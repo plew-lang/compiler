@@ -1,6 +1,6 @@
-import /Frontend with { Comp, FrontendInput, FinalBodyRequests, FinalDependencies, FinalizationPublication, analyzeFrontendForRequests }
-import /SourceAccess with { SourceAccess }
-import @Std/Io with { print }
+use /Frontend only { Comp, FrontendInput, FinalBodyRequests, FinalDependencies, FinalizationPublication, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use @Std/Io only { print }
 
 fn main() {
     mut val c = <Comp />

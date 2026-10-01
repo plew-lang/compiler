@@ -1,8 +1,8 @@
 // spec/03: initializer evaluation precedes the shadow commit. Only ownership
 // remaining in an old unique binding ends there; copyable bindings keep their
 // lexical lifetime. These assertions concern observable language semantics.
-import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 
 unique struct Cell {
     pub val value: I64

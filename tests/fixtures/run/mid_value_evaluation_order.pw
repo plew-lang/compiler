@@ -1,5 +1,5 @@
 // Earlier value arguments/elements must survive later sibling side effects.
-import @Std/Io with { print }
+use @Std/Io only { print }
 mut val number: I64 = 1I64
 mut val text: String = "before"
 fn change() -> I64 { number = 2I64 text = "after" return 0I64 }

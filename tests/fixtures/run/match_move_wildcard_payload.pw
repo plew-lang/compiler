@@ -1,6 +1,6 @@
 // A consuming wildcard arm discards the whole active enum payload at pattern commit.
 
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 unique struct File {
     pub val fd: I64

@@ -1,5 +1,5 @@
-import @Std/Core
-import @Std/Io with { print }
+use @Std/Core
+use @Std/Io only { print }
 
 // An existential `any P` stored as a struct field / enum payload / generic-instance
 // arg is the fat pointer (data + vtable, 2 words). Construction must BOX a concrete

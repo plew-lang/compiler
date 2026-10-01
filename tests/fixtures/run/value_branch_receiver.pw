@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A value-position `if`/`match` used directly as a method receiver: the backend
 // struct/type resolvers must reach the branch's `give` value to dispatch the

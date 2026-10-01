@@ -1,8 +1,8 @@
 // Registering a nested type must not replace its caller's lexical environment.
-import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
-import /SourceAccess with { SourceAccess }
-import /Ir with { TypeRef }
-import @Std/Io with { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { TypeRef }
+use @Std/Io only { print }
 
 fn main() {
     mut val compiler = <Comp />

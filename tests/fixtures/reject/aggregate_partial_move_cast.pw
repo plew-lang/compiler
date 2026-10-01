@@ -1,5 +1,5 @@
 // A no-op wrapper around a field must not hide aggregate partial move.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Pair {
     pub val left: I64

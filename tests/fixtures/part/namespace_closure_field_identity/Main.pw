@@ -1,6 +1,6 @@
-import ./Alpha
-import ./Beta
-import @Std/Io with { print }
+use ./Alpha
+use ./Beta
+use @Std/Io only { print }
 fn main() {
     val first = <Alpha.Handler run=fn() -> I64 { return 42I64 } />
     val second = <Beta.Handler padding=99I64 run=fn() -> String { return "beta" } />

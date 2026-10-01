@@ -1,6 +1,6 @@
 // spec/03: `move` transfers ownership away, so the source local is dead — moving or
 // using it again is a use-after-move error.
-import @Std/Io with { print }
+use @Std/Io only { print }
 unique struct File { pub val fd: I64  deinit { print(self.fd) } }
 pub impl File { factory }
 fn take(f: move File) { }

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // An annotated `val v: P#Ext = p` requires the initializer to already carry the
 // view (spec/09): a plain value cannot be implicitly viewed.
 struct P { val n: I64 }

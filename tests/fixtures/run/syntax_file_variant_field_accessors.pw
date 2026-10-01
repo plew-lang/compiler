@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl, syntaxDeclVariant, syntaxVariant, syntaxVariantFieldCount, syntaxVariantField, syntaxField, syntaxType, DeclId }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl, syntaxDeclVariant, syntaxVariant, syntaxVariantFieldCount, syntaxVariantField, syntaxField, syntaxType, DeclId }
+use @Std/Io only { print }
 
 fn main() {
     val source = "enum Result { Ok(value: U64) }\n"

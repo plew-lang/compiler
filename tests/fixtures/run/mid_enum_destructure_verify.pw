@@ -1,9 +1,9 @@
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { MatchSource, SemanticMatchKind, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution }
-import /Mid/Ir with { MidBody, MidLocalDecl, MidScope, MidBlock, MidPlace, MidEnumDestination, MidStatement, MidTerminator }
-import /Mid/Verify with { verifyCanonicalMidBody, MidVerifyError }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { MatchSource, SemanticMatchKind, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution }
+use /Mid/Ir only { MidBody, MidLocalDecl, MidScope, MidBlock, MidPlace, MidEnumDestination, MidStatement, MidTerminator }
+use /Mid/Verify only { verifyCanonicalMidBody, MidVerifyError }
 
 // The verifier must prove a whole-owner transfer, not merely that individual
 // field projections are plausible. Corrupt exactly one obligation per case.

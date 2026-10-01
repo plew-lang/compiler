@@ -1,6 +1,6 @@
 // Each bundled Io ABI operation is selected by declaration identity.  Keep the
 // values unobserved here so this test isolates call lowering rather than print.
-import @Std/Io with { write, writeByte, eprint, readFile, readFileBytes, fileExists }
+use @Std/Io only { write, writeByte, eprint, readFile, readFileBytes, fileExists }
 
 fn sinkText() {
     write(s: "")

@@ -2,7 +2,7 @@
 // `.count()` / index / `for` directly off the call (without binding to a local
 // first) routes through the array path. This is the call-result type tracking
 // that String `.bytes()` and Array `.count()` methodization rely on.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Holder { pub val xs: Array[I64] }
 pub impl Holder { factory }

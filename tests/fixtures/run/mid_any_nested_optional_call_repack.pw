@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The outer Optional payload is itself Optional[T]. Its conversion proof must
 // be frozen per physical payload field, not reconstructed from T's argument

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // O6 stage 3: bare primitive operators desugar to the Core witnesses (over the
 // intrinsic floor), not a built-in fast path — primitives are not special-cased

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 unique struct File {
     val descriptor: I64
     deinit { print(self.descriptor) }

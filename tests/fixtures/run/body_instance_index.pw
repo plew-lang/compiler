@@ -1,6 +1,6 @@
-import /Frontend with { Comp }
-import /Ir with { WitnessMatch, DeclarationBoundRef, Bind, TypeRef, InstanceEnvironment, StaticConformanceProof }
-import @Std/Io with { write }
+use /Frontend only { Comp }
+use /Ir only { WitnessMatch, DeclarationBoundRef, Bind, TypeRef, InstanceEnvironment, StaticConformanceProof }
+use @Std/Io only { write }
 
 fn main() {
     mut val compiler = <Comp />

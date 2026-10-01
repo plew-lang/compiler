@@ -1,5 +1,5 @@
 // Separate concrete instances of the same recursive generic both stay reachable.
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct Chain[T] {
     pub val value: T
     pub val next: Optional[Chain[T]]

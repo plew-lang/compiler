@@ -1,4 +1,4 @@
-import ./Left
-import ./Right
-import @Std/Io with { print }
+use ./Left
+use ./Right
+use @Std/Io only { print }
 fn main() { print(Left.answer()) print(Right.answer()) }

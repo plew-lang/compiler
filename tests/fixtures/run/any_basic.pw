@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Existential `any P` (spec/08): a value of any concrete type conforming to P,
 // type-erased behind a fat pointer with dynamic dispatch. The simplest case — a

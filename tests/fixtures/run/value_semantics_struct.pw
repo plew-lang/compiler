@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct Bag { pub mut val items: Array[I32]  pub mut val tag: I32 }
 pub impl Bag { factory }
 fn main() {

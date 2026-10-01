@@ -1,7 +1,7 @@
 // ATTACK: record destructure of a call result — does the MutableRef-typed bind's
 // pointee deinit ever run?
-import @Std/Io with { print, write }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print, write }
+use @Std/Core only { MutableRef }
 
 unique struct Cell {
     pub val v: I64

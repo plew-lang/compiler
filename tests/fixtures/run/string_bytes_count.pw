@@ -1,7 +1,7 @@
 // gap#2: `String.bytes()` is an Array[U8] view, so a chained `.count()` (and
 // inferring `val bs = s.bytes()` with no annotation) works. Previously the
 // `.bytes` expr typed as scalar, so `.count()` didn't lower to `.len`.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     val s: String = "banana"

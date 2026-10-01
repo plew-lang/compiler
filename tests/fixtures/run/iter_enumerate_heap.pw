@@ -1,7 +1,7 @@
 // A record layout materialized from a grounded adapter result must retain and
 // destroy heap fields correctly, including the loop's destructured bindings.
-import @Std/Core with { Iterator }
-import @Std/Io with { print }
+use @Std/Core only { Iterator }
+use @Std/Io only { print }
 
 struct Words { pub mut val remaining: I32 }
 pub impl Words { factory }

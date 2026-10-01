@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // F32 (spec/02): a 32-bit float type. Represented as double for now (observably the
 // same on the float floor), so it shares the F64 arithmetic / print / Format path.

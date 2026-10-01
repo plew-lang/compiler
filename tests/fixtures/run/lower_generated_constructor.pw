@@ -1,8 +1,8 @@
 // Macro/value AST construction can carry a name without a source token.
-import @Plew/Syntax with { ExprAst, Span }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { Expr }
+use @Plew/Syntax only { ExprAst, Span }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Expr }
 
 fn main() {
     mut val compiler: Comp = <Comp />

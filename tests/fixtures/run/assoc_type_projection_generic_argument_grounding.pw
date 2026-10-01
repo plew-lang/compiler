@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The projection's trait argument is a generic variable in the declaration and
 // must be grounded to String before Convert[String]'s witness is selected.

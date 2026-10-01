@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A value type whose recursion closes through a USER generic wrapper (`Box[List]`,
 // not the blessed Optional/Result). The boxing reachability walk must substitute the

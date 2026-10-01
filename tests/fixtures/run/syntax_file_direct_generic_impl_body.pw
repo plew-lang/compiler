@@ -2,9 +2,9 @@
 // compiler's collection floor. Keep the receiver type, labelled call, return
 // statement, and lowering boundary together so a future row/slice regression
 // cannot hide behind the simple non-generic impl fixture.
-import @Plew/Syntax with { Lexer, P, ImplId, MemberKind, SyntaxExprKind, SyntaxStmtKind, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImpl, syntaxImplMember, syntaxImplMemberCount, syntaxImplParamCount, syntaxType, syntaxTypeArgCount, syntaxMember, syntaxBlock, syntaxBlockStmtCount, syntaxBlockStmt, syntaxStmt, syntaxExpr, syntaxExprArgCount, syntaxExprArg, syntaxArg }
-import @Std/Io with { print }
-import /Frontend with { Comp }
+use @Plew/Syntax only { Lexer, P, ImplId, MemberKind, SyntaxExprKind, SyntaxStmtKind, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImpl, syntaxImplMember, syntaxImplMemberCount, syntaxImplParamCount, syntaxType, syntaxTypeArgCount, syntaxMember, syntaxBlock, syntaxBlockStmtCount, syntaxBlockStmt, syntaxStmt, syntaxExpr, syntaxExprArgCount, syntaxExprArg, syntaxArg }
+use @Std/Io only { print }
+use /Frontend only { Comp }
 
 fn main() {
     val source = "pub impl[T] Buffer[T] { fn count() -> U64 { return bufferCount(buffer: self) } }\n"

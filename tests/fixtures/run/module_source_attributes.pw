@@ -1,5 +1,5 @@
-import @Std/Io with { write }
-import /Ir with { Modules }
+use @Std/Io only { write }
+use /Ir only { Modules }
 fn main() {
     mut val modules: Modules = <Modules.empty />
     if modules.isSyntaxRoot(moduleId: 0U64) { panic "empty module table" }

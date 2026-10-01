@@ -2,7 +2,7 @@
 // (CLAUDE.md / spec/03 get-modify-set). Previously emitted `&(get(arr,i))`,
 // the address of an rvalue. Covers void- and value-returning inout methods
 // and a computed index.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Cnt {
     pub mut val n: I32

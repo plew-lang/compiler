@@ -1,5 +1,5 @@
 // A literal field value is checked against the declared field type.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Pixel {
     val level: U8

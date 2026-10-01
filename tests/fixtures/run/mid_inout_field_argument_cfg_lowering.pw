@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A direct free-function call through an `inout` struct field is a normal
 // writable-place argument.  Keep the call as the returned expression so Mid

@@ -1,8 +1,8 @@
 // Every Core scalar conversion floor is selected by declaration identity and
 // lowered by Mid.  The values exercise signed/unsigned ABI directions as well
 // as the NaN predicate; only byte-sized observables are written.
-import @Std/Core with { bitCastI64, bitCastU64, truncU8, truncU16, truncU32, truncI8, truncI16, truncI32, isNanF64, f64ToI64, f64ToU64 }
-import @Std/Io with { writeByte }
+use @Std/Core only { bitCastI64, bitCastU64, truncU8, truncU16, truncU32, truncI8, truncI16, truncI32, isNanF64, f64ToI64, f64ToU64 }
+use @Std/Io only { writeByte }
 
 fn main() {
     val byte: U8 = truncU8(n: 65U64)

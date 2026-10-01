@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A recursive value struct: `next` is `Optional[Node]`, which transitively
 // contains `Node`. The compiler boxes the `next` field (heap indirection) so

@@ -1,5 +1,5 @@
 // Closing an inner scope must retain move facts belonging to outer bindings.
-import @Std/Io with { print }
+use @Std/Io only { print }
 unique struct Resource { pub val label: String }
 pub impl Resource { factory }
 fn consume(resource: move Resource) {}

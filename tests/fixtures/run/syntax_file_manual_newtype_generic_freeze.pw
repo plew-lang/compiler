@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Span, SyntaxFile, TopItemAst, TypeAst, syntaxFileTopLevelCount }
-import @Std/Io with { print }
+use @Plew/Syntax only { Span, SyntaxFile, TopItemAst, TypeAst, syntaxFileTopLevelCount }
+use @Std/Io only { print }
 
 fn main() {
     mut val file = <SyntaxFile />

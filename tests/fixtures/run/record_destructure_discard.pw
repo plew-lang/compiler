@@ -2,8 +2,8 @@
 // field is covered but no local is created. The discarded heap field stays
 // owned by the destructure temp and is released at scope end (deinit fires
 // exactly once). Works in the statement and the loop-pattern forms.
-import @Std/Io with { print, write }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print, write }
+use @Std/Core only { MutableRef }
 
 unique struct Cell {
     pub val v: I64

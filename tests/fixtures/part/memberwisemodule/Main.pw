@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import ./Lib with { Secret }
+use @Std/Io only { print }
+use ./Lib only { Secret }
 fn main() {
     val first = <Secret value=3I64 />
     val second = <Secret value=4I64 observed=6I64 />

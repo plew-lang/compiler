@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Boxing a concrete PLACE into `any P` deep-copies its array/struct fields (value
 // semantics, spec/08) — matching a plain struct copy — so mutating the source after

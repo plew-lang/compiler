@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Type-level extension views (spec/09): `Person#Ext` is a zero-cost view usable
 // in a parameter/binding type. A value re-view `v#Ext` carries the view into its

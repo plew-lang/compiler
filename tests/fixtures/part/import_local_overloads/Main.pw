@@ -1,5 +1,5 @@
-import ./Lib with { f }
-import @Std/Io with { print }
+use ./Lib only { f }
+use @Std/Io only { print }
 fn f(value: I64) -> I64 { return 3I64 }
 fn main() { print(f(value: "s"))
 print(f(other: 1I64))

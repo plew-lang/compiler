@@ -1,6 +1,6 @@
 // Reborrowing, disjoint fields, value snapshots and explicit FFI stay legal.
-import @Std/Core with { assert }
-import @Std/Io with { print }
+use @Std/Core only { assert }
+use @Std/Io only { print }
 extern(c) { fn foreignValue() -> I64 }
 struct Pair { pub mut val first: I64 pub mut val second: I64 }
 pub impl Pair { factory }

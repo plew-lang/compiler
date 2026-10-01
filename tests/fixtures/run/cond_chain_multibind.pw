@@ -1,6 +1,6 @@
 // multi-binding condition chain (spec/11): `&&` joins several refutable bindings (and
 // Bool clauses); all must succeed, and earlier bindings scope to later clauses.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn sumBoth(a: Optional[I64], b: Optional[I64]) -> I64 {
     if Optional.Some(v: val x) = a && Optional.Some(v: val y) = b {

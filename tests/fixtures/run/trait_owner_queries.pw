@@ -1,6 +1,6 @@
-import /Frontend with { Comp }
-import /Ir with { TraitOwner }
-import @Std/Io with { write }
+use /Frontend only { Comp }
+use /Ir only { TraitOwner }
+use @Std/Io only { write }
 fn main() {
     mut val compiler: Comp = <Comp />
     compiler.decls.registerTraitOwner(<TraitOwner sourceModule=0U64 nameStart=10U64 nameLen=4U64 nameId=7U64 arity=0U64 />)

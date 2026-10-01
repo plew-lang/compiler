@@ -1,7 +1,7 @@
 // Suspension storage analysis consumes only closed canonical Mid. Drop is a
 // use: a value needed solely for eventual destruction still crosses suspension.
-import ../Frontend with { Comp }
-import ./Ir with { MidBodyNode, MidCanonicalBody, MidTerminatorNode }
+use ../Frontend only { Comp }
+use ./Ir only { MidBodyNode, MidCanonicalBody, MidTerminatorNode }
 
 pub struct MidAsyncFramePlan {
     pub val valid: Bool = false

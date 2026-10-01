@@ -69,7 +69,7 @@ pub impl Comp {
 
     // Index of the enum named (start,len), or c.arena.enumCount() if none.
     inout fn enumIndexByName(start: U64, len: U64) -> U64 {
-        // an import alias (`with { Real as Alias }`) names the same enum as `Real` (spec/15).
+        // a use alias (`only { Real as Alias }`) names the same enum as `Real` (spec/15).
         val ar: Bind = self.aliasReal(start: start, len: len)
         val qId: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
         mut val i: U64 = 0
@@ -84,7 +84,7 @@ pub impl Comp {
 
 
     // Record that the name `(nameStart,nameLen)` was brought into the current module
-    // via `import <path> with { … }` (spec/15). The imported name token sits in the
+    // via `use <path> only { … }` (spec/15). The imported name token sits in the
     // importing file, so `moduleOf(nameStart)` is the importing module; it is stored as
     // the entry's `fieldStart`. A use of a cross-module name is visible only if it was
     // imported here (and exported by its own module). `(segStart,segLen)` is the path's

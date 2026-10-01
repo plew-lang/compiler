@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, lex }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, lex }
+use @Std/Io only { print }
 
 fn main() {
     val source = "x"

@@ -1,6 +1,6 @@
 // Default arguments may be omitted in the middle. Provided/default values are
 // evaluated in parameter declaration order, not call-site attribute order.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn mark(n: I64) -> I64 {
     print(n)

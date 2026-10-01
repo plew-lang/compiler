@@ -4,8 +4,8 @@
 // the OLD cell and its deinit runs AFTER the call returns. Covers (E) the MutableRef variable
 // and its own pointee field lent together (legal: the variable and the pointee are
 // different places), and (G) a sole-owner GLOBAL rebound while `inout g->n` is lent.
-import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 
 unique struct R {
     pub mut val n: I32

@@ -2,8 +2,8 @@
 // parser.  Cover an annotated public item, whole program, expression, and
 // block independently so a legacy grammar cannot be reintroduced behind one
 // compatible value result.
-import @Plew/Syntax with { ExprAst, Lexer, P, StmtAst, TopItemAst, lex, parseBlockFrom, parseExprFrom, parseItem, parseProgramAst }
-import @Std/Io with { print }
+use @Plew/Syntax only { ExprAst, Lexer, P, StmtAst, TopItemAst, lex, parseBlockFrom, parseExprFrom, parseItem, parseProgramAst }
+use @Std/Io only { print }
 
 fn main() {
     // The source slice begins at an original-file offset; materialization must

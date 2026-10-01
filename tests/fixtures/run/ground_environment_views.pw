@@ -1,6 +1,6 @@
-import /Frontend with { Comp }
-import /Ir with { TypeRef, Bind, InstanceEnvironment }
-import @Std/Io with { write }
+use /Frontend only { Comp }
+use /Ir only { TypeRef, Bind, InstanceEnvironment }
+use @Std/Io only { write }
 
 fn main() {
     mut val compiler: Comp = <Comp />

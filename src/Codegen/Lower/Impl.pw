@@ -371,7 +371,7 @@ pub impl Comp {
         return <Result.Ok value=<ImplAst recvType=im.recvType implParams=im.implParams implParamSpans=im.implParamSpans implParamSendable=im.implParamSendable isTraitImpl=im.isTraitImpl traitName=ty.name traitNameSpan=ty.nameSpan traitArgs=ty.args whereParams=im.whereParams whereTraits=im.whereTraits whereTypes=im.whereTypes whereTraitTypes=im.whereTraitTypes isPub=im.isPub members=im.members span=im.span extName=im.extName extNameSpan=im.extNameSpan /> />
     }
 
-    // An `as` trait is a type-level use.  Resolve its import alias from the
+    // An `as` trait is a type-level use.  Resolve its use alias from the
     // original occurrence, rather than re-interning alias text after its
     // module identity has been lost.
     inout fn resolvedImplTraitBind(im: ImplAst) -> Bind {

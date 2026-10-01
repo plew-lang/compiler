@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn selected[T](first: T, second: T) -> T {
     val select: fn(first: T, second: T) -> T = fn(first: T, second: T) -> T { return second }

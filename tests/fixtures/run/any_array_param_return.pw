@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `Array[any P]` flowing through function boundaries (spec/08): built and returned
 // from one function (elements boxed at the return literal), then passed to another

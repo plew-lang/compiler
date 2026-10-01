@@ -1,10 +1,10 @@
 // A whole-target check would reject unused(). The session must lower main
 // first, and become terminal only when the invalid body is actually requested.
-import ../../../src/CheckedProgram with { CompilerSession, CompilerSessionResult }
-import ../../../src/Frontend with { FrontendInput }
-import ../../../src/SourceAccess with { SourceAccess }
-import ../../../src/Backend with { LlvmLoweringResult }
-import @Std/Io with { write }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult }
+use ../../../src/Frontend only { FrontendInput }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Backend only { LlvmLoweringResult }
+use @Std/Io only { write }
 
 fn main() {
     val source = "fn main() {} fn unused() { missing() }"

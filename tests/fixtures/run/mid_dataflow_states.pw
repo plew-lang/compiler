@@ -1,6 +1,6 @@
-import /Mid/DataflowState with { MidOwnershipStates, MidAccessibilityStates }
-import /Mid/Ir with { MidOwnership, MidAccessibility }
-import @Std/Io with { write }
+use /Mid/DataflowState only { MidOwnershipStates, MidAccessibilityStates }
+use /Mid/Ir only { MidOwnership, MidAccessibility }
+use @Std/Io only { write }
 
 fn ownershipCode(state: MidOwnership) -> U64 {
     match state {

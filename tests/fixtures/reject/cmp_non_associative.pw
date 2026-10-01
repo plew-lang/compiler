@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // Comparison/equality is non-associative (spec/12): `a == b == c` is a syntax
 // error (would silently misread as "three are equal").
 fn main() {

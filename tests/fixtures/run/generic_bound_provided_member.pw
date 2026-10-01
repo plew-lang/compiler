@@ -3,8 +3,8 @@
 // eventual call site. The final descriptor must therefore preserve the proof
 // across the generic template boundary instead of treating `Iterator`'s zero
 // positional arity as a complete environment.
-import @Std/Io with { print }
-import @Std/Core with { Iterator }
+use @Std/Io only { print }
+use @Std/Core only { Iterator }
 
 struct Counter { pub mut val value: I64 }
 pub impl Counter { factory }

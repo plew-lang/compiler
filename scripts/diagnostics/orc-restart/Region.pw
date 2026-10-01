@@ -1,6 +1,6 @@
-import @Std/Io with { print }
-import @Std/Async with { sleep }
-import @Std/Process with { argAt }
+use @Std/Io only { print }
+use @Std/Async only { sleep }
+use @Std/Process only { argAt }
 
 mut val counter: I64 = 0I64
 val initial: Array[I64] = [3I64, 5I64]

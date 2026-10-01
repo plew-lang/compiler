@@ -1,7 +1,7 @@
 // `if`-let: a refutable binding in an `if`/`while` condition (spec/11 condition
 // chain). `if PATTERN = expr { … }` binds on a successful match; a trailing `&& cond`
 // adds a Bool clause. Desugars to a `match` (the binding scopes to the then-block).
-import @Std/Io with { print, write }
+use @Std/Io only { print, write }
 
 fn doubled(o: Optional[I64]) -> I64 {
     if Optional.Some(val v) = o {

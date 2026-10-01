@@ -1,6 +1,6 @@
-import /Frontend with { Comp }
-import /Ir with { Bind, TypeRef, UnifyBind, PatternBindInput, PatternTypeInput }
-import @Std/Io with { write }
+use /Frontend only { Comp }
+use /Ir only { Bind, TypeRef, UnifyBind, PatternBindInput, PatternTypeInput }
+use @Std/Io only { write }
 
 fn check(compiler: inout Comp, parameters: PatternBindInput, declared: PatternTypeInput, actual: PatternTypeInput, variable: U64, concrete: U64, nested: U64) {
     if parameters.count() != 1U64 { panic "binder count" }

@@ -1,6 +1,6 @@
-import @Plew/Syntax with { ExternId, Lexer, P, lex, parseProgramSyntaxFile, syntaxExtern, syntaxFileTopLevel, syntaxTopItemPayload }
-import @Std/Io with { print }
-import /Frontend with { Comp }
+use @Plew/Syntax only { ExternId, Lexer, P, lex, parseProgramSyntaxFile, syntaxExtern, syntaxFileTopLevel, syntaxTopItemPayload }
+use @Std/Io only { print }
+use /Frontend only { Comp }
 
 fn main() {
     val source = "extern(plewIntrinsic) { fn raw(value: I8) -> I8 struct Buffer[sendable T] }\n"

@@ -1,5 +1,5 @@
-import /Ir with { Arena, Func }
-import @Std/Io with { write }
+use /Ir only { Arena, Func }
+use @Std/Io only { write }
 
 fn declaration(nameId: U64, body: U64) -> Func {
     return <Func nameStart=0U64 nameLen=0U64 nameId=nameId

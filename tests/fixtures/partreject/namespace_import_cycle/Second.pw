@@ -1,2 +1,2 @@
-import ./First
+use ./First
 pub fn second() {}

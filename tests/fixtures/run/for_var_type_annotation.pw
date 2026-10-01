@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // A loop-variable type annotation types the range bounds, so bare literals need
 // no suffix, and the loop var carries that type into the body (`print(i)` grounds).
 fn main() {

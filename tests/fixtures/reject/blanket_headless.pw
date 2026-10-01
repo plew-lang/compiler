@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // spec/09: 頭なし Self の blanket は禁止 — `impl[T] T as Trait where T: Bound`
 // (subject is a bare type parameter, not a type constructor) is rejected. Type

@@ -1,15 +1,15 @@
 // @Std/Set — a CoW value-semantics hash set (spec/02). NOT a language item: `Set` has
-// no literal, so naming it in a type position needs `import @Std/Set with { Set }`, and
+// no literal, so naming it in a type position needs `use @Std/Set only { Set }`, and
 // instances are built via `Set.from([…])` / `Set.new()`. Built on `Array` (so CoW +
 // value semantics come for free via Array's buffer sharing): the dense `items`/`hashes`
 // arrays hold the elements, and `buckets` is an open-addressing index map (slot -> entry
 // index + 1; 0 = empty) for O(1) membership. Elements need `Hash` (to place) and `Eq`
 // (to resolve collisions). Linear probing, growing at load 0.75 — the same floor as
 // `Dictionary`, minus the value column.
-import @Std/Hash with { Hash, SipHasher }
-import @Std/Core with { Buffer, Eq }
-pub import @Std/Hash with { Hash }
-pub import @Std/Core with { Eq }
+use @Std/Hash only { Hash, SipHasher }
+use @Std/Core only { Buffer, Eq }
+pub use @Std/Hash only { Hash }
+pub use @Std/Core only { Eq }
 
 pub struct Set[E] {
     mut val items: Buffer[E]

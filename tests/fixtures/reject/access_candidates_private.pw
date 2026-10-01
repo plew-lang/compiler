@@ -1,4 +1,4 @@
-import /Ir with { Decls, AccessCandidate }
+use /Ir only { Decls, AccessCandidate }
 fn main() {
     mut val declarations: Decls = <Decls />
     declarations.accessCandidateRows.append(<AccessCandidate readExpr=0U64 placeExpr=1U64 writeExpr=2U64 />)

@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl, syntaxDeclTypeParamCount, syntaxDeclTypeParamSpan, syntaxDeclVariantCount, syntaxDeclVariant, syntaxVariant, syntaxDeclParamCount, syntaxDeclParam, syntaxParam, syntaxDeclWhereCount, syntaxDeclWhereParamSpan, syntaxDeclWhereTraitSpan, syntaxDeclWhereType, syntaxDeclWhereTraitType, syntaxType, DeclId }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl, syntaxDeclTypeParamCount, syntaxDeclTypeParamSpan, syntaxDeclVariantCount, syntaxDeclVariant, syntaxVariant, syntaxDeclParamCount, syntaxDeclParam, syntaxParam, syntaxDeclWhereCount, syntaxDeclWhereParamSpan, syntaxDeclWhereTraitSpan, syntaxDeclWhereType, syntaxDeclWhereTraitType, syntaxType, DeclId }
+use @Std/Io only { print }
 
 fn main() {
     val source = "struct Box[T] { val item: T }\nenum Flag { On }\nfn identity[T](value~: T) -> T where T: Eq { return value }\n"

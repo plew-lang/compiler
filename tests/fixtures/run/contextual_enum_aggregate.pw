@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Packet[T] { Value(item: T) }
 struct Envelope[T] { pub val packet: Packet[T] }

@@ -1,9 +1,9 @@
 // Selecting destruction dependencies must not make their bodies executable.
-import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontend }
-import ../../../src/SourceAccess with { SourceAccess }
-import @Std/Core with { assert }
-import @Std/Process with { argAt }
-import @Std/Io with { print }
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use @Std/Core only { assert }
+use @Std/Process only { argAt }
+use @Std/Io only { print }
 
 fn main() {
     mut val compiler = <Comp />

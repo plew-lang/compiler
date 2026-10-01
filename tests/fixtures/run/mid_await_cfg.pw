@@ -1,8 +1,8 @@
-import @Std/Io with { print }
-import @Std/Core with { assert }
-import /Frontend with { Comp }
-import /Ir with { CallArgumentPassing, Block, Func, Param, TypeRef, Expr, Stmt, SemanticExprType, FinalAwaitResolution, InstanceEnvironment, identValueCode }
-import /Mid with { planCanonicalMidAsyncFrame, buildParametricMidBody, MidBuildError, MidInstantiateError, MidVerifyError, MidRange, MidBlockNode, MidStatementNode, MidAccessError, elaborateCanonicalMidAccesses, instantiateCanonicalMidBody, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use /Frontend only { Comp }
+use /Ir only { CallArgumentPassing, Block, Func, Param, TypeRef, Expr, Stmt, SemanticExprType, FinalAwaitResolution, InstanceEnvironment, identValueCode }
+use /Mid only { planCanonicalMidAsyncFrame, buildParametricMidBody, MidBuildError, MidInstantiateError, MidVerifyError, MidRange, MidBlockNode, MidStatementNode, MidAccessError, elaborateCanonicalMidAccesses, instantiateCanonicalMidBody, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
 
 fn main() {
     mut val compiler: Comp = <Comp />

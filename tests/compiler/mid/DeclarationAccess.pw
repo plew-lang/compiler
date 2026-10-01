@@ -1,12 +1,12 @@
-import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
-import ../../../src/Ir with { CallTemplate, CallTemplateKind }
-import ../../../src/SourceAccess with { SourceAccess }
-import ../../../src/Mid/Build with { MidFunctionTemplates }
-import ../../../src/Mid/DeclarationAccess with { analyzeDeclarationGlobalAccess, DeclarationAccessError, DeclarationAccessNode, DeclarationAccessObligation }
-import ../../../src/Mid/Diagnostics with { reportMidBuildError }
-import @Std/Core with { assert }
-import @Std/Process with { argAt }
-import @Std/Io with { print }
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use ../../../src/Ir only { CallTemplate, CallTemplateKind }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Mid/Build only { MidFunctionTemplates }
+use ../../../src/Mid/DeclarationAccess only { analyzeDeclarationGlobalAccess, DeclarationAccessError, DeclarationAccessNode, DeclarationAccessObligation }
+use ../../../src/Mid/Diagnostics only { reportMidBuildError }
+use @Std/Core only { assert }
+use @Std/Process only { argAt }
+use @Std/Io only { print }
 
 fn main() {
     mut val compiler = <Comp />

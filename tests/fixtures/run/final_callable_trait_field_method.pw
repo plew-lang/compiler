@@ -1,5 +1,5 @@
-import @Std/Core with { Buffer, IndexSet }
-import @Std/Io with { print }
+use @Std/Core only { Buffer, IndexSet }
+use @Std/Io only { print }
 
 struct Box[T] {
     pub mut val data: Buffer[T]

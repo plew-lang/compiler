@@ -1,7 +1,7 @@
 // An inout method on an indexed element may itself be nested in a value
 // expression. Lower must materialize the element, preserve the call result,
 // write the element back, then continue with the enclosing expression.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Counter {
     pub mut val n: I32

@@ -1,4 +1,4 @@
-import @Std/Io with { write, print }
+use @Std/Io only { write, print }
 
 // Returning a unique value on one branch must not skip the deinit of the value
 // the *other* branch would return. The exclusion is per-exit, not a persisted

@@ -1,12 +1,12 @@
-import ../../../src/Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontend }
-import ../../../src/FrontendDriver with { runFrontend }
-import ../../../src/PreparedProgram with { PreparedProgram, programPreparationDiagnostic }
-import ../../../src/CompilerDiagnostics with { reportProgramPreparationError }
-import @Std/Io with { print }
-import @Std/Process with { argCount, argAt }
-import ../../../src/Diag with { emitDiagnostic }
-import ../../../src/SourceAccess with { SourceAccess }
-import ../../../src/Path with { computeStdRoot }
+use ../../../src/Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontend }
+use ../../../src/FrontendDriver only { runFrontend }
+use ../../../src/PreparedProgram only { PreparedProgram, programPreparationDiagnostic }
+use ../../../src/CompilerDiagnostics only { reportProgramPreparationError }
+use @Std/Io only { print }
+use @Std/Process only { argCount, argAt }
+use ../../../src/Diag only { emitDiagnostic }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Path only { computeStdRoot }
 fn main() {
     mut val compiler: Comp = <Comp />
     val returningGenFailure = argCount() > 1I64 && argAt(1I64) == "--return-gen-failure"

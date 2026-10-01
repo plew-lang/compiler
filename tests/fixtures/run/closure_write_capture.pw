@@ -1,7 +1,7 @@
 // Write-only uses must register a shared capture just like reads and +=.
 // Include two closures sharing one cell, shadowing, argument snapshots, and
 // an escaping write-only closure whose cell outlives the declaring activation.
-import @Std/Io with { print }
+use @Std/Io only { print }
 fn setter() -> fn(value: I64) {
     mut val stored: I64 = 0I64
     return fn(value: I64) { stored = value }

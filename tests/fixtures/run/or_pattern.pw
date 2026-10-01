@@ -1,6 +1,6 @@
 // Or-patterns `A | B => ...` in both expression and statement match. Multiple
 // alternatives share one arm body; exhaustiveness counts every listed variant.
-import @Std/Io with { print, write }
+use @Std/Io only { print, write }
 
 enum Tk { A B C D E }
 

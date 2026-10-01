@@ -4,7 +4,7 @@
 // the verify literal pass (Verify/Stmt), so before the fix `val x: U8 = 200 + 100`
 // silently wrapped (300 -> 44) instead of being rejected. spec/12: integer overflow is
 // never a silent wraparound. This program MUST be rejected at compile time.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn widthInGenericBody[T](tag: T) -> U8 {
     val x: U8 = 200 + 100

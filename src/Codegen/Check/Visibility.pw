@@ -1,4 +1,4 @@
-// Part of compile-time checks (root: _.pw): import and use-site visibility
+// Part of compile-time checks (root: _.pw): use and use-site visibility
 // constraints.
 
 // Is `(nameStart,nameLen)` the name of an published declaration (spec/15)? Matched
@@ -170,7 +170,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Was the name `(nameStart,nameLen)` imported into module `mod` via `import … with`?
+    // Was the name `(nameStart,nameLen)` imported into module `mod` via `use … with`?
     inout fn isImportedInto(mod: U64, nameStart: U64, nameLen: U64) -> Bool {
         mut val i: U64 = 0
         while i < self.modules.imports.count() {
@@ -189,7 +189,7 @@ pub impl Comp {
     // (`findFunc` only returns a callee visible from the call's module = same module, or
     // imported+exported). This pass turns the *failure* to resolve in scope into a good
     // error: if a free fn of this name exists in ANOTHER loaded module, the use needs an
-    // import. A same-module match (e.g. wrong labels, reported elsewhere) or no match at
+    // use. A same-module match (e.g. wrong labels, reported elsewhere) or no match at
     // all (local / closure / builtin) is left alone — except `@Std` intrinsics the backend
     // intercepts by raw name (print / write / exit / …), which are not ambient and must be
     // imported too. Types are scoped separately (their resolution sites); member/method
@@ -213,8 +213,8 @@ pub impl Comp {
                 if self.firstVisibleFuncByName(useMod: useMod, nameStart: nameStart, nameLen: nameLen) >= self.arena.functionCount() {
                     if self.firstFuncByName(nameStart: nameStart, nameLen: nameLen) < self.arena.functionCount() {
                         // a free fn of this name exists only in other (loaded) modules and
-                        // was not imported here — the use needs an import.
-                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "use of a function from another module without importing it (add `import … with { … }`)") />
+                        // was not imported here — the use needs a use.
+                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "use of a function from another module without importing it (add `use … only { … }`)") />
                     } else {
                         // no free fn of this name anywhere: a local/closure/builtin, or an
                         // `@Std` intrinsic the backend intercepts by raw name (print /
@@ -222,7 +222,7 @@ pub impl Comp {
                         // items are) and must be imported.
                         if self.isAmbientInterceptedName(start: nameStart, len: nameLen) {
                             if !(self.isImportedInto(mod: useMod, nameStart: nameStart, nameLen: nameLen)) {
-                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "this @Std function is not ambient — import it (e.g. `import @Std/Io with { print }`); only lang items are usable without import (spec/15)") />
+                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "this @Std function is not ambient — import it (e.g. `use @Std/Io only { print }`); only lang items are usable without import (spec/15)") />
                             }
                         }
                     }
@@ -245,11 +245,11 @@ pub impl Comp {
     // Is a user type declaration named (start,len) VISIBLE from module `useMod` (scoped
     // resolution: same module, or imported+exported)? A type decl's OWN module comes from
     // its `defOffset` (a real source offset) — its `nameStart` is re-interned (module 0)
-    // and cannot serve `moduleOf`. The import side is keyed by the name text (the use-site
-    // span and the import record share it), independent of which decl matched.
+    // and cannot serve `moduleOf`. The use side is keyed by the name text (the use-site
+    // span and the use record share it), independent of which decl matched.
     // Is a type declaration whose own module is `moduleOf(defOffset)` visible to a use in
     // module `useMod`? Only the same module is visible on this axis; cross-module visibility
-    // goes through the import side (`isImportedInto` + `isExportedName`) in the caller. Ambient
+    // goes through the use side (`isImportedInto` + `isExportedName`) in the caller. Ambient
     // lang-item TYPES are handled separately by `isAmbientInLang` at the type site (= @Std/Lang's
     // export surface) — no OTHER module is "ambient" as a whole (spec/15).
     inout fn defModuleVisible(defOffset: U64, useMod: U64) -> Bool {
@@ -309,7 +309,7 @@ pub impl Comp {
     // here); `Self` / associated types have no global declaration, so the existence gate skips
     // them silently. A genuine out-of-scope type — one that exists in another module but isn't
     // imported — is the loud error.
-    // Resolve a module-local import alias `import M with { Real as Alias }` to `Real`, scoped
+    // Resolve a module-local use alias `use M only { Real as Alias }` to `Real`, scoped
     // to module `useMod` (the use site's module from its real siteOffset — the type-name span is
     // re-interned, so the alias's own moduleOf must be compared against useMod). Returns the real
     // name span, or the input unchanged when no alias of this module matches. c.modules.imports /
@@ -336,7 +336,7 @@ pub impl Comp {
         if self.typeDeclVisibleFrom(useMod: useMod, start: start, len: len) { return <Result.Ok value=() /> }
         val real: Bind = self.realTypeNameInModule(useMod: useMod, start: start, len: len)
         if self.typeDeclExistsGlobally(start: real.nameStart, len: real.nameLen) {
-            return <Result.Err error=self.diagnosticAt(offset: siteOffset, msg: "use of a type from another module without importing it (add `import … with { … }`)") />
+            return <Result.Err error=self.diagnosticAt(offset: siteOffset, msg: "use of a type from another module without importing it (add `use … only { … }`)") />
         }
         return <Result.Ok value=() />
     }
@@ -473,8 +473,8 @@ pub impl Comp {
         return self.missingDeclIdentity()
     }
 
-    // The real import-name length is stored in the source span itself; recover it
-    // through the matching import/re-export provenance entry instead of guessing.
+    // The real use-name length is stored in the source span itself; recover it
+    // through the matching use/re-export provenance entry instead of guessing.
     inout fn typeDeclIdentityAt(useMod: U64, start: U64, len: U64) -> Bind {
         val qualified = self.modules.qualifiedUseIndex(offset: start)
         if qualified < self.modules.qualifiedUseCount() {
@@ -490,7 +490,7 @@ pub impl Comp {
             return self.typeDeclIdentityFromSurface(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength)
         }
         // @Std/Lang is the one ambient type surface. Its declarations are in
-        // scope without an import, but they still need the same declaration
+        // scope without a use, but they still need the same declaration
         // identity as an explicitly imported type: downstream TypeTerm,
         // proof, and Mid consumers must never fall back to the spelling
         // `Array`/`Optional`/etc. Re-exports are resolved by the surface query
@@ -503,7 +503,7 @@ pub impl Comp {
         return self.missingDeclIdentity()
     }
 
-    // Reachability is fixed for this check, after all declarations and import
+    // Reachability is fixed for this check, after all declarations and use
     // identities have been established. Cache complete sets, including misses.
     inout fn publicSurfaceProvidesDecl(surfaces: inout PublicSurfaceIndex, surfaceMod: U64, identity: Bind) -> Bool {
         if identity.nameLen == 0U64 { return true }
@@ -592,7 +592,7 @@ pub impl Comp {
     }
 
     // A lowered trait constraint already carries its declaration owner.  Do
-    // not feed that owner span back through the exporting module's import
+    // not feed that owner span back through the exporting module's use
     // surface: `PrivateMarker as Marker` would otherwise look unresolved and
     // escape public-API closure.  The canonical identity is the thing whose
     // reachability must be checked.
@@ -961,7 +961,7 @@ pub impl Comp {
 pub impl Comp {
 
     // DFS over the module import graph (colors: 0=white, 1=gray/on-stack, 2=black). A gray
-    // target is a back edge → a circular import; report it at the offending import.
+    // target is a back edge → a circular use; report it at the offending use.
     inout fn dfsImportCycle(node: U64, color: inout Array[U64], parents: inout Array[U64], ef: Array[U64], et: Array[U64], eo: Array[U64]) -> Result[(), CompileDiagnostic] {
         color[node] = 1U64
         mut val k: U64 = 0
@@ -1009,8 +1009,8 @@ pub impl Comp {
         return message + " -> " + self.importModulePath(module: target) + ". The module import graph must be acyclic (spec/15)."
     }
 
-    // Every resolved import contributes an edge, independently of selected names,
-    // aliases or re-exports. Parts themselves do not contribute import edges.
+    // Every resolved use contributes an edge, independently of selected names,
+    // aliases or re-exports. Parts themselves do not contribute use edges.
     inout fn detectImportCycles() -> Result[(), CompileDiagnostic] {
         mut val maxId: U64 = 0
         mut val ri: U64 = 0
@@ -1050,10 +1050,10 @@ pub impl Comp {
     }
 
     // Is (start,len) the name of an `@Std` function the LLVM backend intercepts by raw
-    // name (so it would emit without an import)? These need a real import gate (spec/15):
+    // name (so it would emit without a use)? These need a real use gate (spec/15):
     // the user-facing I/O / process / async intrinsics. (The Buffer/String/FFI floor
     // intrinsics are resolved through their loaded `extern` decls, so they fall under
-    // the ordinary import check above and are not listed here.)
+    // the ordinary use check above and are not listed here.)
     inout fn isAmbientInterceptedName(start: U64, len: U64) -> Bool {
         if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "print") { return true }
         if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "eprint") { return true }
@@ -1066,7 +1066,7 @@ pub impl Comp {
         if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "sleep") { return true }
         if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "exit") { return true }
         // `assert` is a @Std/Core function (not a lang item): now that Core is ambient
-        // (force-loaded), it resolves, but spec keeps it import-required, so gate it here.
+        // (force-loaded), it resolves, but spec keeps it use-required, so gate it here.
         if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "assert") { return true }
         return false
     }

@@ -2,8 +2,8 @@
 // Callers supply graph nodes, known call edges, and canonical storage facts.
 // This module does not discover bodies, resolve call templates, or finalize
 // destruction contracts. Missing edges never constitute a purity proof.
-import ./Ir with { MidCanonicalArena, MidOperandNode, MidStatementNode, MidTerminatorNode }
-import ./Verify with { canonicalMidValuePlacesOverlap }
+use ./Ir only { MidCanonicalArena, MidOperandNode, MidStatementNode, MidTerminatorNode }
+use ./Verify only { canonicalMidValuePlacesOverlap }
 
 struct GlobalAccessEffect {
     pub val body: U64

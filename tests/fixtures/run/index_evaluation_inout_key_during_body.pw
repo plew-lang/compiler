@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 fn adjust(value: inout I64, key: inout U64) {
     value += 10I64
     key = 1U64

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Projection trait arguments are part of the type term.  The two B terms here
 // are distinct, so these edges do not form a trait-instance cycle.

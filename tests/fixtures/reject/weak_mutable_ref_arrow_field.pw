@@ -1,4 +1,4 @@
-import @Std/Core with { MutableRef, WeakMutableRef }
+use @Std/Core only { MutableRef, WeakMutableRef }
 
 struct Cell { pub mut val n: I32 }
 

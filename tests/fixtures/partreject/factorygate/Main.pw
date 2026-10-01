@@ -1,4 +1,4 @@
-import ./NoFactory with { NoFactory }
+use ./NoFactory only { NoFactory }
 
 fn main() {
     val value = <NoFactory n=1I64 />

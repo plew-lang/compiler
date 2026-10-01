@@ -1,4 +1,4 @@
-import @Std/Io with { write }
+use @Std/Io only { write }
 trait Named { fn name() -> String }
 struct Payload { pub val text: String }
 pub impl Payload { factory }

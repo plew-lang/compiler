@@ -2,8 +2,8 @@
 // by the `Pow[Exp]` trait (no `**` operator). The bare call dispatches on the base
 // argument's type. The integer conformances take a non-negative `U64` exponent and
 // compute by repeated checked multiplication; a user type may provide its own `Pow`.
-import @Std/Io with { print }
-import @Std/Core with { Pow }
+use @Std/Io only { print }
+use @Std/Core only { Pow }
 
 struct Sq { pub val n: I64 }
 pub impl Sq { factory }

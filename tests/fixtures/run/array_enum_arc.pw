@@ -6,7 +6,7 @@
 // and returns the array; reading the elements after the locals are gone was a
 // use-after-free before the fix. Also checks CoW (copying then mutating the copy
 // leaves the source intact).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Word {
     Tagged(tags: Array[I32])

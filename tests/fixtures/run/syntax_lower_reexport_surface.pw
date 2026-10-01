@@ -1,12 +1,12 @@
 // SyntaxFile lowering must record the re-exported spelling (the alias when
-// present) in the module export surface, while introducing the same local import binding.
-import @Plew/Syntax with { Lexer, P, ImportId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxImport, syntaxTopItemPayload }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { Bind }
+// present) in the module export surface, while introducing the same local use binding.
+use @Plew/Syntax only { Lexer, P, ImportId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxImport, syntaxTopItemPayload }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Bind }
 
 fn main() {
-    val source = "pub import @Std/Io with { print as show, eprint }\n"
+    val source = "pub use @Std/Io only { print as show, eprint }\n"
     mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />

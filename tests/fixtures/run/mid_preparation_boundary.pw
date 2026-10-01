@@ -1,11 +1,11 @@
-import /Mid/Optimize with { MidCopyCosts }
+use /Mid/Optimize only { MidCopyCosts }
 // Shared semantic preparation publishes an executable body only on success.
 // A builder handle alone is insufficient; failures keep their stage and cause.
-import @Std/Io with { print }
-import @Std/Core with { assert }
-import /Frontend with { Comp }
-import /Ir with { BodyInstance, InstanceEnvironment }
-import /Mid with { MidBody, MidBlock, MidTerminator, MidParametricBody, MidInstantiatedBody, MidAccessResolvedBody, MidDropElaboratedBody, MidExecutableBody, MidPreparationError, MidInstantiateError, MidVerifyError }
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use /Frontend only { Comp }
+use /Ir only { BodyInstance, InstanceEnvironment }
+use /Mid only { MidBody, MidBlock, MidTerminator, MidParametricBody, MidInstantiatedBody, MidAccessResolvedBody, MidDropElaboratedBody, MidExecutableBody, MidPreparationError, MidInstantiateError, MidVerifyError }
 
 fn typedStages(compiler: inout Comp, input: MidParametricBody, instance: U64) -> Bool {
     val instantiated = match MidInstantiatedBody.instantiate(c: inout compiler, body: input, bodyId: instance) {

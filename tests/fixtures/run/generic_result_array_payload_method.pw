@@ -1,5 +1,5 @@
-import @Std/Core with { assert }
-import @Std/Io with { print }
+use @Std/Core only { assert }
+use @Std/Io only { print }
 
 // The `Ok` bind has the fully grounded `Array[T]` payload type. Finalizing
 // this generic body must use the frontend's frozen match fact, rather than

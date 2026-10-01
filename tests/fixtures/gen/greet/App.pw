@@ -1,8 +1,8 @@
 // gen test (spec/16 M0): a user-defined macro `Greet` generates an `impl` on the
 // annotated type into App.gen.pw (part = impl only), which the normal build
 // auto-parts; `main` calls the generated assoc fn.
-import @Plew/Syntax with { Derive, TopItemAst, Src, newSrc }
-import @Std/Io with { write }
+use @Plew/Syntax only { Derive, TopItemAst, Src, newSrc }
+use @Std/Io only { write }
 
 struct Greet { }
 pub impl Greet as Derive {

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn makeCounter() -> fn() -> I32 {
     mut val count: I32 = 0

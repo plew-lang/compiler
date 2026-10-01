@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Keep construction in legacy main. The helper's return expression is the
 // minimal value continuation after an indexed inout receiver call.

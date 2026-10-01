@@ -1,6 +1,6 @@
-import @Std/Io with { print }
-import ./A with { Convert as TextConvert }
-import ./B with { Convert as OtherConvert }
+use @Std/Io only { print }
+use ./A only { Convert as TextConvert }
+use ./B only { Convert as OtherConvert }
 
 struct Parser {}
 pub impl Parser { factory }

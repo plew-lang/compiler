@@ -1,5 +1,5 @@
 // Omitted leading/middle defaults must not become the context of later literals.
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct Options { val increment: I64 = 1I64 }
 fn choose(options: Options = <Options />, items: Array[I64]) -> I64 {
     return options.increment + items[0U64]

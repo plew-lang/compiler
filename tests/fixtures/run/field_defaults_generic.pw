@@ -1,7 +1,7 @@
 // Field defaults work on generic structs too: a concretely-typed default
 // field (`val tag: I32 = 99`) is filled when the construction omits it.
 // (Defaults are self-contained, so no type-parameter substitution is needed.)
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Box[T] {
     pub val v: T

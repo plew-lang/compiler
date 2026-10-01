@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 fn main() {
     val base: I32 = 1
     val f: fn() -> fn() -> I32 = fn() -> fn() -> I32 { return fn() -> I32 { return base } }

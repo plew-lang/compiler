@@ -4,8 +4,8 @@
 // definition (so its method body lands at the reserved-past block 0). Exercises
 // scanGenInstMethodBodies + the block-0 "no body" sentinel reservation. This is
 // the Dictionary `hashOf` pattern in miniature.
-import @Std/Io with { print }
-import @Std/Hash with { Hash, SipHasher }
+use @Std/Io only { print }
+use @Std/Hash only { Hash, SipHasher }
 
 struct Hasher1[K] {
     pub mut val seed: U64

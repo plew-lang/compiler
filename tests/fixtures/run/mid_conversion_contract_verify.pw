@@ -1,8 +1,8 @@
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { FieldDef, EnumDef, Variant, ValueConversionProof, EnumPayloadConversion, FinalDestruction, FrozenEnumPayloadConversion }
-import /Mid with { MidBody, MidBlock, MidStatement, MidRvalue, MidOperand, MidTerminator, MidPlace, MidLocalDecl, MidVerifyError, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { FieldDef, EnumDef, Variant, ValueConversionProof, EnumPayloadConversion, FinalDestruction, FrozenEnumPayloadConversion }
+use /Mid only { MidBody, MidBlock, MidStatement, MidRvalue, MidOperand, MidTerminator, MidPlace, MidLocalDecl, MidVerifyError, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
 
 fn envelope(compiler: inout Comp, name: String, payload: U64) -> U64 {
     val label = compiler.internBytes(s: name)

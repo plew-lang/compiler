@@ -3,9 +3,9 @@
 // This is the "first light" of the LLVM backend path: Plew code building real
 // LLVM IR through the C API (spec/15 FFI). See examples/llvm/README.md to build.
 
-import @Std/Io with { print }
-import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
-import ./Llvm with {
+use @Std/Io only { print }
+use @Std/Ffi only { cString, stringFromCString, arrayCPtr }
+use ./Llvm only {
     LLVMContextRef, LLVMModuleRef, LLVMTypeRef, LLVMValueRef, LLVMBasicBlockRef, LLVMBuilderRef,
     LLVMContextCreate, LLVMModuleCreateWithNameInContext, LLVMInt32TypeInContext, LLVMFunctionType,
     LLVMAddFunction, LLVMGetParam, LLVMAppendBasicBlockInContext, LLVMCreateBuilderInContext,

@@ -1,8 +1,8 @@
-import /CheckedProgram with { CompilerSession, CompilerSessionResult }
-import /Frontend with { FrontendInput }
-import /SourceAccess with { SourceAccess }
-import /Mid/DeclarationAccess with { DeclarationAccessNode }
-import @Std/Io with { print }
+use /CheckedProgram only { CompilerSession, CompilerSessionResult }
+use /Frontend only { FrontendInput }
+use /SourceAccess only { SourceAccess }
+use /Mid/DeclarationAccess only { DeclarationAccessNode }
+use @Std/Io only { print }
 
 fn allBodies() {
     val source = "fn main() { val item = 1I64 val get = fn() -> I64 { return identity(value: item) } val erased: any Value = <Box item=2I64 /> } fn identity(value: I64) -> I64 { return value } trait Value { fn get() -> I64 } struct Box { val item: I64 } impl Box as Value { fn get() -> I64 { return self.item } }"

@@ -1,7 +1,7 @@
 // Reading an enum from an Array field is a value copy. The array remains an
 // owner, so the copied enum must retain its Array payload before it is matched
 // and later dropped.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Item { Payload(values: Array[String]) }
 

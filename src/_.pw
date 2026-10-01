@@ -1,5 +1,5 @@
 // Development entry; distribution supplies embedded sources to the same driver.
-import ./Compiler with { runCompiler }
+use ./Compiler only { runCompiler }
 
 fn main() {
     runCompiler()

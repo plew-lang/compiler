@@ -1,6 +1,6 @@
 // The same selector becomes valid when P is explicitly bound at this use site.
-import ./A with { P, S }
-import @Std/Io with { print }
+use ./A only { P, S }
+use @Std/Io only { print }
 
 fn main() {
     val s: S = <S />

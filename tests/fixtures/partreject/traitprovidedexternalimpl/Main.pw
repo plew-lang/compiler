@@ -1,4 +1,4 @@
-import ./Lib with { Stepper }
+use ./Lib only { Stepper }
 
 pub impl Stepper {
     fn helper() -> I64 {

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait Celsius {}
 pub impl Celsius { fn temp() -> I64 { return 100I64 } }

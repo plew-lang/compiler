@@ -1,7 +1,7 @@
-// `import /Models` resolves the directory module `src/Models/_.pw` (spec/15): a
+// `use /Models` resolves the directory module `src/Models/_.pw` (spec/15): a
 // directory is imported through its `_` root module, with no `src/Models.pw` present.
-import @Std/Io with { print }
-import /Models with { User, label }
+use @Std/Io only { print }
+use /Models only { User, label }
 
 fn main() {
     val u: User = <User id=7I64 />

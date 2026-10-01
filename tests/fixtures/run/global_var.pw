@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Module-level variables (spec/15): a `val` constant and a `mut val` mutable, both
 // readable everywhere and (for `mut val`) writable across functions. A later global's

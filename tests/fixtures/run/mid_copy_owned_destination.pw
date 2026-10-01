@@ -1,4 +1,4 @@
-import @Std/Io with { write }
+use @Std/Io only { write }
 
 // Concatenation is heap-backed: immortal literals would hide surplus retains.
 // Exercise both assignment from Copy and each return boundary independently.

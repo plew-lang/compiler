@@ -1,7 +1,7 @@
 // try error path: a statement temp (heap string arg) + a live named heap local
 // when the Err propagates — is anything dropped on the try.err return path?
-import @Std/Core
-import @Std/Io with { print }
+use @Std/Core
+use @Std/Io only { print }
 
 struct Fail { pub val code: I32 }
 pub impl Fail { factory }

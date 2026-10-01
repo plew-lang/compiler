@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // An `Array[any P]` literal whose CONCRETE elements are a unique type (spec/03,08):
 // the concretes are boxed into the existential (never stored raw as Array elements),

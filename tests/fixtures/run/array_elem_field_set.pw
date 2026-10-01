@@ -1,7 +1,7 @@
 // F10: place mutation through an array element `arr[i].field = v`
 // (CLAUDE.md / spec/03 get-modify-set). Was emitting an unassignable rvalue
 // `PlewArray_E_get(...).field = v`.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct P {
     pub mut val x: I32

@@ -3,7 +3,7 @@
 // Covered: the built-in `Format` (so `print(u)` works directly, no explicit unwrap)
 // for both a String- and an int-underlying newtype, and a user trait whose String
 // witness is dispatched through the newtype (its inherited `self.bytes()` works too).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 pub trait Loud { fn boom() -> U64 }
 pub impl String as Loud { fn boom() -> U64 { return self.bytes().count() + 100U64 } }

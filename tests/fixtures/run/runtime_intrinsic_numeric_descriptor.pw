@@ -1,5 +1,5 @@
-import @Std/Io with { write }
-import /Ir with { RuntimeIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, NumericOverflow, CallTarget }
+use @Std/Io only { write }
+use /Ir only { RuntimeIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, NumericOverflow, CallTarget }
 
 fn main() {
     val target: CallTarget = <CallTarget.RuntimeIntrinsic intrinsic=<RuntimeIntrinsic.Numeric intrinsic=<NumericIntrinsic.Integer width=<NumericWidth.W64 /> unsigned=false operation=<IntegerOperation.Add /> overflow=<NumericOverflow.Checked /> /> /> />

@@ -8,7 +8,7 @@
 // Copy / Move / Drop operations on places; raw retain/release is not an IR
 // escape hatch.
 
-import ../Ir with { CallSiteKey, MatchSource, SemanticClosureCaptureMode }
+use ../Ir only { CallSiteKey, MatchSource, SemanticClosureCaptureMode }
 
 // Canonical Mid storage is deliberately separate from the builder vocabulary
 // below.  A Mid body is read by instantiation, drop elaboration, verification,
@@ -729,7 +729,7 @@ pub struct MidLocalDecl {
     // parameter starts false; a move parameter starts true. An initialized local
     // becomes owned only at its explicit Assign statement.
     pub val ownsAtEntry: Bool = false
-    // Compiler-generated boolean used only by drop elaboration. It is not a
+    // Compiler-generated boolea used only by drop elaboration. It is not a
     // source place and never participates in user ownership/accessibility.
     pub val isDropFlag: Bool = false
     // Compiler-generated ABI result storage. It is outside every source

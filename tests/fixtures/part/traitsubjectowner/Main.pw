@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import ./B with { S }
+use @Std/Io only { print }
+use ./B only { S }
 
 fn main() {
     val s: S = <S value=4I64 />

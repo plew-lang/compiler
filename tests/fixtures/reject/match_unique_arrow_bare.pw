@@ -1,7 +1,7 @@
 // A MutableRef pointee field is still a storage place; bare match must not copy it.
 
-import @Std/Core with { MutableRef }
-import @Std/Io with { print }
+use @Std/Core only { MutableRef }
+use @Std/Io only { print }
 
 unique struct File {
     pub val fd: I64

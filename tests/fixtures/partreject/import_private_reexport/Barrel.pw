@@ -1,1 +1,1 @@
-pub import ./Lib with { f }
+pub use ./Lib only { f }

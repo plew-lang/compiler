@@ -4,7 +4,7 @@
 // release the previous iteration's value. This is the shape that once
 // miscompiled the compiler itself one self-host generation late (block-exit
 // drop era); the assertion is the ASan gate.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Item { pub val name: String }
 pub impl Item { factory }

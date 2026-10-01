@@ -1,15 +1,15 @@
-import ./PublicSurfaceIndex with { PublicSurfaceIndex }
-import ./Ir with { AssociatedBoundEvidence, TraitConstraintRange, SupertraitRef, TraitProofOrigin, DeclarationBoundRef, TraitBound, TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
-import @Plew/Syntax with { syntaxTraitAssocType, syntaxAssociatedTypeBound }
-import ./StringLiteral with { decodeStringLiteral }
-import ./SourceAccess with { SourceAccess }
-import @Std/Set with { Set }
-import ./TraitCycleGraph with { TraitCycleGraph }
-import ./KeywordSpans with { KeywordSpans }
+use ./PublicSurfaceIndex only { PublicSurfaceIndex }
+use ./Ir only { AssociatedBoundEvidence, TraitConstraintRange, SupertraitRef, TraitProofOrigin, DeclarationBoundRef, TraitBound, TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
+use @Plew/Syntax only { syntaxTraitAssocType, syntaxAssociatedTypeBound }
+use ./StringLiteral only { decodeStringLiteral }
+use ./SourceAccess only { SourceAccess }
+use @Std/Set only { Set }
+use ./TraitCycleGraph only { TraitCycleGraph }
+use ./KeywordSpans only { KeywordSpans }
 // @Frontend — the backend-agnostic front-end of the self-hosted Plew compiler. It
 // DEFINES the shared compiler state `Comp` (＋ the name interner) and all analysis
 // over it: parsing (Parser), Codegen analysis (lower / resolve / check / infer /
-// mono / verify), the file Loader, and explicit-input analysis (`analyzeFrontend` fills the caller-owned `Comp`). It `import`s the pure IR data vocabulary `./Ir`
+// mono / verify), the file Loader, and explicit-input analysis (`analyzeFrontend` fills the caller-owned `Comp`). It `use`s the pure IR data vocabulary `./Ir`
 // (Expr/Stmt/TypeRef/… and the arena/table sub-structs that are Comp's fields) and is
 // imported by `./Backend` (which consumes Comp) and the entry `_.pw`.
 //
@@ -18,36 +18,36 @@ import ./KeywordSpans with { KeywordSpans }
 // impl must sit in the type's defining module (spec/15). The passes are mutually
 // recursive, so they are split across `part` files of this one module.
 
-import @Std/Io with { print, write, writeByte, readFile, readFileBytes, eprint, fileExists }
-import @Std/Process with { exit }
-import ./Ir with { SemanticGlobalAddress, ModuleBinding, ImportOrigin, PatternBindInput, PatternTypeInput }
-import ./Ir with { FinalDestruction, FinalDestructorCall, DestructionShape, DestructionDependencies }
-import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
-import @Std/Core with { stringFromBytesUnchecked, truncU8 }
-import @Plew/Syntax with { SyntaxField, SyntaxVariant, syntaxDeclFieldCount, syntaxDeclField, syntaxField, syntaxDeclVariantCount, syntaxDeclVariant, syntaxVariant, syntaxVariantFieldCount, syntaxVariantField }
-import @Plew/Syntax with { DeclId, SyntaxDecl, syntaxDecl }
-import @Plew/Syntax with { syntaxDeclTypeParamCount, syntaxDeclTypeParamSpan, syntaxDeclTypeParamIsSendable }
-import @Plew/Syntax with { syntaxDeclParamCount, syntaxDeclParam, syntaxParam, syntaxDeclWhereCount, syntaxDeclWhereParamSpan, syntaxDeclWhereTraitSpan, syntaxDeclWhereType, syntaxDeclWhereTraitType }
-import @Plew/Syntax with { SigId, SyntaxSig, syntaxSig, syntaxSigTypeParamCount, syntaxSigTypeParamSpan, syntaxSigTypeParamIsSendable, syntaxSigParamCount, syntaxSigParam }
-import @Plew/Syntax with { ExternId, SyntaxExtern, syntaxExtern, syntaxExternFnCount, syntaxExternFn, syntaxExternStructCount, syntaxExternStructNameSpan, syntaxExternStructSpan, syntaxExternStructTypeParamCount, syntaxExternStructTypeParamSpan, syntaxExternStructTypeParamIsSendable }
-import @Plew/Syntax with { DirectiveId, SyntaxDirective, DeriveReqId, SyntaxDeriveReq, syntaxDirective, syntaxDirectiveReqCount, syntaxDirectiveReq, syntaxDeriveReq, syntaxDeriveReqArgCount, syntaxDeriveReqArg, syntaxExternStructDirective }
-import @Plew/Syntax with { syntaxTraitSupertraitCount, syntaxTraitSupertrait, syntaxTraitSupertraitSpan, syntaxTraitAssocTypeCount, syntaxTraitAssocTypeSpan, syntaxTraitReqCount, syntaxTraitReq }
-import @Plew/Syntax with { syntaxTraitTypeParamSpan, syntaxTraitTypeParamIsSendable }
-import @Plew/Syntax with { MemberId, SyntaxMember, syntaxImplMemberCount, syntaxImplMember, syntaxMember, syntaxMemberTypeParamCount, syntaxMemberTypeParamSpan, syntaxMemberTypeParamIsSendable, syntaxMemberParamCount, syntaxMemberParam, syntaxMemberWhereCount, syntaxMemberWhereParamSpan, syntaxMemberWhereTraitSpan, syntaxMemberWhereType, syntaxMemberWhereTraitType }
-import @Plew/Syntax with { ImplId, SyntaxImpl, syntaxImpl, syntaxImplParamCount, syntaxImplParamSpan, syntaxImplParamIsSendable, syntaxImplTraitArgCount, syntaxImplTraitArg, syntaxImplWhereCount, syntaxImplWhereParamSpan, syntaxImplWhereTraitSpan, syntaxImplWhereType, syntaxImplWhereTraitType }
-import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, SyntaxFile, SyntaxSlice, TopItemId, SyntaxTopItemKind, ImportId, SyntaxImport, TraitId, SyntaxTrait, NewtypeId, SyntaxNewtype, TypeId, SyntaxType, ExprId, SyntaxExpr, SyntaxExprKind, ArgId, SyntaxArg, ParamId, SyntaxParam, MakeFieldId, SyntaxMakeField, BindId, SyntaxBind, PatternId, SyntaxPattern, MatchArmId, SyntaxMatchArm, BlockId, SyntaxBlock, StmtId, SyntaxStmt, SyntaxStmtKind, parseProgramSyntaxInto, syntaxFileTopLevel, syntaxTopItemKind, syntaxTopItemPayload, syntaxTopItemSpan, syntaxImport, syntaxTrait, syntaxTraitTypeParamCount, syntaxNewtype, syntaxType, syntaxTypeNameSegment, syntaxTypeArgCount, syntaxTypeArg, syntaxTypeArgLabel, syntaxTypeViewNameCount, syntaxTypeViewName, syntaxTypeProjectionTraitArgCount, syntaxTypeProjectionTraitArg, syntaxTypeProjectionTraitArgLabel, syntaxImportNameCount, syntaxImportNameSpan, syntaxImportNameAliasSpan, syntaxExpr, syntaxExprArgCount, syntaxExprArg, syntaxArg, syntaxExprMakeFieldCount, syntaxExprMakeField, syntaxMakeField, syntaxExprElemCount, syntaxExprElem, syntaxExprDictEntryCount, syntaxExprDictKey, syntaxExprDictValue, syntaxExprParamCount, syntaxExprParam, syntaxExprTypeSegment, syntaxNameSegmentArg, syntaxExprTypeArgCount, syntaxExprTypeArg, syntaxBlock, syntaxBlockStmtCount, syntaxBlockStmt, syntaxStmt, syntaxStmtBindCount, syntaxStmtBind, syntaxBind, syntaxMatchArmCount, syntaxMatchArmAt, syntaxMatchArm, syntaxPattern, syntaxPatternBindCount, syntaxPatternBind, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, ResolvedViewSource, TypeRef, TypeTerm, TypeArgumentRange, TypeRecordLabelRange, TypeRecordFieldRange, TypeViewIdRange, TypeViewSourceRange, TypeArgumentLabelRange, TypeAssocArgumentRange, TypeAssocArgumentLabelRange, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallKind, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, FinalTryResolution, FinalAwaitResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, FfiIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget, identSelfTarget }
-import ./Mid/Ir with { MidCanonicalArena }
-import ./Ir with { CallParameterBinding, DefaultGeneratorRange, DefaultGeneratorOrigin, CachedCallee }
-pub import @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
-pub import ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallKind, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, FinalTryResolution, FinalAwaitResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
-import ./Toml with { bytesEq }
-import ./Path with { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
-import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
-import ./Lock with { Lock }
-import ./Cache with { cacheRoot }
-import ./Diag with { compileErrorAt, compileErrorAtFile, CompileDiagnostic, DiagnosticLocation, emitDiagnostic, eprintInt, digitByte, digitStrU }
-import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
+use @Std/Io only { print, write, writeByte, readFile, readFileBytes, eprint, fileExists }
+use @Std/Process only { exit }
+use ./Ir only { SemanticGlobalAddress, ModuleBinding, ImportOrigin, PatternBindInput, PatternTypeInput }
+use ./Ir only { FinalDestruction, FinalDestructorCall, DestructionShape, DestructionDependencies }
+use @Std/Ffi only { cString, stringFromCString, arrayCPtr }
+use @Std/Core only { stringFromBytesUnchecked, truncU8 }
+use @Plew/Syntax only { SyntaxField, SyntaxVariant, syntaxDeclFieldCount, syntaxDeclField, syntaxField, syntaxDeclVariantCount, syntaxDeclVariant, syntaxVariant, syntaxVariantFieldCount, syntaxVariantField }
+use @Plew/Syntax only { DeclId, SyntaxDecl, syntaxDecl }
+use @Plew/Syntax only { syntaxDeclTypeParamCount, syntaxDeclTypeParamSpan, syntaxDeclTypeParamIsSendable }
+use @Plew/Syntax only { syntaxDeclParamCount, syntaxDeclParam, syntaxParam, syntaxDeclWhereCount, syntaxDeclWhereParamSpan, syntaxDeclWhereTraitSpan, syntaxDeclWhereType, syntaxDeclWhereTraitType }
+use @Plew/Syntax only { SigId, SyntaxSig, syntaxSig, syntaxSigTypeParamCount, syntaxSigTypeParamSpan, syntaxSigTypeParamIsSendable, syntaxSigParamCount, syntaxSigParam }
+use @Plew/Syntax only { ExternId, SyntaxExtern, syntaxExtern, syntaxExternFnCount, syntaxExternFn, syntaxExternStructCount, syntaxExternStructNameSpan, syntaxExternStructSpan, syntaxExternStructTypeParamCount, syntaxExternStructTypeParamSpan, syntaxExternStructTypeParamIsSendable }
+use @Plew/Syntax only { DirectiveId, SyntaxDirective, DeriveReqId, SyntaxDeriveReq, syntaxDirective, syntaxDirectiveReqCount, syntaxDirectiveReq, syntaxDeriveReq, syntaxDeriveReqArgCount, syntaxDeriveReqArg, syntaxExternStructDirective }
+use @Plew/Syntax only { syntaxTraitSupertraitCount, syntaxTraitSupertrait, syntaxTraitSupertraitSpan, syntaxTraitAssocTypeCount, syntaxTraitAssocTypeSpan, syntaxTraitReqCount, syntaxTraitReq }
+use @Plew/Syntax only { syntaxTraitTypeParamSpan, syntaxTraitTypeParamIsSendable }
+use @Plew/Syntax only { MemberId, SyntaxMember, syntaxImplMemberCount, syntaxImplMember, syntaxMember, syntaxMemberTypeParamCount, syntaxMemberTypeParamSpan, syntaxMemberTypeParamIsSendable, syntaxMemberParamCount, syntaxMemberParam, syntaxMemberWhereCount, syntaxMemberWhereParamSpan, syntaxMemberWhereTraitSpan, syntaxMemberWhereType, syntaxMemberWhereTraitType }
+use @Plew/Syntax only { ImplId, SyntaxImpl, syntaxImpl, syntaxImplParamCount, syntaxImplParamSpan, syntaxImplParamIsSendable, syntaxImplTraitArgCount, syntaxImplTraitArg, syntaxImplWhereCount, syntaxImplWhereParamSpan, syntaxImplWhereTraitSpan, syntaxImplWhereType, syntaxImplWhereTraitType }
+use @Plew/Syntax only { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, SyntaxFile, SyntaxSlice, TopItemId, SyntaxTopItemKind, ImportId, SyntaxImport, TraitId, SyntaxTrait, NewtypeId, SyntaxNewtype, TypeId, SyntaxType, ExprId, SyntaxExpr, SyntaxExprKind, ArgId, SyntaxArg, ParamId, SyntaxParam, MakeFieldId, SyntaxMakeField, BindId, SyntaxBind, PatternId, SyntaxPattern, MatchArmId, SyntaxMatchArm, BlockId, SyntaxBlock, StmtId, SyntaxStmt, SyntaxStmtKind, parseProgramSyntaxInto, syntaxFileTopLevel, syntaxTopItemKind, syntaxTopItemPayload, syntaxTopItemSpan, syntaxImport, syntaxTrait, syntaxTraitTypeParamCount, syntaxNewtype, syntaxType, syntaxTypeNameSegment, syntaxTypeArgCount, syntaxTypeArg, syntaxTypeArgLabel, syntaxTypeViewNameCount, syntaxTypeViewName, syntaxTypeProjectionTraitArgCount, syntaxTypeProjectionTraitArg, syntaxTypeProjectionTraitArgLabel, syntaxImportNameCount, syntaxImportNameSpan, syntaxImportNameAliasSpan, syntaxExpr, syntaxExprArgCount, syntaxExprArg, syntaxArg, syntaxExprMakeFieldCount, syntaxExprMakeField, syntaxMakeField, syntaxExprElemCount, syntaxExprElem, syntaxExprDictEntryCount, syntaxExprDictKey, syntaxExprDictValue, syntaxExprParamCount, syntaxExprParam, syntaxExprTypeSegment, syntaxNameSegmentArg, syntaxExprTypeArgCount, syntaxExprTypeArg, syntaxBlock, syntaxBlockStmtCount, syntaxBlockStmt, syntaxStmt, syntaxStmtBindCount, syntaxStmtBind, syntaxBind, syntaxMatchArmCount, syntaxMatchArmAt, syntaxMatchArm, syntaxPattern, syntaxPatternBindCount, syntaxPatternBind, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
+use ./Ir only { PType, ResolvedViewSource, TypeRef, TypeTerm, TypeArgumentRange, TypeRecordLabelRange, TypeRecordFieldRange, TypeViewIdRange, TypeViewSourceRange, TypeArgumentLabelRange, TypeAssocArgumentRange, TypeAssocArgumentLabelRange, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallKind, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, FinalTryResolution, FinalAwaitResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, FfiIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget, identSelfTarget }
+use ./Mid/Ir only { MidCanonicalArena }
+use ./Ir only { CallParameterBinding, DefaultGeneratorRange, DefaultGeneratorOrigin, CachedCallee }
+pub use @Plew/Syntax only { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
+pub use ./Ir only { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallKind, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, FinalTryResolution, FinalAwaitResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
+use ./Toml only { bytesEq }
+use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
+use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
+use ./Lock only { Lock }
+use ./Cache only { cacheRoot }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, DiagnosticLocation, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
 // numeric context. A named value or explicit suffix owns its own type.
@@ -127,7 +127,7 @@ pub struct Comp {
     // declaration / conformance / name side-tables built during loading & analysis
     // (see `Decls`): traits, conformances, method aliases,
     // derive requests, where-bounds, deinits, assoc bindings, pub factories, and
-    // the import-name / chain-result caches.
+    // the use-name / chain-result caches.
     pub mut val decls: Decls = <Decls />
     pub mut val keywordSpans: KeywordSpans = <KeywordSpans.empty />
     // parse-time scratch, reset at each impl/decl boundary (see `ParseScratch`).
@@ -179,7 +179,7 @@ pub struct Comp {
     pub mut val requireMid: Bool = false
     // Declaration identity of the ambient `@Std/Lang` Array type.  Storage
     // consumers compare this offset against resolved TypeRef.declOffset;
-    // they never infer the Array ABI from a source spelling or import alias.
+    // they never infer the Array ABI from a source spelling or use alias.
     pub mut val langArrayDeclOffset: U64 = 0U64
     // Optional counters paired with --trace-phases. They isolate monomorphization
     // work amplification without changing its worklist or generated LLVM.
@@ -903,7 +903,7 @@ pub impl Comp {
 // Compare two name spans for byte equality against the shared source buffer.
 pub fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64) -> Bool {
     // Every interner key is a slice of the shared source buffer.  Keep this
-    // boundary total: a malformed stored span used to turn the byte loop below
+    // boundary total: a malformed stored spa used to turn the byte loop below
     // into an effectively unbounded read, which presented as a compiler hang.
     // This is an internal invariant, not a source-program diagnostic.
     val byteCount: U64 = c.arena.bytes.count()
@@ -1206,8 +1206,8 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     // The caller creates the compiler arena. The loader below fills `bytes`/`moduleRanges` and lowers
     // every item into it: PARSE-DRIVEN LOADING — each file's source is appended to
     // `c.arena.bytes`, parsed by the shared @Plew/Syntax parser, its items retained, and its
-    // `import`/`part` nodes followed to more files. There is no separate directive
-    // pre-scan: the parsed tree drives discovery. Lowering waits until every file and import
+    // `use`/`part` nodes followed to more files. There is no separate directive
+    // pre-scan: the parsed tree drives discovery. Lowering waits until every file and use
     // origin is known, so a source occurrence resolves one declaration identity everywhere.
     // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
     // (synthetic locals, untyped positions) never aliases a real parsed type.
@@ -1227,14 +1227,14 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     c.requireMid = requireMid
     tracePhase(c: inout c, label: "load:start")
     // Each loaded file contributes one immutable root range into Comp.syntax.
-    // Do not retain a program-wide Array[TopItemAst]: import discovery and
+    // Do not retain a program-wide Array[TopItemAst]: use discovery and
     // lowering both traverse these typed IDs after the graph is complete.
     mut val pendingRoots: Array[SyntaxSlice] = []
     mut val nextModuleId: U64 = 1
     match input {
     FrontendInput.File(path: val rootPath) => {
         // Module loader: a recursive, deduplicated worklist over local includes.
-        // Each file's `part`/`import` paths resolve relative to that file's own
+        // Each file's `part`/`use` paths resolve relative to that file's own
         // directory; every distinct file is appended once (single-arena / single-C).
         val entryBytes: Array[U8] = rootPath.bytes()
         // Loud-fail on a missing entry file: without this readFileBytes returns an
@@ -1277,7 +1277,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
         appendBytes(into: inout pathBuf, from: entryBytes)
         loaded.append(<Bind nameStart=es nameLen=entryBytes.count() fieldStart=0 fieldLen=entryBytes.count() />)
         // Force-load @Std/Lang FIRST: it is THE ambient module (spec/15) — it declares the
-        // language's built-in types (the lang items), in scope everywhere without an import.
+        // language's built-in types (the lang items), in scope everywhere without a use.
         // Loaded before Core/Hash/Prelude so the foundational types resolve for them. Its
         // module id is captured (`langModule`) so type visibility can treat a type defined
         // here as ambient. Guarded by fileExists (a freshly-seeded compiler may lack it).
@@ -1293,10 +1293,10 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
         }
         // Force-load @Std/Core so its lang-item types (Optional/Result/Ordering),
         // operator traits + witnesses, and Iterator/Index machinery are AMBIENT
-        // (spec/15: usable without `import` — `2 + 3`, `Optional`, `for` need none).
+        // (spec/15: usable without `use` — `2 + 3`, `Optional`, `for` need none).
         // Its `part Core/Num.pw` + imports are followed by the BFS; a target that also
-        // `import @Std/Core`s dedups via pathSeen. A Core free function like `assert`
-        // still needs an explicit import — checkUseVisibility gates it as an ordinary
+        // `use @Std/Core`s dedups via pathSeen. A Core free function like `assert`
+        // still needs an explicit use — checkUseVisibility gates it as an ordinary
         // cross-module call (only types/operators are ambient, not free functions).
         mut val corePath: Array[U8] = []
         appendBytes(into: inout corePath, from: stdRoot)
@@ -1312,7 +1312,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
         // hashing (the `[k:v]` literal's `K: Hash` machinery + `SipHasher`), so the hashing
         // floor must always be LOADED even when the target never imports it. Force-load is
         // loading only — `Hash`/`Hasher`/`SipHasher` are NOT ambient (spec/15: not lang
-        // items), so naming them in a type position still needs `import @Std/Hash`. The
+        // items), so naming them in a type position still needs `use @Std/Hash`. The
         // prelude itself imports it; a target that also imports it dedups via pathSeen.
         mut val hashPath: Array[U8] = []
         appendBytes(into: inout hashPath, from: stdRoot)
@@ -1325,7 +1325,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
             nextModuleId = nextModuleId + 1
         }
         // Remember the bundled Io path. It is not force-loaded: the loader
-        // records its module identity if and when an ordinary import reaches it.
+        // records its module identity if and when an ordinary use reaches it.
         mut val ioPath: Array[U8] = []
         appendBytes(into: inout ioPath, from: stdRoot)
         appendBytes(into: inout ioPath, from: "Io.pw".bytes())
@@ -1343,10 +1343,10 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
         appendBytes(into: inout asyncPath, from: "Async.pw".bytes())
         if genMode {
             // The synthesized derive-runner calls `write` even when the target file
-            // does not import @Std/Io itself.  Load the real bundled declaration in
-            // this mode only; normal builds retain ordinary import-driven loading.
+            // does not use @Std/Io itself.  Load the real bundled declaration in
+            // this mode only; normal builds retain ordinary use-driven loading.
             // The BFS records its module id below, so this is still the same
-            // declaration-identity path as a source import.
+            // declaration-identity path as a source use.
             if sources.exists(path: ioPath) {
                 val iops: U64 = pathBuf.count()
                 appendBytes(into: inout pathBuf, from: ioPath)
@@ -1356,8 +1356,8 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
             // force-load @Plew/Syntax too: the harness calls `parseItem` and the derive
             // interfaces / built-in derivers (`impl Hash as Derive`) live there. Resolve
             // it through the gen target's OWN manifest (a path or git dependency), exactly
-            // like a normal `@dep` import, so the macro's pinned Syntax version is the one
-            // loaded. Its `part`s + `import @Std/Core` are followed by the BFS below; a
+            // like a normal `@dep` use, so the macro's pinned Syntax version is the one
+            // loaded. Its `part`s + `use @Std/Core` are followed by the BFS below; a
             // target file that also imports it dedups via pathSeen.
             if synPath.count() != 0 {
                 if sources.exists(path: synPath) {
@@ -1481,7 +1481,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
             c.appendSrc(from: sb)
             c.modules.registerSourceFile(start: fileStart, length: c.arena.bytes.count() - fileStart, moduleId: moduleId, path: stringFromBytesUnchecked(path), syntaxRoot: synPath.count() != 0U64 && bytesEq(a: path, b: synPath))
             // Parse now to discover edges; lower all retained items only after the complete
-            // graph (and therefore all import aliases and declarations) exists.
+            // graph (and therefore all use aliases and declarations) exists.
             tracePhaseCount(c: inout c, label: "load:parse-start", count: qi)
             val roots: SyntaxSlice = try c.parseFileSyntax(fileBytes: sb, fileStart: fileStart)
             tracePhaseCount(c: inout c, label: "load:parse-done", count: qi)
@@ -1500,7 +1500,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
             val fPkgDir: Array[U8] = findPkgDir(entry: path)
             val fSrcRoot: Array[U8] = findSrcRoot(entry: path)
             val fDeps: Array[Dep] = loadManifestDeps(pkgDir: fPkgDir)
-            // follow `import`/`part` nodes to child files (in source order); note a
+            // follow `use`/`part` nodes to child files (in source order); note a
             // `@[...]` directive so the generated sibling can be auto-parted.
             mut val sawDirective: Bool = false
             mut val ii: U64 = 0
@@ -1519,7 +1519,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
                     SyntaxTopItemKind.Import => {
                         val imp: SyntaxImport = syntaxImport(file: c.syntax, id: <ImportId raw=syntaxTopItemPayload(file: c.syntax, item: item) />)
                         mut val childPath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count(), stdRoot: stdRoot, stdRootLen: stdRoot.count(), sources: sources)
-                        // a non-`@Std` `@dep` import is unresolved by @Path (returns
+                        // a non-`@Std` `@dep` use is unresolved by @Path (returns
                         // empty); resolve it against this package's [dependencies] —
                         // path deps directly, git deps via the lock's pinned commit in
                         // the global cache.
@@ -1529,9 +1529,9 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
                         if childPath.count() == 0 {
                             childPath = resolveGitDepImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start, deps: fDeps, cacheRoot: cacheRootBytes, lock: entryLock)
                         }
-                        // phantom-dependency rule (spec/17): an external `@<name>` import
+                        // phantom-dependency rule (spec/17): an external `@<name>` use
                         // that no declared dependency backs is a loud error (provenance:
-                        // you may only import what the manifest declares + `@Std`).
+                        // you may only use what the manifest declares + `@Std`).
                         if childPath.count() == 0 {
                             if isExternalDepImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start) {
                                 return <Result.Err error=c.diagnosticAt(offset: imp.path.start, msg: "this `@<package>` import names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies; only declared deps and `@Std` are importable)") />
@@ -1543,7 +1543,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
                             // parted by exactly one parent (spec/15). If its target is
                             // already in the module graph — parted by another file (a
                             // diamond, same module or across modules) or already loaded as
-                            // an imported module root — that is an error. (`import` dedups
+                            // an imported module root — that is an error. (`use` dedups
                             // instead: importing the same module from many places is fine.)
                             if !(imp.isImport) {
                                 if seen {
@@ -1552,13 +1552,13 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
                             }
                             if !seen {
                                 // a resolved path that names no file on disk = a typo'd
-                                // import/part path — reject loudly (acceptance soundness:
+                                // use/part path — reject loudly (acceptance soundness:
                                 // never silently load nothing).
                                 if !(sources.exists(path: childPath)) {
                                     return <Result.Err error=c.diagnosticAt(offset: imp.path.start, msg: "cannot open module file: the import/part path does not resolve to an existing file") />
                                 }
                                 // a `part` (isImport=false) joins this module; an
-                                // `import` (true) starts a fresh module.
+                                // `use` (true) starts a fresh module.
                                 mut val childModule: U64 = moduleId
                                 if imp.isImport {
                                     childModule = nextModuleId
@@ -1568,7 +1568,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
                                 appendBytes(into: inout pathBuf, from: childPath)
                                 loaded.append(<Bind nameStart=cs nameLen=childPath.count() fieldStart=childModule fieldLen=childPath.count() />)
                             }
-                            // record the import edge (this module -> the module the path
+                            // record the use edge (this module -> the module the path
                             // resolved to), whether the target is newly loaded or deduped,
                             // so name resolution can prefer a directly-imported module when
                             // a name is shared by coexisting package versions.
@@ -1737,7 +1737,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     try c.checkDuplicateTraitReqs()
     try c.checkImplOnBuiltin()
     try c.checkImplOnNewtype()
-    // module visibility (spec/15): a name brought in by `import … with { }` must be
+    // module visibility (spec/15): a name brought in by `use … only { }` must be
     // part of its module's public surface (`pub`). Importing from the wrong
     // module also fails here — that module doesn't get loaded, so the name isn't
     // among the exported (loaded) declarations.
@@ -1765,7 +1765,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     tracePhase(c: inout c, label: "declaration-checks:done")
     // gen mode (spec/16): replace the program with the synthesized derive-runner
     // harness `main`. Added after the user-code checks (so its synthetic call to
-    // `deriveFromSource`/`write` is exempt from import hygiene) and before
+    // `deriveFromSource`/`write` is exempt from use hygiene) and before
     // instantiation discovery (so its `print`/method instances are emitted).
     if c.genMode {
         try c.synthGenMain()

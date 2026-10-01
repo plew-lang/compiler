@@ -1,4 +1,4 @@
-import @Std/Core with { Iterator }
+use @Std/Core only { Iterator }
 
 fn unused[T](values: any Iterator[Item=T]) {
     for val value in values {

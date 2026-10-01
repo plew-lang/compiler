@@ -1,13 +1,13 @@
 // One process execution owns its compiler session and ORC code together.
-import ./CompilerCallbacks as Callbacks
-import ./CompilerSessions with { registerCompilerSession, compilerSessionSnapshot, findCompilerSession, unregisterCompilerSession }
-import ./CheckedProgram with { CompilerSession, CompilerSessionResult }
-import ./Frontend with { FrontendInput, FrontendOptions }
-import ./SourceAccess with { SourceAccess }
-import ./Backend with { LlvmJit, LlvmJitCreation, LlvmLoweringResult, ProgramArguments }
-import ./Diag with { emitDiagnostic }
-import @Std/Io with { eprint }
-import @Std/Core with { MutableRef }
+use ./CompilerCallbacks as Callbacks
+use ./CompilerSessions only { registerCompilerSession, compilerSessionSnapshot, findCompilerSession, unregisterCompilerSession }
+use ./CheckedProgram only { CompilerSession, CompilerSessionResult }
+use ./Frontend only { FrontendInput, FrontendOptions }
+use ./SourceAccess only { SourceAccess }
+use ./Backend only { LlvmJit, LlvmJitCreation, LlvmLoweringResult, ProgramArguments }
+use ./Diag only { emitDiagnostic }
+use @Std/Io only { eprint }
+use @Std/Core only { MutableRef }
 
 unique struct SessionRegistration {
     val id: U64

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // One conversion proof crosses enum -> array -> existential box at a function
 // boundary. Construction remains in the producer; the caller owns the Mid

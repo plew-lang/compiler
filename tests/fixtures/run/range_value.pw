@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // First-class ranges: `a..<b` / `a..=b` desugar to HalfOpenRange / ClosedRange
 // values (2-field {start,end} structs). Bound as a value, its fields are read

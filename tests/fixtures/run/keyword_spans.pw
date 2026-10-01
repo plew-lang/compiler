@@ -1,5 +1,5 @@
-import @Std/Io with { write }
-import /KeywordSpans with { KeywordSpans }
+use @Std/Io only { write }
+use /KeywordSpans only { KeywordSpans }
 
 fn main() {
     mut val table: KeywordSpans = <KeywordSpans.empty />

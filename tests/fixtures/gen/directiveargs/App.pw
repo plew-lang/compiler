@@ -1,6 +1,6 @@
-import @Std/Io with { write }
-import @Plew/Syntax with { ParameterizedDerive, TopItemAst, DeclAst }
-import @Std/Core with { stringFromBytesUnchecked }
+use @Std/Io only { write }
+use @Plew/Syntax only { ParameterizedDerive, TopItemAst, DeclAst }
+use @Std/Core only { stringFromBytesUnchecked }
 
 // A parameterized derive: `@[Tagged(prefix: "hello", times: 3)]`. The directive
 // args become fields the macro reads via self. They must be `pub` — a macro that

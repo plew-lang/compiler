@@ -5,7 +5,7 @@
 // Regression probes: the bare-head element name aliased an argless generic
 // head and hung the compiler; a module-level literal let missed instance
 // registration entirely and hung emission.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Box[T] { pub val v: T }
 pub impl Box { factory }

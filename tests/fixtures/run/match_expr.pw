@@ -1,6 +1,6 @@
 // match as an expression (bare-expr arms): scalar/String results, payload
 // binds, and nesting inside a larger expression.
-import @Std/Io with { print, write }
+use @Std/Io only { print, write }
 
 enum Color { Red Green Blue }
 enum Shape { Circle(r: I64) Square(s: I64) }

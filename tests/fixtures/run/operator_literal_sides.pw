@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A bare integer literal takes its type from the typed operand on EITHER side (spec/12:
 // homogeneous numerics share one type) — `5 + big` types `5` from `big`, just like

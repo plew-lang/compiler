@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait Picker {
     fn pick(value: I64) -> I64

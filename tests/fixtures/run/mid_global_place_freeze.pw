@@ -1,5 +1,5 @@
-import @Std/Io with { write }
-import /Mid with { MidBlock, MidBody, MidCanonicalArena, MidCanonicalBody, MidLocalDecl, MidOperand, MidPlace, MidRvalue, MidScope, MidStatement, MidTerminator, canonicalMidBodyIsWellFormed }
+use @Std/Io only { write }
+use /Mid only { MidBlock, MidBody, MidCanonicalArena, MidCanonicalBody, MidLocalDecl, MidOperand, MidPlace, MidRvalue, MidScope, MidStatement, MidTerminator, canonicalMidBodyIsWellFormed }
 
 // Canonical storage must preserve a global declaration identity as an address
 // root; a global-array position or a local sentinel would make later LLVM

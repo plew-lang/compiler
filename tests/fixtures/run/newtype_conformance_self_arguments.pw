@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait Same[Input] { fn accept(value: Input) -> I64 }
 trait Concrete[Input] { fn read(value: Input) -> I64 }

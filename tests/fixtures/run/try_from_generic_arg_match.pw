@@ -1,8 +1,8 @@
 // The mirror of try_from_generic_arg_mismatch: when the source's generic argument
 // DOES match the `from` parameter (`Box[String]` -> `from(Box[String])`), `try`
 // converts through it (spec/13).
-import @Std/Io with { print }
-import @Std/Core with { From }
+use @Std/Io only { print }
+use @Std/Core only { From }
 struct Box[T] { pub val v: T }
 pub impl Box { factory }
 struct DstErr { pub val code: I32 }

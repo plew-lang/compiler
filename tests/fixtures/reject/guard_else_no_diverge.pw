@@ -2,7 +2,7 @@
 // runs on failure and the rest-of-block continues only on success, so falling through
 // the else would defeat the early-exit guarantee. Here the else just prints and falls
 // through, which is rejected.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn f(n: I64) -> I64 {
     guard n > 0 {

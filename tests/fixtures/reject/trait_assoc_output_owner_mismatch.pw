@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 trait NumberOutput { type Output fn number() -> Output }
 trait FlagOutput { type Output fn flag() -> Output }
 struct Sample {}

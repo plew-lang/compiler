@@ -2,7 +2,7 @@
 // mutation through `a` (element store or append) splits off a private copy, so
 // `b` keeps the original value. The sharing is invisible — observably each
 // binding is an independent value.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     mut val a: Array[I32] = [1, 2, 3]

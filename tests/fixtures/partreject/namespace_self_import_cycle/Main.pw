@@ -1,2 +1,2 @@
-import ./Main as Again
+use ./Main as Again
 fn main() {}

@@ -1,8 +1,8 @@
 // Pool-relative ranges, repeated occurrences and distinct child pools matter:
 // traversal must not deduplicate edges or confuse captures with aggregate fields.
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import /Mid/Ir with { MidCanonicalArena, MidRange, MidSwitchCase, MidTerminatorNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidCallReceiverNode, MidStatementNode, MidEnumDestinationNode, MidOperandNode }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Mid/Ir only { MidCanonicalArena, MidRange, MidSwitchCase, MidTerminatorNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidCallReceiverNode, MidStatementNode, MidEnumDestinationNode, MidOperandNode }
 
 fn main() {
     mut val arena: MidCanonicalArena = <MidCanonicalArena />

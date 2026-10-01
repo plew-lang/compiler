@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Provided methods (spec/08): `impl Trait { }` builds on the requirements.
 // Each conforming type gains doubleStep, instantiated per type.

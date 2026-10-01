@@ -1,6 +1,6 @@
-import @Std/Io with { write }
-import @Plew/Syntax with { rangeEquals }
-import /Ir with { Arena, TypeRef }
+use @Std/Io only { write }
+use @Plew/Syntax only { rangeEquals }
+use /Ir only { Arena, TypeRef }
 
 // Reference behavior before registration-time structural evidence.
 fn referenceClosed(arena: Arena, ref: U64) -> Bool {

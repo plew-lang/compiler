@@ -2,7 +2,7 @@
 // factory default-arg sugar). A construction that omits a field gets its
 // declared default; the default expression is re-evaluated at each site.
 // Previously `= expr` after a field was mis-parsed into phantom fields.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Config {
     pub val timeout: I32 = 30

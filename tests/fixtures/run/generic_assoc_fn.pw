@@ -3,7 +3,7 @@
 // through the same machinery as a generic free function. Covers a single type param, a
 // multi-param factory, repeated instances, and a nested assoc call (`Box.dup` ->
 // `Pair.of`), which exercises transitive instance collection.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Pair[A, B] {
     pub val a: A

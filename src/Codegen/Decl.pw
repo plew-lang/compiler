@@ -35,7 +35,7 @@ pub impl Comp {
 
     // Operator syntax has a fixed semantic source: @Std/Core.  Do not recover
     // it by a bare spelling at an arbitrary later checker site, where a user
-    // trait of the same name or an import alias would change the meaning.
+    // trait of the same name or a use alias would change the meaning.
     inout fn coreTraitOwner(name: String, arity: U64 = 0U64) -> U64 {
         val id: U64 = self.internBytes(s: name).nameId
         mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: id)
@@ -87,7 +87,7 @@ pub impl Comp {
     // The source parser normally supplies a trait-use span.  A generated or
     // synthesized declaration can legitimately carry only the spelling, but
     // it still has a lexical module.  Resolve that spelling through the same
-    // local/import/re-export scope as an authored use — never through a
+    // local/use/re-export scope as an authored use — never through a
     // process-wide name scan.  This is also the correct fallback for `part`
     // declarations, which share their root module's lexical scope.
     inout fn traitOwnerInScopeById(mod: U64, nameId: U64, arity: U64) -> U64 {
@@ -202,7 +202,7 @@ pub impl Comp {
     }
 
     // Resolve a trait spelling at its authored use site once: lexical local
-    // declaration, then the import surface (which may be a barrel), then its
+    // declaration, then the use surface (which may be a barrel), then its
     // declaration owner.  Traits are not ambient; absence of such a binding is
     // intentionally unresolved.
     inout fn traitOwnerAtUse(start: U64, len: U64, arity: U64, openArgs: Bool = false) -> U64 {
@@ -290,7 +290,7 @@ pub impl Comp {
     }
 
     // SyntaxFile retains selector spellings as source spans, not Strings. Keep
-    // the same lexical/import/re-export resolution law while avoiding a copied
+    // the same lexical/use/re-export resolution law while avoiding a copied
     // String solely to query a trait view.
     inout fn traitOwnerForSelectorSpan(siteOffset: U64, start: U64, len: U64) -> U64 {
         val textId = intern(c: inout self, start: start, len: len)
@@ -817,7 +817,7 @@ pub impl Comp {
     }
 
     inout fn structIndexByName(start: U64, len: U64) -> U64 {
-        // a use of an import alias (`with { Real as Alias }`) resolves to the real name.
+        // a use of a use alias (`only { Real as Alias }`) resolves to the real name.
         val ar: Bind = self.aliasReal(start: start, len: len)
         val qId: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
         return self.arena.firstConcreteStructNamed(nameId: qId)

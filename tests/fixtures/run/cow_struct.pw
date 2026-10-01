@@ -2,7 +2,7 @@
 // mutating x.items splits off a private copy so y.items keeps the original. The
 // struct is value-copied and its array field is CoW-shared — observably each
 // binding is an independent value.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Bag {
     pub mut val items: Array[I32]

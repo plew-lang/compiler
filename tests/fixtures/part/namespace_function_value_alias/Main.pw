@@ -1,6 +1,6 @@
-import ./Alpha
-import ./Beta with { read as chosen }
-import @Std/Io with { print }
+use ./Alpha
+use ./Beta only { read as chosen }
+use @Std/Io only { print }
 fn main() {
     val callback: fn() -> String = fn() -> String { return chosen() }
     print(callback())

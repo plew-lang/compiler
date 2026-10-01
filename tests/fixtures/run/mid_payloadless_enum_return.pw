@@ -1,8 +1,8 @@
 // A Mid-built return of a payloadless enum is still an aggregate value.  The
 // builder's MidOperandBuild must retain its default MidBuildError.None tag
 // while materializing the enum and carrying it through a conditional return.
-import @Std/Core with { Ordering }
-import @Std/Io with { print }
+use @Std/Core only { Ordering }
+use @Std/Io only { print }
 
 // The unused value forces the same parametric-body path used by `Ord.compare`.
 fn decide[T](value: T, replace: Bool) -> Ordering {

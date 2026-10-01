@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import /Toml with { parseToml, topStr }
+use @Std/Io only { print }
+use /Toml only { parseToml, topStr }
 
 // `parseToml` returns a tree whose Section header, Field key, and Value.SVal
 // payload are independent ARC owners. `topStr` then copies a matched payload

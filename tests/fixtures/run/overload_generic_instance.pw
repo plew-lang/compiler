@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Overloads that differ only in a generic argument's type args (`Box[I64]` vs
 // `Box[String]`) are distinct (spec/07: discriminate at concrete positions). Both the

@@ -2,7 +2,7 @@
 // `useTrait[T](x: T) where T: Describe` called with a `Color` value. The backend
 // now tracks an enum-grounded generic param's type (like an int/Bool one), so
 // `x.describe()` resolves through enum-receiver dispatch instead of being rejected.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Color { Red  Green  Blue }
 

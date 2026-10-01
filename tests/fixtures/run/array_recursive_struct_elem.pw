@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // An Array of a self-recursive struct (its cyclic field is auto-boxed): the
 // deinit-need classifier used to follow the field's type name forever and the

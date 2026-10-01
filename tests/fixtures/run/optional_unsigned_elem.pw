@@ -2,8 +2,8 @@
 // unsigned-ness (spec/02): `Optional[U8].unwrapOr -> U8` must print 200, not -56.
 // Previously the enum receiver's type env was not set when recovering the method's
 // return kind, so `T` stayed abstract and defaulted to a signed print.
-import @Std/Io with { print }
-import @Std/Core
+use @Std/Io only { print }
+use @Std/Core
 
 fn main() {
     val o: Optional[U8] = <Optional[U8].Some v=200U8 />

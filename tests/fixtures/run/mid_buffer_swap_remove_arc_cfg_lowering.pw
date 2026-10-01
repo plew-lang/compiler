@@ -1,5 +1,5 @@
-import @Std/Io with { write }
-import @Std/Core with { Buffer, MutableRef, bufferAppend, bufferSwapRemove }
+use @Std/Io only { write }
+use @Std/Core only { Buffer, MutableRef, bufferAppend, bufferSwapRemove }
 
 unique struct Cell {
     pub val id: I64

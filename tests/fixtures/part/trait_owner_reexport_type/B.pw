@@ -1,1 +1,1 @@
-pub import ./A with { Convert }
+pub use ./A only { Convert }

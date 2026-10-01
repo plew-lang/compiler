@@ -1,7 +1,7 @@
 // CoW gateway (corpus ⑦): passing `inout a[i]` across a function boundary. The
 // gateway runs on the inout argument place `a[i]`, privatizing the outer array `a`
 // so the callee's in-place mutation of the element does not leak to the sharer `b`.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn bump(x: inout Array[I32]) {
     x.append(99)

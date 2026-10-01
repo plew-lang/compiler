@@ -1,18 +1,18 @@
 // A whole-target static-check result owns the exact compiler snapshot it proves.
 // No public factory or mutable arena accessor can attach it to another input.
-import ./Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, finalizeFrontendExecutableRequests, FinalBodyRequests, FinalDependencies, FinalizationPublication }
-import ./Ir with { StaticConformanceProof, BodyOrigin, InstanceEnvironment }
-import ./Backend with { LlvmLoweringResult, lowerRequestedLlvm, lowerGlobalStorageLlvm, lowerCallableDeclarationsLlvm }
-import ./SourceAccess with { SourceAccess }
-import ./Diag with { CompileDiagnostic, DiagnosticLocation }
-import ./DeclarationProgram with { prepareDeclarationProgramWithRequests, prepareDeclarationRoot, DeclarationBodyRequests, declarationProgramDiagnostic }
-import ./Mid/Build with { MidFunctionTemplates }
-import ./Mid/DeclarationAccess with { DeclarationAccessAnalysis, DeclarationAccessNode }
-import ./PreparedProgram with { PreparedProgram, ProgramPreparationError, programPreparationDiagnostic }
-import ./Mid/Program with { MidExecutableRequests, MidExecutableProgram }
-import ./Mid/Prepare with { MidExecutableBody }
-import ./Mid/GlobalAccess with { analyzeMidGlobalAccess }
-import ./Mid/Ambient with { MidAmbientProgram }
+use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, finalizeFrontendExecutableRequests, FinalBodyRequests, FinalDependencies, FinalizationPublication }
+use ./Ir only { StaticConformanceProof, BodyOrigin, InstanceEnvironment }
+use ./Backend only { LlvmLoweringResult, lowerRequestedLlvm, lowerGlobalStorageLlvm, lowerCallableDeclarationsLlvm }
+use ./SourceAccess only { SourceAccess }
+use ./Diag only { CompileDiagnostic, DiagnosticLocation }
+use ./DeclarationProgram only { prepareDeclarationProgramWithRequests, prepareDeclarationRoot, DeclarationBodyRequests, declarationProgramDiagnostic }
+use ./Mid/Build only { MidFunctionTemplates }
+use ./Mid/DeclarationAccess only { DeclarationAccessAnalysis, DeclarationAccessNode }
+use ./PreparedProgram only { PreparedProgram, ProgramPreparationError, programPreparationDiagnostic }
+use ./Mid/Program only { MidExecutableRequests, MidExecutableProgram }
+use ./Mid/Prepare only { MidExecutableBody }
+use ./Mid/GlobalAccess only { analyzeMidGlobalAccess }
+use ./Mid/Ambient only { MidAmbientProgram }
 
 // Observation of prepared descriptors. Remaining declaration obligations are
 // retained; this value cannot be passed to LLVM as execution permission.

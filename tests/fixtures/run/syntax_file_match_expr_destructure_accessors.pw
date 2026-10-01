@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl, syntaxBlock, syntaxBlockStmtCount, syntaxBlockStmt, syntaxStmt, syntaxExpr, syntaxExprMatchArmCount, syntaxExprMatchArm, syntaxStmtBindCount, syntaxStmtBind, syntaxMatchArm, syntaxBind, DeclId, SyntaxExprKind, SyntaxStmtKind }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl, syntaxBlock, syntaxBlockStmtCount, syntaxBlockStmt, syntaxStmt, syntaxExpr, syntaxExprMatchArmCount, syntaxExprMatchArm, syntaxStmtBindCount, syntaxStmtBind, syntaxMatchArm, syntaxBind, DeclId, SyntaxExprKind, SyntaxStmtKind }
+use @Std/Io only { print }
 
 fn main() {
     val source = "struct Pair { val left: U64 }\nfn main() { val result = match 1U64 { 1U64 => { give 2U64 } } Pair { val left } = <Pair left=3U64 /> }\n"

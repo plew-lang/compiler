@@ -1,6 +1,6 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { TypeRef }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { TypeRef }
 fn main() {
     mut val compiler: Comp = <Comp />
     compiler.arena.reserveTypeSentinel()

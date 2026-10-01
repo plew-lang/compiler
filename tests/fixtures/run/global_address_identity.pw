@@ -1,6 +1,6 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { Expr, Global, SemanticExprType, identValueCode, identFnCode }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { Expr, Global, SemanticExprType, identValueCode, identFnCode }
 
 fn main() {
     mut val c: Comp = <Comp />

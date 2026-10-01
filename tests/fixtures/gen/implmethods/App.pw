@@ -1,8 +1,8 @@
 // Metaprogramming gen test (spec/16): a derive macro attached to an IMPL block. The
 // macro receives the impl as `TopItemAst.Impl` and reads its member names,
 // generating a `methodNames()` listing them.
-import @Std/Io with { write }
-import @Plew/Syntax with { Derive, TopItemAst, ImplAst, Src, newSrc }
+use @Std/Io only { write }
+use @Plew/Syntax only { Derive, TopItemAst, ImplAst, Src, newSrc }
 
 struct MethodList { }
 

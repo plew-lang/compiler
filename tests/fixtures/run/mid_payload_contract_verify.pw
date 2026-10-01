@@ -1,8 +1,8 @@
-import @Std/Io with { print }
-import @Std/Core with { assert }
-import /Frontend with { Comp }
-import /Ir with { FieldDef, EnumDef, Variant, FinalDestruction, MatchSource, SemanticMatchKind, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution }
-import /Mid with { MidBody, MidBlock, MidStatement, MidRvalue, MidTerminator, MidPlace, MidLocalDecl, MidEnumDestination, MidVerifyError, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use /Frontend only { Comp }
+use /Ir only { FieldDef, EnumDef, Variant, FinalDestruction, MatchSource, SemanticMatchKind, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution }
+use /Mid only { MidBody, MidBlock, MidStatement, MidRvalue, MidTerminator, MidPlace, MidLocalDecl, MidEnumDestination, MidVerifyError, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
 
 fn check(operation: U64) {
     mut val compiler: Comp = <Comp />

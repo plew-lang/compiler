@@ -1,8 +1,8 @@
 // Cross-sign integer conversion via TryFrom (spec/12): `as` is lossless-only and rejects
 // a sign change, so `<I64.checked source=u/>` / `<U64.checked source=n/>` range-check then
 // reinterpret the identical bit pattern. A U64 above I64.max, or a negative I64, fails.
-import @Std/Io with { print }
-import @Std/Core with { RangeError }
+use @Std/Io only { print }
+use @Std/Core only { RangeError }
 
 fn main() {
     // U64 -> I64.

@@ -1,9 +1,9 @@
 // Prepare the frontend's closed body worklist before any LLVM body exists.
 // BodyInstance identity, rather than emission order, indexes the result.
-import ../Frontend with { Comp, tracePhaseProgress }
-import ../Ir with { InstanceEnvironment }
-import ./Build with { MidFunctionTemplates, MidBodyBuild, MidBuildError, buildMidBodyForInstance, ensureParametricMidClosureBody }
-import ./Prepare with { MidParametricBody, MidExecutableBody, MidPreparationError }
+use ../Frontend only { Comp, tracePhaseProgress }
+use ../Ir only { InstanceEnvironment }
+use ./Build only { MidFunctionTemplates, MidBodyBuild, MidBuildError, buildMidBodyForInstance, ensureParametricMidClosureBody }
+use ./Prepare only { MidParametricBody, MidExecutableBody, MidPreparationError }
 
 pub enum MidProgramError {
     MissingSignature(bodyId: U64)

@@ -1,8 +1,8 @@
 // Two record destructures of the same record type in one function: unique lowered
 // temps (__dtN), renamed binds via explicit field labels, and both MutableRef binds'
 // pointees deinit at scope exit (each exactly once).
-import @Std/Io with { print, write }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print, write }
+use @Std/Core only { MutableRef }
 
 unique struct Cell {
     pub val v: I64

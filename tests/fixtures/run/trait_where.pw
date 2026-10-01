@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `where T: Trait` bound: a generic function dispatches the trait's requirements
 // and provided methods on the concrete type argument (static, monomorphized).

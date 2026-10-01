@@ -1,4 +1,4 @@
-import ./A with { pick }
-import ./B with { pick }
+use ./A only { pick }
+use ./B only { pick }
 
 fn main() { pick(value: 1I64) }

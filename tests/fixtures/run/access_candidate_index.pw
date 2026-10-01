@@ -1,5 +1,5 @@
-import @Std/Io with { write }
-import /Ir with { Decls, AccessCandidate }
+use @Std/Io only { write }
+use /Ir only { Decls, AccessCandidate }
 fn check(table: Decls, rows: Array[AccessCandidate], limit: U64) {
     mut val expression: U64 = 0U64
     while expression < limit {

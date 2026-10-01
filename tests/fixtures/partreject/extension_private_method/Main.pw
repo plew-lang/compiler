@@ -1,6 +1,6 @@
-import @Std/Io with { print }
-import ./Lib with { Box }
-import ./Ext
+use @Std/Io only { print }
+use ./Lib only { Box }
+use ./Ext
 
 fn main() {
     val box: Box = <Box value=7I64 />

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A concrete local crosses a function's declared any return boundary through
 // Mid Convert; LLVM must not reopen the return expression to decide boxing.

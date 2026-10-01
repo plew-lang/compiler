@@ -1,7 +1,7 @@
 // A returned struct owns both its Array field and its omitted mixed-payload
 // enum default.  Mid aggregate lowering must preserve the default enum tag
 // across the return boundary, independently of the Array payload shape.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum BuildState {
     None

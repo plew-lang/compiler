@@ -1,5 +1,5 @@
 // Overflow-checked compound assignment must leave in-range arithmetic untouched.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     mut val a: U8 = 250

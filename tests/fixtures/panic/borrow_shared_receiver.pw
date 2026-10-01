@@ -1,4 +1,4 @@
-import @Std/Core with { MutableRef }
+use @Std/Core only { MutableRef }
 unique struct Cell { pub mut val value: I64 }
 pub impl Cell {
     factory

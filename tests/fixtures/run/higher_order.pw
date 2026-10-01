@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn mapI32(xs: Array[I32], f: fn(n: I32) -> I32) -> Array[I32] {
     mut val out: Array[I32] = []

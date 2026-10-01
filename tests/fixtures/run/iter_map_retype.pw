@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core with { Iterator }
+use @Std/Io only { print }
+use @Std/Core only { Iterator }
 
 // map's output element type B (Bool) differs from the inner Item (I64).
 struct Counter { pub mut val n: I64 }

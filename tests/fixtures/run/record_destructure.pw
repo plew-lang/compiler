@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Record destructuring `(val x, val y) = e` (spec/02,03): bind each field of a record
 // value. Punned `(val x)` binds field x to x; explicit `(a: val n)` binds field a to n.

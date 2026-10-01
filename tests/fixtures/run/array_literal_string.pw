@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // A legitimate Array[String] literal must still pass.
 fn main() {
     val xs: Array[String] = ["a", "b"]

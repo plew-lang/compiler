@@ -1,6 +1,6 @@
 // `==` is trait-backed (Eq). A struct has no Eq here, so comparing two structs
 // must be a compile error (not a blind field/bit comparison).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Point {
     pub val x: I64

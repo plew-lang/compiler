@@ -3,7 +3,7 @@
 // interpolated/integer prints worked: `print(s)` for any non-literal String hit a
 // bogus `where T: Format` rejection (String had no Format impl), and `print("x")`
 // emitted a call to an undefined monomorphization (the literal arg left T uninferred).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct S { pub val text: String }
 pub impl S { factory }

@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, P, ImportId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImport }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, ImportId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImport }
+use @Std/Io only { print }
 
 fn main() {
     val source = "part ./Child\n"

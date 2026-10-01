@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The global intentionally keeps main on legacy emission. `resetFirst` has
 // only a parameter, an indexed inout receiver call, and a value return, so its

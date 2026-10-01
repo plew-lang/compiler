@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // O2: arithmetic operators desugar to operator-trait witnesses for user types
 // (spec/12). `a + b` => Vec2.add(lhs: a, rhs: b); right-operand overloading picks

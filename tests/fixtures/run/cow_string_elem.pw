@@ -2,7 +2,7 @@
 // rc-managed buffer, so CoW-duplicating the array retains each element and dropping it
 // releases each — no leak, no double-free. Stresses append (place + literal), share,
 // CoW-on-append, and element store across two independent owners.
-import @Std/Io with { print }
+use @Std/Io only { print }
 fn make() -> Array[String] {
     mut val xs: Array[String] = []
     mut val a: String = "he"

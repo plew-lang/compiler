@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Pair { pub val first: I64  pub val second: I64 }
 pub impl Pair { factory }

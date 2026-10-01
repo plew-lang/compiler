@@ -1,8 +1,8 @@
 // The selected re-export owner must survive both a generic bound and an
 // associated-type projection in the generic signature.
-import ./B with { Convert }
-import ./C
-import @Std/Io with { print }
+use ./B only { Convert }
+use ./C
+use @Std/Io only { print }
 
 struct Parser {}
 pub impl Parser { factory }

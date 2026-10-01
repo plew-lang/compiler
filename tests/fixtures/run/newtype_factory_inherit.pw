@@ -3,7 +3,7 @@
 // memberwise factory (`<Brand code=… />`), a named factory (`<Brand.gray level=… />`),
 // and a named FALLIBLE factory returning `Result[Self, E]` (→ Result[Brand, E]). All
 // construct directly (no explicit `as`); the result is a Brand.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Rgb { pub val code: I32  pub val alpha: I32 }
 pub impl Rgb { factory }

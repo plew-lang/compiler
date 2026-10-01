@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A plain method returning `any P` used as an inline dispatch receiver
 // (`h.get().m()`, spec/08): the method-call result's recovered type must carry the

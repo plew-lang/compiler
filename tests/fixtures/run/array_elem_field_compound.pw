@@ -1,7 +1,7 @@
 // Compound assignment through an array element field `arr[i].field OP= v`
 // (get-modify-set with the same overflow / zero-divisor checks as a plain
 // field compound-assign). Previously loud-rejected as unsupported.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct P {
     pub mut val x: I32

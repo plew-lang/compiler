@@ -1,4 +1,4 @@
-import @Std/Core
+use @Std/Core
 trait Stepper { fn step() -> I64 }
 fn run[T](value: T) -> I64 where T: Stepper { return value.step() }
 fn unused[T](value: T) -> I64 { return run(value: value) }

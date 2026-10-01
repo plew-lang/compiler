@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `Dictionary.get(key:) -> Optional[V]` (spec/02): the safe, non-panicking lookup
 // (vs `dict[key]` which panics on a missing key). Returns `Some(v)` / `None`, and

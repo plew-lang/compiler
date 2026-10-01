@@ -1,7 +1,7 @@
-import /CheckedProgram with { CompilerSession, CompilerSessionResult }
-import /Frontend with { FrontendInput }
-import /SourceAccess with { SourceAccess }
-import @Std/Io with { print }
+use /CheckedProgram only { CompilerSession, CompilerSessionResult }
+use /Frontend only { FrontendInput }
+use /SourceAccess only { SourceAccess }
+use @Std/Io only { print }
 
 fn initializers() {
     val source = "mut val counter = 1I64 val ready = initialize() fn initialize() -> I64 { return counter } fn main() { missing() }"

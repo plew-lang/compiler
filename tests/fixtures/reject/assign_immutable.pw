@@ -1,6 +1,6 @@
 // `val` is immutable; only `mut val` storage is assignable. Assigning to a
 // plain `val` binding must be a compile error (spec: val is immutable).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     val x: I64 = 0

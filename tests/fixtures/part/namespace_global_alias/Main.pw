@@ -1,3 +1,3 @@
-import ./Facade with { count as total }
-import @Std/Io with { print }
+use ./Facade only { count as total }
+use @Std/Io only { print }
 fn main() { print(total) }

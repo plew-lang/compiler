@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // As with the parameter test, the global keeps main on legacy emission. The
 // `mid:` label must therefore belong to `echo`, whose return value is copied

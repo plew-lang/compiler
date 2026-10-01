@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A module-level global whose INITIALIZER is a generic call (`val g =
 // makeBox(v: 42I64)`): the collection pass must walk global initializers like

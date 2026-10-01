@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // Two conformed traits both provide `foo()`; the bare call is ambiguous.
 trait P {} pub impl P { fn foo() -> I64 { return 1I64 } }
 trait Q {} pub impl Q { fn foo() -> I64 { return 2I64 } }

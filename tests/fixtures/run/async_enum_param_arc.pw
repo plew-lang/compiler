@@ -4,9 +4,9 @@
 // frame-owned param — the pointee deinit runs exactly ONCE, after the body's
 // use beyond the suspension (a missed release would print no 42; a double
 // release would crash or print it twice).
-import @Std/Io with { print }
-import @Std/Async with { sleep }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Async only { sleep }
+use @Std/Core only { MutableRef }
 
 unique struct Cell {
     pub val v: I64

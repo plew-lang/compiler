@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core with { Eq, Ord, Ordering }
+use @Std/Io only { print }
+use @Std/Core only { Eq, Ord, Ordering }
 
 // Eq/Ord operator wiring (spec/12): `==`/`!=` desugar to the Eq witness `eq`,
 // and `< <= > >=` to the Ord witness `compare` (a tag test on its Ordering).

@@ -2,7 +2,7 @@
 // its non-diverging `give` branches.  The shared generic body is instantiated
 // twice, and the selected result is immediately used structurally, so a
 // declaration-template `Box[T]` must not leak into either caller.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Box[T] {
     pub val value: T

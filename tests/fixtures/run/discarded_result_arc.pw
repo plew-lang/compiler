@@ -2,7 +2,7 @@
 // position has no binding to own it — the statement releases it immediately
 // (classifier-routed). A discarded place read is a borrow and releases nothing.
 // LeakSanitizer over this program must be clean; the sharer stays intact.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Wrap {
     pub val tag: String

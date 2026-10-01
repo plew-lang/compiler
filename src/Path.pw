@@ -1,14 +1,14 @@
-// @Path — pure import-path resolution utilities for the module loader. No `Comp`
+// @Path — pure use-path resolution utilities for the module loader. No `Comp`
 // state: these operate only on byte buffers (file paths) and the shared source
 // arena, so they form a DAG-bottom leaf (`Ir ← Path`) imported by the front-end's
 // loader/driver. `resolveImport` turns a path node (`@Std/X`, `/Seg`, `./Name`,
 // `../Name`) into a file path; the rest are byte/path helpers it builds on.
 
-import @Std/Io with { fileExists }
-import ./SourceAccess with { SourceAccess, isEmbeddedSourcePath }
-import @Plew/Syntax with { rangeEquals }
-import ./Ir with { Bind, appendBytes }
-pub import ./Ir with { Bind }
+use @Std/Io only { fileExists }
+use ./SourceAccess only { SourceAccess, isEmbeddedSourcePath }
+use @Plew/Syntax only { rangeEquals }
+use ./Ir only { Bind, appendBytes }
+pub use ./Ir only { Bind }
 
 // Remove `n` trailing directory components from the prefix path[0..baseLen]
 // (baseLen points just past a trailing '/'); returns the new prefix length. Used
@@ -39,9 +39,9 @@ pub fn stripParents(path: Array[U8], baseLen: U64, n: U64) -> U64 {
 
 // Turn a module base path (no extension) into the file to load: `<base>.pw` if it
 // exists, else the directory module `<base>/_.pw` (spec/15 — `_` is a directory's root
-// module, so `import /Models` resolves to `src/Models.pw` OR `src/Models/_.pw`). When
+// module, so `use /Models` resolves to `src/Models.pw` OR `src/Models/_.pw`). When
 // neither exists, returns the `.pw` form so the loader reports the missing file. When
-// `base` already ends with `/` (the bare-`/` root import = `src/`), the directory form
+// `base` already ends with `/` (the bare-`/` root use = `src/`), the directory form
 // is `<base>_.pw` (no doubled slash).
 pub fn finishModulePath(base: Array[U8], sources: SourceAccess = <SourceAccess />) -> Array[U8] {
     mut val withPw: Array[U8] = []
@@ -67,7 +67,7 @@ pub fn finishModulePath(base: Array[U8], sources: SourceAccess = <SourceAccess /
     return withPw
 }
 
-// Resolve an import/part path span into a file path, or an empty array to skip
+// Resolve a use/part path span into a file path, or an empty array to skip
 // (`@…` intrinsic/external, or `/…` with no package root). `/Seg` → srcRoot +
 // Seg + ".pw"; `./Name` → importerDir + Name + ".pw"; `../Name` → parent(s) of
 // importerDir + Name + ".pw". The trailing-`/` subpath stays (subdirectories).
@@ -303,7 +303,7 @@ pub fn genSiblingPath(path: Array[U8]) -> Array[U8] {
 
 // The module id (a loaded Bind's `fieldStart`) for the file `path`, or the sentinel
 // 4_000_000_000 when `path` is not in the loaded set. Lets the loader record an
-// import edge to the specific module a path resolved to.
+// use edge to the specific module a path resolved to.
 pub fn moduleIdOfPath(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -> U64 {
     mut val i: U64 = 0
     while i < loaded.count() {
@@ -327,7 +327,7 @@ pub fn moduleIdOfPath(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -> U
 }
 
 // Whether `path` is already in the loaded set (each Bind is a span into `buf`).
-// Dedup keeps a module included once and makes import cycles terminate.
+// Dedup keeps a module included once and makes use cycles terminate.
 pub fn pathSeen(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -> Bool {
     mut val i: U64 = 0
     while i < loaded.count() {

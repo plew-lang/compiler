@@ -1,8 +1,8 @@
 // Declaration-shaped macro inputs must materialize from the direct rows too:
 // impl members, trait signatures, and extern opaque-type directive groups each
 // exercise a distinct nested scalar pool.
-import @Plew/Syntax with { MemberKind, TopItemAst, parseItem }
-import @Std/Io with { print }
+use @Plew/Syntax only { MemberKind, TopItemAst, parseItem }
+use @Std/Io only { print }
 
 fn main() {
     match parseItem(source: "impl Box { type Item = U8 }", start: 0U64, end: 27U64) {

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A context-typed collection / record literal in a CONSTRUCTION field now infers its
 // type from the field's declared type (the owner type is registered before any body

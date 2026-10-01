@@ -1,3 +1,3 @@
-import ./Public
-import ./Hidden
+use ./Public
+use ./Hidden
 fn main() { val item = <Hidden.Item value=42I64 /> }

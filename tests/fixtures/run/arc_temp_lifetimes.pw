@@ -4,7 +4,7 @@
 // die BEFORE the frame's named locals (S2 — temps are innermost); a discarded
 // call result is a temp (dies at its statement's end); a `move` arg deinits at
 // CALLEE scope end, exactly once, before the caller resumes.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 unique struct Cell {
     pub val v: I32

@@ -1,2 +1,2 @@
-pub import ./Models with { Counter, amount }
+pub use ./Models only { Counter, amount }
 pub fn localAmount() -> I64 { return amount() }

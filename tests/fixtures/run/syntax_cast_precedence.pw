@@ -1,7 +1,7 @@
 // Both public syntax representations must preserve unary > cast > binary.
 // These are syntax-only inputs: identifiers and async calls need no type context.
-import @Plew/Syntax with { DeclId, ExprId, ExprAst, Lexer, P, SyntaxFile, SyntaxExprKind, lex, parseExprFrom, parseProgramSyntaxFile, syntaxBlock, syntaxBlockStmt, syntaxDecl, syntaxExpr, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
-import @Std/Io with { print }
+use @Plew/Syntax only { DeclId, ExprId, ExprAst, Lexer, P, SyntaxFile, SyntaxExprKind, lex, parseExprFrom, parseProgramSyntaxFile, syntaxBlock, syntaxBlockStmt, syntaxDecl, syntaxExpr, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
+use @Std/Io only { print }
 
 fn directShape(file: SyntaxFile, id: ExprId) -> String {
     val expression = syntaxExpr(file: file, id: id)

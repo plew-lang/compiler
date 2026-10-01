@@ -1,7 +1,7 @@
 // The B -> A path and A.Output are supplied only by E.  A selected view must
 // carry both the callable path and its associated output through the generic
 // body to the concrete S instance.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait B {}
 

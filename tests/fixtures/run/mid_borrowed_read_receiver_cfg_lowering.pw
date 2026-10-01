@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A read-only method receiver is a borrow.  The later append therefore writes
 // through the original Array storage; Mid must not materialize an ARC Copy of

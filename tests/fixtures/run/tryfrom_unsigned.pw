@@ -1,8 +1,8 @@
 // Unsigned integer narrowing via TryFrom (spec/12): `<U8.checked source=wide/>` ->
 // `Result[U8, RangeError]` for U8/U16/U32 from U64. Unsigned has no floor check, only
 // the upper bound. Exercises the `truncU16`/`truncU32` narrowing intrinsics.
-import @Std/Io with { print }
-import @Std/Core with { RangeError }
+use @Std/Io only { print }
+use @Std/Core only { RangeError }
 
 fn main() {
     val a: Result[U8, RangeError] = <U8.checked source=200U64 />

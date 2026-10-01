@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Two paths repeatedly reconverge.  The declaration graph has no SCC, and
 // symbolic cycle validation must saturate shared states instead of retaining

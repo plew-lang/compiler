@@ -1,7 +1,7 @@
 // Writeback delegation is a Mid capability, not an inference from LLVM order.
 // Its region is a single-entry linear continuation from the parent call to
 // the final setter. Calls can contain arbitrary control flow in their bodies.
-import ./Ir with { MidCanonicalArena, MidBodyNode, MidTerminatorNode }
+use ./Ir only { MidCanonicalArena, MidBodyNode, MidTerminatorNode }
 
 fn ownedScopeTemporary(arena: MidCanonicalArena, body: MidBodyNode, placeId: U64) -> Bool {
     if placeId == 0U64 || placeId > arena.places.count() { return false }

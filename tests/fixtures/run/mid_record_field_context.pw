@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct Holder[T] { pub val pair: (a: T, b: T) }
 pub impl[T] Holder[T] { factory }
 fn pair[T](a: T, b: T) -> Holder[T] {

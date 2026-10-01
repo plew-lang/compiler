@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core with { Index, IndexSet }
+use @Std/Io only { print }
+use @Std/Core only { Index, IndexSet }
 
 // The outer indexed mutation has two independently selected getter inputs:
 // its receiver is `rows[order[0]]`, while its key is a separate getter result

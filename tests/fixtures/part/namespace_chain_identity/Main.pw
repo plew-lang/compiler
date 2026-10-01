@@ -1,7 +1,7 @@
-import ./Noise
-import ./First
-import ./Second
-import @Std/Io with { print }
+use ./Noise
+use ./First
+use ./Second
+use @Std/Io only { print }
 struct Inner { pub val n: I64 }
 fn main() {
     val first = <First.Slot[Inner, Bool].Full v=<Inner n=7I64 /> />

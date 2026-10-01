@@ -1,5 +1,5 @@
-import @Std/Async with { sleep }
-import @Std/Io with { print }
+use @Std/Async only { sleep }
+use @Std/Io only { print }
 async fn task() { await sleep(ms: 1)
 print(1I64) }
 async fn main() {

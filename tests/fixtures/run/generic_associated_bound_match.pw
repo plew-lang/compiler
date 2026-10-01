@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `Item=I64` constrains the selected Iter witness output; it is not a
 // positional argument of Iter.

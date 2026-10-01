@@ -1,7 +1,7 @@
 // Match a many-variant enum after extracting it from a returned aggregate.
 // This is the same value boundary as MidBodyBuild.error: a scalar field
 // projection must preserve the enum discriminant for every arm.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Detail {
     Expression

@@ -4,8 +4,8 @@
 // (2) distinct MutableRef cells — the runtime place-identity check passes; (3) an
 // `inout r->field` argument passing a REAL cell pointer (the write lands through the
 // MutableRef — the old temp-copy fallback silently dropped it).
-import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 
 struct Counter { pub mut val n: I32 }
 pub impl Counter { factory }

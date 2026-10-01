@@ -1,5 +1,5 @@
-import /TraitCycleGraph with { TraitCycleGraph }
-import @Std/Io with { write }
+use /TraitCycleGraph only { TraitCycleGraph }
+use @Std/Io only { write }
 
 fn main() {
     mut val mask: U64 = 0U64

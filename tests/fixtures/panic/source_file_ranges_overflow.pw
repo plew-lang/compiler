@@ -1,4 +1,4 @@
-import /SourceFiles with { SourceFiles }
+use /SourceFiles only { SourceFiles }
 fn main() {
     mut val files: SourceFiles = <SourceFiles />
     files.append(start: 0U64, length: 0U64, moduleId: 0U64, path: "first")

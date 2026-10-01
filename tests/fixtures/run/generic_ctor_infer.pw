@@ -3,7 +3,7 @@
 // type (return context), so a bare literal field needs no suffix and the
 // instance is named concretely (`Box_I64`). Multi-parameter (`Map[U64,U64]`)
 // inference too. (Bug11 — generic-constructor type-arg inference from context.)
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Box[T] {
     pub val v: T

@@ -1,7 +1,7 @@
 // Compact value domains for the existing root-local dataflow lattices.
 // CoW snapshots remain independent; only their physical representation changes.
-import @Std/Core with { Index }
-import ./Ir with { MidOwnership, MidAccessibility }
+use @Std/Core only { Index }
+use ./Ir only { MidOwnership, MidAccessibility }
 
 fn ownershipBits(state: MidOwnership) -> U64 {
     match state {

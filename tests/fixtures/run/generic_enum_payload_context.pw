@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // spec/02: an untyped integer literal in a generic enum/struct construction types
 // from the declared instance's type argument — `<Optional.Some v=5 />` at
 // `Optional[I64]` types `5` as I64 (no `5I64` suffix needed). Covers let, return,

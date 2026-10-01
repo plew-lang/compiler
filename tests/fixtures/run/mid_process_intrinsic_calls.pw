@@ -1,6 +1,6 @@
 // The Process runtime ABI is chosen by its bundled declaration, not a source
 // spelling. The exit edge is unreachable at runtime but remains compiled.
-import @Std/Process with { argCount, argAt, exit, execOut, execCode }
+use @Std/Process only { argCount, argAt, exit, execOut, execCode }
 
 fn main() {
     val count = argCount()

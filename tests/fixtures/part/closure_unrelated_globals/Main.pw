@@ -1,5 +1,5 @@
-import ./Noise
-import @Std/Io with { print }
+use ./Noise
+use @Std/Io only { print }
 fn adder(base: I64) -> fn(value: I64) -> I64 {
     return fn(value: I64) -> I64 { return base + value }
 }

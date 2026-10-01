@@ -1,6 +1,6 @@
 // Each qualifier keeps its source span and its own type argument list.
-import @Plew/Syntax with { ExprAst, TopItemAst, parseExprFrom, parseItem }
-import @Std/Io with { print }
+use @Plew/Syntax only { ExprAst, TopItemAst, parseExprFrom, parseItem }
+use @Std/Io only { print }
 fn main() {
     match parseExprFrom(source: "<Models.Choice[I64].Some value=41I64 />", start: 17U64) {
         ExprAst.Make(typeName: _, typeNameSpan: _, typePath: val path, typeArgs: _, variant: _, variantSpan: _, isEnum: _, fields: _, span: _) => {

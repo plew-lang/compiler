@@ -1,5 +1,5 @@
-import @Std/Core with { MutableRef, assert }
-import @Std/Io with { print }
+use @Std/Core only { MutableRef, assert }
+use @Std/Io only { print }
 struct Pair { pub mut val first: I64
     pub mut val second: I64 }
 pub impl Pair { factory }

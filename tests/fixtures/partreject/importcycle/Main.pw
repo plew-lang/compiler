@@ -1,3 +1,3 @@
-import @Std/Io with { print }
-import ./A with { aVal }
+use @Std/Io only { print }
+use ./A only { aVal }
 fn main() { print(aVal()) }

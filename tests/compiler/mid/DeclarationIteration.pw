@@ -1,8 +1,8 @@
-import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
-import ../../../src/SourceAccess with { SourceAccess }
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import @Std/Process with { argAt }
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use ../../../src/SourceAccess only { SourceAccess }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
 fn main() {
     mut val compiler = <Comp />
     val result = analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />, sources: <SourceAccess stdRoot=argAt(2I64).bytes() />)

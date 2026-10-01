@@ -103,7 +103,7 @@ pub impl Comp {
             index += 1U64
         }
         // A declaration slot is not a new lexical binding. A later bare name
-        // still resolves through its own module/import provenance.
+        // still resolves through its own module/use provenance.
         match self.arena.stmts[global.letStmt] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, init: _) => {
                 self.cur.locals.append(<Local isGlobal=true globalTypePending=true nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen isArray=tyIsArray ty=ty isInout=false isMut=mutable owned=false moved=false cnum=0U64 />)

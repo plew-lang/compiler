@@ -26,7 +26,7 @@ def variant(template, revision, scenario, functions, expression_shape):
         expression = f'revised(input: {revision}I64)'
     elif kind == 'module':
         modules['Changes.pw'] = f'pub fn revised() -> I64 {{ return {revision}I64 }}\n'
-        declarations = 'import ./Changes with { revised }\n'
+        declarations = 'use ./Changes only { revised }\n'
         expression = 'revised()'
     else:
         declarations = ''

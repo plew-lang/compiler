@@ -1,4 +1,4 @@
-import ./Secret with { Secret as S }
+use ./Secret only { Secret as S }
 
 fn main() {
     val value = <S visible=1I64 hidden=2I64 />

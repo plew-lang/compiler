@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 val midAccessFieldRootAnchor: I64 = 0I64
 

@@ -1,5 +1,5 @@
-import ./Alpha
-import ./Beta
+use ./Alpha
+use ./Beta
 fn main() {
     val value = <Alpha.Choice.First />
     match value { Beta.Choice.Other => {} }

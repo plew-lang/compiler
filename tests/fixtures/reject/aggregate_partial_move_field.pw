@@ -1,5 +1,5 @@
 // Aggregate partial move is rejected even when the field itself is copyable.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Pair {
     pub val left: I64

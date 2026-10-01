@@ -1,6 +1,6 @@
 // Overlapping `inout` (spec/03): an `inout fn` receiver contains an `inout` argument
 // naming one of its own fields (`a.merge(inout a.field)`) — statically certain overlap.
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct Pair { pub mut val n: I64  pub mut val m: I64 }
 pub impl Pair { factory }
 pub impl Pair {

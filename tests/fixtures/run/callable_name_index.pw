@@ -1,5 +1,5 @@
-import @Std/Io with { write }
-import /Ir with { Decls, Callable }
+use @Std/Io only { write }
+use /Ir only { Decls, Callable }
 fn check(table: Decls, names: Array[U64]) {
     if table.callableCount() != names.count() { panic "row count changed" }
     mut val name: U64 = 0U64

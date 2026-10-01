@@ -1,9 +1,9 @@
 // SyntaxFile blocks must traverse StmtId/BlockId directly.  This fixture uses
 // only one-to-one statement forms; compound assignment, destructuring, and
 // match have separate desugaring coverage.
-import @Plew/Syntax with { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxTopItemPayload }
-import @Std/Io with { print }
-import /Frontend with { Comp }
+use @Plew/Syntax only { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxTopItemPayload }
+use @Std/Io only { print }
+use /Frontend only { Comp }
 
 fn main() {
     val source = "fn body() {\n    val value: I8 = 1I8\n    if true { return } else { return }\n}\n"

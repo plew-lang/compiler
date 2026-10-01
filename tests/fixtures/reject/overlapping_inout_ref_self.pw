@@ -2,8 +2,8 @@
 // pointee) contains a pointee field of the SAME MutableRef (`r->m`) — statically certain
 // through the one MutableRef variable, so it is a compile error (two different MutableRefs to one
 // cell are the runtime-checked tier instead).
-import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 struct Pair { pub mut val n: I32  pub mut val m: I32 }
 pub impl Pair { factory }
 pub impl Pair {

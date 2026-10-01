@@ -1,10 +1,10 @@
 // An Array index is a first-class Mid place, not an invitation for LLVM to
 // reopen the source AST.  Its index is the already-evaluated local identity,
 // which makes the evaluation order of `items[index]` explicit in the CFG.
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { Expr, SemanticExprType, Stmt, TypeRef, identValueCode }
-import /Mid with { MidBuildError, MidBuildState, MidOperand, MidProjection, MidRvalue, MidStatement, addMidLocal, buildMidLet }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { Expr, SemanticExprType, Stmt, TypeRef, identValueCode }
+use /Mid only { MidBuildError, MidBuildState, MidOperand, MidProjection, MidRvalue, MidStatement, addMidLocal, buildMidLet }
 
 fn main() {
     mut val c: Comp = <Comp />

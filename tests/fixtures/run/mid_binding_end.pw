@@ -1,8 +1,8 @@
 // A lifetime boundary consumes only remaining ownership. Repeating the
 // boundary or exiting its lexical scope must not manufacture a second drop.
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Mid with { MidPlace, MidOperand, MidConstant, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidVerifyError, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Mid only { MidPlace, MidOperand, MidConstant, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidVerifyError, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
 
 fn check(mode: U64) {
     val place: MidPlace = <MidPlace local=0U64 typeTerm=1U64 />

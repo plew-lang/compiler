@@ -1,7 +1,7 @@
 // A nested enum payload must stay valid while its enclosing value crosses a
 // struct field, a by-value call, and an Array copy.  This mirrors the compiler's
 // CallResolution.target carrier without depending on compiler-internal types.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Intrinsic {
     Write

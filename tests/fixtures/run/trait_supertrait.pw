@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // `trait Sub: Super` — conforming to Sub also requires Super; both usable.
 pub trait Super { fn base() -> I64 }
 pub trait Sub: Super { fn extra() -> I64 }

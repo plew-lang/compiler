@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A read-only Array index is an addressable Mid place. The element is loaded
 // through the explicit Index projection; neither the legacy AST emitter nor a

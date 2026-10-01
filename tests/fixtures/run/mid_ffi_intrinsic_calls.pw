@@ -1,4 +1,4 @@
-import @Std/Ffi with { cString, cFree, stringFromCString, arrayCPtr }
+use @Std/Ffi only { cString, cFree, stringFromCString, arrayCPtr }
 
 fn main() {
     val raw = cString("Mid FFI")

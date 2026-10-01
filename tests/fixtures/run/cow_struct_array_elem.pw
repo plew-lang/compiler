@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A struct holding an Array of structs, constructed into a local, appended to an
 // array, then dropped at scope exit — exercises value-semantics ownership of

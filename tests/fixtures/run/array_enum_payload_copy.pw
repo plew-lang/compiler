@@ -2,8 +2,8 @@
 // variant.  TopItemAst.NewType contains TypeAst, whose generic arguments own an
 // Array[TypeAst].  This is deliberately constructed without the parser so the
 // test isolates Array's copy-into-element contract.
-import @Plew/Syntax with { Span, TopItemAst, TypeAst }
-import @Std/Io with { print }
+use @Plew/Syntax only { Span, TopItemAst, TypeAst }
+use @Std/Io only { print }
 
 fn main() {
     val span = <Span start=0U64 end=5U64 />

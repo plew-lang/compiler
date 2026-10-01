@@ -3,7 +3,7 @@
 // from the field VALUES' concrete types — `<Box v=42I32 />` infers T=I32. A
 // parameter pinned by several fields must agree; the field value's own type is
 // what binds (spec/06). Complements generic_ctor_infer (top-down context).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Box[T] { pub val v: T }
 pub impl Box { factory }

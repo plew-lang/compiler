@@ -1,9 +1,9 @@
 // `?.b.c` propagation through non-optional intermediate fields to a MutableRef[Cell]:
 // the whole trailing `.inner.c` rides the chain desugar's match-temp ARC (the
 // unwrapped Outer is a temp; its MutableRef field is projected and retained correctly).
-import @Std/Io with { print, write }
-import @Std/Core
-import @Std/Core with { MutableRef }
+use @Std/Io only { print, write }
+use @Std/Core
+use @Std/Core only { MutableRef }
 struct Cell { pub val v: I64 }
 pub impl Cell { factory }
 struct RBox { pub val c: MutableRef[Cell] }

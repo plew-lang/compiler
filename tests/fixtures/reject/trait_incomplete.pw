@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Conformance must witness every requirement (spec/08): empty impl is rejected.
 trait Stepper {

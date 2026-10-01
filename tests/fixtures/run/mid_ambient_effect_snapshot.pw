@@ -1,10 +1,10 @@
-import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
-import /SourceAccess with { SourceAccess }
-import /Ir with { CallTarget }
-import /Mid/Program with { MidExecutableRequests }
-import /Mid/Build with { MidFunctionTemplates }
-import /Mid/AmbientEffects with { MidAmbientEffects }
-import @Std/Io with { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTarget }
+use /Mid/Program only { MidExecutableRequests }
+use /Mid/Build only { MidFunctionTemplates }
+use /Mid/AmbientEffects only { MidAmbientEffects }
+use @Std/Io only { print }
 
 fn main() {
     mut val compiler = <Comp />

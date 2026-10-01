@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import ./Lib with { Box }
+use @Std/Io only { print }
+use ./Lib only { Box }
 
 extension Extra {
     pub impl Box {

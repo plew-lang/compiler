@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Trait inheritance through a `where` bound (spec/08 "トレイトの継承"): a
 // `where T: Sub` bound makes the supertrait chain's members callable on T,

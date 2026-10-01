@@ -1,7 +1,7 @@
-import @Std/Io with { print }
-import @Std/Core with { assert }
-import /Frontend with { Comp }
-import /Ir with { FieldDef, EnumDef, Variant, TypeRef, ArcClass }
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use /Frontend only { Comp }
+use /Ir only { FieldDef, EnumDef, Variant, TypeRef, ArcClass }
 
 fn field(compiler: inout Comp, name: String, typeName: String) -> FieldDef {
     val label = compiler.internBytes(s: name)

@@ -1,6 +1,6 @@
 // Method calls with a middle default evaluate provided/default params in
 // declaration order.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn mark(n: I64) -> I64 {
     print(n)

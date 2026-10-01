@@ -1,9 +1,9 @@
-import /CompilerSessions with { registerCompilerSession, compilerSessionSnapshot, findCompilerSession, unregisterCompilerSession }
-import /CheckedProgram with { CompilerSession, CompilerSessionResult }
-import /Frontend with { FrontendInput }
-import /SourceAccess with { SourceAccess }
-import @Std/Core with { assert, WeakRef }
-import @Std/Io with { print }
+use /CompilerSessions only { registerCompilerSession, compilerSessionSnapshot, findCompilerSession, unregisterCompilerSession }
+use /CheckedProgram only { CompilerSession, CompilerSessionResult }
+use /Frontend only { FrontendInput }
+use /SourceAccess only { SourceAccess }
+use @Std/Core only { assert, WeakRef }
+use @Std/Io only { print }
 
 fn registered(source: String) -> U64 {
     match CompilerSession.open(input: <FrontendInput.Text path="registry.pw" text=source />, sources: <SourceAccess />) {

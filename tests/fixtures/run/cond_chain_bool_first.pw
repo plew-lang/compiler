@@ -1,7 +1,7 @@
 // Condition chain with a Bool clause BEFORE a refutable binding (spec/11): a binding
 // may appear in any `&&`-joined clause, not only the first. `flag && Some(v) = o`
 // short-circuits on `flag`, then matches `o`. Desugars to `if flag { match o { … } }`.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn f(flag: Bool, o: Optional[I64]) -> I64 {
     if flag && Optional.Some(v: val x) = o {

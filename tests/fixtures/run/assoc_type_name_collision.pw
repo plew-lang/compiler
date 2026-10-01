@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Regression (root③(iv) full closure): a concrete type whose name collides with a
 // trait's associated type name (`Item` for Iterator). std's provided-method copies on

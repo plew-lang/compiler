@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 fn main() {
     mut val a: Array[I32] = [1, 2, 3]
     mut val b: Array[I32] = a

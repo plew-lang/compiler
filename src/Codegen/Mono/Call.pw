@@ -1,8 +1,8 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { DeclarationBoundRef, SelectedCallableSubstitution, BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalAwaitResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
-import ../../Diag with { eprintU64 }
+use ../../Ir only { DeclarationBoundRef, SelectedCallableSubstitution, BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalAwaitResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
+use ../../Diag only { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
 // (args before self, so a nested generic call is registered before the outer one
@@ -501,7 +501,7 @@ pub impl Comp {
         // useful for scalar typing, but not for a method receiver: an
         // `Array[U8]` local must retain the full instance identity selected at
         // the call site.  Ident locals above therefore win; non-local
-        // expressions can use the ordinary typed-IR recovery.
+        // expressions ca use the ordinary typed-IR recovery.
         out = (try self.groundedTypeOf(id: exprId))
         if out != 0U64 {
             return <Result.Ok value=out />
@@ -2397,7 +2397,7 @@ pub impl Comp {
     }
 
     // AST navigation adapter for legacy backend sites.  The semantic lookup
-    // itself remains the explicit-key reader above, which Mid can use without
+    // itself remains the explicit-key reader above, which Mid ca use without
     // reintroducing an ambient body or ExprId dependency.
     inout fn bodyCalleeIndex(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         val bodyId: U64 = self.currentBodyInstanceId()
@@ -2639,7 +2639,7 @@ pub impl Comp {
                 }
             }
             // The existential TypeTerm already carries the resolver-selected
-            // declaration identity. Reusing that identity prevents an import
+            // declaration identity. Reusing that identity prevents a use
             // or re-export with the same spelling from changing a conversion
             // proof during finalization.
             val traitIdx: U64 = self.recordAnyTraitIndex(anyRef: targetRef)

@@ -1,7 +1,7 @@
-import /Frontend with { Comp }
-import @Plew/Syntax as Syntax
-import @Std/Core with { assert }
-import @Std/Io with { print }
+use /Frontend only { Comp }
+use @Plew/Syntax as Syntax
+use @Std/Core only { assert }
+use @Std/Io only { print }
 fn check(compiler: inout Comp) {
     assert(compiler.decls.conformCount() == 1U64)
     val conformance = compiler.decls.conformAt(index: 0U64)

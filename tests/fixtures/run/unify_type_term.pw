@@ -1,7 +1,7 @@
-import /Ir with { PatternBindInput }
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { TypeRef, Bind, UnifyBind }
+use /Ir only { PatternBindInput }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { TypeRef, Bind, UnifyBind }
 
 fn check(compiler: inout Comp, pattern: U64, actual: U64, expected: Bool, ignoreTopView: Bool = false) {
     mut val bindings: Array[UnifyBind] = []

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn read(value: Optional[I32]) -> I32 { return value.unwrap() }
 fn main() {

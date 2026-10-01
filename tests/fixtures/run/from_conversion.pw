@@ -1,7 +1,7 @@
 // From conversion via `x as T` ⟺ `<T from=x/>` (spec/12): a total conversion
 // expressed as an anonymous `factory(from: Source)`. Numeric `as` is unaffected
 // (primitives have no `from` factory).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Celsius { pub val c: I64 }
 pub impl Celsius { factory }

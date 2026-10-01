@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, P, NewtypeId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxNewtype, syntaxType, syntaxTypeArgLabel, syntaxTypeProjectionTraitArgCount, syntaxTypeProjectionTraitArg, syntaxTypeProjectionTraitArgLabel }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, NewtypeId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxNewtype, syntaxType, syntaxTypeArgLabel, syntaxTypeProjectionTraitArgCount, syntaxTypeProjectionTraitArg, syntaxTypeProjectionTraitArgLabel }
+use @Std/Io only { print }
 
 fn main() {
     val source = "newtype Projection = T#Trait[U8].Item\n"

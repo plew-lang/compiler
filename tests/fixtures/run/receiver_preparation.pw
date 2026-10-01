@@ -1,6 +1,6 @@
 // Place receivers read at activation; produced values keep their own storage.
-import @Std/Core with { assert }
-import @Std/Io with { print }
+use @Std/Core only { assert }
+use @Std/Io only { print }
 struct Counter { pub mut val value: I64 }
 pub impl Counter {
     factory

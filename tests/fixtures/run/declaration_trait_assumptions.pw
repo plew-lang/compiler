@@ -1,8 +1,8 @@
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
-import /SourceAccess with { SourceAccess }
-import /Ir with { StaticConformanceProof, PatternTypeInput, PatternBindInput, DeclarationBoundRef }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { StaticConformanceProof, PatternTypeInput, PatternBindInput, DeclarationBoundRef }
 
 fn conformance(compiler: inout Comp, name: String) -> U64 {
     val id = compiler.internBytes(s: name).nameId

@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core with { Iterator }
+use @Std/Io only { print }
+use @Std/Core only { Iterator }
 
 // map comes from @Std/Core (no local adapter). Output type may differ from Item.
 struct Counter { pub mut val n: I64 }

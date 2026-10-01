@@ -1,13 +1,13 @@
 // Semantic preparation diagnostics shared by compiler drivers; no LLVM state.
-import @Std/Io with { eprint }
-import ../Diag with { eprintU64, CompileDiagnostic }
-import ../Frontend with { Comp }
-import ./Build with { MidBuildError, MidUnsupportedBuild, MidUnsupportedAssign }
-import ./Prepare with { MidPreparationError }
-import ./Instantiate with { MidInstantiateError }
-import ./Access with { MidAccessError }
-import ./Verify with { MidVerifyError, MidVerification }
-import ./Ir with { MidCanonicalBody }
+use @Std/Io only { eprint }
+use ../Diag only { eprintU64, CompileDiagnostic }
+use ../Frontend only { Comp }
+use ./Build only { MidBuildError, MidUnsupportedBuild, MidUnsupportedAssign }
+use ./Prepare only { MidPreparationError }
+use ./Instantiate only { MidInstantiateError }
+use ./Access only { MidAccessError }
+use ./Verify only { MidVerifyError, MidVerification }
+use ./Ir only { MidCanonicalBody }
 
 fn midUnsupportedBuildCoverageDetail(reason: MidUnsupportedBuild) -> U64 {
     match reason {

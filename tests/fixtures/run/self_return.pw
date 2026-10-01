@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A method returning bare `Self` resolves to the receiver type (`fn dup() -> Self`
 // on N returns N). The Self type env is set while emitting a non-generic method so

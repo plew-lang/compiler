@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // spec/08: an existential over a trait with an associated type must bind it
 // (`any Source[Item=I64]`); the bare `any Source` leaves Item unbound and is

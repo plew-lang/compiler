@@ -2,7 +2,7 @@
 // from local arrays.  This is the ordinary value-return shape used by the
 // compiler's MidBodyBuild: every destination owner must co-own each nested
 // ARC value before the builder locals are cleaned up.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum BuildError {
     None

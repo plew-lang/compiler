@@ -4,7 +4,7 @@
 // `arr` and the constructed struct stay independent. (The struct / enum-payload
 // construction branches are covered by cow_struct / array_enum_arc + the ASan-clean
 // self-compile, which builds them constantly.)
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct Bag { pub mut val items: Array[I32] }
 pub impl Bag { factory }
 fn main() {

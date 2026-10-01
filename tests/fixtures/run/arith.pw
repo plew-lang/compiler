@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn add(a: I64, b: I64) -> I64 {
     return a + b

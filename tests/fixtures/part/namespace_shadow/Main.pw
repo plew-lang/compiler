@@ -1,5 +1,5 @@
-import ./Models as models
-import @Std/Io with { print }
+use ./Models as models
+use @Std/Io only { print }
 struct Local {}
 impl Local { fn answer() -> I64 { return 99I64 } }
 fn read(models: Local, value: I64 = models.answer()) -> I64 {

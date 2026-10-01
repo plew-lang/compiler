@@ -1,5 +1,5 @@
-import ./Facade with { Counter, amount, localAmount }
-import @Std/Io with { print }
+use ./Facade only { Counter, amount, localAmount }
+use @Std/Io only { print }
 fn main() {
     val counter = <Counter value=3 />
     print(counter.read())

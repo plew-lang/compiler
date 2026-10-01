@@ -1,8 +1,8 @@
 // Internal frontend regression: compile this module, not a standalone part file.
 // Imports the actual Comp implementation; does not invoke the compiler driver.
-import ../../../src/Frontend with { Comp }
-import ../../../src/Ir with { TypeRef }
-import @Std/Io with { print }
+use ../../../src/Frontend only { Comp }
+use ../../../src/Ir only { TypeRef }
+use @Std/Io only { print }
 
 fn main() {
     mut val compiler: Comp = <Comp />

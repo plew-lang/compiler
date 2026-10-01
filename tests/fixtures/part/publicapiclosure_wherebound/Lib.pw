@@ -1,4 +1,4 @@
-import ./Dep with { Marker }
+use ./Dep only { Marker }
 
 pub fn id[T](value: T) -> T where T: Marker {
     return value

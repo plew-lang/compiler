@@ -1,9 +1,9 @@
-// Cross-file `import ./Name` (separate files folded into the build by the
-// module loader), including a diamond: both Main and Helper import Util, which
+// Cross-file `use ./Name` (separate files folded into the build by the
+// module loader), including a diamond: both Main and Helper use Util, which
 // must be included exactly once (dedup).
-import @Std/Io with { print }
-import ./Helper with { addOne }
-import ./Util with { triple }
+use @Std/Io only { print }
+use ./Helper only { addOne }
+use ./Util only { triple }
 
 fn main() {
     print(addOne(n: 41I64))      // 42

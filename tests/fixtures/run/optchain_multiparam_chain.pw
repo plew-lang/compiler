@@ -3,8 +3,8 @@
 // argument as the chain Value and carry the sibling `Meta` through the result —
 // a fixed `args[0]` assumption both crashed (index out of range) and dropped
 // `Meta`. spec/12 + spec/08 (associated types).
-import @Std/Io with { print }
-import @Std/Core with { Chain }
+use @Std/Io only { print }
+use @Std/Core only { Chain }
 struct Inner { pub val n: I64 }
 pub impl Inner { factory }
 enum Slot[Meta, T] {

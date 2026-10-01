@@ -1,4 +1,4 @@
-import @Std/Core with { Iterable }
+use @Std/Core only { Iterable }
 trait Source[T] { type Values: Iterable[Item=T] }
 impl[T] Source[T] {
     fn inspect(values: Self#Source[T].Values) {

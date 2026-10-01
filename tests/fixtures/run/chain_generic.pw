@@ -3,8 +3,8 @@
 // stage parametrically; a stored grounded result froze instance 1's types into
 // instance 2 — and a generic-struct chain Value once overflowed the compiler's
 // stack by registering the bare param name as a concrete type).
-import @Std/Io with { print }
-import @Std/Core
+use @Std/Io only { print }
+use @Std/Core
 
 struct BoxG[T] { pub val value: T }
 pub impl BoxG { factory }

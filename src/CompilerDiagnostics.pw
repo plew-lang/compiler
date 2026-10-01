@@ -1,8 +1,8 @@
 // Terminal adapter for the existing batch compiler driver.
-import @Std/Process with { exit }
-import ./Frontend with { Comp }
-import ./PreparedProgram with { ProgramPreparationError, programPreparationDiagnostic }
-import ./Diag with { emitDiagnostic }
+use @Std/Process only { exit }
+use ./Frontend only { Comp }
+use ./PreparedProgram only { ProgramPreparationError, programPreparationDiagnostic }
+use ./Diag only { emitDiagnostic }
 
 pub fn reportProgramPreparationError(c: inout Comp, error: ProgramPreparationError) {
     val diagnostic = programPreparationDiagnostic(c: inout c, error: error)

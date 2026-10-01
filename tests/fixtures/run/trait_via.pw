@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `via` aliases a requirement name to an existing real member: both the
 // requirement name (draw) and the real name (render) call the one method.

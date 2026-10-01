@@ -1,4 +1,4 @@
-import /Mid with { MidAccessResolvedBody, MidCanonicalBody }
+use /Mid only { MidAccessResolvedBody, MidCanonicalBody }
 fn main() {
     val body = <MidAccessResolvedBody canonical=<MidCanonicalBody body=1U64 /> />
 }

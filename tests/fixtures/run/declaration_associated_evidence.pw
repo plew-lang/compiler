@@ -1,8 +1,8 @@
-import @Std/Io with { print }
-import @Std/Core with { assert }
-import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
-import /SourceAccess with { SourceAccess }
-import /Ir with { StaticConformanceProof, DeclarationBoundRef, PatternTypeInput, PatternBindInput }
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { StaticConformanceProof, DeclarationBoundRef, PatternTypeInput, PatternBindInput }
 fn main() {
     val source = "trait Required {}\ntrait Source { type Item: Required }\ntrait Container { type Item }\nstruct Box[T] {}\nimpl[T] Box[T] as Container where T: Source { type Item=T#Source.Item }\n"
     mut val compiler = <Comp />

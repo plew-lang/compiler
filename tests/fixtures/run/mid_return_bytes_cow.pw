@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn returnedBytes(text: String) -> Array[U8] { return text.bytes() }
 fn returnedText(text: String) -> String { return text }

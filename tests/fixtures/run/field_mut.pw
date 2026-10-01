@@ -1,7 +1,7 @@
 // Composite mutability: a `mut val` field on a `mut val` binding is assignable
 // (directly and via compound assign); a plain `val` field is read-only but still
 // readable. Index assignment works through a `mut val` array binding.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Counter {
     pub mut val n: I64

@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, P, SyntaxFile, lex, parseProgramSyntaxInto }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, SyntaxFile, lex, parseProgramSyntaxInto }
+use @Std/Io only { print }
 
 fn main() {
     val source = "newtype Bytes = Array[U8]\n"

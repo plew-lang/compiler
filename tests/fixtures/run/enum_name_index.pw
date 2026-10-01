@@ -1,5 +1,5 @@
-import /Ir with { Arena, Bind, EnumDef }
-import @Std/Io with { write }
+use /Ir only { Arena, Bind, EnumDef }
+use @Std/Io only { write }
 
 fn enumeration(nameId: U64, generic: Bool) -> EnumDef {
     mut val parameters: Array[Bind] = []

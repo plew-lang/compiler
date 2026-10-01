@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import /Mid/Ir with { MidCanonicalArena, MidCanonicalBody, MidBodyNode, MidBlockNode, MidStatementNode, MidTerminatorNode, MidPlaceNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidRange, MidLocalDecl }
+use @Std/Io only { print }
+use /Mid/Ir only { MidCanonicalArena, MidCanonicalBody, MidBodyNode, MidBlockNode, MidStatementNode, MidTerminatorNode, MidPlaceNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidRange, MidLocalDecl }
 
 // Structural validation must follow the current canonical schema, including
 // rejection of malformed references in the newer closure and try operations.

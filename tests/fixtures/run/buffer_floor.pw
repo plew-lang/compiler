@@ -4,8 +4,8 @@
 // in the heap header; new/count/append/get are lowered inline to the rawbuf
 // header ops. This exercises construction, growth across cap boundaries
 // (0 -> 8 -> 16 -> 32), the header count, bounds-checked reads, and scope-drop.
-import @Std/Io with { print }
-import @Std/Core with { Buffer }
+use @Std/Io only { print }
+use @Std/Core only { Buffer }
 
 fn main() {
     mut val b: Buffer[I64] = Buffer.new()

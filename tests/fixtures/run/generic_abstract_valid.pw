@@ -1,8 +1,8 @@
 // Valid generic code under the Rust-style abstract checker (spec/06): type
 // parameters used only via their bounds / as themselves are accepted, while the
 // checker rejects the invalid shapes (see tests/fixtures/reject/generic_*).
-import @Std/Io with { print }
-import @Std/Core with { Add, Eq }
+use @Std/Io only { print }
+use @Std/Core only { Add, Eq }
 
 // identity / pass-through: T is used only as itself.
 fn id[T](x: T) -> T {

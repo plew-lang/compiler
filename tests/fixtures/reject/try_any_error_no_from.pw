@@ -4,7 +4,7 @@
 // must not silently treat "assignment-compatible" as "same type" (that skipped both the
 // `from` and the existential boxing, rewrapping the raw payload = invalid IR). With no
 // `from` on the existential, reject.
-import @Std/Core
+use @Std/Core
 trait HasCode { fn code() -> I32 }
 struct CErr { pub val c: I32 }
 impl CErr as HasCode { fn code() -> I32 { return self.c } }

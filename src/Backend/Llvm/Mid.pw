@@ -1,11 +1,11 @@
-import ../../Mid/Diagnostics with { emitMidCoverageVerify }
-import ../../Diag with { eprintU64 }
+use ../../Mid/Diagnostics only { emitMidCoverageVerify }
+use ../../Diag only { eprintU64 }
 // Part of the LLVM backend (root: _.pw): lowering of already-elaborated Mid
 // CFG. This path owns no syntax/type/call resolution. It consumes only typed
 // places, semantic constants, and explicit ownership operations.
 
-import @Std/Core with { truncU32, bitCastU64 }
-import ../../Ir with { ConversionProofNode, FrozenEnumPayloadConversion, CaptureEntry }
+use @Std/Core only { truncU32, bitCastU64 }
+use ../../Ir only { ConversionProofNode, FrozenEnumPayloadConversion, CaptureEntry }
 
 pub impl LlvmCtx {
 

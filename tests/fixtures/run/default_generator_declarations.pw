@@ -1,6 +1,6 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { Bind, Expr, Func, FuncBound, Param, Stmt }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { Bind, Expr, Func, FuncBound, Param, Stmt }
 
 fn parameter(hasDefault: Bool) -> Param {
     return <Param nameStart=0U64 nameLen=1U64 tyStart=0U64 tyLen=1U64

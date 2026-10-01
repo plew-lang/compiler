@@ -92,7 +92,7 @@ def main():
         directory = output / name
         state['current_artifact'] = name
         save()
-        print(f'[self-host] {name}: compile with {executable}', file=sys.stderr, flush=True)
+        print(f'[self-host] {name}: compile only {executable}', file=sys.stderr, flush=True)
         check_inputs()
         subprocess.run(['./scripts/diagnostics/measure-self-compile.sh'], env={**os.environ, 'PLEWC': str(executable), 'SOURCE': str(source), 'OUT_DIR': str(directory), 'LLVM_CONFIG': config}, check=True)
         with (directory / 'runtime.c').open('wb') as stream:

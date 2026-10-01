@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct Bag {
     pub mut val entries: Dictionary[U64, U64] = [:]
     pub val initial: Dictionary[U64, U64] = [1U64: 7U64]

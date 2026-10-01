@@ -1,7 +1,7 @@
 // await inside a while loop (state reused each iteration) and inside an if
 // branch (a second suspension point). Exercises stage-3a control flow.
-import @Std/Io with { print }
-import @Std/Async with { sleep }
+use @Std/Io only { print }
+use @Std/Async only { sleep }
 
 async fn tick(x: I64) -> Promise[I64] {
     await sleep(ms: 1)

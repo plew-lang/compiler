@@ -1,7 +1,7 @@
 // Process operations are a closed runtime ABI descriptor, not a backend lookup
 // by the source spelling `argCount`.
-import @Std/Io with { write }
-import /Ir with { RuntimeIntrinsic, ProcessIntrinsic, CallTarget }
+use @Std/Io only { write }
+use /Ir only { RuntimeIntrinsic, ProcessIntrinsic, CallTarget }
 
 fn main() {
     val target: CallTarget = <CallTarget.RuntimeIntrinsic intrinsic=<RuntimeIntrinsic.Process intrinsic=<ProcessIntrinsic.ArgCount /> /> />

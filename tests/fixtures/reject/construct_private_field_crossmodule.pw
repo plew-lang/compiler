@@ -2,7 +2,7 @@
 // constructing from another module. `Dictionary`'s internal fields (`keys`/…)
 // are private and live in the prelude module, so naming them in an explicit
 // `<Dictionary …/>` here is an encapsulation violation (use the `[:]` literal).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     mut val d: Dictionary[String, U64] = <Dictionary[String, U64] keys=[] vals=[] hashes=[] buckets=[] entryCount=0 />

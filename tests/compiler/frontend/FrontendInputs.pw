@@ -1,10 +1,10 @@
 // Exercise the embedding entry without reading this process's argv or stdin.
-import ../../../src/Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontend }
-import ../../../src/SourceAccess with { SourceAccess }
-import ../../../src/PreparedProgram with { PreparedProgram }
-import ../../../src/CompilerDiagnostics with { reportProgramPreparationError }
-import ./InvariantDiagnostics with { checkInvariantDiagnostics }
-import @Std/Io with { print }
+use ../../../src/Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/PreparedProgram only { PreparedProgram }
+use ../../../src/CompilerDiagnostics only { reportProgramPreparationError }
+use ./InvariantDiagnostics only { checkInvariantDiagnostics }
+use @Std/Io only { print }
 
 fn checkSource(path: String, asan: Bool) {
     mut val compiler: Comp = <Comp />

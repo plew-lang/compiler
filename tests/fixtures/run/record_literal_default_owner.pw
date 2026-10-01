@@ -1,5 +1,5 @@
 struct DefaultOwner { val value: I64 = 1I64 }
-import @Std/Io with { print }
+use @Std/Io only { print }
 fn main() {
     val record = (lower: 2I64, upper: 3I64)
     val instance = <DefaultOwner />

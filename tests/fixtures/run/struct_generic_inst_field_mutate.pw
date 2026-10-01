@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Assigning a generic-instance field by value (`b.a = <Optional.Some v=99 />`):
 // the un-suffixed RHS construction infers the field's instance type args.

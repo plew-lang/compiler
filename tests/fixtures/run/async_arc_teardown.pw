@@ -5,8 +5,8 @@
 // inside an async body (the concat below) drop at the suspension point; awaited
 // temp promises drop after their value is read; a Promise binding releases its
 // owner count at scope exit. LeakSanitizer over this program must be clean.
-import @Std/Io with { print }
-import @Std/Async with { sleep }
+use @Std/Io only { print }
+use @Std/Async only { sleep }
 
 async fn shout(text: String, times: I64) -> Promise[I64] {
     await sleep(ms: 1)

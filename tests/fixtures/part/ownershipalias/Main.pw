@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import /Models with { Packet as Envelope, Payload as Selection }
+use @Std/Io only { print }
+use /Models only { Packet as Envelope, Payload as Selection }
 
 fn first(value~: Selection) -> I64 {
     match value {

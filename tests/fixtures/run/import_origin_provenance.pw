@@ -1,5 +1,5 @@
-import /Ir with { Modules, ImportOrigin }
-import @Std/Io with { write }
+use /Ir only { Modules, ImportOrigin }
+use @Std/Io only { write }
 fn check(origin: ImportOrigin, module: U64, target: U64) {
     if origin.localStart != 30U64 || origin.localLength != 5U64 || origin.sourceStart != 10U64 || origin.sourceLength != 7U64 { panic "spelling provenance changed" }
     if origin.localModule != module || origin.targetModule != target { panic "module provenance changed" }
@@ -15,7 +15,7 @@ fn main() {
     check(origin: modules.reExportOriginAt(index: 0U64), module: 8U64, target: 4U64)
     check(origin: copy.importOriginAt(index: 0U64), module: 0U64, target: 9U64)
     check(origin: copy.importOriginAt(index: 1U64), module: 6U64, target: 2U64)
-    if modules.firstImportOriginNamed(moduleId: 0U64, nameId: 7U64) != 0U64 { panic "first import" }
+    if modules.firstImportOriginNamed(moduleId: 0U64, nameId: 7U64) != 0U64 { panic "first use" }
     if modules.firstImportOriginNamed(moduleId: 6U64, nameId: 7U64) != modules.importOriginCount() { panic "copy index escaped" }
     if copy.firstImportOriginNamed(moduleId: 6U64, nameId: 7U64) != 1U64 { panic "copy index missing" }
     if modules.firstReExportOriginNamed(moduleId: 8U64, nameId: 7U64) != 0U64 { panic "reexport index" }

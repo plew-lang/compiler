@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `any P` is a value type (spec/08): copying an existential (`mut val b = a`) makes
 // an independent value — its boxed concrete is duplicated (the vtable's copy thunk),

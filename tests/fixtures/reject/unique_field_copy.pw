@@ -1,6 +1,6 @@
 // Constructing a struct with a unique field from a bare place copies the unique
 // value (double deinit). Require `move` (or a fresh value).
-import @Std/Io with { write }
+use @Std/Io only { write }
 unique struct File { pub val fd: I64 }
 pub impl File { factory }
 unique struct Holder { pub val f: File }

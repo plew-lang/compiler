@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A generic method with a `where T: Trait` bound: the body is checked (#9) and
 // the receiver instantiation's type argument must conform (#8).

@@ -1,4 +1,4 @@
-import /Internal with { PrivateMarker as Marker }
+use /Internal only { PrivateMarker as Marker }
 
 pub fn id[T](value: T) -> T where T: Marker {
     return value

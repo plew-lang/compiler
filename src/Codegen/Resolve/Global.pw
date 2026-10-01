@@ -1,7 +1,7 @@
 // Part of name/type resolution (root: _.pw): global-init dependency
-// ordering and import-alias / factory-construction rewriting.
+// ordering and use-alias / factory-construction rewriting.
 
-import ../../Ir with { InstanceEnvironment }
+use ../../Ir only { InstanceEnvironment }
 
 pub impl Comp {
     fn globalInitializerPrepared(target: U64) -> Bool {
@@ -350,13 +350,13 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Resolve a module-local import alias to the real imported name (spec/15:
-    // `import M with { Real as Alias }`). A use of `Alias` in a TYPE position (annotation,
+    // Resolve a module-local use alias to the real imported name (spec/15:
+    // `use M only { Real as Alias }`). A use of `Alias` in a TYPE position (annotation,
     // construction head, assoc-fn receiver) resolves to `Real` for downstream struct/type
     // lookup — the call-expression alias rewrite (the lexical module-name pass) handles value
     // uses, this handles type uses. No-op when there are no aliases or the span does not
     // name a local alias (returns the input span unchanged). The alias is module-scoped:
-    // only a use in the same module as the `with` clause resolves.
+    // only a use in the same module as the `only` clause resolves.
     inout fn aliasReal(start: U64, len: U64) -> Bind {
         if self.decls.importAliases.count() == 0U64 {
             return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
@@ -440,7 +440,7 @@ pub impl Comp {
                     return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
                 }
                 if self.isTypeName(start: start, len: len) {
-                    // resolve an import alias (`with { Real as Alias }`) so `Alias.fn(args)`
+                    // resolve a use alias (`only { Real as Alias }`) so `Alias.fn(args)`
                     // dispatches to the assoc fn declared on the real type (spec/15).
                     return self.aliasReal(start: start, len: len)
                 }

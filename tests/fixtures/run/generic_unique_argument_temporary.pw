@@ -1,5 +1,5 @@
 // A generic unique owner lives in the frame; its copied result outlives deinit.
-import @Std/Io with { print }
+use @Std/Io only { print }
 unique struct Resource[T] {
     pub val value: T
     pub val id: I64

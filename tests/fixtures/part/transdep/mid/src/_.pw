@@ -1,4 +1,4 @@
-import @Leaf with { leafVal }
-import /Helper with { helperVal }
+use @Leaf only { leafVal }
+use /Helper only { helperVal }
 
 pub fn combined() -> I64 { return leafVal() + helperVal() }

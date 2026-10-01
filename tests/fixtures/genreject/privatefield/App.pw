@@ -1,8 +1,8 @@
 // A macro taking directive arguments must expose its fields publicly. Here `prefix`
 // is private, so the directive `@[Tag(prefix: …)]` construction must be REJECTED by
 // `plewc --gen` (the harness cannot set a private field from outside).
-import @Std/Io with { write }
-import @Plew/Syntax with { Derive, DeclAst }
+use @Std/Io only { write }
+use @Plew/Syntax only { Derive, DeclAst }
 
 struct Tag {
     val prefix: String

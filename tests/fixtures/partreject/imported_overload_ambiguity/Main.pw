@@ -1,4 +1,4 @@
-import ./Lib with { pick }
+use ./Lib only { pick }
 
 // A directly imported module is a resolution tier, not a first-match escape
 // hatch: this unsuffixed literal matches both overloads in that tier.

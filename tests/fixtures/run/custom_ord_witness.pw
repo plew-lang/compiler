@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core with { Ord, Eq, Ordering }
+use @Std/Io only { print }
+use @Std/Core only { Ord, Eq, Ordering }
 
 // A hand-written `Ord` with REVERSED ordering: `<` must route through this
 // `compare` witness (spec/12: ordering is `Ord` sugar), not a structural field

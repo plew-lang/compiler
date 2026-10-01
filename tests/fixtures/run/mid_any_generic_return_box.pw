@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A generic return crosses its declared existential ABI boundary in two body
 // instances. The selected bound proof must be frozen per BodyInstance; Mid

@@ -1,11 +1,11 @@
-import @Plew/Syntax with { Lexer, P, ImportId, SyntaxTopItemKind, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxImport, syntaxImportNameCount, syntaxTopItemKind, syntaxTopItemPayload }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, ImportId, SyntaxTopItemKind, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxImport, syntaxImportNameCount, syntaxTopItemKind, syntaxTopItemPayload }
+use @Std/Io only { print }
 
 fn main() {
     // A re-export at byte offset zero exercises the explicit start-presence
     // contract in the direct parser; offset zero is a valid source location,
     // not an omitted start argument.
-    val source = "pub import ./Child with { Foo as Bar }\n"
+    val source = "pub use ./Child only { Foo as Bar }\n"
     mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />

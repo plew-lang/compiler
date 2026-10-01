@@ -1,9 +1,9 @@
 // Ownership optimizations consume frozen, instantiated Mid. They never inspect
 // source names or synthesize raw ARC operations. Rewrites append snapshots so
 // the input remains available to verification and other body instances.
-import ./Ir with { MidCanonicalArena, MidCanonicalBody, MidBodyNode, MidRange, MidBlockNode, MidStatementNode, MidRvalueNode, MidOperandNode }
+use ./Ir only { MidCanonicalArena, MidCanonicalBody, MidBodyNode, MidRange, MidBlockNode, MidStatementNode, MidRvalueNode, MidOperandNode }
 
-import ../Ir with { FinalDestruction }
+use ../Ir only { FinalDestruction }
 
 // Profitability facts are frozen by the frontend, not inferred from names or
 // LLVM layout. Missing facts only lose a cheap-copy exclusion; they never

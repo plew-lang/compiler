@@ -4,7 +4,7 @@
 // the ground runtime `Array_Entry_U64_U64` — not the un-substituted template
 // `Array_Entry_K_V` (which must not be emitted at all). The nested-generic
 // monomorphization cluster.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Entry[K, V] {
     pub val key: K

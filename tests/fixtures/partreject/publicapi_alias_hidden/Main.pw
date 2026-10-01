@@ -1,2 +1,2 @@
-import / with { factory }
+use / only { factory }
 fn main() { val value = factory() }

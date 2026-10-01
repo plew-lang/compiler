@@ -1,6 +1,6 @@
 // `guard` statement (spec/11): runs the body when the condition FAILS (early exit);
 // on success, control continues with any bindings in scope (binding-escape).
-import @Std/Io with { print, write }
+use @Std/Io only { print, write }
 
 fn checkPos(n: I64) -> String {
     guard n > 0 {

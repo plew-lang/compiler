@@ -1,7 +1,7 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { TypeRef, InstanceEnvironment, SemanticTypeRecipe }
-import /Mid with { MidBody, MidBlock, MidTerminator, MidLocalDecl, MidScope, MidOperand, MidPlace, MidInstantiateError, instantiateCanonicalMidBody }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { TypeRef, InstanceEnvironment, SemanticTypeRecipe }
+use /Mid only { MidBody, MidBlock, MidTerminator, MidLocalDecl, MidScope, MidOperand, MidPlace, MidInstantiateError, instantiateCanonicalMidBody }
 
 fn main() {
     mut val compiler = <Comp />

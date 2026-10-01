@@ -2,7 +2,7 @@
 // generic `where` proof into the next generic direct call.  The latter cannot
 // infer U from the source spelling alone: `parsed()` returns the associated
 // output of Convert[String], which becomes concrete only for the BodyInstance.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait Convert[From] {
     type Output

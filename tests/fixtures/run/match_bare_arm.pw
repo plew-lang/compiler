@@ -2,7 +2,7 @@
 // not only `=> { ... }`). Previously a bare arm was handed to parseBlock, which
 // greedily swallowed the following arms — leaving only the first registered, so
 // the match was wrongly judged non-exhaustive (and miscompiled).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Shape {
     Circle(r: I32)

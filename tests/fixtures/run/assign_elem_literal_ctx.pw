@@ -1,6 +1,6 @@
 // An assignment target's type is the RHS literal's context: a bare literal element
 // store and a compound store both type the literal at the element width (U8 here).
-import @Std/Io with { print }
+use @Std/Io only { print }
 fn main() {
     mut val xs: Array[U8] = [10, 20]
     xs[0] = 5

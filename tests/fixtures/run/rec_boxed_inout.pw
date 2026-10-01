@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct Node {
     pub val value: String
     pub mut val next: Optional[Node]

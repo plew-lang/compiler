@@ -1,7 +1,7 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { SemanticExprType, Arg, ArgRange, Block, CallArgumentSource, CallTemplate, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, StaticConformanceProof, Stmt, identValueCode }
-import /Mid with { MidBuildError, MidBuildState, MidTerminator, addMidLocal, buildMidBlock }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { SemanticExprType, Arg, ArgRange, Block, CallArgumentSource, CallTemplate, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, StaticConformanceProof, Stmt, identValueCode }
+use /Mid only { MidBuildError, MidBuildState, MidTerminator, addMidLocal, buildMidBlock }
 
 // A CallTemplate carries whether a selected argument is `inout`. Mid must turn
 // that semantic ABI fact into an Inout borrow rather than silently retaining a

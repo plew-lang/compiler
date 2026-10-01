@@ -2,7 +2,7 @@
 # Move every top-level FREE `fn` (with its leading doc-comment block) out of a part
 # file into the Frontend module root (compiler/src/Frontend.pw), so the part is left
 # with only `impl` blocks (the spec/15 part=impl-only ideal). `impl` blocks, the file
-# header, and `import`/`part` lines stay put. Same-module scope, so call sites are
+# header, and `use`/`part` lines stay put. Same-module scope, so call sites are
 # unchanged. Run per file; build + fixpoint after a batch.
 #
 # Usage: relocate_free.py [--root <module-root.pw>] [--types] <part-file.pw> [...]

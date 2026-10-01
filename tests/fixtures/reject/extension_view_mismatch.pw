@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // A plain value cannot be passed where a `#Ext` view is required (spec/09):
 // `A` and `A#Ext` are distinct types with no implicit cast. Must apply the view
 // explicitly at the call (`useIt(x: p#Ext)`).

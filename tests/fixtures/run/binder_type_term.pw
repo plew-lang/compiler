@@ -1,7 +1,7 @@
-import /Ir with { PatternBindInput }
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { TypeRef, Bind }
+use /Ir only { PatternBindInput }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { TypeRef, Bind }
 
 fn main() {
     mut val compiler: Comp = <Comp />

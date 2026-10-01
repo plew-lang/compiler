@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 unique struct Resource {
     pub val number: I64
     deinit { print(self.number) }

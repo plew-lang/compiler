@@ -2,10 +2,10 @@
 // source spans while its argument is lowered through the typed ArgId pool.
 // This is intentionally distinct from syntax_lower_call_expr: it exercises
 // method (rather than free-call) argument-context selection.
-import @Plew/Syntax with { Lexer, P, StmtId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { Expr }
+use @Plew/Syntax only { Lexer, P, StmtId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Expr }
 
 fn main() {
     val source = "val answer = receiver.method(argument: 1I8)\n"

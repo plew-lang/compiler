@@ -1,6 +1,6 @@
-import /Frontend with { Comp }
-import /Ir with { FieldDef, StructDef, TypeRef }
-import @Std/Io with { print }
+use /Frontend only { Comp }
+use /Ir only { FieldDef, StructDef, TypeRef }
+use @Std/Io only { print }
 fn main() {
     mut val compiler = <Comp />
     compiler.arena.reserveTypeSentinel()

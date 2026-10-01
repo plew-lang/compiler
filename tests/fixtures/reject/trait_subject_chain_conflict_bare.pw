@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The program is rejected at the shared `self.b()` body call: B has distinct
 // C/D witnesses, and an outer call cannot select one for that body.  This

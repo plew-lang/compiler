@@ -82,7 +82,7 @@ with tempfile.TemporaryDirectory(prefix='plew-expose-collision-') as folder:
     (directory / 'Library.pw').write_text('pub expose fn entry(value~: I8) -> I8 { return value }\n')
     for parameter, result in [('I64', 'I8'), ('I8', 'I64'), ('U8', 'I8'), ('I8', 'U8')]:
         source = directory / 'Main.pw'
-        source.write_text('import ./Library as Library\nextern(c) { fn entry(value~: ' + parameter + ') -> ' + result + ' }\nfn main() { val value = entry(1' + parameter + ') }\n')
+        source.write_text('use ./Library as Library\nextern(c) { fn entry(value~: ' + parameter + ') -> ' + result + ' }\nfn main() { val value = entry(1' + parameter + ') }\n')
         execution = subprocess.run([str(compiler), str(source)], capture_output=True, timeout=55)
         assert execution.returncode != 0, (parameter, result)
         # Namespace-only imports do not contribute bare-call candidates. The
@@ -104,7 +104,7 @@ with tempfile.TemporaryDirectory(prefix='plew-expose-private-name-') as folder:
 with tempfile.TemporaryDirectory(prefix='plew-expose-managed-') as folder:
     source = Path(folder) / 'Main.pw'
     for type_name in ['Buffer[I64]', 'Ref[I64]', 'String', 'Array[I64]']:
-        imports = 'import @Std/Core with { Buffer, Ref }\n'
+        imports = 'use @Std/Core only { Buffer, Ref }\n'
         for declaration, diagnostic in [
             ('expose fn entry(value~: ' + type_name + ') {}', b'expose parameter ABI is not supported'),
             ('expose fn entry() -> ' + type_name + ' { panic "unreachable" }', b'expose return ABI is not supported'),

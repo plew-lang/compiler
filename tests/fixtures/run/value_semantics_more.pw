@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct Holder { pub val items: Array[I32] }
 pub impl Holder { factory }
 fn main() {

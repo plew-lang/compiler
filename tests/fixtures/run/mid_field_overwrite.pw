@@ -2,7 +2,7 @@
 // Mid must lower this physical field replacement without delegating the
 // function to the legacy emitter. Ownership-sensitive fields are covered once
 // the place operation itself is established.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 val midFieldOverwriteAnchor: I64 = 0I64
 

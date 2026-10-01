@@ -1,10 +1,10 @@
 // A SyntaxFile construction must lower directly from its type-argument and
 // field IDs.  In particular, the field value must not require rebuilding a
 // MakeFieldAst or its name as a String.
-import @Plew/Syntax with { Lexer, P, StmtId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { Expr }
+use @Plew/Syntax only { Lexer, P, StmtId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Expr }
 
 fn main() {
     val source = "val item = <Box[I8] value=1I8 />\n"

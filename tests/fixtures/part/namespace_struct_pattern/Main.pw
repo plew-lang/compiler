@@ -1,5 +1,5 @@
-import ./Models
-import @Std/Io with { print }
+use ./Models
+use @Std/Io only { print }
 fn read(value: Models.Item) -> I64 {
     match value { Models.Item { value: val item } => { return item } }
     return 0I64

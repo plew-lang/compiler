@@ -2,7 +2,7 @@
 // The later initializer reads the earlier process-lifetime root, while the
 // generic call proves that finalized call identities are available from the
 // synthetic global body as well as an ordinary function body.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Box[T] { pub val value: T }
 pub impl Box { factory }

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A generic free function whose parameter is a generic-struct INSTANCE type
 // (`box: Box[T]`) — the param must bind under the instance env so the body's

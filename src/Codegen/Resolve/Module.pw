@@ -3,7 +3,7 @@
 
 // The module id owning the source byte `offset` (spec/15 visibility): the loader
 // tags each file's [start,len) span in `bytes` with a module id (a module = a root
-// file + its `part` tree; each `import` target a separate one). A declaration's or
+// file + its `part` tree; each `use` target a separate one). A declaration's or
 // use's module is `moduleOf(its name offset)`. Returns 0 (the entry module) if no
 // range matches (e.g. synthetic spans appended after loading).
 
@@ -199,8 +199,8 @@ pub impl Comp {
         return <Result.Ok value=<LetEff start=effStart len=effLen arr=effArr ty=effTy /> />
     }
 
-    // Does module `useMod` have a direct import edge to `targetMod` (it did
-    // `import <path>` resolving to that module)? Drives the coexistence tiebreak.
+    // Does module `useMod` have a direct use edge to `targetMod` (it did
+    // `use <path>` resolving to that module)? Drives the coexistence tiebreak.
     inout fn hasImportEdge(useMod: U64, targetMod: U64) -> Bool {
         mut val i: U64 = 0
         while i < self.modules.importEdges.count() {
@@ -218,12 +218,12 @@ pub impl Comp {
     // Is the candidate decl `(candStart,candLen)` (a free fn) visible from module `useMod`
     // (spec/15)? (name, module)-keyed: a cross-module candidate is visible only if the
     // candidate's OWN module exports the name AND `useMod` directly imported that module
-    // (an import edge) AND brought this name into scope (a `with { }` import, not a bare
+    // (a use edge) AND brought this name into scope (a `only { }` use, not a bare
     // namespace import). Pinning the candidate's module is what stops a private same-named
     // decl in one module from being reached via an unrelated module's export of the same
-    // text (the import + "exported somewhere" pair alone did not distinguish the source).
-    // Does `useMod` import a barrel module that re-exports from `srcMod` (spec/15)? Composes
-    // a direct import edge (useMod -> barrel) with a re-export edge (barrel -> srcMod), so a
+    // text (the use + "exported somewhere" pair alone did not distinguish the source).
+    // Does `useMod` use a barrel module that re-exports from `srcMod` (spec/15)? Composes
+    // a direct use edge (useMod -> barrel) with a re-export edge (barrel -> srcMod), so a
     // name defined+exported in `srcMod` and forwarded by a barrel the use site imports is
     // reachable without the use site naming the source module directly.
     inout fn importsBarrelForwarding(useMod: U64, srcMod: U64) -> Bool {
@@ -320,13 +320,13 @@ pub impl Comp {
         }
         if firstLabel != self.arena.functionCount() { return <Result.Ok value=firstLabel /> }
         // gen mode (spec/16): the synthesized derive-runner harness calls force-loaded std
-        // free fns (`parseItem`/`write`/…) that the gen'd entry file does not `import` —
-        // force-load is NOT import, so scoped resolution above found no visible candidate
+        // free fns (`parseItem`/`write`/…) that the gen'd entry file does not `use` —
+        // force-load is NOT use, so scoped resolution above found no visible candidate
         // (the harness's call has a re-interned nameStart, `moduleOf` 0, which can't see
         // @Plew/Syntax). The harness is trusted compiler-generated code, so resolve it
         // GLOBALLY here, gen-only (the pre-scoped-resolution behaviour): first label match,
         // type match preferred. Normal compilation never reaches this — it returns
-        // "not found" (firstLabel == count) so checkUseVisibility can demand an import.
+        // "not found" (firstLabel == count) so checkUseVisibility can demand a use.
         if self.genMode {
             val qId = intern(c: inout self, start: nameStart, len: nameLen)
             mut val gLabel: U64 = self.arena.functionCount()

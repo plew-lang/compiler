@@ -1,11 +1,11 @@
 // Sparse cliff candidates retain local identity and emission order. The
 // unselected locals must not acquire drops merely because they fill a gap.
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Mid/Ir with { MidBody, MidBlock, MidLocalDecl, MidPlace, MidOperand, MidConstant, MidRvalue, MidStatement, MidTerminator }
-import /Mid/Drop with { elaborateCanonicalMidDrops }
-import /Mid/Verify with { MidVerifyError, verifyCanonicalMidBody }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Mid/Ir only { MidBody, MidBlock, MidLocalDecl, MidPlace, MidOperand, MidConstant, MidRvalue, MidStatement, MidTerminator }
+use /Mid/Drop only { elaborateCanonicalMidDrops }
+use /Mid/Verify only { MidVerifyError, verifyCanonicalMidBody }
 
 fn main() {
     mut val locals: Array[MidLocalDecl] = []

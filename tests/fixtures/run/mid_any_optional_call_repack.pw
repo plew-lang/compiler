@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A generic enum payload conversion is selected at the call boundary: Some
 // boxes its concrete payload, while None preserves the tag without a box.

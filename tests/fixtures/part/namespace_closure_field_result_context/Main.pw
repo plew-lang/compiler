@@ -1,6 +1,6 @@
-import ./First
-import ./Second
-import @Std/Io with { print }
+use ./First
+use ./Second
+use @Std/Io only { print }
 fn main() {
     val first = <First.Handler run=fn() -> I64 { return 11I64 } />
     val second = <Second.Handler run=fn() -> String { return "ok" } />

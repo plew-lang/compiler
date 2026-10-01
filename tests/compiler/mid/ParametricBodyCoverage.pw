@@ -1,12 +1,12 @@
 // Inspect declaration-time Mid without requesting LLVM or concrete instances.
-import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
-import ../../../src/SourceAccess with { SourceAccess }
-import ../../../src/Mid/Build with { MidFunctionTemplates, MidBuildError }
-import ../../../src/Mid/Drop with { elaborateCanonicalMidDrops }
-import ../../../src/Mid/Diagnostics with { reportMidBuildError }
-import @Std/Io with { print }
-import @Std/Core with { assert }
-import @Std/Process with { argAt, argCount }
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Mid/Build only { MidFunctionTemplates, MidBuildError }
+use ../../../src/Mid/Drop only { elaborateCanonicalMidDrops }
+use ../../../src/Mid/Diagnostics only { reportMidBuildError }
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use @Std/Process only { argAt, argCount }
 
 fn main() {
     mut val compiler = <Comp />

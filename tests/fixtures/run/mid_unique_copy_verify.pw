@@ -1,8 +1,8 @@
-import @Std/Io with { print }
-import @Std/Core with { assert }
-import /Frontend with { Comp }
-import /Ir with { StructDef, TypeRef }
-import /Mid with { MidBody, MidBlock, MidTerminator, MidOperand, MidPlace, MidLocalDecl, MidVerifyError, verifyExecutableCanonicalMidBody }
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use /Frontend only { Comp }
+use /Ir only { StructDef, TypeRef }
+use /Mid only { MidBody, MidBlock, MidTerminator, MidOperand, MidPlace, MidLocalDecl, MidVerifyError, verifyExecutableCanonicalMidBody }
 
 fn check(noncopyable: Bool, transfer: Bool) {
     mut val compiler = <Comp />

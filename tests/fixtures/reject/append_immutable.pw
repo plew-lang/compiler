@@ -1,6 +1,6 @@
 // `.append` mutates the array, so the receiver must be a mutable binding.
 // Appending to a plain `val` array must be rejected.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     val xs: Array[I64] = [1, 2]

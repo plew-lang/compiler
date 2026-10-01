@@ -1,5 +1,5 @@
-import ./A with { f }
-import ./B with { f }
-import @Std/Io with { print }
+use ./A only { f }
+use ./B only { f }
+use @Std/Io only { print }
 fn main() { print(f(value: 1I64))
 print(f(value: "s")) }

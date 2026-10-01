@@ -1,1 +1,1 @@
-pub import ./Defs with { Box }
+pub use ./Defs only { Box }

@@ -1,9 +1,9 @@
-import @Std/Io with { print }
-import @Std/Core with { assert }
-import /Frontend with { Comp }
-import /Mid with { MidBody, MidLocalDecl, MidScope, MidBlock, MidPlace, MidStatement, MidTerminator, MidOperand, MidBorrowCapability, MidCallTarget, MidCallReceiver, verifyCanonicalMidBody }
-import /Mid/Ir with { MidOperandNode, MidPlaceNode }
-import /Mid/Verify with { MidVerifyError }
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use /Frontend only { Comp }
+use /Mid only { MidBody, MidLocalDecl, MidScope, MidBlock, MidPlace, MidStatement, MidTerminator, MidOperand, MidBorrowCapability, MidCallTarget, MidCallReceiver, verifyCanonicalMidBody }
+use /Mid/Ir only { MidOperandNode, MidPlaceNode }
+use /Mid/Verify only { MidVerifyError }
 
 fn accepted(alive: Bool, validPlace: Bool, tag: U64) -> Bool {
     mut val compiler: Comp = <Comp />

@@ -1,6 +1,6 @@
 // Composite mutability: the binding `c` is `mut val`, but the field `base` is a
 // plain `val` (immutable storage), so `c.base = ...` must be rejected.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Point {
     pub mut val x: I64

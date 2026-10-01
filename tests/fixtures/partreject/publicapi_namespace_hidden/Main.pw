@@ -1,2 +1,2 @@
-import / with { Models }
+use / only { Models }
 fn main() { val value = Models.create() }

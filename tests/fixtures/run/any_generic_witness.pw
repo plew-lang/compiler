@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait Reader[Output] { fn read() -> Output }
 struct Box[T] { pub val value: T }

@@ -1,6 +1,6 @@
-import ./First
-import ./Second
-import @Std/Io with { print }
+use ./First
+use ./Second
+use @Std/Io only { print }
 fn main() {
     val first = <First.Item value=11I64 />
     val second = <Second.Item other=22I64 />

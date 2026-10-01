@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The selected generic witness must ground Item=T using Box[I64]'s instance.
 trait Iter { type Item }

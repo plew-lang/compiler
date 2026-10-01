@@ -1,4 +1,4 @@
-import ./A
-import ./B
+use ./A
+use ./B
 
 fn main() {}

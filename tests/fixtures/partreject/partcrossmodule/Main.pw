@@ -1,7 +1,7 @@
 // Cross-module double `part`: Main parts Shared, and the imported module Other
 // also parts Shared. A file belongs to exactly one module — rejected.
-import @Std/Io with { print }
-import ./Other with { other }
+use @Std/Io only { print }
+use ./Other only { other }
 
 part ./Shared
 

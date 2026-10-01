@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Regression (spec/08): a user trait that shares a NAME with an ambient Core
 // operator trait but differs in ARITY may carry a PROVIDED method. Here `Sub` (0

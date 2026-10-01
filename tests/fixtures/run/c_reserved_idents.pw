@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // C reserved words (`default`, `double`, `int`, `void`, `const`, `switch`) are
 // legal Plew identifiers; codegen mangles them so the generated C compiles.
 struct Config {

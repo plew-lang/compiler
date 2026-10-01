@@ -1,7 +1,7 @@
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { TypeRef }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { TypeRef }
 
 fn main() {
     mut val compiler = <Comp />

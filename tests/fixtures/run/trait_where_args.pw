@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `where T: Trait[Args]` (spec/08): a where-clause trait bound may carry the
 // trait's type arguments (`Into[I64]`, `Seq[I64]`). The complete trait key is

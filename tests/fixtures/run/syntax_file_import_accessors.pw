@@ -1,8 +1,8 @@
-import @Plew/Syntax with { Lexer, P, ImportId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImport, syntaxImportNameCount, syntaxImportNameSpan, syntaxImportNameAliasSpan }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, ImportId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImport, syntaxImportNameCount, syntaxImportNameSpan, syntaxImportNameAliasSpan }
+use @Std/Io only { print }
 
 fn main() {
-    val source = "import @Std/Io as Console with { print as show, eprint }\n"
+    val source = "use @Std/Io as Console only { print as show, eprint }\n"
     mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />

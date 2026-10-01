@@ -3,8 +3,8 @@
 // CALLER owns the temp and releases it at statement end. The closure-call
 // emitter once skipped the anonymous-owned-home registration, leaking every
 // temp argument (MutableRef, String, record literal alike). Place args stay borrows.
-import @Std/Io with { print, write }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print, write }
+use @Std/Core only { MutableRef }
 
 unique struct Cell {
     pub val v: I64

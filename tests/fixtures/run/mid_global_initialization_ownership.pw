@@ -1,8 +1,8 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { Global }
-import /Mid with { MidBlock, MidBody, MidBuildError, MidCanonicalBody, MidLocalDecl, MidPlace, MidScope, MidStatement, MidTerminator, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
-import /Mid/Verify with { MidVerifyError }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { Global }
+use /Mid only { MidBlock, MidBody, MidBuildError, MidCanonicalBody, MidLocalDecl, MidPlace, MidScope, MidStatement, MidTerminator, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
+use /Mid/Verify only { MidVerifyError }
 
 // InitializeGlobal is the one transfer into a process-lifetime root.  It is
 // not a spelling of assignment available to an ordinary user body.

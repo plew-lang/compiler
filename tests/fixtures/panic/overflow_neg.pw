@@ -1,5 +1,5 @@
 // Negating the signed minimum overflows (its magnitude is unrepresentable).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     val big: I32 = 2147483647

@@ -1,7 +1,7 @@
-import @Plew/Syntax with { TypeAst, NameSegmentAst, Span }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { ImportOrigin }
+use @Plew/Syntax only { TypeAst, NameSegmentAst, Span }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { ImportOrigin }
 fn main() {
     mut val compiler: Comp = <Comp />
     compiler.arena.reserveTypeSentinel()

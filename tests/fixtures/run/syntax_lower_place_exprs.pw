@@ -1,9 +1,9 @@
 // Source-provenance of a SyntaxFile place expression must survive lowering:
 // the field spelling and cast type are source spans, not reconstructed Strings.
-import @Plew/Syntax with { Lexer, P, StmtId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { Expr }
+use @Plew/Syntax only { Lexer, P, StmtId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Expr }
 
 fn main() {
     val source = "val value = input.field as I8\n"

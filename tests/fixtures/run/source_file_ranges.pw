@@ -1,5 +1,5 @@
-import @Std/Io with { write }
-import /SourceFiles with { SourceFiles }
+use @Std/Io only { write }
+use /SourceFiles only { SourceFiles }
 
 fn expectOwner(files: SourceFiles, offset: U64, expected: U64) {
     match files.containing(offset: offset) {

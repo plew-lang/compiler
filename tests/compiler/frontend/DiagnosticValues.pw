@@ -1,6 +1,6 @@
 // Displaying a diagnostic must return; only the CLI decides whether to exit.
-import ../../../src/Diag with { CompileDiagnostic, DiagnosticLocation, emitDiagnostic }
-import @Std/Io with { print }
+use ../../../src/Diag only { CompileDiagnostic, DiagnosticLocation, emitDiagnostic }
+use @Std/Io only { print }
 
 fn main() {
     val diagnostic = <CompileDiagnostic

@@ -1,10 +1,10 @@
 // Internal pipeline contract: static checking must not demand concrete bodies.
 // Concrete implementation limits remain build/run diagnostics, not language bans.
-import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
-import /SourceAccess with { SourceAccess }
-import /DeclarationProgram with { prepareDeclarationProgram }
-import /Mid/Build with { MidFunctionTemplates }
-import @Std/Io with { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+use /SourceAccess only { SourceAccess }
+use /DeclarationProgram only { prepareDeclarationProgram }
+use /Mid/Build only { MidFunctionTemplates }
+use @Std/Io only { print }
 
 fn checkBoundary(source: String, expected: String) {
     mut val compiler = <Comp />

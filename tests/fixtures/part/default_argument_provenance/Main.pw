@@ -1,5 +1,5 @@
-import @Std/Io with { print, write }
-import ./Defaults with { choose, chooseGlobal }
+use @Std/Io only { print, write }
+use ./Defaults only { choose, chooseGlobal }
 
 val secret: String = "caller-global"
 

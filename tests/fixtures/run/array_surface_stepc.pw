@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The canonical Array removal/insert surface (collections.md step C / spec/02 §Buffer):
 // removeLast()->T, pop()->Optional[T], insertAt, removeAt, swapRemove, clear, truncate,

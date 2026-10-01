@@ -1,4 +1,4 @@
-import @Std/Core with { Ref }
+use @Std/Core only { Ref }
 
 struct Cell { pub mut val n: I32 }
 

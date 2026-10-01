@@ -1,7 +1,7 @@
 // capture binding `val x =>` (spec/11): a named wildcard that binds the whole
 // scrutinee, on scalar / literal matches (`match` arms have no guards — refine with
 // a literal arm + a capture catch-all, or a nested match).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn classify(n: I64) -> I64 {
     return match n {

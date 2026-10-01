@@ -1,4 +1,4 @@
-import /Ir with { Arena }
+use /Ir only { Arena }
 fn main() {
     val arena: Arena = <Arena />
     val value = arena.typeRows

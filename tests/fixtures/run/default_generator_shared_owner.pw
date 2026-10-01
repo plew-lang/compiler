@@ -1,6 +1,6 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { Bind, Expr, Func, FuncBound, Param }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { Bind, Expr, Func, FuncBound, Param }
 
 fn main() {
     mut val c: Comp = <Comp />

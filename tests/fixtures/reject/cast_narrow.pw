@@ -1,6 +1,6 @@
 // `as` is lossless-only: a narrowing integer conversion (I64 -> U8) must be a
 // compile error (use a fallible TryFrom instead).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     val x: I64 = 5

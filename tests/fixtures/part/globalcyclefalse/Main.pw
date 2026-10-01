@@ -1,6 +1,6 @@
-import @Std/Io with { print }
-import ./ModA with { sumA }
-import ./ModB with { sumB }
+use @Std/Io only { print }
+use ./ModA only { sumA }
+use ./ModB only { sumB }
 
 fn main() {
     print(sumA())  // b=5, a=b+1=6 -> 11

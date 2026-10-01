@@ -1,7 +1,7 @@
 // Two delayed tasks started concurrently fire in deadline order, not start
 // order: `a` (delay 100) is started first but `b` (delay 50) resolves first.
-import @Std/Io with { print }
-import @Std/Async with { sleep }
+use @Std/Io only { print }
+use @Std/Async only { sleep }
 
 async fn delayed(label: I64, ms: I64) -> Promise[I64] {
     await sleep(ms: ms)

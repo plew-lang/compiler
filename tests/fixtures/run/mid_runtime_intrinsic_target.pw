@@ -1,5 +1,5 @@
-import @Std/Io with { write }
-import /Ir with { RuntimeIntrinsic, IoIntrinsic, CallTarget }
+use @Std/Io only { write }
+use /Ir only { RuntimeIntrinsic, IoIntrinsic, CallTarget }
 
 fn main() {
     val writeTarget: CallTarget = <CallTarget.RuntimeIntrinsic intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.Write /> /> />

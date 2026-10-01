@@ -1,7 +1,7 @@
 // The ordinary (non-main) LLVM lowering must implement the same `append(x)`
 // value-copy contract as Mid lowering.  Parser helpers run through this path.
-import @Plew/Syntax with { Span, TopItemAst, TypeAst }
-import @Std/Io with { print }
+use @Plew/Syntax only { Span, TopItemAst, TypeAst }
+use @Std/Io only { print }
 
 fn genericArgCountAfterAppend(item: TopItemAst) -> U64 {
     mut val items: Array[TopItemAst] = []

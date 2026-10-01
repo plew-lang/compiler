@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Choice { First(value: I64) Second(value: I64) }
 

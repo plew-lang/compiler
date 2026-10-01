@@ -1,7 +1,7 @@
 // Multi-file module: Main.pw stitches in Helper.pw via `part`. Helper holds an
 // `impl` on `N` (declared here) — spec/15: a part contains only impl blocks, and
 // the shared module scope lets that impl see the root's type.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 part ./Helper
 

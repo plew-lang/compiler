@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Labelled anonymous records (spec/02): a structural, nameless record `(x: I64, y: I64)`
 // — type, literal, and `.field` access. Identity is the field-name+type set (order

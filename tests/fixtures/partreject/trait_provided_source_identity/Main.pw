@@ -1,5 +1,5 @@
-import ./Zero with { Clash as ZeroClash }
-import ./One with { Clash as OneClash }
+use ./Zero only { Clash as ZeroClash }
+use ./One only { Clash as OneClash }
 
 struct S {}
 pub impl S { factory }

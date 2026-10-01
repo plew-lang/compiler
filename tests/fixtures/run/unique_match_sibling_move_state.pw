@@ -1,5 +1,5 @@
 // An arm's moved payload must not mark a sibling arm's reused local slot.
-import @Std/Io with { print }
+use @Std/Io only { print }
 unique struct Resource { pub val label: String deinit { print(self.label) } }
 pub impl Resource { factory }
 unique enum Outcome { Success(resource: Resource) Failure(message: String) }

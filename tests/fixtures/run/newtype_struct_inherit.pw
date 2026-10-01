@@ -4,7 +4,7 @@
 // method (`w.mark()`), and the inherited conformance satisfying a `where T: Special`
 // bound (`needs(x: w)`). Resolved by localStructIdxFor routing a newtype-over-struct
 // to the underlying struct's index, so the struct dispatch path applies.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait Special { fn mark() -> I64 }
 struct Plain { pub val v: I64 }

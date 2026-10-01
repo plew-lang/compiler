@@ -1,7 +1,7 @@
 // A mutable capture cell and a captured Ref survive suspension together.
-import @Std/Io with { print }
-import @Std/Async with { sleep }
-import @Std/Core with { Ref }
+use @Std/Io only { print }
+use @Std/Async only { sleep }
+use @Std/Core only { Ref }
 unique struct Resource { pub val text: String deinit { print("drop") } }
 pub impl Resource { factory }
 async fn main() {

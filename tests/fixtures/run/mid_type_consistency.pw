@@ -1,10 +1,10 @@
 // Explicit type inconsistencies must fail even when ownership is balanced.
-import @Std/Io with { print }
-import @Std/Core with { assert }
-import /Frontend with { Comp }
-import /Ir with { TypeRef, CallResolution, CallResolutionParameterTypeRange, BodyInstance, InstanceEnvironment, ValueConversionProof }
-import /Mid with { MidCastKind, MidCallTarget, MidCallReceiver, MidBody, MidBlock, MidStatement, MidTerminator, MidPlace, MidLocalDecl, MidOperand, MidRvalue, MidConstant, MidVerifyError, verifyExecutableCanonicalMidBody }
-import /Mid/Types with { midViewTypesMatch }
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use /Frontend only { Comp }
+use /Ir only { TypeRef, CallResolution, CallResolutionParameterTypeRange, BodyInstance, InstanceEnvironment, ValueConversionProof }
+use /Mid only { MidCastKind, MidCallTarget, MidCallReceiver, MidBody, MidBlock, MidStatement, MidTerminator, MidPlace, MidLocalDecl, MidOperand, MidRvalue, MidConstant, MidVerifyError, verifyExecutableCanonicalMidBody }
+use /Mid/Types only { midViewTypesMatch }
 
 fn check(mode: U64) {
     mut val c: Comp = <Comp />

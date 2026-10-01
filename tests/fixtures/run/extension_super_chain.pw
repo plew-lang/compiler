@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Extension method self-view, `#!Ext` super, and stacked `#A#B` views (spec/09).
 struct P { pub val n: I64 }

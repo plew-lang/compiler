@@ -1,6 +1,6 @@
 // Diagnostic: a by-value Ref parameter must survive rebinding its caller's owner.
-import @Std/Io with { print }
-import @Std/Core with { MutableRef, assert }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef, assert }
 unique struct Cell {
     pub val value: I64
     deinit { print(self.value) }

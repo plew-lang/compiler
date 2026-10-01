@@ -1,6 +1,6 @@
 // An extension with no members still contributes a source-selectable
 // conformance surface, so the view can satisfy a generic bound.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait Mark {}
 struct Box {}

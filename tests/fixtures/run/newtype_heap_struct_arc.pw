@@ -3,7 +3,7 @@
 // The old per-site enumeration in valueArc missed the newtype->underlying
 // resolution, so newtype-of-struct values skipped ARC entirely (leak; caught
 // when arcClassOfRef became the single classifier).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Holder { pub val name: String  pub val tags: Array[String] }
 pub impl Holder { factory }

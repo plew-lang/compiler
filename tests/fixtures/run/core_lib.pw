@@ -1,5 +1,5 @@
-import @Std/Core
-import @Std/Io with { print }
+use @Std/Core
+use @Std/Io only { print }
 
 fn safeDiv(a: I32, b: I32) -> Result[I32, U8] {
     if b == 0 {

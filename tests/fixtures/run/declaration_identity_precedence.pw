@@ -1,6 +1,6 @@
-import /Frontend with { Comp }
-import /Ir with { Bind, StructDef, EnumDef, TraitDef, NewtypeDef }
-import @Std/Io with { write }
+use /Frontend only { Comp }
+use /Ir only { Bind, StructDef, EnumDef, TraitDef, NewtypeDef }
+use @Std/Io only { write }
 
 fn main() {
     mut val c = <Comp />

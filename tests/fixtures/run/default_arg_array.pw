@@ -1,7 +1,7 @@
 // F13: an array-typed default argument (`xs: Array[T] = []`) must use the
 // typed array constructor; previously it emitted a bare `0`, miscompiling.
 // The default is re-evaluated each call (a fresh empty array, no shared state).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn tally(xs: Array[I32] = []) -> U64 {
     mut val ys: Array[I32] = xs

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The receiver's outer argument is Array[Yes], while the impl binder T is
 // Yes. Final-body bound checking must use the receiver-pattern witness rather

@@ -3,8 +3,8 @@
 // The unchecked floor `stringFromBytesUnchecked` is the escape hatch for known-valid
 // bytes. Exercises the well-formed-UTF-8 table: ASCII, 2/3/4-byte sequences, and the
 // rejections (lone continuation, truncation, overlong, surrogate, out-of-range lead).
-import @Std/Io with { print }
-import @Std/Core with { TryFrom, Utf8Error }
+use @Std/Io only { print }
+use @Std/Core only { TryFrom, Utf8Error }
 
 fn ok(bytes: Array[U8]) -> Bool {
     val r: Result[String, Utf8Error] = <String.checked source=bytes />

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Method-source selection `a#P.foo()` (spec/08,09): when a type conforms to two
 // traits that provide the same-name method, the bare call is ambiguous (see

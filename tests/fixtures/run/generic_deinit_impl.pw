@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 unique struct Resource[T] {
     pub val value: T
 }

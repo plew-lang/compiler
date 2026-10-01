@@ -1,6 +1,6 @@
 // spec/05: a field default is default-argument sugar and cannot suspend, even
 // when the await is nested in a value-position match arm block.
-import @Std/Async with { sleep }
+use @Std/Async only { sleep }
 
 enum Choice {
     A

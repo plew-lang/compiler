@@ -1,5 +1,5 @@
-import @Std/Io with { write, print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { write, print }
+use @Std/Core only { MutableRef }
 
 // The spec-blessed way to share/store a unique value is to wrap it in MutableRef[T]
 // (unique values cannot go in generics/arrays directly). The last MutableRef to drop

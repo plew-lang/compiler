@@ -2,7 +2,7 @@
 // `Array[Array[I32]]`. The nested element store must privatize the OUTER array `a`
 // (gateway on the index base) before the inner-level CoW, so the sharer `b` is
 // untouched at every level.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     mut val a: Array[Array[I32]] = []

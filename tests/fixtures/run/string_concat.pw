@@ -3,7 +3,7 @@
 // type with no owned/borrowed split, so `String + String -> String` is symmetric
 // (unlike Rust's `String + &str`). Covered: literals, variables, chaining, function
 // results, a method on the result, and the `s = s + …` accumulation form.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn greet(name: String) -> String { return "Hello, " + name + "!" }
 

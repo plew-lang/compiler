@@ -1,6 +1,6 @@
 // Access inputs must preserve call evaluation order and evaluate each source
 // occurrence once, including calls used as the root of nested indexing.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn matrix(value: I64) -> Array[Array[I64]] {
     print(10I64)

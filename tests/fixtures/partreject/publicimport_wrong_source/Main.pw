@@ -1,2 +1,2 @@
-import ./Facade with { secret }
+use ./Facade only { secret }
 fn main() {}

@@ -1,4 +1,4 @@
-import @Std/Io with { write, print }
+use @Std/Io only { write, print }
 
 // A unique (copy-incapable, move-only) resource type with a `deinit` that runs
 // deterministically when its last owner leaves scope (spec/03).

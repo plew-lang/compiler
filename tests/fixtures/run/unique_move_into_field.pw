@@ -1,4 +1,4 @@
-import @Std/Io with { write, print }
+use @Std/Io only { write, print }
 
 // A unique value can be moved into a struct field at construction; the source is
 // consumed, so deinit runs exactly once (via the new owner).

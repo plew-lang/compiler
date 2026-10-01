@@ -1,6 +1,6 @@
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import /Ir with { Decls, Conform }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Ir only { Decls, Conform }
 
 fn declaration(owner: U64, identity: U64, derived: Bool) -> Conform {
     return <Conform sourceModule=0U64 typeStart=identity typeLen=1U64 typeId=identity subjectTraitOwner=owner traitStart=99U64 traitLen=1U64 traitId=99U64 derived=derived />

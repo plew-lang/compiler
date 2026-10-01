@@ -1,5 +1,5 @@
-import @Std/Core with { MutableRef }
-import @Std/Io with { print }
+use @Std/Core only { MutableRef }
+use @Std/Io only { print }
 struct Holder { pub mut val items: Array[I64] pub mut val value: I64 }
 pub impl Holder { factory }
 mut val current = <MutableRef value=<Holder items=[1I64] value=1I64 /> />

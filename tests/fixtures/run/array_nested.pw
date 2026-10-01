@@ -2,7 +2,7 @@
 // and nested indexing (`m[i][j]`, `m[i].count()`). Appending works with a variable
 // row and with a bare array literal (`m.append([1,2,3])`), including deeper
 // nesting where the appended element is itself a nested array.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     mut val m: Array[Array[I32]] = []

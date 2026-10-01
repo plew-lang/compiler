@@ -1,10 +1,10 @@
 // Session-scoped declaration ownership requests. Immutable input body identity
 // is the key; this cache must remain with the Comp that owns that arena.
-import ../Frontend with { Comp }
-import ./Ir with { MidCanonicalBody }
-import ./Prepare with { MidParametricBody }
-import ./Drop with { elaborateCanonicalMidDrops }
-import ./Verify with { MidVerification, MidVerifyError, verifyDeclarationMidOwnership }
+use ../Frontend only { Comp }
+use ./Ir only { MidCanonicalBody }
+use ./Prepare only { MidParametricBody }
+use ./Drop only { elaborateCanonicalMidDrops }
+use ./Verify only { MidVerification, MidVerifyError, verifyDeclarationMidOwnership }
 
 // No public factory: only a successful declaration verification issues this
 // token. It does not prove conversion eligibility, access effects or executable

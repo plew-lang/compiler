@@ -1,4 +1,4 @@
-import @Std/Core with { Chain }
+use @Std/Core only { Chain }
 pub enum Slot[T, Meta] { Empty Full(v: T) }
 pub impl[T, Meta] Slot[T, Meta] as Chain {
     type Value = T

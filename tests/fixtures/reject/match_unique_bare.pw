@@ -1,5 +1,5 @@
 // A unique storage place is not consumed by bare `match`; use `match move`.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 unique struct File { pub val fd: I64 }
 

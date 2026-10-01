@@ -1,7 +1,7 @@
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
-import /SourceAccess with { SourceAccess }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
 fn main() {
     val cases = [
         "trait Parser { type Output }\nfn bad[T](value: T#Parser.Missing) where T: Parser {}\n",

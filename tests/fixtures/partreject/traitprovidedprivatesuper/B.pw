@@ -1,5 +1,5 @@
-import ./A with { Super }
-pub import ./A with { Super }
+use ./A only { Super }
+pub use ./A only { Super }
 
 pub trait Sub: Super {
 }

@@ -3,7 +3,7 @@
 // literal `(x: 9, y: 8)` must take its type from the grounded parameter, not from a local
 // annotation — the call site supplies the receiver's instance env so the record-typed
 // param resolves. Both the fallback-consuming (None/Err) and value (Some/Ok) paths.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     // None: the record-literal fallback is consumed and grounded at the call.

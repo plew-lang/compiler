@@ -3,8 +3,8 @@
 // previously errored "no type from context" even with the annotation).
 // (Reading a scalar pointee via `->` is a separate, unsupported thing; this
 // exercises construction, copy/retain and scope-drop.)
-import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 
 fn main() {
     val r: MutableRef[I32] = <MutableRef[I32] value=7 />

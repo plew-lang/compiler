@@ -1,7 +1,7 @@
 // Anonymous and named factory requirements preserve the same selector in
 // the direct SyntaxFile parser and the macro value parser.
-import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, parseTraitDecl, syntaxFileTopLevel, syntaxTopItemPayload, syntaxTrait, syntaxTraitReqCount, syntaxTraitReq, syntaxSig, syntaxSigParamCount, syntaxSigParam, syntaxParam, TraitId }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, parseTraitDecl, syntaxFileTopLevel, syntaxTopItemPayload, syntaxTrait, syntaxTraitReqCount, syntaxTraitReq, syntaxSig, syntaxSigParamCount, syntaxSigParam, syntaxParam, TraitId }
+use @Std/Io only { print }
 
 fn main() {
     val source = "trait Convert[Source] { factory(from: Source) factory checked(source: Source) }"

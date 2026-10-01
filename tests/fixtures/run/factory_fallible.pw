@@ -1,7 +1,7 @@
 // fallible factories (spec/05): `optional factory` returns Optional[Self], `result[E]
 // factory` returns Result[Self, E]. The return type is synthesized (not written); the
 // body returns the wrapped value. Invoked via `<Type.name attrs/>`.
-import @Std/Io with { print, write }
+use @Std/Io only { print, write }
 
 struct Pct { pub val v: I64 }
 pub impl Pct { factory }

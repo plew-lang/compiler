@@ -1,6 +1,6 @@
-import @Plew/Syntax with { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl }
-import @Std/Io with { print }
-import /Frontend with { Comp }
+use @Plew/Syntax only { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl }
+use @Std/Io only { print }
+use /Frontend only { Comp }
 
 fn main() {
     val source = "trait P {}\nfn identity[T](value: T) -> T where T: P { return value }\n"

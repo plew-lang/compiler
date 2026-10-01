@@ -2,7 +2,7 @@
 // projects an I64 out of Value=Box, and `fromValue` cannot take it — the
 // desugar's mismatch rejects (and anchors at the `?.n` source token; the
 // synthesized tree once pointed at a line outside the file).
-import @Std/Core
+use @Std/Core
 struct Box { pub val n: I64 }
 enum Maybe {
     Just(b: Box)

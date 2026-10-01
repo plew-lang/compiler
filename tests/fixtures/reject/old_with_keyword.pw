@@ -1,0 +1,2 @@
+use @Std/Io with { print }
+fn main() {}

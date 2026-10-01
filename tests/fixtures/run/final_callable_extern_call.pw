@@ -1,4 +1,4 @@
-import @Std/Io with { fileExists, print }
+use @Std/Io only { fileExists, print }
 
 fn main() {
     print(fileExists(path: "tests/fixtures/run/final_callable_extern_call.pw".bytes()))

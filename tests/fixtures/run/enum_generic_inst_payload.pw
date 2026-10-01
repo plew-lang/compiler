@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // An enum variant carrying a generic-instance payload by value (`Leaf(v: Optional[I64])`):
 // the inline instance is sized into the payload area and a nested match recovers it.

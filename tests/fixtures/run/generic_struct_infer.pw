@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 fn applyTo[B](f: fn(x: I64) -> B, n: I64) -> B {
     return f(x: n)
 }

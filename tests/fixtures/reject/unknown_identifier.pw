@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct P { val n: I32 }
 impl P {
     fn get() -> I32 { return n }

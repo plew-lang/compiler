@@ -1,7 +1,7 @@
 // Part of compile-time checks (root: _.pw): trait-bound and conformance
 // validation.
 
-import ../../Ir with { DynamicCallTemplateTarget }
+use ../../Ir only { DynamicCallTemplateTarget }
 
 // The concrete type span that the conforming type `(recvStart,recvLen)` binds for
 // the associated type named `(nameStart,nameLen)` (spec/08 `type Item = Concrete`),

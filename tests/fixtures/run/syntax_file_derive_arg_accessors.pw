@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDirective, syntaxDirectiveReq, syntaxDeriveReq, syntaxDeriveReqArgCount, syntaxDeriveReqArg, syntaxMakeField, syntaxExpr, DirectiveId }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDirective, syntaxDirectiveReq, syntaxDeriveReq, syntaxDeriveReqArgCount, syntaxDeriveReqArg, syntaxMakeField, syntaxExpr, DirectiveId }
+use @Std/Io only { print }
 
 fn main() {
     val source = "@[IntTryFrom(sources: [\"I8\"])]\nstruct Count {}\n"

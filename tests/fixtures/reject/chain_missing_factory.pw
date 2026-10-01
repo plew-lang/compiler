@@ -1,4 +1,4 @@
-import @Std/Core with { Chain }
+use @Std/Core only { Chain }
 enum Missing[T] { Full(v: T) Empty }
 pub impl[T] Missing[T] as Chain {
     type Value = T

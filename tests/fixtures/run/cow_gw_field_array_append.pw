@@ -2,7 +2,7 @@
 // inout-self append on a nested struct-field array, with `a` shared. The gateway
 // privatizes the outer array `a` (recursing through the field base `a[i]`) before
 // the append's own field-buffer CoW, so the sharer `b` keeps the original.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Box {
     pub mut val xs: Array[I32]

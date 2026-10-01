@@ -1,4 +1,4 @@
-import @Std/Io with { print, write }
+use @Std/Io only { print, write }
 
 struct Sized { pub val n: U64  pub val tag: String }
 pub impl Sized { factory }

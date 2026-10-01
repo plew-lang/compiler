@@ -1,6 +1,6 @@
 // literal match patterns (spec/11): bare int / string / bool / negative literals
 // in both expression and statement position, desugared to an `==` if/else chain.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn name(n: I64) -> String {
     return match n {

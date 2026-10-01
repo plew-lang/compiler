@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Keep main on legacy emission; the helper isolates an explicit inout argument
 // access so `mid:` proves that semantic access role=argument reaches Mid.

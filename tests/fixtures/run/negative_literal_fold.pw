@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A leading `-` on an integer literal folds into the literal (spec/02): `-128I8`
 // is the literal -128, valid even though `128` alone exceeds I8's positive range.

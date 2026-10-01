@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Reassigning the SAME named type (struct A, and same generic enums Optional/Result)
 // must NOT be false-rejected by the named-type assignment check — same head name =>

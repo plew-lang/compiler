@@ -1,8 +1,8 @@
 // Overlapping `inout` runtime tier (spec/03): two MutableRef VARIABLES can alias one cell —
 // syntactically distinct, so the pre-call place-identity check catches it at runtime
 // (the shared cell is never CoW-privatized, so the two field pointers compare equal).
-import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 struct Counter { pub mut val n: I32 }
 pub impl Counter { factory }
 fn bump2(x: inout I32, y: inout I32) { x = x + 1I32  y = y + 10I32 }

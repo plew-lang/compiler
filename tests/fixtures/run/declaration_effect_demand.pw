@@ -1,9 +1,9 @@
-import /Frontend with { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
-import /SourceAccess with { SourceAccess }
-import /Mid/Build with { MidFunctionTemplates }
-import /Mid/OwnershipAnalysis with { MidOwnershipRequests }
-import /Mid/DeclarationAccess with { analyzeDeclarationGlobalAccessRoots, DeclarationAccessNode }
-import @Std/Io with { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
+use /SourceAccess only { SourceAccess }
+use /Mid/Build only { MidFunctionTemplates }
+use /Mid/OwnershipAnalysis only { MidOwnershipRequests }
+use /Mid/DeclarationAccess only { analyzeDeclarationGlobalAccessRoots, DeclarationAccessNode }
+use @Std/Io only { print }
 
 fn owner(c: inout Comp, name: String) -> U64 {
     val span = c.internBytes(s: name)

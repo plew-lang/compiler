@@ -1,7 +1,7 @@
 // Part of name/type resolution (root: _.pw): expression type-cache table
 // construction.
 
-import ../../Ir with { SemanticAggregateKind, SemanticTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateArgumentRange, CallTemplateTypeArgumentRange, CallTemplateOperandRange, CallTemplateViewRange, DynamicCallTemplateTarget, StaticMemberResolution }
+use ../../Ir only { SemanticAggregateKind, SemanticTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateArgumentRange, CallTemplateTypeArgumentRange, CallTemplateOperandRange, CallTemplateViewRange, DynamicCallTemplateTarget, StaticMemberResolution }
 
 pub impl Comp {
 

@@ -1,7 +1,7 @@
 // A `newtype` exported from a submodule, then imported and used across the module
 // boundary — including its inherited String members (`.bytes`) and the `as` re-tag.
-import @Std/Io with { print }
-import /Models/User with { UserId, makeUser }
+use @Std/Io only { print }
+use /Models/User only { UserId, makeUser }
 
 fn main() {
     val u: UserId = makeUser("alice")

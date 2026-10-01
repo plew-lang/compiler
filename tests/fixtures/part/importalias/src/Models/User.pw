@@ -1,5 +1,5 @@
 // A module whose exports are imported under aliases by Main (spec/15:
-// `import M with { Real as Alias }`). The alias must resolve to the real type for
+// `use M only { Real as Alias }`). The alias must resolve to the real type for
 // construction, field access, assoc-fn dispatch, enum match, and value calls.
 pub struct User {
     pub val id: I64

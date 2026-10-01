@@ -1,6 +1,6 @@
-import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel }
-import @Std/Io with { print }
-import /Frontend with { Comp }
+use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel }
+use @Std/Io only { print }
+use /Frontend only { Comp }
 
 fn main() {
     val source = "val answer: I8 = 42I8\n"

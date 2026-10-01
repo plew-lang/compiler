@@ -1,4 +1,4 @@
-import @Std/Io with { write }
+use @Std/Io only { write }
 
 struct Box[T] { pub val value: T }
 pub impl[T] Box[T] { factory }

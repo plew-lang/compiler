@@ -1,5 +1,5 @@
-import @Plew/Syntax with { SyntaxNewtype, TypeId, Span }
-import @Std/Io with { print }
+use @Plew/Syntax only { SyntaxNewtype, TypeId, Span }
+use @Std/Io only { print }
 
 struct Wide40Store {
     mut val a0: Array[U64] = []

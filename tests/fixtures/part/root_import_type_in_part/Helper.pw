@@ -1,5 +1,5 @@
-// A part shares Main's import scope. Its impl may use a type imported by the
-// root module without adding an independent import edge.
+// A part shares Main's use scope. Its impl may use a type imported by the
+// root module without adding an independent use edge.
 pub impl Producer {
     assoc fn make() -> Token {
         return <Token value=7I64 />

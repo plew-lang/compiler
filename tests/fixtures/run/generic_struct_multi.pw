@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Pair[A, B] {
     pub val first: A

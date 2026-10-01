@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct Counter { pub mut val value: I64 }
 pub impl Counter { factory inout fn bump(extra: I64) { self.value += 10I64 } }
 fn change(key: inout U64) -> I64 { key = 1U64 return 0I64 }

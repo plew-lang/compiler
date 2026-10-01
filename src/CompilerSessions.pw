@@ -1,6 +1,6 @@
 // Host registry: IDs cross the C boundary; Plew alone owns compiler state.
-import ./CheckedProgram with { CompilerSession }
-import @Std/Core with { MutableRef }
+use ./CheckedProgram only { CompilerSession }
+use @Std/Core only { MutableRef }
 
 mut val sessions: Dictionary[U64, MutableRef[CompilerSession]] = [:]
 mut val nextSessionId: U64 = 1U64

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The CallResolution boundary, not just assignment lowering, must repack a
 // concrete array before a function receives Array[any Shape].

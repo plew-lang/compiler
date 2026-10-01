@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Keep `main` on the legacy path. The helpers below must lower through Mid:
 // `break` and `continue` leave only the nested loop-body scope, then branch to

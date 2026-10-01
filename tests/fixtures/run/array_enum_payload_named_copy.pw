@@ -1,8 +1,8 @@
 // `append(x)` is a value copy: the source binding remains an owner after the
 // call, so an enum payload containing Array[TypeAst] must be retained for the
 // destination.  This is distinct from appending a freshly-constructed value.
-import @Plew/Syntax with { Span, TopItemAst, TypeAst }
-import @Std/Io with { print }
+use @Plew/Syntax only { Span, TopItemAst, TypeAst }
+use @Std/Io only { print }
 
 fn main() {
     val span = <Span start=0U64 end=5U64 />

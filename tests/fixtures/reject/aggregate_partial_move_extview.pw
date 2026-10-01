@@ -1,5 +1,5 @@
 // Extension views are transparent for aggregate partial move rejection.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Pair {
     pub val left: I64

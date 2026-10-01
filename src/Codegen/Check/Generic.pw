@@ -371,7 +371,7 @@ pub impl Comp {
                 // concrete operand checks in a generic body (`1I64 + true`, `aT == 5I64`):
                 // the same binop type-check verifyProgram runs on non-generic bodies, now
                 // applied to EVERY module's generic templates (std included — no
-                // trusted-import boundary).
+                // trusted-use boundary).
                 if self.cur.checkFn < self.arena.functionCount() {
                     try self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
                 }
@@ -655,7 +655,7 @@ pub impl Comp {
                 // non-generic path runs (verifyExpr), now for EVERY module's GENERIC bodies —
                 // walked here regardless of instantiation, so a dead generic's `return n`
                 // (forgotten `self.`) is still caught at declaration (std included — no
-                // trusted-import boundary). A named function is a callable declaration, not a
+                // trusted-use boundary). A named function is a callable declaration, not a
                 // value. A bare type-parameter name is a valid assoc-fn receiver (`T.make()`),
                 // like a type.
                 // value position: a bare type / type-parameter name reaching here is NOT a
@@ -1102,7 +1102,7 @@ pub impl Comp {
         // provided-method templates (`pub impl Trait { fn m() {...} }` — Self abstract):
         // a dead provided method (no conforming type, so no concrete copy is verified)
         // would otherwise escape all checks. Every module is walked (std included — no
-        // trusted-import boundary).
+        // trusted-use boundary).
         mut val shouldCheck: Bool = false
         if f.typeParams.count() > 0 {
             shouldCheck = true

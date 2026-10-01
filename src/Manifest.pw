@@ -1,10 +1,10 @@
-// @Manifest — package-manifest (`Plew.toml`) reading and `@dep` import resolution.
+// @Manifest — package-manifest (`Plew.toml`) reading and `@dep` use resolution.
 //
 // A DAG-bottom leaf (`Ir ← Manifest`, plus the shared `@Toml` reader): it operates
 // only on byte buffers (the manifest's bytes, file paths) plus file existence, so
-// the front-end loader can import it alongside @Path. Dependency RESOLUTION lives
+// the front-end loader ca use it alongside @Path. Dependency RESOLUTION lives
 // here: read the consuming package's `[dependencies]`, then turn a non-`@Std`
-// `@<name>` import into the file that backs that dependency's lib face
+// `@<name>` use into the file that backs that dependency's lib face
 // (`<dep>/src/_.pw`).
 //
 // Package model (spec/17): packages are FLAT — `@Acme/Http` names ONE package whose
@@ -13,11 +13,11 @@
 // is special (resolved against the bundled std dir by @Path) — every other `@name`
 // is looked up whole in the dependency table.
 
-import @Std/Io with { fileExists, readFileBytes }
-import ./Toml with { TomlDoc, Section, Field, Value, KV, parseToml, topStr, inlineGet, bytesEq, spanEqArr, appendBytes }
-import ./Lock with { Lock, lockCommitForConstraint, parseLock, emptyLock }
-pub import ./Lock with { Lock, LockPkg, Name }
-import ./Cache with { srcDir }
+use @Std/Io only { fileExists, readFileBytes }
+use ./Toml only { TomlDoc, Section, Field, Value, KV, parseToml, topStr, inlineGet, bytesEq, spanEqArr, appendBytes }
+use ./Lock only { Lock, lockCommitForConstraint, parseLock, emptyLock }
+pub use ./Lock only { Lock, LockPkg, Name }
+use ./Cache only { srcDir }
 
 // One declared dependency from `[dependencies]`. `key` is the binding name the
 // consumer writes after `@` (it may contain `/`). `kind`: 0 = path, 1 = git.
@@ -93,8 +93,8 @@ pub fn loadManifestDeps(pkgDir: Array[U8]) -> Array[Dep] {
     return mani.deps
 }
 
-// Whether the import path bytes src[pStart .. pStart+pLen] are an external
-// package import (`@<name>`) other than `@Std/…` — i.e. one that must be backed
+// Whether the use path bytes src[pStart .. pStart+pLen] are an external
+// package use (`@<name>`) other than `@Std/…` — i.e. one that must be backed
 // by a declared dependency. Used to enforce the phantom-dependency rule (spec/17).
 pub fn isExternalDepImport(src: Array[U8], pStart: U64, pLen: U64) -> Bool {
     if pLen < 2 {
@@ -121,7 +121,7 @@ pub fn isExternalDepImport(src: Array[U8], pStart: U64, pLen: U64) -> Bool {
     return true
 }
 
-// Resolve a non-`@Std` `@<name>` import (path bytes src[pStart .. pStart+pLen],
+// Resolve a non-`@Std` `@<name>` use (path bytes src[pStart .. pStart+pLen],
 // leading '@') against the declared dependencies. A PATH dep resolves to
 // `<pkgDir><loc>/src/_.pw` (the dep's lib face). Other kinds (git, not fetched
 // yet) and undeclared names return empty so the loader leaves them unresolved.
@@ -152,10 +152,10 @@ pub fn resolveDepImport(src: Array[U8], pStart: U64, pLen: U64, deps: Array[Dep]
     return out
 }
 
-// Resolve a non-`@Std` `@<name>` import to a GIT dependency's cached lib face: find
+// Resolve a non-`@Std` `@<name>` use to a GIT dependency's cached lib face: find
 // the declared dep, look up its pinned commit in the lock, and point at
 // `<cacheRoot>/src/<url>/<commit>/src/_.pw`. Empty when the name is not a git dep
-// or is not yet locked (then the loader reports a phantom / unresolved import — the
+// or is not yet locked (then the loader reports a phantom / unresolved use — the
 // resolver must run first).
 pub fn resolveGitDepImport(src: Array[U8], pStart: U64, pLen: U64, deps: Array[Dep], cacheRoot: Array[U8], lock: Lock) -> Array[U8] {
     mut val out: Array[U8] = []

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Iterating an array of structs / records binds the loop variable as that struct, so a
 // field access / method call on it resolves (previously only the struct-DESTRUCTURE

@@ -1,10 +1,10 @@
-import ./CheckedProgram with { CompilerSession }
-import @Std/Core with { MutableRef }
-import ./CompilerSessions with { compilerSessionSnapshot, findCompilerSession }
-import ./Backend with { LlvmLoweringResult, transferLlvmModule }
-import ./LlvmHandles with { LLVMContextRef, LLVMModuleRef }
-import ./Diag with { emitDiagnostic }
-import @Std/Io with { eprint }
+use ./CheckedProgram only { CompilerSession }
+use @Std/Core only { MutableRef }
+use ./CompilerSessions only { compilerSessionSnapshot, findCompilerSession }
+use ./Backend only { LlvmLoweringResult, transferLlvmModule }
+use ./LlvmHandles only { LLVMContextRef, LLVMModuleRef }
+use ./Diag only { emitDiagnostic }
+use @Std/Io only { eprint }
 
 // Runs synchronously while the application is stopped. The host keeps ORC and
 // the registered session alive; the native bridge consumes the output pair.

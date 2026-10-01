@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A polymorphic integer literal in a float context types as that float (spec/02,12):
 // no implicit conversion — the literal simply IS a float here.

@@ -1,6 +1,6 @@
 // assoc val (spec/05): a per-type constant `Type.NAME`, desugared to a zero-arg
 // `assoc fn`. Read as `Type.NAME` (no parens), usable in expressions.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Circle { pub val r: I64 }
 pub impl Circle { factory }

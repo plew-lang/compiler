@@ -1,7 +1,7 @@
 // The two Token declarations share spelling and arity but are distinct nominal
 // types.  These rewrites do not compose, so this must not be an exact cycle.
-import ./A with { Token as AToken }
-import ./B with { Token as BToken }
+use ./A only { Token as AToken }
+use ./B only { Token as BToken }
 
 trait P[Item] {}
 trait Q[Item] {}

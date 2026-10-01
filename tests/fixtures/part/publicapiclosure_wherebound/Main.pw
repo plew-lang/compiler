@@ -1,6 +1,6 @@
-import @Std/Io with { print }
-import ./Lib with { id }
-import ./Dep with { Marker }
+use @Std/Io only { print }
+use ./Lib only { id }
+use ./Dep only { Marker }
 
 struct Box {
     pub val n: I64

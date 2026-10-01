@@ -1,9 +1,9 @@
 // SyntaxFile expression lowering consumes source spans directly.  In particular,
 // unary minus must retain the value-AST rule that folds only a bare integer literal.
-import @Plew/Syntax with { Lexer, P, StmtId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { Expr }
+use @Plew/Syntax only { Lexer, P, StmtId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Expr }
 
 fn main() {
     val source = "val answer = -2I8 + 5I8\n"

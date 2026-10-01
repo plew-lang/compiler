@@ -1,5 +1,5 @@
-import @Std/Core
-import @Std/Io with { print }
+use @Std/Core
+use @Std/Io only { print }
 // `??` was removed (spec/12): the eager/lazy unwrap-or-default is explicit via
 // `Optional.unwrapOr(fallback:)` (overloaded value vs closure), not a special
 // short-circuit operator. Writing `??` is now a syntax error.

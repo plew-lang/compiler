@@ -7,7 +7,7 @@ set -eu
 cd "$(dirname "$0")/../../.."
 
 for source in src/Frontend.pw src/Backend.pw; do
-    imports=$(rg '^import @Plew/Syntax with \{' "$source")
+    imports=$(rg '^use @Plew/Syntax only \{' "$source")
     for endpoint in parseItem parseProgramAst parseExprAst parseBlockAst; do
         if printf '%s\n' "$imports" | rg -q "\\b$endpoint\\b"; then
             echo "normal compiler imports macro value-parser endpoint $endpoint from $source" >&2

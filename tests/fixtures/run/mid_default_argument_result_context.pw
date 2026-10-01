@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn values[T](items: Array[T] = []) -> Array[T] { return items }
 

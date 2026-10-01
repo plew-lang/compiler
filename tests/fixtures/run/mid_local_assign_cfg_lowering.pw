@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Keep main on legacy emission. `overwrite` isolates a root-place assignment:
 // Mid must use the frontend-bound local place, not recover an identifier in

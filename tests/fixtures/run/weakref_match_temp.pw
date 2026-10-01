@@ -5,8 +5,8 @@
 // > 0 and r's drop would never run the pointee `deinit`. Each `deinit` prints its tag, so the
 // final marker fires iff the upgrade temp was released exactly once (no leak, no double-free).
 // Guards the owned-scrutinee-temp release for BOTH a returning arm and a fall-through arm.
-import @Std/Io with { print }
-import @Std/Core with { MutableRef, WeakMutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef, WeakMutableRef }
 
 unique struct Cell {
     pub mut val v: I32

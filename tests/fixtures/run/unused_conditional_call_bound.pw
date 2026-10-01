@@ -1,4 +1,4 @@
-import @Std/Core
+use @Std/Core
 trait Stepper { fn step() -> I64 }
 struct Wrapper[T] { val value: T }
 impl[T] Wrapper[T] as Stepper where T: Stepper { fn step() -> I64 { return self.value.step() } }

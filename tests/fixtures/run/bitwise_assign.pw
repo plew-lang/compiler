@@ -1,5 +1,5 @@
 // Compound bitwise-assign operators: &= |= ^= <<= >>= (pure desugar to a = a OP b).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     mut val a: I64 = 12

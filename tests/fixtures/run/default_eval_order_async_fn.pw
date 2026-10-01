@@ -1,6 +1,6 @@
 // Async entry calls also build the ABI arg list in parameter declaration order.
-import @Std/Io with { print }
-import @Std/Async with { sleep }
+use @Std/Io only { print }
+use @Std/Async only { sleep }
 
 fn mark(n: I64) -> I64 {
     print(n)

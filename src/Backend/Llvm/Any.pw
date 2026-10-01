@@ -1,6 +1,6 @@
 // Part of the LLVM backend (root: _.pw): existential `any P` vtable, witness, boxing, and dynamic dispatch.
 
-import ../../Ir with { CallReceiverPassing, CallArgumentPassing }
+use ../../Ir only { CallReceiverPassing, CallArgumentPassing }
 
 // ---- existential `any P` (spec/08): vtable, boxing, dynamic dispatch ----
 //

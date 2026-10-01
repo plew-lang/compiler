@@ -1,6 +1,6 @@
-import @Std/Io with { print }
-import @Std/Core with { Buffer, Eq }
-import @Std/Hash with { Hash, SipHasher }
+use @Std/Io only { print }
+use @Std/Core only { Buffer, Eq }
+use @Std/Hash only { Hash, SipHasher }
 
 struct Pair[E] {
     mut val values: Buffer[E]

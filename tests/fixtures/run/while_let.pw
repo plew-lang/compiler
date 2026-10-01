@@ -1,6 +1,6 @@
 // `while`-let: a refutable binding in a `while` condition (spec/11). Loops while the
 // match succeeds, binding each iteration; a failed match ends the loop.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Counter { pub mut val n: I64 }
 pub impl Counter { factory }

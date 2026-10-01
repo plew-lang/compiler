@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import ./Container with { Container }
+use @Std/Io only { print }
+use ./Container only { Container }
 
 fn main() {
     val container: Container = <Container />

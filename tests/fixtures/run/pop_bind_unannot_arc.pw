@@ -1,8 +1,8 @@
 // An UN-annotated binding of an Array method's COMPOUND generic return
 // (`pop() -> Optional[T]`): the result type must ground (T = MutableRef[Cell]) so the
 // local classifies for release — its pointee deinits at scope exit, not never.
-import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 
 unique struct Cell {
     pub val v: I32

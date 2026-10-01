@@ -1,7 +1,7 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { StructDef, TypeRef, Expr, Stmt, SemanticExprType, identValueCode }
-import /Mid with { MidBuildState, MidBuildError, MidOperand, MidRvalue, MidStatement, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { StructDef, TypeRef, Expr, Stmt, SemanticExprType, identValueCode }
+use /Mid only { MidBuildState, MidBuildError, MidOperand, MidRvalue, MidStatement, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet }
 
 fn main() {
     mut val c: Comp = <Comp />

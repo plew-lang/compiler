@@ -1,9 +1,9 @@
 // Mutated executable IR must be rejected, independently of the producer.
-import @Std/Io with { print }
-import @Std/Core with { assert }
-import /Frontend with { Comp }
-import /Ir with { CallResolution }
-import /Mid with { MidBody, MidBlock, MidStatement, MidTerminator, MidPlace, MidLocalDecl, MidOperand, MidRvalue, MidConstant, MidCallTarget, MidCallReceiver, MidVerifyError, verifyExecutableCanonicalMidBody }
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use /Frontend only { Comp }
+use /Ir only { CallResolution }
+use /Mid only { MidBody, MidBlock, MidStatement, MidTerminator, MidPlace, MidLocalDecl, MidOperand, MidRvalue, MidConstant, MidCallTarget, MidCallReceiver, MidVerifyError, verifyExecutableCanonicalMidBody }
 fn check(mode: U64) {
     mut val c: Comp = <Comp />
     c.arena.reserveTypeSentinel()

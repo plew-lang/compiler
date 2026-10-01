@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn identity[T](value~: T) -> T { return value }
 fn narrow() -> F32 { return 1.25 }

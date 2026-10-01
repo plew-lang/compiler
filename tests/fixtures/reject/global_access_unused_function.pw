@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 mut val value = 7I64
 unique struct Observer {
     pub val unused: I64

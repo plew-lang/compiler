@@ -1,14 +1,14 @@
-import ../Diag with { CompileDiagnostic }
+use ../Diag only { CompileDiagnostic }
 // Mid builder state. Source bindings are mapped once to Mid local identities;
 // later passes consume the frontend resolver's declaration identity rather than
 // recovering a place by spelling from the AST.
 
-import ../Frontend with { Comp }
-import ../Ir with { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
-import ../Diag with { eprintU64 }
-import @Std/Io with { eprint }
-import ../Ops with { opAnd, opOr }
-import ./Ir with { midLocalIsOwnedTemporary, MidEnumDestination, MidRange, MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidCallArgument, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
+use ../Frontend only { Comp }
+use ../Ir only { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+use ../Diag only { eprintU64 }
+use @Std/Io only { eprint }
+use ../Ops only { opAnd, opOr }
+use ./Ir only { midLocalIsOwnedTemporary, MidEnumDestination, MidRange, MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidCallArgument, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
 
 // The frontend owns synthetic primitive identity and ownership classification.
 // A missing contract is a build error, never a request to rediscover a type.

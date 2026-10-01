@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The match scrutinee is a call result, not a source place. Mid must evaluate
 // it exactly once into a scoped temporary, then read its tag/payload from that

@@ -1,6 +1,6 @@
-import ./Models
-import ./Other
-import @Std/Io with { print }
+use ./Models
+use ./Other
+use @Std/Io only { print }
 fn read(item: Models.Item) -> I64 { return item.value }
 fn other(item: Other.Item) -> I64 { return item.value }
 fn main() { print(read(item: <Models.Item value=41I64 />)) print(other(item: <Other.Item value=52I64 />)) }

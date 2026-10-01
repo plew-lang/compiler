@@ -1,8 +1,8 @@
-import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
-import /SourceAccess with { SourceAccess }
-import /DeclarationProgram with { prepareDeclarationProgram, DeclarationProgramError }
-import /Mid/Build with { MidFunctionTemplates }
-import @Std/Io with { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /DeclarationProgram only { prepareDeclarationProgram, DeclarationProgramError }
+use /Mid/Build only { MidFunctionTemplates }
+use @Std/Io only { print }
 
 fn main() {
     mut val c = <Comp />

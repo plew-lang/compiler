@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `Dictionary` keyed by unsigned integer types narrower than 64 bits (spec/02):
 // U8 / U16 / U32 hash through `writeU64` after a lossless `as U64` widen.

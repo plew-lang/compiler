@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core
+use @Std/Io only { print }
+use @Std/Core
 
 struct Profile { pub val age: I32 }
 pub impl Profile { factory }

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Extensions (spec/09): an `extension Name { impl Type { ... } }` block adds
 // methods to a type that are NOT visible to bare resolution (`p.greet()` is an

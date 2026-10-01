@@ -1,7 +1,7 @@
 // Branch temporaries transfer into the enclosing scope; shared resources must
 // survive the branch cleanup, and CoW mutation must preserve the other value.
-import @Std/Io with { print }
-import @Std/Core with { Ref }
+use @Std/Io only { print }
+use @Std/Core only { Ref }
 unique struct Resource[T] {
     pub val value: T
     deinit { print("drop") }

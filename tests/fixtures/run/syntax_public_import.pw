@@ -1,8 +1,8 @@
 // Public imports retain publication metadata in both compiler and macro ASTs.
-import @Plew/Syntax with { Lexer, P, ImportId, TopItemAst, lex, parseProgramSyntaxFile, parseProgramAst, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImport }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, ImportId, TopItemAst, lex, parseProgramSyntaxFile, parseProgramAst, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImport }
+use @Std/Io only { print }
 fn main() {
-    val source = "pub import ./Models with { Item as Model }\nimport ./Other\n"
+    val source = "pub use ./Models only { Item as Model }\nuse ./Other\n"
     mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />

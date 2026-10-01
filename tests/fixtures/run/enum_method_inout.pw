@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // An `inout fn` method on an enum mutates self in place (spec/03,05): `flip`
 // reassigns self, and the change persists in the caller's binding.

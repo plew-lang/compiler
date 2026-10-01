@@ -3,8 +3,8 @@
 // inner buffer (rc++) so the inner local's scope-drop does not free it, get is
 // value-return (retains), and the outer's scope-drop cascades into each inner
 // buffer's release+free. ASan-on-self-compile / run prove it is leak/UAF-free.
-import @Std/Io with { print }
-import @Std/Core with { Buffer }
+use @Std/Io only { print }
+use @Std/Core only { Buffer }
 
 fn main() {
     mut val outer: Buffer[Buffer[I64]] = Buffer.new()

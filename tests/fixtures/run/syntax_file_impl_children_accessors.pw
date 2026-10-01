@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImpl, syntaxImplParamCount, syntaxImplParamSpan, syntaxImplTraitArgCount, syntaxImplMemberCount, syntaxImplMember, syntaxMember, syntaxMemberTypeParamCount, syntaxMemberTypeParamSpan, syntaxMemberParamCount, syntaxMemberParam, syntaxMemberWhereCount, syntaxMemberWhereParamSpan, syntaxMemberWhereTraitSpan, syntaxMemberWhereType, syntaxMemberWhereTraitType, syntaxParam, syntaxType, syntaxTypeArgCount, ImplId }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImpl, syntaxImplParamCount, syntaxImplParamSpan, syntaxImplTraitArgCount, syntaxImplMemberCount, syntaxImplMember, syntaxMember, syntaxMemberTypeParamCount, syntaxMemberTypeParamSpan, syntaxMemberParamCount, syntaxMemberParam, syntaxMemberWhereCount, syntaxMemberWhereParamSpan, syntaxMemberWhereTraitSpan, syntaxMemberWhereType, syntaxMemberWhereTraitType, syntaxParam, syntaxType, syntaxTypeArgCount, ImplId }
+use @Std/Io only { print }
 
 fn main() {
     val source = "impl[T] Box[T] as Eq { fn same[U](value~: U) -> U where U: Eq { return value } }\n"

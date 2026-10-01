@@ -1,7 +1,7 @@
 // The selected B[Element] -> A path binds Output=Element.  This prevents a
 // source-only lookup from passing: path substitution must carry B's instance
 // argument into A's associated output and the provided body.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait B[Element] { fn base() -> Element }
 trait A {

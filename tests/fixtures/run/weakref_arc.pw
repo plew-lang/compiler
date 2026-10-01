@@ -8,8 +8,8 @@
 // `Optional` payload) plus the canonical strong-down / weak-up cycle, none of which leak.
 // Each pointee `deinit` prints its tag, so the count + order of markers verifies single
 // release (no missing = no leak, no extra = no double-free) and no use-after-free. ASan-clean.
-import @Std/Io with { print }
-import @Std/Core with { MutableRef, WeakMutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef, WeakMutableRef }
 
 unique struct Cell {
     pub val v: I32

@@ -1,30 +1,30 @@
-import ./LlvmHandles with { LLVMContextRef, LLVMModuleRef, PlewLlvmJitRef, PlewProgramArgumentsRef }
-import ./Mid/Ambient with { MidAmbientProgram, MidAmbientBodyPlan, MidAmbientStorage }
-import ./Mid/Program with { MidExecutableProgram }
-import ./PreparedProgram with { PreparedProgram, programPreparationDiagnostic }
+use ./LlvmHandles only { LLVMContextRef, LLVMModuleRef, PlewLlvmJitRef, PlewProgramArgumentsRef }
+use ./Mid/Ambient only { MidAmbientProgram, MidAmbientBodyPlan, MidAmbientStorage }
+use ./Mid/Program only { MidExecutableProgram }
+use ./PreparedProgram only { PreparedProgram, programPreparationDiagnostic }
 // @Backend — the LLVM emitter of the self-hosted Plew compiler. It consumes the
 // front-end's analyzed `Comp` (built by `./Frontend`'s `analyzeFrontend`) and emits
 // an owned LLVM module via libLLVM-C. Text is an explicit diagnostic/seed
-// output; object emission borrows the same module. `emitLlvmRuntime` emits C. It `import`s
+// output; object emission borrows the same module. `emitLlvmRuntime` emits C. It `use`s
 // the IR data (`./Ir`) and the front-end query/analysis API (`./Frontend`) — a
 // one-way dependency (Ir ← Frontend ← Backend), so the module graph is a DAG.
 
-import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileBytes, eprint, fileExists }
-import @Std/Process with { argCount, argAt, exit }
-import @Std/Ffi with { CString, cString, cFree, stringFromCString, arrayCPtr }
-import @Std/Core with { stringFromBytesUnchecked, truncU8, truncU32 }
-import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, SemanticClosure, SemanticClosureCaptureMode, Local, TypeInfo, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, FuncParamRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyInstance, BodyOrigin, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, FfiIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
-import ./Frontend with { Comp, intern, spansEqual, tracePhase, tracePhaseCount, tracePhaseProgress }
+use @Std/Io only { print, write, writeByte, readStdin, readFile, readFileBytes, eprint, fileExists }
+use @Std/Process only { argCount, argAt, exit }
+use @Std/Ffi only { CString, cString, cFree, stringFromCString, arrayCPtr }
+use @Std/Core only { stringFromBytesUnchecked, truncU8, truncU32 }
+use @Plew/Syntax only { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
+use ./Ir only { PType, TypeRef, ArcClass, CaptureEntry, SemanticClosure, SemanticClosureCaptureMode, Local, TypeInfo, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, FuncParamRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyInstance, BodyOrigin, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, FfiIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
+use ./Frontend only { Comp, intern, spansEqual, tracePhase, tracePhaseCount, tracePhaseProgress }
 // Import the Mid vocabulary at the backend boundary now.  Lowering is migrated
 // body-by-body; keeping this edge one-way prevents Mid from becoming another
 // frontend `part` or from reaching LLVM through ambient AST recovery.
-import ./Mid with { MidParametricBody, MidExecutableBody, MidPreparationError, MidRange, MidBodyNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidBlockNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidPlace, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidVerification, MidVerifyError, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidInstantiateError, MidAccessError, buildParametricMidBody, buildMidBodyForInstance, buildParametricMidGlobalInit, ensureParametricMidClosureBody }
-pub import ./Frontend with { Comp }
-pub import @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
-pub import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, BindRange, Arg, ArgRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
-import ./Diag with { CompileDiagnostic, DiagnosticLocation, digitStrU }
-import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, isBinTraitOp, binTraitMethodName, unaryMethodName }
+use ./Mid only { MidParametricBody, MidExecutableBody, MidPreparationError, MidRange, MidBodyNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidBlockNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidPlace, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidVerification, MidVerifyError, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidInstantiateError, MidAccessError, buildParametricMidBody, buildMidBodyForInstance, buildParametricMidGlobalInit, ensureParametricMidClosureBody }
+pub use ./Frontend only { Comp }
+pub use @Plew/Syntax only { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
+pub use ./Ir only { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, BindRange, Arg, ArgRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
+use ./Diag only { CompileDiagnostic, DiagnosticLocation, digitStrU }
+use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, isBinTraitOp, binTraitMethodName, unaryMethodName }
 
 // The initial backend subset is deliberately fail-closed. Keep the reason as
 // a closed value rather than an anonymous Bool so coverage can account for

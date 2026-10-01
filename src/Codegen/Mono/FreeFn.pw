@@ -3,7 +3,7 @@
 
 // Whether c.arena.functionAt(index: fi) is a generic free function (no receiver, has type params).
 
-import ../../Ir with { CallTemplateArgument }
+use ../../Ir only { CallTemplateArgument }
 
 pub impl Comp {
 

@@ -1,3 +1,3 @@
-import / with { id }
+use / only { id }
 
 fn main() {}

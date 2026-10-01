@@ -1,5 +1,5 @@
-import @Plew/Syntax with { SyntaxFile }
-import @Std/Io with { print }
+use @Plew/Syntax only { SyntaxFile }
+use @Std/Io only { print }
 
 fn main() {
     val file = <SyntaxFile />

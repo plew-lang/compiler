@@ -1,7 +1,7 @@
-import /CheckedProgram with { CompilerSession, CompilerSessionResult, checkCompilerSession, ProgramCheckResult, prepareCheckedProgram, ExecutableCompilationResult }
-import /Frontend with { FrontendInput }
-import /SourceAccess with { SourceAccess }
-import @Std/Io with { print }
+use /CheckedProgram only { CompilerSession, CompilerSessionResult, checkCompilerSession, ProgramCheckResult, prepareCheckedProgram, ExecutableCompilationResult }
+use /Frontend only { FrontendInput }
+use /SourceAccess only { SourceAccess }
+use @Std/Io only { print }
 
 fn partialFailure() {
     match CompilerSession.open(input: <FrontendInput.Text path="partial.pw" text="fn main() { later() } fn later() { missing() }" />, sources: <SourceAccess />) {

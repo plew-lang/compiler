@@ -1,6 +1,6 @@
 // match must be exhaustive (spec: Rust-style). This match omits `Blue` and has
 // no `_` wildcard, so it must be a compile error.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Color { Red Green Blue }
 

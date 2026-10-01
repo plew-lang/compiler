@@ -1,5 +1,5 @@
-import @Std/Core
-import @Std/Io with { print }
+use @Std/Core
+use @Std/Io only { print }
 
 // A type that structurally exposes `chain()`/`fromValue`/`empty` with the right arities
 // but does NOT declare `impl … as Chain`. Plew traits are nominal, so `?.` must reject

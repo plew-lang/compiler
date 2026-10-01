@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A trait requirement with a `Self`-typed input param (`fn eqTo(other: Self)`),
 // witnessed by a hand-written method that also writes `Self`: the conformance

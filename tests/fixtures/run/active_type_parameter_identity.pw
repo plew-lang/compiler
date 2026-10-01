@@ -1,6 +1,6 @@
-import /Frontend with { Comp }
-import /Ir with { Bind, TypeRef }
-import @Std/Io with { print }
+use /Frontend only { Comp }
+use /Ir only { Bind, TypeRef }
+use @Std/Io only { print }
 
 fn main() {
     mut val c = <Comp />

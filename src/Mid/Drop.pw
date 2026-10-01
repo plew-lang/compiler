@@ -1,10 +1,10 @@
-import ./DataflowState with { MidOwnershipStates, MidAccessibilityStates }
+use ./DataflowState only { MidOwnershipStates, MidAccessibilityStates }
 // Ownership dataflow for Mid IR. This pass consumes only the canonical arena;
 // it does not inspect AST, recover a type, or emit LLVM. Build creates operations;
 // this pass computes their ownership consequences for drop elaboration and the
 // always-on verifier.
 
-import ./Ir with { MidCanonicalArena, canonicalMidPlaceIsWhole, MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidCallReceiverNode, MidCanonicalBody, MidOperand, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBody, MidOwnership, MidAccessibility }
+use ./Ir only { MidCanonicalArena, canonicalMidPlaceIsWhole, MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidCallReceiverNode, MidCanonicalBody, MidOperand, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBody, MidOwnership, MidAccessibility }
 
 // Ownership state is function-local. A Global place denotes a stable storage
 // address whose owner is the module lifetime, so reads and borrows never

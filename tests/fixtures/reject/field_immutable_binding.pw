@@ -1,6 +1,6 @@
 // Composite mutability: even though `n` is `mut val`, the binding `c` is a plain
 // `val`, so the place `c.n` is immutable. Assigning to it must be rejected.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Counter {
     pub mut val n: I64

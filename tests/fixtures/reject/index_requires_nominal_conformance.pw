@@ -1,6 +1,6 @@
 // spec/12: a same-named method does not establish Index conformance.
-import @Std/Core with { Index }
-import @Std/Io with { print }
+use @Std/Core only { Index }
+use @Std/Io only { print }
 struct Foo { pub val n: I64 }
 pub impl Foo { factory }
 pub impl Foo { fn index(key: I64) -> I64 { return self.n } }

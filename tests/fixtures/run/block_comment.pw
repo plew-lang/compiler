@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 /* A block comment (spec/01 lexical): spans lines, can be inline, and nests so a
    commented-out region containing `/* … */` stays balanced. */

@@ -1,5 +1,5 @@
-import @Std/Core
-import @Std/Io with { print }
+use @Std/Core
+use @Std/Io only { print }
 
 fn parseDigit(b: U8) -> Result[I32, U8] {
     if b < 48 {

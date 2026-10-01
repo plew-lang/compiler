@@ -4,7 +4,7 @@
 // the record pass re-derived the init via exprType (which reports a literal as
 // unknown) and dropped the just-recorded literal type, leaving the local
 // untyped — every later use was rejected.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     mut val xs = [10U8, 20U8]

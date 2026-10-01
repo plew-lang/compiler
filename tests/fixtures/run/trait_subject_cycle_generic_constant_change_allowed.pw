@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // This path changes a finite trait argument but does not grow any SCC edge
 // and cannot close at a finite instance. It remains valid.

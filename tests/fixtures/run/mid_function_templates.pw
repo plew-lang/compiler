@@ -1,9 +1,9 @@
 // Reuse only an immutable declaration template within one preparation.
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { Block, Func }
-import /Mid/Build with { MidFunctionTemplates, MidBuildError }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Block, Func }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
 fn main() {
     mut val compiler: Comp = <Comp />
     compiler.arena.blocks.append(<Block stmtStart=0U64 stmtLen=0U64 />)

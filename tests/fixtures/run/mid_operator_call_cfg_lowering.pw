@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Keep main on the legacy path.  The only Mid candidate under test is `sum`,
 // whose `+` is a frontend-selected operator call rather than a backend

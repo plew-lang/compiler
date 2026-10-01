@@ -1,9 +1,9 @@
-import @Std/Io with { print }
-import @Std/Random with { Random }
+use @Std/Io only { print }
+use @Std/Random only { Random }
 
 // @Std/Random — a xorshift64 PRNG. With a fixed seed the stream is reproducible
 // (deterministic exact values); `fromEntropy()` is unpredictable so it is only
-// range-checked here. (spec/15: Random is import-required, not ambient.)
+// range-checked here. (spec/15: Random is use-required, not ambient.)
 fn main() {
     mut val r: Random = Random.withSeed(42U64)
     val a: U64 = r.nextU64()

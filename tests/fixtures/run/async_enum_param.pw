@@ -4,8 +4,8 @@
 // params into the frame, and the enum retain walker's entryAlloca assumed the
 // entry block already had a terminator — the thunk emitted into a bare block.
 // Now the thunk uses the standard fn skeleton (entry: br body0).
-import @Std/Io with { print }
-import @Std/Async with { sleep }
+use @Std/Io only { print }
+use @Std/Async only { sleep }
 
 struct Pt { pub val x: I64 pub val y: I64 }
 pub impl Pt { factory }

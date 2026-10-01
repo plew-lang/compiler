@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // An existential iterator (spec/08): a trait with an associated type bound at the
 // `any` (`any Iter[Item=I64]`) plus an `inout fn next()` (mutating self, returning

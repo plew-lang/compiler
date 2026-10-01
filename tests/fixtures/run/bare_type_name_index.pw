@@ -1,5 +1,5 @@
-import @Std/Io with { write }
-import /Ir with { Arena, TypeRef }
+use @Std/Io only { write }
+use /Ir only { Arena, TypeRef }
 fn check(arena: Arena) {
     mut val name: U64 = 0U64
     while name < 220U64 {

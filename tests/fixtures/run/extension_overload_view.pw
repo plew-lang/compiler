@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // View-aware overload resolution (spec/09): `f(a: P)` and `f(a: P#Ext)` are
 // distinct overloads that coexist and select on the argument's view. (Front-end

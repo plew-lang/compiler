@@ -4,7 +4,7 @@
 // must resolve `T` to ITS instance (I32), not the enclosing one — lexical shadowing, the
 // innermost wins. (Regression: the payload type and the payload VALUE were grounded under
 // different match orders, so the inner payload typed as Optional[I32] while holding an i32.)
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     val a: Optional[Optional[I32]] = <Optional.Some v=<Optional.Some v=7I32 /> />

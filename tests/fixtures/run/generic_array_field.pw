@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A generic struct whose field is `Array[T]`: instantiating `Box[I64]` must emit
 // the nested `Array_I64` typedef (its element resolved through the instantiation

@@ -1,1 +1,1 @@
-pub import ./Models with { create as factory }
+pub use ./Models only { create as factory }

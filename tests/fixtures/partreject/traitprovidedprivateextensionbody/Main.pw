@@ -1,4 +1,4 @@
-import ./Lib with { Stepper }
+use ./Lib only { Stepper }
 
 extension Extra {
     pub impl Stepper {

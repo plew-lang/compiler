@@ -1,6 +1,6 @@
 // Inherent methods via `impl`: a by-value `fn` receiver reads self; an
 // `inout fn` receiver mutates self. Calls are `recv.name(label: arg)`.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Counter {
     pub mut val n: I64

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The producer constructs an enum through Mid using the frontend-selected enum
 // declaration and variant slots; main may remain legacy while matching it.

@@ -1,6 +1,6 @@
 // Passing a unique value by argument requires a mode (`move`/`borrow`/`inout`);
 // a bare place is a forbidden copy.
-import @Std/Io with { write }
+use @Std/Io only { write }
 unique struct File { pub val fd: I64 }
 pub impl File { factory }
 fn use(f: borrow File) { write(s: "x\n") }

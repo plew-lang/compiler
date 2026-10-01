@@ -1,7 +1,7 @@
 // `Output` is supplied by the B -> A trait path, not by T's direct bound.
 // The provided A member and the generic function result must carry that same
 // path proof until S's concrete output is grounded.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait B {}
 trait A {

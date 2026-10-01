@@ -1,8 +1,8 @@
 // discarded removal results are statement temps (spec/03): pop() / removeAt() /
 // removeLast() release the removed element at that statement's end; clear()
 // releases every remaining element at the call.
-import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 
 unique struct Cell {
     pub val v: I32

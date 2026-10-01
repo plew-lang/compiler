@@ -1,9 +1,9 @@
 // TypeTerm arena invariant: pushType appends exactly one entry and returns its
 // usable arena index. Generic receiver Func.recvTy relies on this directly.
-import @Std/Io with { write }
-import @Plew/Syntax with { Span, TypeAst }
-import /Frontend with { Comp }
-import /Ir with { Bind, TypeRef }
+use @Std/Io only { write }
+use @Plew/Syntax only { Span, TypeAst }
+use /Frontend only { Comp }
+use /Ir only { Bind, TypeRef }
 
 fn pushThroughHelper(c: inout Comp) -> U64 {
     return c.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=false />)

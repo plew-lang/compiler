@@ -1,8 +1,8 @@
-import @Std/Io with { print }
-import @Std/Core with { assert }
-import /Frontend with { Comp }
-import /Ir with { TypeRef, InstanceEnvironment, SemanticTypeRecipe }
-import /Mid with { MidBody, MidBlock, MidScope, MidLocalDecl, MidTerminator, MidInstantiateError, instantiateCanonicalMidBody }
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use /Frontend only { Comp }
+use /Ir only { TypeRef, InstanceEnvironment, SemanticTypeRecipe }
+use /Mid only { MidBody, MidBlock, MidScope, MidLocalDecl, MidTerminator, MidInstantiateError, instantiateCanonicalMidBody }
 
 fn main() {
     mut val compiler = <Comp />

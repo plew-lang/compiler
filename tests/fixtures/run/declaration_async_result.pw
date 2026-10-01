@@ -1,8 +1,8 @@
-import @Std/Io with { print }
-import @Std/Core with { assert }
-import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
-import /SourceAccess with { SourceAccess }
-import /Ir with { ArcClass, CallTemplateKind }
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { ArcClass, CallTemplateKind }
 fn main() {
     mut val c = <Comp />
     val source = "async fn task() {}\nfn caller() { val promise = task() }\n"

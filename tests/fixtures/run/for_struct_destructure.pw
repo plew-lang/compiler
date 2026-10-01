@@ -1,7 +1,7 @@
 // F4: struct-destructure in a for-loop header (spec/11) — `for S { val x } in
 // arr` binds each element's fields directly, mirroring the match struct pattern.
 // Punning (`val name`), rename (`age: val a`), and discard (`name: _`) all work.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Person {
     pub val name: I64

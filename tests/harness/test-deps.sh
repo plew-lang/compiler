@@ -52,7 +52,7 @@ name = "Mid"
 [dependencies]
 "Acme/Greet" = { git = "$LEAF", version = "1" }
 EOF
-printf 'import @Acme/Greet with { hello }\npub fn midVal() -> I64 { return hello() + 1I64 }\n' > "$MID/src/_.pw"
+printf 'use @Acme/Greet only { hello }\npub fn midVal() -> I64 { return hello() + 1I64 }\n' > "$MID/src/_.pw"
 gitinit "$MID"
 git -C "$MID" -c tag.gpgSign=false tag -a -m v2 2.0.0
 
@@ -80,7 +80,7 @@ name = "app1"
 [dependencies]
 "Acme/Greet" = { git = "$LEAF", version = "1" }
 EOF
-printf 'import @Std/Io with { print }\nimport @Acme/Greet with { hello }\nfn main() { print(hello()) }\n' > "$A1/Main.pw"
+printf 'use @Std/Io only { print }\nuse @Acme/Greet only { hello }\nfn main() { print(hello()) }\n' > "$A1/Main.pw"
 ( cd "$A1" && "$WORK/bin/plew-resolve" ) > "$A1/Plew.lock"
 check "lock picks 1.2.0" "1.2.0" "$(grep -A2 '\[\[package\]\]' "$A1/Plew.lock" | grep version | head -1 | sed 's/.*"\(.*\)".*/\1/')"
 "$PLEWC" "$A1/Main.pw" > "$WORK/a1.ll"
@@ -94,7 +94,7 @@ name = "app2"
 [dependencies]
 "Mid" = { git = "$MID", version = "2" }
 EOF
-printf 'import @Std/Io with { print }\nimport @Mid with { midVal }\nfn main() { print(midVal()) }\n' > "$A2/Main.pw"
+printf 'use @Std/Io only { print }\nuse @Mid only { midVal }\nfn main() { print(midVal()) }\n' > "$A2/Main.pw"
 ( cd "$A2" && "$WORK/bin/plew-resolve" ) > "$A2/Plew.lock"
 check "transitive lock has 2 pkgs" "2" "$(grep -c '\[\[package\]\]' "$A2/Plew.lock")"
 "$PLEWC" "$A2/Main.pw" > "$WORK/a2.ll"
@@ -108,7 +108,7 @@ name = "app3"
 [dependencies]
 "Acme/Greet" = { git = "$LEAF", version = "1.0" }
 EOF
-printf 'import @Std/Io with { print }\nimport @Acme/Greet with { hello }\nfn main() { print(hello()) }\n' > "$A3/Main.pw"
+printf 'use @Std/Io only { print }\nuse @Acme/Greet only { hello }\nfn main() { print(hello()) }\n' > "$A3/Main.pw"
 # explicit resolve (version "1.0" pins 1.0.x -> 1.0.0)
 "$WORK/plew" resolve "$A3" >/dev/null 2>&1
 check "driver resolve pins 1.0.0" "1.0.0" "$(grep 'version = "' "$A3/Plew.lock" | head -1 | sed 's/.*"\(.*\)".*/\1/')"
@@ -134,7 +134,7 @@ name = "$1"
 [dependencies]
 "L2" = { git = "$L2", version = "$3" }
 EOF
-    printf 'import @L2 with { leafval }\npub fn %s() -> I64 { return leafval() }\n' "$4" > "$2/src/_.pw"
+    printf 'use @L2 only { leafval }\npub fn %s() -> I64 { return leafval() }\n' "$4" > "$2/src/_.pw"
     gitinit "$2"; git -C "$2" -c tag.gpgSign=false tag -a -m t 1.0.0
 }
 mkmid MidA "$WORK/mida" 1 va
@@ -146,7 +146,7 @@ name = "app4"
 "MidA" = { git = "$WORK/mida", version = "1" }
 "MidB" = { git = "$WORK/midb", version = "1" }
 EOF
-printf 'import @Std/Io with { print }\nimport @MidA with { va }\nimport @MidB with { vb }\nfn main() { print(va() + vb()) }\n' > "$A4/Main.pw"
+printf 'use @Std/Io only { print }\nuse @MidA only { va }\nuse @MidB only { vb }\nfn main() { print(va() + vb()) }\n' > "$A4/Main.pw"
 ( cd "$A4" && "$WORK/bin/plew-resolve" ) > "$A4/Plew.lock"
 check "lock holds both L2 versions" "2" "$(grep -c "git = \"$L2\"" "$A4/Plew.lock")"
 "$PLEWC" "$A4/Main.pw" > "$WORK/a4.ll"

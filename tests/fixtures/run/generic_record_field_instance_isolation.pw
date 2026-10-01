@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A generic body's anonymous-record field selection is recorded once as the
 // parametric term `T`, then grounded independently for every BodyInstance.

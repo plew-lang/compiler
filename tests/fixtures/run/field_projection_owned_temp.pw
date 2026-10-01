@@ -2,7 +2,7 @@
 // project a heap field out of a witness-owned (+1) element / call result — the
 // projected String is independently retained, so it survives both the temp's
 // statement-end drain and the retirement of the source element.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Item { pub val name: String }
 pub impl Item { factory }

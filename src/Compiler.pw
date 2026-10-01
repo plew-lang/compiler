@@ -1,12 +1,12 @@
 // Low-level compiler driver shared by the development and distributed entries.
-import @Std/Process with { argCount, argAt, exit }
-import ./Frontend with { Comp, FrontendInput, analyzeFrontend }
-import ./FrontendDriver with { frontendRequest, configuredSourceAccess }
-import ./CompilerExecution with { executeProgram }
-import ./CheckedProgram with { CheckedProgram, ProgramCheckResult, prepareCheckedProgram, ExecutableCompilationResult }
-import ./Backend with { emitLlvmRuntime, lowerLlvm, lowerPreparedLlvm, nativeCpu, LlvmModule, LlvmLoweringResult }
-import ./SourceAccess with { SourceAccess }
-import ./Diag with { CompileDiagnostic, emitDiagnostic }
+use @Std/Process only { argCount, argAt, exit }
+use ./Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ./FrontendDriver only { frontendRequest, configuredSourceAccess }
+use ./CompilerExecution only { executeProgram }
+use ./CheckedProgram only { CheckedProgram, ProgramCheckResult, prepareCheckedProgram, ExecutableCompilationResult }
+use ./Backend only { emitLlvmRuntime, lowerLlvm, lowerPreparedLlvm, nativeCpu, LlvmModule, LlvmLoweringResult }
+use ./SourceAccess only { SourceAccess }
+use ./Diag only { CompileDiagnostic, emitDiagnostic }
 
 extern(c) {
     fn plew_llvm_initialize_worker(trace~: I32)

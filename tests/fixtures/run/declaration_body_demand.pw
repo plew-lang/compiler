@@ -1,10 +1,10 @@
-import /Frontend with { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
-import /SourceAccess with { SourceAccess }
-import /DeclarationProgram with { DeclarationBodyRequests }
-import /Mid/Build with { MidFunctionTemplates }
-import /Mid/DeclarationAccess with { DeclarationAccessError }
-import /Mid/Verify with { MidVerifyError }
-import @Std/Io with { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
+use /SourceAccess only { SourceAccess }
+use /DeclarationProgram only { DeclarationBodyRequests }
+use /Mid/Build only { MidFunctionTemplates }
+use /Mid/DeclarationAccess only { DeclarationAccessError }
+use /Mid/Verify only { MidVerifyError }
+use @Std/Io only { print }
 
 fn owner(c: inout Comp, name: String) -> U64 {
     val span = c.internBytes(s: name)

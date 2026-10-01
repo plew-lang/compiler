@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A view selects E as the source set, but its proof is still the generic
 // witness inside E. The witness substitution must ground Item=T before the

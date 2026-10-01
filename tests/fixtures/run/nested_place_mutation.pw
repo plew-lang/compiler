@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Mutating a place reached through NESTED struct fields (`c.arena.items`, a field
 // of a field) — append / set / index-assign / compound-assign / inout-arg, plus a

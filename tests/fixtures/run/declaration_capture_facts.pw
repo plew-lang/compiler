@@ -1,8 +1,8 @@
-import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
-import /SourceAccess with { SourceAccess }
-import /Ir with { SemanticClosureCaptureMode }
-import @Std/Core with { assert }
-import @Std/Io with { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { SemanticClosureCaptureMode }
+use @Std/Core only { assert }
+use @Std/Io only { print }
 fn main() {
     mut val c = <Comp />
     val source = "fn unused() { mut val value: I64 = 1I64 val closure = fn() -> I64 { value = 2I64 return value } }\n"

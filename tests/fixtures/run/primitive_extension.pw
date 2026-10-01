@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // An extension on a primitive receiver (spec/09): you cannot write an inherent
 // `impl I64` (you don't own the type), but `#Ext` adds methods, callable through

@@ -2,7 +2,7 @@
 // `Brand`, a distinct type from the underlying `Rgb`. Assigning that result to an
 // `Rgb` without an explicit `as` must be rejected (no implicit conversion, spec/12) —
 // the inheritance does not silently erase the brand.
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct Rgb { pub val code: I32 }
 pub impl Rgb {
     factory

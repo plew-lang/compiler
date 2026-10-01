@@ -1,6 +1,6 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { DeclarationBoundRef, ValueConversionProof, EnumPayloadConversion, StaticConformanceProof }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { DeclarationBoundRef, ValueConversionProof, EnumPayloadConversion, StaticConformanceProof }
 
 fn describe(proof: ValueConversionProof) {
     match proof {

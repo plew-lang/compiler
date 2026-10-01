@@ -1,4 +1,4 @@
-import @Std/Io with { write }
+use @Std/Io only { write }
 
 fn ignoredValue() {
     1I64

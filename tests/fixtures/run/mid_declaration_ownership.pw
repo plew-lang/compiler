@@ -1,15 +1,15 @@
 // Declaration ownership consumes semantic facts, without executable layouts.
 // The stricter instantiated/executable verifiers retain their stage contracts.
-import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
-import /SourceAccess with { SourceAccess }
-import /Ir with { StructDef, TypeRef, AccessCandidate, CallSiteKey }
-import /Mid/Ir with { MidRange, MidCallTarget, MidCallReceiver, MidScope, MidBody, MidBlock, MidLocalDecl, MidPlace, MidOperand, MidRvalue, MidStatement, MidTerminator }
-import /Mid/Build with { MidFunctionTemplates, MidBuildError }
-import /Mid/Drop with { elaborateCanonicalMidDrops }
-import /Mid/Prepare with { MidParametricBody }
-import /Mid/OwnershipAnalysis with { MidOwnershipRequests }
-import /Mid/Verify with { verifyDeclarationMidOwnership, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody, MidVerifyError }
-import @Std/Io with { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { StructDef, TypeRef, AccessCandidate, CallSiteKey }
+use /Mid/Ir only { MidRange, MidCallTarget, MidCallReceiver, MidScope, MidBody, MidBlock, MidLocalDecl, MidPlace, MidOperand, MidRvalue, MidStatement, MidTerminator }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
+use /Mid/Drop only { elaborateCanonicalMidDrops }
+use /Mid/Prepare only { MidParametricBody }
+use /Mid/OwnershipAnalysis only { MidOwnershipRequests }
+use /Mid/Verify only { verifyDeclarationMidOwnership, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody, MidVerifyError }
+use @Std/Io only { print }
 
 fn checkSource() {
     mut val c = <Comp />

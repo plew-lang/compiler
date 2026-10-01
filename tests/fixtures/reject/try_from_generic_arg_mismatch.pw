@@ -2,7 +2,7 @@
 // arguments (spec/13). `DstErr as From[Box[String]]` takes `Box[String]`, so a `Box[I64]` source has
 // no matching overload — reject. A head-name-only match read the I64 payload as a
 // String pointer and dereferenced it (SEGV).
-import @Std/Core with { From }
+use @Std/Core only { From }
 
 struct Box[T] { pub val v: T }
 struct DstErr { pub val msg: String }

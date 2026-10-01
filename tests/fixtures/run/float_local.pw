@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // F64 locals + Format (spec/02): a float binds to a local, participates in
 // arithmetic, and prints (via `impl F64 as Format` -> floatToString -> "%g").

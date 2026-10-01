@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl, syntaxImpl, syntaxExtern, syntaxDirective, syntaxStmt, DeclId, ImplId, ExternId, DirectiveId, StmtId, SyntaxStmtKind }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl, syntaxImpl, syntaxExtern, syntaxDirective, syntaxStmt, DeclId, ImplId, ExternId, DirectiveId, StmtId, SyntaxStmtKind }
+use @Std/Io only { print }
 
 fn main() {
     val source = "struct First {}\nimpl First {}\nextern(plewIntrinsic) { fn raw() }\n@[Eq]\nval answer = 42U64\n"

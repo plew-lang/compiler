@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // A method cannot be bound to a value (spec/07): `val f = w.get` must be a loud
 // reject, not a silent broken-C field access. (Wrap in a closure to pass around.)
 struct W { pub val x: I32 }

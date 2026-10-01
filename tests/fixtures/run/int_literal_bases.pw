@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Integer literal bases (spec/02): hexadecimal `0x` (upper/lowercase digits and X),
 // octal `0o`, binary `0b`, plus `_` digit separators in any literal (including floats).

@@ -1,4 +1,4 @@
-// @Std/Random — pseudo-random number generation (spec/15: import-required, not a
+// @Std/Random — pseudo-random number generation (spec/15: use-required, not a
 // lang item / ambient). A small in-language PRNG (xorshift64) seeded either from the
 // OS entropy source (`Random.fromEntropy()`) for an unpredictable stream, or from an
 // explicit value (`Random.withSeed(s)`) for a reproducible one.

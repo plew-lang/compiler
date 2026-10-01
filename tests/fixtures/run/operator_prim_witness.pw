@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // O6 stage 2: the primitive numeric types carry real operator-trait witnesses
 // (Core's `impl I32 as Add[I32]` etc., generated over the intrinsic floor). Call

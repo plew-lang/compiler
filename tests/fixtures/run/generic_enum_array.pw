@@ -7,8 +7,8 @@
 //   3. `?.` chain results placed DIRECTLY as elements (the Chain-desugar
 //      MatchExpr has no per-form exprLlvmType arm; its type reads through
 //      groundedTypeOf -> ChainSite.stageRef)
-import @Std/Io with { print }
-import @Std/Core
+use @Std/Io only { print }
+use @Std/Core
 
 struct BoxG[T] { pub val value: T }
 pub impl BoxG { factory }

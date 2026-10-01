@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // Two stacked extension views provide the same method name -> ambiguous (spec/09).
 struct P { val n: I64 }
 extension A { pub impl P { fn m() -> I64 { return 1I64 } } }

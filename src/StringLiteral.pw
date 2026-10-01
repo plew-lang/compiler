@@ -1,6 +1,6 @@
 // Decode a lexically valid quoted string span independently of LLVM and Comp.
 // The result includes a trailing NUL for native string storage.
-import @Std/Core with { truncU8 }
+use @Std/Core only { truncU8 }
 //
 // Decode one C-style escape (the byte after a backslash) to its actual byte.
 fn escByte(nx: U8) -> U8 {

@@ -1,5 +1,5 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
+use @Std/Io only { write }
+use /Frontend only { Comp }
 fn main() {
     mut val compiler: Comp = <Comp />
     compiler.internBytes(s: "padding")

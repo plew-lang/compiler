@@ -1,7 +1,7 @@
 // Core string-floor calls construct owned String results. Their ABI is selected
 // by the bundled declaration, not by a backend spelling check.
-import @Std/Core with { stringFromBytesUnchecked, floatToString }
-import @Std/Io with { write }
+use @Std/Core only { stringFromBytesUnchecked, floatToString }
+use @Std/Io only { write }
 
 fn fromBytes() -> String {
     val bytes: Array[U8] = [65U8]

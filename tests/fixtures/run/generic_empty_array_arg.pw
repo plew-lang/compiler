@@ -5,8 +5,8 @@
 // `Array[T]` sent emission into self-referential grounding (compiler stack
 // overflow); a partial inference must not ground (an unfound param substitutes
 // a hole that would pass the ground gate).
-import @Std/Io with { print }
-import @Std/Core with { Add }
+use @Std/Io only { print }
+use @Std/Core only { Add }
 
 fn sum[T](xs: Array[T], seed: T) -> T where T: Add[T, Output = T] {
     mut val acc: T = seed

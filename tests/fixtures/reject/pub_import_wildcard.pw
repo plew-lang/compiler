@@ -1,2 +1,2 @@
-pub import @Std/Io with *
+pub use @Std/Io only *
 fn main() {}

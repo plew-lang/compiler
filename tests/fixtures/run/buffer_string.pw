@@ -4,8 +4,8 @@
 // releases the popped element, and scope-drop releases every live element before
 // freeing the backing buffer. Exercises the element cascade beyond the scalar MVP
 // (the companion ASan-on-self-compile gate proves it is leak/UAF-free).
-import @Std/Io with { print }
-import @Std/Core with { Buffer }
+use @Std/Io only { print }
+use @Std/Core only { Buffer }
 
 fn main() {
     mut val b: Buffer[String] = Buffer.new()

@@ -1,2 +1,2 @@
-import ./Models
+use ./Models
 fn main() { mut val value = 9I64 Models.value = 32I64 }

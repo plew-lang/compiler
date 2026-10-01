@@ -1,7 +1,7 @@
 // Desugared subscripts retain their requirements independently of method names.
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { Expr, Stmt, SyntheticCallKind }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Expr, Stmt, SyntheticCallKind }
 
 fn main() {
     mut val c: Comp = <Comp />

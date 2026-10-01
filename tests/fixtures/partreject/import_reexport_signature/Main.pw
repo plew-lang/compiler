@@ -1,2 +1,2 @@
-import ./Barrel with { f }
+use ./Barrel only { f }
 fn main() { f(value: 1I64) }

@@ -1,7 +1,7 @@
 // A value stored in Array must preserve an enum payload nested inside a struct.
 // This is the carrier shape used by compiler semantic tables: Array[Entry],
 // where Entry owns a sum whose selected alternative owns an Array.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Selection { Values(items: Array[String]) }
 

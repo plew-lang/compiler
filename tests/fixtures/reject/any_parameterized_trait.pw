@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // spec/08: forming `any P` requires all of P's type arguments to be bound (the only
 // thing still erased is `Self`). `any Conv[I64]` would be valid; the bare `any Conv`

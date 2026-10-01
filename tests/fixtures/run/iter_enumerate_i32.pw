@@ -4,8 +4,8 @@
 // coincides — see iter_enumerate.pw); an I32 element exposes the bug (the build emitted
 // `insertvalue i32 into an i64 field` = invalid IR). The mono pass now registers the
 // grounded record instance `(index:U64,value:I32)` so its `value` field lowers as i32.
-import @Std/Io with { print }
-import @Std/Core with { Iterator }
+use @Std/Io only { print }
+use @Std/Core only { Iterator }
 
 struct Counter { pub mut val n: I32 }
 pub impl Counter { factory }

@@ -1,7 +1,7 @@
-import /CheckedProgram with { CheckedProgram, ProgramCheckResult, ExecutableCompilationResult, prepareCheckedProgram }
-import /Frontend with { FrontendInput, FrontendOptions }
-import /SourceAccess with { SourceAccess }
-import @Std/Io with { print }
+use /CheckedProgram only { CheckedProgram, ProgramCheckResult, ExecutableCompilationResult, prepareCheckedProgram }
+use /Frontend only { FrontendInput, FrontendOptions }
+use /SourceAccess only { SourceAccess }
+use @Std/Io only { print }
 
 fn checked(source: String) -> ProgramCheckResult {
     return CheckedProgram.check(input: <FrontendInput.Text text=source path="check.pw" />,

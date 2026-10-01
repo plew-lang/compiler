@@ -1,7 +1,7 @@
 // `MidOperandBuild` is a tagged operand followed by MidBuildError.  A Mid
 // builder propagates its tail error after inspecting it; the first field must
 // never overwrite the following enum tag during aggregate return/copy.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Operand {
     Copy(place: U64)

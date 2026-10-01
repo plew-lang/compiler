@@ -1,6 +1,6 @@
 // In a consuming match, `field: _` drops that active payload field at pattern
 // commit, before the arm body runs.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 unique struct File {
     pub val fd: I64

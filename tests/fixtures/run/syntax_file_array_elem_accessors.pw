@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl, syntaxBlock, syntaxBlockStmt, syntaxStmt, syntaxExpr, syntaxExprElemCount, syntaxExprElem, DeclId, SyntaxExprKind }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl, syntaxBlock, syntaxBlockStmt, syntaxStmt, syntaxExpr, syntaxExprElemCount, syntaxExprElem, DeclId, SyntaxExprKind }
+use @Std/Io only { print }
 
 fn main() {
     val source = "fn main() { val values = [1U64, 2U64] }\n"

@@ -2,7 +2,7 @@
 // element, and another generic call.  I64 and String must be grounded from the
 // body instance independently; neither the bare `T` result template nor the
 // call-specific extension view may leak into type identity.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Box[T] { pub val value: T }
 pub impl[T] Box[T] { factory }

@@ -1,6 +1,6 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
-// Keep main on the legacy path. `relay` can use Mid only when a Call
+// Keep main on the legacy path. `relay` ca use Mid only when a Call
 // terminator carries its resolved value receiver separately from formal args.
 val mainPathAnchor: I64 = 0I64
 

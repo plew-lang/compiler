@@ -3,7 +3,7 @@
 // generic — not just an array-typed local binding. Regression probe: an
 // Ident-only walk left `firstOf(xs: mkStrs())` uninferred (T=0), so the outer
 // generic (`print[T]`) had no instance and the program was wrongly rejected.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn firstOf[T](xs: Array[T]) -> T {
     return xs[0]

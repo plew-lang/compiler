@@ -1,5 +1,5 @@
-import @Std/Core with { MutableRef }
-import @Std/Io with { print }
+use @Std/Core only { MutableRef }
+use @Std/Io only { print }
 struct Cell { pub mut val value: I64 }
 pub impl Cell { factory }
 fn update(value: inout I64, alias: MutableRef[Cell]) {

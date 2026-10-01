@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `T` is a trait declaration, not a type parameter.  In particular, the
 // `Optional[Self]` result is erased to `Optional[any T]`, then its payload is

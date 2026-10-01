@@ -2,7 +2,7 @@
 // `right` are mutually recursive, while their one shared generic AST body is
 // instantiated for both I64 and String. Re-entering an already-scanning body
 // must not wait for its nested calls or reuse the other instance's resolution.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn left[T](value: T, remaining: I64) -> T {
     if remaining <= 0I64 { return value }

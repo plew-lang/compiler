@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Set with { Set }
+use @Std/Io only { print }
+use @Std/Set only { Set }
 
 // Set[E] (spec/02): a CoW hash set built on the Dictionary floor (keys only).
 // No literal — constructed via Set.from / Set.new. Membership, dedup, removal.

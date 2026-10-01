@@ -1,8 +1,8 @@
 // A SyntaxFile call argument carries its label as a source span.  Lowering must
 // preserve that span without rebuilding the label as a String.
-import @Plew/Syntax with { ExprId, Lexer, P, StmtId, lex, parseProgramSyntaxFile, syntaxArg, syntaxExpr, syntaxExprArg, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
-import @Std/Io with { print }
-import /Frontend with { Comp }
+use @Plew/Syntax only { ExprId, Lexer, P, StmtId, lex, parseProgramSyntaxFile, syntaxArg, syntaxExpr, syntaxExprArg, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
+use @Std/Io only { print }
+use /Frontend only { Comp }
 
 fn main() {
     val source = "val value = target(argument: 1I8)\n"

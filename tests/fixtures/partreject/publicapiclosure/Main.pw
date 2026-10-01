@@ -1,4 +1,4 @@
-import ./Lib with { Box, make }
+use ./Lib only { Box, make }
 
 fn main() {
     val h = make()

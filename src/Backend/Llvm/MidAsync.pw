@@ -1,6 +1,6 @@
 // Physical async lowering consumes the same prepared canonical body as sync
 // emission. No AST local collection or source expression evaluation occurs here.
-import ../../Mid with { planCanonicalMidAsyncFrame }
+use ../../Mid only { planCanonicalMidAsyncFrame }
 
 pub impl LlvmCtx {
     inout fn prepareAsyncMidCanonical(c: inout Comp, bodyId: U64) -> Result[MidCanonicalBody, CompileDiagnostic] {

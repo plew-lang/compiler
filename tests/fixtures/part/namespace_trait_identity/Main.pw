@@ -1,6 +1,6 @@
-import ./Alpha
-import ./Beta
-import @Std/Io with { print }
+use ./Alpha
+use ./Beta
+use @Std/Io only { print }
 struct Local {}
 impl Local as Alpha.Read { fn alpha() -> I64 { return 41I64 } }
 impl Local as Beta.Read { fn beta() -> I64 { return 42I64 } }

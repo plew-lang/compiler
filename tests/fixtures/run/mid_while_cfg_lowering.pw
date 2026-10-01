@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Keep `main` on the legacy path. `loopNoop` is the Mid candidate: even an
 // empty loop must re-evaluate its condition through a CFG backedge rather

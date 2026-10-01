@@ -12,7 +12,7 @@
 // Why a standalone generator rather than the `@[...]` derive pipeline: any
 // derive macro depends on @Std/Syntax, which depends on @Std/Core — so deriving
 // for the primitives (which Core owns, the floor everything imports) would form
-// an import cycle through Core. The `@[...]` dogfood fits user types above Core,
+// a use cycle through Core. The `@[...]` dogfood fits user types above Core,
 // not the primitive floor itself. This generator keeps the bootstrap-critical
 // core free of gen-pipeline coupling while still avoiding ~400 hand-written lines.
 //
@@ -20,7 +20,7 @@
 //     && clang -w /tmp/gen.ll /tmp/rt.c $(llvm-config --ldflags --libs core) \
 //        -o /tmp/gen && /tmp/gen > std/Core/Num.pw
 
-import @Std/Io with { write }
+use @Std/Io only { write }
 
 // impl <ty> as <trn>[<ty>] { type Output = <ty>  assoc fn <meth>(lhs,rhs) { return <pfx><suf>(a:lhs, b:rhs) } }
 fn implBin(ty: String, trn: String, meth: String, pfx: String, suf: String) {

@@ -1,12 +1,12 @@
-import /CompilerCallbacks as Callbacks
-import /CompilerSessions with { registerCompilerSession, compilerSessionSnapshot, findCompilerSession, unregisterCompilerSession }
-import /CheckedProgram with { CompilerSession, CompilerSessionResult }
-import /Frontend with { FrontendInput }
-import /Backend with { LlvmJit, LlvmJitCreation, LlvmLoweringResult }
-import /SourceAccess with { SourceAccess }
-import @Std/Core with { assert }
-import @Std/Process with { argAt }
-import @Std/Io with { print }
+use /CompilerCallbacks as Callbacks
+use /CompilerSessions only { registerCompilerSession, compilerSessionSnapshot, findCompilerSession, unregisterCompilerSession }
+use /CheckedProgram only { CompilerSession, CompilerSessionResult }
+use /Frontend only { FrontendInput }
+use /Backend only { LlvmJit, LlvmJitCreation, LlvmLoweringResult }
+use /SourceAccess only { SourceAccess }
+use @Std/Core only { assert }
+use @Std/Process only { argAt }
+use @Std/Io only { print }
 extern(c) {
     fn exerciseCompilerCallback(address~: U64) -> I32
     fn rejectCompilerCallback(session~: U64) -> I32

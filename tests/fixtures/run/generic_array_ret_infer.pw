@@ -6,7 +6,7 @@
 // or sent emission into self-referential grounding (compiler stack overflow);
 // `val xs: Array[Box[T]]` in a template body was never scanned under the
 // instance env and died as a null value at emission.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Box[T] { pub val v: T }
 pub impl Box { factory }

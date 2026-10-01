@@ -1,9 +1,9 @@
 // The SyntaxFile block path must share the normal compound-assignment
 // desugaring: no compound Stmt.Assign reaches later verification/codegen.
-import @Plew/Syntax with { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxTopItemPayload }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { Stmt }
+use @Plew/Syntax only { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxTopItemPayload }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Stmt }
 
 fn main() {
     val source = "fn body() {\n    value += 1I8\n}\n"

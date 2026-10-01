@@ -1,7 +1,7 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { Block, Expr, SemanticExprType, StructDef, Stmt, Func, InstanceEnvironment, FinalStorageResolution, ValueConversionProof, identValueCode }
-import /Mid with { MidInstantiateError, MidBuildError, MidBuildState, MidBody, MidOwnership, MidStatement, MidTerminator, MidVerifyError, addMidLocal, analyzeCanonicalMidOwnership, buildMidBlock, buildMidIf, elaborateCanonicalMidDrops, instantiateCanonicalMidBody, verifyCanonicalMidBody }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { Block, Expr, SemanticExprType, StructDef, Stmt, Func, InstanceEnvironment, FinalStorageResolution, ValueConversionProof, identValueCode }
+use /Mid only { MidInstantiateError, MidBuildError, MidBuildState, MidBody, MidOwnership, MidStatement, MidTerminator, MidVerifyError, addMidLocal, analyzeCanonicalMidOwnership, buildMidBlock, buildMidIf, elaborateCanonicalMidDrops, instantiateCanonicalMidBody, verifyCanonicalMidBody }
 
 fn main() {
     mut val c: Comp = <Comp />

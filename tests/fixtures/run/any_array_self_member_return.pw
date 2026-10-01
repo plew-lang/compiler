@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A trait member returning `Array[Self]` IS callable through `any P` (spec/08, SE-0309):
 // the dispatch thunk covariantly repacks the witness's `Array[Concrete]` result into

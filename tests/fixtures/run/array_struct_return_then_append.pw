@@ -1,8 +1,8 @@
 // A returned TypeAst is a fresh owned value.  Appending it to Array[TypeAst]
 // must preserve its nested generic-argument buffer after the return temporary
 // is cleaned up.  This isolates the parser's failing return→append boundary.
-import @Plew/Syntax with { Span, TypeAst }
-import @Std/Io with { print }
+use @Plew/Syntax only { Span, TypeAst }
+use @Std/Io only { print }
 
 fn genericType() -> TypeAst {
     val span = <Span start=0U64 end=5U64 />

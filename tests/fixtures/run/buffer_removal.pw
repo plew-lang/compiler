@@ -4,8 +4,8 @@
 // truncate drops a suffix, clear drops everything. The moved-out elements are owned by
 // the caller's bindings (dropped at scope end); the dropped suffix/all are released by
 // the buffer (commit-then-release). ASan-on-self-compile / run prove leak/UAF freedom.
-import @Std/Io with { print }
-import @Std/Core with { Buffer }
+use @Std/Io only { print }
+use @Std/Core only { Buffer }
 
 fn main() {
     mut val b: Buffer[String] = Buffer.new()

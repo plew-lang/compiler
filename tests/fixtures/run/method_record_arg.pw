@@ -1,6 +1,6 @@
 // A record literal as a METHOD argument (spec/02): the literal `(x:3, y:4)` takes
 // its type from the method parameter's declared record type (method-arg context).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Box { pub val v: I64 }
 pub impl Box { factory }

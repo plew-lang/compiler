@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core with { Index, IndexSet }
+use @Std/Io only { print }
+use @Std/Core only { Index, IndexSet }
 
 struct Grid { pub mut val cells: Array[I64] }
 pub impl Grid { factory }

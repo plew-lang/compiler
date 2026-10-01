@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A String literal has no mutable place, but `bytes` only borrows it for the
 // duration of the call. Mid must carry that rvalue as a read-only receiver,

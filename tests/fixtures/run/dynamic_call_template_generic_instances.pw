@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A generic body is shared by both instances below.  Calling a closure local
 // and a closure stored in a generic field must use the selected lexical/field

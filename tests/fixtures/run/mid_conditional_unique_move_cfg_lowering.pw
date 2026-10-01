@@ -1,4 +1,4 @@
-import @Std/Io with { write }
+use @Std/Io only { write }
 
 unique struct File { pub val fd: I64 }
 pub impl File { factory }

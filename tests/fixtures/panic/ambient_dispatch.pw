@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 mut val value = 7I64
 trait Reader { fn read() -> I64 }
 struct Source { pub val unused: I64 }

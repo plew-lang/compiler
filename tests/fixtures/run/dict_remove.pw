@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Dictionary.remove (spec/02): deletes a key, compacting the dense entries and
 // backward-shifting the open-addressing index so every surviving key stays

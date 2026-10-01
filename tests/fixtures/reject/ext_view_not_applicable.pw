@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // An extension view `#F` is valid only when the extension actually has an `impl`
 // for the receiver's type. F only extends `Other`, so `s#F` on an S is rejected

@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core with { Buffer, bufferAppend, bufferGet, bufferInsertAt }
+use @Std/Io only { print }
+use @Std/Core only { Buffer, bufferAppend, bufferGet, bufferInsertAt }
 
 // Insert has a distinct boundary from append: its inclusive index <= count
 // rule and relocation of the suffix must be preserved by Mid.

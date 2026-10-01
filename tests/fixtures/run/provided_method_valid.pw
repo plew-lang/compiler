@@ -1,7 +1,7 @@
 // A valid trait provided-method (spec/08): the body uses `self` only through the
 // trait's requirements, with matching types — accepted by the abstract checker,
 // and exercised via a conforming type.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait Named {
     fn first() -> I64

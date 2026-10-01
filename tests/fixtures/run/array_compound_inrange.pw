@@ -1,5 +1,5 @@
 // In-range array-element compound arithmetic is untouched by the overflow check.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     mut val xs: Array[U16] = [300, 1000]

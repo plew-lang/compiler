@@ -1,5 +1,5 @@
-import @Std/Core
-import @Std/Io with { print }
+use @Std/Core
+use @Std/Io only { print }
 
 struct Fail { pub val msg: String }
 pub impl Fail { factory }

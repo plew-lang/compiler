@@ -1,4 +1,4 @@
-import @Std/Io with { write }
+use @Std/Io only { write }
 
 // Keep main on the legacy path: each helper's Mid coverage is independently
 // observable, while the program output asserts the language-level short

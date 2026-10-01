@@ -1,5 +1,5 @@
 // spec/03: a moved local is live again after a fresh value is bound to it.
-import @Std/Io with { print }
+use @Std/Io only { print }
 unique struct File { pub val fd: I64  deinit { print(self.fd) } }
 pub impl File { factory }
 fn take(f: move File) { }

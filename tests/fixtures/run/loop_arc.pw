@@ -7,8 +7,8 @@
 // which shares the source collection's buffer — is released at loop exit so that buffer
 // reaches rc 0 and cascade-releases its elements. Each `deinit` prints its tag, so the count
 // of markers proves single release (no leak, no double-free). ASan-clean.
-import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 
 unique struct Cell {
     pub val v: I32

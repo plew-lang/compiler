@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Assigning an array PLACE into a struct field copies (spec/03 value semantics):
 // the field and the source binding must stay independent. Covers a `self.f = a`

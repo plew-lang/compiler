@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `any P` over a parameterized / associated-type trait (spec/08): the type
 // arguments and associated types are bound at the existential (`any Producer[I32]`,

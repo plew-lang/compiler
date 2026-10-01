@@ -1,5 +1,5 @@
 // `match borrow` needs borrow-pattern bindings and is not part of v1.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 unique struct File { pub val fd: I64 }
 

@@ -1,4 +1,4 @@
-import ./B with { B }
+use ./B only { B }
 
 pub trait Derive {}
 

@@ -1,6 +1,6 @@
 // spec/04: a default argument is evaluated synchronously at the call site; it
 // cannot suspend.
-import @Std/Async with { sleep }
+use @Std/Async only { sleep }
 
 async fn later() -> Promise[I64] {
     return await sleep(ms: 1)

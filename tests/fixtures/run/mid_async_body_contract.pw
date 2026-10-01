@@ -1,8 +1,8 @@
-import @Std/Io with { print }
-import @Std/Core with { assert }
-import /Frontend with { Comp }
-import /Ir with { Block, Func, Param, TypeRef }
-import /Mid with { buildParametricMidBody, MidBuildError }
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use /Frontend only { Comp }
+use /Ir only { Block, Func, Param, TypeRef }
+use /Mid only { buildParametricMidBody, MidBuildError }
 
 fn main() {
     mut val compiler: Comp = <Comp />

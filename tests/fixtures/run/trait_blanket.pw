@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Inter-trait conformance (spec/08,09): `impl Named as Show` makes every type
 // conforming to the subject trait Named also conform to Show, witnessing Show's

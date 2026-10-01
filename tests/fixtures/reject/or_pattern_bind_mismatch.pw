@@ -1,6 +1,6 @@
 // or-pattern alternatives must bind the same names (spec). Circle binds `r`,
 // Square binds `s`, so the shared body has no well-defined binding -> error.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Shape { Circle { r: I64 } Square { s: I64 } }
 

@@ -3,7 +3,7 @@
 // init used to emit the bare name, resolving to the earlier shadowed binding (a
 // different — possibly differently typed — C variable). spec/03,11 (unlimited
 // shadowing) + closures capture by reference.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     // value capture of a shadowed immutable binding

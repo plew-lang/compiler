@@ -1,8 +1,8 @@
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Mid/Ir with { MidPlace, MidConstant, MidOperand, MidRvalue, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
-import /Mid/Drop with { elaborateCanonicalMidDrops }
-import /Mid/Verify with { MidVerifyError, verifyCanonicalMidBody }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Mid/Ir only { MidPlace, MidConstant, MidOperand, MidRvalue, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
+use /Mid/Drop only { elaborateCanonicalMidDrops }
+use /Mid/Verify only { MidVerifyError, verifyCanonicalMidBody }
 
 fn position(block: U64, reversed: Bool) -> U64 {
     if reversed { return 6U64 - block }

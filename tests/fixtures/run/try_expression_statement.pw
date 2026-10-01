@@ -1,5 +1,5 @@
-import @Std/Core
-import @Std/Io with { print }
+use @Std/Core
+use @Std/Io only { print }
 
 fn step(ok: Bool) -> Result[I64, I64] {
     if ok { return <Result.Ok value=1I64 /> }

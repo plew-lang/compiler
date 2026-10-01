@@ -1,9 +1,9 @@
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { TypeRef }
-import /Mid with { MidBody, MidBlock, MidScope, MidLocalDecl, MidPlace, MidStatement, MidTerminator, verifyCanonicalMidBody }
-import /Mid/Verify with { MidVerifyError }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { TypeRef }
+use /Mid only { MidBody, MidBlock, MidScope, MidLocalDecl, MidPlace, MidStatement, MidTerminator, verifyCanonicalMidBody }
+use /Mid/Verify only { MidVerifyError }
 
 fn accepted(compiler: inout Comp, source: U64, target: U64) -> Bool {
     val destination = <MidPlace local=0U64 typeTerm=target />

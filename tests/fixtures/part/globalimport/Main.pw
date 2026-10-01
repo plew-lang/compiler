@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import ./Consts with { tableSize, appName }
+use @Std/Io only { print }
+use ./Consts only { tableSize, appName }
 
 fn main() {
     print(appName)         // plew

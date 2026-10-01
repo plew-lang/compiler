@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct Measurement[T] {
     pub val low: T
     pub val high: T

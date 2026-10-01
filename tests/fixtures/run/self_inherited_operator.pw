@@ -1,4 +1,4 @@
-import @Std/Core with { Eq }
+use @Std/Core only { Eq }
 trait Comparable: Eq {}
 impl Comparable {
     fn same(other: Self) -> Bool { return self == other }

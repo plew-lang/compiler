@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `any P` as a generic collection element flowing through the generic-method
 // machinery (spec/08): appending a CONCRETE conforming value boxes it into the

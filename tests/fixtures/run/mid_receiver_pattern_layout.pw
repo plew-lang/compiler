@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait Label {}
 struct Yes { pub val number: I64 }

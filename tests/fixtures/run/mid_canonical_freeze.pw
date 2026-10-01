@@ -1,6 +1,6 @@
-import @Std/Io with { write }
-import /Ir with { MatchSource }
-import /Mid with { MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidCanonicalArena, MidCanonicalBody, canonicalMidBodyIsWellFormed }
+use @Std/Io only { write }
+use /Ir only { MatchSource }
+use /Mid only { MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidCanonicalArena, MidCanonicalBody, canonicalMidBodyIsWellFormed }
 
 fn main() {
     val source: MidPlace = <MidPlace local=2U64 projections=[<MidProjection.Field isBoxed=false index=3U64 typeTerm=11U64 />, <MidProjection.Index indexLocal=4U64 typeTerm=12U64 />] typeTerm=12U64 />

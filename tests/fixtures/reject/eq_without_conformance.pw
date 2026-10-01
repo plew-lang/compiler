@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct P { pub val v: I64 }
 pub impl P { factory }
 impl P { assoc fn eq(lhs: P, rhs: P) -> Bool { return lhs.v == rhs.v } }

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Inter-trait conformance path selection with `#` (spec/09): when a type reaches a
 // trait through more than one subject trait, the bare call is ambiguous and the

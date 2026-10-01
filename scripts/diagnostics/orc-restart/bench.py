@@ -15,7 +15,7 @@ sys.dont_write_bytecode = True
 from check import ROOT, HERE, PIPELINE, digest, apply
 
 def source_text(count, ownership):
-    bodies = ['import @Std/Io with { print }']
+    bodies = ['use @Std/Io only { print }']
     for index in range(count):
         marker = 7000000 + index
         if ownership:

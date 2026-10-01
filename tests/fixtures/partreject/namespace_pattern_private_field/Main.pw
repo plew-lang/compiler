@@ -1,2 +1,2 @@
-import ./Models
+use ./Models
 fn main() { val item = <Models.Item value=41I64 /> match item { Models.Item { value: val field } => {} } }

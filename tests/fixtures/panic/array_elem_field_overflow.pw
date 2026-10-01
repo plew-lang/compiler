@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct P { pub mut val x: I8 }
 pub impl P { factory }
 fn main() {

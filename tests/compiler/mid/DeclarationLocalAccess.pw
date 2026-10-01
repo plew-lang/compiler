@@ -1,12 +1,12 @@
-import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
-import ../../../src/SourceAccess with { SourceAccess }
-import ../../../src/Ir with { CallTemplate }
-import ../../../src/Mid/Build with { MidFunctionTemplates }
-import ../../../src/Mid/DeclarationAccess with { checkDeclarationLocalAccess, DeclarationAccessError }
-import ../../../src/Mid/Verify with { MidVerifyError }
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import @Std/Process with { argAt }
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { CallTemplate }
+use ../../../src/Mid/Build only { MidFunctionTemplates }
+use ../../../src/Mid/DeclarationAccess only { checkDeclarationLocalAccess, DeclarationAccessError }
+use ../../../src/Mid/Verify only { MidVerifyError }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
 
 fn classification(result: Result[(), DeclarationAccessError]) -> U64 {
     match result {

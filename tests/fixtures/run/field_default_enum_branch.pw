@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum State { Empty Filled(value: String) }
 struct Container { pub val state: State = <State.Empty /> }

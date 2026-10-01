@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A closure stored in a (generic) struct field, invoked through `self.f(...)`.
 // This is the machinery lazy iterator adapters need: an adapter struct holds the

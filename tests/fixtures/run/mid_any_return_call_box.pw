@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A direct-call result crosses the enclosing function's existential return
 // boundary. The call result is not an ABI return value until the enclosing

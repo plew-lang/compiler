@@ -1,5 +1,5 @@
 // IndexSet is required even when an ordinary setter has the same signature.
-import @Std/Core with { IndexSet }
+use @Std/Core only { IndexSet }
 struct Shelf { pub mut val item: I64 }
 pub impl Shelf {
     factory

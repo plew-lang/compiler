@@ -1,7 +1,7 @@
 // A closure call must retain the declaration chosen by lexical resolution, not
 // look up the call spelling again while lowering.  The same name denotes three
 // distinct closure values across nested scopes (spec/03,11).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     val invoke: fn() -> I64 = fn() -> I64 { return 1I64 }

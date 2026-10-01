@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, P, TopItemAst, TypeAst, lex, parseProgramAst }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, TopItemAst, TypeAst, lex, parseProgramAst }
+use @Std/Io only { print }
 
 fn childCount(ty: TypeAst) -> U64 {
     return ty.args.count()

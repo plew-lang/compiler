@@ -1,5 +1,5 @@
-import @Std/Core with { Index }
-import @Std/Io with { print }
+use @Std/Core only { Index }
+use @Std/Io only { print }
 
 struct Shelf[T] { pub val item: T }
 pub impl Shelf { factory }

@@ -1,6 +1,6 @@
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { SupertraitRef, WitnessMatch, DeclarationBoundRef, TraitConstraint, TraitInstanceKey, TraitAssocPredicate, FuncBound, ConformBound, StaticConformanceProof, StaticProofNode }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { SupertraitRef, WitnessMatch, DeclarationBoundRef, TraitConstraint, TraitInstanceKey, TraitAssocPredicate, FuncBound, ConformBound, StaticConformanceProof, StaticProofNode }
 
 fn main() {
     mut val compiler: Comp = <Comp />

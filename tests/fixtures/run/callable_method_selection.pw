@@ -1,6 +1,6 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { ArgRange, Bind, Func, MethodAlias }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { ArgRange, Bind, Func, MethodAlias }
 fn add(c: inout Comp, receiver: Bind, name: Bind, traitId: U64 = 0U64, extensionId: U64 = 0U64, viewOnly: Bool = false, hasReceiver: Bool = true) -> U64 {
     val index = c.arena.functionCount()
     c.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId

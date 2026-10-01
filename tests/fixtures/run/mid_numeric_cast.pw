@@ -1,7 +1,7 @@
 // Primitive `as` has no user-visible `from` factory in the current Core
 // surface, but its frontend-selected representation conversion must still be
 // carried through Mid rather than re-derived from Expr.Cast by LLVM.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 newtype UserNumber = I64
 

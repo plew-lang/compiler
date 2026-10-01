@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A generic layout may be reached without satisfying every conditional
 // conformance declared for it. `Array[NoEq]` is valid as a value, but it must

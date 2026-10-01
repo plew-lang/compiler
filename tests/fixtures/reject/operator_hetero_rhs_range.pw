@@ -3,7 +3,7 @@
 // against the witness's Rhs (I8), NOT against the result/annotation type (U64): the
 // surrounding U64 context types the RESULT, never the operand. `200` fits U64 but not I8,
 // so this is rejected (else the backend would silently truncate it to i8).
-import @Std/Io with { print }
+use @Std/Io only { print }
 trait Add[Rhs] { type Output  assoc fn add(lhs: Self, rhs: Rhs) -> Output }
 struct Money { pub val cents: I64 }
 impl Money as Add[I8] {

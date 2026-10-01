@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn divU8(numerator~: U8, denominator~: U8) -> U8 { return numerator / denominator }
 fn remU8(numerator~: U8, denominator~: U8) -> U8 { return numerator % denominator }

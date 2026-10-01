@@ -509,7 +509,7 @@ pub impl Comp {
         mut val assocTraitId: U64 = 0
         if t.projectionTrait.bytes().count() > 0 {
             val atn: Bind = self.internBytes(s: t.projectionTrait)
-            // A projection source is a declaration identity, not its import
+            // A projection source is a declaration identity, not its use
             // alias spelling.  Preserve that owner in the lowered type so
             // `TextConvert` and `BytesConvert` can select distinct same-name
             // traits and their associated witnesses.

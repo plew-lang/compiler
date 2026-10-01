@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Extensions on an enum receiver (spec/09): methods are reached through an
 // explicit `#Ext` view.

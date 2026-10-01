@@ -1,4 +1,4 @@
-import /Mid with { MidInstantiatedBody, MidCanonicalBody }
+use /Mid only { MidInstantiatedBody, MidCanonicalBody }
 fn main() {
     val body = <MidInstantiatedBody canonical=<MidCanonicalBody body=1U64 /> />
 }

@@ -1,6 +1,6 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Mid with { MidPlace, MidOwnership, MidAccessibility, MidConstant, MidOperand, MidCallReceiver, MidCallTarget, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidVerifyError, analyzeCanonicalMidOwnership, analyzeCanonicalMidAccessibility, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Mid only { MidPlace, MidOwnership, MidAccessibility, MidConstant, MidOperand, MidCallReceiver, MidCallTarget, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidVerifyError, analyzeCanonicalMidOwnership, analyzeCanonicalMidAccessibility, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
 
 fn printState(state: MidOwnership) {
     match state {

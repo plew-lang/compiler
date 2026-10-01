@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A recursive value enum: `Cons` holds a `List` payload that the compiler boxes
 // (heap indirection) so the type is finite. spec/03.

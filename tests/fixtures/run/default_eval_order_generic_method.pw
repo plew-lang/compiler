@@ -1,6 +1,6 @@
 // Generic methods keep argument-to-parameter mapping when a middle default is
 // omitted.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn mark(n: I64) -> I64 {
     print(n)

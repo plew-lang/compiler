@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn choose(values: Array[String]) -> String {
     for val value in values {

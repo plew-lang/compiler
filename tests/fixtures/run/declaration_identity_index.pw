@@ -1,5 +1,5 @@
-import /Ir with { Arena, Decls, DeclarationName, StructDef, EnumDef, TraitDef, NewtypeDef }
-import @Std/Io with { write }
+use /Ir only { Arena, Decls, DeclarationName, StructDef, EnumDef, TraitDef, NewtypeDef }
+use @Std/Io only { write }
 
 fn verify(actual: Optional[DeclarationName], start: U64, len: U64, present: Bool) {
     match actual {

@@ -1,6 +1,6 @@
 // Distinct cells and disjoint fields remain legal; an Index result owns its value.
-import @Std/Core with { MutableRef, Ref, assert }
-import @Std/Io with { print }
+use @Std/Core only { MutableRef, Ref, assert }
+use @Std/Io only { print }
 unique struct Cell { pub mut val value: I64 }
 pub impl Cell {
     factory

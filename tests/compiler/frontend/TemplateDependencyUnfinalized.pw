@@ -1,7 +1,7 @@
-import /Frontend with { Comp }
-import /Ir with { Expr }
-import /Diag with { emitDiagnostic }
-import @Std/Io with { print }
+use /Frontend only { Comp }
+use /Ir only { Expr }
+use /Diag only { emitDiagnostic }
+use @Std/Io only { print }
 fn main() {
     mut val compiler: Comp = <Comp />
     compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)

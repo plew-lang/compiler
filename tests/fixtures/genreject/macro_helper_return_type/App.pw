@@ -1,5 +1,5 @@
 // Macro dependencies are executable Plew, even when their input is only AST.
-import @Plew/Syntax with { Derive, TopItemAst }
+use @Plew/Syntax only { Derive, TopItemAst }
 
 fn generatedImplementation() -> String {
     return 1I64

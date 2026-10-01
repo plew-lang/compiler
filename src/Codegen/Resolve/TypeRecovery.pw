@@ -547,7 +547,7 @@ pub impl Comp {
     }
 
     inout fn typeInfoOfName(start: U64, len: U64, isArray: Bool) -> TypeInfo {
-        // resolve an import alias (`with { Real as Alias }`) to the real name so the carried
+        // resolve a use alias (`only { Real as Alias }`) to the real name so the carried
         // type identity is canonical for downstream struct/field lookup (spec/15).
         val ar: Bind = self.aliasReal(start: start, len: len)
         val rs: U64 = ar.nameStart

@@ -2,8 +2,8 @@
 // deinit body first (fields still valid), then fields in DECLARATION order,
 // recursing; and every place overwrite (local reassign / array index / struct
 // field) evaluates the RHS BEFORE releasing the old value (storeToPlace).
-import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 
 unique struct Cell {
     pub val v: I32

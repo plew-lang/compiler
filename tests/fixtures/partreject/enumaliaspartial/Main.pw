@@ -1,4 +1,4 @@
-import /Models with { Payload as Selection }
+use /Models only { Payload as Selection }
 fn main() {
     val value: Selection = <Selection.Pair a=1I64 b=2I64 />
     match value {

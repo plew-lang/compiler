@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // O4: prefix unary operators desugar to operator-trait witnesses (spec/12).
 trait Neg { type Output  assoc fn neg(value: Self) -> Output }

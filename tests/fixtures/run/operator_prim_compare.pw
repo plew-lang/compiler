@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // O6 (Eq/Ord): bare primitive comparisons desugar to Core's Eq/Ord witnesses over
 // the intrinsic floor (i32Eq / i32Lt -> Ordering tag test), not a built-in — the

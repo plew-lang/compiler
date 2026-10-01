@@ -1,4 +1,4 @@
-import @Std/Io with { write, print }
+use @Std/Io only { write, print }
 
 // Nested unique types: when an owner is destroyed, its own `deinit` body runs
 // first, then each field's deinit in declaration order, recursively (spec/03).

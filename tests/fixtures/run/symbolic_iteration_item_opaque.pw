@@ -1,4 +1,4 @@
-import @Std/Core with { Iterable }
+use @Std/Core only { Iterable }
 fn unused[T](values: T) where T: Iterable {
     for val value in values { val item: T#Iterable.Item = value }
 }

@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl, syntaxDeclTypeParamIsSendable, syntaxTrait, syntaxTraitTypeParamIsSendable, syntaxImpl, syntaxImplParamIsSendable, syntaxImplMember, syntaxMember, syntaxMemberTypeParamIsSendable, syntaxTraitReq, syntaxSig, syntaxSigTypeParamIsSendable, DeclId, TraitId, ImplId }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl, syntaxDeclTypeParamIsSendable, syntaxTrait, syntaxTraitTypeParamIsSendable, syntaxImpl, syntaxImplParamIsSendable, syntaxImplMember, syntaxMember, syntaxMemberTypeParamIsSendable, syntaxTraitReq, syntaxSig, syntaxSigTypeParamIsSendable, DeclId, TraitId, ImplId }
+use @Std/Io only { print }
 
 fn main() {
     val source = "struct Box[sendable T] {}\ntrait Stream[sendable T] { fn next[sendable U]() }\nimpl[sendable T] Box[T] { fn copy[sendable U]() {} }\n"

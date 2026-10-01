@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn makeAdder(base: I32) -> fn(n: I32) -> I32 {
     return fn(n: I32) -> I32 { return n + base }

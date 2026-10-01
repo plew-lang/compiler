@@ -1,6 +1,6 @@
 // value-position match arms may diverge with `panic` / `return` instead of giving
 // a value (spec/11): such arms are excluded from the result, the others yield it.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Opt { Some(v: I64) None }
 

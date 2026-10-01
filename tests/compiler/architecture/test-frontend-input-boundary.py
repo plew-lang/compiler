@@ -37,7 +37,7 @@ for forbidden in ('finalizeFrontendExecutables(', 'LLVMContextCreate(', 'lowerRe
     assert forbidden not in checking, f'whole-target check crosses its boundary: {forbidden}'
 # Sessions now also own explicit backend requests. Static check/open must not
 # execute them; importing their result types is not code generation.
-assert 'import ./Backend' not in frontend
+assert 'use ./Backend' not in frontend
 body_lowering = checked.split('inout fn lowerBody(', 1)[1].split('inout fn lowerGlobalStorage(', 1)[0]
 storage_lowering = checked.split('inout fn lowerGlobalStorage(', 1)[1].split('inout fn request(', 1)[0]
 assert body_lowering.index('self.prepareBodyAccess(') < body_lowering.index('lowerRequestedLlvm(')

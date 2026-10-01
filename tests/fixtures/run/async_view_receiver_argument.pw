@@ -1,7 +1,7 @@
 // Receiver storage is chosen before awaiting an argument; borrow starts later.
-import @Std/Io with { print }
-import @Std/Async with { sleep }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Async only { sleep }
+use @Std/Core only { MutableRef }
 struct Counter { pub mut val value: I64 }
 pub impl Counter { factory }
 struct Holder { pub mut val counter: Counter }

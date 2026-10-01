@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // spec/05: publishing memberwise construction does not expose private fields.
 // Omitted defaults come from the declaration, not from the caller's labels.

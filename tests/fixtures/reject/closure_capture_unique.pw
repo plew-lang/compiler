@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 unique struct Handle { pub val id: I32 }
 pub impl Handle { factory }
 

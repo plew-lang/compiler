@@ -1,2 +1,2 @@
-pub @Std/Io with { print }
+pub @Std/Io only { print }
 fn main() {}

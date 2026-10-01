@@ -2,7 +2,7 @@
 // (spec/12): `Vec2` has both `Add[I32]` and `Add[I64]`, so `a + 10` could pick either.
 // Plew rejects rather than silently choosing by declaration order (曖昧はエラー) — the
 // literal must carry a suffix (`a + 10I64`) to disambiguate.
-import @Std/Io with { print }
+use @Std/Io only { print }
 trait Add[Rhs] { type Output  assoc fn add(lhs: Self, rhs: Rhs) -> Output }
 struct Vec2 { pub val x: I64  pub val y: I64 }
 impl Vec2 as Add[I32] { type Output = Vec2  assoc fn add(lhs: Vec2, rhs: I32) -> Vec2 { return <Vec2 x=lhs.x y=lhs.y /> } }

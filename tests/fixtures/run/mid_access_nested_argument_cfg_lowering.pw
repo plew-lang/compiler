@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Main remains legacy for construction. The helper forces a completed inout
 // method call to become the argument of a second Mid call.

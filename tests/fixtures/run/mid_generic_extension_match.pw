@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Packet[T] { Empty Value(value: T) }
 extension Inspect {

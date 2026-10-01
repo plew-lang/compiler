@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 fn main() {
     val range = 0.0 ..< 1.0
     for value in range { print(value) }

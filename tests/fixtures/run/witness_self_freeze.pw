@@ -1,6 +1,6 @@
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { WitnessMatch, StaticConformanceProof, PatternBindInput }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { WitnessMatch, StaticConformanceProof, PatternBindInput }
 
 // Proof storage must preserve the semantic receiver independently of its
 // conformance ID: inherited and underlying witnesses share that declaration.

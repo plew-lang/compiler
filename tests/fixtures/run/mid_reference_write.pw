@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core with { MutableRef, Ref }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef, Ref }
 
 unique struct Cell {
     pub mut val name: String

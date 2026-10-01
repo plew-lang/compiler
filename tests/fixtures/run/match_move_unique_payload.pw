@@ -1,7 +1,7 @@
 // `match move` consumes the enum owner and transfers an active payload bind to
 // the arm local, so moving that bind onward does not leave the original enum to
 // drop the same payload again.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 unique struct File {
     pub val fd: I64

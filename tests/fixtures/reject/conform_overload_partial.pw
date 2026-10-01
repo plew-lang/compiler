@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // Two same-name requirements differing by parameter type; witnessing only one
 // is incomplete (selector-level completeness, gap #3).
 trait Writer {

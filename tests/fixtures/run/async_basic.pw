@@ -1,6 +1,6 @@
 // Sequential awaits with value passing through an async fn's Promise result.
-import @Std/Io with { print }
-import @Std/Async with { sleep }
+use @Std/Io only { print }
+use @Std/Async only { sleep }
 
 async fn doubler(x: I64) -> Promise[I64] {
     await sleep(ms: 5)

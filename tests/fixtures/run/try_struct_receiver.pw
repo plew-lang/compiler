@@ -1,5 +1,5 @@
-import @Std/Core
-import @Std/Io with { print }
+use @Std/Core
+use @Std/Io only { print }
 
 // `(try e).method()` where e: Result[T,E] and T is a struct: the unwrapped `Ok`
 // payload is a T, so the method dispatches on T's struct (regression — once

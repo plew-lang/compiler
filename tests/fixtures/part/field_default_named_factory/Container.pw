@@ -1,4 +1,4 @@
-import ./Payload with { Payload }
+use ./Payload only { Payload }
 
 pub struct Container {
     pub val payload: Payload = <Payload.empty />

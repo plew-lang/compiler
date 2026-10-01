@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Row { pub val text: String pub val number: I64 }
 pub impl Row { factory }

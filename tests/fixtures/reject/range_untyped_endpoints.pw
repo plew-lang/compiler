@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A range whose element type is inferable from neither endpoint (both are bare
 // integer literals) has no type to bind T to — rejected like any width-less

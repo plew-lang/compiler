@@ -1,4 +1,4 @@
-import ./Lib with { Subject }
+use ./Lib only { Subject }
 
 extension Extra {
     pub impl Subject {

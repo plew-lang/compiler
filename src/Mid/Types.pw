@@ -1,12 +1,12 @@
 // Consistency of published Mid types, separate from ownership dataflow.
 // Consumers call these only after structural pool/range validation. No name
 // resolution, type inference, AST walk, or LLVM representation is involved.
-import @Std/Io with { eprint }
-import ../Diag with { eprintU64 }
-import ../Frontend with { Comp }
-import ../Ir with { InstanceEnvironment, CallReceiverPassing }
-import @Plew/Syntax with { rangeEquals }
-import ./Ir with { MidCanonicalArena, MidBodyNode, MidPlaceNode, MidRvalueNode, MidStatementNode, MidTerminatorNode }
+use @Std/Io only { eprint }
+use ../Diag only { eprintU64 }
+use ../Frontend only { Comp }
+use ../Ir only { InstanceEnvironment, CallReceiverPassing }
+use @Plew/Syntax only { rangeEquals }
+use ./Ir only { MidCanonicalArena, MidBodyNode, MidPlaceNode, MidRvalueNode, MidStatementNode, MidTerminatorNode }
 
 // Removing outer facets must not erase views inside generic arguments or
 // change nominal identity. This check is separate from conversion selection.

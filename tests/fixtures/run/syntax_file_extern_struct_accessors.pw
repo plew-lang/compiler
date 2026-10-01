@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxExtern, syntaxExternStructCount, syntaxExternStructNameSpan, syntaxExternStructSpan, syntaxExternStructTypeParamCount, syntaxExternStructTypeParamSpan, syntaxExternStructTypeParamIsSendable, syntaxExternStructDirective, syntaxDirective, syntaxDirectiveReqCount, syntaxDirectiveReq, syntaxDeriveReq, ExternId }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxExtern, syntaxExternStructCount, syntaxExternStructNameSpan, syntaxExternStructSpan, syntaxExternStructTypeParamCount, syntaxExternStructTypeParamSpan, syntaxExternStructTypeParamIsSendable, syntaxExternStructDirective, syntaxDirective, syntaxDirectiveReqCount, syntaxDirectiveReq, syntaxDeriveReq, ExternId }
+use @Std/Io only { print }
 
 fn main() {
     val source = "extern(plewIntrinsic) { @[Eq] struct Buffer[sendable T] }\n"

@@ -3,7 +3,7 @@
 // `let`/`return`), like the empty array literal. Construction is move-out (no deep
 // copy of the freshly built dictionary), and the result is a normal owned value:
 // copying it is a CoW copy, so later mutation of the copy does not touch the source.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn build() -> Dictionary[U64, U64] {
     return [1U64: 100U64, 2U64: 200U64]

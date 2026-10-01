@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A String-VALUED dictionary across all accessors (spec/02): the generic `-> V`
 // (= String) return / payload is grounded under the receiver-instance env, so a

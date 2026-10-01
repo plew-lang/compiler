@@ -63,7 +63,7 @@ def main():
         run('missing-command', [binary], expected=1)
         run('missing-source', [binary, 'build', 'Missing.pw'], expected=1)
         source = root / "Source 'quoted'.pw"
-        source.write_text('import @Std/Io with { print }\nfn main() { print(42I64) }\n')
+        source.write_text('use @Std/Io only { print }\nfn main() { print(42I64) }\n')
         output = root / 'app with spaces'
         run('build', [binary, 'build', source, '-o', output], extra_env={'PLEW_TRACE_BUILD': '1'})
         trace = (evidence / 'build.stderr').read_bytes()
@@ -97,7 +97,7 @@ def main():
             actual = run(name, [binary, 'run', root / fixture.name])
             assert actual.rstrip(b'\n') == fixture.with_suffix('.out').read_bytes().rstrip(b'\n'), name
 
-        source.write_text('import @Std/Process with { argAt, exit }\nimport @Std/Io with { print, readStdin }\nfn main() { print(argAt(1I64)) print(readStdin()) exit(code: 7I64) }\n')
+        source.write_text('use @Std/Process only { argAt, exit }\nuse @Std/Io only { print, readStdin }\nfn main() { print(argAt(1I64)) print(readStdin()) exit(code: 7I64) }\n')
         assert run('arguments-stdin-status', [binary, 'run', source, "one 'argument'"],
                    expected=7, data=b'input') == b"one 'argument'\ninput\n"
 

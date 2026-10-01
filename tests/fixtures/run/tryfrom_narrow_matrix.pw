@@ -4,8 +4,8 @@
 // and the `IntTryFrom` derive (a dumb, arg-only renderer in @Plew/Syntax) emits one
 // delegating witness per source into the committed `Core.gen.pw`. Each delegates to
 // the target's hand-written `TryFrom[I64]` base after a lossless `from as I64` widen.
-import @Std/Io with { print }
-import @Std/Core with { RangeError }
+use @Std/Io only { print }
+use @Std/Core only { RangeError }
 
 fn main() {
     // signed -> narrower signed

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Wrapping arithmetic (spec/02): `* + -` panic on overflow; the `wrapping*` ops opt
 // into two's-complement wraparound (the only way to wrap — no `&+` operator). They are

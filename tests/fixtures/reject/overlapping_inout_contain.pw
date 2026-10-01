@@ -1,6 +1,6 @@
 // Overlapping `inout` (spec/03): one `inout` place CONTAINS the other (`s` and `s.n`)
 // — statically certain, so it is a compile error (not a runtime check).
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct Pair { pub mut val n: I64  pub mut val m: I64 }
 pub impl Pair { factory }
 fn f(a: inout Pair, b: inout I64) { a.n = 1I64  b = 2I64 }

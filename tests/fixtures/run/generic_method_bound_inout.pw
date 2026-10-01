@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A method-own type parameter `[H]` with a `where H: Trait` bound, calling the
 // bound trait's methods through a generic `inout H` receiver (the machinery the

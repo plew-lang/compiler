@@ -1,11 +1,11 @@
 // Single-file tool entry. Compiler and resolver remain Plew modules; native
 // glue owns OS process/link operations and the LLVM object backend.
-import @Std/Process with { argCount, argAt, exit }
-import @Std/Io with { print }
-import @Std/Ffi with { cString, cFree, stringFromCString, arrayCPtr }
-import ../src/Compiler with { runCompiler, compileObject, runCheck, runProgram }
-import ../src/SourceAccess with { SourceAccess, SourceResource }
-import ../resolve/Resolver with { runResolver, needsResolution }
+use @Std/Process only { argCount, argAt, exit }
+use @Std/Io only { print }
+use @Std/Ffi only { cString, cFree, stringFromCString, arrayCPtr }
+use ../src/Compiler only { runCompiler, compileObject, runCheck, runProgram }
+use ../src/SourceAccess only { SourceAccess, SourceResource }
+use ../resolve/Resolver only { runResolver, needsResolution }
 
 extern(c) {
     fn plew_tool_main(count~: I64, arguments~: CPtr[CPtr[U8]]) -> I64

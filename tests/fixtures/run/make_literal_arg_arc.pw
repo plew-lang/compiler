@@ -2,7 +2,7 @@
 // directly as an argument, and as the value of a subscript-assign (indexSet
 // witness): the heap-owning temporary gets an anonymous owned home and drops at
 // statement end (leak regression pin; the assertion is the LeakSanitizer gate).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Bag { pub val label: String }
 pub impl Bag { factory }

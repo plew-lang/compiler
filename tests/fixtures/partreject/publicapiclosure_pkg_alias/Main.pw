@@ -1,4 +1,4 @@
-import / with { parse }
+use / only { parse }
 
 fn main() {
     val t = parse()

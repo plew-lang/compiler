@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // spec/04,08: a bare `return` early-exits a void function; trait requirements may
 // overload on parameter type.
 trait Show {

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn echo[P](value: P) -> P { return value }
 struct P {

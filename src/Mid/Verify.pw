@@ -1,13 +1,13 @@
-import ./DataflowState with { MidOwnershipStates }
-import ./AccessScopes with { canonicalMidAccessScopesValid }
+use ./DataflowState only { MidOwnershipStates }
+use ./AccessScopes only { canonicalMidAccessScopesValid }
 // Structural and ownership verification for Mid IR. This consumes only Mid
 // dataflow, never source AST or LLVM state. Every backend entry calls it before lowering executable canonical bodies.
 
-import ../Frontend with { Comp }
-import ../Ir with { Global, MatchSource, SemanticMatchKind, SemanticMatchPayload }
-import ./Ir with { MidCanonicalArena, canonicalMidPlaceIsWhole, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidBody, MidOwnership }
-import ./Types with { canonicalMidStatementTypesMatch, canonicalMidTerminatorTypesMatch }
-import ./Drop with { analyzeCanonicalMidOwnership }
+use ../Frontend only { Comp }
+use ../Ir only { Global, MatchSource, SemanticMatchKind, SemanticMatchPayload }
+use ./Ir only { MidCanonicalArena, canonicalMidPlaceIsWhole, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidBody, MidOwnership }
+use ./Types only { canonicalMidStatementTypesMatch, canonicalMidTerminatorTypesMatch }
+use ./Drop only { analyzeCanonicalMidOwnership }
 
 // Verification phases have different representation contracts. Declaration
 // ownership may consume symbolic conversion boundaries; executable admission

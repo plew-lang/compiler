@@ -1,7 +1,7 @@
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { FinalAwaitResolution }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { FinalAwaitResolution }
 
 fn main() {
     mut val compiler: Comp = <Comp />

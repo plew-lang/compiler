@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Associated (static) functions: `assoc fn` takes no self, called `Type.name(args)`.
 struct Vec2 { pub val x: I64  pub val y: I64 }

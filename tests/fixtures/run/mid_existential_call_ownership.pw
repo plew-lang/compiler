@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Final existential signatures must preserve associated arguments/results,
 // CoW receiver mutation, re-erased Self results and inout argument addresses.

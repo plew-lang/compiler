@@ -1,6 +1,6 @@
 mut val starts = 0I64
-import @Std/Io with { print }
-import @Std/Process with { argAt, argCount }
+use @Std/Io only { print }
+use @Std/Process only { argAt, argCount }
 val initial = initialize()
 val items = [2I64, 3I64]
 fn initialize() -> I64 { starts += 1I64 return 7I64 }

@@ -1,5 +1,5 @@
-import @Std/Core with { assert }
-import ./ExposeLibrary as Library
+use @Std/Core only { assert }
+use ./ExposeLibrary as Library
 
 extern(c) {
     fn exposedImported(value~: I8) -> I8

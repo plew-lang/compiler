@@ -2,8 +2,8 @@
 // recognised Index, value-return like `get`). Works for an ARC element (String, where
 // the read retains so the result is independently owned) and a scalar element (U64, used
 // in arithmetic / comparison). Special-cased like Array's `[]` (not an `index` witness).
-import @Std/Io with { print }
-import @Std/Core with { Buffer }
+use @Std/Io only { print }
+use @Std/Core only { Buffer }
 
 fn main() {
     mut val b: Buffer[String] = Buffer.new()

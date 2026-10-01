@@ -1,10 +1,10 @@
 // Closed-world may-effects select reservations, never diagnose execution of
 // an unchosen branch. Unknown dispatch/foreign effects are not purity facts.
-import ../Frontend with { Comp }
-import ../Diag with { CompileDiagnostic }
-import ../Ir with { ArcClass, CallTarget, RuntimeIntrinsic }
-import ./Ir with { MidTerminatorNode }
-import ./Program with { MidExecutableProgram }
+use ../Frontend only { Comp }
+use ../Diag only { CompileDiagnostic }
+use ../Ir only { ArcClass, CallTarget, RuntimeIntrinsic }
+use ./Ir only { MidTerminatorNode }
+use ./Program only { MidExecutableProgram }
 
 pub struct MidAmbientEffects {
     pub mut val affected: Array[Bool] = []

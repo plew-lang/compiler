@@ -2,7 +2,7 @@
 // pattern both use parentheses (the variant payload IS a labelled record);
 // construction stays JSX. The legacy brace form is still accepted during the
 // migration but the canonical syntax is parentheses.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Shape {
     Circle(r: I32)

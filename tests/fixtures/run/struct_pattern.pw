@@ -2,7 +2,7 @@
 // Irrefutable (a struct has one shape), so no tag — fields bind directly.
 // Covers punning, rename (`field: val name`), discard (`field: _`), array and
 // nested-struct fields, a generic struct, and value-position match.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Inner {
     pub val n: I32

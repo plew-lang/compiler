@@ -1,5 +1,5 @@
-import /Ir with { Decls, TraitOwner }
-import @Std/Io with { write }
+use /Ir only { Decls, TraitOwner }
+use @Std/Io only { write }
 
 fn verify(table: Decls, nameId: U64, offset: U64) {
     mut val candidate = table.firstTraitOwnerNamed(nameId: nameId)

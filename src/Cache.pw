@@ -5,9 +5,9 @@
 // (`$PLEW_CACHE` or `$HOME/.plew/cache`) is obtained by the caller at runtime and
 // passed in, so this module stays free of the environment + compiler arena.
 
-import @Std/Process with { execOut }
-import @Std/Core with { stringFromBytesUnchecked }
-import ./Toml with { appendBytes }
+use @Std/Process only { execOut }
+use @Std/Core only { stringFromBytesUnchecked }
+use ./Toml only { appendBytes }
 
 // Trim trailing spaces / CR / LF from a byte buffer.
 pub fn trimEnd(b: Array[U8]) -> Array[U8] {

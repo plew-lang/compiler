@@ -1,5 +1,5 @@
 // Part of the lowering pass (root: _.pw): top-level item dispatch
-// (extern / decl / import / directive / newtype / global).
+// (extern / decl / use / directive / newtype / global).
 
 // Lower an `extern(plewIntrinsic)` block (spec/15): each fn -> a Func(isExtern),
 // each opaque struct -> a body-less StructDef(isExtern). Mirrors parseExtern. fns
@@ -303,7 +303,7 @@ pub impl Comp {
             }
             TopItemAst.NewType(val name, nameSpan: _, val ty, isPub: _, val span) => {
                 // `pub newtype Name = Underlying` (spec/10,15): lower the distinct type,
-                // then record its name as exported so other modules can import it.
+                // then record its name as exported so other modules ca use it.
                 val ntB: U64 = self.arena.newtypeCount()
                 try self.lowerNewtype(name: name, ty: ty, defOffset: span.start)
                 if self.arena.newtypeCount() > ntB {

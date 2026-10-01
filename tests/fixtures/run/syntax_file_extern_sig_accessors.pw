@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxExtern, syntaxExternFnCount, syntaxExternFn, syntaxSig, ExternId }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxExtern, syntaxExternFnCount, syntaxExternFn, syntaxSig, ExternId }
+use @Std/Io only { print }
 
 fn main() {
     val source = "extern(plewIntrinsic) { fn raw() -> U64 }\n"

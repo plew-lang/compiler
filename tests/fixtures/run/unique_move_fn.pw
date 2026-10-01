@@ -1,4 +1,4 @@
-import @Std/Io with { write, print }
+use @Std/Io only { write, print }
 
 // A `move fn` consumes self (a unique value): the method takes ownership and runs
 // self's deinit at its scope exit; the call site consumes the receiver, so it is

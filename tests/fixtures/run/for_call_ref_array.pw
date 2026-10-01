@@ -1,5 +1,5 @@
-import @Std/Io with { print, write }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print, write }
+use @Std/Core only { MutableRef }
 unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }

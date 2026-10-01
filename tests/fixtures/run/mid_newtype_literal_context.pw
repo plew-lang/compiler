@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 newtype Byte = U8
 newtype SignedByte = I8

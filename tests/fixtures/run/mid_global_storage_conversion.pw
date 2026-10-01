@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait Named { fn label() -> String }
 struct Person { pub val name: String }

@@ -2,8 +2,8 @@
 // yielding labelled records `(index: U64, value: E)`. Built on generic-record support
 // (the adapter's `next()` returns `Optional[(index:U64,value:E)]`). The binding form
 // `for p in it.enumerate()` exposes `p.index` / `p.value`.
-import @Std/Io with { print }
-import @Std/Core with { Iterator, RangeError }
+use @Std/Io only { print }
+use @Std/Core only { Iterator, RangeError }
 
 struct Counter { pub mut val n: I64 }
 pub impl Counter { factory }

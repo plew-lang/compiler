@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Overload discrimination must use a variable argument's DECLARED type, read from the
 // parametric store (recordParametricTypes fills it with cur.locals populated). Plain

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct Maker { pub val n: I64 }
 pub impl Maker { factory }
 pub impl Maker {

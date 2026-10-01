@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 fn accept[T](value: T) {}
 fn caller[T](value: T) {
     accept(value: "separate binder")

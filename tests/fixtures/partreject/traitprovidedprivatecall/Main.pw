@@ -1,4 +1,4 @@
-import ./Lib with { Counter }
+use ./Lib only { Counter }
 fn main() {
     val c = <Counter n=7I64 />
     val x: I64 = c.internalTwice()

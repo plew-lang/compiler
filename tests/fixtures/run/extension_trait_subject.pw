@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Trait-subject extensions (spec/09): an extension may add provided methods to a
 // trait (`impl Trait`, third-party `itertools`-style) or add an inter-trait

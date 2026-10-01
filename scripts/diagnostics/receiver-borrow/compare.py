@@ -34,8 +34,8 @@ def source(case, mode):
     if case == 'ref_parameter':
         helper = 'fn inspectReference(reference: MutableRef[Item], iteration: I64) -> I64 { return ' + call + ' }'
         call = 'inspectReference(reference: reference, iteration: iteration)'
-    return '''import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+    return '''use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 extern(c) {
     fn probeStep(iteration~: I64) -> I64
     fn probeLimit() -> I64

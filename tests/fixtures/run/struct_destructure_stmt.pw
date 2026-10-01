@@ -4,7 +4,7 @@
 // (`y: val b`), bare assigns to an existing `mut val`, and `label: _` discards —
 // and the same coverage rule (every field bound or discarded). A generic struct
 // destructures through its head name (`Box { val v } = b` for a Box[String]).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Pt { pub val x: I64 pub val y: I64 pub val z: I64 }
 pub impl Pt { factory }

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The call's selected Array[any Shape] parameter is the literal's result
 // context.  Mid must therefore build the array with the frontend-selected

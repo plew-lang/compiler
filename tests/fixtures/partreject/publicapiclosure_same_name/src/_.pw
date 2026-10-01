@@ -1,5 +1,5 @@
-import @Dep with { Token }
-import /Internal with { Token as InternalToken }
+use @Dep only { Token }
+use /Internal only { Token as InternalToken }
 
 pub fn parse() -> InternalToken {
     return <InternalToken local=1I64 />

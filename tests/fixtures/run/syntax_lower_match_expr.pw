@@ -1,8 +1,8 @@
 // Value-position literal matches must preserve the existing single-evaluation
 // give-block wrapper; they are not a direct enum MatchExpr.
-import @Plew/Syntax with { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxTopItemPayload, syntaxBlock, syntaxBlockStmt, syntaxStmt }
-import @Std/Io with { print }
-import /Frontend with { Comp }
+use @Plew/Syntax only { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxTopItemPayload, syntaxBlock, syntaxBlockStmt, syntaxStmt }
+use @Std/Io only { print }
+use /Frontend only { Comp }
 
 fn main() {
     val source = "fn body() { val result = match 1I8 { 1I8 => { give 2I8 } _ => { give 3I8 } } }\n"

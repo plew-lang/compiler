@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core with { Iterator, Iterable }
+use @Std/Io only { print }
+use @Std/Core only { Iterator, Iterable }
 
 struct BoxIter[T] {
     pub val items: Array[T]

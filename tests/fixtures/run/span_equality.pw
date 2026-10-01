@@ -1,5 +1,5 @@
-import /Frontend with { Comp, spansEqual }
-import @Std/Io with { write }
+use /Frontend only { Comp, spansEqual }
+use @Std/Io only { write }
 fn main() {
     mut val compiler: Comp = <Comp />
     compiler.arena.bytes = "abcabcabd".bytes()

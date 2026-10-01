@@ -1,8 +1,8 @@
 // A `where T: BP` bound must name B.P's declaration identity, not merely the
 // same-spelling, same-arity A.P. S conforms only to A.P, so this call is
 // invalid even though A.P has no requirements.
-import ./A with { P as AP }
-import ./B with { P as BP }
+use ./A only { P as AP }
+use ./B only { P as BP }
 
 struct S {}
 pub impl S { factory }

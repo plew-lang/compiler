@@ -1,7 +1,7 @@
 // Mirror MidBodyBuild's return ABI: a 48-byte nested Body followed by a
 // mixed-payload error enum.  Both the caller and callee are Mid-eligible.
 // The tail enum tag must survive the aggregate return and field projection.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Unsupported {
     Expression

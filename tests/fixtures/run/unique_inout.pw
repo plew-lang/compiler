@@ -1,4 +1,4 @@
-import @Std/Io with { write, print }
+use @Std/Io only { write, print }
 
 // `inout` is valid for unique types (a mutable borrow consumes nothing): the
 // caller keeps ownership and deinit runs once at its scope.

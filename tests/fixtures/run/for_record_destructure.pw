@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A record-destructuring loop pattern `for (val x, val y) in xs` (spec/02,11) binds each
 // element's record fields per iteration. Punned `(val x)` and explicit `(field: val n)`

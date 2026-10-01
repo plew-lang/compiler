@@ -1,6 +1,6 @@
 // Multiplication overflow panics too. U16 max is 65535; 1000 * 1000 = 1_000_000
 // does not fit, so the checked multiply aborts.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     val a: U16 = 1000

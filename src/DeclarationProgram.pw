@@ -1,15 +1,15 @@
 // Declaration-only Mid preparation. No executable discovery or LLVM work.
 // Remaining obligations are explicit; success is not a whole-target check token.
-import ./Frontend with { Comp }
-import ./Diag with { CompileDiagnostic }
-import ./Mid/Build with { MidBuildError, MidBodyBuild, MidFunctionTemplates, ensureParametricMidClosureBody }
-import ./Mid/DeclarationAccess with { analyzeDeclarationGlobalAccessWithRequests, analyzeDeclarationGlobalAccessRoots, checkDeclarationBodyAccess, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
-import ./Mid/Verify with { MidVerifyError }
-import ./Mid/OwnershipAnalysis with { MidOwnershipRequests }
-import ./Mid/Prepare with { MidParametricBody }
-import ./Mid/Ir with { MidCanonicalBody }
-import ./Ir with { SemanticClosure }
-import ./Mid/Diagnostics with { reportMidBuildError }
+use ./Frontend only { Comp }
+use ./Diag only { CompileDiagnostic }
+use ./Mid/Build only { MidBuildError, MidBodyBuild, MidFunctionTemplates, ensureParametricMidClosureBody }
+use ./Mid/DeclarationAccess only { analyzeDeclarationGlobalAccessWithRequests, analyzeDeclarationGlobalAccessRoots, checkDeclarationBodyAccess, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
+use ./Mid/Verify only { MidVerifyError }
+use ./Mid/OwnershipAnalysis only { MidOwnershipRequests }
+use ./Mid/Prepare only { MidParametricBody }
+use ./Mid/Ir only { MidCanonicalBody }
+use ./Ir only { SemanticClosure }
+use ./Mid/Diagnostics only { reportMidBuildError }
 
 pub enum DeclarationProgramError {
     Analysis(error: DeclarationAccessError)

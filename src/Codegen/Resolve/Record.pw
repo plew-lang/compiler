@@ -24,7 +24,7 @@
 // exprs, and any node this walk cannot scope (they surface in the Task-#3
 // shadow and are closed there).
 
-import ../../Ir with { InstanceEnvironment, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload }
+use ../../Ir only { InstanceEnvironment, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload }
 
 pub impl Comp {
 
@@ -376,7 +376,7 @@ pub impl Comp {
     }
 
     // An `any` type has an already-resolved declaration identity in TypeRef.
-    // Prefer that owner over a spelling scan so an import/re-export cannot
+    // Prefer that owner over a spelling scan so a use/re-export cannot
     // redirect an existential slot after the source resolver selected it.
     inout fn recordAnyTraitIndex(anyRef: U64) -> U64 {
         if anyRef == 0U64 || anyRef >= self.arena.typeCount() { return self.decls.traitCount() }
@@ -636,7 +636,7 @@ pub impl Comp {
         // Rebuilding it from the first same-spelled f.typeParams used to erase
         // their ParamIds, making `self.field: I` fail to match an `I: Trait`
         // proof during abstract generic checking.  A non-extension receiver
-        // can use this exact term directly.  Extensions retain the view
+        // ca use this exact term directly.  Extensions retain the view
         // decoration path below until TypeRef view construction is centralized.
         if f.recvTy != 0U64 {
             if vid == 0U64 {

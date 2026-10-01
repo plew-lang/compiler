@@ -1,6 +1,6 @@
 // F2: shadowing (spec/03,11 — unlimited). Re-declaring a name in the same
 // block must not collide in the generated C.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct P {
     pub val x: I32

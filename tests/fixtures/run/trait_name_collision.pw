@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A user trait may share a NAME (and even arity) with an ambient operator trait
 // from @Std/Core without colliding: conformance resolution is structural — a

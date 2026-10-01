@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Inter-trait conformance path ambiguity (spec/09): S reaches R through two subject
 // traits (P→R and Q→R, with S: P and S: Q), so a bare `s.r()` is ambiguous and must

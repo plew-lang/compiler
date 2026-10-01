@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core with { Step, FixedWidthInteger, Pow }
+use @Std/Io only { print }
+use @Std/Core only { Step, FixedWidthInteger, Pow }
 
 // Std I64 declares same-type operations with Self; newtypes inherit those signatures.
 newtype Meter = I64

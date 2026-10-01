@@ -1,6 +1,6 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Mid with { MidPlace, MidOwnership, MidOperand, MidCallReceiver, MidCallTarget, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidVerifyError, analyzeCanonicalMidOwnership, verifyCanonicalMidBody }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Mid only { MidPlace, MidOwnership, MidOperand, MidCallReceiver, MidCallTarget, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidVerifyError, analyzeCanonicalMidOwnership, verifyCanonicalMidBody }
 
 fn main() {
     mut val c: Comp = <Comp />

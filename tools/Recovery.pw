@@ -2,12 +2,12 @@
 // The compiler implementation is unchanged: supply the SAME empty syntax
 // value explicitly at its construction site. Do not use this entry to claim
 // normal self-host recovery; src/_.pw must compile and run afterwards.
-import @Std/Process with { argCount, argAt, exit }
-import @Plew/Syntax with { SyntaxFile }
-import ../src/Frontend with { Comp }
-import ../src/Diag with { emitDiagnostic }
-import ../src/FrontendDriver with { runFrontend }
-import ../src/Backend with { emitLlvm, emitLlvmRuntime }
+use @Std/Process only { argCount, argAt, exit }
+use @Plew/Syntax only { SyntaxFile }
+use ../src/Frontend only { Comp }
+use ../src/Diag only { emitDiagnostic }
+use ../src/FrontendDriver only { runFrontend }
+use ../src/Backend only { emitLlvm, emitLlvmRuntime }
 
 fn main() {
     if argCount() > 1 {

@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+fn use(value: I64) -> I64 { return value + 1 }
+fn only(use: I64) -> I64 { return use + 1 }
+struct Box { val use: I64 val only: I64 }
+fn main() {
+    val use = use(value: 1)
+    val only = only(use: use)
+    val box = <Box use=use only=only />
+    print(box.use)
+    print(box.only)
+}

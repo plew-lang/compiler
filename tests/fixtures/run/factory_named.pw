@@ -1,7 +1,7 @@
 // custom named factory (spec/05): `factory name(params) { return … }` returns the
 // impl's type (implicit Self), invoked via `<Type.name attrs/>`. Lowered as an
 // assoc fn; the memberwise `<Type field=…/>` construction is unaffected.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Celsius { pub val degrees: I64 }
 pub impl Celsius { factory }

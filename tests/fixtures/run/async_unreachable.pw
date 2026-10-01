@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Async with { sleep }
+use @Std/Io only { print }
+use @Std/Async only { sleep }
 async fn unused(value: String) -> Promise[I64] {
     await sleep(ms: 1)
     print(value)

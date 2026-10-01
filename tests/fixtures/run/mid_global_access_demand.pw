@@ -1,10 +1,10 @@
-import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
-import /SourceAccess with { SourceAccess }
-import /Mid/Build with { MidFunctionTemplates }
-import /Mid/Program with { MidExecutableRequests }
-import /Mid/GlobalAccess with { analyzeMidGlobalAccess }
-import /Mid/GlobalAccessGraph with { GlobalAccessGraph }
-import @Std/Io with { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+use /SourceAccess only { SourceAccess }
+use /Mid/Build only { MidFunctionTemplates }
+use /Mid/Program only { MidExecutableRequests }
+use /Mid/GlobalAccess only { analyzeMidGlobalAccess }
+use /Mid/GlobalAccessGraph only { GlobalAccessGraph }
+use @Std/Io only { print }
 
 fn graphDependencies() {
     mut val graph = <GlobalAccessGraph.empty />

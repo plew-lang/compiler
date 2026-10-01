@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Compound assignment to a dictionary element `d[k] OP= v` (spec/12): desugars to
 // `d[k] = d[k] OP v` (the missing-key read panics like a bare `d[k]`), then re-inserts.

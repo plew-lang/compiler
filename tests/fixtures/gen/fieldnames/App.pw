@@ -3,9 +3,9 @@
 // the @Plew/Syntax value-tree `DeclAst`) and generates a `fieldNames()` returning
 // their comma-separated names — proving the macro receives the parsed declaration,
 // not a stub.
-import @Std/Io with { write }
-import @Plew/Syntax with { Derive, TopItemAst, DeclAst }
-import @Std/Core with { stringFromBytesUnchecked }
+use @Std/Io only { write }
+use @Plew/Syntax only { Derive, TopItemAst, DeclAst }
+use @Std/Core only { stringFromBytesUnchecked }
 
 struct FieldList { }
 

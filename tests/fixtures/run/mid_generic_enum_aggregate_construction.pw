@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The generic body constructs Optional[T]. Mid receives the selected enum
 // declaration identity and grounds only the frozen result TypeTerm.

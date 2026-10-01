@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 
 // Zero-sized physical storage must not erase evaluation or resource lifetime.
 struct Empty {}

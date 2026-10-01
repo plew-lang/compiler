@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // An unsuffixed integer literal matches both overloads (it adapts to any integer
 // type); the call is ambiguous and must be rejected, not silently bound to the
 // first overload (spec: 補完はする／忖度はしない／曖昧はエラー).

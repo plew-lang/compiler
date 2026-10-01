@@ -4,7 +4,7 @@
 // against the grounded field type (records compare structurally, not by template name), and
 // the backend lowers the instance field to the grounded record struct (not the i64-defaulting
 // template). Reading the record's fields back yields the constructed values.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Holder[T] { pub val pair: (a: T, b: T) }
 pub impl Holder { factory }

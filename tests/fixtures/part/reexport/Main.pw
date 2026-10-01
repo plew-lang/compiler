@@ -1,6 +1,6 @@
 // Consumer: imports the forwarded names FROM the barrel (never names Defs).
-import @Std/Io with { print }
-import ./Barrel with { addOne, Box }
+use @Std/Io only { print }
+use ./Barrel only { addOne, Box }
 
 fn main() {
     print(addOne(n: 41I64))        // 42

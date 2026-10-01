@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A mutating (`inout fn`) method dispatched through `any P` (spec/08): `Self`
 // appears only in the receiver, so the member is callable. The existential's data

@@ -1,4 +1,4 @@
-import @Dep with { External }
+use @Dep only { External }
 
 pub fn get() -> External {
     return <External n=7I64 />

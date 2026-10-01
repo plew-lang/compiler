@@ -1,8 +1,8 @@
 // Metaprogramming gen test (spec/16): a derive macro attached to a TRAIT. The
 // macro receives the trait as `TopItemAst.Trait` and reads its requirement names,
 // generating a `reqNames()` listing them — proving impl/trait are macro targets.
-import @Std/Io with { write }
-import @Plew/Syntax with { Derive, TopItemAst, TraitAst, Src, newSrc }
+use @Std/Io only { write }
+use @Plew/Syntax only { Derive, TopItemAst, TraitAst, Src, newSrc }
 
 struct ReqList { }
 

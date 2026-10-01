@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Pattern binding initially borrows the active ARC payload from `payload`.
 // Returning it must make the ordinary value-semantic Copy explicit, so the

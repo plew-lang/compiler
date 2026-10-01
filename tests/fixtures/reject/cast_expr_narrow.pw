@@ -1,7 +1,7 @@
 // The lossless-`as` check now sees the width of an arithmetic expression: the
 // result of `a - b` (both I64) is I64, so casting it to U8 is a narrowing `as`
 // and must be rejected (closes the `(expr) as T` gap, not just `ident as T`).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     val a: I64 = 100

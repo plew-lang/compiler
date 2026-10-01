@@ -1,2 +1,2 @@
-import ./Library
+use ./Library
 fn main() { Library.secret() }

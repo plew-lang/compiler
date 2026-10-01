@@ -25,10 +25,10 @@ with tempfile.TemporaryDirectory(prefix='lazy-cli-', dir=ROOT / 'tmp') as tempor
             assert result.stdout == output, (name, result.stdout)
         print('PASS lazy CLI ' + name, flush=True)
         return result
-    unused = 'import @Std/Io with { print }\nfn main() { print(42I64) }\nfn unused() { missing() }\n'
+    unused = 'use @Std/Io only { print }\nfn main() { print(42I64) }\nfn unused() { missing() }\n'
     run('unused', unused, 0, b'42\n')
     run('check-unused', unused, 1, mode='--check')
-    late = 'import @Std/Io with { eprint }\nfn bad() { missing() }\nfn main() { eprint(text: "entered\\n") bad() }\n'
+    late = 'use @Std/Io only { eprint }\nfn bad() { missing() }\nfn main() { eprint(text: "entered\\n") bad() }\n'
     failed = run('late-error', late, 1)
     assert failed.stderr.startswith(b'entered\n'), failed.stderr
     # Identical validators must defer body-local uses while retaining whole
@@ -42,7 +42,7 @@ with tempfile.TemporaryDirectory(prefix='lazy-cli-', dir=ROOT / 'tmp') as tempor
         'call-import': 'print(1I64)',
         'type-import': 'val x: Hidden = <Types.Hidden value=1I64 />',
     }
-    prefix = 'import @Std/Io with { eprint }\nimport ./Types as Types\n'
+    prefix = 'use @Std/Io only { eprint }\nuse ./Types as Types\n'
     for name, body in cases.items():
         unused = prefix + 'fn main() { eprint(text: "entered\\n") }\nfn bad() { ' + body + ' }\n'
         assert run(name + '-unused', unused, 0).stderr == b'entered\n'
@@ -78,10 +78,10 @@ with tempfile.TemporaryDirectory(prefix='lazy-cli-', dir=ROOT / 'tmp') as tempor
     result = subprocess.run([str(binary), *app_arguments], capture_output=True, timeout=60)
     assert (result.returncode, result.stdout, result.stderr) == (0, expected, b''), result
     print('PASS lazy CLI exit callback arguments match AOT', flush=True)
-    arguments = 'import @Std/Process with { argCount, argAt }\nimport @Std/Io with { print }\nfn main() { print(argCount()) print(argAt(1I64)) print(argAt(2I64)) }\n'
+    arguments = 'use @Std/Process only { argCount, argAt }\nuse @Std/Io only { print }\nfn main() { print(argCount()) print(argAt(1I64)) print(argAt(2I64)) }\n'
     run('arguments', arguments, 0, b'3\n--check\none argument\n', arguments=('--check', 'one argument'))
-    run('exit-status', 'import @Std/Process with { exit }\nfn main() { exit(code: 7I64) }\n', 7)
-    shared = '''import @Std/Io with { print }
+    run('exit-status', 'use @Std/Process only { exit }\nfn main() { exit(code: 7I64) }\n', 7)
+    shared = '''use @Std/Io only { print }
 trait Value { fn value() -> I64 }
 struct Item { val number: I64 }
 impl Item as Value { fn value() -> I64 { return self.number } }
@@ -90,7 +90,7 @@ fn second() -> any Value { return <Item number=2I64 /> }
 fn main() { val a = first() val b = second() print(a.value()) print(b.value()) }
 '''
     run('shared-witness', shared, 0, b'1\n2\n')
-    source.write_text('import @Std/Io with { eprint }\nimport @Std/Async with { sleep }\nasync fn main() { eprint(text: "ready\\n") while true { await sleep(ms: 100) } }\n')
+    source.write_text('use @Std/Io only { eprint }\nuse @Std/Async only { sleep }\nasync fn main() { eprint(text: "ready\\n") while true { await sleep(ms: 100) } }\n')
     for sig in (signal.SIGINT, signal.SIGTERM):
         process = subprocess.Popen([str(COMPILER), '--run', str(source)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:

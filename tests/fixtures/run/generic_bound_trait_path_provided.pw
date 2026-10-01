@@ -1,7 +1,7 @@
 // A generic T:B has static evidence for A only through the declared
 // trait-to-trait path B -> A. `double` is provided by A, so neither member
 // selection nor its body environment may rediscover a concrete S witness.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait B { fn base() -> I64 }
 trait A { fn value() -> I64 }

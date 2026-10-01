@@ -1,0 +1,9 @@
+use ./Facade only { use, only }
+use ./Library as Library
+use @Std/Io only { print }
+fn main() {
+    print(use(value: 3))
+    print(use("ok"))
+    print(only(value: 3))
+    print(Library.use(value: 3))
+}

@@ -1,6 +1,6 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { FinalForResolution }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { FinalForResolution }
 
 fn fact(bodyId: U64, stmtId: U64, item: U64) -> FinalForResolution {
     return <FinalForResolution bodyId=bodyId stmtId=stmtId iteratorResolution=0U64 nextResolution=1U64 identityIterator=true iteratorTypeRef=2U64 nextTypeRef=3U64 itemTypeRef=item optionalEnumIndex=0U64 someVariantIndex=1U64 noneVariantIndex=0U64 />

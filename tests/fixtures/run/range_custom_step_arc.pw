@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core with { Step, Eq, Ord, Ordering, assert }
+use @Std/Io only { print }
+use @Std/Core only { Step, Eq, Ord, Ordering, assert }
 mut val advances: U64 = 0U64
 struct Position { pub val index: I64  pub val label: String }
 pub impl Position { factory }

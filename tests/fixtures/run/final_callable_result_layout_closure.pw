@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The only concrete occurrence of Token[T] is the selected generic call's
 // result.  Mono must register Token[String] from the grounded final body and

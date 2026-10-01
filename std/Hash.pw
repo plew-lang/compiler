@@ -1,12 +1,12 @@
 // @Std/Hash — hashing (spec/02). `Hash`/`Hasher` + SipHash-1-3 (same as Rust's
 // default), with a per-process random key (`__dictSeed`). NOT a language item: naming
-// `Hash`/`Hasher`/`SipHasher` in a type position needs `import @Std/Hash with { … }`,
+// `Hash`/`Hasher`/`SipHasher` in a type position needs `use @Std/Hash only { … }`,
 // like any non-language type/trait. The module is force-loaded (so the `Dictionary`
 // lang item's `[k:v]` machinery resolves the hashing it is built on) but force-load is
-// only LOADING — visibility still requires the import.
+// only LOADING — visibility still requires the use.
 
 // Signed hashing uses the primitive numeric ABI owned by Core.
-import @Std/Core with { bitCastU64 }
+use @Std/Core only { bitCastU64 }
 
 // Per-process dictionary hash seed (random once, then stable).
 extern(plewIntrinsic) {

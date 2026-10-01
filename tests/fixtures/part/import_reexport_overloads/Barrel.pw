@@ -1,2 +1,2 @@
-pub import ./A with { f as g }
+pub use ./A only { f as g }
 pub fn g(flag: Bool) -> I64 { return 3I64 }

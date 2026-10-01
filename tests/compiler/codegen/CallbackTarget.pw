@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 expose fn target(value~: I64) -> I64 { return increment(value) }
 fn unused() { missing() }
 fn main() {}

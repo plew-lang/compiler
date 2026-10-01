@@ -1,6 +1,6 @@
 // or-pattern over payload variants that share a field name (bound by punning):
 // both alternatives bind `value`, so they can share one body.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Node { Leaf(value: I64) Unary(value: I64) Bin(value: I64) }
 

@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import ./Barrel with { Error, Build, build, propagate, Propagates, Carrier }
+use @Std/Io only { print }
+use ./Barrel only { Error, Build, build, propagate, Propagates, Carrier }
 
 fn main() {
     val result: Build = build()

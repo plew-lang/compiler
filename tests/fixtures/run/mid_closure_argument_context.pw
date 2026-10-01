@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A closure signature supplies the same literal context as a named function.
 fn main() {

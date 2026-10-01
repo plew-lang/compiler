@@ -1,4 +1,4 @@
-import ./Lib with { A }
+use ./Lib only { A }
 
 fn main() {
     val a = <A n=4I64 />

@@ -1,7 +1,7 @@
 // `r->typo` where the pointee struct IS registered but the field doesn't
 // exist: rejects with the field-level message (the generic "`->` only on a
 // Ref to a registered struct" would misdirect to the Ref itself).
-import @Std/Core with { Ref }
+use @Std/Core only { Ref }
 struct Pt { pub val x: I64 }
 pub impl Pt { factory }
 

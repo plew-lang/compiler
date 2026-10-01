@@ -1,7 +1,7 @@
 // Re-export binding preserves A.Leaked's declaration identity even when a
 // separately loaded module declares a same-spelling trait.
-import ./B with { Leaked }
-import ./C
+use ./B only { Leaked }
+use ./C
 
 struct S {}
 pub impl S { factory }

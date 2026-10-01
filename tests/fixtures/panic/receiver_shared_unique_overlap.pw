@@ -1,5 +1,5 @@
 // Unique payloads use shared-cell alias checks when reached through Ref.
-import @Std/Core with { MutableRef, Ref }
+use @Std/Core only { MutableRef, Ref }
 unique struct Cell { pub mut val value: I64 }
 pub impl Cell {
     factory

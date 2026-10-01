@@ -1,7 +1,7 @@
 // `unique enum` (spec/03,05): a move-only enum legally holding a unique payload.
 // The payload's deinit runs EXACTLY once — at the inner scope exit, at the end of
 // a consuming (move-param) callee, and never for the moved-from binding.
-import @Std/Io with { print, write }
+use @Std/Io only { print, write }
 
 unique struct Cell {
     pub val v: I32

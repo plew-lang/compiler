@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import ./Types with { Token }
+use @Std/Io only { print }
+use ./Types only { Token }
 
 part ./Helper
 

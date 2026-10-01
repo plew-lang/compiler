@@ -1,6 +1,6 @@
 // capture binding `val rest =>` in an enum-dispatch match (spec/11): binds the whole
 // scrutinee, alongside variant arms, in BOTH statement and value position.
-import @Std/Io with { print, write }
+use @Std/Io only { print, write }
 
 enum Color { Red Green Blue }
 

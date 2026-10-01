@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 trait Stepper { fn step() -> I64 }
 struct Counter { val n: I64 }
 impl Counter as Stepper { fn step() -> I64 { return self.n } }

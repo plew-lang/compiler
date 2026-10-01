@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Appending an array PLACE element copies (spec/03 value semantics): the
 // container's element stays independent of the source binding.

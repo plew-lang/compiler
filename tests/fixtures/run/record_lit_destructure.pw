@@ -1,7 +1,7 @@
 // A record LITERAL is self-describing: its labels + field value types name its
 // structural struct, so it needs no annotation and no call-context — it can be
 // bound bare, destructured directly, and used as a for-loop element.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     // bare bind + field access (no annotation)

@@ -2,7 +2,7 @@
 // exit (locals can depend on earlier locals — the dependent side dies first);
 // (S4) a shadowed `unique` binding is released at the redeclaration commit
 // point — the old owner becomes inaccessible before the next statement.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 unique struct Cell {
     pub val v: I32

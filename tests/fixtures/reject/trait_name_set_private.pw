@@ -1,4 +1,4 @@
-import /Ir with { Decls }
+use /Ir only { Decls }
 fn main() {
     val declarations: Decls = <Decls />
     val value = declarations.traitOwnerNameHeads

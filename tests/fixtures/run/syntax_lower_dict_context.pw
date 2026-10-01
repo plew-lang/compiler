@@ -1,10 +1,10 @@
 // Dictionary literals are context-typed. SyntaxFile lowering must validate and
 // consume that context before lowering its entry IDs, then use the one shared
 // dictionary desugar used by the value-AST route.
-import @Plew/Syntax with { Lexer, P, StmtId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { Expr, TypeRef }
+use @Plew/Syntax only { Lexer, P, StmtId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Expr, TypeRef }
 
 fn main() {
     val source = "val table = [1I8: 2I8]\n"

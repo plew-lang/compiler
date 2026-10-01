@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Float arithmetic + comparison (spec/02,12): the backend emits the IEEE op
 // (fadd/fsub/fmul/fdiv, ordered fcmp). `%` (remainder) is integer-only.

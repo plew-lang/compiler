@@ -1,4 +1,4 @@
-import @Std/Io with { print, readStdin }
+use @Std/Io only { print, readStdin }
 
 fn main() {
     val s: String = readStdin()

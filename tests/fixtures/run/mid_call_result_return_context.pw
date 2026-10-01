@@ -1,5 +1,5 @@
-import @Std/Core with { Buffer }
-import @Std/Io with { print }
+use @Std/Core only { Buffer }
+use @Std/Io only { print }
 
 fn numbers() -> Buffer[I64] { return Buffer.new() }
 fn words() -> Buffer[String] { return Buffer.new() }

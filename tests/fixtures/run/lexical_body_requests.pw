@@ -1,9 +1,9 @@
 // Internal request contract: diagnostics survive retries, the caller's cursor
 // is restored, and an unrelated owner remains independently preparable.
-import /Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontendDeclarations, spansEqual }
-import /SourceAccess with { SourceAccess }
-import /Ir with { CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver }
-import @Std/Io with { print }
+use /Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendDeclarations, spansEqual }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver }
+use @Std/Io only { print }
 
 fn owner(c: inout Comp, name: String) -> U64 {
     val span = c.internBytes(s: name)

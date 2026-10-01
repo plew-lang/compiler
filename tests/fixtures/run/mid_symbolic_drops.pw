@@ -1,9 +1,9 @@
 // Ownership rewriting preserves symbolic types and control flow. This does
 // not admit the result as executable Mid or resolve any deferred contract.
-import /Mid/Ir with { MidCanonicalArena, MidBody, MidBlock, MidLocalDecl, MidScope, MidPlace, MidOperand, MidConstant, MidStatement, MidTerminator }
-import /Mid/Drop with { elaborateCanonicalMidDrops }
-import @Std/Core with { assert }
-import @Std/Io with { print }
+use /Mid/Ir only { MidCanonicalArena, MidBody, MidBlock, MidLocalDecl, MidScope, MidPlace, MidOperand, MidConstant, MidStatement, MidTerminator }
+use /Mid/Drop only { elaborateCanonicalMidDrops }
+use @Std/Core only { assert }
+use @Std/Io only { print }
 
 fn condition() -> MidOperand {
     return <MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=true typeTerm=0U64 /> />

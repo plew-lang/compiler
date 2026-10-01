@@ -1,10 +1,10 @@
 // CLI adapter only. Embedders call analyzeFrontend with explicit inputs.
-import @Std/Io with { readStdin }
-import @Std/Process with { argCount, argAt, exit }
-import ./Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontend }
-import ./Diag with { emitDiagnostic }
-import ./SourceAccess with { SourceAccess }
-import ./Path with { computeStdRoot }
+use @Std/Io only { readStdin }
+use @Std/Process only { argCount, argAt, exit }
+use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontend }
+use ./Diag only { emitDiagnostic }
+use ./SourceAccess only { SourceAccess }
+use ./Path only { computeStdRoot }
 
 pub struct FrontendRequest {
     pub val input: FrontendInput

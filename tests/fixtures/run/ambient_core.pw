@@ -1,8 +1,8 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `@Std/Core` is ambient (spec/15): operators, comparison, the lang-item types
-// Optional / Result, and `for` over a range all work with NO `import @Std/Core`.
-// (Only `import @Std/Io with { print }` here — print is not ambient.)
+// Optional / Result, and `for` over a range all work with NO `use @Std/Core`.
+// (Only `use @Std/Io only { print }` here — print is not ambient.)
 fn main() {
     val x: I64 = 2I64 + 3I64 * 4I64        // operators ambient
     print(x)                                // 14

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait Peek { fn peek() -> Optional[Self] fn tag() -> I64 }
 struct Sample { pub val value: I64 }

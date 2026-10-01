@@ -1,6 +1,6 @@
-import @Std/Io with { print }
-import ./State with { Counter, Box }
-import ./Bump with { bump, bumpNested }
+use @Std/Io only { print }
+use ./State only { Counter, Box }
+use ./Bump only { bump, bumpNested }
 
 fn main() {
     // (1) pub field cross-module `inout` mutation

@@ -1,6 +1,6 @@
-import @Plew/Syntax with { Lexer, P, ImplId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImpl }
-import @Std/Io with { print }
-import /Frontend with { Comp }
+use @Plew/Syntax only { Lexer, P, ImplId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImpl }
+use @Std/Io only { print }
+use /Frontend only { Comp }
 
 fn main() {
     val source = "struct Box { val value: I8 }\nimpl Box { fn value() -> I8 { return self.value } }\n"

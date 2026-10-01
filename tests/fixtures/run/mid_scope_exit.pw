@@ -1,9 +1,9 @@
 // A lexical scope boundary is not an LLVM-side cleanup convention.  It is a
 // Mid CFG marker which drop-elaboration must turn into the explicit root Drop
 // required by the ownership verifier.
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Mid with { MidPlace, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, elaborateCanonicalMidDrops, verifyCanonicalMidBody, MidVerifyError }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Mid only { MidPlace, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, elaborateCanonicalMidDrops, verifyCanonicalMidBody, MidVerifyError }
 
 fn main() {
     mut val c: Comp = <Comp />

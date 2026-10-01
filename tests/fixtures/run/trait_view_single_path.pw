@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Single-path (unambiguous) `#P` view selection is redundant but valid: `#` is
 // trait-relative and resolves for direct conformance too (spec/09:209). It is only

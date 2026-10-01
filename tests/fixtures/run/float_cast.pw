@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `as` int -> float (spec/12): a total, IEEE-rounded conversion (sitofp / uitofp).
 // (float -> int is lossy and is a fallible TryFrom, not `as`.)

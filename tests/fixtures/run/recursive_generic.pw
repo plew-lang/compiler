@@ -2,7 +2,7 @@
 // cycles back through itself (a generic linked list / tree). The cyclic field is
 // auto-boxed (heap pointer) per instance; construction, match, and field access
 // all resolve the concrete instantiation. CoW value semantics throughout.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Node[T] {
     pub val value: T

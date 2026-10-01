@@ -1,7 +1,7 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { SemanticExprType, StructDef, Arg, ArgRange, Block, CallArgumentSource, CallTemplate, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, StaticConformanceProof, Stmt, identValueCode }
-import /Mid with { MidBuildError, MidBuildState, MidCallTarget, MidOperand, MidTerminator, addMidLocal, buildMidBlock }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { SemanticExprType, StructDef, Arg, ArgRange, Block, CallArgumentSource, CallTemplate, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, StaticConformanceProof, Stmt, identValueCode }
+use /Mid only { MidBuildError, MidBuildState, MidCallTarget, MidOperand, MidTerminator, addMidLocal, buildMidBlock }
 
 fn main() {
     mut val c: Comp = <Comp />

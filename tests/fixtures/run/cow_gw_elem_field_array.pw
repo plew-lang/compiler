@@ -4,7 +4,7 @@
 // second sharer `b` keeps the original value. Value semantics either way (eager
 // copy or CoW-share); this pins the observable contract for the place-Index path
 // that the gateway is the sole guard of.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Bag {
     pub mut val items: Array[I32]

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A user-defined generic enum (named to NOT shadow the ambient lang-item `Optional`,
 // which is now auto-loaded and not redefinable).

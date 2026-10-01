@@ -1,4 +1,4 @@
-import @Std/Io with { print, write }
+use @Std/Io only { print, write }
 struct Handler { pub val run: fn() -> I64 }
 pub impl Handler { factory }
 fn main() {

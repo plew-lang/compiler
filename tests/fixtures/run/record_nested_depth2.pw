@@ -3,7 +3,7 @@
 // `(v: Optional[Optional[Bool]])` — must be distinct types (the canonical record key
 // recurses to full depth, so they do NOT collide into one struct), and each must construct
 // and read back correctly (the nested generic construction grounds the innermost param).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     val a: (v: Optional[Optional[I32]]) = (v: <Optional.Some v=<Optional.Some v=7I32 /> />)

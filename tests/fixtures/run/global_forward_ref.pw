@@ -1,6 +1,6 @@
 // module-level variables init before main in dependency order (spec/15): a forward
 // reference in an initializer reads the already-initialized value, not zero.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 val total: I64 = base + bonus
 val base: I64 = 10

@@ -1,6 +1,6 @@
-import @Plew/Syntax with { Lexer, P, DeclId, ImplId, TraitId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxImpl, syntaxTopItemPayload, syntaxTrait }
-import @Std/Io with { print }
-import /Frontend with { Comp }
+use @Plew/Syntax only { Lexer, P, DeclId, ImplId, TraitId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxImpl, syntaxTopItemPayload, syntaxTrait }
+use @Std/Io only { print }
+use /Frontend only { Comp }
 
 fn main() {
     val source = "trait Convert { type Output fn convert() -> Output }\nstruct Box { val value: I8 }\nimpl Box as Convert { type Output = I8 fn convert() -> Output { return self.value } }\n"

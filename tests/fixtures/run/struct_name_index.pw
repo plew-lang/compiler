@@ -1,5 +1,5 @@
-import /Ir with { Arena, Bind, StructDef }
-import @Std/Io with { write }
+use /Ir only { Arena, Bind, StructDef }
+use @Std/Io only { write }
 
 fn structure(nameId: U64, generic: Bool) -> StructDef {
     mut val parameters: Array[Bind] = []

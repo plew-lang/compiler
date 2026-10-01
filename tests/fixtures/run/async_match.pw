@@ -1,8 +1,8 @@
 // await inside a match arm (the arm's payload binds are frame fields so they
 // survive the suspension); a synchronously-completing arm (Stop) exercises the
 // no-suspension path (entry must not read a freed frame).
-import @Std/Io with { print }
-import @Std/Async with { sleep }
+use @Std/Io only { print }
+use @Std/Async only { sleep }
 
 enum Step {
     Go(n: I64)

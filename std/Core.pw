@@ -4,7 +4,7 @@
 // types. They are ordinary generic enums; the compiler monomorphizes each
 // concrete instantiation (`Optional[I32]`, `Result[I32, String]`, ...) and the
 // methods below per instantiation. (Spec makes these ambient; for now a program
-// imports them explicitly with `import @Std/Core`.)
+// imports them explicitly with `use @Std/Core`.)
 
 // --- lang-item primitive scalar types (spec/15 core-library boundary) ---
 // Opaque intrinsic types (representation is the compiler's int*_t / PlewString mapping):
@@ -620,7 +620,7 @@ pub trait Ord: Eq { assoc fn compare(lhs~: Self, rhs~: Self) -> Ordering }
 // `< <= > >=` operators desugar through it but RETURN `Bool` (the `Ordering` reference
 // lives only in the compiler's desugar, like the operator trait names) — so naming
 // `Ordering` (matching a `compare` result, a custom comparator's return) requires
-// `import @Std/Core with { Ordering }`, the same as Rust's `std::cmp::Ordering`. It
+// `use @Std/Core only { Ordering }`, the same as Rust's `std::cmp::Ordering`. It
 // lives here next to `Ord`, the trait that produces it.
 pub enum Ordering { Less  Equal  Greater }
 
@@ -628,7 +628,7 @@ pub enum Ordering { Less  Equal  Greater }
 // reference cells (spec/03,14). `Ref` is read-only capability; `MutableRef` permits
 // mutation through `->`. NOT lang items: they are named via generic factories and
 // annotations, with no dedicated literal/operator that produces them (unlike `Array`'s
-// `[…]`), so by the spec/15 criterion they are import-required, like any library type.
+// `[…]`), so by the spec/15 criterion they are use-required, like any library type.
 // The cell representation is compiler-supplied (a "blessed primitive" — refcounted heap
 // cell), but capability is ordinary API: the public Ref-family structs below are normal
 // wrappers over a strong or weak cell. Mutable/read-only is not an extern distinction.
@@ -637,7 +637,7 @@ pub enum Ordering { Less  Equal  Greater }
 // growable contiguous buffer whose lifecycle ops are compiler intrinsics and whose
 // element copy/drop run through invisible witnesses (no raw slot/pointer surface).
 // `Array`/`Dictionary`/`Set`/`String` are all built on it. Like `Ref`, it is named
-// explicitly (no literal produces it) → import-required, so it lives here with the
+// explicitly (no literal produces it) → use-required, so it lives here with the
 // other floor primitives.
 extern(plewIntrinsic) {
     struct StrongRefCell[T]

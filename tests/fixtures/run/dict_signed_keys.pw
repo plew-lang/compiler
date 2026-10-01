@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Signed-integer dictionary keys (provisional gap (b)): a negative key hashes its
 // two's-complement bits (`bitCastU64`) instead of `as U64` (which is lossless-only and

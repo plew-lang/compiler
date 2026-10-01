@@ -1,2 +1,2 @@
-import / with { exported }
+use / only { exported }
 fn main() { val value = exported }

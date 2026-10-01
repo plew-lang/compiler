@@ -3,8 +3,8 @@
 // ([1 x i64]) once let the 16-byte closure store overflow into adjacent frame
 // words (stack corruption). Pins fn-typed payload sizing end to end: build,
 // iterate, call each element, and release the captured cells exactly once.
-import @Std/Io with { print, write }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print, write }
+use @Std/Core only { MutableRef }
 
 unique struct Cell {
     pub val v: I64

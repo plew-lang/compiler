@@ -1,4 +1,4 @@
-import @Std/Core with { MutableRef }
+use @Std/Core only { MutableRef }
 
 trait Numberish {
     fn number() -> I64

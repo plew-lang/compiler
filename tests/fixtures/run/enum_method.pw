@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Inherent methods on an enum (spec/05,07): the receiver is an enum value, dispatched
 // like a struct method (self by value). A method can match on self, access a

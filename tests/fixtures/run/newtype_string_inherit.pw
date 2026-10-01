@@ -3,7 +3,7 @@
 // Covered: the `as` re-tag in both directions (wrap `"a" as UserId` / unwrap
 // `u as String`), inherited field access (`u.bytes()`), and inherited method
 // dispatch with a correctly-kinded Bool return (`u.isEmpty()`).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 newtype UserId = String
 

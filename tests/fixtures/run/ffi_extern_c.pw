@@ -6,8 +6,8 @@
 //
 // extern(c) functions take NO argument labels (C has none): every parameter is
 // written label-suppressed `name~:` (explicit, spec/15) and called positionally.
-import @Std/Io with { print }
-import @Std/Ffi with { CString, stringFromCString }
+use @Std/Io only { print }
+use @Std/Ffi only { CString, stringFromCString }
 
 extern(c) {
     type ModuleRef

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `print` is generic and invokes the `Format.format` requirement through a
 // StaticMethod template. The receiver is the generic parameter local, so this

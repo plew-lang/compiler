@@ -1,7 +1,7 @@
 // F1: `val x = expr` with no type annotation infers the binding's full type
 // from the initializer (previously only integers/bools worked; structs,
 // arrays, call results and variable copies fell back to `long long`).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct P {
     pub val x: I32

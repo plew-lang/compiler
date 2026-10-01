@@ -1,14 +1,14 @@
 // Production pass admission is typed; canonical handles remain storage IDs.
 // Tokens describe pass history for one immutable snapshot in its owning arena.
 // They do not authorize mutation or transfer a body into a different arena.
-import ../Frontend with { Comp }
-import ./Ir with { MidCanonicalArena, MidCanonicalBody }
-import ./Instantiate with { MidInstantiateError, instantiateCanonicalMidBody }
-import ./Access with { MidAccessError, elaborateCanonicalMidAccesses }
-import ./Optimize with { MidCopyCosts, optimizeCanonicalMidCopies }
-import ./Drop with { elaborateCanonicalMidDrops }
-import ./GlobalAccess with { registerMidGlobalAccessBody }
-import ./Verify with { MidVerifyError, MidVerification, verifyExecutableCanonicalMidBody }
+use ../Frontend only { Comp }
+use ./Ir only { MidCanonicalArena, MidCanonicalBody }
+use ./Instantiate only { MidInstantiateError, instantiateCanonicalMidBody }
+use ./Access only { MidAccessError, elaborateCanonicalMidAccesses }
+use ./Optimize only { MidCopyCosts, optimizeCanonicalMidCopies }
+use ./Drop only { elaborateCanonicalMidDrops }
+use ./GlobalAccess only { registerMidGlobalAccessBody }
+use ./Verify only { MidVerifyError, MidVerification, verifyExecutableCanonicalMidBody }
 
 // Admission to the beginning of the pipeline makes no validation claim.
 pub struct MidParametricBody {

@@ -1,4 +1,4 @@
-import @Std/Core with { Iterable, Iterator }
+use @Std/Core only { Iterable, Iterator }
 trait Required {}
 struct Cursor[T] {}
 impl[T] Cursor[T] as Iterator { type Item=T

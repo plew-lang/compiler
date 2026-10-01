@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `any P` as a first-class type in parameter and return position (spec/08): a
 // concrete conforming argument is boxed at the call, and a concrete returned value

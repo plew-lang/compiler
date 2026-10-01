@@ -1,2 +1,2 @@
-pub import ./Hidden with { secret }
-import ./Public with { secret as other }
+pub use ./Hidden only { secret }
+use ./Public only { secret as other }

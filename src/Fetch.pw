@@ -8,10 +8,10 @@
 // containing a literal single quote is rejected by callers (a hardening TODO is to
 // validate manifest URLs up front).
 
-import @Std/Process with { execOut, execCode }
-import @Std/Core with { stringFromBytesUnchecked }
-import ./Toml with { appendBytes }
-import ./Cache with { repoDir, srcDir, trimEnd, cacheRoot }
+use @Std/Process only { execOut, execCode }
+use @Std/Core only { stringFromBytesUnchecked }
+use ./Toml only { appendBytes }
+use ./Cache only { repoDir, srcDir, trimEnd, cacheRoot }
 
 // Run a shell command (its bytes), returning captured stdout bytes. The exit code
 // is available from `execCode()` immediately after.

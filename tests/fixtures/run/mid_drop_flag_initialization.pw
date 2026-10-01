@@ -1,8 +1,8 @@
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Mid/Ir with { MidPlace, MidConstant, MidOperand, MidRvalue, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
-import /Mid/Drop with { elaborateCanonicalMidDrops }
-import /Mid/Verify with { MidVerifyError, verifyCanonicalMidBody }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Mid/Ir only { MidPlace, MidConstant, MidOperand, MidRvalue, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
+use /Mid/Drop only { elaborateCanonicalMidDrops }
+use /Mid/Verify only { MidVerifyError, verifyCanonicalMidBody }
 
 fn condition() -> MidOperand {
     return <MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=true typeTerm=0U64 /> />

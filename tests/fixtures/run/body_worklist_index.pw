@@ -1,6 +1,6 @@
-import /Ir with { MonoWork }
-import @Std/Core with { assert }
-import @Std/Io with { print }
+use /Ir only { MonoWork }
+use @Std/Core only { assert }
+use @Std/Io only { print }
 fn main() {
     mut val work = <MonoWork />
     assert(!work.containsBody(bodyId: 0U64))

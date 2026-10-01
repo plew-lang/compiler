@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core with { Buffer, bufferCapacity, bufferReserve }
+use @Std/Io only { print }
+use @Std/Core only { Buffer, bufferCapacity, bufferReserve }
 
 // `reserveEnough` directly exercises the descriptor's inout slot without an
 // element ownership transfer. Main remains legacy so coverage can identify the

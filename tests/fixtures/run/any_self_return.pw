@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Self-return re-erasure through `any P` (spec/08): a `-> Self` member IS callable
 // through the existential — the output `Self` is re-erased back to `any P` (the

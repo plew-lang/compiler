@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A trait view `#P` only NARROWS an existing conformance — it never confers one.
 // So you cannot tag a value with a trait its type does not conform to: `s#Z` is

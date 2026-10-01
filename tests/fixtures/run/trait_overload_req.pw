@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // Witnessing both overloaded requirements satisfies the conformance.
 trait Writer {
     fn put(data: I64) -> I64

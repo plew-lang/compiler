@@ -1,7 +1,7 @@
 // A non-runtime plewIntrinsic extern must remain a Direct CallTarget while
 // runtime ABI classification is carried by the finalized declaration.
-import @Std/Io with { write }
-import @Std/Process with { argCount }
+use @Std/Io only { write }
+use @Std/Process only { argCount }
 
 fn main() {
     val count: I64 = argCount()

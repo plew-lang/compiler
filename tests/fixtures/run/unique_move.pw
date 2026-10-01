@@ -1,4 +1,4 @@
-import @Std/Io with { write, print }
+use @Std/Io only { write, print }
 
 // Move semantics for unique types (spec/03): ownership transfers on `move`, the
 // source goes dead, and `deinit` still runs exactly once — for whoever owns the

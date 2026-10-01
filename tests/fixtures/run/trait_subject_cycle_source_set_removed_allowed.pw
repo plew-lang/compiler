@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Cycle checks observe the final normalized set, not transient parser steps:
 // E + F would cycle, but #!F resets to the base view and the trailing #E

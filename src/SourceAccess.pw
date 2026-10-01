@@ -1,7 +1,7 @@
 // Compiler source input boundary. Filesystem paths keep normal IO behavior;
 // embedded standard sources live in a distinct logical namespace. No extraction
 // or neighboring checkout is needed to resolve imports and parts in that space.
-import @Std/Io with { readFileBytes, fileExists }
+use @Std/Io only { readFileBytes, fileExists }
 
 pub fn isEmbeddedSourcePath(path: Array[U8]) -> Bool {
     val prefix = "plew:std/".bytes()

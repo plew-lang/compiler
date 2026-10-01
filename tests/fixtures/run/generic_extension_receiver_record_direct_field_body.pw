@@ -2,7 +2,7 @@
 // CallResolution of the *concrete generic body instance*.  The declaration
 // body is shared, so reading the method's `(first: T, second: T)` template
 // would leak bare T into one of these calls.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Box[T] { pub val value: T }
 pub impl[T] Box[T] { factory }

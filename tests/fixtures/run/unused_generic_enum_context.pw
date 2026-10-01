@@ -1,4 +1,4 @@
-import @Std/Core
+use @Std/Core
 
 fn unused[T](value: T) -> Optional[T] {
     val result: Optional[T] = <Optional.Some v=value />

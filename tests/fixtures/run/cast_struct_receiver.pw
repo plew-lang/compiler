@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `(x as T).method()` where the cast target is a (newtype-over-)struct: the cast
 // result must dispatch on T's struct, like a plain receiver (regression — once

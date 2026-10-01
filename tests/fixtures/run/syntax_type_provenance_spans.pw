@@ -1,5 +1,5 @@
-import @Plew/Syntax with { parseItem, TopItemAst }
-import @Std/Io with { print }
+use @Plew/Syntax only { parseItem, TopItemAst }
+use @Std/Io only { print }
 
 fn main() {
     val item = parseItem(source: "fn use(value: Box[Item=Leaf]#View#Trait[Assoc=Arg].Output) {}", start: 0U64, end: 61U64)

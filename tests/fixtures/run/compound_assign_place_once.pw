@@ -3,7 +3,7 @@
 // side-effecting index like `xs[idx()] += v` must call `idx()` a single time.
 // The desugar lives in the Lower pass, which temps any side-effecting index key
 // so both the read and the write-back reuse the SAME computed place.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 mut val calls: I64 = 0
 

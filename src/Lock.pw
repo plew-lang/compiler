@@ -4,8 +4,8 @@
 // shared @Toml parser; writing is direct so formatting/sorting stay under our
 // control. Pure byte logic (no compiler arena) so both binaries can share it.
 
-import ./Toml with { TomlDoc, Section, Field, Value, KV, parseToml, bytesEq, appendBytes }
-import ./Version with { satisfies }
+use ./Toml only { TomlDoc, Section, Field, Value, KV, parseToml, bytesEq, appendBytes }
+use ./Version only { satisfies }
 
 // A byte-string wrapped for use in arrays (avoids Array[Array[U8]]).
 pub struct Name {

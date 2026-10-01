@@ -1,5 +1,5 @@
-import @Std/Core with { Eq }
-import @Std/Io with { print }
+use @Std/Core only { Eq }
+use @Std/Io only { print }
 
 fn main() {
     val value: I64 = 1I64

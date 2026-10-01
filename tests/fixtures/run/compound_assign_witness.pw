@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Compound assignment desugars to `target = target OP value` and routes the OP
 // through the operator-trait witness like any binary (spec/12) — no built-in

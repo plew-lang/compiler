@@ -4,7 +4,7 @@
 // the empty `[:]` literal (its private internal fields are not externally
 // constructible — spec/05). String keys exercise the transitive
 // `key.hash[SipHasher]` instantiation.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     mut val d: Dictionary[String, U64] = [:]

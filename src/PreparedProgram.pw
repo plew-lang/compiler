@@ -1,15 +1,15 @@
-import ./Mid/Build with { MidBuildError, MidFunctionTemplates }
+use ./Mid/Build only { MidBuildError, MidFunctionTemplates }
 // LLVM-independent preparation of the frontend's selected executable program.
 // Includes declaration global effects; unresolved declaration obligations do
 // not yet constitute a whole-target checked-program token.
-import ./Frontend with { Comp }
-import ./Diag with { CompileDiagnostic }
-import ./Mid/Program with { MidExecutableProgram, MidExecutableRequests, MidProgramError }
-import ./Mid/Ambient with { MidAmbientProgram }
-import ./Mid/DeclarationAccess with { DeclarationAccessAnalysis }
-import ./DeclarationProgram with { prepareDeclarationProgram, DeclarationProgramError, declarationProgramDiagnostic }
-import ./Mid/GlobalAccess with { conflictingMidGlobalAccess }
-import ./Mid/Diagnostics with { reportMidBuildError, midPreparationDiagnostic }
+use ./Frontend only { Comp }
+use ./Diag only { CompileDiagnostic }
+use ./Mid/Program only { MidExecutableProgram, MidExecutableRequests, MidProgramError }
+use ./Mid/Ambient only { MidAmbientProgram }
+use ./Mid/DeclarationAccess only { DeclarationAccessAnalysis }
+use ./DeclarationProgram only { prepareDeclarationProgram, DeclarationProgramError, declarationProgramDiagnostic }
+use ./Mid/GlobalAccess only { conflictingMidGlobalAccess }
+use ./Mid/Diagnostics only { reportMidBuildError, midPreparationDiagnostic }
 
 pub enum ProgramPreparationError {
     Frontend(diagnostic: CompileDiagnostic)

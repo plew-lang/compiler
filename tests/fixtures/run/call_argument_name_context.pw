@@ -1,6 +1,6 @@
-import /Frontend with { Comp }
-import /Ir with { Bind, Func, Param }
-import @Std/Io with { write }
+use /Frontend only { Comp }
+use /Ir only { Bind, Func, Param }
+use @Std/Io only { write }
 
 fn add(compiler: inout Comp, name: Bind, label: Bind, typeRef: U64, receiver: Bool = false, generic: Bool = false) {
     mut val binders: Array[Bind] = []

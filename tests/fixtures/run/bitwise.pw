@@ -1,7 +1,7 @@
 // Bitwise & shift operators (& | ^ << >> ~) and their precedence.
 // Spec order (low->high): | < ^ < & < shift < +-, so `&` binds tighter than `|`
 // and `+` tighter than `<<`.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     print(12I64 & 10I64)        // 8I64

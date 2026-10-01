@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `any P` bound to a generic type parameter (spec/08): an existential value flows
 // through an UNBOUNDED generic function (`identity[T]`, T = any Shape) and a generic

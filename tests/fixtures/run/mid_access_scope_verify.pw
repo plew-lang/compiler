@@ -1,7 +1,7 @@
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import /Mid/Ir with { MidCanonicalArena, MidBodyNode, MidBlockNode, MidTerminatorNode, MidRange, MidLocalDecl, MidPlaceNode, MidOperandNode, MidCallReceiverNode }
-import /Mid/AccessScopes with { canonicalMidAccessScopesValid }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Mid/Ir only { MidCanonicalArena, MidBodyNode, MidBlockNode, MidTerminatorNode, MidRange, MidLocalDecl, MidPlaceNode, MidOperandNode, MidCallReceiverNode }
+use /Mid/AccessScopes only { canonicalMidAccessScopesValid }
 
 fn accepted(mode: U64) -> Bool {
     mut val arena = <MidCanonicalArena />

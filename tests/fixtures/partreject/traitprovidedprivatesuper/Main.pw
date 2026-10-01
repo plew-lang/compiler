@@ -1,4 +1,4 @@
-import ./B with { useSub }
+use ./B only { useSub }
 
 fn main() {
 }

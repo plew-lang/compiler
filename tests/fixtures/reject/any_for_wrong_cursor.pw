@@ -1,3 +1,3 @@
-import @Std/Core with { Iterable }
+use @Std/Core only { Iterable }
 fn unused(values: any Iterable[Item=I64, Iter=I64]) { for val item in values {} }
 fn main() {}

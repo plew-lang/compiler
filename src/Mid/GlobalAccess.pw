@@ -1,12 +1,12 @@
 // Static global-storage tier of access checking. These summaries describe
 // only direct Plew call edges and mutable global places, not purity or the
 // absence of effects through closures, shared cells, drops or foreign code.
-import ../Frontend with { Comp }
-import ../Diag with { CompileDiagnostic }
-import ../Ir with { CallTarget, ArcClass }
-import ./Ir with { MidCanonicalBody }
-import ./GlobalAccessGraph with { GlobalAccessGraph }
-import ./Verify with { canonicalMidReachable }
+use ../Frontend only { Comp }
+use ../Diag only { CompileDiagnostic }
+use ../Ir only { CallTarget, ArcClass }
+use ./Ir only { MidCanonicalBody }
+use ./GlobalAccessGraph only { GlobalAccessGraph }
+use ./Verify only { canonicalMidReachable }
 
 // Record verified bodies once during the normal typed preparation pipeline.
 // With no mutable globals this tier has no possible obligations.

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 enum Envelope[T] { Empty Value(value: T) }
 pub impl[T] Envelope[T] {

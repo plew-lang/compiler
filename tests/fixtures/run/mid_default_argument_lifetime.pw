@@ -1,4 +1,4 @@
-import @Std/Io with { print, write }
+use @Std/Io only { print, write }
 
 unique struct Resource {
     pub val tag: I64

@@ -1,7 +1,7 @@
 // `as` is lossless-only: widening integer conversions (and in-range literals)
 // are accepted. Narrowing / signedness-changing `as` is a compile error
 // (see tests/fixtures/reject/cast_*), to be done via TryFrom instead.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     val a: U8 = 200

@@ -1,9 +1,9 @@
 // Exercise ownership transfer from a partial compiler session to ORC.
-import ../../../src/CheckedProgram with { CompilerSession, CompilerSessionResult }
-import ../../../src/Frontend with { FrontendInput }
-import ../../../src/SourceAccess with { SourceAccess }
-import ../../../src/Backend with { LlvmLoweringResult, LlvmJit, LlvmJitCreation }
-import @Std/Io with { write }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult }
+use ../../../src/Frontend only { FrontendInput }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Backend only { LlvmLoweringResult, LlvmJit, LlvmJitCreation }
+use @Std/Io only { write }
 extern(c) {
     fn plew_test_args_address() -> U64
     fn plew_test_call_main(address~: U64) -> I32

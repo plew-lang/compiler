@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `any P` as a struct field (spec/08 lists fields among the valid positions): the
 // concrete value is boxed into the existential on construction, and a read +

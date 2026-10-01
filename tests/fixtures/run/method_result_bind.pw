@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Binding an un-annotated method-call result whose type is a generic instance
 // (`val o = d.get(k)` -> Optional[V]) tracks the instance type, so a later

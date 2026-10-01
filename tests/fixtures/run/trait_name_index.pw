@@ -1,5 +1,5 @@
-import @Std/Io with { write }
-import /Ir with { Decls, TraitOwner }
+use @Std/Io only { write }
+use /Ir only { Decls, TraitOwner }
 fn check(table: Decls, names: Array[U64]) {
     if table.traitOwnerCount() != names.count() { panic "owner count changed" }
     mut val query: U64 = 0U64

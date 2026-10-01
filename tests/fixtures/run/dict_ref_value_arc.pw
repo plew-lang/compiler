@@ -4,8 +4,8 @@
 // the current implementation's iteration order — the spec deliberately leaves
 // dict drop order unspecified (hidden cost), so a hash-layout change may
 // legitimately re-pin this golden.
-import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 
 unique struct Cell {
     pub val v: I32

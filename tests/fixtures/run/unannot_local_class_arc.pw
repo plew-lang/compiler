@@ -1,8 +1,8 @@
 // Un-annotated bindings whose class comes from the INITIALIZER's TypeRef (no
 // annotation to classify from): a MutableRef-typed field read, a MutableRef share, and a
 // heap-payload enum call result must all release at scope exit.
-import @Std/Io with { print, write }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print, write }
+use @Std/Core only { MutableRef }
 
 unique struct Cell {
     pub val v: I64

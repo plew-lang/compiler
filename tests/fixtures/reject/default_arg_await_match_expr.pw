@@ -1,6 +1,6 @@
 // spec/04: a default argument cannot suspend, even when the await is nested in a
 // value-position match arm block.
-import @Std/Async with { sleep }
+use @Std/Async only { sleep }
 
 enum Choice {
     A

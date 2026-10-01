@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-// `get`/`set` come from the implicit prelude — no import needed (ambient, like
+use @Std/Io only { print }
+// `get`/`set` come from the implicit prelude — no use needed (ambient, like
 // the `Array` type itself).
 fn main() {
     mut val xs: Array[I64] = []

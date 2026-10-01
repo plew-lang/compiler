@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import ./Helper with { addOne }
+use @Std/Io only { print }
+use ./Helper only { addOne }
 // Main has its OWN private free fn named `helper`, distinct from Helper's.
 fn helper(n: I64) -> I64 { return n + 100 }
 fn main() {

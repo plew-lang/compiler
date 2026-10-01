@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Associated types (spec/08): a trait declares an output type `Item` that each
 // conformer binds with `type Item = Concrete`. A requirement signature references

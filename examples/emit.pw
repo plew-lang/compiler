@@ -13,7 +13,7 @@
 //     literals (stage0 String is immutable / literal-backed, so we select a
 //     "0".."9" literal per digit rather than constructing a String)
 //
-// The lexer/parser below are copied from parser.pw (stage0 has no import
+// The lexer/parser below are copied from parser.pw (stage0 has no use
 // mechanism yet, so each selfhost program is a single self-contained file).
 
 enum Kind {

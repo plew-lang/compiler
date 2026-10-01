@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A heterogeneous operator trait (`impl Vec2 as Add[I64]`, spec/12) with a NESTED
 // literal right operand: `b + 2 * 3` must fold `2 * 3` at the witness's Rhs type (I64)

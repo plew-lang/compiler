@@ -97,13 +97,13 @@ pub impl Comp {
             // directive arguments must set publicly-settable fields (enforce the
             // construction rule the post-checks pass skipped for this synthetic Make).
             // The annotation names a source declaration before the trusted
-            // harness is synthesized. Apply ordinary import visibility here.
+            // harness is synthesized. Apply ordinary use visibility here.
             try self.checkTypeName(siteOffset: d.nameStart, start: d.nameStart, len: d.nameLen)
             try self.checkDirectiveArgsPublic(d: d)
             // `parseItem(source: <item src>, start: declStart, end: declEnd)` — the
             // annotated item's own source slice, with its original offset so the macro
             // sees spans in original coordinates. (Synthesized post-checks, so the
-            // free-fn cross-module use of `parseItem` bypasses import hygiene.)
+            // free-fn cross-module use of `parseItem` bypasses use hygiene.)
             val srcLit: Bind = self.internSourceLiteral(from: d.declStart, to: d.declEnd)
             val srcE: U64 = self.pushExpr(e: <Expr.Str start=srcLit.nameStart len=srcLit.nameLen />)
             val startE: U64 = self.pushExpr(e: <Expr.Int value=d.declStart offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)

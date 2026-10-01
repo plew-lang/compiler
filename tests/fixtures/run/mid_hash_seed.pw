@@ -1,5 +1,5 @@
-import @Std/Hash with { SipHasher, Hasher }
-import @Std/Io with { print }
+use @Std/Hash only { SipHasher, Hasher }
+use @Std/Io only { print }
 
 // An ordinary declaration with the same spelling is not a runtime intrinsic.
 fn __dictSeed() -> U64 { return 17U64 }

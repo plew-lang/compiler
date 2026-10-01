@@ -1,1 +1,1 @@
-pub import ./A with { Leaked }
+pub use ./A only { Leaked }

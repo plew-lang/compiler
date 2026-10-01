@@ -1,5 +1,5 @@
 // Derive consumes syntax, not a semantically checked application type.
-import @Std/Core with { Eq }
+use @Std/Core only { Eq }
 
 @[Eq]
 struct Item { pub val value: MissingType }

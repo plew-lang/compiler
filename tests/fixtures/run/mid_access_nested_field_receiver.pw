@@ -1,5 +1,5 @@
-import @Std/Core with { assert }
-import @Std/Io with { print }
+use @Std/Core only { assert }
+use @Std/Io only { print }
 
 struct Cell {
     pub mut val values: Array[I64]

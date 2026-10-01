@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A trait conformance providing a method on an enum (spec/08): the witness method
 // dispatches on the enum value like any inherent method.

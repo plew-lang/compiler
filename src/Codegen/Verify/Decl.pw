@@ -81,14 +81,14 @@ pub impl Comp {
         while includeBodies && fi < sourceFuncLimit {
             // Verify EVERY module's bodies, not just the entry module: a Plew program's
             // acceptance rules apply uniformly to imported code too (std, the compiler's
-            // own import submodules, future package deps) — "develops as spoken" reaches
-            // across the import boundary, and verifying the compiler's own source (the
+            // own use submodules, future package deps) — "develops as spoken" reaches
+            // across the use boundary, and verifying the compiler's own source (the
             // largest Plew program) is the deepest dogfood of the language. Cost is ~5% on
             // a self-compile and noise on an ordinary program (measured). The former
             // entry-module-only gate is gone; its false-reject rationale (a prelude
-            // operator witness `Add[U64]` in SipHasher said to be loaded only on import) is
+            // operator witness `Add[U64]` in SipHasher said to be loaded only on use) is
             // moot — Core is force-loaded WITH its witnesses (see Frontend force-load), so a
-            // no-import program resolves them fine. extern fns have no body to verify.
+            // no-use program resolves them fine. extern fns have no body to verify.
             try self.verifyFunctionDeclaration(fnIdx: fi)
             fi += 1
         }

@@ -1,6 +1,6 @@
 // Read/read, distinct cells and disjoint fields preserve language borrows.
-import @Std/Core with { MutableRef, assert }
-import @Std/Io with { print }
+use @Std/Core only { MutableRef, assert }
+use @Std/Io only { print }
 unique struct Cell { pub mut val value: I64 }
 pub impl Cell { factory
     fn read(other: borrow Cell) -> I64 { return self.value + other.value }

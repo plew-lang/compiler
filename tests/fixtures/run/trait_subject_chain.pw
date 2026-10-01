@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Transitive (chained) inter-trait conformance (spec/09): conformance composes —
 // `impl C as B` + `impl B as A` makes every C-conformer also conform to A. The

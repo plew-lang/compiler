@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A binary tree: a `Branch` payload holds two recursive `Tree` children, both
 // boxed independently. Exercises multiple boxed fields in one variant. spec/03.

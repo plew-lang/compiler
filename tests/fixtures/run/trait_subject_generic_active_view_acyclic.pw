@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A generic #E view is valid when the bound makes its B -> C portion
 // applicable and the active trait-subject graph is acyclic.

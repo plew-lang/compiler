@@ -1,8 +1,8 @@
-import @Std/Core with { Eq }
+use @Std/Core only { Eq }
 // `@[Eq]` on an enum, exercised through the real derive pipeline (`plew gen`
 // synthesizes `Shape.eq` into App.gen.pw). Structural equality: tags must agree,
 // then payloads compare field-wise — payload variants need no manual impl.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 @[Eq]
 enum Shape {

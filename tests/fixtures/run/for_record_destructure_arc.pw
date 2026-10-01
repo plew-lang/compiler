@@ -2,7 +2,7 @@
 // same ARC contract as the struct form — the bound String field retains its
 // share, the owned element drops each iteration (leak/UAF regression pin; the
 // assertion is the ASan+LeakSanitizer gate).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     mut val ps: Array[(name: String, n: I64)] = []

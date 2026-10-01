@@ -1,5 +1,5 @@
-import @Std/Core with { Iterator }
-import @Std/Io with { print }
+use @Std/Core only { Iterator }
+use @Std/Io only { print }
 trait Source: Iterator[Item=I64] {}
 impl Source {
     fn sum() -> I64 {

@@ -1,4 +1,4 @@
-import /Internal with { Token }
+use /Internal only { Token }
 
 pub fn parse() -> Token {
     return <Token n=1I64 />

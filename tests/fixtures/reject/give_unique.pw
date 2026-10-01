@@ -1,5 +1,5 @@
 // Yielding a bare unique place would copy it; give requires an explicit move.
-import @Std/Io with { write, print }
+use @Std/Io only { write, print }
 unique struct File { pub val fd: I64  deinit { print(self.fd) } }
 pub impl File { factory }
 fn main() {

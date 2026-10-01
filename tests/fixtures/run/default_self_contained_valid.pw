@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // spec/04,05: defaults referencing module-level globals (not siblings/self) are fine.
 val base: I64 = 100I64
 struct P { pub val a: I64 = 7I64  pub val b: I64 = base }

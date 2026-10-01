@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Nested / mixed operator-literal inference (spec/12). A bare literal takes its type
 // from the typed operand — across precedence boundaries and through deep subtrees —

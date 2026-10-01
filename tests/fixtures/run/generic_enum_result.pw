@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A user-defined two-parameter generic enum (named to NOT shadow the ambient
 // lang-item `Result`).

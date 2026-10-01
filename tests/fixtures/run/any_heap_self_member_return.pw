@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A covariant-Self member return whose Self carries HEAP (a String field) exercises the
 // ARC balance of the repack: eraseCovariantToAny retains each erased payload into its fresh

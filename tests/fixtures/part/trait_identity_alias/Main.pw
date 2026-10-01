@@ -1,7 +1,7 @@
 // Same-spelling, same-arity traits remain distinct declarations. Import aliases
 // name their declaration identities in both conformance and `#` selection.
-import ./A with { P as AP }
-import ./B with { P as BP }
+use ./A only { P as AP }
+use ./B only { P as BP }
 
 struct S {}
 pub impl S { factory }

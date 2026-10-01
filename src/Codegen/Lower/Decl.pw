@@ -177,7 +177,7 @@ pub impl Comp {
                 projectionTrait = (try self.uniqueProjectionTrait(t: t, whereTypes: whereTypes, whereTraits: whereTraits))
             } else {
                 val traitN: Bind = self.internBytes(s: projectionTrait)
-                // The spelling may be an import alias.  Resolve it at this
+                // The spelling may be a use alias.  Resolve it at this
                 // authored type site before comparing arity; a global
                 // name-id scan would pick an unrelated same-spelled trait.
                 val owner: U64 = self.traitOwnerAtUse(start: traitN.nameStart, len: traitN.nameLen, arity: t.projectionTraitArgs.count())
@@ -547,7 +547,7 @@ pub impl Comp {
             }
             ai += 1U64
         }
-        // Resolve the trait spelling at its authored use once.  An import
+        // Resolve the trait spelling at its authored use once.  An use
         // alias is a surface name, not the semantic trait identity stored
         // in a bound: every later proof/query must see the declaration
         // owner just as `impl … as Trait` does.

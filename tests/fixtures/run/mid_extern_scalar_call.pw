@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 extern(c) {
     fn externalSigned(value~: I32) -> I32

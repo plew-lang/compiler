@@ -1,6 +1,6 @@
-import @Plew/Syntax as Syntax
-import @Std/Core with { assert }
-import @Std/Io with { print }
+use @Plew/Syntax as Syntax
+use @Std/Core only { assert }
+use @Std/Io only { print }
 fn check(file: Syntax.SyntaxFile, item: Syntax.TopItemId) {
     val declaration = Syntax.syntaxTrait(file: file, id: <Syntax.TraitId raw=Syntax.syntaxTopItemPayload(file: file, item: item) />)
     assert(Syntax.syntaxTraitAssocTypeCount(file: file, trait: declaration) == 2U64)

@@ -1,8 +1,8 @@
 // SyntaxFile binder lowering keeps source spans as the semantic spelling: it
 // must not allocate a second String just to assign a ParamId.
-import @Plew/Syntax with { Span }
-import @Std/Io with { print }
-import /Frontend with { Comp }
+use @Plew/Syntax only { Span }
+use @Std/Io only { print }
+use /Frontend only { Comp }
 
 fn main() {
     mut val c: Comp = <Comp />

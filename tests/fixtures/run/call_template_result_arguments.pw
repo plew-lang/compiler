@@ -1,9 +1,9 @@
 // Internal contract test: frozen call records, repeatable completion, and
 // caller/callee binder identity. Public usage is covered by
 // mid_default_argument_result_context.pw and generic_array_ret_infer.pw.
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { Bind, CallArgumentSource, CallTemplateKind, CallTemplateReceiver, Expr, Func, FuncBindRange, Param, StaticConformanceProof, TypeRef }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { Bind, CallArgumentSource, CallTemplateKind, CallTemplateReceiver, Expr, Func, FuncBindRange, Param, StaticConformanceProof, TypeRef }
 
 fn inferredArgument(c: inout Comp, pattern: U64, expected: U64, params: FuncBindRange) -> U64 {
     val valueParams = c.pushFuncParams(params: [])

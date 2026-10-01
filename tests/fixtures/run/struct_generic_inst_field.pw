@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A struct holding generic-instance members by value (`Optional[I64]`, `Optional[String]`):
 // the named tagged-union type is sized + laid out inline, constructed without explicit

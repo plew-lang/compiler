@@ -1,8 +1,8 @@
 // SyntaxFile destructuring must preserve the normal temp-plus-field-read
 // expansion and register exactly one structural-completeness site.
-import @Plew/Syntax with { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxTopItemPayload }
-import @Std/Io with { print }
-import /Frontend with { Comp }
+use @Plew/Syntax only { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxTopItemPayload }
+use @Std/Io only { print }
+use /Frontend only { Comp }
 
 fn main() {
     val source = "fn body() {\n    (val left, val right) = pair\n}\n"

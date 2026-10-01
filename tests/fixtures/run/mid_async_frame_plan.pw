@@ -1,8 +1,8 @@
 // Storage liveness fixtures: no source types or LLVM layouts are involved.
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Mid with { MidBody, MidBlock, MidLocalDecl, MidPlace, MidProjection, MidOperand, MidConstant, MidRvalue, MidStatement, MidTerminator, MidBorrowCapability, planCanonicalMidAsyncFrame }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Mid only { MidBody, MidBlock, MidLocalDecl, MidPlace, MidProjection, MidOperand, MidConstant, MidRvalue, MidStatement, MidTerminator, MidBorrowCapability, planCanonicalMidAsyncFrame }
 
 fn local(borrowed: Bool = false, cell: Bool = false, flag: Bool = false) -> MidLocalDecl {
     return <MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false isBorrowed=borrowed isCaptureCell=cell isDropFlag=flag />

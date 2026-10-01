@@ -2,8 +2,8 @@
 // WHOLE trailing member chain on an empty base, else projects `b.c` off the
 // unwrapped value. Covers a plain multi-hop field chain, a method call in the
 // continuation, and short-circuit on None.
-import @Std/Io with { print, write }
-import @Std/Core
+use @Std/Io only { print, write }
+use @Std/Core
 struct C { pub val n: I64 }
 pub impl C { factory }
 pub impl C { fn doubled() -> I64 { return self.n * 2 } }

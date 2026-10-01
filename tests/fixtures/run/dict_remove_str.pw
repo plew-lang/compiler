@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Dictionary.remove with String keys AND values: the dense-array swap copies a
 // String place into the freed slot (CoW-share, rc++) and drops the tail (rc--),

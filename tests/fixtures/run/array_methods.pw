@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // User methods on the builtin Array, written in pure Plew over Array's public
 // methods (the ambient prelude API; the raw `array*` intrinsics are the private
 // floor) — monomorphized per element type and dispatched by name.

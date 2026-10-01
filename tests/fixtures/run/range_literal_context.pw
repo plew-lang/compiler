@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 fn lower() -> I64 { print(11I64) return 2I64 }
 fn upper() -> I64 { print(22I64) return 5I64 }
 fn main() {

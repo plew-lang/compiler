@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn unused() {
     val values: Array[I64] = [1, 2, 3]

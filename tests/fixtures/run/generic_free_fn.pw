@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Generic free functions are monomorphized per call site, and their bodies are
 // eagerly checked against `where` bounds (#9): `x.get()` is valid because T is

@@ -1,4 +1,4 @@
-import ./Lib with { Box }
+use ./Lib only { Box }
 
 extension Extra {
     impl Box {

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Covariant container erasure (spec/08, SE-0309): assigning an `Array[Concrete]` to an
 // `Array[any P]` is a genuine per-element REPACK, not an identity cast — the element layout

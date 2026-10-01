@@ -1,7 +1,7 @@
 // Multiple pending consumers must all resume, while a completed handle may
 // still be awaited repeatedly. Sum the results without depending on wake order.
-import @Std/Io with { print }
-import @Std/Async with { sleep }
+use @Std/Io only { print }
+use @Std/Async only { sleep }
 mut val resumed: I64 = 0I64
 async fn answer() -> Promise[I64] {
     await sleep(ms: 1)

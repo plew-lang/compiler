@@ -1,8 +1,8 @@
-import @Std/Io with { print }
-import @Std/Core with { assert }
-import /Frontend with { Comp }
-import /Ir with { FinalDestruction }
-import /Mid with { MidBody, MidBlock, MidStatement, MidTerminator, MidPlace, MidLocalDecl, MidVerifyError, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use /Frontend only { Comp }
+use /Ir only { FinalDestruction }
+use /Mid only { MidBody, MidBlock, MidStatement, MidTerminator, MidPlace, MidLocalDecl, MidVerifyError, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
 
 fn main() {
     mut val compiler: Comp = <Comp />

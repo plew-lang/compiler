@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 mut val evaluations: U64 = 0U64
 fn defaultLabel() -> String {

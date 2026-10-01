@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Member visibility (spec/05), per-field: `pub(get)` reads publicly but is written
 // only inside the type's anonymous impl; `pub` is read+write public; unmarked is

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Variant payload destructure forms (spec/05,11): full bind, `field: _` discard,
 // and a bare tag match (no payload binding) all accepted.

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The SCC path removes one Array layer per round and therefore terminates.
 trait A[Item] {}

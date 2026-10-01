@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A trait can own provided `assoc fn`s (no `self`, no `Self` in the signature),
 // called `Trait.fn(args)` — resolved to the single provided impl (the derive

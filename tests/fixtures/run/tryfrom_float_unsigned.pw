@@ -2,8 +2,8 @@
 // float->int, so the lossy conversion is the named `convert`: truncate toward zero,
 // fail on NaN/±inf, a NEGATIVE float (never fits unsigned), or above the target max.
 // Backed by the `f64ToU64` (`fptoui`) intrinsic; narrow targets bound-check then trunc.
-import @Std/Io with { print }
-import @Std/Core with { RangeError }
+use @Std/Io only { print }
+use @Std/Core only { RangeError }
 
 fn main() {
     val a: Result[U8, RangeError] = <U8.checked source=200.7 />

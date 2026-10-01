@@ -1,7 +1,7 @@
 // `panic` is a diverging statement. Here it sits on a branch that isn't taken,
 // so the program runs to completion — this checks that panic compiles, links,
 // and (being noreturn) lets a function "end" on panic without a return.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn mustBeSmall(n: I64) -> I64 {
     if n > 100 {

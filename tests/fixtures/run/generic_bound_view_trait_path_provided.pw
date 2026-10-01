@@ -1,7 +1,7 @@
 // The B -> A conformance is supplied only by E. A generic bound supplies B,
 // while the use site explicitly supplies E; the selected path and A-provided
 // member must retain that view provenance through instantiation.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait B { fn base() -> I64 }
 trait A { fn value() -> I64 }

@@ -1,8 +1,8 @@
 // The compiler-facing SyntaxFile parser records a cast as one direct node with
 // its target TypeId.  Keep this separate from the macro materializer fixture:
 // it proves the persistent carrier itself never needs ExprAst -> freeze.
-import @Plew/Syntax with { DeclId, Lexer, P, SyntaxExprKind, lex, parseProgramSyntaxFile, syntaxBlock, syntaxBlockStmt, syntaxDecl, syntaxExpr, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload, syntaxType }
-import @Std/Io with { print }
+use @Plew/Syntax only { DeclId, Lexer, P, SyntaxExprKind, lex, parseProgramSyntaxFile, syntaxBlock, syntaxBlockStmt, syntaxDecl, syntaxExpr, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload, syntaxType }
+use @Std/Io only { print }
 
 fn main() {
     val source = "fn main() {\n    val value = 1U8 as U64\n}\n"

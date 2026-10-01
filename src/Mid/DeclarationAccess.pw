@@ -1,15 +1,15 @@
 // Declaration-time global effects. This is an analysis result, not a checked
 // program token: unresolved calls, conversions, and ownership dependencies
 // remain explicit obligations for instance analysis or dynamic enforcement.
-import ../Frontend with { Comp }
-import ../Diag with { CompileDiagnostic }
-import ../Ir with { CallSiteKey, CallTemplateKind }
-import ./Build with { MidFunctionTemplates, MidBuildError, MidBodyBuild, ensureParametricMidClosureBody }
-import ./Ir with { MidTerminatorNode, MidCanonicalBody }
-import ./Prepare with { MidParametricBody }
-import ./OwnershipAnalysis with { MidOwnershipRequests }
-import ./GlobalAccessGraph with { GlobalAccessGraph }
-import ./Verify with { canonicalMidReachable, canonicalMidCallAccessError, MidVerifyError, MidVerification }
+use ../Frontend only { Comp }
+use ../Diag only { CompileDiagnostic }
+use ../Ir only { CallSiteKey, CallTemplateKind }
+use ./Build only { MidFunctionTemplates, MidBuildError, MidBodyBuild, ensureParametricMidClosureBody }
+use ./Ir only { MidTerminatorNode, MidCanonicalBody }
+use ./Prepare only { MidParametricBody }
+use ./OwnershipAnalysis only { MidOwnershipRequests }
+use ./GlobalAccessGraph only { GlobalAccessGraph }
+use ./Verify only { canonicalMidReachable, canonicalMidCallAccessError, MidVerifyError, MidVerification }
 
 pub enum DeclarationAccessNode {
     Function(function: U64)

@@ -1,8 +1,8 @@
 // A type-level projection must retain the declaration selected through B's
 // re-export, rather than re-resolving the spelling against C.Convert.
-import ./B with { Convert }
-import ./C
-import @Std/Io with { print }
+use ./B only { Convert }
+use ./C
+use @Std/Io only { print }
 
 struct Parser {}
 pub impl Parser { factory }

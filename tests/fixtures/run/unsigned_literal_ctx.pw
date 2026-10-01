@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // An un-suffixed integer literal takes its type from context (spec/02,12): a typed
 // sibling (`1U64 + 2`) or an annotation (`val x: U64 = ...`). That context must reach

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The returned String comes from a non-move parameter. Mid must copy it into
 // the ABI return place (retain), not transfer a borrowed parameter ownership.

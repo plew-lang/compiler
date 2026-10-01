@@ -1,4 +1,4 @@
-import @Std/Io with { print, write }
+use @Std/Io only { print, write }
 
 // Temporaries die at the end of the full expression (statement) that created them
 // (spec/03) — not at block exit: the borrowing call returns, the statement ends, and

@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A context-typed literal as a free-function argument infers its type from the resolved
 // parameter's declared type (record / dict / `()` literals carry no type of their own).

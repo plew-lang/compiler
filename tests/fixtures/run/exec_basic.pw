@@ -1,6 +1,6 @@
 // @Std/Process execOut/execCode: run a shell command, capture stdout + exit code.
-import @Std/Io with { print, write }
-import @Std/Process with { execOut, execCode }
+use @Std/Io only { print, write }
+use @Std/Process only { execOut, execCode }
 
 fn main() {
     write(s: execOut(cmd: "printf 'ab'; printf 'cd'"))

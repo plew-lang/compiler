@@ -1,5 +1,5 @@
-import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl, syntaxDeclFieldCount, syntaxDeclField, syntaxField, syntaxType, DeclId }
-import @Std/Io with { print }
+use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl, syntaxDeclFieldCount, syntaxDeclField, syntaxField, syntaxType, DeclId }
+use @Std/Io only { print }
 
 fn main() {
     val source = "struct Pair { mut val left: Array[U8] }\n"

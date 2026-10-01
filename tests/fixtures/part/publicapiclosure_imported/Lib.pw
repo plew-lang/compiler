@@ -1,4 +1,4 @@
-import ./Dep with { External }
+use ./Dep only { External }
 
 pub fn leak() -> External {
     return <External n=1I64 />

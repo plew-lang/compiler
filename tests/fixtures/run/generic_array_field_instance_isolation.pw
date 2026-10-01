@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // The declaration binder `T` and the impl binder `T` are distinct.  The same
 // `Bag.add` body is emitted twice, so both the nested field `Array[T]` and its

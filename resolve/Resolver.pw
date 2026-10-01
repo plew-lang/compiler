@@ -1,13 +1,13 @@
 // Dependency resolver shared by the standalone resolver and distribution CLI.
-import @Std/Io with { write, eprint, readFileBytes, fileExists }
-import @Std/Process with { exit }
-import @Std/Core with { stringFromBytesUnchecked }
-import ../src/Manifest with { Manifest, Dep, parseManifest }
-import ../src/Version with { pickLatest }
-import ../src/Lock with { LockPkg, Name, writeLock }
-import ../src/Cache with { srcDir, cacheRoot }
-import ../src/Fetch with { ensureMirror, listTags, resolveCommit, materialize }
-import ../src/Toml with { appendBytes, bytesEq }
+use @Std/Io only { write, eprint, readFileBytes, fileExists }
+use @Std/Process only { exit }
+use @Std/Core only { stringFromBytesUnchecked }
+use ../src/Manifest only { Manifest, Dep, parseManifest }
+use ../src/Version only { pickLatest }
+use ../src/Lock only { LockPkg, Name, writeLock }
+use ../src/Cache only { srcDir, cacheRoot }
+use ../src/Fetch only { ensureMirror, listTags, resolveCommit, materialize }
+use ../src/Toml only { appendBytes, bytesEq }
 
 // Whether `b` is already in the list of seen byte-strings.
 fn hasName(seen: Array[Name], b: Array[U8]) -> Bool {

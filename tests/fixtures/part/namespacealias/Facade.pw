@@ -1,1 +1,1 @@
-pub import @Std/Io with { write as out }
+pub use @Std/Io only { write as out }

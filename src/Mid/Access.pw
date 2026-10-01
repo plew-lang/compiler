@@ -2,11 +2,11 @@
 // Access marker because the selected inout ABI belongs to a BodyInstance;
 // this pass consumes only frozen SemanticAccess and already-resolved calls.
 
-import ../Frontend with { Comp }
-import ../Ir with { Expr, SemanticAccess, SemanticAccessInput, CallResolution, CallReceiverPassing, CallArgumentPassing }
-import ../Diag with { eprintU64 }
-import @Std/Io with { eprint }
-import ./Ir with { MidCanonicalArena, MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidCallTargetNode, MidCallReceiverNode, MidStatementNode, MidRvalueNode, MidTerminatorNode, MidSwitchCase, MidCanonicalBody, MidTerminator, MidLocalDecl, MidBody, canonicalMidBorrowPlace, canonicalMidMovePlace }
+use ../Frontend only { Comp }
+use ../Ir only { Expr, SemanticAccess, SemanticAccessInput, CallResolution, CallReceiverPassing, CallArgumentPassing }
+use ../Diag only { eprintU64 }
+use @Std/Io only { eprint }
+use ./Ir only { MidCanonicalArena, MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidCallTargetNode, MidCallReceiverNode, MidStatementNode, MidRvalueNode, MidTerminatorNode, MidSwitchCase, MidCanonicalBody, MidTerminator, MidLocalDecl, MidBody, canonicalMidBorrowPlace, canonicalMidMovePlace }
 
 pub enum MidAccessError {
     None

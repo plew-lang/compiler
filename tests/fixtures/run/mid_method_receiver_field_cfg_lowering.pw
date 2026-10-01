@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Keep main on the legacy entry while the by-value method itself must cross
 // the Mid boundary.  `self.value` is a semantic field projection, not a

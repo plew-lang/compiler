@@ -1,8 +1,8 @@
 // Bare MutableRef construction must infer Cell and retain its owned value.
 // Appending the temporary must not destroy Cell early or leak it: array drop
 // destroys each Cell exactly once, after the 100 marker, in element order.
-import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 
 unique struct Cell {
     pub val v: I32

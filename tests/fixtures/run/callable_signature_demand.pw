@@ -1,7 +1,7 @@
-import /Frontend with { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
-import /SourceAccess with { SourceAccess }
-import /Ir with { InstanceEnvironment }
-import @Std/Io with { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
+use /SourceAccess only { SourceAccess }
+use /Ir only { InstanceEnvironment }
+use @Std/Io only { print }
 
 fn owner(c: inout Comp, name: String) -> U64 {
     val span = c.internBytes(s: name)

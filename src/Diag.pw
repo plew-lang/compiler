@@ -1,11 +1,11 @@
 // @Diag — compiler diagnostics + decimal formatting, a dependency-free leaf module
-// (imports only @Std). Both ./Frontend and ./Backend import it, so it sits below
+// (imports only @Std). Both ./Frontend and ./Backend use it, so it sits below
 // both in the module DAG (@Std ← Diag ← { Frontend, Backend }). These are ordinary
 // module functions, NOT ambient builtins, so the compiler source stays spec-valid:
 // they report on stderr via @Std/Io `eprint` and stop via @Std/Process `exit`.
 
-import @Std/Io with { eprint }
-import @Std/Process with { exit }
+use @Std/Io only { eprint }
+use @Std/Process only { exit }
 
 // A decimal digit (0-9) as its glyph String.
 pub fn digitStr(d: I64) -> String {

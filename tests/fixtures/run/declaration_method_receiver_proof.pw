@@ -1,8 +1,8 @@
-import @Std/Core with { assert }
-import @Std/Io with { print }
-import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
-import /SourceAccess with { SourceAccess }
-import /Ir with { StaticConformanceProof, DeclarationBoundRef, PatternTypeInput, PatternBindInput }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { StaticConformanceProof, DeclarationBoundRef, PatternTypeInput, PatternBindInput }
 fn main() {
     val source = "trait Marker {}\ntrait Root { type Item: Marker }\ntrait Parent: Root {}\nimpl Parent { fn probe(value: Self#Root.Item) {} }\nfn outside() {}\n"
     mut val compiler = <Comp />

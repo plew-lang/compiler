@@ -1,6 +1,6 @@
-import @Std/Io with { print }
-import /Frontend with { Comp }
-import /Ir with { Conform, TypeRef, PatternTypeInput, PatternBindInput }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Conform, TypeRef, PatternTypeInput, PatternBindInput }
 
 fn main() {
     mut val compiler = <Comp />

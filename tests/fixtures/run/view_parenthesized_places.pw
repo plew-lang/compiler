@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 struct Counter { pub mut val value: I64 }
 pub impl Counter { factory }
 struct Holder { pub mut val counter: Counter pub mut val items: Array[Counter] }

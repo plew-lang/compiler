@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // Conforming to Sub requires conforming to its supertrait Super (spec/08).
 trait Super { fn a() -> I64 }
 trait Sub: Super { fn b() -> I64 }

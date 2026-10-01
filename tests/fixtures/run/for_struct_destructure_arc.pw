@@ -3,7 +3,7 @@
 // fresh value copy sharing the element's heap, so it must retain — and the
 // element itself needs its per-iteration owned home. Double release (bind drop +
 // element-home drop of the same buffer) is the regression this pins (ASan).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 struct Person {
     pub val name: String

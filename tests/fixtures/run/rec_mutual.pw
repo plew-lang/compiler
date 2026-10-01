@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // Mutual recursion: Expr contains Term, Term refers back to Expr via Optional.
 // The cycle is broken by boxing the field(s) that close it. spec/03.

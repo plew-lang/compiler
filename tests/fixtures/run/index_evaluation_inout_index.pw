@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 struct Item { pub val values: Array[I64] }
 pub impl Item {
     factory

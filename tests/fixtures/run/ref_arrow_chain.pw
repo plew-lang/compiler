@@ -4,8 +4,8 @@
 //   - a free function CALL returning `MutableRef[T]` as the `->` base: `mk()->get()`.
 //   - a `->`field result as a method receiver: `r->inner.dbl()` (`exprStructIdx` now resolves
 //     Arrow via the shared helper, like `.`-field).
-import @Std/Io with { print }
-import @Std/Core with { MutableRef }
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
 
 struct Cell { pub mut val n: I32 }
 pub impl Cell { factory }

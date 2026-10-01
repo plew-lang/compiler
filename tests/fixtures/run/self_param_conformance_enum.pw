@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `Self`-typed param on an ENUM receiver: the backend grounds the `Self` param to the
 // enum so a `match other` in the body recovers the enum's variants.

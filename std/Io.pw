@@ -7,8 +7,8 @@
 // appears here — that is `extern "C"` (future, real FFI).
 //
 
-import @Std/Core with { Format }
-pub import @Std/Core with { Format }
+use @Std/Core only { Format }
+pub use @Std/Core only { Format }
 
 pub extern(plewIntrinsic) {
     // Write a string to stdout (no trailing newline).

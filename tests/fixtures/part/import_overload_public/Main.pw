@@ -1,5 +1,5 @@
-import ./Lib with { f }
-import @Std/Io with { print }
+use ./Lib only { f }
+use @Std/Io only { print }
 fn main() {
 print(f(left: 1I64))
 print(f(right: 1I64))

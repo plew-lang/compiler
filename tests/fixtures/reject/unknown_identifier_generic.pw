@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // An UNCALLED generic function body is abstract-checked at declaration time, so an
 // undefined identifier in it is rejected even with zero instantiations.
 fn dead[T](x: T) -> I32 { return n }

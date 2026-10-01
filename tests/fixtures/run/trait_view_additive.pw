@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A `#X` view tag (extension OR trait) is purely additive: it makes X's methods
 // visible and lets them shadow a same-name base method, but it never *hides* the

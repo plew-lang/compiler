@@ -1,8 +1,8 @@
 // Literal match lowering must retain the value-AST single-evaluation if-chain
 // form instead of exposing a scalar pattern to enum-match codegen.
-import @Plew/Syntax with { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxTopItemPayload }
-import @Std/Io with { print }
-import /Frontend with { Comp }
+use @Plew/Syntax only { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxTopItemPayload }
+use @Std/Io only { print }
+use /Frontend only { Comp }
 
 fn main() {
     val source = "fn body() { match value { 1I8 => {} _ => {} } }\n"

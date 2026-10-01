@@ -1,9 +1,9 @@
 mut val sentinel = 0I64
-import /CompilerExecution with { executeProgram }
-import /Frontend with { FrontendInput }
-import /SourceAccess with { SourceAccess }
-import @Std/Process with { argAt, argCount, exit }
-import @Std/Core with { assert }
+use /CompilerExecution only { executeProgram }
+use /Frontend only { FrontendInput }
+use /SourceAccess only { SourceAccess }
+use @Std/Process only { argAt, argCount, exit }
+use @Std/Core only { assert }
 fn execute() -> I32 {
     val target = argAt(2I64)
     val status = executeProgram(input: <FrontendInput.File path=argAt(2I64) />,

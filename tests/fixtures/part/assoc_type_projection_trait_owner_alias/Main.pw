@@ -1,6 +1,6 @@
-import @Std/Io with { print }
-import ./A with { Convert as TextConvert }
-import ./B with { Convert as BytesConvert }
+use @Std/Io only { print }
+use ./A only { Convert as TextConvert }
+use ./B only { Convert as BytesConvert }
 
 // The aliases resolve distinct trait declarations with the same spelling and
 // arity.  Their projection sources must select distinct instance witnesses.

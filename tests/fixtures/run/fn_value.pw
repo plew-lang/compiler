@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 fn twice(n: I32) -> I32 { return n * 2 }
 fn apply(f: fn(n: I32) -> I32, x: I32) -> I32 {
     return f(n: x)

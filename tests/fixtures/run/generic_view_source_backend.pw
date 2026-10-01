@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 trait Extra {}
 pub impl Extra { fn traitMethod() -> I64 { return 11I64 } }

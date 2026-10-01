@@ -1,6 +1,6 @@
 // Lexically valid source spans can fail semantically without terminating the host.
-import ../../../src/StringLiteral with { decodeStringLiteral }
-import @Std/Io with { print }
+use ../../../src/StringLiteral only { decodeStringLiteral }
+use @Std/Io only { print }
 
 fn inspect(source: Array[U8]) {
     match decodeStringLiteral(source: source, start: 0U64, len: source.count()) {

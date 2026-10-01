@@ -2,7 +2,7 @@
 // `[a, b]`) co-owns its active variant's heap (CoW-share, not deep-copy), and the
 // gateway privatizes before any mutation — so reassigning/mutating one owner leaves
 // the others intact. Exercises the consumeIntoOwned enum branch + array-of-enum CoW.
-import @Std/Io with { print }
+use @Std/Io only { print }
 enum Word { Tagged(tags: Array[I32])  Empty }
 fn main() {
     mut val a: Word = <Word.Tagged tags=[1, 2, 3] />

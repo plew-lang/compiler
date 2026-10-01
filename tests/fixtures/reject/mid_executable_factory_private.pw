@@ -1,5 +1,5 @@
 // Canonical storage is not proof of successful mandatory preparation.
-import /Mid with { MidExecutableBody, MidCanonicalBody }
+use /Mid only { MidExecutableBody, MidCanonicalBody }
 fn main() {
     val executable = <MidExecutableBody canonical=<MidCanonicalBody body=1U64 /> />
 }

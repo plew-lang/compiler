@@ -1,7 +1,7 @@
-import @Std/Io with { print }
-import @Std/Core with { stringFromBytesUnchecked }
-import /SourceAccess with { SourceResource, SourceAccess }
-import /Path with { finishModulePath, findPkgDir, findSrcRoot, resolveImport }
+use @Std/Io only { print }
+use @Std/Core only { stringFromBytesUnchecked }
+use /SourceAccess only { SourceResource, SourceAccess }
+use /Path only { finishModulePath, findPkgDir, findSrcRoot, resolveImport }
 
 fn main() {
     val sources = <SourceAccess stdRoot="plew:std/".bytes() resources=[

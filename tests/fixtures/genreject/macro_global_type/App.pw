@@ -1,8 +1,8 @@
 // A referenced initializer must receive normal type verification.
 // The macro uses an inferred global whose initializer calls a same-file helper.
 // Generation must retain this dependency while excluding application-only globals.
-import @Plew/Syntax with { Derive, TopItemAst }
-import @Std/Io with { write }
+use @Plew/Syntax only { Derive, TopItemAst }
+use @Std/Io only { write }
 
 val generatedText: String = 42I64
 

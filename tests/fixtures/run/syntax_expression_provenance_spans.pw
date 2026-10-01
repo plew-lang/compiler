@@ -1,5 +1,5 @@
-import @Plew/Syntax with { parseExprFrom, ExprAst }
-import @Std/Io with { print }
+use @Plew/Syntax only { parseExprFrom, ExprAst }
+use @Std/Io only { print }
 
 fn main() {
     val call = parseExprFrom(source: "call(label: 1I32)", start: 0U64)

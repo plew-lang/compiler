@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // `Array[any P]` (spec/08): heterogeneous concrete types in one collection, each
 // boxed into the existential, iterated and dynamically dispatched — the React-tree

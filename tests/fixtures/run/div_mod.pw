@@ -1,7 +1,7 @@
 // Division and modulo lower through plew_div / plew_mod (which panic on a zero
 // divisor). This exercises the normal, nonzero path: results must be unchanged,
 // and `%` follows C truncated semantics (remainder takes the dividend's sign).
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     print(17I64 / 5I64)            // 3I64

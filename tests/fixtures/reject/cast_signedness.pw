@@ -1,6 +1,6 @@
 // `as` is lossless-only: U64 -> I64 is the same width but not value-preserving
 // (large u64 values become negative), so it must be rejected.
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 fn main() {
     val x: U64 = 5

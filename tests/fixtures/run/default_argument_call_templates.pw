@@ -1,9 +1,9 @@
 // Internal contract test: default evaluation identity, idempotent recording,
 // and preservation of previously resolved argument provenance. Public usage
 // is covered by default_eval_order.pw and default_eval_order_generic_method.pw.
-import @Std/Io with { write }
-import /Frontend with { Comp }
-import /Ir with { CallArgumentSource, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, Func, Param, CallTemplate, CallSiteKey, SemanticClosure }
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { CallArgumentSource, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, Func, Param, CallTemplate, CallSiteKey, SemanticClosure }
 
 fn main() {
     mut val c: Comp = <Comp />

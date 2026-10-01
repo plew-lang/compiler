@@ -1,6 +1,6 @@
 part ./Ir/FinalResolutions
-import ./SourceFiles with { SourceFiles, SourceFileRange }
-import @Std/Set with { Set }
+use ./SourceFiles only { SourceFiles, SourceFileRange }
+use @Std/Set only { Set }
 part ./Ir/Modules
 part ./Ir/AccessCandidates
 part ./Ir/Callables
@@ -3023,8 +3023,8 @@ pub impl DestructureSite { factory }
 // Trait` bounds keyed by function index. `deinits`: declared destructor function indices, whose receiver
 // type carries the resolved nominal identity. `assocBindings`: `type Item = Concrete` lines from
 // conformances. `pubFactoryTypes`: receiver TypeRefs of published default factories.
-// `importAliases`: `import …
-// with { real as alias }` rewrites. `chainSites`: each desugared `?.` stage,
+// `importAliases`: `use …
+// only { real as alias }` rewrites. `chainSites`: each desugared `?.` stage,
 // recorded PARAMETRICALLY (see ChainSite) so readers and per-instance
 // registration ground it under their own env — storing a grounded result would
 // freeze the first instance's grounding into every other instantiation of a
@@ -3142,7 +3142,7 @@ pub impl Decls { factory }
 // Module identity + cross-module visibility tables (spec/15). `files` owns
 // ordered, disjoint source spans and their paths. Its common position lookup
 // reverse-maps a declaration/use to a file and module (a module = a root file
-// + its `part` tree; each `import` target is another). `exports`: name spans of published top-level decls (a name is public
+// + its `part` tree; each `use` target is another). `exports`: name spans of published top-level decls (a name is public
 // iff it appears here). `imports`: imported name spans with `fieldStart` = the
 // importing module id (a cross-module use is visible only if imported there, and
 // exported by its own module). Aliases / namespace imports are additive.
@@ -3172,13 +3172,13 @@ pub struct Modules {
     mut val publicDeclarationOffsets: Set[U64] = Set.new()
     pub mut val exports: Array[Bind] = []
     pub mut val imports: Array[Bind] = []
-    // Resolved import edges: fieldStart is importer, fieldLen is target module;
-    // nameStart/nameLen retain the import path span for diagnostics. Includes
+    // Resolved use edges: fieldStart is importer, fieldLen is target module;
+    // nameStart/nameLen retain the use path span for diagnostics. Includes
     // selected-name, namespace and public imports, independent of declarations.
     pub mut val importEdges: Array[Bind] = []
     // re-export EDGES (fieldStart = the re-exporting module, fieldLen = the source module it
-    // forwards from). Recorded by the loader for each `pub import <path>` (spec/15).
-    // Composed with an import edge for visibility: a name defined+exported in the source
+    // forwards from). Recorded by the loader for each `pub use <path>` (spec/15).
+    // Composed with a use edge for visibility: a name defined+exported in the source
     // module is visible to a consumer that imported the re-exporting module (the barrel) and
     // brought the name into scope — the barrel need not be the name's defining module.
     pub mut val reExportEdges: Array[Bind] = []
@@ -3187,7 +3187,7 @@ pub struct Modules {
     // bundled std modules it is the module itself. Public API closure uses this to distinguish
     // a module-local `pub` from the package's external surface (spec/15).
     pub mut val packageRoots: Array[Bind] = []
-    // Local import/re-export spelling -> original spelling + target module. This
+    // Local use/re-export spelling -> original spelling + target module. This
     // is provenance for declaration-identity resolution, not a visibility table.
     mut val qualifiedUses: Array[ImportOrigin] = []
     mut val qualifiedUseOffsets: Dictionary[U64, U64] = [:]
@@ -3200,7 +3200,7 @@ pub struct Modules {
     // the module id of the ambient lang-item module @Std/Lang (std/Lang.pw), or the
     // "none" sentinel 4_000_000_000 when it was not loaded. Lang is THE ambient module
     // (spec/15): the types it declares — the language's built-in types — are in scope
-    // everywhere without an `import`. Type visibility (Check/Visibility.pw) treats a type
+    // everywhere without an `use`. Type visibility (Check/Visibility.pw) treats a type
     // defined in this module as ambient. Captured when the driver force-loads Lang.
     pub mut val langModule: U64 = 4000000000U64
     // The module defining language operator traits (`@Std/Core`).  Operator
@@ -3213,9 +3213,9 @@ pub struct Modules {
     // identity only; its ordinary free functions remain non-ambient.
     pub mut val ioModule: U64 = 4000000000U64
     // The bundled Std Process module. Runtime ABI declaration identity is
-    // distinct from its ordinary import visibility.
+    // distinct from its ordinary use visibility.
     pub mut val processModule: U64 = 4000000000U64
-    // The bundled Std Ffi floor. It is import-scoped like Io; its module
+    // The bundled Std Ffi floor. It is use-scoped like Io; its module
     // identity is only used to classify the compiler-provided ABI declarations.
     pub mut val ffiModule: U64 = 4000000000U64
     // Entropy is owned by the explicitly imported bundled Random module.

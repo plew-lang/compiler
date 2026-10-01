@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 
 // A single-letter trait name (`P`) used through `any P` must NOT be misread as a type
 // parameter: `tyRefIsGround` treats an existential node as ground, so `Array[any P]`

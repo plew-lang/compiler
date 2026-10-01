@@ -1,12 +1,12 @@
-import ../Diag with { CompileDiagnostic }
+use ../Diag only { CompileDiagnostic }
 // Logical storage recipes for dynamic exclusivity. Formal value storage is
 // protected by the caller; capture boxes and cells are independent aliases.
 // Paths describe physical fields, never byte intervals (including zero-sized
 // fields). An index reserves its container, not an element address.
-import ../Frontend with { Comp }
-import ./Ir with { MidCanonicalArena, MidBodyNode, MidPlaceNode, MidRange, MidTerminatorNode }
-import ./Program with { MidExecutableProgram }
-import ./AmbientEffects with { MidAmbientEffects }
+use ../Frontend only { Comp }
+use ./Ir only { MidCanonicalArena, MidBodyNode, MidPlaceNode, MidRange, MidTerminatorNode }
+use ./Program only { MidExecutableProgram }
+use ./AmbientEffects only { MidAmbientEffects }
 
 pub struct MidAmbientStorage {
     pub val kind: U64 = 0U64 // 1 shared cell, 2 mutable global, 3 capture box

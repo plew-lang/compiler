@@ -1,5 +1,5 @@
-import @Std/Io with { print }
-import @Std/Core with { Eq }
+use @Std/Io only { print }
+use @Std/Core only { Eq }
 
 // `Array[T] == Array[T]` desugars to the `impl[T] Array[T] as Eq where T: Eq`
 // witness (spec/12: comparison is trait sugar). The witness rides the buffer floor

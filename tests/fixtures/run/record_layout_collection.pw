@@ -1,9 +1,9 @@
 // Layout collection consumes semantic fields, even after pure substitution has
 // left an opaque template name attached. Equal records share a layout; equal
 // spellings with different nominal owners must not share one.
-import /Frontend with { Comp }
-import /Ir with { TypeRef, Bind }
-import @Std/Io with { write }
+use /Frontend only { Comp }
+use /Ir only { TypeRef, Bind }
+use @Std/Io only { write }
 
 fn main() {
     mut val compiler: Comp = <Comp />

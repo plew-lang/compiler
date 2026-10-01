@@ -1,9 +1,9 @@
-import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
-import /SourceAccess with { SourceAccess }
-import /Ir with { BodyInstance, InstanceEnvironment }
-import /Mid/Build with { MidFunctionTemplates, MidBuildError }
-import /Mid/Program with { MidExecutableRequests, MidProgramError }
-import @Std/Io with { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+use /SourceAccess only { SourceAccess }
+use /Ir only { BodyInstance, InstanceEnvironment }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
+use /Mid/Program only { MidExecutableRequests, MidProgramError }
+use @Std/Io only { print }
 
 fn instances() {
     mut val compiler = <Comp />

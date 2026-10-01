@@ -1,4 +1,4 @@
-import @Std/Io with { print }
+use @Std/Io only { print }
 // Legitimate overloads differing only in a parameter TYPE must NOT be flagged as
 // duplicates (same name + label, different type head).
 fn f(a: I64) -> I64 { return a }

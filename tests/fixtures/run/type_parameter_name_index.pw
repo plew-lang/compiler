@@ -1,5 +1,5 @@
-import /Ir with { Arena, Bind, StructDef, EnumDef, Func, FuncBindRange }
-import @Std/Io with { write }
+use /Ir only { Arena, Bind, StructDef, EnumDef, Func, FuncBindRange }
+use @Std/Io only { write }
 
 fn binder(nameId: U64) -> Bind {
     return <Bind nameStart=0U64 nameLen=0U64 nameId=nameId fieldStart=0U64 fieldLen=0U64 />

@@ -1,1 +1,1 @@
-pub import ./Second
+pub use ./Second
