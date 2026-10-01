@@ -395,13 +395,13 @@ pub impl Comp {
                 mut val requirement: StaticMemberResolution = <StaticMemberResolution.Missing />
                 if requiredTraitOwner == 0U64 || self.decls.traitAt(index: nextTrait).nameStart == requiredTraitOwner { requirement = (try self.selectStaticRequirement(proof: proof, traitIdx: nextTrait, memberId: memberId, args: args, operatorArity: operatorArity)) }
                 match requirement { StaticMemberResolution.Missing => {} _ => { return <Result.Ok value=requirement />} }
-                mut val fi: U64 = 0U64
+                mut val fi: U64 = self.arena.firstFunctionNamed(nameId: memberId)
                 while fi < self.arena.functionCount() {
                     val candidate: Func = self.arena.functionAt(index: fi)
                     if operatorArity == 0U64 && (requiredTraitOwner == 0U64 || candidate.provTraitOwner == requiredTraitOwner) && !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == target.nameId && candidate.provTraitOwner == target.nameStart && candidate.nameId == memberId && self.paramsLabelsOk(params: candidate.params, args: args) {
                         return <Result.Ok value=<StaticMemberResolution.Provided proof=proof traitIdx=nextTrait callee=fi /> />
                     }
-                    fi += 1U64
+                    fi = self.arena.nextFunctionNamed(index: fi)
                 }
                 val nested: StaticMemberResolution = (try self.staticMemberInSupertraits(boundRef: boundRef, traitIdx: nextTrait, memberId: memberId, args: args, path: nextPath, depth: depth + 1U64, requiredTraitOwner: requiredTraitOwner, operatorArity: operatorArity))
                 match nested {
@@ -448,13 +448,13 @@ pub impl Comp {
                                 // same trait instance. Keep its declaration
                                 // identity rather than asking Mono to recover
                                 // it from the call spelling later.
-                                mut val fi: U64 = 0U64
+                                mut val fi: U64 = self.arena.firstFunctionNamed(nameId: memberId)
                                 while fi < self.arena.functionCount() {
                                     val candidate: Func = self.arena.functionAt(index: fi)
                                     if (requiredTraitOwner == 0U64 || candidate.provTraitOwner == requiredTraitOwner) && !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == traitDef.nameId && candidate.provTraitOwner == traitDef.nameStart && candidate.nameId == memberId && self.paramsLabelsOk(params: candidate.params, args: args) {
                                         return <Result.Ok value=<StaticMemberResolution.Provided proof=proof traitIdx=ti callee=fi /> />
                                     }
-                                    fi += 1U64
+                                    fi = self.arena.nextFunctionNamed(index: fi)
                                 }
                             }
                             ti += 1U64
@@ -514,13 +514,13 @@ pub impl Comp {
                                     val traitDef: TraitDef = self.decls.traitAt(index: ti)
                                     if traitDef.nameStart == edge.traitStart && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: edge.traitArgs.count()) {
                                         val proof: StaticConformanceProof = <StaticConformanceProof.AssumedTraitPath source=boundRef steps=[] edges=[selectedWitness] />
-                                        mut val fi: U64 = 0U64
+                                        mut val fi: U64 = self.arena.firstFunctionNamed(nameId: memberId)
                                         while fi < self.arena.functionCount() {
                                             val candidate: Func = self.arena.functionAt(index: fi)
                                             if (requiredTraitOwner == 0U64 || candidate.provTraitOwner == requiredTraitOwner) && !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == traitDef.nameId && candidate.provTraitOwner == traitDef.nameStart && candidate.nameId == memberId && self.paramsLabelsOk(params: candidate.params, args: args) {
                                                 return <Result.Ok value=<StaticMemberResolution.Provided proof=proof traitIdx=ti callee=fi /> />
                                             }
-                                            fi += 1U64
+                                            fi = self.arena.nextFunctionNamed(index: fi)
                                         }
                                         mut val requirement: StaticMemberResolution = <StaticMemberResolution.Missing />
                                         if requiredTraitOwner == 0U64 || self.decls.traitAt(index: ti).nameStart == requiredTraitOwner { requirement = (try self.selectStaticRequirement(proof: proof, traitIdx: ti, memberId: memberId, args: args)) }
@@ -1224,7 +1224,7 @@ pub impl Comp {
     inout fn typeHasMember(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
         val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = 0
+        mut val i: U64 = self.arena.firstFunctionNamed(nameId: qName)
         while i < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: i)
             if f.hasRecv {
@@ -1242,7 +1242,7 @@ pub impl Comp {
                     }
                 }
             }
-            i += 1
+            i = self.arena.nextFunctionNamed(index: i)
         }
         return false
     }
@@ -1298,7 +1298,7 @@ pub impl Comp {
     inout fn witnessFnFor(typeStart: U64, typeLen: U64, nameStart: U64, nameLen: U64) -> U64 {
         val qRecv: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = 0
+        mut val i: U64 = self.arena.firstFunctionNamed(nameId: qName)
         while i < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: i)
             if f.isAssoc || f.hasRecv {
@@ -1308,7 +1308,7 @@ pub impl Comp {
                     }
                 }
             }
-            i += 1
+            i = self.arena.nextFunctionNamed(index: i)
         }
         return self.arena.functionCount()
     }

@@ -58,13 +58,13 @@ pub impl Comp {
         val ty: Bind = self.typeDeclIdentityFromSurface(surfaceMod: surfaceMod, start: start, len: len)
         if ty.nameLen != 0U64 { return ty }
         val qId: U64 = intern(c: inout self, start: start, len: len)
-        mut val i: U64 = 0U64
+        mut val i: U64 = self.arena.firstFunctionNamed(nameId: qId)
         while i < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: i)
             if !(f.hasRecv || f.isAssoc) && f.nameId == qId && self.funcDeclModule(f: f) == surfaceMod {
                 return <Bind nameStart=f.defOffset nameLen=1 fieldStart=0 fieldLen=0 />
             }
-            i += 1U64
+            i = self.arena.nextFunctionNamed(index: i)
         }
         i = 0U64
         while i < self.modules.reExportOriginCount() {

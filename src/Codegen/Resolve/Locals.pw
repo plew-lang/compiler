@@ -190,7 +190,7 @@ pub impl Comp {
     inout fn typeHasMethodNamed(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
         val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
-        mut val i: U64 = 0
+        mut val i: U64 = self.arena.firstFunctionNamed(nameId: qName)
         while i < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: i)
             if f.hasRecv {
@@ -200,7 +200,7 @@ pub impl Comp {
                     }
                 }
             }
-            i += 1
+            i = self.arena.nextFunctionNamed(index: i)
         }
         return false
     }

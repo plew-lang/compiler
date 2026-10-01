@@ -42,7 +42,7 @@ pub impl Comp {
                     sti += 1
                 }
                 val includePrivateProvided: Bool = useMod == self.traitModuleByOwner(owner: traitOwner)
-                mut val gi: U64 = 0
+                mut val gi: U64 = self.arena.firstFunctionNamed(nameId: qName)
                 while gi < self.arena.functionCount() {
                     val g: Func = self.arena.functionAt(index: gi)
                     if g.hasRecv && g.recvStart == traitOwner && g.nameId == qName {
@@ -52,7 +52,7 @@ pub impl Comp {
                             }
                         }
                     }
-                    gi += 1
+                    gi = self.arena.nextFunctionNamed(index: gi)
                 }
             }
             ti += 1

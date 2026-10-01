@@ -179,7 +179,7 @@ pub impl Comp {
                 }
                 // provided method of this trait (a method with recv = the trait)
                 val includePrivateProvided: Bool = useMod == self.traitModuleByOwner(owner: traitOwner)
-                mut val gi: U64 = 0
+                mut val gi: U64 = self.arena.firstFunctionNamed(nameId: qName)
                 while gi < self.arena.functionCount() {
                     val g: Func = self.arena.functionAt(index: gi)
                     if g.hasRecv {
@@ -193,7 +193,7 @@ pub impl Comp {
                             }
                         }
                     }
-                    gi += 1
+                    gi = self.arena.nextFunctionNamed(index: gi)
                 }
             }
             ti += 1
