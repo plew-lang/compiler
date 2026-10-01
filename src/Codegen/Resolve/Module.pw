@@ -1097,7 +1097,7 @@ pub impl Comp {
         // receiver name to the underlying so `Brand.checked(…)` finds Rgb's `checked`.
         val rnu: Bind = self.newtypeUnderName(start: recvStart, len: recvLen)
         val qRecvId: U64 = intern(c: inout self, start: rnu.nameStart, len: rnu.nameLen)
-        mut val i: U64 = 0
+        mut val i: U64 = self.decls.firstCallableNamed(nameId: qNameId)
         while i < self.decls.callableCount() {
             val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
@@ -1122,7 +1122,7 @@ pub impl Comp {
                     }
                 }
             }
-            i += 1
+            i = self.decls.nextCallableNamed(index: i)
         }
         if typeMatch != self.arena.functionCount() {
             // A type qualifier carries only the receiver head (`Box.tag()`),
