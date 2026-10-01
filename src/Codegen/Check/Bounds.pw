@@ -8,17 +8,6 @@ import ../../Ir with { DynamicCallTemplateTarget }
 // or the input name unchanged when it is not an associated type / has no binding.
 
 pub impl Comp {
-    // A trait-provided declaration is abstract over its source receiver,
-    // including when it supplies another trait through `impl B as A`.
-    fn functionHasTraitReceiver(fnIdx: U64) -> Bool {
-        if fnIdx >= self.arena.functionCount() { return false }
-        val function = self.arena.functionAt(index: fnIdx)
-        if function.recvTy == 0U64 || function.recvTy >= self.arena.typeCount() { return false }
-        val traitIndex = self.decls.traitIndexByOffset(offset: function.recvStart)
-        if traitIndex >= self.decls.traitCount() { return false }
-        return self.arena.typeTerms[function.recvTy].paramId != 0U64 && self.arena.typeTerms[function.recvTy].paramId == self.decls.traitAt(index: traitIndex).selfParamId
-    }
-
     fn functionBoundAssumptions(fnIdx: U64) -> Array[DeclarationBoundRef] {
         mut val result: Array[DeclarationBoundRef] = []
         mut val index = 0U64
@@ -26,7 +15,7 @@ pub impl Comp {
             if self.decls.funcBounds[index].fnIdx == fnIdx { result.append(<DeclarationBoundRef.Function index=index />) }
             index += 1U64
         }
-        if self.functionHasTraitReceiver(fnIdx: fnIdx) { result.append(<DeclarationBoundRef.MethodReceiver index=fnIdx />) }
+        if functionHasTraitReceiver(self.arena, self.decls, fnIdx: fnIdx) { result.append(<DeclarationBoundRef.MethodReceiver index=fnIdx />) }
         return result
     }
 
@@ -46,7 +35,7 @@ pub impl Comp {
             DeclarationBoundRef.Conformance(val index) => { return index < self.decls.conformBoundPool.count() }
             DeclarationBoundRef.TraitSubject(val index) => { return index < self.decls.conformCount() }
             DeclarationBoundRef.AssociatedType(val index) => { return index < self.arena.associatedBoundEvidence.count() }
-            DeclarationBoundRef.MethodReceiver(val index) => { return self.functionHasTraitReceiver(fnIdx: index) }
+            DeclarationBoundRef.MethodReceiver(val index) => { return functionHasTraitReceiver(self.arena, self.decls, fnIdx: index) }
         }
     }
 

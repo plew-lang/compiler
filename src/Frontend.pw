@@ -49,6 +49,18 @@ import ./Cache with { cacheRoot }
 import ./Diag with { compileErrorAt, compileErrorAtFile, CompileDiagnostic, DiagnosticLocation, emitDiagnostic, eprintInt, digitByte, digitStrU }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
+// A trait-provided declaration is abstract over its source receiver,
+// including when it supplies another trait through `impl B as A`.
+fn functionHasTraitReceiver(arena ~: Arena, decls ~: Decls, fnIdx: U64) -> Bool {
+    if fnIdx >= arena.functionCount() { return false }
+    val function = arena.functionAt(index: fnIdx)
+    if function.recvTy == 0U64 || function.recvTy >= arena.typeCount() { return false }
+    val traitIndex = decls.traitIndexByOffset(offset: function.recvStart)
+    if traitIndex >= decls.traitCount() { return false }
+    return arena.typeTerms[function.recvTy].paramId != 0U64 && arena.typeTerms[function.recvTy].paramId == decls.traitAt(index: traitIndex).selfParamId
+}
+
+
 // Append-only publication progress belongs to one finalization session.
 // A diagnostic is terminal for this publisher; partial rows are never retried
 // or presented as a successful publication boundary.
