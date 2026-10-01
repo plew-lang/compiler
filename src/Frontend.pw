@@ -2115,16 +2115,3 @@ fn armDiagOffset(c: inout Comp, a: MatchArm) -> U64 {
     }
     return a.enumStart
 }
-
-// Is `ref` a `MutableRef[T]` instantiation? Same cell representation as Ref, with
-// write capability through `->`.
-pub fn isMutableRefInst(arena: Arena, ref: U64) -> Bool {
-    if ref >= arena.typeCount() {
-        return false
-    }
-    val t = arena.typeTerms[ref]
-    if t.args.len != 1 {
-        return false
-    }
-    return rangeEquals(bytes: arena.bytes, start: t.nameStart, len: t.nameLen, kw: "MutableRef")
-}

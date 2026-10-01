@@ -38,6 +38,19 @@ pub impl Comp {
         return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref")
     }
 
+    // Is `ref` a `MutableRef[T]` instantiation? Same cell representation as Ref, with
+    // write capability through `->`.
+    fn isMutableRefInst(ref: U64) -> Bool {
+        if ref >= self.arena.typeCount() {
+            return false
+        }
+        val t = self.arena.typeTerms[ref]
+        if t.args.len != 1 {
+            return false
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "MutableRef")
+    }
+
     // Is `ref` either strong reference capability (`Ref[T]` or `MutableRef[T]`)?
     fn isStrongRefInst(ref: U64) -> Bool {
         if ref >= self.arena.typeCount() { return false }

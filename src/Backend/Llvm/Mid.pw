@@ -1,4 +1,3 @@
-import ../../Frontend with { isMutableRefInst }
 import ../../Mid/Diagnostics with { emitMidCoverageVerify }
 import ../../Diag with { eprintU64 }
 // Part of the LLVM backend (root: _.pw): lowering of already-elaborated Mid
@@ -878,7 +877,7 @@ pub impl LlvmCtx {
             if projection.tag == 3U64 {
                 if index != 0U64 || place.rootTag != 1U64 || place.local >= body.locals.len { return <Result.Ok value=false /> }
                 val local: MidLocalDecl = c.mid.locals[body.locals.start + place.local]
-                if local.sourceNameStart != 0U64 || local.isParameter || local.isBorrowed || local.isInout || local.isCaptureCell || !isMutableRefInst(arena: c.arena, ref: local.typeTerm) { return <Result.Ok value=false /> }
+                if local.sourceNameStart != 0U64 || local.isParameter || local.isBorrowed || local.isInout || local.isCaptureCell || !c.isMutableRefInst(ref: local.typeTerm) { return <Result.Ok value=false /> }
                 shared = true
             } else if shared && projection.tag != 1U64 { return <Result.Ok value=false /> }
             index += 1U64

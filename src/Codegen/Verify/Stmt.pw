@@ -379,7 +379,7 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)") />
                 } else if self.isRefInst(ref: abt.ref) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "cannot assign through `Ref[T]`; use `MutableRef[T]` for shared mutation or call a mutable handle before narrowing with `asRef()` (spec/03)") />
-                } else if isMutableRefInst(arena: self.arena, ref: abt.ref) {
+                } else if self.isMutableRefInst(ref: abt.ref) {
                     // the pointee FIELD must be `mut val` — the MutableRef exception waives only the
                     // binding's mutability, not the field's (spec/03 `val` immutability).
                     if !((try self.placeIsMutable(id: target))) {

@@ -36,7 +36,7 @@ pub impl Comp {
         if self.isActiveTypeParam(t: t) {
             return <Result.Ok value=self.typeParamHasSendableBound(t: t) />
         }
-        if isMutableRefInst(arena: self.arena, ref: rr) || self.isWeakMutableRefInst(ref: rr) {
+        if self.isMutableRefInst(ref: rr) || self.isWeakMutableRefInst(ref: rr) {
             return <Result.Ok value=false />
         }
         if self.isRefInst(ref: rr) || self.isWeakRefInst(ref: rr) {
