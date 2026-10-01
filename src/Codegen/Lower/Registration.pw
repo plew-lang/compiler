@@ -604,7 +604,7 @@ pub impl Comp {
         if !(f.isProvided) || f.extId == 0U64 {
             return <Result.Ok value=() />
         }
-        mut val i: U64 = 0U64
+        mut val i: U64 = self.decls.firstCallableNamed(nameId: f.nameId)
         while i < self.decls.callableCount() {
             val prior: Func = self.arena.functionAt(index: self.decls.callableAt(index: i).funcIdx)
             if !(prior.isProvided) && prior.extId == f.extId && prior.nameId == f.nameId {
@@ -614,7 +614,7 @@ pub impl Comp {
                     }
                 }
             }
-            i += 1U64
+            i = self.decls.nextCallableNamed(index: i)
         }
         return <Result.Ok value=() />
     }
