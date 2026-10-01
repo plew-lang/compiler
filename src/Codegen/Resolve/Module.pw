@@ -976,7 +976,7 @@ pub impl Comp {
     inout fn extMethodNameExists(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
-        mut val i: U64 = 0
+        mut val i: U64 = self.decls.firstCallableNamed(nameId: qNameId)
         while i < self.decls.callableCount() {
             val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
@@ -989,7 +989,7 @@ pub impl Comp {
                     }
                 }
             }
-            i += 1
+            i = self.decls.nextCallableNamed(index: i)
         }
         return false
     }
@@ -997,7 +997,7 @@ pub impl Comp {
     inout fn viewOnlyMethodExists(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
-        mut val i: U64 = 0
+        mut val i: U64 = self.decls.firstCallableNamed(nameId: qNameId)
         while i < self.decls.callableCount() {
             val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
@@ -1010,7 +1010,7 @@ pub impl Comp {
                     }
                 }
             }
-            i += 1
+            i = self.decls.nextCallableNamed(index: i)
         }
         return false
     }
@@ -1030,7 +1030,7 @@ pub impl Comp {
         mut val typeMatch2: U64 = self.arena.functionCount()
         mut val typeMatchEntry: U64 = self.decls.callableCount()
         mut val typeMatch2Entry: U64 = self.decls.callableCount()
-        mut val i: U64 = 0
+        mut val i: U64 = self.decls.firstCallableNamed(nameId: qNameId)
         while i < self.decls.callableCount() {
             val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
@@ -1057,7 +1057,7 @@ pub impl Comp {
                         }
                 }
             }
-            i += 1
+            i = self.decls.nextCallableNamed(index: i)
         }
         if typeMatch != self.arena.functionCount() {
             try self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
@@ -1202,7 +1202,7 @@ pub impl Comp {
         val tnu: Bind = self.newtypeUnderName(start: typeStart, len: typeLen)
         val tId: U64 = intern(c: inout self, start: tnu.nameStart, len: tnu.nameLen)
         val nId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = 0
+        mut val i: U64 = self.decls.firstCallableNamed(nameId: nId)
         while i < self.decls.callableCount() {
             val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
@@ -1215,7 +1215,7 @@ pub impl Comp {
                     }
                 }
             }
-            i += 1
+            i = self.decls.nextCallableNamed(index: i)
         }
         return false
     }
@@ -1251,7 +1251,7 @@ pub impl Comp {
             return <Result.Ok value=self.arena.functionCount() />
         }
         val fromN: Bind = self.internBytes(s: "from")
-        mut val i: U64 = 0
+        mut val i: U64 = self.decls.firstCallableNamed(nameId: fromN.nameId)
         while i < self.decls.callableCount() {
             val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
@@ -1272,7 +1272,7 @@ pub impl Comp {
                     }
                 }
             }
-            i += 1
+            i = self.decls.nextCallableNamed(index: i)
         }
         return <Result.Ok value=self.arena.functionCount() />
     }

@@ -558,7 +558,7 @@ pub impl Comp {
     }
 
     inout fn checkFuncRegistration(f: Func, sourceModule: U64) -> Result[(), CompileDiagnostic] {
-        mut val i: U64 = 0
+        mut val i: U64 = self.decls.firstCallableNamed(nameId: f.nameId)
         while i < self.decls.callableCount() {
             val priorEntry: Callable = self.decls.callableAt(index: i)
             val prior: Func = self.arena.functionAt(index: priorEntry.funcIdx)
@@ -590,7 +590,7 @@ pub impl Comp {
                     }
                 }
             }
-            i += 1U64
+            i = self.decls.nextCallableNamed(index: i)
         }
         return <Result.Ok value=() />
     }
