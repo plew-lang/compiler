@@ -199,8 +199,7 @@ impl DeclarationAccessState {
                     if function >= c.arena.functionCount() {
                         return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=c.diagnosticAt(offset: 0U64, msg: "internal error: effect request has no function declaration") /> />
                     }
-                    val declaration = c.arena.functionAt(index: function)
-                    if declaration.body != 0U64 && !declaration.isExtern {
+                    if c.arena.functionHasPlewBody(index: function) {
                         match c.prepareLexicalBody(fnIdx: function) {
                             Result.Ok(value: _) => {}
                             Result.Err(error: val diagnostic) => { return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=diagnostic /> /> }
