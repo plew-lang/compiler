@@ -21,12 +21,11 @@ pub impl Modules {
         val empty: Dictionary[U64, U64] = [:]
         if reExport {
             mut val names = self.reExportOriginNames.getOr(key: origin.localModule, fallback: empty)
-            if names.getOr(key: nameId, fallback: 0U64) == 0U64 {
+            mut val previous = names.getOr(key: nameId, fallback: 0U64)
+            if previous == 0U64 {
                 names[nameId] = self.reExportOrigins.count() + 1U64
                 self.reExportOriginNames[origin.localModule] = names
-            }
-            mut val previous = names.getOr(key: nameId, fallback: 0U64)
-            if previous != 0U64 && previous <= self.reExportOrigins.count() {
+            } else {
                 while self.reExportOriginNext[previous - 1U64] != 0U64 { previous = self.reExportOriginNext[previous - 1U64] }
                 self.reExportOriginNext[previous - 1U64] = self.reExportOrigins.count() + 1U64
             }
@@ -34,12 +33,11 @@ pub impl Modules {
             self.reExportOrigins.append(origin)
         } else {
             mut val names = self.importOriginNames.getOr(key: origin.localModule, fallback: empty)
-            if names.getOr(key: nameId, fallback: 0U64) == 0U64 {
+            mut val previous = names.getOr(key: nameId, fallback: 0U64)
+            if previous == 0U64 {
                 names[nameId] = self.importOrigins.count() + 1U64
                 self.importOriginNames[origin.localModule] = names
-            }
-            mut val previous = names.getOr(key: nameId, fallback: 0U64)
-            if previous != 0U64 && previous <= self.importOrigins.count() {
+            } else {
                 while self.importOriginNext[previous - 1U64] != 0U64 { previous = self.importOriginNext[previous - 1U64] }
                 self.importOriginNext[previous - 1U64] = self.importOrigins.count() + 1U64
             }

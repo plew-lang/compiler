@@ -246,10 +246,12 @@ pub impl Comp {
         mut val index = self.decls.firstCallableNamed(nameId: nameId)
         while index < self.decls.callableCount() {
             val candidate = self.decls.callableAt(index: index)
-            val function = self.arena.functionAt(index: candidate.funcIdx)
-            if candidate.sourceModule == moduleId && !(function.hasRecv || function.isAssoc) {
-                if !publicOnly || self.modules.isPublicDeclaration(offset: function.defOffset) {
-                    if !idInSet(set: candidates, id: candidate.funcIdx) { candidates.append(candidate.funcIdx) }
+            if candidate.sourceModule == moduleId {
+                val function = self.arena.functionAt(index: candidate.funcIdx)
+                if !(function.hasRecv || function.isAssoc) {
+                    if !publicOnly || self.modules.isPublicDeclaration(offset: function.defOffset) {
+                        if !idInSet(set: candidates, id: candidate.funcIdx) { candidates.append(candidate.funcIdx) }
+                    }
                 }
             }
             index = self.decls.nextCallableNamed(index: index)
@@ -257,10 +259,9 @@ pub impl Comp {
         index = self.modules.firstReExportOriginNamed(moduleId: moduleId, nameId: nameId)
         while index < self.modules.reExportOriginCount() {
             val origin = self.modules.reExportOriginAt(index: index)
-            if origin.localModule == moduleId && !origin.isNamespace {
-                if intern(c: inout self, start: origin.localStart, len: origin.localLength) == nameId {
-                    self.appendFreeFunctionSurface(moduleId: origin.targetModule, nameId: intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength), publicOnly: true, candidates: inout candidates)
-                }
+            // The origin index already selects this module and local name.
+            if !origin.isNamespace {
+                self.appendFreeFunctionSurface(moduleId: origin.targetModule, nameId: intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength), publicOnly: true, candidates: inout candidates)
             }
             index = self.modules.nextReExportOriginNamed(index: index)
         }
@@ -282,10 +283,9 @@ pub impl Comp {
         mut val index = self.modules.firstImportOriginNamed(moduleId: moduleId, nameId: nameId)
         while index < self.modules.importOriginCount() {
             val origin = self.modules.importOriginAt(index: index)
-            if origin.localModule == moduleId && !origin.isNamespace {
-                if intern(c: inout self, start: origin.localStart, len: origin.localLength) == nameId {
-                    self.appendFreeFunctionSurface(moduleId: origin.targetModule, nameId: intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength), publicOnly: true, candidates: inout candidates)
-                }
+            // The origin index already selects this module and local name.
+            if !origin.isNamespace {
+                self.appendFreeFunctionSurface(moduleId: origin.targetModule, nameId: intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength), publicOnly: true, candidates: inout candidates)
             }
             index = self.modules.nextImportOriginNamed(index: index)
         }
