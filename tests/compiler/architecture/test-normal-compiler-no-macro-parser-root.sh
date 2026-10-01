@@ -117,8 +117,13 @@ if rg -q 'while fi < c\.arena\.funcs\.count\(\)' "$closures"; then
     echo "closure collection still scans every function declaration" >&2
     exit 1
 fi
-if ! rg -q 'while bodyI < c\.monoWork\.bodyCount\(\)' "$closures"; then
+if ! rg -q 'while [A-Za-z_][A-Za-z_0-9]* < c\.monoWork\.bodyCount\(\)' "$closures"; then
     echo "closure collection is not driven by final body instances" >&2
+    exit 1
+fi
+
+if ! rg -Fq 'c.arena.bodySignature(bodyId: bodyId).closureSignatureId != 0U64' "$closures"; then
+    echo "closure collection does not select finalized closure signatures" >&2
     exit 1
 fi
 
