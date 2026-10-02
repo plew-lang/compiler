@@ -47,3 +47,4 @@ tests/fixtures/run/type_compatibility_canonical.pw
 tests/fixtures/run/closure_enum_owned.pw
 tests/fixtures/run/closure_enum_cell.pw
 tests/fixtures/run/closure_capture_typed_cell.pw
+tests/fixtures/run/trait_via_ownership.pw

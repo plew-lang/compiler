@@ -1252,27 +1252,18 @@ pub struct Conform {
     // so the completeness check matches requirements by selector (name + param
     // types), distinguishing same-name overloaded requirements.
     pub val witnessed: ConformWitnessRange = <ConformWitnessRange start=0U64 len=0U64 />
-    // Exact declarations that supplied the non-`via` witnesses, in member
+    // Exact declarations that supplied the witnesses, including via, in member
     // order. `witnessed` intentionally remains a signature-only validation
     // carrier; final call/proof resolution must use these stable Func ids
     // rather than reconstructing a member from spelling and receiver surface.
     pub val witnessFuncIds: ConformFuncIdRange = <ConformFuncIdRange start=0U64 len=0U64 />
 }
 
-// A `via` alias `fn req(...) -> T via real` inside a trait impl (spec/08: the
-// requirement name becomes a bare callable that dispatches to the real member).
-// findMethod, on missing `alias` for `recv`, retries with `real` — so both
-// `x.req()` and `x.real()` resolve to the one real method.
-pub struct MethodAlias {
-    pub val recvStart: U64
-    pub val recvLen: U64
-    pub val recvId: U64 = 0
-    pub val aliasStart: U64
-    pub val aliasLen: U64
-    pub val aliasId: U64 = 0
-    pub val realStart: U64
-    pub val realLen: U64
-    pub val realId: U64 = 0
+// A via witness owns an ordinary forwarding Func. Keep its declared target
+// for validation; lookup must retain the witness, never rename a call to it.
+pub struct ViaWitness {
+    pub val functionIndex: U64
+    pub val targetNameId: U64
 }
 
 // The semantic input of every trait query. `owner` is the resolved trait
@@ -3028,7 +3019,7 @@ pub struct DestructureSite {
 pub impl DestructureSite { factory }
 
 // Declaration / conformance / name side-tables built during loading & analysis.
-// `traits`/`conforms`/`methodAliases` drive trait conformance (spec/08): trait
+// `traits`/`conforms`/`viaWitnesses` drive trait conformance (spec/08): trait
 // decls, recorded conformances, and `via` requirement→witness redirects.
 // `derives`: `@[...]` derive requests on type decls. `funcBounds`: `where T:
 // Trait` bounds keyed by function index. `deinits`: declared destructor function indices, whose receiver
@@ -3073,7 +3064,7 @@ pub struct Decls {
     pub mut val conformBindPool: Array[Bind] = []
     pub mut val conformWitnessPool: Array[Func] = []
     pub mut val conformFuncIdPool: Array[U64] = []
-    pub mut val methodAliases: Array[MethodAlias] = []
+    pub mut val viaWitnesses: Array[ViaWitness] = []
     pub mut val derives: Array[DeriveReq] = []
     pub mut val funcBounds: Array[FuncBound] = []
     // Func rows are copied throughout selection and emission. Keep every
@@ -3535,7 +3526,7 @@ pub impl TraitDef { factory }
 pub impl DeriveReq { factory }
 pub impl AssocBinding { factory }
 pub impl Conform { factory }
-pub impl MethodAlias { factory }
+pub impl ViaWitness { factory }
 pub impl FuncBound { factory }
 pub impl FnInst { factory }
 pub impl InstanceEnvironment { factory }

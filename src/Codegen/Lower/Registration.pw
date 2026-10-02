@@ -619,7 +619,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn registerDeclaredFunc(f: Func) -> Result[U64, CompileDiagnostic] {
+    inout fn registerDeclaredFunc(f: Func, registerSurface: Bool = true) -> Result[U64, CompileDiagnostic] {
         if f.isExposed {
             if f.hasRecv || f.isAssoc {
                 return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "expose requires a free function; methods and associated functions cannot be exposed") />
@@ -660,7 +660,7 @@ pub impl Comp {
             self.decls.funcBounds.append(<FuncBound fnIdx=idx paramStart=subject.nameStart paramLen=subject.nameLen paramNameId=subject.nameId paramTy=bound.subject constraint=bound.constraint />)
             boundIndex += 1U64
         }
-        try self.registerCallable(funcIdx: idx, checkCollisions: true)
+        if registerSurface { try self.registerCallable(funcIdx: idx, checkCollisions: true) }
         return <Result.Ok value=idx />
     }
 

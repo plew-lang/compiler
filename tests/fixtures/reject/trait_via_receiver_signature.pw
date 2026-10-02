@@ -1,0 +1,5 @@
+trait Action { inout fn go() }
+struct Worker {}
+impl Worker { fn perform() {} }
+impl Worker as Action { inout fn go() via perform }
+fn main() {}

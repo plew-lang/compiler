@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+unique struct Ticket { val number: I64
+    deinit { print(self.number) }
+}
+trait Consume { move fn consume() -> I64 }
+impl Ticket { move fn finish() -> I64 { return self.number } }
+impl Ticket as Consume { move fn consume() -> I64 via finish }
+trait ReadTicket { fn read(ticket: borrow Ticket) -> I64 }
+struct Reader {}
+impl Reader { fn inspect(ticket: borrow Ticket) -> I64 { return ticket.number } }
+impl Reader as ReadTicket { fn read(ticket: borrow Ticket) -> I64 via inspect }
+fn main() {
+    val ticket = <Ticket number=5I64 />
+    print(<Reader />.read(ticket: borrow ticket))
+    print(ticket.consume())
+}

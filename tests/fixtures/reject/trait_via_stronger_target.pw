@@ -1,0 +1,7 @@
+trait Allowed {}
+trait Extra {}
+trait Action { fn go[U](value: U) where U: Allowed }
+struct Worker {}
+impl Worker { fn perform[U](value: U) where U: Extra {} }
+impl Worker as Action { fn go[U](value: U) via perform }
+fn main() {}

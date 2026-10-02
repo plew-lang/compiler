@@ -1347,40 +1347,59 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn typeHasMember(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
-        val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
-        val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = self.arena.firstFunctionNamed(nameId: qName)
-        while i < self.arena.functionCount() {
-            val f: Func = self.arena.functionAt(index: i)
-            if f.hasRecv {
-                if f.recvId == qRecv {
-                    if f.nameId == qName {
-                        return true
-                    }
-                }
-            } else {
-                if f.isAssoc {
-                    if f.recvId == qRecv {
-                        if f.nameId == qName {
-                            return true
-                        }
-                    }
-                }
-            }
-            i = self.arena.nextFunctionNamed(index: i)
+    // A forwarding call alone could accept omitted defaults or discard a
+    // result. Via instead promises the complete declared signature, including
+    // ownership modes. Match the implementation directionally: requirement
+    // binders remain rigid while the target's binders acquire one substitution.
+    inout fn viaSignatureMatches(witness: Func, target: Func) -> Bool {
+        if witness.hasRecv != target.hasRecv || witness.isAssoc != target.isAssoc || witness.selfInout != target.selfInout || witness.selfMove != target.selfMove || witness.isAsync != target.isAsync || witness.hasRet != target.hasRet || witness.params.count() != target.params.count() {
+            return false
         }
-        return false
+        mut val bindings: Array[UnifyBind] = []
+        val targetParameters = <PatternBindInput.Function range=target.typeParams />
+        val rigidParameters = <PatternBindInput.Values values=[] />
+        if target.recvTy != 0U64 || witness.recvTy != 0U64 {
+            if !self.unifyPatterns(a: target.recvTy, aSide: 0U64, b: witness.recvTy, bSide: 1U64, aParams: targetParameters, bParams: rigidParameters, binds: inout bindings) { return false }
+        }
+        mut val index = 0U64
+        while index < witness.params.count() {
+            val expected = self.funcParamAt(params: witness.params, index: index)
+            val actual = self.funcParamAt(params: target.params, index: index)
+            if expected.noLabel != actual.noLabel || (!expected.noLabel && expected.nameId != actual.nameId) || expected.isInout != actual.isInout || expected.isMove != actual.isMove || expected.isBorrow != actual.isBorrow { return false }
+            val expectedType = self.groundTermInEnvironment(ref: expected.ty, params: [], values: [], selfRef: witness.recvTy)
+            val actualType = self.groundTermInEnvironment(ref: actual.ty, params: [], values: [], selfRef: witness.recvTy)
+            if !self.unifyPatterns(a: actualType, aSide: 0U64, b: expectedType, bSide: 1U64, aParams: targetParameters, bParams: rigidParameters, binds: inout bindings) { return false }
+            index += 1U64
+        }
+        if witness.hasRet {
+            val expectedType = self.groundTermInEnvironment(ref: witness.retTy, params: [], values: [], selfRef: witness.recvTy)
+            val actualType = self.groundTermInEnvironment(ref: target.retTy, params: [], values: [], selfRef: witness.recvTy)
+            if !self.unifyPatterns(a: actualType, aSide: 0U64, b: expectedType, bSide: 1U64, aParams: targetParameters, bParams: rigidParameters, binds: inout bindings) { return false }
+        }
+        return true
     }
 
     inout fn checkViaTargets() -> Result[(), CompileDiagnostic] {
-        mut val i: U64 = 0
-        while i < self.decls.methodAliases.count() {
-            val al: MethodAlias = self.decls.methodAliases[i]
-            if !(self.typeHasMember(recvStart: al.recvStart, recvLen: al.recvLen, nameStart: al.realStart, nameLen: al.realLen)) {
-                return <Result.Err error=self.diagnosticAt(offset: al.aliasStart, msg: "`via` target is not a member of this type") />
+        for val binding in self.decls.viaWitnesses {
+            val witness = self.arena.functionAt(index: binding.functionIndex)
+            mut val foundName = false
+            mut val foundSignature = false
+            mut val index = self.decls.firstCallableNamed(nameId: binding.targetNameId)
+            while index < self.decls.callableCount() {
+                val candidateIndex = self.decls.callableAt(index: index).funcIdx
+                val target = self.arena.functionAt(index: candidateIndex)
+                if candidateIndex != binding.functionIndex && target.recvId == witness.recvId && (target.extId == 0U64 || target.extId == witness.extId) && self.methodIsVisible(mf: target, offset: witness.defOffset) {
+                    foundName = true
+                    if self.viaSignatureMatches(witness: witness, target: target) { foundSignature = true }
+                }
+                index = self.decls.nextCallableNamed(index: index)
             }
-            i += 1
+            if !foundName {
+                return <Result.Err error=self.diagnosticAt(offset: witness.defOffset, msg: "`via` target is not a member of this type") />
+            }
+            if !foundSignature {
+                return <Result.Err error=self.diagnosticAt(offset: witness.defOffset, msg: "`via` target signature does not match the declared requirement") />
+            }
         }
         return <Result.Ok value=() />
     }
@@ -1723,51 +1742,6 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkOneFnInstBounds(fin: FnInst, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
-        val f: Func = self.arena.functionAt(index: fin.fnIdx)
-        mut val bi: U64 = 0
-        while bi < self.decls.funcBounds.count() {
-            val fb: FuncBound = self.decls.funcBounds[bi]
-            if fb.fnIdx == fin.fnIdx {
-                val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: self.copyFuncBinds(binds: f.typeParams), args: fin.args)
-                if fb.paramTy != 0U64 {
-                    val lhs: U64 = self.groundTermInEnvironment(ref: fb.paramTy, params: self.copyFuncBinds(binds: f.typeParams), values: fin.args)
-                    if lhs < self.arena.typeCount() {
-                        val ok: Bool = (try self.viewedTypeConformsTraitConstraint(ref: lhs, constraint: constraint, assumptions: assumptions))
-                        if !ok {
-                            return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "type argument does not conform to the trait required by `where`") />
-                        }
-                    }
-                    bi += 1
-                } else {
-                mut val pi: U64 = 0
-                while pi < f.typeParams.count() {
-                    val tp: Bind = self.funcBindAt(binds: f.typeParams, index: pi)
-                    if tp.nameId == fb.paramNameId {
-                        if pi < fin.args.count() {
-                            // a `#`-viewed type argument (`f(a: s#P)` / `g(x#Ext)`,
-                            // spec/09) satisfies the bound via the conformance path the
-                            // view selects, even when the bare type does not conform.
-                            // conformsInstance checks CONDITIONAL conformance against the
-                            // arg's full ref (`Array[NoEq]` ⟹ false here, at this bound's
-                            // location — no deferral to a deeper monomorphization level).
-                            val ok: Bool = (try self.viewedTypeConformsTraitConstraint(ref: fin.args[pi], constraint: constraint, assumptions: assumptions))
-                            if !ok {
-                                return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "type argument does not conform to the trait required by `where`") />
-                            }
-                        }
-                    }
-                    pi += 1
-                }
-                bi += 1
-                }
-            } else {
-                bi += 1
-            }
-        }
-        return <Result.Ok value=() />
-    }
-
     // Shared declaration-receiver matcher. It is also the source of truth for
     // grounding a method result under a structural receiver pattern.
     inout fn methodReceiverEnvironment(f: Func, instRef: U64) -> Result[WitnessMatch, CompileDiagnostic] {
@@ -1778,59 +1752,6 @@ pub impl Comp {
         mut val patternParams = f.typeParams
         if f.recvPatternParams.count() > 0U64 { patternParams = f.recvPatternParams }
         return <Result.Ok value=(try self.conformancePatternWitnessMatch(conformIdx: 0U64, subjectId: f.recvId, subjectTy: f.recvTy, subjectArgs: <PatternTypeInput.Values values=noArgs />, typeParams: <PatternBindInput.Function range=patternParams />, declaredTraitArgs: <PatternTypeInput.Values values=noArgs />, typeRef: instRef, traitArgs: <PatternTypeInput.Values values=noArgs />)) />
-    }
-
-    // A receiver pattern such as `impl[T] Box[Array[T]]` does not map the
-    // concrete receiver's argument positionally to the method's T. Derive its
-    // substitution by the same directional pattern match used for conformance
-    // proofs, but run it for the one BodyInstance that finalization enqueues
-    // rather than sweeping every discovered generic layout up front.
-    inout fn checkOneMethodReceiverBounds(fnIdx: U64, f: Func, args: Array[U64], instRef: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
-        if f.recvTy == 0U64 || instRef == 0U64 || instRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
-        val receiverEnv: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: instRef))
-        if receiverEnv.conformIdx == 0U64 { return <Result.Ok value=() /> }
-        // Start with method-owned substitutions carried by the final callable,
-        // then replace only binders proven by the receiver pattern. This keeps
-        // `impl[T] Box[Array[T]]` structural while still checking a method's
-        // own generic parameters from its concrete call edge.
-        mut val values: Array[U64] = args
-        while values.count() < f.typeParams.count() { values.append(0U64) }
-        mut val mi: U64 = 0U64
-        while mi < receiverEnv.binds.count() {
-            val matchBind: WitnessBind = receiverEnv.binds[mi]
-            mut val pi: U64 = 0U64
-            while pi < f.typeParams.count() {
-                if self.funcBindAt(binds: f.typeParams, index: pi).paramId == matchBind.paramId { values.set(i: pi, value: matchBind.term) }
-                pi += 1U64
-            }
-            mi += 1U64
-        }
-        mut val bi: U64 = 0U64
-        while bi < self.decls.funcBounds.count() {
-            val fb: FuncBound = self.decls.funcBounds[bi]
-            if fb.fnIdx == fnIdx {
-                val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: self.copyFuncBinds(binds: f.typeParams), args: values)
-                mut val lhs: U64 = 0U64
-                if fb.paramTy != 0U64 {
-                    lhs = self.groundTermInEnvironment(ref: fb.paramTy, params: self.copyFuncBinds(binds: f.typeParams), values: values)
-                } else {
-                    mut val pi: U64 = 0U64
-                    while pi < f.typeParams.count() {
-                        if self.funcBindAt(binds: f.typeParams, index: pi).nameId == fb.paramNameId {
-                            if pi < values.count() { lhs = values[pi] }
-                        }
-                        pi += 1U64
-                    }
-                }
-                if lhs != 0U64 && lhs < self.arena.typeCount() {
-                    if !((try self.viewedTypeConformsTraitConstraint(ref: lhs, constraint: constraint, assumptions: assumptions))) {
-                        return <Result.Err error=self.diagnosticAt(offset: fb.paramStart, msg: "receiver type argument does not conform to the trait required by the method's `where`") />
-                    }
-                }
-            }
-            bi += 1U64
-        }
-        return <Result.Ok value=() />
     }
 
 }

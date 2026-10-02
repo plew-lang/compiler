@@ -519,18 +519,6 @@ pub impl Comp {
         if firstLabel != self.arena.functionCount() {
             return <Result.Ok value=firstLabel />
         }
-        // no direct method: a trait `via` alias may redirect this requirement name to
-        // a real member (spec/08). Retry resolution under the real name.
-        mut val ai: U64 = 0
-        while ai < self.decls.methodAliases.count() {
-            val al: MethodAlias = self.decls.methodAliases[ai]
-            if al.recvId == qRecvId {
-                if al.aliasId == qNameId {
-                    return <Result.Ok value=(try self.findMethod(recvStart: recvStart, recvLen: recvLen, nameStart: al.realStart, nameLen: al.realLen, args: args, recvRef: recvRef)) />
-                }
-            }
-            ai += 1
-        }
         return <Result.Ok value=self.arena.functionCount() />
     }
 

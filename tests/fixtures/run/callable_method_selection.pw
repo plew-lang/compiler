@@ -1,6 +1,6 @@
 use @Std/Io only { write }
 use /Frontend only { Comp }
-use /Ir only { ArgRange, Bind, Func, MethodAlias }
+use /Ir only { ArgRange, Bind, Func }
 fn add(c: inout Comp, receiver: Bind, name: Bind, traitId: U64 = 0U64, extensionId: U64 = 0U64, viewOnly: Bool = false, hasReceiver: Bool = true) -> U64 {
     val index = c.arena.functionCount()
     c.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
@@ -34,7 +34,8 @@ fn main() {
     val inherent = add(c: inout c, receiver: receiver, name: name)
     if selected(c: inout c, receiver: receiver, name: name) != inherent { panic "inherent priority changed" }
     val alias = c.internBytes(s: "alias")
-    c.decls.methodAliases.append(<MethodAlias recvStart=receiver.nameStart recvLen=receiver.nameLen recvId=receiver.nameId aliasStart=alias.nameStart aliasLen=alias.nameLen aliasId=alias.nameId realStart=name.nameStart realLen=name.nameLen realId=name.nameId />)
-    if selected(c: inout c, receiver: receiver, name: alias) != inherent { panic "alias retry changed" }
+    // A via alias is a registered witness callable, not a resolver name retry.
+    val witness = add(c: inout c, receiver: receiver, name: alias)
+    if selected(c: inout c, receiver: receiver, name: alias) != witness { panic "alias witness missing" }
     write(s: "callable-method-selection-ok\n")
 }

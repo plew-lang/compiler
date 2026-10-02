@@ -3,8 +3,8 @@
 
 // Lower a method / assoc-fn member of an impl block. Mirrors parseFuncCommon for
 // the impl-member case: a witnessed requirement signature (for a trait impl, body-
-// less, before the body), then either a `via` alias (no body/func) or the real
-// method appended to c.arena.funcs with its `where`-bounds (method-own then impl-level).
+// less, before the body), then its authored or synthesized forwarding body.
+// Both own a Func with `where` bounds (method-own then impl-level).
 // `recvN` is the (re-interned) receiver type name; `implParamBinds` the impl's `[T]`.
 // Append the associated-type binders of the trait named by `nameId` (if such a trait is
 // loaded) to `scope`. Associated types (`type Item`) are binders, not module-scoped types,
@@ -532,6 +532,41 @@ pub impl Comp {
         return <Result.Ok value=self.pushConformBounds(bounds: bounds) />
     }
 
+    // A via declaration owns its requirement contract. Its synthesized body
+    // forwards through an ordinary call, so argument passing, constraints and
+    // ownership use the same semantic pipeline as an authored implementation.
+    inout fn lowerViaBody(params: Array[Param], receiver: Bind, receiverType: U64, target: Bind, isAssoc: Bool, isAsync: Bool, hasRet: Bool, offset: U64) -> Result[U64, CompileDiagnostic] {
+        mut val arguments: Array[Arg] = []
+        for val parameter in params {
+            mut val value = self.pushExpr(e: <Expr.Ident start=parameter.nameStart len=parameter.nameLen />)
+            self.arena.exprSpanStart[value] = offset
+            if parameter.isMove || parameter.isBorrow {
+                value = self.pushExpr(e: <Expr.Move operand=value isBorrow=parameter.isBorrow />)
+                self.arena.exprSpanStart[value] = offset
+            }
+            arguments.append(<Arg expr=value isInout=parameter.isInout labelStart=parameter.nameStart labelLen=parameter.nameLen hasLabel=!parameter.noLabel />)
+        }
+        val receiverName = if isAssoc { give receiver } else { give self.internBytes(s: "self") }
+        val receiverExpression = self.pushExpr(e: <Expr.Ident start=receiverName.nameStart len=receiverName.nameLen />)
+        self.arena.exprSpanStart[receiverExpression] = offset
+        val call = self.pushExpr(e: <Expr.Method recv=receiverExpression nameStart=target.nameStart nameLen=target.nameLen args=self.pushArgs(args: arguments) />)
+        self.arena.exprSpanStart[call] = offset
+        if isAssoc {
+            try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call originSerial=self.arena.exprOriginSerial[call] receiverTerm=receiverType receiverIsType=true />)
+        }
+        mut val result = call
+        if isAsync {
+            result = self.pushExpr(e: <Expr.Await operand=call />)
+            self.arena.exprSpanStart[result] = offset
+        }
+        val statement = if hasRet {
+            give self.pushStmt(s: <Stmt.Return value=result hasValue=true offset=offset />)
+        } else {
+            give self.pushStmt(s: <Stmt.ExprStmt expr=result />)
+        }
+        return <Result.Ok value=self.pushBlock(stmts: [statement]) />
+    }
+
     // The Syntax decoder deliberately converges on Func/Conform/AssocBinding,
     // not on a shadow MemberAst.  Its temporary arrays are semantic scopes and
     // pool payloads; no source tree is reconstructed or retained.
@@ -619,14 +654,7 @@ pub impl Comp {
         if im.isTraitImpl {
             if m.isVia {
                 val realN: Bind = <Bind nameStart=m.viaName.start nameLen=m.viaName.end - m.viaName.start fieldStart=m.viaName.start fieldLen=m.viaName.end - m.viaName.start />
-                self.decls.methodAliases.append(<MethodAlias recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) aliasStart=nameN.nameStart aliasLen=nameN.nameLen aliasId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) realStart=realN.nameStart realLen=realN.nameLen realId=intern(c: inout self, start: realN.nameStart, len: realN.nameLen) />)
-                witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=false isExtern=false />)
-                self.lowerAssociatedOwner = savedAssociatedOwner
-                self.lowerAssociatedArgs = savedAssociatedArgs
-                self.cur.typeParams = savedTP
-                self.lowerWhereSyntaxTypes = savedWT
-                self.lowerWhereSyntaxTraits = savedWTr
-                return <Result.Ok value=() />
+                self.decls.viaWitnesses.append(<ViaWitness functionIndex=self.arena.functionCount() targetNameId=intern(c: inout self, start: realN.nameStart, len: realN.nameLen) />)
             }
             witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=false isExtern=false />)
         }
@@ -635,7 +663,11 @@ pub impl Comp {
         if recvTraitOwner == 0U64 {
             self.cur.lowerRetTy = self.groundTermInEnvironment(ref: retRef, params: [], values: [], selfRef: recvTy)
         }
-        val body: U64 = (try self.lowerSyntaxBlock(id: m.body))
+        val body: U64 = if m.isVia {
+            give (try self.lowerViaBody(params: params, receiver: recvN, receiverType: recvTy, target: <Bind nameStart=m.viaName.start nameLen=m.viaName.end - m.viaName.start fieldStart=m.viaName.start fieldLen=m.viaName.end - m.viaName.start />, isAssoc: isAssoc, isAsync: m.isAsync, hasRet: effHasRet, offset: m.name.start))
+        } else {
+            give  (try self.lowerSyntaxBlock(id: m.body))
+        }
         self.cur.lowerRetTy = savedRet
         val fnIdx: U64 = self.arena.functionCount()
         mut val extId: U64 = 0U64
@@ -649,7 +681,12 @@ pub impl Comp {
             originTraitOwner = origin.nameStart
             originTraitArity = syntaxImplTraitArgCount(file: self.syntax, impl: im)
         }
-        (try self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.lowerMethodReceiverType(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=recvTraitArgs.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=fnIdx + 1U64 defOffset=m.name.start />))
+        mut val registerSurface = true
+        if m.isVia {
+            val target = <Bind nameStart=m.viaName.start nameLen=m.viaName.end - m.viaName.start fieldStart=m.viaName.start fieldLen=m.viaName.end - m.viaName.start />
+            registerSurface = !spansEqual(c: inout self, aStart: nameN.nameStart, aLen: nameN.nameLen, bStart: target.nameStart, bLen: target.nameLen)
+        }
+        (try self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.lowerMethodReceiverType(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=recvTraitArgs.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=fnIdx + 1U64 defOffset=m.name.start />, registerSurface: registerSurface))
         try self.appendSyntaxMemberBounds(fnIdx: fnIdx, member: m)
         try self.appendSyntaxImplBounds(fnIdx: fnIdx, im: im)
         self.lowerAssociatedOwner = savedAssociatedOwner
@@ -768,14 +805,7 @@ pub impl Comp {
         if im.isTraitImpl {
             if m.isVia {
                 val realN: Bind = self.internBytes(s: m.viaName)
-                self.decls.methodAliases.append(<MethodAlias recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) aliasStart=nameN.nameStart aliasLen=nameN.nameLen aliasId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) realStart=realN.nameStart realLen=realN.nameLen realId=intern(c: inout self, start: realN.nameStart, len: realN.nameLen) />)
-                witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=false isExtern=false />)
-                self.lowerAssociatedOwner = savedAssociatedOwner
-                self.lowerAssociatedArgs = savedAssociatedArgs
-                self.cur.typeParams = savedTP
-                self.lowerWhereTypes = savedWT
-                self.lowerWhereTraits = savedWTr
-                return <Result.Ok value=() />
+                self.decls.viaWitnesses.append(<ViaWitness functionIndex=self.arena.functionCount() targetNameId=intern(c: inout self, start: realN.nameStart, len: realN.nameLen) />)
             }
             witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=false isExtern=false />)
         }
@@ -784,7 +814,11 @@ pub impl Comp {
         if recvTraitOwner == 0U64 {
             self.cur.lowerRetTy = self.groundTermInEnvironment(ref: retRef, params: [], values: [], selfRef: recvTy)
         }
-        val body: U64 = (try self.lowerBlock(b: m.body))
+        val body: U64 = if m.isVia {
+            give (try self.lowerViaBody(params: params, receiver: recvN, receiverType: recvTy, target: self.internBytes(s: m.viaName), isAssoc: isAssoc, isAsync: m.isAsync, hasRet: effHasRet, offset: m.nameSpan.start))
+        } else {
+            give (try self.lowerBlock(b: m.body))
+        }
         self.cur.lowerRetTy = savedRet
         val fnIdx: U64 = self.arena.functionCount()
         // an extension method (spec/09) is tagged with its extension's name id so it is
@@ -803,7 +837,12 @@ pub impl Comp {
             originTraitOwner = originTrait.nameStart
             originTraitArity = im.traitArgs.count()
         }
-        (try self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.lowerMethodReceiverType(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=recvTraitArgs.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=fnIdx + 1U64 defOffset=m.nameSpan.start />))
+        mut val registerSurface = true
+        if m.isVia {
+            val target = self.internBytes(s: m.viaName)
+            registerSurface = !spansEqual(c: inout self, aStart: nameN.nameStart, aLen: nameN.nameLen, bStart: target.nameStart, bLen: target.nameLen)
+        }
+        (try self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.lowerMethodReceiverType(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=recvTraitArgs.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=fnIdx + 1U64 defOffset=m.nameSpan.start />, registerSurface: registerSurface))
         try self.appendFuncBounds(fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits, types: m.whereTypes, traitTypes: m.whereTraitTypes)
         try self.appendFuncBounds(fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits, types: im.whereTypes, traitTypes: im.whereTraitTypes)
         self.lowerAssociatedOwner = savedAssociatedOwner

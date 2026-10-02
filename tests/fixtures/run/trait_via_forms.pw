@@ -1,0 +1,36 @@
+use @Std/Io only { print }
+trait Read { fn read() -> I64 }
+trait Change { inout fn change(amount: I64) }
+trait Create { assoc fn create(value: I64) -> I64 }
+trait Select {
+    fn select(value: I64) -> I64
+    fn select(value: String) -> I64
+}
+struct Counter { mut val value: I64 }
+impl Counter {
+    fn read() -> I64 { return self.value }
+    inout fn increment(amount: I64) { self.value += amount }
+    assoc fn calculate(value: I64) -> I64 { return value + 1I64 }
+    fn resolve(value: I64) -> I64 { return value }
+    fn resolve(value: String) -> I64 { return 9I64 }
+}
+impl Counter as Read { fn read() -> I64 via read }
+impl Counter as Change { inout fn change(amount: I64) via increment }
+impl Counter as Create { assoc fn create(value: I64) -> I64 via calculate }
+impl Counter as Select {
+    fn select(value: I64) -> I64 via resolve
+    fn select(value: String) -> I64 via resolve
+}
+fn readValue[T](value: T) -> I64 where T: Read { return value.read() }
+fn createValue[T](value: T) -> I64 where T: Create { return T.create(value: 5I64) }
+fn main() {
+    mut val counter = <Counter value=1I64 />
+    print(counter#Read.read())
+    print(readValue(value: counter))
+    counter.change(amount: 2I64)
+    print(counter#Read.read())
+    print(Counter.create(value: 3I64))
+    print(createValue(value: counter))
+    print(counter.select(value: 8I64))
+    print(counter.select(value: "s"))
+}
