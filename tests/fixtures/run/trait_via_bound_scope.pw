@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+
+trait Allowed {}
+trait Action { fn go[U](value: U) -> I64 where U: Allowed }
+struct Input {}
+impl Input as Allowed {}
+struct Worker {}
+impl Worker {
+    fn perform[U](value: U) -> I64 { return 7I64 }
+}
+impl Worker as Action { fn go[U](value: U) -> I64 via perform }
+fn invoke[T](worker: T) -> I64 where T: Action {
+    return worker.go(value: <Input />)
+}
+fn main() {
+    val worker = <Worker />
+    print(worker.perform(value: 1I64))
+    print(worker.go(value: <Input />))
+    print(invoke(worker: worker))
+}
