@@ -428,6 +428,8 @@ pub impl Comp {
                 try self.tcCheckGenericArgConsistency(f: mf, args: args)
                 val ps: Array[Param] = self.copyFuncParams(params: mf.params)
                 val genericRecv: Bool = self.isGenericInst(ref: rt.ref)
+                mut val environment = <InstanceEnvironment />
+                if genericRecv { environment = (try self.finalMethodEnvironment(f: mf, receiverRef: rt.ref, args: args)) }
                 mut val i: U64 = 0
                 while i < args.len {
                     val pi: U64 = self.paramIndexForArg(params: mf.params, args: args, argIdx: i)
@@ -435,54 +437,11 @@ pub impl Comp {
                         val p: Param = ps[pi]
                         try self.checkArgInoutMode(p: p, arg: self.argAt(args: args, index: i))
                         if genericRecv {
-                            // a CONCRETE primitive param (`n: I64`) on a generic receiver
-                            // needs no grounding — check it directly. (substTypeInfo with the
-                            // method's own type params mis-grounds a method-own generic like
-                            // `fold[B]`'s `B`, so only primitives are checked this way.)
-                            if self.isPrimType(start: p.tyStart, len: p.tyLen) {
-                                try self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
-                                try self.tcCheckValue(expectedRef: p.ty, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
-                            } else {
-                                // resolve the param's type under the receiver's
-                                // instantiation so a literal arg gets the concrete context.
-                                val pti: TypeInfo = (try self.substTypeInfo(instRef: rt.ref, params: self.copyFuncBinds(binds: mf.typeParams), tyRef: p.ty))
-                                try self.checkLitTi(id: self.argAt(args: args, index: i).expr, ti: pti)
-                                // full type-compatibility against the GROUNDED param type — a
-                                // typed value whose type disagrees with the (instantiated)
-                                // parameter (`w.combine(x: 5I64)` on `W[String]` stores an I64
-                                // where a String is expected). checkLitTi only range-checks a
-                                // literal against its own suffix. A grounded String/primitive
-                                // carries no TypeRef ref (kind 1 / kind 0 are name-only), so
-                                // synthesize one from the grounded name. BUT a param whose head
-                                // is a METHOD-OWN type param (the tail of mf.typeParams beyond the
-                                // receiver's own params — e.g. `fold[B]`'s accumulator `B`, which
-                                // may even share a NAME with a conformer param) is NOT grounded by
-                                // the receiver instance: it is abstract here, so keep it lenient
-                                // (else `fold(init: 0U64, …)` on `MapIter[…,B=I64]` false-rejects).
-                                mut val headMethodOwn: Bool = false
-                                if p.ty != 0U64 {
-                                    val nConf: U64 = self.recvOwnParamCount(rt: rt)
-                                    val headId: U64 = self.arena.typeTerms[p.ty].nameId
-                                    mut val mk: U64 = nConf
-                                    while mk < mf.typeParams.count() {
-                                        if self.funcBindAt(binds: mf.typeParams, index: mk).nameId == headId {
-                                            headMethodOwn = true
-                                        }
-                                        mk += 1U64
-                                    }
-                                }
-                                if !(headMethodOwn) {
-                                    mut val pref: U64 = pti.ref
-                                    if pref == 0U64 {
-                                        if pti.nameLen > 0U64 {
-                                            pref = self.simpleTypeRef(nameStart: pti.nameStart, nameLen: pti.nameLen)
-                                        }
-                                    }
-                                    if pref != 0U64 {
-                                        try self.tcCheckValue(expectedRef: pref, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
-                                    }
-                                }
-                            }
+                            // Parameter checking uses the same lexical receiver and
+                            // method substitutions as return typing and finalization.
+                            val parameterType = (try self.groundFinalMethodSignatureInEnvironment(f: mf, environment: environment, signatureTerm: p.ty))
+                            try self.checkLitTi(id: self.argAt(args: args, index: i).expr, ti: self.typeInfoOfRef(ref: parameterType))
+                            try self.tcCheckValue(expectedRef: parameterType, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
                         } else {
                             try self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
                             try self.tcCheckValue(expectedRef: p.ty, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")

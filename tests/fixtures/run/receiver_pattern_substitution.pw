@@ -1,0 +1,30 @@
+use @Std/Io only { print }
+
+struct Pair[A, B] {
+    val first: A
+    val second: B
+}
+
+impl[T] Pair[String, T] {
+    fn payload() -> T { return self.second }
+    fn other[U](value: U) -> U { return value }
+}
+
+impl[A, B] Pair[B, A] {
+    fn reorderedFirst() -> B { return self.first }
+}
+
+struct Envelope[T] { val value: T }
+
+impl[T] Envelope[Array[T]] {
+    fn first() -> T { return self.value[0U64] }
+}
+
+fn main() {
+    val pair = <Pair first="first" second=42I64 />
+    print(pair.payload())
+    print(pair.reorderedFirst())
+    print(pair.other(value: "method"))
+    val envelope: Envelope[Array[I64]] = <Envelope value=[7I64] />
+    print(envelope.first())
+}

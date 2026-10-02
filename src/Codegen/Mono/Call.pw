@@ -1346,17 +1346,6 @@ pub impl Comp {
             calleeProof = (try self.providedBodyProof(f: f, receiverRef: recvInst))
         }
         if f.typeParams.count() > 0U64 {
-            // An associated callable whose complete generic signature is its
-            // receiver subject (`Optional[T].empty()` and
-            // `Optional[T].fromValue(value:)`) takes T from that selected
-            // receiver, not from an independent inference pass.  This holds
-            // equally for zero- and value-argument factories.
-            if f.isAssoc && recvInst != 0U64 && recvInst < self.arena.typeCount() {
-                val recvArgs: Array[U64] = self.arena.typeAt(index: recvInst).args
-                if recvArgs.count() == f.typeParams.count() && (try self.fnArgsAllGround(args: recvArgs)) {
-                    return <Result.Ok value=<Optional.Some v=<SelectedCallableSubstitution receiverRef=recvInst args=recvArgs proof=calleeProof /> /> />
-                }
-            }
             // A recorded call template owns the parametric substitution.  Its
             // grounded values are the primary final-builder input; legacy
             // method producers that have not recorded substitutions yet keep
@@ -1395,41 +1384,18 @@ pub impl Comp {
                     ii += 1U64
                 }
             }
-            mut val recvCount: U64 = 0U64
-            // Associated callables carry their generic subject exactly like
-            // instance methods: `impl[T] Box[T] as Eq { fn eq… }` has no value
-            // self, yet `T` is fixed by the selected Box instance.  Preserve
-            // those leading substitutions here so LLVM never reconstructs them
-            // from an operand or expected type.
+            // Receiver patterns bind lexical parameters, not nominal argument
+            // positions. Share this projection with declaration-time method typing.
             if (f.hasRecv || f.isAssoc) && recvInst != 0U64 && recvInst < self.arena.typeCount() {
-                recvCount = self.recvParamCount(ref: recvInst)
-                // `Pair.of(...)` is written against the generic head `Pair`,
-                // whose source TypeRef has no actual arguments.  In that form
-                // the call arguments (or expected result) determine *all*
-                // parameters; consume only substitutions the receiver actually
-                // carries.
-                if recvCount > self.arena.typeAt(index: recvInst).args.count() {
-                    recvCount = self.arena.typeAt(index: recvInst).args.count()
-                }
-                mut val ri: U64 = 0U64
-                while ri < recvCount {
-                    if ri < self.arena.typeAt(index: recvInst).args.count() {
-                        finalArgs.append(self.arena.typeAt(index: recvInst).args[ri])
-                    }
-                    ri += 1U64
-                }
+                val receiverMatch = (try self.methodReceiverEnvironment(f: f, instRef: recvInst))
+                finalArgs = (try self.receiverCallableArguments(f: f, receiverRef: recvInst, receiverMatch: receiverMatch))
+            } else {
+                while finalArgs.count() < f.typeParams.count() { finalArgs.append(0U64) }
             }
-            mut val ai: U64 = recvCount
-            while ai < inferred.count() {
-                finalArgs.append(inferred[ai])
+            mut val ai = 0U64
+            while ai < inferred.count() && ai < finalArgs.count() {
+                if finalArgs[ai] == 0U64 { finalArgs.set(i: ai, value: inferred[ai]) }
                 ai += 1U64
-            }
-            // Keep the vector positional even when a legacy inference path did
-            // not materialize an unconstrained slot.  The conformance binding
-            // below fills such slots by declaration identity; leaving the slot
-            // absent would make that information impossible to apply.
-            while finalArgs.count() < f.typeParams.count() {
-                finalArgs.append(0U64)
             }
             // Generic return-position inference consumes the call template's
             // expected-result context, never the call result itself: before
@@ -1444,7 +1410,9 @@ pub impl Comp {
             val traitArgs: Array[U64] = (try self.providedTraitArgsForFinalCallee(callee: callee, recvRef: recvInst))
             mut val tai: U64 = 0U64
             while tai < traitArgs.count() {
-                val target: U64 = recvCount + tai
+                // Generated provided signatures place trait parameters after
+                // the nominal receiver binders; this is their declared layout.
+                val target: U64 = self.recvParamCount(ref: recvInst) + tai
                 if target < finalArgs.count() {
                     if finalArgs[target] == 0U64 || !((try self.tyRefIsGround(ref: finalArgs[target]))) { finalArgs[target] = traitArgs[tai] }
                 }

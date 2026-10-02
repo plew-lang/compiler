@@ -1,0 +1,8 @@
+struct Pair[A, B] { val first: A val second: B }
+impl[T] Pair[String, T] {
+    fn check(value: T) {}
+}
+fn main() {
+    val pair: Pair[String, I64] = <Pair first="first" second=42I64 />
+    pair.check(value: "wrong")
+}

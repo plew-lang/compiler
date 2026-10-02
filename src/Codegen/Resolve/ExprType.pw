@@ -91,24 +91,10 @@ pub impl Comp {
         return <Result.Ok value=self.typeInfoOfName(start: f.retStart, len: f.retLen, isArray: f.retIsArray) />
     }
 
-    // Build the selected method's complete lexical substitution once.  Return
-    // typing and parameter typing are two views of the same final callable:
-    // letting either reconstruct a weaker receiver-only substitution loses a
-    // method/impl binder such as Array[T].append(value: T).  An empty
-    // environment is the explicit "not a receiver-instantiated callable"
-    // outcome; a valid non-generic method has a nonzero receiverRef and no
-    // parameter entries.
-    inout fn finalMethodEnvironment(f: Func, receiverRef: U64, args: ArgRange) -> Result[InstanceEnvironment, CompileDiagnostic] {
-        if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() {
-            return <Result.Ok value=<InstanceEnvironment /> />
-        }
-        // A method's generic binder list can contain the nominal declaration
-        // binder, an impl receiver-pattern binder, and method-owned binders.
-        // They are lexical identities, not positional aliases. Finalization
-        // retains the complete WitnessMatch here, including legacy binder
-        // indexes while the ParamId migration is still in flight.
-        val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: receiverRef))
-        if f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 { return <Result.Ok value=<InstanceEnvironment /> />}
+    // Project structural receiver bindings into the selected callable's lexical
+    // parameter vector. Nominal receiver arguments are not that vector: patterns
+    // may fix, reorder, or nest them, and methods may own additional parameters.
+    inout fn receiverCallableArguments(f: Func, receiverRef: U64, receiverMatch: WitnessMatch) -> Result[Array[U64], CompileDiagnostic] {
         mut val fullArgs: Array[U64] = []
         mut val fi: U64 = 0U64
         while fi < f.typeParams.count() {
@@ -163,10 +149,32 @@ pub impl Comp {
             }
             bi += 1U64
         }
+        return <Result.Ok value=fullArgs />
+    }
+
+    // Build the selected method's complete lexical substitution once.  Return
+    // typing and parameter typing are two views of the same final callable:
+    // letting either reconstruct a weaker receiver-only substitution loses a
+    // method/impl binder such as Array[T].append(value: T).  An empty
+    // environment is the explicit "not a receiver-instantiated callable"
+    // outcome; a valid non-generic method has a nonzero receiverRef and no
+    // parameter entries.
+    inout fn finalMethodEnvironment(f: Func, receiverRef: U64, args: ArgRange) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() {
+            return <Result.Ok value=<InstanceEnvironment /> />
+        }
+        // A method's generic binder list can contain the nominal declaration
+        // binder, an impl receiver-pattern binder, and method-owned binders.
+        // They are lexical identities, not positional aliases. Finalization
+        // retains the complete WitnessMatch here, including legacy binder
+        // indexes while the ParamId migration is still in flight.
+        val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: receiverRef))
+        if f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 { return <Result.Ok value=<InstanceEnvironment /> />}
+        mut val fullArgs: Array[U64] = (try self.receiverCallableArguments(f: f, receiverRef: receiverRef, receiverMatch: receiverMatch))
         // Fill only binders the receiver pattern did not determine. Those are
         // method-owned generic parameters and may be inferred from arguments.
         val inferred: Array[U64] = (try self.inferFnArgs(f: f, args: args))
-        fi = 0U64
+        mut val fi = 0U64
         while fi < inferred.count() && fi < fullArgs.count() {
             if fullArgs[fi] == 0U64 { fullArgs.set(i: fi, value: inferred[fi]) }
             fi += 1U64
