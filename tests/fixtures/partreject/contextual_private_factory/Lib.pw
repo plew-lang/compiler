@@ -1,0 +1,3 @@
+pub struct Secret { val stored: I64 }
+impl Secret { factory(value: I64) { return <Secret stored=value /> } }
+pub fn consume(value: Secret) {}

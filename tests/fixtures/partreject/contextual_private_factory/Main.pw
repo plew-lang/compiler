@@ -1,0 +1,2 @@
+use ./Lib only { Secret, consume }
+fn main() { consume(value: <value=1I64 />) }

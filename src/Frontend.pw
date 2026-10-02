@@ -197,6 +197,8 @@ pub struct Comp {
     // block. Record requests local uses; declaration loading checks only the
     // remaining signature/field uses. Synthetic types are not new source uses.
     pub mut val loweringTypeUses: Array[U64] = []
+    // Source constructions awaiting a parameter or result expectation.
+    pub mut val pendingConstructionContexts: Set[U64] = Set.new()
     pub mut val expressionTypeUses: Dictionary[U64, Array[U64]] = [:]
     pub mut val blockTypeUses: Dictionary[U64, Array[U64]] = [:]
     pub mut val checkedTypeUses: Set[U64] = Set.new()

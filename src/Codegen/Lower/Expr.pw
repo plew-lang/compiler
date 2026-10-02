@@ -227,9 +227,11 @@ pub impl Comp {
                 }
                 mut val tyRef = self.contextualConstructionType(nameStart: tn.nameStart, nameLen: tn.nameLen, args: targs, siteOffset: typeNameSpan.start, ctxRef: ctxRef, isVariant: constructionEnum)
                 if typeNameSpan.start == typeNameSpan.end && typeName.bytes().count() == 0U64 {
-                    tyRef = (try self.requireConstructionContext(ctxRef: ctxRef, offset: span.start))
-                    val context = self.arena.typeAt(index: tyRef)
-                    tn = <Bind nameStart=context.nameStart nameLen=context.nameLen fieldStart=0U64 fieldLen=0U64 />
+                    tyRef = ctxRef
+                    if tyRef != 0U64 {
+                        val context = self.arena.typeAt(index: tyRef)
+                        tn = <Bind nameStart=context.nameStart nameLen=context.nameLen fieldStart=0U64 fieldLen=0U64 />
+                    }
                 }
                 mut val vStart: U64 = 0
                 mut val vLen: U64 = 0
@@ -240,6 +242,7 @@ pub impl Comp {
                 }
                 val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields, typeRef: tyRef, variant: constructorVariant, isEnum: constructionEnum))
                 result = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=vStart variantLen=vLen isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fs) />)
+                if typeNameSpan.start == typeNameSpan.end && typeName.bytes().count() == 0U64 && ctxRef == 0U64 { self.pendingConstructionContexts.insert(result) }
             }
             ExprAst.ArrayLit(val elems, val span) => {
                 mut val es: Array[U64] = []
@@ -543,9 +546,11 @@ pub impl Comp {
                 }
                 mut val tyRef = self.contextualConstructionType(nameStart: typeName.start, nameLen: typeName.end - typeName.start, args: typeArgs, siteOffset: e.name.start, ctxRef: ctxRef, isVariant: constructionEnum)
                 if e.name.start == e.name.end {
-                    tyRef = (try self.requireConstructionContext(ctxRef: ctxRef, offset: e.span.start))
-                    val context = self.arena.typeAt(index: tyRef)
-                    typeName = <Span start=context.nameStart end=context.nameStart + context.nameLen />
+                    tyRef = ctxRef
+                    if tyRef != 0U64 {
+                        val context = self.arena.typeAt(index: tyRef)
+                        typeName = <Span start=context.nameStart end=context.nameStart + context.nameLen />
+                    }
                 }
                 mut val variantId: U64 = 0U64
                 if constructionEnum {
@@ -553,6 +558,7 @@ pub impl Comp {
                 }
                 val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e, typeRef: tyRef, variantId: variantId, isEnum: constructionEnum))
                 result = self.pushExpr(e: <Expr.Make typeStart=typeName.start typeLen=typeName.end - typeName.start variantStart=variantName.start variantLen=variantName.end - variantName.start isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fields) />)
+                if e.name.start == e.name.end && ctxRef == 0U64 { self.pendingConstructionContexts.insert(result) }
             }
             SyntaxExprKind.Range => {
                 result = (try self.lowerSyntaxRange(expr: e))

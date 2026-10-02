@@ -1,0 +1,27 @@
+use @Std/Core only { Format, FormatOptions, TextOutput }
+use @Std/Io only { print }
+struct Options { val prefix: String }
+impl Options as FormatOptions {
+    factory() { return <Options prefix="default:" /> }
+}
+impl Options {
+    factory tagged(prefix: String) { return <Options prefix=prefix /> }
+}
+struct Item { val name: String }
+impl Item as Format {
+    type Options = Options
+    fn format[Output](output: inout Output, options: Options) -> Result[(), Output.Error] where Output: TextOutput {
+        try output.write(options.prefix)
+        return output.write(self.name)
+    }
+}
+fn explicitDefault[T](value: T) -> String where T: Format {
+    return <String value=value options=</> />
+}
+fn main() {
+    val item = <Item name="item" />
+    print(explicitDefault(value: item))
+    print(<String value=item options=</> />)
+    print(<String value=item options=<prefix="custom:" /> />)
+    print(<String value=item options=<.tagged prefix="named:" /> />)
+}

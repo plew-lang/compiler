@@ -1435,6 +1435,7 @@ pub impl Comp {
     // without reopening the AST or reading Mono's ambient scan state.
     inout fn recordSemanticExprExpectedResult(exprId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
         if expectedTerm == 0U64 || expectedTerm >= self.arena.typeCount() { return <Result.Ok value=() /> }
+        if self.pendingConstructionContexts.contains(exprId) { try self.recordExpr(exprId: exprId, expectedTerm: expectedTerm) }
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         try self.recordCallTemplateExpectedResult(exprId: exprId, expectedTerm: expectedTerm)

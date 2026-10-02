@@ -1223,7 +1223,12 @@ pub impl Comp {
     // unique enclosing chain stage. The payload is a structural child input,
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
-    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false) -> Result[(), CompileDiagnostic] {
+        if self.pendingConstructionContexts.contains(exprId) {
+            if expectedTerm == 0U64 && deferContext { return <Result.Ok value=() /> }
+            val context = (try self.requireConstructionContext(ctxRef: expectedTerm, offset: self.exprOffset(id: exprId)))
+            try self.resolveConstructionContext(exprId: exprId, context: context)
+        }
         if !self.genMode {
             if exprId < self.sourceExpressionLimit { try self.checkExpressionVisibility(exprId: exprId) }
             match self.expressionTypeUses.get(key: exprId) {
@@ -1313,7 +1318,7 @@ pub impl Comp {
             Expr.Call(nameStart: val callStart, nameLen: val callLen, args: val args) => {
                 mut val i: U64 = 0
                 while i < args.len {
-                    try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
+                    try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true)
                     i += 1
                 }
                 // `pow(base:, exp:)` has free-call syntax but is a static
@@ -1408,7 +1413,7 @@ pub impl Comp {
                 try self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
                 mut val i: U64 = 0
                 while i < args.len {
-                    try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
+                    try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true)
                     i += 1
                 }
                 val receiverTerm: U64 = self.syntheticCallReceiverTerm(exprId: exprId, fallback: (try self.methodReceiverTerm(exprId: recv)))
@@ -1488,8 +1493,9 @@ pub impl Comp {
                         if parameterIndex < selectedMethod.params.count() {
                             val parameter: Param = self.funcParamAt(params: selectedMethod.params, index: parameterIndex)
                             val mctx: U64 = (try self.groundFinalMethodParameter(f: selectedMethod, recvTy: self.typeInfoOfRef(ref: receiverTerm), args: args, parameterTerm: parameter.ty))
+                            val argumentExpr: U64 = self.argAt(args: args, index: mk).expr
+                            if mctx != 0U64 && self.pendingConstructionContexts.contains(argumentExpr) { try self.recordExpr(exprId: argumentExpr, chainHoleRef: chainHoleRef, expectedTerm: mctx) }
                             if mctx != 0U64 && (try self.tyRefIsGround(ref: mctx)) {
-                                val argumentExpr: U64 = self.argAt(args: args, index: mk).expr
                                 val parameterType: TypeInfo = self.typeInfoOfRef(ref: mctx)
                                 try self.checkLitSpanCtx(id: argumentExpr, tyStart: parameterType.nameStart, tyLen: parameterType.nameLen, isArray: parameterType.kind == 3, ctxRef: mctx)
                                 try self.recordSemanticExprExpectedResult(exprId: argumentExpr, expectedTerm: mctx)
@@ -1534,7 +1540,7 @@ pub impl Comp {
                 try self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
                 mut val i: U64 = 0
                 while i < args.len {
-                    try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
+                    try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true)
                     i += 1
                 }
                 mut val receiverTerm: U64 = self.parametricExprTerm(exprId: recv)

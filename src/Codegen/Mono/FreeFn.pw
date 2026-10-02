@@ -260,6 +260,11 @@ pub impl Comp {
             mut val pi: U64 = 0
             while pi < f.params.count() {
                 val p: Param = self.funcParamAt(params: f.params, index: pi)
+                val supplied = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
+                if supplied < args.len && self.pendingConstructionContexts.contains(self.argAt(args: args, index: supplied).expr) {
+                    pi += 1U64
+                    continue
+                }
                 mut val cand: U64 = 0
                 if p.tyIsArray {
                     // `Array[T]` param: infer T from the argument array's element.
