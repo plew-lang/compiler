@@ -31,6 +31,6 @@ pub extern(plewIntrinsic) {
 // `print(x)` infers the type of `x`; a bare integer literal needs a suffix
 // (`print(42I64)`) since numeric literals have no default type (spec/02).
 pub fn print[T](value~: T) where T: Format {
-    write(s: value.format(format: ""))
+    write(s: <String value=value />)
     write(s: "\n")
 }

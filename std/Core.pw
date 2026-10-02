@@ -1039,16 +1039,41 @@ pub trait FormatOptions {
     factory()
 }
 
-// Textual formatting (spec/02): `{x}` interpolation desugars to x.format(format:).
-// The `format` spec string (e.g. ".2") is accepted but ignored for integers for
-// now (no precision/padding yet — additive).
-pub trait Format {
-    fn format(format: String) -> String
+// Types without configurable formatting use the same stateless options value.
+pub enum DefaultFormatOptions { Default }
+pub impl DefaultFormatOptions as FormatOptions {
+    factory() { return <DefaultFormatOptions.Default /> }
 }
 
-pub impl I64 as Format {
-    fn format(format: String) -> String {
-        mut val n: I64 = self
+pub trait Format {
+    type Options: FormatOptions
+    fn format[Output](output: inout Output, options: Options) -> Result[(), Output.Error] where Output: TextOutput
+}
+
+// Only valid String fragments enter this buffer. Finishing transfers the storage
+// into String; it does not validate or copy the completed text again.
+struct StringOutput { mut val buffer: Buffer[U8] }
+impl StringOutput as TextOutput {
+    type Error = Infallible
+    inout fn write(text~: String) -> Result[(), Infallible] {
+        val bytes = text.bytes()
+        self.buffer.reserve(additionalCapacity: bytes.count())
+        for val byte in bytes { self.buffer.append(byte) }
+        return <Result.Ok value=() />
+    }
+}
+pub impl[T] String where T: Format {
+    factory(value: T, options: T.Options = </>) {
+        mut val output = <StringOutput buffer=Buffer.new() />
+        value.format(output: inout output, options: options).value()
+        return <String buffer=output.buffer />
+    }
+}
+
+// Decimal conversion is shared across destinations rather than specialized for
+// every TextOutput. All emitted bytes are ASCII and therefore valid UTF-8.
+fn signedDecimalText(value~: I64) -> String {
+        mut val n: I64 = value
         mut val neg: Bool = false
         if n < 0 {
             neg = true
@@ -1076,13 +1101,11 @@ pub impl I64 as Format {
             i = i - 1
             out.append(digits[i])
         }
-        return stringFromCheckedBytes(bytes: out)
-    }
+        return stringFromBytesUnchecked(out)
 }
 
-pub impl U64 as Format {
-    fn format(format: String) -> String {
-        mut val n: U64 = self
+fn unsignedDecimalText(value~: U64) -> String {
+        mut val n: U64 = value
         mut val digits: Array[U8] = []
         if n == 0 {
             digits.append(48)
@@ -1098,54 +1121,80 @@ pub impl U64 as Format {
             i = i - 1
             out.append(digits[i])
         }
-        return stringFromCheckedBytes(bytes: out)
-    }
+        return stringFromBytesUnchecked(out)
 }
 
-// The narrower integer types delegate to the 64-bit formatters via a lossless
-// widening (`as` allows signed->wider-signed and unsigned->wider-unsigned).
+pub impl I64 as Format {
+    type Options = DefaultFormatOptions
+    fn format[Output](output: inout Output, options: DefaultFormatOptions) -> Result[(), Output.Error] where Output: TextOutput {
+        return output.write(signedDecimalText(self))
+    }
+}
+pub impl U64 as Format {
+    type Options = DefaultFormatOptions
+    fn format[Output](output: inout Output, options: DefaultFormatOptions) -> Result[(), Output.Error] where Output: TextOutput {
+        return output.write(unsignedDecimalText(self))
+    }
+}
 pub impl I8 as Format {
-    fn format(format: String) -> String { return (self as I64).format(format: format) }
+    type Options = DefaultFormatOptions
+    fn format[Output](output: inout Output, options: DefaultFormatOptions) -> Result[(), Output.Error] where Output: TextOutput {
+        return (self as I64).format(output: inout output, options: options)
+    }
 }
 pub impl I16 as Format {
-    fn format(format: String) -> String { return (self as I64).format(format: format) }
-}
-pub impl I32 as Format {
-    fn format(format: String) -> String { return (self as I64).format(format: format) }
-}
-pub impl U8 as Format {
-    fn format(format: String) -> String { return (self as U64).format(format: format) }
-}
-pub impl U16 as Format {
-    fn format(format: String) -> String { return (self as U64).format(format: format) }
-}
-pub impl U32 as Format {
-    fn format(format: String) -> String { return (self as U64).format(format: format) }
-}
-pub impl F64 as Format {
-    fn format(format: String) -> String { return floatToString(self) }
-}
-pub impl F32 as Format {
-    // F32 is represented as double for now, so widening to F64 is a no-op.
-    fn format(format: String) -> String { return floatToString(self as F64) }
-}
-pub impl Bool as Format {
-    // Bool prints as 1/0 (matching the integer lowering), not true/false.
-    fn format(format: String) -> String {
-        if self {
-            return "1"
-        } else {
-            return "0"
-        }
+    type Options = DefaultFormatOptions
+    fn format[Output](output: inout Output, options: DefaultFormatOptions) -> Result[(), Output.Error] where Output: TextOutput {
+        return (self as I64).format(output: inout output, options: options)
     }
 }
-
+pub impl I32 as Format {
+    type Options = DefaultFormatOptions
+    fn format[Output](output: inout Output, options: DefaultFormatOptions) -> Result[(), Output.Error] where Output: TextOutput {
+        return (self as I64).format(output: inout output, options: options)
+    }
+}
+pub impl U8 as Format {
+    type Options = DefaultFormatOptions
+    fn format[Output](output: inout Output, options: DefaultFormatOptions) -> Result[(), Output.Error] where Output: TextOutput {
+        return (self as U64).format(output: inout output, options: options)
+    }
+}
+pub impl U16 as Format {
+    type Options = DefaultFormatOptions
+    fn format[Output](output: inout Output, options: DefaultFormatOptions) -> Result[(), Output.Error] where Output: TextOutput {
+        return (self as U64).format(output: inout output, options: options)
+    }
+}
+pub impl U32 as Format {
+    type Options = DefaultFormatOptions
+    fn format[Output](output: inout Output, options: DefaultFormatOptions) -> Result[(), Output.Error] where Output: TextOutput {
+        return (self as U64).format(output: inout output, options: options)
+    }
+}
+pub impl F64 as Format {
+    type Options = DefaultFormatOptions
+    fn format[Output](output: inout Output, options: DefaultFormatOptions) -> Result[(), Output.Error] where Output: TextOutput {
+        return output.write(floatToString(self))
+    }
+}
+pub impl F32 as Format {
+    type Options = DefaultFormatOptions
+    fn format[Output](output: inout Output, options: DefaultFormatOptions) -> Result[(), Output.Error] where Output: TextOutput {
+        return output.write(floatToString(self as F64))
+    }
+}
+pub impl Bool as Format {
+    type Options = DefaultFormatOptions
+    fn format[Output](output: inout Output, options: DefaultFormatOptions) -> Result[(), Output.Error] where Output: TextOutput {
+        if self { return output.write("1") }
+        return output.write("0")
+    }
+}
 pub impl String as Format {
-    // A string formats as itself (the `format` spec is ignored for now, like the
-    // integer impls). Without this conformance `print(s)` for a non-literal String
-    // fails the `where T: Format` bound on `print` (spec/02).
-    fn format(format: String) -> String {
-        return self
+    type Options = DefaultFormatOptions
+    fn format[Output](output: inout Output, options: DefaultFormatOptions) -> Result[(), Output.Error] where Output: TextOutput {
+        return output.write(self)
     }
 }
 

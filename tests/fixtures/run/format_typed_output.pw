@@ -1,0 +1,25 @@
+use @Std/Core only { Format, TextOutput, DefaultFormatOptions }
+use @Std/Io only { print }
+enum WriteError { Full }
+struct LimitedOutput { mut val writes: I64 }
+impl LimitedOutput as TextOutput {
+    type Error = WriteError
+    inout fn write(text~: String) -> Result[(), WriteError] {
+        self.writes += 1
+        return <Result.Err error=<WriteError.Full /> />
+    }
+}
+fn main() {
+    print(<String value=(-9223372036854775807I64 - 1I64) />)
+    print(<String value=18446744073709551615U64 />)
+    print(<String value=0I64 />)
+    print(<String value=true />)
+    print(<String value="text" />)
+    mut val output = <LimitedOutput writes=0 />
+    val result = (42I64).format(output: inout output, options: <DefaultFormatOptions />)
+    match result {
+        Result.Ok(val value) => { print("unexpected") }
+        Result.Err(val error) => { print("failed") }
+    }
+    print(output.writes)
+}
