@@ -1219,6 +1219,32 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // All statically selected method surfaces use the same argument context.
+    inout fn recordSelectedMethodArguments(callee: U64, receiverTerm: U64, args: ArgRange, chainHoleRef: U64) -> Result[(), CompileDiagnostic] {
+        if callee < self.arena.functionCount() {
+            val selectedMethod: Func = self.arena.functionAt(index: callee)
+            mut val mk: U64 = 0U64
+            while mk < args.len {
+                val parameterIndex: U64 = self.paramIndexForArg(params: selectedMethod.params, args: args, argIdx: mk)
+                if parameterIndex < selectedMethod.params.count() {
+                    val parameter: Param = self.funcParamAt(params: selectedMethod.params, index: parameterIndex)
+                    val mctx: U64 = (try self.groundFinalMethodParameter(f: selectedMethod, recvTy: self.typeInfoOfRef(ref: receiverTerm), args: args, parameterTerm: parameter.ty))
+                    val argumentExpr: U64 = self.argAt(args: args, index: mk).expr
+                    if mctx != 0U64 && self.pendingConstructionContexts.contains(argumentExpr) { try self.recordExpr(exprId: argumentExpr, chainHoleRef: chainHoleRef, expectedTerm: mctx) }
+                    if mctx != 0U64 && (try self.tyRefIsGround(ref: mctx)) {
+                        val parameterType: TypeInfo = self.typeInfoOfRef(ref: mctx)
+                        try self.checkLitSpanCtx(id: argumentExpr, tyStart: parameterType.nameStart, tyLen: parameterType.nameLen, isArray: parameterType.kind == 3, ctxRef: mctx)
+                        try self.recordSemanticExprExpectedResult(exprId: argumentExpr, expectedTerm: mctx)
+                        try self.recordArrayLitCtx(exprId: argumentExpr, ctxRef: mctx)
+                        try self.tcCheckValue(expectedRef: mctx, valueExpr: argumentExpr, pos: "arg")
+                    }
+                }
+                mk += 1U64
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
     // Record an expression under an optional-chain payload supplied by its
     // unique enclosing chain stage. The payload is a structural child input,
     // not Cursor state: ordinary expressions use 0, and every continuation
@@ -1477,35 +1503,7 @@ pub impl Comp {
                     StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => { methodCallee = self.arena.functionCount() }
                     _ => {}
                 }
-                // Context-type arguments from the selected method
-                // parameter. `receiverTerm` is the just-recorded semantic
-                // receiver fact; reopening `typeOf(recv)` here loses an
-                // Array's nested argument and can leave `[1, 2]` without its
-                // required Array[I32] context. This is a producer boundary,
-                // so ground the declaration parameter once under that term.
-                // Validate both contextual literals and typed values before freezing
-                // argument sources; context does not permit implicit conversion.
-                if methodCallee < self.arena.functionCount() {
-                    val selectedMethod: Func = self.arena.functionAt(index: methodCallee)
-                    mut val mk: U64 = 0U64
-                    while mk < args.len {
-                        val parameterIndex: U64 = self.paramIndexForArg(params: selectedMethod.params, args: args, argIdx: mk)
-                        if parameterIndex < selectedMethod.params.count() {
-                            val parameter: Param = self.funcParamAt(params: selectedMethod.params, index: parameterIndex)
-                            val mctx: U64 = (try self.groundFinalMethodParameter(f: selectedMethod, recvTy: self.typeInfoOfRef(ref: receiverTerm), args: args, parameterTerm: parameter.ty))
-                            val argumentExpr: U64 = self.argAt(args: args, index: mk).expr
-                            if mctx != 0U64 && self.pendingConstructionContexts.contains(argumentExpr) { try self.recordExpr(exprId: argumentExpr, chainHoleRef: chainHoleRef, expectedTerm: mctx) }
-                            if mctx != 0U64 && (try self.tyRefIsGround(ref: mctx)) {
-                                val parameterType: TypeInfo = self.typeInfoOfRef(ref: mctx)
-                                try self.checkLitSpanCtx(id: argumentExpr, tyStart: parameterType.nameStart, tyLen: parameterType.nameLen, isArray: parameterType.kind == 3, ctxRef: mctx)
-                                try self.recordSemanticExprExpectedResult(exprId: argumentExpr, expectedTerm: mctx)
-                                try self.recordArrayLitCtx(exprId: argumentExpr, ctxRef: mctx)
-                                try self.tcCheckValue(expectedRef: mctx, valueExpr: argumentExpr, pos: "arg")
-                            }
-                        }
-                        mk += 1U64
-                    }
-                }
+                try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef)
                 try self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverTerm: receiverTerm, args: args)
                 if methodCallee >= self.arena.functionCount() {
                     try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -1562,6 +1560,7 @@ pub impl Comp {
                     val surface: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
                     methodCallee = (try self.resolveExtMethodFinal(recv: recv, srcStart: surface.start, srcLen: surface.len, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args))
                 }
+                try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef)
                 try self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: receiverSource, receiverTerm: receiverTerm, args: args)
                 if methodCallee >= self.arena.functionCount() {
                     try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)

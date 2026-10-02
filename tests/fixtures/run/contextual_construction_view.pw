@@ -1,0 +1,6 @@
+use @Std/Io only { print }
+struct Point { val value: I64 }
+struct Reader {}
+extension View { impl Reader { fn read(point: Point) -> I64 { return point.value } } }
+fn main() { val reader = <Reader />
+print(reader#View.read(point: <value=12I64 />)) }
