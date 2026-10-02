@@ -1,0 +1,21 @@
+use @Plew/Syntax only { Derive, TopItemAst, ExprAst }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+struct Inspect {}
+pub impl Inspect as Derive {
+    assoc fn derive(input: TopItemAst) -> String {
+        match input {
+            TopItemAst.Decl(val d) => {
+                match d.fields[0U64].defaultVal {
+                    ExprAst.StrLit(val raw, span: _) => { assert(raw == "\"{{{{text}}}}\"") }
+                    _ => { panic "expected literal" }
+                }
+                return "impl " + d.name + " {{ assoc fn checked() -> Bool {{ return true }} }}"
+            }
+            _ => { panic "expected declaration" }
+        }
+    }
+}
+@[Inspect]
+struct Item { val text: String = "{{text}}" }
+fn main() { print(Item.checked()) }

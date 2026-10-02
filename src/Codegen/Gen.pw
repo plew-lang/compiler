@@ -41,6 +41,10 @@ pub impl Comp {
                                 self.arena.bytes.append('\\')
                                 self.arena.bytes.append('t')
                             } else {
+                                // The synthesized literal uses the same decoder
+                                // as authored strings. Preserve source braces,
+                                // including already escaped pairs, exactly.
+                                if b == '{' || b == '}' { self.arena.bytes.append(b) }
                                 self.arena.bytes.append(b)
                             }
                         }
