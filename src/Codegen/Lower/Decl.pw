@@ -4,20 +4,11 @@
 // Lower generic parameter names `[T, U]` (Array[String]) to the arena's Bind spans.
 
 pub impl Comp {
-    inout fn traitHasAssocId(traitId: U64, assocId: U64) -> Bool {
-        mut val ti: U64 = 0
-        while ti < self.decls.traitCount() {
-            val tr: TraitDef = self.decls.traitAt(index: ti)
-            if tr.nameId == traitId {
-                mut val ai: U64 = 0
-                while ai < tr.assocTypes.count() {
-                    if self.traitBindAt(binds: tr.assocTypes, index: ai).nameId == assocId {
-                        return true
-                    }
-                    ai += 1
-                }
-            }
-            ti += 1
+    fn traitOwnerHasAssocId(owner: U64, assocId: U64) -> Bool {
+        val index = self.decls.traitOwnerIndex(offset: owner)
+        if index >= self.decls.traitOwnerCount() { return false }
+        for val member in self.decls.traitOwnerAt(index: index).assocTypes {
+            if member.nameId == assocId { return true }
         }
         return false
     }
@@ -64,11 +55,11 @@ pub impl Comp {
         while i < whereTypes.count() {
             if self.boundLhsMatchesType(lhs: whereTypes[i], t: t) {
                 if i < whereTraits.count() {
-                    val trN: Bind = self.internBytes(s: whereTraits[i])
-                    if self.traitHasAssocId(traitId: trN.nameId, assocId: assocN.nameId) {
-                        if foundId != trN.nameId {
+                    val owner = self.traitOwnerForSelector(siteOffset: t.span.start, text: whereTraits[i])
+                    if self.traitOwnerHasAssocId(owner: owner, assocId: assocN.nameId) {
+                        if foundId != owner {
                             found = whereTraits[i]
-                            foundId = trN.nameId
+                            foundId = owner
                             count += 1U64
                         }
                     }
@@ -114,11 +105,11 @@ pub impl Comp {
             if self.boundLhsMatchesSyntaxType(lhs: self.lowerWhereSyntaxTypes[i], t: t) {
                 if i < self.lowerWhereSyntaxTraits.count() {
                     val traitSpan: Span = self.lowerWhereSyntaxTraits[i]
-                    val traitId: U64 = intern(c: inout self, start: traitSpan.start, len: traitSpan.end - traitSpan.start)
-                    if self.traitHasAssocId(traitId: traitId, assocId: assocId) {
-                        if foundId != traitId {
+                    val owner = self.traitOwnerForSelectorSpan(siteOffset: t.span.start, start: traitSpan.start, len: traitSpan.end - traitSpan.start)
+                    if self.traitOwnerHasAssocId(owner: owner, assocId: assocId) {
+                        if foundId != owner {
                             found = traitSpan
-                            foundId = traitId
+                            foundId = owner
                             count += 1U64
                         }
                     }

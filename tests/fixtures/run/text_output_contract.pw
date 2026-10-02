@@ -1,0 +1,45 @@
+use @Std/Core only { TextOutput, FormatOptions, Infallible }
+use @Std/Io only { print }
+
+struct Options { val marker: I64 }
+impl Options as FormatOptions {
+    factory() { return <Options marker=7I64 /> }
+}
+fn defaultOptions[T]() -> T where T: FormatOptions { return </> }
+
+struct Counter { mut val bytes: U64 }
+impl Counter as TextOutput {
+    type Error = Infallible
+    inout fn write(text~: String) -> Result[(), Infallible] {
+        self.bytes += text.bytes().count()
+        return <Result.Ok value=() />
+    }
+}
+
+enum WriteError { Failed }
+struct Failing { mut val calls: I64 }
+impl Failing as TextOutput {
+    type Error = WriteError
+    inout fn write(text~: String) -> Result[(), WriteError] {
+        self.calls += 1I64
+        return <Result.Err error=<WriteError.Failed /> />
+    }
+}
+
+fn writePair[Output](output: inout Output) -> Result[(), Output.Error] where Output: TextOutput {
+    try output.write("abc")
+    return output.write("de")
+}
+
+fn main() {
+    val options: Options = defaultOptions()
+    print(options.marker)
+    mut val counter = <Counter bytes=0U64 />
+    writePair(output: inout counter).value()
+    print(counter.bytes)
+    mut val failing = <Failing calls=0I64 />
+    match writePair(output: inout failing) {
+        Result.Ok(val value) => { print("unexpected") }
+        Result.Err(val error) => { print(failing.calls) }
+    }
+}

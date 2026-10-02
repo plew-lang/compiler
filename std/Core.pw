@@ -1028,6 +1028,17 @@ fn digitByteU(d: U64) -> U8 {
     return 57
 }
 
+// Formatting destinations keep their own error type and completion contract.
+pub trait TextOutput {
+    type Error
+    inout fn write(text~: String) -> Result[(), Error]
+}
+
+// An omitted options expression constructs the default on every invocation.
+pub trait FormatOptions {
+    factory()
+}
+
 // Textual formatting (spec/02): `{x}` interpolation desugars to x.format(format:).
 // The `format` spec string (e.g. ".2") is accepted but ignored for integers for
 // now (no precision/padding yet — additive).
