@@ -726,6 +726,8 @@ pub enum Expr {
     // value-position `if cond { ... give a } else { ... give b }`: each branch is
     // a block ending in `give`. Lowers to a C statement-expression (like
     // MatchExpr). `else` is mandatory in value position (it must always yield).
+    // Compiler-generated expression steps; no new full-expression lifetime.
+    Sequence(body: U64)
     IfExpr(cond: U64, thenBlk: U64, elseBlk: U64)
     // `base?.<cont>` (optional chaining, spec/12): if `base` (a Chain type) yields a
     // value, the result wraps `cont` applied to that value, else empty — Swift-style

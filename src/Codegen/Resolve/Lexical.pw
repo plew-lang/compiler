@@ -112,6 +112,9 @@ pub impl Comp {
                 self.resolveLexicalModuleExpr(id: base, names: inout names)
                 self.resolveLexicalModuleExpr(id: cont, names: inout names)
             }
+            Expr.Sequence(val body) => {
+                self.resolveLexicalModuleBlock(blockId: body, names: inout names)
+            }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 self.resolveLexicalModuleExpr(id: cond, names: inout names)
                 self.resolveLexicalModuleBlock(blockId: thenBlk, names: inout names)

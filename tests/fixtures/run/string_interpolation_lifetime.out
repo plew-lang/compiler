@@ -6,3 +6,11 @@ itemitem
 2
 1
 after
+make
+format
+outer=inner=item
+5
+make
+failure
+3
+caught

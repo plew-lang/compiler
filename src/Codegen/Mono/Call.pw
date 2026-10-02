@@ -5952,6 +5952,9 @@ pub impl Comp {
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => { try self.scanExprInsts(exprId: base) }
             Expr.Deref(val base) => { try self.scanExprInsts(exprId: base) }
+            Expr.Sequence(val body) => {
+                try self.scanBlockInsts(blkId: body)
+            }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.scanExprInsts(exprId: cond)
                 try self.scanBlockInsts(blkId: thenBlk)

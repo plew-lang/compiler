@@ -538,6 +538,10 @@ pub impl Comp {
                     ai += 1
                 }
             }
+            Expr.Sequence(val body) => {
+                try self.checkBranchYieldsValue(blkId: body, offset: self.exprOffset(id: id))
+                try self.verifyBlock(blockId: body)
+            }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.verifyExpr(id: cond)
                 try self.checkBranchYieldsValue(blkId: thenBlk, offset: self.exprOffset(id: id))

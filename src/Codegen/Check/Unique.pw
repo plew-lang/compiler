@@ -300,6 +300,9 @@ pub impl Comp {
                 }
                 return false
             }
+            Expr.Sequence(val body) => {
+                return self.blockContainsAwait(blockId: body)
+            }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 if self.exprContainsAwait(exprId: cond) { return true }
                 if self.blockContainsAwait(blockId: thenBlk) { return true }

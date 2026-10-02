@@ -63,11 +63,7 @@ pub impl Comp {
         val result = self.stringStorageMake(typeRef: stringRef, buffer: buffer, offset: span.start)
         stmts.append(self.pushStmt(s: <Stmt.Give value=result />))
         val body = self.blockOfStmts(stmts: stmts)
-        val message = self.internBytes(s: "\"unreachable interpolation branch\"")
-        val messageExpr = self.pushExpr(e: <Expr.Str start=message.nameStart len=message.nameLen />)
-        val unreachable = self.blockOfStmts(stmts: [self.pushStmt(s: <Stmt.Panic msg=messageExpr offset=span.start />)])
-        val condition = self.pushExpr(e: <Expr.Int value=1U64 offset=span.start isBool=true tyStart=0U64 tyLen=0U64 isNeg=false />)
-        val block = self.pushExpr(e: <Expr.IfExpr cond=condition thenBlk=body elseBlk=unreachable />)
+        val block = self.pushExpr(e: <Expr.Sequence body=body />)
         self.arena.exprSpanStart[block] = span.start
         return block
     }

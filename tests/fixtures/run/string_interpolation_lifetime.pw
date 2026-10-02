@@ -18,7 +18,19 @@ fn item(id: I64) -> Item {
     print("make")
     return <Item resource=<Ref[Resource] value=<Resource id=id /> /> />
 }
+fn failure() -> Result[Options, Bool] {
+    print("failure")
+    return <Result.Err error=true />
+}
+fn early() -> Result[String, Bool] {
+    return <Result.Ok value="{item(id: 3I64): try failure()}{item(id: 4I64)}" />
+}
 fn main() {
     print("{item(id: 1I64)}{item(id: 2I64)}")
     print("after")
+    print("outer={"inner={item(id: 5I64)}"}")
+    match early() {
+        Result.Ok(value: _) => { print("unexpected success") }
+        Result.Err(error: _) => { print("caught") }
+    }
 }

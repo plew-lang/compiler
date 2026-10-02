@@ -1784,6 +1784,10 @@ pub impl Comp {
                     }
                 }
             }
+            Expr.Sequence(val body) => {
+                try self.recordBlock(blkId: body)
+                self.recordValueBlockResult(exprId: exprId, blockId: body)
+            }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.recordExpr(exprId: cond, chainHoleRef: chainHoleRef)
                 try self.recordBlock(blkId: thenBlk)

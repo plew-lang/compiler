@@ -858,6 +858,7 @@ fn midUnsupportedOperandForExpr(expressions: Array[Expr], exprId: U64) -> MidUns
         Expr.OptChain(base: _, cont: _) => { return <MidUnsupportedBuild.UnloweredView /> }
         Expr.ChainHole => { return <MidUnsupportedBuild.UnloweredView /> }
         Expr.MatchExpr(scrut: _, arms: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
+        Expr.Sequence(body: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
         Expr.IfExpr(cond: _, thenBlk: _, elseBlk: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
         Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return <MidUnsupportedBuild.UnloweredReference /> }
         Expr.Deref(base: _) => { return <MidUnsupportedBuild.UnloweredReference /> }
@@ -1457,6 +1458,12 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             if ownsUnique { return <MidOperandBuild operand=<MidOperand.Move place=destination /> /> }
             return <MidOperandBuild operand=<MidOperand.Copy place=destination /> />
         }
+        Expr.Sequence(body: val body) => {
+            val resultLocal = addMidTemporary(state: inout state, typeTerm: typeTerm)
+            val resultPlace = <MidPlace local=resultLocal typeTerm=typeTerm />
+            val error = buildMidBlockInto(c: inout c, state: inout state, blockId: body, hasGiveDestination: true, giveDestination: resultPlace, expressionSequence: true)
+            return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> error=error />
+        }
         Expr.IfExpr(cond: val cond, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
             // Value `if` uses the same ordinary CFG as statement `if`. Each
             // normally completing arm writes this one place; all-diverging
@@ -2035,7 +2042,7 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
 // Mid local plus an explicit assignment.  It is intentionally narrow, but it
 // is a real frontend consumer: types come from Stmt/Record, identifier operands
 // come from TypeCache, and no legacy type recovery is reachable from this path.
-pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64, completeEvaluation: Bool = true) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.Let(mutable: val mutable, nameStart: val nameStart, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => {
@@ -2046,7 +2053,8 @@ pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> Mi
             val destination: MidPlace = <MidPlace local=destinationLocal typeTerm=term />
             // The named destination belongs to the enclosing lexical scope;
             // only its initializer dependencies belong to this full expression.
-            val evaluation: U64 = midOpenScope(state: inout state)
+            mut val evaluation = state.currentScope
+            if completeEvaluation { evaluation = midOpenScope(state: inout state) }
             val aggregate: MidAggregateLookup = (match midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: init) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return <MidBuildError.Frontend diagnostic=diagnostic /> } })
             mut val operandResult: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=term /> /> />
             if aggregate.found {
@@ -2057,7 +2065,7 @@ pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> Mi
             match operandResult.error {
                 MidBuildError.None => {}
                 _ => {
-                    midFinishEvaluationScope(state: inout state, scope: evaluation)
+                    if completeEvaluation { midFinishEvaluationScope(state: inout state, scope: evaluation) }
                     return operandResult.error
                 }
             }
@@ -2066,7 +2074,7 @@ pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> Mi
             } else {
                 midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.StorageBoundary stmtId=stmtId targetTerm=term operand=midReturnOperand(c: inout c, operand: operandResult.operand, typeTerm: c.semanticExprTerm(exprId: init)) /> />)
             }
-            midFinishEvaluationScope(state: inout state, scope: evaluation)
+            if completeEvaluation { midFinishEvaluationScope(state: inout state, scope: evaluation) }
             val ended = c.decls.semanticBindingEnds.getOr(key: stmtId, fallback: 0U64)
             if ended != 0U64 {
                 val prior = midLocalForBinding(state: state, declarationTarget: ended)
@@ -2178,21 +2186,24 @@ pub fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
 // supports statements whose ownership/evaluation form is already explicit;
 // unsupported source forms fail at the builder boundary rather than being sent
 // through the legacy LLVM emitter.
-fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, hasGiveDestination: Bool, giveDestination: MidPlace) -> MidBuildError {
+fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, hasGiveDestination: Bool, giveDestination: MidPlace, expressionSequence: Bool = false) -> MidBuildError {
     if blockId >= c.arena.blocks.count() { return <MidBuildError.InvalidBlock /> }
-    val scope: U64 = midOpenScope(state: inout state)
+    mut val scope = state.currentScope
+    if !expressionSequence { scope = midOpenScope(state: inout state) }
     val block = c.arena.blocks[blockId]
     mut val result: MidBuildError = <MidBuildError.None />
     mut val i: U64 = 0U64
     while i < block.stmtLen {
         // A completed value from an earlier statement is not an operand of
         // this evaluation. Lexical variables live in bindings/locals instead.
-        state.callValues = []
-        state.aggregateValues = []
+        if !expressionSequence {
+            state.callValues = []
+            state.aggregateValues = []
+        }
         val stmtId: U64 = c.arena.blockStmtPool[block.stmtStart + i]
         match c.arena.stmts[stmtId] {
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => {
-                result = buildMidLet(c: inout c, state: inout state, stmtId: stmtId)
+                result = buildMidLet(c: inout c, state: inout state, stmtId: stmtId, completeEvaluation: !expressionSequence)
             }
             Stmt.If(cond: _, thenBlk: _, elseBlk: _, hasElse: _) => {
                 result = buildMidIf(c: inout c, state: inout state, stmtId: stmtId)
@@ -2203,7 +2214,8 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, ha
                 midFinishEvaluationScope(state: inout state, scope: evaluation)
             }
             Stmt.ExprStmt(expr: val expr) => {
-                val evaluation: U64 = midOpenScope(state: inout state)
+                mut val evaluation = state.currentScope
+                if !expressionSequence { evaluation = midOpenScope(state: inout state) }
                 // An expression statement has the same evaluation semantics
                 // as a value position, followed by lexical disposal of its
                 // result.  In particular `try f()` must retain its Err edge
@@ -2211,7 +2223,7 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, ha
                 // here used to make that source form lose its CFG meaning.
                 val discarded: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: expr, typeTerm: c.semanticExprTerm(exprId: expr), allowAccessMarker: false)
                 result = discarded.error
-                midFinishEvaluationScope(state: inout state, scope: evaluation)
+                if !expressionSequence { midFinishEvaluationScope(state: inout state, scope: evaluation) }
             }
             Stmt.Assign(target: _, value: _) => {
                 val evaluation: U64 = midOpenScope(state: inout state)
@@ -2252,10 +2264,12 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, ha
         match result { MidBuildError.None => {} _ => { i = block.stmtLen } }
         i += 1U64
     }
-    if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
-        midEmitScopeExit(state: inout state, scope: scope)
+    if !expressionSequence {
+        if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
+            midEmitScopeExit(state: inout state, scope: scope)
+        }
+        midCloseScope(state: inout state, scope: scope)
     }
-    midCloseScope(state: inout state, scope: scope)
     return result
 }
 

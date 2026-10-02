@@ -1301,6 +1301,11 @@ pub impl Comp {
                 }
                 return <Result.Ok value=scalarInfo() />
             }
+            Expr.Sequence(val body) => {
+                val value = self.blockGiveExpr(blkId: body)
+                if value < self.arena.exprs.count() { return self.exprTypeWithChainHole(id: value, chainHoleRef: chainHoleRef) }
+                return <Result.Ok value=scalarInfo() />
+            }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 val g: U64 = self.blockGiveExpr(blkId: thenBlk)
                 if g < self.arena.exprs.count() {

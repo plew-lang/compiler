@@ -634,6 +634,9 @@ pub impl Comp {
             Expr.Try(val expr) => { try self.checkBoundsExpr(exprId: expr) }
             Expr.Arrow(val base, val nameStart, val nameLen) => { try self.checkBoundsExpr(exprId: base) }
             Expr.Deref(val base) => { try self.checkBoundsExpr(exprId: base) }
+            Expr.Sequence(val body) => {
+                try self.checkBoundsBlock(blkId: body)
+            }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.checkBoundsExpr(exprId: cond)
                 try self.checkBoundsBlock(blkId: thenBlk)
@@ -823,6 +826,10 @@ pub impl Comp {
         // a value-position if/match: each branch's `give` value must match the expected
         // type (`val x: I64 = if c { give a } else { give b }` with a: T).
         match self.arena.exprs[valueExpr] {
+            Expr.Sequence(val body) => {
+                val value = self.tcBlockGiveValue(blockId: body)
+                if value != 0U64 { try self.checkGenericTypeMatch(expectedRef: expectedRef, valueExpr: value) }
+            }
             Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
                 val tv: U64 = self.tcBlockGiveValue(blockId: thenBlk)
                 if tv != 0U64 {
