@@ -214,7 +214,7 @@ pub impl Comp {
                     if self.firstFuncByName(nameStart: nameStart, nameLen: nameLen) < self.arena.functionCount() {
                         // a free fn of this name exists only in other (loaded) modules and
                         // was not imported here — the use needs a use.
-                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "use of a function from another module without importing it (add `use … only { … }`)") />
+                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "use of a function from another module without importing it (add `use … only {{ … }}`)") />
                     } else {
                         // no free fn of this name anywhere: a local/closure/builtin, or an
                         // `@Std` intrinsic the backend intercepts by raw name (print /
@@ -222,7 +222,7 @@ pub impl Comp {
                         // items are) and must be imported.
                         if self.isAmbientInterceptedName(start: nameStart, len: nameLen) {
                             if !(self.isImportedInto(mod: useMod, nameStart: nameStart, nameLen: nameLen)) {
-                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "this @Std function is not ambient — import it (e.g. `use @Std/Io only { print }`); only lang items are usable without import (spec/15)") />
+                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "this @Std function is not ambient — import it (e.g. `use @Std/Io only {{ print }}`); only lang items are usable without import (spec/15)") />
                             }
                         }
                     }
@@ -336,7 +336,7 @@ pub impl Comp {
         if self.typeDeclVisibleFrom(useMod: useMod, start: start, len: len) { return <Result.Ok value=() /> }
         val real: Bind = self.realTypeNameInModule(useMod: useMod, start: start, len: len)
         if self.typeDeclExistsGlobally(start: real.nameStart, len: real.nameLen) {
-            return <Result.Err error=self.diagnosticAt(offset: siteOffset, msg: "use of a type from another module without importing it (add `use … only { … }`)") />
+            return <Result.Err error=self.diagnosticAt(offset: siteOffset, msg: "use of a type from another module without importing it (add `use … only {{ … }}`)") />
         }
         return <Result.Ok value=() />
     }

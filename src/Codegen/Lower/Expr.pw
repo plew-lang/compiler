@@ -110,6 +110,9 @@ pub impl Comp {
             ExprAst.StrLit(val raw, val span) => {
                 result = self.pushExpr(e: <Expr.Str start=span.start len=spanLen(s: span) />)
             }
+            ExprAst.StringInterpolation(val parts, val span) => {
+                result = try self.lowerStringInterpolation(parts: parts, span: span)
+            }
             ExprAst.Ident(val name, val span) => {
                 result = self.pushExpr(e: <Expr.Ident start=span.start len=spanLen(s: span) />)
             }
@@ -452,6 +455,9 @@ pub impl Comp {
             }
             SyntaxExprKind.StrLit => {
                 result = self.pushExpr(e: <Expr.Str start=e.text.start len=e.text.end - e.text.start />)
+            }
+            SyntaxExprKind.StringInterpolation => {
+                result = try self.lowerSyntaxStringInterpolation(expr: e)
             }
             SyntaxExprKind.Ident => {
                 result = self.pushExpr(e: <Expr.Ident start=e.name.start len=e.name.end - e.name.start />)

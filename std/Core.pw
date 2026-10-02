@@ -1052,7 +1052,9 @@ pub trait Format {
 
 // Only valid String fragments enter this buffer. Finishing transfers the storage
 // into String; it does not validate or copy the completed text again.
-struct StringOutput { mut val buffer: Buffer[U8] }
+// The type is module-private. Its storage is visible to compiler-synthesized
+// construction/finish expressions; it does not expose a public builder type.
+struct StringOutput { pub mut val buffer: Buffer[U8] }
 impl StringOutput as TextOutput {
     type Error = Infallible
     inout fn write(text~: String) -> Result[(), Infallible] {

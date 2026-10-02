@@ -275,12 +275,12 @@ pub impl Comp {
             while index < fields.len {
                 val field = self.makeFieldAt(fields: fields, index: index)
                 if field.requiresFactoryAccess() {
-                    return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "construction outside the defining module requires a public factory (`pub impl Type { factory }`)") />
+                    return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "construction outside the defining module requires a public factory (`pub impl Type {{ factory }}`)") />
                 }
                 index += 1U64
             }
             if fields.len == 0U64 {
-                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "construction outside the defining module requires a public factory (`pub impl Type { factory }`)") />
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "construction outside the defining module requires a public factory (`pub impl Type {{ factory }}`)") />
             }
         }
         return <Result.Ok value=() />

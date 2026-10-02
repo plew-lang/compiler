@@ -42,6 +42,8 @@ pub impl Comp {
         match self.decls.syntheticCallSites[index].kind {
             SyntheticCallKind.IndexRead => { return self.coreTraitOwner(name: "Index", arity: 1U64) }
             SyntheticCallKind.IndexWrite => { return self.coreTraitOwner(name: "IndexSet", arity: 1U64) }
+            SyntheticCallKind.Format => { return self.coreTraitOwner(name: "Format", arity: 0U64) }
+            SyntheticCallKind.TextWrite => { return self.coreTraitOwner(name: "TextOutput", arity: 0U64) }
             SyntheticCallKind.Ordinary => { return 0U64 }
         }
     }

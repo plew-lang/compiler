@@ -2687,6 +2687,8 @@ pub enum SyntheticCallKind {
     Ordinary
     IndexRead
     IndexWrite
+    Format
+    TextWrite
 }
 
 pub struct SyntheticCallSite {

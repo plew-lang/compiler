@@ -46,7 +46,7 @@ pub fn trimEnd(b: Array[U8]) -> Array[U8] {
 // runtime via the shell (no env intrinsic needed). Both the resolver (fetching
 // into it) and the compiler's loader (reading from it) compute it the same way.
 pub fn cacheRoot() -> Array[U8] {
-    val out: String = execOut(cmd: "printf %s \"${PLEW_CACHE:-$HOME/.plew/cache}\"")
+    val out: String = execOut(cmd: "printf %s \"${{PLEW_CACHE:-$HOME/.plew/cache}}\"")
     return trimEnd(b: out.bytes())
 }
 

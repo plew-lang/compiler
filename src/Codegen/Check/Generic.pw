@@ -567,7 +567,7 @@ pub impl Comp {
                     Expr.Ident(val start, val len) => {
                         if self.identIsTypeQualifier(start: start, len: len, tpFn: self.cur.checkFn) {
                             if self.typeHasAssocFn(typeStart: start, typeLen: len, nameStart: nameStart, nameLen: nameLen) {
-                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; wrap the call in an explicit closure (e.g. `fn(...) { return Type.name(...) }`) (spec/07)") />
+                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; wrap the call in an explicit closure (e.g. `fn(...) {{ return Type.name(...) }}`) (spec/07)") />
                             } else {
                                 return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a type name has no fields; use `Type.fn(...)` to call an associated function, or construct a value before reading fields (spec/07)") />
                             }
@@ -667,7 +667,7 @@ pub impl Comp {
                     val bindCode: I64 = self.recordIdent(id: exprId, start: start, len: len, tpFn: self.cur.checkFn)
                     if !(self.bindIsValue(code: bindCode)) {
                         if bindCode == identFnCode() {
-                            return <Result.Err error=self.diagnosticAt(offset: start, msg: "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) { return name(...) }`) (spec/04)") />
+                            return <Result.Err error=self.diagnosticAt(offset: start, msg: "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) {{ return name(...) }}`) (spec/04)") />
                         } else {
                             return <Result.Err error=self.diagnosticAt(offset: start, msg: "undefined identifier: this name is not a local, parameter, or global in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)") />
                         }

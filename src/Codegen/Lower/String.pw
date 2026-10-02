@@ -1,0 +1,125 @@
+// Interpolation lowers to one ordinary value block. Receiver evaluation, calls,
+// full-expression cleanup and early returns remain the responsibility of Mid.
+use @Plew/Syntax only { StringPartAst }
+
+pub impl Comp {
+    inout fn stringCoreType(name: String) -> U64 {
+        val binding = self.internBytes(s: name)
+        self.recordNamespaceUse(name: <Span start=binding.nameStart end=binding.nameStart + binding.nameLen />, moduleId: self.modules.coreModule)
+        return self.simpleTypeRef(nameStart: binding.nameStart, nameLen: binding.nameLen)
+    }
+
+    inout fn stringStorageMake(typeRef: U64, buffer: U64, offset: U64) -> U64 {
+        val storage = self.internBytes(s: "buffer")
+        val target = self.arena.typeAt(index: typeRef)
+        val fields: Array[MakeField] = [<MakeField nameStart=storage.nameStart nameLen=storage.nameLen value=buffer offset=offset origin=<MakeFieldOrigin.Synthesized /> />]
+        return self.pushExpr(e: <Expr.Make typeStart=target.nameStart typeLen=target.nameLen variantStart=0U64 variantLen=0U64 isEnum=false ty=typeRef fields=self.pushMakeFields(fields: fields) />)
+    }
+
+    inout fn beginStringInterpolation(output: Bind, stmts: inout Array[U64], span: Span) -> Result[(), CompileDiagnostic] {
+        val typeRef = self.stringCoreType(name: "StringOutput")
+        val byteRef = self.stringCoreType(name: "U8")
+        val buffer = try self.synthBufferNew(elemRef: byteRef)
+        val initial = self.stringStorageMake(typeRef: typeRef, buffer: buffer, offset: span.start)
+        stmts.append(self.pushStmt(s: <Stmt.Let mutable=true nameStart=output.nameStart nameLen=output.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=typeRef init=initial />))
+        return <Result.Ok value=() />
+    }
+
+    inout fn appendStringInterpolation(output: Bind, value: U64, options: U64, literal: Bool, stmts: inout Array[U64]) -> Result[(), CompileDiagnostic] {
+        val destination = self.pushExpr(e: <Expr.Ident start=output.nameStart len=output.nameLen />)
+        mut val args: Array[Arg] = []
+        mut val receiver = value
+        mut val name = self.internBytes(s: "format")
+        mut val kind = <SyntheticCallKind.Format />
+        if literal {
+            receiver = destination
+            name = self.internBytes(s: "write")
+            kind = <SyntheticCallKind.TextWrite />
+            args.append(<Arg expr=value isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />)
+        } else {
+            val outputLabel = self.internBytes(s: "output")
+            val optionsLabel = self.internBytes(s: "options")
+            args.append(<Arg expr=destination isInout=true labelStart=outputLabel.nameStart labelLen=outputLabel.nameLen hasLabel=true />)
+            mut val selectedOptions = options
+            if selectedOptions == 0U64 {
+                selectedOptions = self.pushExpr(e: <Expr.Make typeStart=0U64 typeLen=0U64 variantStart=0U64 variantLen=0U64 isEnum=false ty=0U64 fields=self.pushMakeFields(fields: []) />)
+                self.pendingConstructionContexts.insert(selectedOptions)
+            }
+            args.append(<Arg expr=selectedOptions isInout=false labelStart=optionsLabel.nameStart labelLen=optionsLabel.nameLen hasLabel=true />)
+        }
+        val call = self.pushExpr(e: <Expr.Method recv=receiver nameStart=name.nameStart nameLen=name.nameLen args=self.pushArgs(args: args) />)
+        try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call kind=kind originSerial=self.arena.exprOriginSerial[call] receiverTerm=0U64 />)
+        val successName = self.internBytes(s: "value")
+        val success = self.pushExpr(e: <Expr.Method recv=call nameStart=successName.nameStart nameLen=successName.nameLen args=self.pushArgs(args: []) />)
+        stmts.append(self.pushStmt(s: <Stmt.ExprStmt expr=success />))
+        return <Result.Ok value=() />
+    }
+
+    inout fn finishStringInterpolation(output: Bind, stmts: inout Array[U64], span: Span) -> U64 {
+        val destination = self.pushExpr(e: <Expr.Ident start=output.nameStart len=output.nameLen />)
+        val storage = self.internBytes(s: "buffer")
+        val buffer = self.pushExpr(e: <Expr.Field base=destination nameStart=storage.nameStart nameLen=storage.nameLen />)
+        val stringRef = self.stringCoreType(name: "String")
+        val result = self.stringStorageMake(typeRef: stringRef, buffer: buffer, offset: span.start)
+        stmts.append(self.pushStmt(s: <Stmt.Give value=result />))
+        val body = self.blockOfStmts(stmts: stmts)
+        val message = self.internBytes(s: "\"unreachable interpolation branch\"")
+        val messageExpr = self.pushExpr(e: <Expr.Str start=message.nameStart len=message.nameLen />)
+        val unreachable = self.blockOfStmts(stmts: [self.pushStmt(s: <Stmt.Panic msg=messageExpr offset=span.start />)])
+        val condition = self.pushExpr(e: <Expr.Int value=1U64 offset=span.start isBool=true tyStart=0U64 tyLen=0U64 isNeg=false />)
+        val block = self.pushExpr(e: <Expr.IfExpr cond=condition thenBlk=body elseBlk=unreachable />)
+        self.arena.exprSpanStart[block] = span.start
+        return block
+    }
+
+    inout fn lowerStringInterpolation(parts: Array[StringPartAst], span: Span) -> Result[U64, CompileDiagnostic] {
+        val output = self.internTmpName(prefix: "$stringOutput", n: self.cur.lowerTmpSeq)
+        self.cur.lowerTmpSeq += 1U64
+        mut val stmts: Array[U64] = []
+        try self.beginStringInterpolation(output: output, stmts: inout stmts, span: span)
+        for part in parts {
+            match part {
+                StringPartAst.Text(raw: _, span: val text) => {
+                    val literal = self.pushExpr(e: <Expr.Str start=text.start - 1U64 len=text.end - text.start + 2U64 />)
+                    try self.appendStringInterpolation(output: output, value: literal, options: 0U64, literal: true, stmts: inout stmts)
+                }
+                StringPartAst.Value(val value, val options, span: _) => {
+                    val receiver = try self.lowerExpr(e: value)
+                    mut val argument = 0U64
+                    match options {
+                        Optional.Some(v: val option) => { argument = try self.lowerExpr(e: option) }
+                        Optional.None => {}
+                    }
+                    try self.appendStringInterpolation(output: output, value: receiver, options: argument, literal: false, stmts: inout stmts)
+                }
+            }
+        }
+        return <Result.Ok value=self.finishStringInterpolation(output: output, stmts: inout stmts, span: span) />
+    }
+
+    inout fn lowerSyntaxStringInterpolation(expr: SyntaxExpr) -> Result[U64, CompileDiagnostic] {
+        val output = self.internTmpName(prefix: "$stringOutput", n: self.cur.lowerTmpSeq)
+        self.cur.lowerTmpSeq += 1U64
+        mut val stmts: Array[U64] = []
+        try self.beginStringInterpolation(output: output, stmts: inout stmts, span: expr.span)
+        mut val index = 0U64
+        while index < syntaxExprElemCount(file: self.syntax, expr: expr) {
+            val part = syntaxExpr(file: self.syntax, id: syntaxExprElem(file: self.syntax, expr: expr, index: index))
+            match part.kind {
+                SyntaxExprKind.StringFragment => {
+                    val literal = self.pushExpr(e: <Expr.Str start=part.text.start - 1U64 len=part.text.end - part.text.start + 2U64 />)
+                    try self.appendStringInterpolation(output: output, value: literal, options: 0U64, literal: true, stmts: inout stmts)
+                }
+                SyntaxExprKind.StringValue => {
+                    val receiver = try self.lowerSyntaxExpr(id: part.child0)
+                    mut val argument = 0U64
+                    if part.child1.raw != 0U64 { argument = try self.lowerSyntaxExpr(id: part.child1) }
+                    try self.appendStringInterpolation(output: output, value: receiver, options: argument, literal: false, stmts: inout stmts)
+                }
+                _ => { panic "invalid interpolation part" }
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=self.finishStringInterpolation(output: output, stmts: inout stmts, span: expr.span) />
+    }
+}

@@ -365,7 +365,7 @@ pub impl Comp {
             Expr.Ident(val start, val len) => {
                 if self.identIsTypeQualifier(start: start, len: len, tpFn: self.arena.functionCount()) {
                     if self.typeHasAssocFn(typeStart: start, typeLen: len, nameStart: nameStart, nameLen: nameLen) {
-                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; wrap the call in an explicit closure (e.g. `fn(...) { return Type.name(...) }`) (spec/07)") />
+                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; wrap the call in an explicit closure (e.g. `fn(...) {{ return Type.name(...) }}`) (spec/07)") />
                     } else {
                         return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a type name has no fields; use `Type.fn(...)` to call an associated function, or construct a value before reading fields (spec/07)") />
                     }
@@ -387,7 +387,7 @@ pub impl Comp {
             }
             if self.fieldVis(structIndex: self.structIndexForType(ref: self.typedIrRefOfInfo(ti: bt)), fieldStart: nameStart, fieldLen: nameLen) == 3U64 {
                 if self.typeHasMethodNamed(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen) {
-                    return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a method cannot be used as a value; call it, or wrap it in a closure (e.g. `fn() { obj.method() }`)") />
+                    return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a method cannot be used as a value; call it, or wrap it in a closure (e.g. `fn() {{ obj.method() }}`)") />
                 }
             }
             try self.verifySelectedFieldExists(exprId: exprId, receiverTerm: self.parametricExprTerm(exprId: base), nameStart: nameStart, nameLen: nameLen, message: "no such field on this value's type")
