@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+
+struct Selection[A, B] { val tag: I64 }
+impl[A, B] Selection[A, B] {
+    factory(value: A) { return <Selection[A, B] tag=1I64 /> }
+    factory(value: B) { return <Selection[A, B] tag=2I64 /> }
+}
+
+fn main() {
+    val first = <Selection[I64, String] value=7I64 />
+    val second = <Selection[I64, String] value="text" />
+    val reversed = <Selection[String, I64] value=7I64 />
+    print(first.tag)
+    print(second.tag)
+    print(reversed.tag)
+}

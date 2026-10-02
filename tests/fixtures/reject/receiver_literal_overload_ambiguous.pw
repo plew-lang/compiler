@@ -1,0 +1,6 @@
+struct Number {}
+impl Number {
+    fn accept(value: I64) {}
+    fn accept(value: I32) {}
+}
+fn main() { <Number />.accept(value: 7) }

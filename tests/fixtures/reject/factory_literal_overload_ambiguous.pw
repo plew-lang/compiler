@@ -1,0 +1,6 @@
+struct Number { val raw: I64 }
+impl Number {
+    factory(value: I64) { return <Number raw=value /> }
+    factory(value: I32) { return <Number raw=(value as I64) /> }
+}
+fn main() { val number = <Number value=7 /> }

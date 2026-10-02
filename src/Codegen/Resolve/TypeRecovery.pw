@@ -356,7 +356,11 @@ pub impl Comp {
                         }
                     } else {
                         val et: TypeRef = self.arena.typeAt(index: expected)
-                        if actual.nameLen == 0U64 || intern(c: inout self, start: actual.nameStart, len: actual.nameLen) != et.nameId {
+                        if actual.kind == 0I64 && actual.nameLen == 0U64 {
+                            // Keep untyped integer literals adaptable after
+                            // receiver substitution, just as argMatchesParam.
+                            if !self.isIntType(start: et.nameStart, len: et.nameLen) { allMatch = false }
+                        } else if actual.nameLen == 0U64 || intern(c: inout self, start: actual.nameStart, len: actual.nameLen) != et.nameId {
                             allMatch = false
                         }
                     }
