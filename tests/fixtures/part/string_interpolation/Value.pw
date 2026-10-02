@@ -1,14 +1,14 @@
 use @Std/Core only { Format, FormatOptions, TextOutput }
 pub struct Options { val prefix: String }
 pub impl Options {
-    factory(prefix: String) { return <Options prefix=prefix /> }
+    factory
 }
 pub impl Options as FormatOptions {
     factory() { return <Options prefix="default:" /> }
 }
 pub struct Value { val text: String }
 pub impl Value {
-    factory(text: String) { return <Value text=text /> }
+    factory
     fn format[Output](output: inout Output, options: Bool) -> String where Output: TextOutput {
         return "unexpected inherent"
     }
