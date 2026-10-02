@@ -1,0 +1,20 @@
+use @Std/Core only { Format, DefaultFormatOptions, TextOutput }
+use @Std/Io only { print }
+struct Repeated { val count: U64 }
+impl Repeated as Format {
+    type Options = DefaultFormatOptions
+    fn format[Output](output: inout Output, options: DefaultFormatOptions) -> Result[(), Output.Error] where Output: TextOutput {
+        mut val i = 0U64
+        while i < self.count {
+            try output.write("x")
+            i += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+}
+fn main() {
+    val text = <String value=<Repeated count=4096U64 /> />
+    print(text.bytes().count())
+    print(text.bytes()[0U64])
+    print(text.bytes()[4095U64])
+}
