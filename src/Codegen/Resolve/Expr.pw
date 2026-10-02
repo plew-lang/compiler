@@ -852,7 +852,6 @@ pub impl Comp {
     // grounds it.  Mono must never reopen the call expression to rediscover
     // lexical scope, field identity, or requirement overload selection.
     inout fn recordDynamicCallTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, target: DynamicCallTemplateTarget) -> Result[(), CompileDiagnostic] {
-        if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
         mut val functionType: U64 = 0U64
         match target {
             DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: _, fnTypeTerm: val term) => { functionType = term }
@@ -864,9 +863,14 @@ pub impl Comp {
             mut val index: U64 = 0U64
             while index < args.len && index + 1U64 < signature.args.count() {
                 val expected: U64 = signature.args[index + 1U64]
-                if expected != 0U64 && (try self.tyRefIsGround(ref: expected)) {
+                val argument: U64 = self.argAt(args: args, index: index).expr
+                // The function signature supplies context before either the
+                // argument check or call-template publication can consume it.
+                if expected != 0U64 && self.pendingConstructionContexts.contains(argument) {
+                    try self.recordExpr(exprId: argument, expectedTerm: expected)
+                }
+                if self.cur.recordCallTemplates && expected != 0U64 && (try self.tyRefIsGround(ref: expected)) {
                     val parameter: TypeInfo = self.typeInfoOfRef(ref: expected)
-                    val argument: U64 = self.argAt(args: args, index: index).expr
                     try self.checkLitSpanCtx(id: argument, tyStart: parameter.nameStart, tyLen: parameter.nameLen, isArray: parameter.kind == 3, ctxRef: expected)
                     try self.recordSemanticExprExpectedResult(exprId: argument, expectedTerm: expected)
                     try self.recordArrayLitCtx(exprId: argument, ctxRef: expected)
@@ -874,6 +878,7 @@ pub impl Comp {
                 index += 1U64
             }
         }
+        if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
         val templateArgs: CallTemplateArgumentRange = (try self.directCallTemplateArgs(args: args))
         val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)

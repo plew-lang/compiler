@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+struct Point { val value: I64 = 7I64 }
+struct Holder { val point: Point }
+struct Action { val apply: fn(point: Point) -> Point }
+fn read(point: Point) -> I64 { return point.value }
+fn main() {
+    val holder: Holder = <point=<value=9I64 /> />
+    val closure: fn(point: Point) -> Point = fn(point: Point) -> Point { return <value=point.value /> }
+    val result = closure(point: <value=10I64 />)
+    val action = <Action apply=closure />
+    val fieldResult = action.apply(point: <value=11I64 />)
+    print(fieldResult.value)
+    print(holder.point.value)
+    print(result.value)
+    print(read(point: </>))
+}
