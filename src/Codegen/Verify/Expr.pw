@@ -124,6 +124,7 @@ pub impl Comp {
                 // query rather than searching requirement names independently.
                 mut val receiverTerm = self.parametricExprTerm(exprId: recv)
                 if receiverTerm == 0U64 { receiverTerm = (try self.inferType(id: recv)) }
+                receiverTerm = self.syntheticCallReceiverTerm(exprId: id, fallback: receiverTerm)
                 if (try self.checkSymbolicMethodArgs(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)) {
                     return <Result.Ok value=() />
                 }

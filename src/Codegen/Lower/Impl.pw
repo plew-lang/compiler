@@ -465,7 +465,7 @@ pub impl Comp {
             val p: SyntaxParam = syntaxParam(file: self.syntax, id: syntaxMemberParam(file: self.syntax, member: member, index: i))
             val ty: PType = (try self.lowerSyntaxType(id: p.ty))
             mut val defaultExpr: U64 = 0U64
-            if p.hasDefault { defaultExpr = (try self.lowerSyntaxExpr(id: p.defaultVal)) }
+            if p.hasDefault { defaultExpr = (try self.lowerSyntaxExprWithCtx(id: p.defaultVal, ctxRef: ty.ref)) }
             val name: Bind = <Bind nameStart=p.name.start nameLen=p.name.end - p.name.start fieldStart=p.name.start fieldLen=p.name.end - p.name.start offset=p.name.start />
             out.append(self.appendLoweredParam(name: name, hasType: true, ty: ty, isInout: p.isInout, isMove: p.isMove, isBorrow: p.isBorrow, noLabel: p.noLabel, hasDefault: p.hasDefault, defaultExpr: defaultExpr))
             i += 1U64
@@ -620,7 +620,7 @@ pub impl Comp {
             if m.isVia {
                 val realN: Bind = <Bind nameStart=m.viaName.start nameLen=m.viaName.end - m.viaName.start fieldStart=m.viaName.start fieldLen=m.viaName.end - m.viaName.start />
                 self.decls.methodAliases.append(<MethodAlias recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) aliasStart=nameN.nameStart aliasLen=nameN.nameLen aliasId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) realStart=realN.nameStart realLen=realN.nameLen realId=intern(c: inout self, start: realN.nameStart, len: realN.nameLen) />)
-                witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+                witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=false isExtern=false />)
                 self.lowerAssociatedOwner = savedAssociatedOwner
                 self.lowerAssociatedArgs = savedAssociatedArgs
                 self.cur.typeParams = savedTP
@@ -628,7 +628,7 @@ pub impl Comp {
                 self.lowerWhereSyntaxTraits = savedWTr
                 return <Result.Ok value=() />
             }
-            witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+            witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=false isExtern=false />)
         }
         val savedRet: U64 = self.cur.lowerRetTy
         self.cur.lowerRetTy = retRef
@@ -769,7 +769,7 @@ pub impl Comp {
             if m.isVia {
                 val realN: Bind = self.internBytes(s: m.viaName)
                 self.decls.methodAliases.append(<MethodAlias recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) aliasStart=nameN.nameStart aliasLen=nameN.nameLen aliasId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) realStart=realN.nameStart realLen=realN.nameLen realId=intern(c: inout self, start: realN.nameStart, len: realN.nameLen) />)
-                witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+                witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=false isExtern=false />)
                 self.lowerAssociatedOwner = savedAssociatedOwner
                 self.lowerAssociatedArgs = savedAssociatedArgs
                 self.cur.typeParams = savedTP
@@ -777,7 +777,7 @@ pub impl Comp {
                 self.lowerWhereTraits = savedWTr
                 return <Result.Ok value=() />
             }
-            witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+            witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=false isExtern=false />)
         }
         val savedRet: U64 = self.cur.lowerRetTy
         self.cur.lowerRetTy = retRef
@@ -1083,9 +1083,15 @@ pub impl Comp {
             retIsArray = pt.isArray
             retRef = pt.ref
         }
+        if sig.isFactory {
+            val selfName = self.internBytes(s: "Self")
+            retStart = selfName.nameStart
+            retLen = selfName.nameLen
+            retRef = self.lowerConstructionType(nameStart: retStart, nameLen: retLen, args: [], siteOffset: retStart)
+        }
         self.cur.typeParams = savedTP
         val runtimeIntrinsic: RuntimeIntrinsicDeclaration = self.runtimeIntrinsicDeclaration(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
-        return <Result.Ok value=<Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=nameStart /> />
+        return <Result.Ok value=<Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=nameStart /> />
     }
 
     inout fn lowerSyntaxSigToFunc(sig: SyntaxSig, isExtern: Bool, isCExtern: Bool) -> Result[Func, CompileDiagnostic] {
@@ -1126,9 +1132,15 @@ pub impl Comp {
             retIsArray = ret.isArray
             retRef = ret.ref
         }
+        if sig.isFactory {
+            val selfName = self.internBytes(s: "Self")
+            retStart = selfName.nameStart
+            retLen = selfName.nameLen
+            retRef = self.lowerConstructionType(nameStart: retStart, nameLen: retLen, args: [], siteOffset: retStart)
+        }
         self.cur.typeParams = savedTP
         val runtimeIntrinsic: RuntimeIntrinsicDeclaration = self.runtimeIntrinsicDeclarationSyntax(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
-        return <Result.Ok value=<Func nameStart=sig.name.start nameLen=sig.name.end - sig.name.start nameId=intern(c: inout self, start: sig.name.start, len: sig.name.end - sig.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=sig.name.start /> />
+        return <Result.Ok value=<Func nameStart=sig.name.start nameLen=sig.name.end - sig.name.start nameId=intern(c: inout self, start: sig.name.start, len: sig.name.end - sig.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=sig.name.start /> />
     }
 
     inout fn lowerTrait(t: TraitAst) -> Result[(), CompileDiagnostic] {

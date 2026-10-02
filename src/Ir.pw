@@ -2703,6 +2703,7 @@ pub struct SyntheticCallSite {
     pub val originSerial: U64 = 0U64
     // A typed construction has already selected its declaration.
     pub val selectedFactory: Optional[U64] = <Optional.None />
+    pub val receiverIsType: Bool = false
     pub val receiverTerm: U64
 }
 pub impl SyntheticCallSite { factory }

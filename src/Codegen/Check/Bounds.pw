@@ -428,6 +428,12 @@ pub impl Comp {
     // grounds the selected bound at an actual instantiation.
     inout fn staticMemberResolution(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64 = 0U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
         val memberId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        // Associated-type bounds are entailed by the projection's prerequisite
+        // proof. Reuse that proof query rather than treating them as new
+        // authored function bounds or searching concrete implementations.
+        if receiverRef != 0U64 && receiverRef < self.arena.typeCount() && self.arena.typeTerms[receiverRef].assocNameId != 0U64 {
+            return self.projectedMemberResolution(fnIdx: fnIdx, receiverRef: receiverRef, memberId: memberId, args: args, requiredTraitOwner: requiredTraitOwner)
+        }
         val assumptions = self.functionBoundAssumptions(fnIdx: fnIdx)
         mut val i: U64 = 0U64
         while i < assumptions.count() {
@@ -538,6 +544,44 @@ pub impl Comp {
             i += 1U64
         }
         return <Result.Ok value=<StaticMemberResolution.Missing /> />
+    }
+
+    inout fn projectedMemberResolution(fnIdx: U64, receiverRef: U64, memberId: U64, args: ArgRange, requiredTraitOwner: U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
+        val assumptions = self.functionBoundAssumptions(fnIdx: fnIdx)
+        mut val selected: StaticMemberResolution = <StaticMemberResolution.Missing />
+        mut val index = 0U64
+        while index < self.decls.traitCount() {
+            val declaration = self.decls.traitAt(index: index)
+            if requiredTraitOwner == 0U64 || declaration.nameStart == requiredTraitOwner {
+                mut val hasMember = false
+                mut val requirementIndex = 0U64
+                while requirementIndex < declaration.reqs.count() {
+                    val requirement = self.traitReqAt(reqs: declaration.reqs, index: requirementIndex)
+                    if requirement.nameId == memberId && self.paramsLabelsOk(params: requirement.params, args: args) { hasMember = true }
+                    requirementIndex += 1U64
+                }
+                if hasMember {
+                    val proof = (try self.traitPatternProof(baseRef: receiverRef, traitId: declaration.nameId, traitOwner: declaration.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: true, assumptions: assumptions))
+                    match proof {
+                        StaticConformanceProof.Missing => {}
+                        _ => {
+                            val resolution = (try self.selectStaticRequirement(proof: proof, traitIdx: index, memberId: memberId, args: args))
+                            match resolution {
+                                StaticMemberResolution.Missing => {}
+                                _ => {
+                                    match selected {
+                                        StaticMemberResolution.Missing => { selected = resolution }
+                                        _ => { return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTerms[receiverRef].siteOffset, msg: "ambiguous associated-type member: multiple trait requirements match") /> }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=selected />
     }
 
     // Operator syntax has no written argument labels, yet it is still a

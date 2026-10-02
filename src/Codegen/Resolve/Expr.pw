@@ -46,6 +46,27 @@ pub impl Comp {
         }
     }
 
+    inout fn writtenCallReceiverTemplate(exprId: U64, receiverExpr: U64) -> Result[CallTemplateReceiver, CompileDiagnostic] {
+        val synthetic = self.syntheticCallSiteIndex(exprId: exprId)
+        if synthetic < self.decls.syntheticCallSites.count() {
+            val site = self.decls.syntheticCallSites[synthetic]
+            if site.receiverIsType { return <Result.Ok value=<CallTemplateReceiver.Term term=site.receiverTerm /> /> }
+        }
+        return self.directReceiverTemplateForExpr(exprId: receiverExpr)
+    }
+
+    inout fn symbolicCallQualifierTerm(exprId: U64, receiverExpr: U64) -> U64 {
+        val synthetic = self.syntheticCallSiteIndex(exprId: exprId)
+        if synthetic < self.decls.syntheticCallSites.count() {
+            val site = self.decls.syntheticCallSites[synthetic]
+            if site.receiverIsType && site.receiverTerm != 0U64 && site.receiverTerm < self.arena.typeCount() {
+                val receiver = self.arena.typeTerms[site.receiverTerm]
+                if receiver.paramId != 0U64 || receiver.assocNameId != 0U64 { return site.receiverTerm }
+            }
+        }
+        return self.typeParameterQualifierTerm(exprId: receiverExpr)
+    }
+
     inout fn resolveWrittenMethod(exprId: U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         val synthetic = self.syntheticCallSiteIndex(exprId: exprId)
         if synthetic < self.decls.syntheticCallSites.count() {

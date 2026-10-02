@@ -470,7 +470,7 @@ pub impl Comp {
                     try self.checkBoundsExpr(exprId: self.argAt(args: args, index: i).expr)
                     i += 1
                 }
-                val qualifier: U64 = self.typeParameterQualifierTerm(exprId: recv)
+                val qualifier: U64 = self.symbolicCallQualifierTerm(exprId: exprId, receiverExpr: recv)
                 if qualifier != 0U64 {
                     val selected: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args))
                     match selected {
@@ -493,6 +493,12 @@ pub impl Comp {
                             return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)") />
                         }
                     }
+                    return <Result.Ok value=() />
+                }
+                // A value whose type is T.Options must be checked against
+                // that projection's evidence, not the spelling of its T head.
+                val semanticReceiver = self.parametricExprTerm(exprId: recv)
+                if (try self.checkSymbolicMethodArgs(fnIdx: self.cur.checkFn, receiverRef: semanticReceiver, nameStart: nameStart, nameLen: nameLen, args: args)) {
                     return <Result.Ok value=() />
                 }
                 val rt: TypeInfo = (try self.typeOf(id: recv))
@@ -887,7 +893,7 @@ pub impl Comp {
                 }
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                val qualifier: U64 = self.typeParameterQualifierTerm(exprId: recv)
+                val qualifier: U64 = self.symbolicCallQualifierTerm(exprId: valueExpr, receiverExpr: recv)
                 if qualifier != 0U64 {
                     val selected: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args))
                     val result: U64 = (try self.staticRequirementResultType(resolution: selected))

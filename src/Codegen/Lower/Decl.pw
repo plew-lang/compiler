@@ -377,7 +377,7 @@ pub impl Comp {
             val p: SyntaxParam = syntaxParam(file: self.syntax, id: syntaxDeclParam(file: self.syntax, decl: d, index: i))
             val ty: PType = (try self.lowerSyntaxType(id: p.ty))
             mut val defaultExpr: U64 = 0U64
-            if p.hasDefault { defaultExpr = (try self.lowerSyntaxExpr(id: p.defaultVal)) }
+            if p.hasDefault { defaultExpr = (try self.lowerSyntaxExprWithCtx(id: p.defaultVal, ctxRef: ty.ref)) }
             val name: Bind = <Bind nameStart=p.name.start nameLen=p.name.end - p.name.start fieldStart=p.name.start fieldLen=p.name.end - p.name.start offset=p.name.start />
             out.append(self.appendLoweredParam(name: name, hasType: true, ty: ty, isInout: p.isInout, isMove: p.isMove, isBorrow: p.isBorrow, noLabel: p.noLabel, hasDefault: p.hasDefault, defaultExpr: defaultExpr))
             i += 1U64

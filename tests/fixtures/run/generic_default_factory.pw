@@ -1,13 +1,38 @@
 use @Std/Io only { print }
 trait Default {
     factory()
+    fn measure() -> I64
 }
 struct Options { val precision: I64 }
 impl Options as Default {
     factory() { return <Options precision=2I64 /> }
+    fn measure() -> I64 { return self.precision }
 }
+trait Configuration { type Options: Default }
+struct Value {}
+impl Value as Configuration { type Options = Options }
+fn configure[T](value: T) -> T.Options where T: Configuration { return </> }
+
+trait FromValue { factory(value: I64) }
+struct Number { val raw: I64 }
+impl Number as FromValue {
+    factory(value: I64) { return <Number raw=value /> }
+}
+fn convert[T](value: I64) -> T where T: FromValue { return <value=value /> }
+
+struct Rendered { val raw: I64 }
+impl[T] Rendered where T: Configuration {
+    factory(value: T, options: T.Options = </>) { return <Rendered raw=options.measure() /> }
+}
+
 fn create[T]() -> T where T: Default { return </> }
 fn main() {
     val options: Options = create()
     print(options.precision)
+    val configured = configure(value: <Value />)
+    print(configured.precision)
+    val number: Number = convert(value: 9I64)
+    print(number.raw)
+    val rendered = <Rendered value=<Value /> />
+    print(rendered.raw)
 }

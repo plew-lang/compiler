@@ -309,7 +309,7 @@ pub impl Comp {
                             val receiverTerm: U64 = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen) }
                             val originSerial: U64 = self.nextExprOriginSerial
                             self.nextExprOriginSerial += 1U64
-                            try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=i originSerial=originSerial receiverTerm=receiverTerm />)
+                            try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=i originSerial=originSerial receiverTerm=receiverTerm receiverIsType=true />)
                         }
                     }
                 }
@@ -496,8 +496,9 @@ pub impl Comp {
             Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, val ty, val fields) => {
                 if isEnum || self.arena.resolvedMemberwiseFactories.contains(exprId) { return <Result.Ok value=() /> }
                 val candidates = self.anonymousConstructionCandidates(typeStart: typeStart, typeLen: typeLen)
-                if candidates.count() == 0U64 { return <Result.Ok value=() /> }
                 val receiver = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen) }
+                val abstractReceiver = receiver != 0U64 && receiver < self.arena.typeCount() && (self.arena.typeTerms[receiver].paramId != 0U64 || self.arena.typeTerms[receiver].assocNameId != 0U64)
+                if candidates.count() == 0U64 && !abstractReceiver { return <Result.Ok value=() /> }
                 mut val arguments: Array[Arg] = []
                 mut val index = 0U64
                 while index < fields.len {
@@ -507,6 +508,33 @@ pub impl Comp {
                     index += 1U64
                 }
                 val args = self.pushArgs(args: arguments)
+                if abstractReceiver {
+                    mut val callStart = typeStart
+                    mut val callLen = 0U64
+                    if fields.len != 0U64 {
+                        val first = self.makeFieldAt(fields: fields, index: 0U64)
+                        callStart = first.nameStart
+                        callLen = first.nameLen
+                    }
+                    val resolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiver, nameStart: callStart, nameLen: callLen, args: args))
+                    mut val factoryRequirement = false
+                    match resolution {
+                        StaticMemberResolution.Requirement(proof: _, val traitIdx, val reqIdx) => {
+                            val trait = self.decls.traitAt(index: traitIdx)
+                            factoryRequirement = self.traitReqAt(reqs: trait.reqs, index: reqIdx).isAnonymousFactory
+                        }
+                        _ => {}
+                    }
+                    if !factoryRequirement {
+                        return <Result.Err error=self.diagnosticAt(offset: typeStart, msg: "generic construction requires a matching factory requirement") />
+                    }
+                    val recv = self.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
+                    self.arena.exprs[exprId] = <Expr.Method recv=recv nameStart=callStart nameLen=callLen args=args />
+                    val origin = self.nextExprOriginSerial
+                    self.nextExprOriginSerial += 1U64
+                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId originSerial=origin receiverTerm=receiver receiverIsType=true />)
+                    return <Result.Ok value=() />
+                }
                 val memberwise = (try self.memberwiseConstructionMatches(receiver: receiver, fields: fields, offset: typeStart))
                 mut val selected = self.arena.functionCount()
                 mut val rank = 0U64
@@ -557,7 +585,7 @@ pub impl Comp {
                     self.arena.exprs[exprId] = <Expr.Method recv=recv nameStart=callStart nameLen=callLen args=args />
                     val origin = self.nextExprOriginSerial
                     self.nextExprOriginSerial += 1U64
-                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId originSerial=origin receiverTerm=receiver selectedFactory=<Optional.Some v=selected /> />)
+                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId originSerial=origin receiverTerm=receiver receiverIsType=true selectedFactory=<Optional.Some v=selected /> />)
                 } else {
                     self.arena.resolvedMemberwiseFactories.insert(exprId)
                     self.normalizeMemberwiseDefaultsAt(exprId: exprId)

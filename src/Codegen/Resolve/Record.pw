@@ -336,7 +336,12 @@ pub impl Comp {
         // ParamId would make a later body environment unable to ground it.
         // `fnArgsAllGround` is deliberately reserved for reachability/codegen.
         if f.typeParams.count() > 0U64 && self.fnArgsAllResolved(args: calleeArgs) {
-            result = self.groundTermInEnvironment(ref: f.retTy, params: self.copyFuncBinds(binds: f.typeParams), values: calleeArgs)
+            // Substitution alone leaves a concrete receiver's associated
+            // output as a projection. Close it with the same explicit
+            // environment used by method signatures before publishing the
+            // call result to field selection and local inference.
+            val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=calleeArgs />
+            result = (try self.groundTermForBody(ref: f.retTy, environment: environment, selfRef: 0U64, itemRef: 0U64))
         }
         try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: calleeArgs, resultTerm: result)
         // The existing SemanticExprType is still consumed by the abstract
@@ -1495,9 +1500,9 @@ pub impl Comp {
                         mk += 1U64
                     }
                 }
-                try self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: (try self.directReceiverTemplateForExpr(exprId: recv)), receiverTerm: receiverTerm, args: args)
+                try self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverTerm: receiverTerm, args: args)
                 if methodCallee >= self.arena.functionCount() {
-                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.directReceiverTemplateForExpr(exprId: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
                 }
                 if self.cur.recordCallTemplates && !self.cur.recordingAccessWriteFacet && requiredTraitOwner != 0U64 {
                     // Record publishes under the lexical checking declaration.
