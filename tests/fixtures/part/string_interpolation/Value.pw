@@ -1,0 +1,22 @@
+use @Std/Core only { Format, FormatOptions, TextOutput }
+pub struct Options { val prefix: String }
+pub impl Options {
+    factory(prefix: String) { return <Options prefix=prefix /> }
+}
+pub impl Options as FormatOptions {
+    factory() { return <Options prefix="default:" /> }
+}
+pub struct Value { val text: String }
+pub impl Value {
+    factory(text: String) { return <Value text=text /> }
+    fn format[Output](output: inout Output, options: Bool) -> String where Output: TextOutput {
+        return "unexpected inherent"
+    }
+}
+pub impl Value as Format {
+    type Options = Options
+    fn format[Output](output: inout Output, options: Options) -> Result[(), Output.Error] where Output: TextOutput {
+        try output.write(options.prefix)
+        return output.write(self.text)
+    }
+}

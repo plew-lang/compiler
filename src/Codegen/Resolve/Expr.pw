@@ -48,6 +48,19 @@ pub impl Comp {
         }
     }
 
+    fn missingSyntheticRequirement(exprId: U64) -> String {
+        val index = self.syntheticCallSiteIndex(exprId: exprId)
+        if index < self.decls.syntheticCallSites.count() {
+            match self.decls.syntheticCallSites[index].kind {
+                SyntheticCallKind.Format => { return "string interpolation requires a Format implementation" }
+                SyntheticCallKind.TextWrite => { return "string construction requires a TextOutput implementation" }
+                SyntheticCallKind.IndexRead | SyntheticCallKind.IndexWrite => { return "subscript requires an Index implementation for reading or an IndexSet implementation for writing" }
+                SyntheticCallKind.Ordinary => {}
+            }
+        }
+        return "no matching implementation for the synthesized call"
+    }
+
     inout fn writtenCallReceiverTemplate(exprId: U64, receiverExpr: U64) -> Result[CallTemplateReceiver, CompileDiagnostic] {
         val synthetic = self.syntheticCallSiteIndex(exprId: exprId)
         if synthetic < self.decls.syntheticCallSites.count() {

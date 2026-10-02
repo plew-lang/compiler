@@ -48,6 +48,7 @@ pub impl Comp {
             args.append(<Arg expr=selectedOptions isInout=false labelStart=optionsLabel.nameStart labelLen=optionsLabel.nameLen hasLabel=true />)
         }
         val call = self.pushExpr(e: <Expr.Method recv=receiver nameStart=name.nameStart nameLen=name.nameLen args=self.pushArgs(args: args) />)
+        self.arena.exprSpanStart[call] = self.exprOffset(id: value)
         try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call kind=kind originSerial=self.arena.exprOriginSerial[call] receiverTerm=0U64 />)
         val successName = self.internBytes(s: "value")
         val success = self.pushExpr(e: <Expr.Method recv=call nameStart=successName.nameStart nameLen=successName.nameLen args=self.pushArgs(args: []) />)

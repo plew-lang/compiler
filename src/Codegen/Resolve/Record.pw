@@ -1515,7 +1515,7 @@ pub impl Comp {
                     // bodyFnIdx belongs to emission and can name an unrelated
                     // body here; origin fallback would hide that mismatch.
                     if !(try self.recordedCallIsSelected(exprId: exprId)) {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "subscript requires an Index implementation for reading or an IndexSet implementation for writing") />
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: self.missingSyntheticRequirement(exprId: exprId)) />
                     }
                 }
                 // A synthetic index read used as this receiver is an access

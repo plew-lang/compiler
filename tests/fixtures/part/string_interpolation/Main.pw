@@ -1,0 +1,13 @@
+use ./Value only { Value }
+use @Std/Core only { Format }
+use @Std/Io only { print }
+fn generic[T](value: T) -> String where T: Format {
+    return "{value: </>}"
+}
+fn main() {
+    val value = <Value text="item" />
+    print("{value}")
+    print("{value: <prefix="custom:" />}")
+    print(generic(value: value))
+    print(<String value=value />)
+}

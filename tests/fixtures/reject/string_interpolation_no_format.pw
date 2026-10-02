@@ -1,0 +1,3 @@
+struct Plain {}
+fn main() { val value = <Plain />
+ val text = "{value}" }
