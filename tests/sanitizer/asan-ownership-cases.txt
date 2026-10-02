@@ -48,3 +48,6 @@ tests/fixtures/run/closure_enum_owned.pw
 tests/fixtures/run/closure_enum_cell.pw
 tests/fixtures/run/closure_capture_typed_cell.pw
 tests/fixtures/run/trait_via_ownership.pw
+tests/fixtures/run/string_interpolation_order.pw
+tests/fixtures/run/string_interpolation_lifetime.pw
+tests/fixtures/run/string_interpolation_options_lifetime.pw

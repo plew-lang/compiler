@@ -2,6 +2,6 @@ version = 1
 
 [[package]]
 git = "https://github.com/plew-lang/syntax.git"
-version = "0.1.11-dev.12"
-commit = "8e506dcb778068942d7eb7f73df31b4a0129cc9b"
+version = "0.1.11-dev.13"
+commit = "abaf7618f5d074b8b5ba1f703376bde4552a77c3"
 dependencies = []
