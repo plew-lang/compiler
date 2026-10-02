@@ -1069,7 +1069,7 @@ pub impl Comp {
         // here, before the instance becomes reachable by LLVM.
         val environment: InstanceEnvironment = (try self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, selectedProof: selectedProof))
         val declaration: Func = (try self.lexicalFunction(f: f))
-        try self.checkSelectedCallableBounds(fnIdx: fnIdx, args: args, receiver: environment.receiverRef)
+        try self.checkSelectedCallableBounds(fnIdx: fnIdx, environment: environment)
         // A provided copy has no standalone semantic body: its `Self`,
         // associated outputs and nested requirements are defined by the
         // conformance that selected it.  Never materialize one with Missing

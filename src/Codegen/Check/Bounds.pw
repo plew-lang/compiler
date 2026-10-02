@@ -1467,14 +1467,28 @@ pub impl Comp {
     // its substitutions came from arguments, a receiver, or an expected result.
     // The same closed callable constraint is checked whether selected during
     // declaration analysis or demanded later by executable discovery.
-    inout fn checkSelectedCallableBounds(fnIdx: U64, args: Array[U64], receiver: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
+    inout fn checkSelectedCallableBounds(fnIdx: U64, environment: InstanceEnvironment, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
         val function = self.arena.functionAt(index: fnIdx)
-        val declaration = try self.lexicalFunction(f: function)
-        if declaration.hasRecv && receiver != 0U64 {
-            return self.checkOneMethodReceiverBounds(fnIdx: fnIdx, f: declaration, args: args, instRef: receiver, assumptions: assumptions)
-        }
-        if function.typeParams.count() > 0U64 && args.count() == function.typeParams.count() {
-            return self.checkOneFnInstBounds(fin: <FnInst fnIdx=fnIdx args=args recvInstRef=receiver />, assumptions: assumptions)
+        val owner = if function.lexicalOwnerFnId != 0U64 { give function.lexicalOwnerFnId - 1U64 } else { give fnIdx }
+        mut val index = 0U64
+        while index < self.decls.funcBounds.count() {
+            val bound = self.decls.funcBounds[index]
+            if bound.fnIdx == fnIdx || bound.fnIdx == owner {
+                val subject = try self.groundTermForBody(ref: bound.paramTy, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                mut val arguments: Array[U64] = []
+                for val argument in bound.constraint.key.positionalArgs {
+                    arguments.append((try self.groundTermForBody(ref: argument, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)))
+                }
+                mut val predicates: Array[TraitAssocPredicate] = []
+                for val predicate in bound.constraint.assocPredicates {
+                    predicates.append(<TraitAssocPredicate member=predicate.member value=(try self.groundTermForBody(ref: predicate.value, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)) span=predicate.span />)
+                }
+                val constraint = <TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates />
+                if !(try self.viewedTypeConformsTraitConstraint(ref: subject, constraint: constraint, assumptions: assumptions)) {
+                    return <Result.Err error=self.diagnosticAt(offset: bound.paramStart, msg: "type argument does not conform to the trait required by `where`") />
+                }
+            }
+            index += 1U64
         }
         return <Result.Ok value=() />
     }
@@ -1487,7 +1501,7 @@ pub impl Comp {
             Optional.None => { return <Result.Ok value=0U64 /> }
             Optional.Some(v: val substitution) => {
                 val environment = try self.bodyInstanceEnvironment(fnIdx: callee, args: substitution.args, recvInstRef: substitution.receiverRef, selectedProof: substitution.proof)
-                try self.checkSelectedCallableBounds(fnIdx: callee, args: substitution.args, receiver: environment.receiverRef)
+                try self.checkSelectedCallableBounds(fnIdx: callee, environment: environment)
                 return self.groundedSelectedCalleeReturn(callee: callee, environment: environment)
             }
         }
@@ -1524,7 +1538,7 @@ pub impl Comp {
                 val receiver = template.receiverTypeTerm
                 if (function.hasRecv || function.isAssoc) && (receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver)) { return <Result.Ok value=0U64 /> }
                 val environment = try self.bodyInstanceEnvironment(fnIdx: callee, args: args, recvInstRef: receiver, selectedProof: self.thawStaticConformanceProof(id: proofId))
-                try self.checkSelectedCallableBounds(fnIdx: callee, args: args, receiver: environment.receiverRef)
+                try self.checkSelectedCallableBounds(fnIdx: callee, environment: environment)
                 val result = try self.groundedSelectedCalleeReturn(callee: callee, environment: environment)
                 if result == 0U64 || !self.arena.typeIsClosed(ref: result) { return <Result.Ok value=0U64 /> }
                 return <Result.Ok value=result />
@@ -1650,7 +1664,7 @@ pub impl Comp {
     inout fn checkRecordedCallTemplateBound(templateIndex: U64) -> Result[(), CompileDiagnostic] {
         val template = self.decls.callTemplates[templateIndex]
         match template.kind {
-            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: _) => {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: val proofId) => {
                 val function = self.arena.functionAt(index: callee)
                 val args = self.callTemplateTypeArgs(range: arguments)
                 mut val resolved = args.count() == function.typeParams.count()
@@ -1662,7 +1676,8 @@ pub impl Comp {
                 val receiver = template.receiverTypeTerm
                 if function.hasRecv && (receiver == 0U64) { resolved = false }
                 if resolved {
-                    try self.checkSelectedCallableBounds(fnIdx: callee, args: args, receiver: self.canonicalBodyReceiverRef(fnIdx: callee, recvInstRef: receiver), assumptions: self.functionBoundAssumptions(fnIdx: template.siteKey.ownerFnIdx))
+                    val environment = try self.bodyInstanceEnvironment(fnIdx: callee, args: args, recvInstRef: receiver, selectedProof: self.thawStaticConformanceProof(id: proofId))
+                    try self.checkSelectedCallableBounds(fnIdx: callee, environment: environment, assumptions: self.functionBoundAssumptions(fnIdx: template.siteKey.ownerFnIdx))
                 }
             }
             _ => {}
@@ -1683,6 +1698,12 @@ pub impl Comp {
         while index < self.decls.funcBounds.count() {
             val bound = self.decls.funcBounds[index]
             if bound.fnIdx < constrained.count() { constrained.set(i: bound.fnIdx, value: true) }
+            index += 1U64
+        }
+        index = 0U64
+        while index < self.arena.functionCount() {
+            val owner = self.arena.functionAt(index: index).lexicalOwnerFnId
+            if owner != 0U64 && owner - 1U64 < constrained.count() && constrained[owner - 1U64] { constrained.set(i: index, value: true) }
             index += 1U64
         }
         val count = self.decls.callTemplates.count()

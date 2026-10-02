@@ -14,9 +14,15 @@ impl GeneralWorker as Action { fn go[U](value: U) -> I64 { return 8I64 } }
 fn invoke[T, U](action: T, value: U) -> I64 where T: Action, U: Narrow {
     return action.go(value: value)
 }
+trait Layer {}
+impl Layer as Action { fn go[U](value: U) -> I64 { return 9I64 } }
+struct Delegated {}
+impl Delegated as Layer {}
 fn main() {
     print(<Worker />.go(value: <Input />))
     print(invoke(action: <Worker />, value: <Input />))
     print(<GeneralWorker />.go(value: <Input />))
     print(invoke(action: <GeneralWorker />, value: <Input />))
+    print(<Delegated />.go(value: <Input />))
+    print(invoke(action: <Delegated />, value: <Input />))
 }
