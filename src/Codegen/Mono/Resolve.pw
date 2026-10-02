@@ -222,6 +222,14 @@ pub impl Comp {
     }
 
     inout fn projectedTraitPatternProof(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        // An explicitly assumed projected constraint is already evidence for
+        // that subject. Requiring the projection's parent conformance first
+        // would lose a valid `where T#Parser.Output: Mark` premise. Schema-
+        // derived constraints still require their parent proof below.
+        if assumptions.count() != 0U64 {
+            val assumed = try self.traitPatternProofFromFacts(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, includeConcrete: false)
+            match assumed { StaticConformanceProof.Missing => {} _ => { return <Result.Ok value=assumed /> } }
+        }
         val projection = self.arena.typeAt(index: baseRef)
         val receiver = self.typeTermProjectionReceiver(t: projection)
         // The lowerer already canonicalizes the trait span. Declaration
@@ -279,7 +287,7 @@ pub impl Comp {
         return <DeclarationBoundRef.AssociatedType index=index />
     }
 
-    inout fn traitPatternProofFromFacts(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
+    inout fn traitPatternProofFromFacts(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = [], includeConcrete: Bool = true) -> Result[StaticConformanceProof, CompileDiagnostic] {
         if baseRef >= self.arena.typeCount() { return <Result.Ok value=<StaticConformanceProof.Missing /> />}
         mut val pending: Array[TraitProofState] = []
         mut val seen: Array[TraitProofState] = []
@@ -297,7 +305,7 @@ pub impl Comp {
             }
         }
         mut val ci: U64 = 0U64
-        while ci < self.decls.conformCount() {
+        while includeConcrete && ci < self.decls.conformCount() {
             val cf: Conform = self.decls.conformAt(index: ci)
             if !cf.derived && cf.subjectTraitOwner == 0U64 && self.proofSourceIsActive(baseRef: baseRef, extId: cf.extId) {
                 val witness: WitnessMatch = (try self.conformanceWitnessMatch(conformIdx: ci, typeRef: baseRef, traitArgs: [], traitArgsOpen: true))

@@ -1,0 +1,38 @@
+use @Std/Core only { TextOutput, FormatOptions, Infallible, stringFromBytesUnchecked }
+use @Std/Io only { print }
+trait Render {
+    type Options: FormatOptions
+    fn render[Output](output: inout Output, options: Options) -> Result[(), Output.Error] where Output: TextOutput
+}
+enum DefaultOptions { Default }
+impl DefaultOptions as FormatOptions {
+    factory() { return <DefaultOptions.Default /> }
+}
+struct Text { val bytes: Array[U8] }
+struct Builder { mut val bytes: Array[U8] }
+impl Builder as TextOutput {
+    type Error = Infallible
+    inout fn write(text~: String) -> Result[(), Infallible] {
+        for val byte in text.bytes() { self.bytes.append(byte) }
+        return <Result.Ok value=() />
+    }
+}
+impl[T] Text where T: Render {
+    factory(value: T, options: T.Options = </>) {
+        mut val builder = <Builder bytes=[] />
+        value.render(output: inout builder, options: options).value()
+        return <Text bytes=builder.bytes />
+    }
+}
+struct Value {}
+impl Value as Render {
+    type Options = DefaultOptions
+    fn render[Output](output: inout Output, options: DefaultOptions) -> Result[(), Output.Error] where Output: TextOutput {
+        try output.write("first")
+        return output.write("second")
+    }
+}
+fn main() {
+    val text = <Text value=<Value /> />
+    print(stringFromBytesUnchecked(text.bytes))
+}

@@ -846,7 +846,8 @@ pub impl Comp {
                 val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
                 if requirement.typeParams.count() != 0U64 {
                     val arguments = try self.inferFnArgs(f: requirement, args: args)
-                    return <Result.Ok value=self.groundTermInEnvironment(ref: result, params: self.copyFuncBinds(binds: requirement.typeParams), values: arguments) />
+                    val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: requirement.typeParams) args=arguments />
+                    return self.groundTermForBody(ref: result, environment: environment, selfRef: 0U64, itemRef: 0U64)
                 }
             }
             _ => {}
