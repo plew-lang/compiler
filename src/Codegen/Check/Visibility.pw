@@ -7,7 +7,7 @@
 pub impl Comp {
     inout fn moduleBindingFromOrigin(origin: ImportOrigin, requirePublic: Bool = true) -> ModuleBinding {
         if origin.isNamespace { return <ModuleBinding.Namespace moduleId=origin.targetModule /> }
-        return self.moduleBindingFromSurface(moduleId: origin.targetModule, nameStart: origin.sourceStart, nameLen: origin.sourceLength, requirePublic: requirePublic)
+        return self.moduleBindingFromSurface(moduleId: origin.targetModule, nameStart: origin.sourceStart, nameLen: origin.sourceLength, requirePublic: requirePublic && !origin.isSynthesized)
     }
 
     inout fn moduleBindingFromSurface(moduleId: U64, nameStart: U64, nameLen: U64, requirePublic: Bool = true) -> ModuleBinding {

@@ -5,7 +5,7 @@ use @Plew/Syntax only { StringPartAst }
 pub impl Comp {
     inout fn stringCoreType(name: String) -> U64 {
         val binding = self.internBytes(s: name)
-        self.recordNamespaceUse(name: <Span start=binding.nameStart end=binding.nameStart + binding.nameLen />, moduleId: self.modules.coreModule)
+        self.modules.registerQualifiedUse(<ImportOrigin localStart=binding.nameStart localLength=binding.nameLen localModule=self.moduleOf(offset: binding.nameStart) sourceStart=binding.nameStart sourceLength=binding.nameLen targetModule=self.modules.coreModule isSynthesized=true />)
         return self.simpleTypeRef(nameStart: binding.nameStart, nameLen: binding.nameLen)
     }
 

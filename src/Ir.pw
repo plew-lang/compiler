@@ -3160,6 +3160,9 @@ pub enum ModuleBinding {
 }
 
 pub struct ImportOrigin {
+    // Authored imports/qualified names require a public surface. Compiler
+    // lowering can bind an implementation declaration in its defining module.
+    pub val isSynthesized: Bool = false
     pub val localStart: U64
     pub val localLength: U64
     pub val localModule: U64

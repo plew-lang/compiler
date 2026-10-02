@@ -1,0 +1,32 @@
+use @Std/Core only { Format, FormatOptions, TextOutput }
+use @Std/Io only { print }
+struct Options { val prefix: String }
+impl Options as FormatOptions {
+    factory() {
+        print("default options")
+        return <Options prefix="default:" />
+    }
+}
+struct Item { val name: String }
+impl Item {
+    fn format[Output](output: inout Output, options: Bool) -> String where Output: TextOutput {
+        return "inherent"
+    }
+}
+impl Item as Format {
+    type Options = Options
+    fn format[Output](output: inout Output, options: Options) -> Result[(), Output.Error] where Output: TextOutput {
+        try output.write(options.prefix)
+        return output.write(self.name)
+    }
+}
+fn main() {
+    val number = 42I64
+    val item = <Item name="item" />
+    print("answer={number}!")
+    print("{{{number}}}")
+    print("nested={"value={number}"}")
+    print("{item}")
+    print("{item: <prefix="custom:" />}")
+    print("{item: </>}")
+}

@@ -1055,7 +1055,7 @@ pub trait Format {
 // The type is module-private. Its storage is visible to compiler-synthesized
 // construction/finish expressions; it does not expose a public builder type.
 struct StringOutput { pub mut val buffer: Buffer[U8] }
-impl StringOutput as TextOutput {
+pub impl StringOutput as TextOutput {
     type Error = Infallible
     inout fn write(text~: String) -> Result[(), Infallible] {
         val bytes = text.bytes()

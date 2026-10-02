@@ -1,0 +1,2 @@
+use @Std/Core only { StringOutput }
+fn main() {}
