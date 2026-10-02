@@ -1,8 +1,9 @@
-use @Std/Core only { Format, FormatOptions, TextOutput }
+use @Std/Core only { Format, FormatOptions, TextOutput, MutableRef }
 use @Std/Io only { print }
 struct Options { val marker: Bool }
 impl Options as FormatOptions { factory() { return <Options marker=false /> } }
 struct Item { mut val value: I64 }
+struct Holder { mut val item: Item }
 impl Item as Format {
     type Options = Options
     fn format[Output](output: inout Output, options: Options) -> Result[(), Output.Error] where Output: TextOutput {
@@ -12,6 +13,11 @@ impl Item as Format {
 fn mutate(item: inout Item) -> Options {
     print("options")
     item.value = 2I64
+    return <Options marker=false />
+}
+fn replace(items: inout Array[Item]) -> Options {
+    print("replace")
+    items[0U64] = <Item value=3I64 />
     return <Options marker=false />
 }
 fn snapshot(item: Item) -> Item { print("receiver")
@@ -28,6 +34,10 @@ fn main() {
     print("{item: mutate(item: inout item)}")
     item.value = 1I64
     print("{snapshot(item: item): mutate(item: inout item)}")
+    mut val items: Array[Item] = [<Item value=1I64 />]
+    print("{items[0U64]: replace(items: inout items)}")
+    val shared = <MutableRef[Holder] value=<Holder item=<Item value=1I64 /> /> />
+    print("{shared->item: mutate(item: inout shared->item)}")
     match failing(item: item) {
         Result.Ok(value: _) => { print("unexpected success") }
         Result.Err(error: _) => { print("error") }

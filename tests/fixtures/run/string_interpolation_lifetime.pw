@@ -1,0 +1,24 @@
+use @Std/Core only { Format, FormatOptions, TextOutput, Ref }
+use @Std/Io only { print }
+unique struct Resource {
+    val id: I64
+    deinit { print(self.id) }
+}
+struct Item { val resource: Ref[Resource] }
+struct Options { val marker: Bool }
+impl Options as FormatOptions { factory() { return <Options marker=false /> } }
+impl Item as Format {
+    type Options = Options
+    fn format[Output](output: inout Output, options: Options) -> Result[(), Output.Error] where Output: TextOutput {
+        print("format")
+        return output.write("item")
+    }
+}
+fn item(id: I64) -> Item {
+    print("make")
+    return <Item resource=<Ref[Resource] value=<Resource id=id /> /> />
+}
+fn main() {
+    print("{item(id: 1I64)}{item(id: 2I64)}")
+    print("after")
+}
