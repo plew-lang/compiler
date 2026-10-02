@@ -47,6 +47,13 @@ pub impl Comp {
     }
 
     inout fn resolveWrittenMethod(exprId: U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+        val synthetic = self.syntheticCallSiteIndex(exprId: exprId)
+        if synthetic < self.decls.syntheticCallSites.count() {
+            match self.decls.syntheticCallSites[synthetic].selectedFactory {
+                Optional.Some(v: val declaration) => { return <Result.Ok value=declaration /> }
+                Optional.None => {}
+            }
+        }
         return <Result.Ok value=(try self.resolveMethodFinalForType(recv: recv, receiverType: (try self.typeOf(id: recv)), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))) />
     }
 

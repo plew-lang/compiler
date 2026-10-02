@@ -1,0 +1,2 @@
+use ./Value only { Value }
+fn main() { val value = <Value value=1I64 /> }

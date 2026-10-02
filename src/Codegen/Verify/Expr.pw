@@ -129,7 +129,10 @@ pub impl Comp {
                 }
                 val mf: U64 = (try self.resolveWrittenMethod(exprId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args))
                 val rt: TypeInfo = (try self.typeOf(id: recv))
-                if rt.nameLen != 0U64 { try self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args) }
+                // A type qualifier is not a value receiver and may have no
+                // value TypeInfo. The selected declaration still requires
+                // visibility and ownership checks.
+                try self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args)
                 self.recordResolvedMethodCallee(id: id, callee: mf)
                 try self.checkResolvedMethodArgs(mf: mf, args: args)
             }

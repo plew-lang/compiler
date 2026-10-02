@@ -2205,6 +2205,9 @@ pub struct Func {
     // yet recvStart/recvLen still name the owning type, so the C name mangles
     // `Type_name` and a call `Type.name(args)` resolves. Operator requirements
     // (`Eq.eq`, `Ord.compare`, `Add.add`) are assoc fns.
+    // Retain source construction identity through callable registration.
+    pub val isFactory: Bool = false
+    pub val isAnonymousFactory: Bool = false
     pub val isAssoc: Bool
     // `async fn` (spec/14): the function suspends at `await` points and returns a
     // `Promise[T]`. Lowered to a stackless state machine (frame + resume + entry)
@@ -2447,6 +2450,7 @@ pub struct NewtypeDef {
 pub struct Arena {
     pub mut val bytes: Array[U8] = []
     pub mut val exprs: Array[Expr] = []
+    pub mut val resolvedMemberwiseFactories: Set[U64] = Set.new()
     // Flat immutable payload pool for Call / Method / ExtMethod arguments.
     // ArgRange is the only AST-side handle; consumers read through Comp.argAt.
     pub mut val argPool: Array[Arg] = []
@@ -2502,6 +2506,7 @@ pub struct Arena {
     mut val typeParameterNameIds: Set[U64] = Set.new()
     mut val concreteTypeNameIds: Set[U64] = Set.new()
     mut val funcs: Array[Func] = []
+    mut val anonymousFactoriesByReceiver: Dictionary[U64, Array[U64]] = [:]
     mut val functionNameHeads: Dictionary[U64, U64] = [:]
     mut val functionNameTails: Dictionary[U64, U64] = [:]
     mut val functionNameNext: Array[U64] = []
@@ -2696,6 +2701,8 @@ pub struct SyntheticCallSite {
     // Allocated at the synthesis point.  Generated nodes have no source span,
     // so an arena index is only a navigation anchor, never their origin.
     pub val originSerial: U64 = 0U64
+    // A typed construction has already selected its declaration.
+    pub val selectedFactory: Optional[U64] = <Optional.None />
     pub val receiverTerm: U64
 }
 pub impl SyntheticCallSite { factory }

@@ -11,6 +11,17 @@ impl Box {
     factory(value: String) { return <Box value=43I64 /> }
 }
 
+struct Combined { val raw: I64 }
+impl Combined {
+    factory() { return <Combined raw=10I64 /> }
+    factory(left: I64, right: I64 = 2I64) { return <Combined raw=left + right /> }
+}
+
+struct Ordinary { val value: I64 }
+impl Ordinary {
+    assoc fn value(value: String) -> Ordinary { return <Ordinary value=99I64 /> }
+}
+
 fn consume(number: Number) -> I64 { return number.raw }
 fn consume(text: String) -> String { return text }
 
@@ -24,4 +35,12 @@ fn main() {
     print(consume(number: <value=9I64 />))
     val boxed: Box = <value="43" />
     print(boxed.value)
+    val empty: Combined = </>
+    val combined: Combined = <left=11I64 right=12I64 />
+    val defaulted: Combined = <left=13I64 />
+    print(empty.raw)
+    print(combined.raw)
+    print(defaulted.raw)
+    val ordinary = <Ordinary value=16I64 />
+    print(ordinary.value)
 }

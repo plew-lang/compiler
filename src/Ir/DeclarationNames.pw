@@ -129,7 +129,16 @@ pub impl Arena {
             self.functionNameNext[tail - 1U64] = entry
         }
         self.functionNameTails[declaration.nameId] = entry
+        if declaration.isAnonymousFactory {
+            mut val factories = self.anonymousFactoriesByReceiver.getOr(key: declaration.recvId, fallback: [])
+            factories.append(self.funcs.count())
+            self.anonymousFactoriesByReceiver[declaration.recvId] = factories
+        }
         self.funcs.append(declaration)
+    }
+
+    fn anonymousFactoriesForReceiver(nameId: U64) -> Array[U64] {
+        return self.anonymousFactoriesByReceiver.getOr(key: nameId, fallback: [])
     }
 
     // Includes generated functions that are not source-visible callables.

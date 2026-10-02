@@ -1,0 +1,4 @@
+pub struct Value { pub val raw: I64 }
+impl Value {
+    factory(value: I64) { return <Value raw=value /> }
+}

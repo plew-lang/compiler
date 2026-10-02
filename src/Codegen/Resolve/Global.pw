@@ -311,25 +311,6 @@ pub impl Comp {
                             self.nextExprOriginSerial += 1U64
                             try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=i originSerial=originSerial receiverTerm=receiverTerm />)
                         }
-                    } else {
-                        // Anonymous factory form (spec/05): `factory(label: T)` lowers as an
-                        // assoc fn named by its first parameter label, so `<Type label=x/>`
-                        // routes to `Type.label(label: x)`. `from` is just the conversion
-                        // instance of this rule; memberwise construction remains the fallback
-                        // when no such factory exists.
-                        if fields.len == 1U64 {
-                            val field: MakeField = self.makeFieldAt(fields: fields, index: 0U64)
-                            if self.typeHasAssocFn(typeStart: typeStart, typeLen: typeLen, nameStart: field.nameStart, nameLen: field.nameLen) {
-                                val recv: U64 = self.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
-                                mut val fargs: Array[Arg] = []
-                                fargs.append(<Arg expr=field.value isInout=false labelStart=field.nameStart labelLen=field.nameLen hasLabel=true />)
-                                self.arena.exprs[i] = <Expr.Method recv=recv nameStart=field.nameStart nameLen=field.nameLen args=self.pushArgs(args: fargs) />
-                                val receiverTerm: U64 = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen) }
-                                val originSerial: U64 = self.nextExprOriginSerial
-                                self.nextExprOriginSerial += 1U64
-                                try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=i originSerial=originSerial receiverTerm=receiverTerm />)
-                            }
-                        }
                     }
                 }
                 Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
@@ -448,5 +429,132 @@ pub impl Comp {
             }
             _ => { return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 /> }
         }
+    }
+}
+
+pub impl Comp {
+    inout fn anonymousConstructionCandidates(typeStart: U64, typeLen: U64) -> Array[U64] {
+        val receiver = self.newtypeUnderName(start: typeStart, len: typeLen)
+        val name = intern(c: inout self, start: receiver.nameStart, len: receiver.nameLen)
+        return self.arena.anonymousFactoriesForReceiver(nameId: name)
+    }
+
+    inout fn constructionHasAnonymousFactories(exprId: U64) -> Bool {
+        match self.arena.exprs[exprId] {
+            Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, fields: _) => {
+                return !isEnum && self.anonymousConstructionCandidates(typeStart: typeStart, typeLen: typeLen).count() != 0U64
+            }
+            _ => { return false }
+        }
+    }
+
+    // Memberwise construction participates with its declared field types, not
+    // merely with the first written label. Reuse ordinary argument matching.
+    inout fn memberwiseConstructionMatches(receiver: U64, fields: MakeFieldRange) -> Result[Bool, CompileDiagnostic] {
+        val declaration = self.structIndexForType(ref: receiver)
+        if declaration >= self.arena.structCount() { return <Result.Ok value=false /> }
+        val declared = self.arena.structAt(index: declaration).fields
+        mut val index = 0U64
+        while index < fields.len {
+            val field = self.makeFieldAt(fields: fields, index: index)
+            mut val matched = false
+            for val candidate in declared {
+                if spansEqual(c: inout self, aStart: field.nameStart, aLen: field.nameLen, bStart: candidate.nameStart, bLen: candidate.nameLen) {
+                    val term = (try self.fieldTypeRefOfReceiver(receiverRef: receiver, fieldStart: candidate.nameStart, fieldLen: candidate.nameLen))
+                    val info = self.typeInfoOfRef(ref: term)
+                    val parameter = <Param nameStart=candidate.nameStart nameLen=candidate.nameLen nameId=candidate.nameId tyStart=info.nameStart tyLen=info.nameLen tyNameId=intern(c: inout self, start: info.nameStart, len: info.nameLen) tyIsArray=info.kind == 3I64 ty=term isInout=false isMove=false isBorrow=false noLabel=false hasDefault=candidate.hasDefault defaultExpr=candidate.defaultVal />
+                    matched = (try self.argMatchesParam(argExpr: field.value, p: parameter))
+                    break
+                }
+            }
+            if !matched { return <Result.Ok value=false /> }
+            index += 1U64
+        }
+        for val candidate in declared {
+            if !candidate.hasDefault {
+                mut val supplied = false
+                index = 0U64
+                while index < fields.len {
+                    val field = self.makeFieldAt(fields: fields, index: index)
+                    if spansEqual(c: inout self, aStart: field.nameStart, aLen: field.nameLen, bStart: candidate.nameStart, bLen: candidate.nameLen) { supplied = true }
+                    index += 1U64
+                }
+                if !supplied { return <Result.Ok value=false /> }
+            }
+        }
+        return <Result.Ok value=true />
+    }
+
+    // Run under Record's lexical scope. The selected declaration is carried
+    // by the synthetic call, so later passes never redo factory selection.
+    inout fn prepareAnonymousConstruction(exprId: U64, chainHoleRef: U64) -> Result[(), CompileDiagnostic] {
+        match self.arena.exprs[exprId] {
+            Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, val ty, val fields) => {
+                if isEnum || self.arena.resolvedMemberwiseFactories.contains(exprId) { return <Result.Ok value=() /> }
+                val candidates = self.anonymousConstructionCandidates(typeStart: typeStart, typeLen: typeLen)
+                if candidates.count() == 0U64 { return <Result.Ok value=() /> }
+                val receiver = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen) }
+                mut val arguments: Array[Arg] = []
+                mut val index = 0U64
+                while index < fields.len {
+                    val field = self.makeFieldAt(fields: fields, index: index)
+                    try self.recordExpr(exprId: field.value, chainHoleRef: chainHoleRef)
+                    arguments.append(<Arg expr=field.value isInout=false labelStart=field.nameStart labelLen=field.nameLen hasLabel=true />)
+                    index += 1U64
+                }
+                val args = self.pushArgs(args: arguments)
+                val memberwise = (try self.memberwiseConstructionMatches(receiver: receiver, fields: fields))
+                mut val selected = self.arena.functionCount()
+                mut val rank = 0U64
+                for val candidate in candidates {
+                    val function = self.arena.functionAt(index: candidate)
+                    if function.extId == 0U64 && function.srcTraitId == 0U64 && self.receiverDeclarationMatches(f: function, receiverRef: receiver) {
+                        val matchRank = (try self.callableArgMatchRank(f: function, args: args))
+                        if matchRank > rank {
+                            rank = matchRank
+                            selected = candidate
+                        } else if matchRank == 2U64 {
+                            try self.checkOverloadAmbiguity(a: selected, b: candidate, args: args)
+                            return <Result.Err error=self.diagnosticAt(offset: typeStart, msg: "ambiguous anonymous factory call") />
+                        }
+                    }
+                }
+                if memberwise {
+                    // Factory bodies construct their completed Self through the
+                    // memberwise surface (spec/05), not recursive factory calls.
+                    mut val constructingSelf = false
+                    if self.cur.checkFn < self.arena.functionCount() {
+                        val enclosing = self.arena.functionAt(index: self.cur.checkFn)
+                        constructingSelf = enclosing.isFactory && self.receiverDeclarationMatches(f: enclosing, receiverRef: receiver) && enclosing.recvId == intern(c: inout self, start: typeStart, len: typeLen)
+                    }
+                    if rank == 2U64 && !constructingSelf {
+                        return <Result.Err error=self.diagnosticAt(offset: typeStart, msg: "ambiguous construction: both memberwise and anonymous factories match") />
+                    }
+                    self.arena.resolvedMemberwiseFactories.insert(exprId)
+                    self.normalizeMemberwiseDefaultsAt(exprId: exprId)
+                    return <Result.Ok value=() />
+                }
+                if selected < self.arena.functionCount() {
+                    val function = self.arena.functionAt(index: selected)
+                    val recv = self.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
+                    mut val callStart = typeStart
+                    mut val callLen = 0U64
+                    if fields.len != 0U64 {
+                        val first = self.makeFieldAt(fields: fields, index: 0U64)
+                        callStart = first.nameStart
+                        callLen = first.nameLen
+                    }
+                    self.arena.exprs[exprId] = <Expr.Method recv=recv nameStart=callStart nameLen=callLen args=args />
+                    val origin = self.nextExprOriginSerial
+                    self.nextExprOriginSerial += 1U64
+                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId originSerial=origin receiverTerm=receiver selectedFactory=<Optional.Some v=selected /> />)
+                } else {
+                    self.arena.resolvedMemberwiseFactories.insert(exprId)
+                    self.normalizeMemberwiseDefaultsAt(exprId: exprId)
+                }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=() />
     }
 }
