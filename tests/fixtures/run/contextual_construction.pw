@@ -1,0 +1,29 @@
+use @Std/Io only { print }
+
+struct Point { val value: I64 = 7I64 }
+impl Point {
+    factory named(value: I64) { return <Point value=value /> }
+}
+enum Choice { Value(value: I64) Empty }
+fn point() -> Point { return <value=9I64 /> }
+fn read(point: Point) -> I64 { return point.value }
+fn main() {
+    val defaults: Point = </>
+    val explicit: Point = <value=8I64 />
+    val named: Point = <.named value=10I64 />
+    val choice: Choice = <.Value value=11I64 />
+    val empty: Choice = <.Empty />
+    print(defaults.value)
+    print(explicit.value)
+    print(point().value)
+    print(named.value)
+    print(read(point: <value=12I64 />))
+    match choice {
+        Choice.Value(val value) => { print(value) }
+        Choice.Empty => { print(0I64) }
+    }
+    match empty {
+        Choice.Value(val value) => { print(value) }
+        Choice.Empty => { print("empty") }
+    }
+}

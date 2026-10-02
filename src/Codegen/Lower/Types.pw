@@ -89,6 +89,13 @@ pub impl Comp {
     }
 
 
+    inout fn requireConstructionContext(ctxRef: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
+        if ctxRef == 0U64 || ctxRef >= self.arena.typeCount() {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a construction with an omitted type requires a unique expected type") />
+        }
+        return <Result.Ok value=ctxRef />
+    }
+
     inout fn contextualConstructionType(nameStart: U64, nameLen: U64, args: Array[U64], siteOffset: U64, ctxRef: U64, isVariant: Bool) -> U64 {
         if !isVariant && args.count() == 0U64 && ctxRef != 0U64 && ctxRef < self.arena.typeCount() {
             val context = self.arena.typeAt(index: ctxRef)

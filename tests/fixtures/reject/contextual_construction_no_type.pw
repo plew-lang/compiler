@@ -1,0 +1,2 @@
+struct Point { val value: I64 }
+fn main() { val point = <value=1I64 /> }

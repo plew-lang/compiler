@@ -225,7 +225,12 @@ pub impl Comp {
                     targs.append((try self.lowerType(t: constructorArgs[ti])).ref)
                     ti += 1U64
                 }
-                val tyRef = self.contextualConstructionType(nameStart: tn.nameStart, nameLen: tn.nameLen, args: targs, siteOffset: typeNameSpan.start, ctxRef: ctxRef, isVariant: constructionEnum)
+                mut val tyRef = self.contextualConstructionType(nameStart: tn.nameStart, nameLen: tn.nameLen, args: targs, siteOffset: typeNameSpan.start, ctxRef: ctxRef, isVariant: constructionEnum)
+                if typeNameSpan.start == typeNameSpan.end && typeName.bytes().count() == 0U64 {
+                    tyRef = (try self.requireConstructionContext(ctxRef: ctxRef, offset: span.start))
+                    val context = self.arena.typeAt(index: tyRef)
+                    tn = <Bind nameStart=context.nameStart nameLen=context.nameLen fieldStart=0U64 fieldLen=0U64 />
+                }
                 mut val vStart: U64 = 0
                 mut val vLen: U64 = 0
                 if constructionEnum {
@@ -536,7 +541,12 @@ pub impl Comp {
                         i += 1U64
                     }
                 }
-                val tyRef = self.contextualConstructionType(nameStart: typeName.start, nameLen: typeName.end - typeName.start, args: typeArgs, siteOffset: e.name.start, ctxRef: ctxRef, isVariant: constructionEnum)
+                mut val tyRef = self.contextualConstructionType(nameStart: typeName.start, nameLen: typeName.end - typeName.start, args: typeArgs, siteOffset: e.name.start, ctxRef: ctxRef, isVariant: constructionEnum)
+                if e.name.start == e.name.end {
+                    tyRef = (try self.requireConstructionContext(ctxRef: ctxRef, offset: e.span.start))
+                    val context = self.arena.typeAt(index: tyRef)
+                    typeName = <Span start=context.nameStart end=context.nameStart + context.nameLen />
+                }
                 mut val variantId: U64 = 0U64
                 if constructionEnum {
                     variantId = intern(c: inout self, start: variantName.start, len: variantName.end - variantName.start)
