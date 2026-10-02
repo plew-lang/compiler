@@ -9,7 +9,7 @@ extern(c) {
     fn plew_test_call_main(address~: U64) -> I32
 }
 fn main() {
-    match CompilerSession.open(input: <FrontendInput.Text text="fn main() {} fn unused() { missing() }" path="request.pw" />, sources: <SourceAccess />) {
+    match CompilerSession.open(input: <FrontendInput.Text text="fn main() {{}} fn unused() {{ missing() }}" path="request.pw" />, sources: <SourceAccess />) {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         CompilerSessionResult.Success(session: val opened) => {
             mut val session = move opened

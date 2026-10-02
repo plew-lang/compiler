@@ -6,7 +6,7 @@ use @Std/Io only { print }
 
 fn main() {
     mut val c = <Comp />
-    val source = "mut val value = 1I64 fn read() -> I64 { return value } fn unused[T](input: T) -> T { val observed = read() return input } fn main() {}"
+    val source = "mut val value = 1I64 fn read() -> I64 {{ return value }} fn unused[T](input: T) -> T {{ val observed = read() return input }} fn main() {{}}"
     analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=source path="declarations.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val instances = c.arena.bodyInstanceCount()
     mut val templates = <MidFunctionTemplates />
@@ -19,7 +19,7 @@ fn main() {
     if !(c.arena.finalDestructions.count() == 0U64) { panic "boundary condition 20" }
 
     mut val conflict = <Comp />
-    val invalid = "mut val value = 1I64 fn update(target: inout I64) { target = value } fn unused() { update(target: inout value) } fn main() {}"
+    val invalid = "mut val value = 1I64 fn update(target: inout I64) {{ target = value }} fn unused() {{ update(target: inout value) }} fn main() {{}}"
     analyzeFrontendDeclarations(c: inout conflict, input: <FrontendInput.Text text=invalid path="conflict.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val conflictInstances = conflict.arena.bodyInstanceCount()
     mut val conflictTemplates = <MidFunctionTemplates />

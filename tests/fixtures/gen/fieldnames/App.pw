@@ -16,14 +16,14 @@ pub impl FieldList as Derive {
                 mut val out: Array[U8] = []
                 pushStr(into: inout out, s: "impl ")
                 pushStr(into: inout out, s: d.name)
-                pushStr(into: inout out, s: " {\n    assoc fn fieldNames() -> String {\n        return \"")
+                pushStr(into: inout out, s: " {{\n    assoc fn fieldNames() -> String {{\n        return \"")
                 mut val i: U64 = 0
                 while i < d.fields.count() {
                     pushStr(into: inout out, s: d.fields[i].name)
                     out.append(',')
                     i += 1
                 }
-                pushStr(into: inout out, s: "\"\n    }\n}\n")
+                pushStr(into: inout out, s: "\"\n    }}\n}}\n")
                 return stringFromBytesUnchecked(out)
             }
             _ => { return "" }

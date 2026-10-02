@@ -15,7 +15,7 @@ fn owner(c: inout Comp, name: String) -> U64 {
 
 fn main() {
     mut val c = <Comp />
-    val source = "trait Index[K] { type Output fn index(key: K) -> Output } trait IndexSet[K] { type Value inout fn indexSet(key: K, value~: Value) } struct Shelf { mut val value: I64 } impl Shelf as Index[U64] { type Output = I64 fn index(key: U64) -> I64 { return self.value } } impl Shelf as IndexSet[U64] { type Value = I64 inout fn indexSet(key: U64, value~: I64) { self.value = value } } fn take(target: inout I64) { target = 2I64 } fn first() { mut val shelf = <Shelf value=1I64 /> take(target: inout shelf[0U64]) } fn second() { mut val shelf = <Shelf value=3I64 /> take(target: inout shelf[0U64]) } unique struct Resource {} impl Resource { deinit {} } fn main() {}"
+    val source = "trait Index[K] {{ type Output fn index(key: K) -> Output }} trait IndexSet[K] {{ type Value inout fn indexSet(key: K, value~: Value) }} struct Shelf {{ mut val value: I64 }} impl Shelf as Index[U64] {{ type Output = I64 fn index(key: U64) -> I64 {{ return self.value }} }} impl Shelf as IndexSet[U64] {{ type Value = I64 inout fn indexSet(key: U64, value~: I64) {{ self.value = value }} }} fn take(target: inout I64) {{ target = 2I64 }} fn first() {{ mut val shelf = <Shelf value=1I64 /> take(target: inout shelf[0U64]) }} fn second() {{ mut val shelf = <Shelf value=3I64 /> take(target: inout shelf[0U64]) }} unique struct Resource {{}} impl Resource {{ deinit {{}} }} fn main() {{}}"
     analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text path="publication.pw" text=source />, sources: <SourceAccess />).unwrap()
     c.inCollection = true
     c.initializeFinalCallables().unwrap()

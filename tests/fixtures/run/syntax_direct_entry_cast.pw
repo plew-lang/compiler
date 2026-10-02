@@ -5,7 +5,7 @@ use @Plew/Syntax only { DeclId, Lexer, P, SyntaxExprKind, lex, parseProgramSynta
 use @Std/Io only { print }
 
 fn main() {
-    val source = "fn main() {\n    val value = 1U8 as U64\n}\n"
+    val source = "fn main() {{\n    val value = 1U8 as U64\n}}\n"
     mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />

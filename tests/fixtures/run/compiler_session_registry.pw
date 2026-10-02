@@ -15,7 +15,7 @@ fn registered(source: String) -> U64 {
 }
 
 fn releasedSession() -> WeakRef[CompilerSession] {
-    val sessionId = registered(source: "fn main() {}")
+    val sessionId = registered(source: "fn main() {{}}")
     val snapshot = compilerSessionSnapshot()
     val held = findCompilerSession(registry: snapshot, sessionId: sessionId).unwrap()
     val weak = held.asRef().weak()
@@ -33,8 +33,8 @@ fn main() {
         Optional.Some(v: _) => { panic "registry leaked a removed session" }
         Optional.None => {}
     }
-    val first = registered(source: "fn main() {}")
-    val second = registered(source: "fn main() { missing() }")
+    val first = registered(source: "fn main() {{}}")
+    val second = registered(source: "fn main() {{ missing() }}")
     assert(first != second)
     val snapshot = compilerSessionSnapshot()
     val held = findCompilerSession(registry: snapshot, sessionId: first).unwrap()
@@ -52,7 +52,7 @@ fn main() {
         Result.Ok(value: _) => { panic "session state was confused" }
         Result.Err(error: _) => {}
     }
-    val third = registered(source: "fn main() {}")
+    val third = registered(source: "fn main() {{}}")
     assert(third > second)
     unregisterCompilerSession(sessionId: second)
     unregisterCompilerSession(sessionId: third)

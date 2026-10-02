@@ -5,7 +5,7 @@ use @Plew/Syntax only { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxBlo
 use @Std/Io only { print }
 
 fn main() {
-    val source = "fn body() {\n    for (val left, val right) in pairs {}\n}\n"
+    val source = "fn body() {{\n    for (val left, val right) in pairs {{}}\n}}\n"
     mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />

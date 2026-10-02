@@ -6,7 +6,7 @@ use @Std/Io only { print }
 
 fn main() {
     mut val compiler = <Comp />
-    val source = "struct Box[T] { val value: T } impl[T] Box[T] { fn get() -> T { return self.value } } fn main() { val box = <Box[I64] value=1I64 /> }"
+    val source = "struct Box[T] {{ val value: T }} impl[T] Box[T] {{ fn get() -> T {{ return self.value }} }} fn main() {{ val box = <Box[I64] value=1I64 /> }}"
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="collection.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val name = compiler.internBytes(s: "Box")
     mut val instance = 0U64

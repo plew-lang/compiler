@@ -11,7 +11,7 @@ pub impl VariantNames as Derive {
                 mut val s: Src = newSrc()
                 s.put("impl ")
                 s.put(d.name)
-                s.put(" {\n    assoc fn variantNames() -> String {\n        return \"")
+                s.put(" {{\n    assoc fn variantNames() -> String {{\n        return \"")
                 mut val i: U64 = 0
                 while i < d.variants.count() {
                     s.put(d.variants[i].name)
@@ -21,7 +21,7 @@ pub impl VariantNames as Derive {
                     s.putByte(44)
                     i += 1
                 }
-                s.put("\"\n    }\n}\n")
+                s.put("\"\n    }}\n}}\n")
                 return s.finish()
             }
             _ => { return "" }

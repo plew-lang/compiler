@@ -7,7 +7,7 @@ use ../../../src/Backend only { LlvmLoweringResult }
 use @Std/Io only { write }
 
 fn main() {
-    val source = "fn main() {} fn unused() { missing() }"
+    val source = "fn main() {{}} fn unused() {{ missing() }}"
     match CompilerSession.open(input: <FrontendInput.Text text=source path="request.pw" />, sources: <SourceAccess />) {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         CompilerSessionResult.Success(session: val opened) => {

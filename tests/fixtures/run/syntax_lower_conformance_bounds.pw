@@ -19,7 +19,7 @@ fn check(compiler: inout Comp) {
     assert(compiler.monoWork.bodyCount() == 0U64)
 }
 fn main() {
-    val source = "trait Marker[Input] {}\ntrait Container { type Element }\nstruct Box[T] { val value: T }\nimpl[T] Box[T] as Container where T: Marker[String] { type Element = T }\n"
+    val source = "trait Marker[Input] {{}}\ntrait Container {{ type Element }}\nstruct Box[T] {{ val value: T }}\nimpl[T] Box[T] as Container where T: Marker[String] {{ type Element = T }}\n"
     mut val lexer = <Syntax.Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     Syntax.lex(lx: inout lexer)
     mut val parser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />

@@ -10,8 +10,8 @@ val registration: I64 = initializeMarker()
 fn initializeMarker() -> I64 { marker = 1I64 return 0I64 }
 
 fn generatedImplementation() -> String {
-    if marker == 0I64 { return "impl Widget { assoc fn widgetTag() -> String { return \"unregistered\\n\" } }\n" }
-    return "impl Widget { assoc fn widgetTag() -> String { return \"tagged!\\n\" } }\n"
+    if marker == 0I64 { return "impl Widget {{ assoc fn widgetTag() -> String {{ return \"unregistered\\n\" }} }}\n" }
+    return "impl Widget {{ assoc fn widgetTag() -> String {{ return \"tagged!\\n\" }} }}\n"
 }
 
 struct Tag { }

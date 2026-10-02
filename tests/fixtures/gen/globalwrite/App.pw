@@ -8,7 +8,7 @@ mut val generationCount: I64 = 0I64
 
 fn generatedImplementation() -> String {
     generationCount = 1I64
-    return "impl Widget { assoc fn widgetTag() -> String { return \"tagged!\\n\" } }\n"
+    return "impl Widget {{ assoc fn widgetTag() -> String {{ return \"tagged!\\n\" }} }}\n"
 }
 
 struct Tag { }

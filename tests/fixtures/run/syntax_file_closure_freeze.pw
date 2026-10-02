@@ -2,7 +2,7 @@ use @Plew/Syntax only { Lexer, P, lex, parseProgramAst, parseProgramSyntaxFile, 
 use @Std/Io only { print }
 
 fn main() {
-    val source = "fn main() { val f = fn(value: U64) -> U64 { return value } }\n"
+    val source = "fn main() {{ val f = fn(value: U64) -> U64 {{ return value }} }}\n"
     mut val valueLexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout valueLexer)
     mut val valueParser = <P bytes=source.bytes() toks=valueLexer.toks pos=0U64 base=0U64 />

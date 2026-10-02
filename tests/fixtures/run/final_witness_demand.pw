@@ -4,7 +4,7 @@ use @Std/Io only { print }
 
 fn main() {
     mut val c = <Comp />
-    val source = "fn main() { val erased: any Value = <Box item=1I64 /> } trait Value { fn get() -> I64 } struct Box { val item: I64 } impl Box as Value { fn get() -> I64 { missing() } }"
+    val source = "fn main() {{ val erased: any Value = <Box item=1I64 /> }} trait Value {{ fn get() -> I64 }} struct Box {{ val item: I64 }} impl Box as Value {{ fn get() -> I64 {{ missing() }} }}"
     analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="witness.pw" text=source />, sources: <SourceAccess />).unwrap()
     c.initializeFinalCallables().unwrap()
     mut val requests = <FinalBodyRequests />

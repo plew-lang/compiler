@@ -3,7 +3,7 @@ use @Std/Io only { print }
 use /Frontend only { Comp }
 
 fn main() {
-    val source = "trait Convert { type Output fn convert() -> Output }\nstruct Box { val value: I8 }\nimpl Box as Convert { type Output = I8 fn convert() -> Output { return self.value } }\n"
+    val source = "trait Convert {{ type Output fn convert() -> Output }}\nstruct Box {{ val value: I8 }}\nimpl Box as Convert {{ type Output = I8 fn convert() -> Output {{ return self.value }} }}\n"
     mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />

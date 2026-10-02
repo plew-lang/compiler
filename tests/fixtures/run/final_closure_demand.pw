@@ -4,7 +4,7 @@ use @Std/Io only { print }
 
 fn main() {
     mut val c = <Comp />
-    val source = "fn main() { maker(item: 1I64) } fn maker[T](item: T) { val get = fn() -> T { return identity(value: item) } } fn identity[T](value: T) -> T { return value }"
+    val source = "fn main() {{ maker(item: 1I64) }} fn maker[T](item: T) {{ val get = fn() -> T {{ return identity(value: item) }} }} fn identity[T](value: T) -> T {{ return value }}"
     analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="closure.pw" text=source />, sources: <SourceAccess />).unwrap()
     c.initializeFinalCallables().unwrap()
     mut val requests = <FinalBodyRequests />

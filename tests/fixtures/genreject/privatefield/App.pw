@@ -10,7 +10,7 @@ struct Tag {
 
 pub impl Tag as Derive {
     fn derive(input: DeclAst) -> String {
-        return "fn tagName() -> String {\n    return \"x\"\n}\n"
+        return "fn tagName() -> String {{\n    return \"x\"\n}}\n"
     }
 }
 

@@ -10,9 +10,9 @@ pub impl A as Derive {
                 mut val s: Src = newSrc()
                 s.put("impl ")
                 s.put(d.name)
-                s.put(" {\n    assoc fn fromA() -> String { return \"A:")
+                s.put(" {{\n    assoc fn fromA() -> String {{ return \"A:")
                 s.put(d.name)
-                s.put("\" }\n}\n")
+                s.put("\" }}\n}}\n")
                 return s.finish()
             }
             _ => { return "" }
@@ -28,9 +28,9 @@ pub impl B as Derive {
                 mut val s: Src = newSrc()
                 s.put("impl ")
                 s.put(d.name)
-                s.put(" {\n    assoc fn fromB() -> String { return \"B:")
+                s.put(" {{\n    assoc fn fromB() -> String {{ return \"B:")
                 s.put(d.name)
-                s.put("\" }\n}\n")
+                s.put("\" }}\n}}\n")
                 return s.finish()
             }
             _ => { return "" }

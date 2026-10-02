@@ -15,7 +15,7 @@ fn owner(c: inout Comp, name: String) -> U64 {
 
 fn main() {
     mut val c = <Comp />
-    val source = "unique struct Resource {} impl Resource { deinit { missing() } } fn make() -> Resource { return <Resource /> } fn initial() -> I64 { missing() } val number = initial() fn main() {}"
+    val source = "unique struct Resource {{}} impl Resource {{ deinit {{ missing() }} }} fn make() -> Resource {{ return <Resource /> }} fn initial() -> I64 {{ missing() }} val number = initial() fn main() {{}}"
     analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="dependencies.pw" text=source />, sources: <SourceAccess />).unwrap()
     c.initializeFinalCallables().unwrap()
     mut val requests = <FinalBodyRequests />

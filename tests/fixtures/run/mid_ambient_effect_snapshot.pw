@@ -8,7 +8,7 @@ use @Std/Io only { print }
 
 fn main() {
     mut val compiler = <Comp />
-    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="snapshot.pw" text="fn main() { helper() } fn helper() {}" />, sources: <SourceAccess />).unwrap()
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="snapshot.pw" text="fn main() {{ helper() }} fn helper() {{}}" />, sources: <SourceAccess />).unwrap()
     finalizeFrontendExecutables(c: inout compiler).unwrap()
     mut val templates = <MidFunctionTemplates />
     mut val requests = <MidExecutableRequests />

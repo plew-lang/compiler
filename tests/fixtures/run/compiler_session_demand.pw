@@ -5,7 +5,7 @@ use /Mid/DeclarationAccess only { DeclarationAccessNode }
 use @Std/Io only { print }
 
 fn partial() {
-    match CompilerSession.open(input: <FrontendInput.Text path="partial.pw" text="fn main() {} fn broken() { missing() }" />, sources: <SourceAccess />) {
+    match CompilerSession.open(input: <FrontendInput.Text path="partial.pw" text="fn main() {{}} fn broken() {{ missing() }}" />, sources: <SourceAccess />) {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         CompilerSessionResult.Success(session: val opened) => {
             mut val session = move opened
@@ -32,12 +32,12 @@ fn partial() {
 
 fn snapshot() {
     val path = "plew:std/Session.pw"
-    mut val resources = [<SourceResource path=path.bytes() text="fn main() {}" />]
+    mut val resources = [<SourceResource path=path.bytes() text="fn main() {{}}" />]
     match CompilerSession.open(input: <FrontendInput.File path=path />, sources: <SourceAccess resources=resources />) {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         CompilerSessionResult.Success(session: val opened) => {
             mut val session = move opened
-            resources[0U64] = <SourceResource path=path.bytes() text="fn main() { missing() }" />
+            resources[0U64] = <SourceResource path=path.bytes() text="fn main() {{ missing() }}" />
             session.request(root: <DeclarationAccessNode.Function function=0U64 />).unwrap()
             match checkCompilerSession(session: move session) {
                 ProgramCheckResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
@@ -58,7 +58,7 @@ fn snapshot() {
 }
 
 fn effects() {
-    val source = "mut val value = 1I64 fn main() -> I64 { return leaf() } fn leaf() -> I64 { return value } fn broken() { missing() }"
+    val source = "mut val value = 1I64 fn main() -> I64 {{ return leaf() }} fn leaf() -> I64 {{ return value }} fn broken() {{ missing() }}"
     match CompilerSession.open(input: <FrontendInput.Text path="effects.pw" text=source />, sources: <SourceAccess />) {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         CompilerSessionResult.Success(session: val opened) => {
@@ -72,7 +72,7 @@ fn effects() {
 }
 
 fn localDependency() {
-    val source = "mut val value = 1I64 fn main() { conflict() } fn conflict() { mut val counter = <Counter value=1I64 /> counter.read(other: inout counter, token: 0I64) } struct Counter { mut val value: I64 } impl Counter { fn read[T](other: inout Counter, token: T) -> I64 { other.value = 2I64 return self.value } }"
+    val source = "mut val value = 1I64 fn main() {{ conflict() }} fn conflict() {{ mut val counter = <Counter value=1I64 /> counter.read(other: inout counter, token: 0I64) }} struct Counter {{ mut val value: I64 }} impl Counter {{ fn read[T](other: inout Counter, token: T) -> I64 {{ other.value = 2I64 return self.value }} }}"
     match CompilerSession.open(input: <FrontendInput.Text path="local.pw" text=source />, sources: <SourceAccess />) {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         CompilerSessionResult.Success(session: val opened) => {

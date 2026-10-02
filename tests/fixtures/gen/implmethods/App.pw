@@ -13,14 +13,14 @@ pub impl MethodList as Derive {
                 mut val s: Src = newSrc()
                 s.put("impl ")
                 s.put(im.recvType.name)
-                s.put(" {\n    assoc fn methodNames() -> String {\n        return \"")
+                s.put(" {{\n    assoc fn methodNames() -> String {{\n        return \"")
                 mut val i: U64 = 0
                 while i < im.members.count() {
                     s.put(im.members[i].name)
                     s.put(",")
                     i += 1
                 }
-                s.put("\"\n    }\n}\n")
+                s.put("\"\n    }}\n}}\n")
                 return s.finish()
             }
             _ => { return "" }

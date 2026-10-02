@@ -1,7 +1,7 @@
 use @Plew/Syntax only { ExprAst, parseExprFrom }
 use @Std/Io only { print }
 fn main() {
-    match parseExprFrom(source: "match value { Models.Choice.Some(val item) => item }", start: 0U64) {
+    match parseExprFrom(source: "match value {{ Models.Choice.Some(val item) => item }}", start: 0U64) {
         ExprAst.MatchExpr(scrut: _, arms: val arms, span: _) => {
             val pattern = arms[0U64].pattern
             print(pattern.typePath.count())
@@ -10,7 +10,7 @@ fn main() {
         }
         _ => { print(99U64) }
     }
-    match parseExprFrom(source: "match value { Models.Item { value: val item } => item }", start: 0U64) {
+    match parseExprFrom(source: "match value {{ Models.Item {{ value: val item }} => item }}", start: 0U64) {
         ExprAst.MatchExpr(scrut: _, arms: val arms, span: _) => {
             val pattern = arms[0U64].pattern
             print(pattern.isStruct)

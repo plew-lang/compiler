@@ -5,7 +5,7 @@ use /Mid/DeclarationAccess only { DeclarationAccessNode }
 use @Std/Io only { print }
 
 fn allBodies() {
-    val source = "fn main() { val item = 1I64 val get = fn() -> I64 { return identity(value: item) } val erased: any Value = <Box item=2I64 /> } fn identity(value: I64) -> I64 { return value } trait Value { fn get() -> I64 } struct Box { val item: I64 } impl Box as Value { fn get() -> I64 { return self.item } }"
+    val source = "fn main() {{ val item = 1I64 val get = fn() -> I64 {{ return identity(value: item) }} val erased: any Value = <Box item=2I64 /> }} fn identity(value: I64) -> I64 {{ return value }} trait Value {{ fn get() -> I64 }} struct Box {{ val item: I64 }} impl Box as Value {{ fn get() -> I64 {{ return self.item }} }}"
     match CompilerSession.open(input: <FrontendInput.Text path="bodies.pw" text=source />, sources: <SourceAccess />) {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         CompilerSessionResult.Success(session: val opened) => {
@@ -44,7 +44,7 @@ fn allBodies() {
 }
 
 fn dropDoesNotInvokeClosure() {
-    val source = "fn main() { val held = 1I64 val get = fn() -> I64 { mut val counter = <Counter value=held /> counter.read(other: inout counter, token: 0I64) return held } } struct Counter { mut val value: I64 } impl Counter { fn read[T](other: inout Counter, token: T) -> I64 { other.value = 2I64 return self.value } }"
+    val source = "fn main() {{ val held = 1I64 val get = fn() -> I64 {{ mut val counter = <Counter value=held /> counter.read(other: inout counter, token: 0I64) return held }} }} struct Counter {{ mut val value: I64 }} impl Counter {{ fn read[T](other: inout Counter, token: T) -> I64 {{ other.value = 2I64 return self.value }} }}"
     match CompilerSession.open(input: <FrontendInput.Text path="drop.pw" text=source />, sources: <SourceAccess />) {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         CompilerSessionResult.Success(session: val opened) => {

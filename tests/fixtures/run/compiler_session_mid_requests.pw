@@ -4,7 +4,7 @@ use /SourceAccess only { SourceAccess }
 use @Std/Io only { print }
 
 fn reuseInBuild() {
-    val source = "fn main() { val item = 1I64 val get = fn() -> I64 { return identity(value: item) } val erased: any Value = <Box item=2I64 /> val resource = <Resource /> } fn identity(value: I64) -> I64 { return value } trait Value { fn get() -> I64 } struct Box { val item: I64 } impl Box as Value { fn get() -> I64 { return self.item } } unique struct Resource {} impl Resource { deinit {} }"
+    val source = "fn main() {{ val item = 1I64 val get = fn() -> I64 {{ return identity(value: item) }} val erased: any Value = <Box item=2I64 /> val resource = <Resource /> }} fn identity(value: I64) -> I64 {{ return value }} trait Value {{ fn get() -> I64 }} struct Box {{ val item: I64 }} impl Box as Value {{ fn get() -> I64 {{ return self.item }} }} unique struct Resource {{}} impl Resource {{ deinit {{}} }}"
     match CompilerSession.open(input: <FrontendInput.Text path="mid.pw" text=source />, sources: <SourceAccess />) {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         CompilerSessionResult.Success(session: val opened) => {
@@ -47,7 +47,7 @@ fn reuseInBuild() {
 }
 
 fn deferCallee() {
-    match CompilerSession.open(input: <FrontendInput.Text path="defer.pw" text="fn main() { later() } fn later() { missing() }" />, sources: <SourceAccess />) {
+    match CompilerSession.open(input: <FrontendInput.Text path="defer.pw" text="fn main() {{ later() }} fn later() {{ missing() }}" />, sources: <SourceAccess />) {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         CompilerSessionResult.Success(session: val opened) => {
             mut val session = move opened
@@ -67,7 +67,7 @@ fn deferCallee() {
 }
 
 fn globalDependencies() {
-    val source = "mut val counter = 0I64 fn main() { helper() val resource = <Resource /> } fn helper() { counter = 1I64 } unique struct Resource {} impl Resource { deinit { counter = 2I64 } }"
+    val source = "mut val counter = 0I64 fn main() {{ helper() val resource = <Resource /> }} fn helper() {{ counter = 1I64 }} unique struct Resource {{}} impl Resource {{ deinit {{ counter = 2I64 }} }}"
     match CompilerSession.open(input: <FrontendInput.Text path="global.pw" text=source />, sources: <SourceAccess />) {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         CompilerSessionResult.Success(session: val opened) => {

@@ -4,7 +4,7 @@ use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
 use /SourceAccess only { SourceAccess }
 fn main() {
     mut val c = <Comp />
-    val source = "struct Value {}\ntrait Cursor { type Item }\ntrait Source { type Iter fn iterator() -> Iter }\nfn test[T](values: any Source[Iter=T]) where T: Cursor[Item=Value] {}\n"
+    val source = "struct Value {{}}\ntrait Cursor {{ type Item }}\ntrait Source {{ type Iter fn iterator() -> Iter }}\nfn test[T](values: any Source[Iter=T]) where T: Cursor[Item=Value] {{}}\n"
     analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=source path="cursor.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val bound = c.decls.funcBounds[0U64]
     val function = c.arena.functionAt(index: bound.fnIdx)

@@ -9,7 +9,7 @@ use @Std/Io only { print }
 fn checkSource(path: String, asan: Bool) {
     mut val compiler: Comp = <Comp />
     val analysis = analyzeFrontend(c: inout compiler,
-        input: <FrontendInput.Text text="fn main() {}" path=path />,
+        input: <FrontendInput.Text text="fn main() {{}}" path=path />,
         sources: <SourceAccess />, options: <FrontendOptions asan=asan />)
     match analysis {
         Result.Ok(value: _) => {}

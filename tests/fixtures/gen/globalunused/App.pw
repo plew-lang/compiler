@@ -5,7 +5,7 @@ use @Plew/Syntax only { Derive, TopItemAst }
 use @Std/Io only { write }
 
 fn generatedImplementation() -> String {
-    return "impl Widget { assoc fn widgetTag() -> String { return \"tagged!\\n\" } }\n"
+    return "impl Widget {{ assoc fn widgetTag() -> String {{ return \"tagged!\\n\" }} }}\n"
 }
 
 struct Tag { }

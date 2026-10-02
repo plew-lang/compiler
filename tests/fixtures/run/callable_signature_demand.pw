@@ -16,7 +16,7 @@ fn owner(c: inout Comp, name: String) -> U64 {
 
 fn main() {
     mut val c = <Comp />
-    analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="signature.pw" text="struct Item {} fn later[T](value: T) -> T { missing() } fn main() {}" />, sources: <SourceAccess />).unwrap()
+    analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="signature.pw" text="struct Item {{}} fn later[T](value: T) -> T {{ missing() }} fn main() {{}}" />, sources: <SourceAccess />).unwrap()
     val declaration = owner(c: inout c, name: "later")
     val item = c.arena.structAt(index: 0U64)
     val term = c.simpleTypeRef(nameStart: item.nameStart, nameLen: item.nameLen)

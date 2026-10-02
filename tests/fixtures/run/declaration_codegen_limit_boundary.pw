@@ -25,15 +25,15 @@ fn checkBoundary(source: String, expected: String) {
 }
 
 fn main() {
-    checkBoundary(source: "struct Value[T] { val value: T } fn captured[T](value: T) -> fn() -> T { return fn() -> T { return value } } fn main() { val scalar = captured(value: 1I64) val unsupported = captured(value: <Value[I64] value=2I64 />) }",
+    checkBoundary(source: "struct Value[T] {{ val value: T }} fn captured[T](value: T) -> fn() -> T {{ return fn() -> T {{ return value }} }} fn main() {{ val scalar = captured(value: 1I64) val unsupported = captured(value: <Value[I64] value=2I64 />) }}",
         expected: "closure capture does not support unique, generic struct, or function-typed values")
-    checkBoundary(source: "struct Box[T] { pub val v: T } fn deep[T](v: T) { deep(v: <Box[T] v=v />) } fn main() { deep(v: 1I64) }",
+    checkBoundary(source: "struct Box[T] {{ pub val v: T }} fn deep[T](v: T) {{ deep(v: <Box[T] v=v />) }} fn main() {{ deep(v: 1I64) }}",
         expected: "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)")
 
     // A static type error must still fail before concrete execution preparation.
     mut val invalid = <Comp />
     match analyzeFrontendDeclarations(c: inout invalid,
-        input: <FrontendInput.Text text="fn unused[T](value: T) -> I64 { return value } fn main() {}" path="invalid.pw" />,
+        input: <FrontendInput.Text text="fn unused[T](value: T) -> I64 {{ return value }} fn main() {{}}" path="invalid.pw" />,
         sources: <SourceAccess stdRoot=[] />) {
         Result.Ok(value: _) => { panic "unused generic type error accepted" }
         Result.Err(error: _) => {}

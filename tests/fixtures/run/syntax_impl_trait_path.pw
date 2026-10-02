@@ -1,7 +1,7 @@
 use @Plew/Syntax only { TopItemAst, parseItem }
 use @Std/Io only { print }
 fn main() {
-    val source = "impl Local as Facade.Models.Read[I64] {}"
+    val source = "impl Local as Facade.Models.Read[I64] {{}}"
     match parseItem(source: source, start: 0U64, end: source.bytes().count()) {
         TopItemAst.Impl(im: val im) => {
             print(im.traitPath.count())

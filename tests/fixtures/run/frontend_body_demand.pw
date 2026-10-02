@@ -17,7 +17,7 @@ fn owner(c: inout Comp, name: String) -> U64 {
 fn main() {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler,
-        input: <FrontendInput.Text path="demand.pw" text="fn identity[T](value: T) -> T { return value } fn good() -> I64 { return identity(value: 1I64) } fn goodClosure() -> I64 { val getter = fn() -> I64 { return identity(value: 2I64) } return getter() } fn broken() { missing() } fn main() {}" />,
+        input: <FrontendInput.Text path="demand.pw" text="fn identity[T](value: T) -> T {{ return value }} fn good() -> I64 {{ return identity(value: 1I64) }} fn goodClosure() -> I64 {{ val getter = fn() -> I64 {{ return identity(value: 2I64) }} return getter() }} fn broken() {{ missing() }} fn main() {{}}" />,
         sources: <SourceAccess stdRoot=[] />).unwrap()
     if compiler.genMode || compiler.globalCallTemplatesClosed || compiler.lexicalBodyPreparations.count() != 0U64 { panic "entry checked source bodies" }
     if compiler.monoWork.bodyCount() != 0U64 || compiler.arena.finalDestructions.count() != 0U64 { panic "entry discovered executable code" }

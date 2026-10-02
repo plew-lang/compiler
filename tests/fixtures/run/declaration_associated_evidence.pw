@@ -4,7 +4,7 @@ use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
 use /SourceAccess only { SourceAccess }
 use /Ir only { StaticConformanceProof, DeclarationBoundRef, PatternTypeInput, PatternBindInput }
 fn main() {
-    val source = "trait Required {}\ntrait Source { type Item: Required }\ntrait Container { type Item }\nstruct Box[T] {}\nimpl[T] Box[T] as Container where T: Source { type Item=T#Source.Item }\n"
+    val source = "trait Required {{}}\ntrait Source {{ type Item: Required }}\ntrait Container {{ type Item }}\nstruct Box[T] {{}}\nimpl[T] Box[T] as Container where T: Source {{ type Item=T#Source.Item }}\n"
     mut val compiler = <Comp />
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="evidence.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val conform = compiler.decls.conformAt(index: 0U64)

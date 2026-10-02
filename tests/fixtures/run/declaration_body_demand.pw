@@ -19,7 +19,7 @@ fn owner(c: inout Comp, name: String) -> U64 {
 
 fn main() {
     mut val c = <Comp />
-    val source = "struct Counter { mut val value: I64 } impl Counter { fn read[T](other: inout Counter, token: T) -> I64 { other.value = 2I64 return self.value } } fn good[T](value: T) -> T { return value } fn closure() -> I64 { val get = fn() -> I64 { return 1I64 } return get() } fn conflict() { mut val counter = <Counter value=1I64 /> counter.read(other: inout counter, token: 0I64) } fn broken() { missing() } fn main() {}"
+    val source = "struct Counter {{ mut val value: I64 }} impl Counter {{ fn read[T](other: inout Counter, token: T) -> I64 {{ other.value = 2I64 return self.value }} }} fn good[T](value: T) -> T {{ return value }} fn closure() -> I64 {{ val get = fn() -> I64 {{ return 1I64 }} return get() }} fn conflict() {{ mut val counter = <Counter value=1I64 /> counter.read(other: inout counter, token: 0I64) }} fn broken() {{ missing() }} fn main() {{}}"
     analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="body-demand.pw" text=source />, sources: <SourceAccess stdRoot=[] />).unwrap()
     mut val templates = <MidFunctionTemplates />
     mut val requests = <DeclarationBodyRequests />

@@ -5,7 +5,7 @@ use /Toml only { parseToml, topStr }
 // payload are independent ARC owners. `topStr` then copies a matched payload
 // across the destruction of its temporary Field and Section values.
 fn main() {
-    val doc = parseToml(bytes: "name = \"plewc\"\n\n[dependencies]\n\"Plew/Syntax\" = { path = \"../syntax\" }\n".bytes())
+    val doc = parseToml(bytes: "name = \"plewc\"\n\n[dependencies]\n\"Plew/Syntax\" = {{ path = \"../syntax\" }}\n".bytes())
     val name = topStr(doc: doc, key: "name".bytes())
     print(name.count())
 }

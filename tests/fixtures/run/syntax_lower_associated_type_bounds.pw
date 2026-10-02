@@ -27,7 +27,7 @@ fn check(compiler: inout Comp) {
     assert(compiler.monoWork.bodyCount() == 0U64)
 }
 fn main() {
-    val source = "trait Marker {}\ntrait Cursor[Input] { type Item }\ntrait Collection[T] { type Item type Iter: Cursor[T, Item=Item] + Marker type Other: Cursor[T, Item=T] }\n"
+    val source = "trait Marker {{}}\ntrait Cursor[Input] {{ type Item }}\ntrait Collection[T] {{ type Item type Iter: Cursor[T, Item=Item] + Marker type Other: Cursor[T, Item=T] }}\n"
     mut val lexer = <Syntax.Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     Syntax.lex(lx: inout lexer)
     mut val parser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />

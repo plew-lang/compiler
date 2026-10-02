@@ -6,7 +6,7 @@ use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLeve
 use @Std/Io only { print }
 
 fn main() {
-    val source = "extension E {\n  impl Box {\n    fn plain() {}\n    inout fn change() {}\n    move fn take() {}\n    borrow fn look() {}\n    async move fn later() {}\n    deinit {}\n    factory\n    factory named() {}\n    optional factory maybe() {}\n    result[I64] factory checked() {}\n    assoc val answer: I64 = 1\n    assoc fn helper() {}\n    type Item = I64\n  }\n}\npub struct Published {}\npub use @Std/Io only { print as show }\n"
+    val source = "extension E {{\n  impl Box {{\n    fn plain() {{}}\n    inout fn change() {{}}\n    move fn take() {{}}\n    borrow fn look() {{}}\n    async move fn later() {{}}\n    deinit {{}}\n    factory\n    factory named() {{}}\n    optional factory maybe() {{}}\n    result[I64] factory checked() {{}}\n    assoc val answer: I64 = 1\n    assoc fn helper() {{}}\n    type Item = I64\n  }}\n}}\npub struct Published {{}}\npub use @Std/Io only {{ print as show }}\n"
     mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />

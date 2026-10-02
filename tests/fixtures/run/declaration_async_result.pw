@@ -5,7 +5,7 @@ use /SourceAccess only { SourceAccess }
 use /Ir only { ArcClass, CallTemplateKind }
 fn main() {
     mut val c = <Comp />
-    val source = "async fn task() {}\nfn caller() { val promise = task() }\n"
+    val source = "async fn task() {{}}\nfn caller() {{ val promise = task() }}\n"
     analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=source path="async-result.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val declaration = c.arena.functionAt(index: 0U64)
     val result = c.semanticCallableReturnTerm(function: declaration)

@@ -15,7 +15,7 @@ fn owner(c: inout Comp, name: String) -> U64 {
 
 fn main() {
     mut val c = <Comp />
-    analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="demand.pw" text="fn later() { missing() } fn recurse() { recurse() later() } fn main() {}" />, sources: <SourceAccess />).unwrap()
+    analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="demand.pw" text="fn later() {{ missing() }} fn recurse() {{ recurse() later() }} fn main() {{}}" />, sources: <SourceAccess />).unwrap()
     c.initializeFinalCallables().unwrap()
     mut val requests = <FinalBodyRequests />
     val root = c.enqueueFinalBody(fnIdx: owner(c: inout c, name: "recurse"), args: [], recvInstRef: 0U64).unwrap()

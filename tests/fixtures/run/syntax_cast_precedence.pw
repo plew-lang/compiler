@@ -35,7 +35,7 @@ fn valueShape(expression: ExprAst) -> String {
 }
 
 fn check(source: String) {
-    val program = "fn main() { val value = " + source + " }\n"
+    val program = "fn main() {{ val value = " + source + " }}\n"
     mut val lexer = <Lexer bytes=program.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=program.bytes() toks=lexer.toks pos=0U64 base=0U64 />

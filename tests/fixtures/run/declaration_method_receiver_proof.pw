@@ -4,7 +4,7 @@ use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
 use /SourceAccess only { SourceAccess }
 use /Ir only { StaticConformanceProof, DeclarationBoundRef, PatternTypeInput, PatternBindInput }
 fn main() {
-    val source = "trait Marker {}\ntrait Root { type Item: Marker }\ntrait Parent: Root {}\nimpl Parent { fn probe(value: Self#Root.Item) {} }\nfn outside() {}\n"
+    val source = "trait Marker {{}}\ntrait Root {{ type Item: Marker }}\ntrait Parent: Root {{}}\nimpl Parent {{ fn probe(value: Self#Root.Item) {{}} }}\nfn outside() {{}}\n"
     mut val compiler = <Comp />
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="self.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val function = compiler.arena.functionAt(index: 0U64)

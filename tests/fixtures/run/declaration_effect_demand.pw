@@ -46,8 +46,8 @@ fn check(source: String, conflict: Bool, functions: U64) {
 }
 
 fn main() {
-    check(source: "mut val value = 1I64 fn broken() { missing() } fn leaf() -> I64 { return value } fn root() -> I64 { return leaf() } fn main() {}", conflict: false, functions: 2U64)
-    check(source: "mut val value = 1I64 fn broken() { missing() } fn first(target: inout I64) { second(target: inout target) } fn second(target: inout I64) { target = value first(target: inout target) } fn root() { first(target: inout value) } fn main() {}", conflict: true, functions: 3U64)
-    check(source: "mut val value = 1I64 unique struct Resource {} impl Resource { deinit { val observed = value } } fn broken() { missing() } fn release(target: inout I64) { val item = <Resource /> } fn root() { release(target: inout value) } fn main() {}", conflict: true, functions: 3U64)
+    check(source: "mut val value = 1I64 fn broken() {{ missing() }} fn leaf() -> I64 {{ return value }} fn root() -> I64 {{ return leaf() }} fn main() {{}}", conflict: false, functions: 2U64)
+    check(source: "mut val value = 1I64 fn broken() {{ missing() }} fn first(target: inout I64) {{ second(target: inout target) }} fn second(target: inout I64) {{ target = value first(target: inout target) }} fn root() {{ first(target: inout value) }} fn main() {{}}", conflict: true, functions: 3U64)
+    check(source: "mut val value = 1I64 unique struct Resource {{}} impl Resource {{ deinit {{ val observed = value }} }} fn broken() {{ missing() }} fn release(target: inout I64) {{ val item = <Resource /> }} fn root() {{ release(target: inout value) }} fn main() {{}}", conflict: true, functions: 3U64)
     print("ok")
 }

@@ -4,7 +4,7 @@ use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, parseTraitDecl, s
 use @Std/Io only { print }
 
 fn main() {
-    val source = "trait Convert[Source] { factory(from: Source) factory checked(source: Source) }"
+    val source = "trait Convert[Source] {{ factory(from: Source) factory checked(source: Source) }}"
     mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />

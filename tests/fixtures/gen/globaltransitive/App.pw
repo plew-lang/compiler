@@ -11,7 +11,7 @@ fn generatedImplementation() -> String {
 }
 
 fn initialGeneratedText() -> String {
-    return "impl Widget { assoc fn widgetTag() -> String { return \"tagged!\\n\" } }\n"
+    return "impl Widget {{ assoc fn widgetTag() -> String {{ return \"tagged!\\n\" }} }}\n"
 }
 
 struct Tag { }

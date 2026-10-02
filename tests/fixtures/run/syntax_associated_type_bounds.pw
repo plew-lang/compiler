@@ -17,7 +17,7 @@ fn check(file: Syntax.SyntaxFile, item: Syntax.TopItemId) {
     assert(marker.name.end - marker.name.start == 6U64)
 }
 fn main() {
-    val source = "trait Collection { type Item type Iter: Iterator[Item = Item] + Marker fn iterator() -> Iter }"
+    val source = "trait Collection {{ type Item type Iter: Iterator[Item = Item] + Marker fn iterator() -> Iter }}"
     mut val lexer = <Syntax.Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     Syntax.lex(lx: inout lexer)
     mut val parser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=17U64 />
@@ -43,7 +43,7 @@ fn main() {
     check(file: legacyFrozen, item: legacyRoot)
     val secondRoot = legacyFrozen.freezeTopItem(ast: values[0U64])
     check(file: legacyFrozen, item: secondRoot)
-    for val invalid in ["trait Broken { type Item: }", "trait Broken { type Item: Marker + }"] {
+    for val invalid in ["trait Broken {{ type Item: }}", "trait Broken {{ type Item: Marker + }}"] {
         mut val invalidLexer = <Syntax.Lexer bytes=invalid.bytes() pos=0U64 toks=[] depth=0I64 />
         Syntax.lex(lx: inout invalidLexer)
         mut val direct = <Syntax.P bytes=invalid.bytes() toks=invalidLexer.toks pos=0U64 base=0U64 />

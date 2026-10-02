@@ -7,7 +7,7 @@ use @Std/Io only { print }
 
 fn instances() {
     mut val compiler = <Comp />
-    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="instances.pw" text="fn main() { val one = identity(value: 1I64) val two = identity(value: true) val get = fn() -> I64 { return 2I64 } val three = get() } fn identity[T](value: T) -> T { return value }" />, sources: <SourceAccess />).unwrap()
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="instances.pw" text="fn main() {{ val one = identity(value: 1I64) val two = identity(value: true) val get = fn() -> I64 {{ return 2I64 }} val three = get() }} fn identity[T](value: T) -> T {{ return value }}" />, sources: <SourceAccess />).unwrap()
     mut val templates = <MidFunctionTemplates />
     mut val requests = <MidExecutableRequests />
     finalizeFrontendExecutables(c: inout compiler).unwrap()

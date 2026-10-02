@@ -28,7 +28,7 @@ fn query(compiler: inout Comp, assumptions: Array[DeclarationBoundRef], target: 
     panic "missing target"
 }
 fn main() {
-    val source = "struct Token {}\nstruct Other {}\ntrait Parent[T] { type Item }\ntrait Middle[T]: Parent[T, Item=T] {}\ntrait Child[T]: Middle[T] {}\ntrait Both: Parent[Token, Item=Token] + Parent[Other, Item=Other] {}\ntrait Target[T] { type Item }\nimpl[T] Parent[T] as Target[T] { type Item=T }\ntrait Scope {}\nstruct Context[A] {}\nimpl[A] Context[A] as Scope where A: Child[Token] {}\nstruct Alternative[A] {}\nimpl[A] Alternative[A] as Scope where A: Child[Other] {}\nstruct Double[A] {}\nimpl[A] Double[A] as Scope where A: Both {}\n"
+    val source = "struct Token {{}}\nstruct Other {{}}\ntrait Parent[T] {{ type Item }}\ntrait Middle[T]: Parent[T, Item=T] {{}}\ntrait Child[T]: Middle[T] {{}}\ntrait Both: Parent[Token, Item=Token] + Parent[Other, Item=Other] {{}}\ntrait Target[T] {{ type Item }}\nimpl[T] Parent[T] as Target[T] {{ type Item=T }}\ntrait Scope {{}}\nstruct Context[A] {{}}\nimpl[A] Context[A] as Scope where A: Child[Token] {{}}\nstruct Alternative[A] {{}}\nimpl[A] Alternative[A] as Scope where A: Child[Other] {{}}\nstruct Double[A] {{}}\nimpl[A] Double[A] as Scope where A: Both {{}}\n"
     mut val compiler = <Comp />
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="supertrait-proof.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val context = facts(compiler: inout compiler, name: "Context")

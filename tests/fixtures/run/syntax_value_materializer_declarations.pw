@@ -5,7 +5,7 @@ use @Plew/Syntax only { MemberKind, TopItemAst, parseItem }
 use @Std/Io only { print }
 
 fn main() {
-    match parseItem(source: "impl Box { type Item = U8 }", start: 0U64, end: 27U64) {
+    match parseItem(source: "impl Box {{ type Item = U8 }}", start: 0U64, end: 27U64) {
         TopItemAst.Impl(im: val im) => {
             match im.members[0U64].kind {
                 MemberKind.AssocType => { print(1U64) }
@@ -15,12 +15,12 @@ fn main() {
         _ => { print(0U64) }
     }
 
-    match parseItem(source: "trait Sample { fn item() -> U8 }", start: 0U64, end: 31U64) {
+    match parseItem(source: "trait Sample {{ fn item() -> U8 }}", start: 0U64, end: 31U64) {
         TopItemAst.Trait(t: val t) => { print(t.reqs.count()) }
         _ => { print(0U64) }
     }
 
-    match parseItem(source: "extern(plewIntrinsic) { @[Eq] struct Buffer[sendable T] }", start: 0U64, end: 58U64) {
+    match parseItem(source: "extern(plewIntrinsic) {{ @[Eq] struct Buffer[sendable T] }}", start: 0U64, end: 58U64) {
         TopItemAst.Extern(e: val e) => {
             print(e.structNames.count())
             print(e.structTypeParams[0U64].count())

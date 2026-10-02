@@ -4,7 +4,7 @@ use /SourceAccess only { SourceAccess }
 use @Std/Io only { print }
 
 fn partialFailure() {
-    match CompilerSession.open(input: <FrontendInput.Text path="partial.pw" text="fn main() { later() } fn later() { missing() }" />, sources: <SourceAccess />) {
+    match CompilerSession.open(input: <FrontendInput.Text path="partial.pw" text="fn main() {{ later() }} fn later() {{ missing() }}" />, sources: <SourceAccess />) {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         CompilerSessionResult.Success(session: val opened) => {
             mut val session = move opened
@@ -28,7 +28,7 @@ fn partialFailure() {
 }
 
 fn complete() {
-    match CompilerSession.open(input: <FrontendInput.Text path="complete.pw" text="fn main() { val value = identity(value: 2I64) } fn identity(value: I64) -> I64 { return value }" />, sources: <SourceAccess />) {
+    match CompilerSession.open(input: <FrontendInput.Text path="complete.pw" text="fn main() {{ val value = identity(value: 2I64) }} fn identity(value: I64) -> I64 {{ return value }}" />, sources: <SourceAccess />) {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         CompilerSessionResult.Success(session: val opened) => {
             mut val session = move opened

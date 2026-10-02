@@ -19,7 +19,7 @@ pub impl Tagged as ParameterizedDerive {
                 mut val out: Array[U8] = []
                 pushStr(into: inout out, s: "impl ")
                 pushStr(into: inout out, s: d.name)
-                pushStr(into: inout out, s: " {\n    assoc fn tag() -> String {\n        return \"")
+                pushStr(into: inout out, s: " {{\n    assoc fn tag() -> String {{\n        return \"")
                 mut val i: I64 = 0
                 while i < self.times {
                     pushStr(into: inout out, s: self.prefix)
@@ -27,7 +27,7 @@ pub impl Tagged as ParameterizedDerive {
                     i += 1
                 }
                 pushStr(into: inout out, s: d.name)
-                pushStr(into: inout out, s: "\"\n    }\n}\n")
+                pushStr(into: inout out, s: "\"\n    }}\n}}\n")
                 return stringFromBytesUnchecked(out)
             }
             _ => { return "" }

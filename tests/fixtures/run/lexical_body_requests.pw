@@ -19,7 +19,7 @@ fn owner(c: inout Comp, name: String) -> U64 {
 fn main() {
     mut val c = <Comp />
     analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text
-        text="fn broken() { missing() } fn good() {} fn main() {}" path="requests.pw" />,
+        text="fn broken() {{ missing() }} fn good() {{}} fn main() {{}}" path="requests.pw" />,
         sources: <SourceAccess stdRoot=[] />, options: <FrontendOptions genMode=true />).unwrap()
     val broken = owner(c: inout c, name: "broken")
     val good = owner(c: inout c, name: "good")

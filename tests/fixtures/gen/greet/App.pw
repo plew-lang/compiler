@@ -12,7 +12,7 @@ pub impl Greet as Derive {
                 mut val s: Src = newSrc()
                 s.put("impl ")
                 s.put(d.name)
-                s.put(" {\n    assoc fn widgetTag() -> String {\n        return \"tagged!\\n\"\n    }\n}\n")
+                s.put(" {{\n    assoc fn widgetTag() -> String {{\n        return \"tagged!\\n\"\n    }}\n}}\n")
                 return s.finish()
             }
             _ => { return "" }

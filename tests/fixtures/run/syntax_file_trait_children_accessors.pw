@@ -2,7 +2,7 @@ use @Plew/Syntax only { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLeve
 use @Std/Io only { print }
 
 fn main() {
-    val source = "trait Stream[T]: Eq { type Item; fn next[U](value~: U) -> Item }\n"
+    val source = "trait Stream[T]: Eq {{ type Item; fn next[U](value~: U) -> Item }}\n"
     mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />

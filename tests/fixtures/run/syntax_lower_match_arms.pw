@@ -6,7 +6,7 @@ use @Std/Io only { print }
 use /Frontend only { Comp }
 
 fn main() {
-    val source = "fn body() { match 1U64 { 1U64 => {} } }\n"
+    val source = "fn body() {{ match 1U64 {{ 1U64 => {{}} }} }}\n"
     mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />

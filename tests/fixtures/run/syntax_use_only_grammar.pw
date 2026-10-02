@@ -11,14 +11,14 @@ fn check(source: String, valid: Bool) {
     if value.hasErr == valid { panic "value parser disagrees" }
 }
 fn main() {
-    check(source: "use ./Library only { use, only as useOnly }\n", valid: true)
-    check(source: "pub use ./Library only { use, only }\n", valid: true)
+    check(source: "use ./Library only {{ use, only as useOnly }}\n", valid: true)
+    check(source: "pub use ./Library only {{ use, only }}\n", valid: true)
     check(source: "use ./Library as only\n", valid: true)
-    check(source: "use ./Library as use only { only }\n", valid: true)
-    check(source: "fn use(only: I64) {}\nfn only(use: I64) {}\n", valid: true)
-    check(source: "import ./Library with { use }\n", valid: false)
-    check(source: "use ./Library with { use }\n", valid: false)
-    check(source: "use ./Library { use }\n", valid: false)
+    check(source: "use ./Library as use only {{ only }}\n", valid: true)
+    check(source: "fn use(only: I64) {{}}\nfn only(use: I64) {{}}\n", valid: true)
+    check(source: "import ./Library with {{ use }}\n", valid: false)
+    check(source: "use ./Library with {{ use }}\n", valid: false)
+    check(source: "use ./Library {{ use }}\n", valid: false)
     check(source: "use ./Library only *\n", valid: false)
     print("ok")
 }

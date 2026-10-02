@@ -4,9 +4,9 @@ use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
 use /SourceAccess only { SourceAccess }
 fn main() {
     val cases = [
-        "trait Parser { type Output }\nfn bad[T](value: T#Parser.Missing) where T: Parser {}\n",
-        "trait Parser { type Output }\nfn bad[T](value: Array[T#Parser.Missing]) where T: Parser {}\n",
-        "trait Parser { type Output }\nfn bad[T](value: T) -> T#Parser.Missing where T: Parser { panic(\"unused\") }\n"
+        "trait Parser {{ type Output }}\nfn bad[T](value: T#Parser.Missing) where T: Parser {{}}\n",
+        "trait Parser {{ type Output }}\nfn bad[T](value: Array[T#Parser.Missing]) where T: Parser {{}}\n",
+        "trait Parser {{ type Output }}\nfn bad[T](value: T) -> T#Parser.Missing where T: Parser {{ panic(\"unused\") }}\n"
     ]
     for val source in cases {
         mut val c = <Comp />
@@ -17,7 +17,7 @@ fn main() {
         assert(c.monoWork.bodyCount() == 0U64)
     }
     mut val valid = <Comp />
-    analyzeFrontendDeclarations(c: inout valid, input: <FrontendInput.Text text="trait Parser { type Output }\nfn valid[T](value: T#Parser.Output) where T: Parser {}\n" path="valid.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    analyzeFrontendDeclarations(c: inout valid, input: <FrontendInput.Text text="trait Parser {{ type Output }}\nfn valid[T](value: T#Parser.Output) where T: Parser {{}}\n" path="valid.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     assert(valid.monoWork.bodyCount() == 0U64)
     print("ok")
 }

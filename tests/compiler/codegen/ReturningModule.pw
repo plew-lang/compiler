@@ -29,7 +29,7 @@ fn lowerInput(path: String, shouldFail: Bool) {
 fn lowerMissingEntry() {
     mut val compiler: Comp = <Comp />
     analyzeFrontend(c: inout compiler,
-        input: <FrontendInput.Text text="fn helper() {}" path="NoEntry.pw" />,
+        input: <FrontendInput.Text text="fn helper() {{}}" path="NoEntry.pw" />,
         sources: <SourceAccess />).unwrap()
     match lowerLlvm(c: inout compiler) {
         LlvmLoweringResult.Success(module: val module) => { panic("module without main was accepted") }
@@ -39,7 +39,7 @@ fn lowerMissingEntry() {
 fn lowerInvalidContract() {
     mut val compiler: Comp = <Comp />
     analyzeFrontend(c: inout compiler,
-        input: <FrontendInput.Text text="fn main() {}" path="InvalidContract.pw" />,
+        input: <FrontendInput.Text text="fn main() {{}}" path="InvalidContract.pw" />,
         sources: <SourceAccess />).unwrap()
     val prepared = PreparedProgram.prepare(c: inout compiler).unwrap()
     // A deliberately unfinished backend input must fail after LLVM allocation,

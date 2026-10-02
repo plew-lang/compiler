@@ -2,7 +2,7 @@ use @Plew/Syntax only { parseItem, TopItemAst }
 use @Std/Io only { print }
 
 fn main() {
-    val item = parseItem(source: "fn use(value: Sample#E#F) {}", start: 0U64, end: 28U64)
+    val item = parseItem(source: "fn use(value: Sample#E#F) {{}}", start: 0U64, end: 28U64)
     match item {
         TopItemAst.Decl(val d) => { print(d.params[0].ty.viewNames.count()) }
         _ => { print(0U64) }

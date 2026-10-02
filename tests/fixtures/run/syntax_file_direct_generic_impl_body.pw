@@ -7,7 +7,7 @@ use @Std/Io only { print }
 use /Frontend only { Comp }
 
 fn main() {
-    val source = "pub impl[T] Buffer[T] { fn count() -> U64 { return bufferCount(buffer: self) } }\n"
+    val source = "pub impl[T] Buffer[T] {{ fn count() -> U64 {{ return bufferCount(buffer: self) }} }}\n"
     mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />

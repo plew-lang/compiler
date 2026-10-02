@@ -5,7 +5,7 @@ use @Std/Io only { print }
 use /Frontend only { Comp }
 
 fn main() {
-    val source = "fn body() { val result = match 1I8 { 1I8 => { give 2I8 } _ => { give 3I8 } } }\n"
+    val source = "fn body() {{ val result = match 1I8 {{ 1I8 => {{ give 2I8 }} _ => {{ give 3I8 }} }} }}\n"
     mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />

@@ -8,7 +8,7 @@ use @Std/Io only { print }
 fn main() {
     // The source slice begins at an original-file offset; materialization must
     // subtract that base before recovering spellings from the slice bytes.
-    val item = parseItem(source: "@[Eq]\npub struct Box { val value: U8 }", start: 17U64, end: 57U64)
+    val item = parseItem(source: "@[Eq]\npub struct Box {{ val value: U8 }}", start: 17U64, end: 57U64)
     match item {
         TopItemAst.Decl(d: val d) => { print(d.name.bytes().count()) }
         _ => { print(0U64) }
@@ -25,7 +25,7 @@ fn main() {
         _ => { print(0U64) }
     }
 
-    val block = parseBlockFrom(source: "{ val value = 1U8 as U64 }", start: 0U64)
+    val block = parseBlockFrom(source: "{{ val value = 1U8 as U64 }}", start: 0U64)
     if block.stmts.count() > 0U64 {
         match block.stmts[0U64] {
             StmtAst.Let(mutable: _, name: _, nameSpan: _, hasTy: _, ty: _, init: val init, span: _) => {

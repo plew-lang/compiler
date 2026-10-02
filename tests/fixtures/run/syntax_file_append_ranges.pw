@@ -9,9 +9,9 @@ fn parserFor(source: String) -> P {
 
 fn main() {
     mut val file = <SyntaxFile />
-    mut val firstParser = parserFor(source: "struct First {}\n")
+    mut val firstParser = parserFor(source: "struct First {{}}\n")
     val first = parseProgramSyntaxInto(p: inout firstParser, file: inout file)
-    mut val secondParser = parserFor(source: "trait Second {}\n")
+    mut val secondParser = parserFor(source: "trait Second {{}}\n")
     val second = parseProgramSyntaxInto(p: inout secondParser, file: inout file)
     val firstItem = syntaxFileTopLevel(file: file, index: first.start)
     val secondItem = syntaxFileTopLevel(file: file, index: second.start)
