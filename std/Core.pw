@@ -1093,16 +1093,9 @@ fn signedDecimalText(value~: I64) -> String {
             digits.append(digitByteI(d: d))
             n = n / 10
         }
-        mut val out: Array[U8] = []
-        if neg {
-            out.append(45)
-        }
-        mut val i: U64 = digits.count()
-        while i > 0 {
-            i = i - 1
-            out.append(digits[i])
-        }
-        return stringFromBytesUnchecked(out)
+        if neg { digits.append(45U8) }
+        reverseDecimalBytes(bytes: inout digits)
+        return stringFromBytesUnchecked(digits)
 }
 
 fn unsignedDecimalText(value~: U64) -> String {
@@ -1116,13 +1109,23 @@ fn unsignedDecimalText(value~: U64) -> String {
             digits.append(digitByteU(d: d))
             n = n / 10
         }
-        mut val out: Array[U8] = []
-        mut val i: U64 = digits.count()
-        while i > 0 {
-            i = i - 1
-            out.append(digits[i])
-        }
-        return stringFromBytesUnchecked(out)
+        reverseDecimalBytes(bytes: inout digits)
+        return stringFromBytesUnchecked(digits)
+}
+
+// Reverse the one owned digit buffer instead of allocating a second array.
+fn reverseDecimalBytes(bytes: inout Array[U8]) {
+    mut val left = 0U64
+    mut val right = bytes.count()
+    while left < right {
+        right -= 1U64
+        if left >= right { break }
+        val first = bytes[left]
+        val last = bytes[right]
+        bytes[left] = last
+        bytes[right] = first
+        left += 1U64
+    }
 }
 
 pub impl I64 as Format {
