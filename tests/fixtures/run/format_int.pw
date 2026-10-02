@@ -1,16 +1,16 @@
 // Format trait implemented in pure Plew for the primitive integer types (Core
 // owns I64/U64 via `extern struct`, so it may coherently `impl I64 as Format`).
-// Integer -> decimal String via digit bytes routed through `<String.checked source=bytes />`.
+// Integer -> decimal String through the typed Format implementation and String factory.
 use @Std/Core only { Format }
 use @Std/Io only { write }
 
 fn main() {
-    write(s: (0I64).format(format: ""))
+    write(s: <String value=(0I64) />)
     write(s: "\n")
-    write(s: (42I64).format(format: ""))
+    write(s: <String value=(42I64) />)
     write(s: "\n")
-    write(s: (-1234I64).format(format: ""))
+    write(s: <String value=(-1234I64) />)
     write(s: "\n")
-    write(s: (18446744073709551615U64).format(format: ""))
+    write(s: <String value=(18446744073709551615U64) />)
     write(s: "\n")
 }

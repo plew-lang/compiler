@@ -14,5 +14,5 @@ fn replaceFirst(buffer: inout Buffer[I64]) -> I64 {
 fn main() {
     mut val buffer: Buffer[I64] = Buffer.new()
     bufferAppend(buffer: inout buffer, value: 42I64)
-    print(replaceFirst(buffer: inout buffer).format(format: ""))
+    print(<String value=replaceFirst(buffer: inout buffer) />)
 }

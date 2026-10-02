@@ -13,5 +13,5 @@ fn appendOnce(buffer: inout Buffer[I64]) {
 fn main() {
     mut val buffer: Buffer[I64] = Buffer.new()
     appendOnce(buffer: inout buffer)
-    print(bufferCount(buffer: buffer).format(format: ""))
+    print(<String value=bufferCount(buffer: buffer) />)
 }

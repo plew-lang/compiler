@@ -11,11 +11,11 @@ fn main() {
     mut val b: Buffer[String] = Buffer.new()
     mut val i: I64 = 0I64
     while i < 12I64 {
-        b.append("item-" + i.format(format: ""))
+        b.append("item-" + <String value=i />)
         i += 1I64
     }
     val c0: U64 = b.count()
-    print("count=" + c0.format(format: ""))
+    print("count=" + <String value=c0 />)
     val first: String = b.get(index: 0U64)
     print("first=" + first)
     val last: String = b.get(index: 11U64)
@@ -26,5 +26,5 @@ fn main() {
     val popped: String = b.removeLast()   // move-out: caller owns + drops "item-11"
     print("popped=" + popped)
     val c1: U64 = b.count()
-    print("afterPop=" + c1.format(format: ""))
+    print("afterPop=" + <String value=c1 />)
 }

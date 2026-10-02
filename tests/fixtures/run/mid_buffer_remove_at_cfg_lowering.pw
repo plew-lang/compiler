@@ -13,7 +13,7 @@ fn main() {
     bufferAppend(buffer: inout buffer, value: 10I64)
     bufferAppend(buffer: inout buffer, value: 20I64)
     bufferAppend(buffer: inout buffer, value: 30I64)
-    print(takeMiddle(buffer: inout buffer).format(format: ""))
-    print(bufferGet(buffer: buffer, index: 1U64).format(format: ""))
-    print(bufferCount(buffer: buffer).format(format: ""))
+    print(<String value=takeMiddle(buffer: inout buffer) />)
+    print(<String value=bufferGet(buffer: buffer, index: 1U64) />)
+    print(<String value=bufferCount(buffer: buffer) />)
 }

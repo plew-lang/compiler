@@ -3,7 +3,7 @@ use @Std/Core only { Buffer, MutableRef, bufferAppend, bufferSwapRemove }
 
 unique struct Cell {
     pub val id: I64
-    deinit { write(s: self.id.format(format: "") + "\n") }
+    deinit { write(s: <String value=self.id /> + "\n") }
 }
 pub impl Cell { factory }
 

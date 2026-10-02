@@ -13,6 +13,6 @@ fn main() {
     mut val buffer: Buffer[I64] = Buffer.new()
     bufferAppend(buffer: inout buffer, value: 42I64)
     val popped: I64 = popOne(buffer: inout buffer)
-    print(popped.format(format: ""))
-    print(bufferCount(buffer: buffer).format(format: ""))
+    print(<String value=popped />)
+    print(<String value=bufferCount(buffer: buffer) />)
 }

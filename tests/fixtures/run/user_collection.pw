@@ -56,14 +56,14 @@ fn main() {
     nums.push(30I64)
     val ncount: U64 = nums.count()
     val ntop: I64 = nums.peek()
-    print("nums count=" + ncount.format(format: "") + " top=" + ntop.format(format: ""))
+    print("nums count=" + <String value=ncount /> + " top=" + <String value=ntop />)
     nums.replaceTop(99I64)
     val ntop2: I64 = nums.peek()
     val a: I64 = nums.pop()
     val b: I64 = nums.pop()
     val empty: Bool = nums.isEmpty()
     val emptyStr: String = if empty { give "y" } else { give "n" }
-    print("replaced top=" + ntop2.format(format: "") + " popped " + a.format(format: "") + "," + b.format(format: "") + " empty=" + emptyStr)
+    print("replaced top=" + <String value=ntop2 /> + " popped " + <String value=a /> + "," + <String value=b /> + " empty=" + emptyStr)
 
     // (2) ARC element (String): push retains, replaceTop is commit-then-release (§6-4),
     // peek value-returns (retains), pop moves the live String out to the caller.
@@ -75,7 +75,7 @@ fn main() {
     words.replaceTop("BETA")          // old "beta" freed only after "BETA" is committed
     val top1: String = words.peek()
     val wcount: U64 = words.count()
-    print("top now=" + top1 + " count=" + wcount.format(format: ""))
+    print("top now=" + top1 + " count=" + <String value=wcount />)
     val w: String = words.pop()
     val rem: String = words.peek()
     print("popped=" + w + " remaining=" + rem)
@@ -93,5 +93,5 @@ fn main() {
     val dc: U64 = dup.count()
     val st: String = src.peek()
     val dt: String = dup.peek()
-    print("src count=" + sc.format(format: "") + " top=" + st + " | dup count=" + dc.format(format: "") + " top=" + dt)
+    print("src count=" + <String value=sc /> + " top=" + st + " | dup count=" + <String value=dc /> + " top=" + dt)
 }

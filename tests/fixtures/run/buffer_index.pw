@@ -16,7 +16,7 @@ fn main() {
     nums.append(10U64)
     nums.append(20U64)
     val s: U64 = nums[0U64] + nums[1U64]
-    print("sum=" + s.format(format: ""))
+    print("sum=" + <String value=s />)
     val first: U64 = nums[0U64]
     if first == 10U64 {
         print("first==10")

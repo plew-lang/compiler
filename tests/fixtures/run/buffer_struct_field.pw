@@ -23,11 +23,11 @@ fn build() -> Buffer[String] {
 fn main() {
     val h: Holder = <Holder items=build() />
     val n0: U64 = h.items.count()
-    print("h=" + n0.format(format: ""))
+    print("h=" + <String value=n0 />)
     val h2: Holder = h
     val n1: U64 = h.items.count()
     val n2: U64 = h2.items.count()
-    print("shared h=" + n1.format(format: "") + " h2=" + n2.format(format: ""))
+    print("shared h=" + <String value=n1 /> + " h2=" + <String value=n2 />)
     val e0: String = h2.items.get(index: 0U64)
     val e2: String = h.items.get(index: 2U64)
     print("h2[0]=" + e0 + " h[2]=" + e2)

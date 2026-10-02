@@ -15,5 +15,5 @@ fn main() {
     mut val buffer: Buffer[I64] = Buffer.new()
     bufferAppend(buffer: inout buffer, value: 10I64)
     bufferAppend(buffer: inout buffer, value: 30I64)
-    print(insertMiddle(buffer: inout buffer).format(format: ""))
+    print(<String value=insertMiddle(buffer: inout buffer) />)
 }

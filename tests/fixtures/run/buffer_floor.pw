@@ -10,14 +10,14 @@ use @Std/Core only { Buffer }
 fn main() {
     mut val b: Buffer[I64] = Buffer.new()
     val empty: U64 = b.count()
-    print("empty=" + empty.format(format: ""))
+    print("empty=" + <String value=empty />)
     mut val i: I64 = 0I64
     while i < 20I64 {
         b.append(i * 10I64)
         i += 1I64
     }
     val n: U64 = b.count()
-    print("count=" + n.format(format: ""))
+    print("count=" + <String value=n />)
     mut val sum: I64 = 0I64
     mut val k: U64 = 0U64
     while k < n {
@@ -25,14 +25,14 @@ fn main() {
         sum += e
         k += 1U64
     }
-    print("sum=" + sum.format(format: ""))
+    print("sum=" + <String value=sum />)
     // set / removeLast / isEmpty / capacity.
     b.set(index: 0U64, 7I64)
     val b0: I64 = b.get(index: 0U64)
-    print("b0=" + b0.format(format: ""))
+    print("b0=" + <String value=b0 />)
     b.removeLast()
     val n2: U64 = b.count()
-    print("afterPop=" + n2.format(format: ""))
+    print("afterPop=" + <String value=n2 />)
     val cap: U64 = b.capacity()
     val capOk: Bool = cap >= n2
     if capOk { print("cap-ok") }
