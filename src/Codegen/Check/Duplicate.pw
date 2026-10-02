@@ -5,6 +5,36 @@
 // the "selector" minus types. Used to detect a generic/concrete overload clash.
 
 pub impl Comp {
+    // Memberwise constructors have no executable Func, but expose an ordinary
+    // callable signature. Compare that signature with custom anonymous factories
+    // using the same receiver/default-argument unification as registration.
+    inout fn checkMemberwiseFactoryCollisions() -> Result[(), CompileDiagnostic] {
+        mut val index = 0U64
+        while index < self.arena.functionCount() {
+            val function = self.arena.functionAt(index: index)
+            if function.isAnonymousFactory && !function.isProvided && function.extId == 0U64 && function.srcTraitId == 0U64 {
+                val declaration = self.structIndexForType(ref: function.recvTy)
+                if declaration < self.arena.structCount() {
+                    val structure = self.arena.structAt(index: declaration)
+                    if !structure.isExtern && !structure.isCExtern {
+                        mut val parameters: Array[Param] = []
+                        for field in structure.fields {
+                            val term = (try self.fieldTypeRefOfReceiver(receiverRef: function.recvTy, fieldStart: field.nameStart, fieldLen: field.nameLen))
+                            val info = self.typeInfoOfRef(ref: term)
+                            parameters.append(<Param nameStart=field.nameStart nameLen=field.nameLen nameId=field.nameId tyStart=info.nameStart tyLen=info.nameLen tyIsArray=info.kind == 3I64 ty=term isInout=false isMove=false isBorrow=false noLabel=false hasDefault=field.hasDefault defaultExpr=field.defaultVal />)
+                        }
+                        val memberwise = <Func nameStart=function.nameStart nameLen=function.nameLen nameId=function.nameId recvTy=function.recvTy typeParams=function.typeParams params=self.pushFuncParams(params: parameters) hasRet=true retStart=structure.nameStart retLen=structure.nameLen retIsArray=false retTy=function.recvTy body=0U64 hasRecv=false recvStart=function.recvStart recvLen=function.recvLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />
+                        if self.callableFormsMayOverlap(a: function, b: memberwise) {
+                            return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "anonymous factory overlaps the implicit memberwise factory (spec/05,07)") />
+                        }
+                    }
+                }
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn sameLabels(a: FuncParamRange, b: FuncParamRange) -> Bool {
         if a.count() != b.count() {
             return false

@@ -1,0 +1,3 @@
+struct Item {}
+impl Item { factory() { panic("unused") } }
+fn main() {}

@@ -1753,6 +1753,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
         try c.checkSourceTypeUses(types: c.loweringTypeUses)
     }
     c.resolveTypeDeclIdentities()
+    try c.checkMemberwiseFactoryCollisions()
     // recursive value types (spec/03): mark fields that close a containment cycle
     // onto their owner; codegen stores them behind a heap pointer so the C type is
     // finite (hidden indirection; value semantics kept by deref-read/repoint-write).
