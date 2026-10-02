@@ -1,0 +1,11 @@
+pub struct Value { pub val raw: I64 }
+pub impl Value {
+    factory(value: I64) { return <Value raw=value /> }
+}
+impl Value {
+    factory(value: I32) { return <Value raw=99I64 /> }
+}
+pub struct Memberwise { pub val value: I32 }
+pub impl Memberwise {
+    factory(value: I64) { return <Memberwise value=8I32 /> }
+}

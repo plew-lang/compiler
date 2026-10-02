@@ -237,8 +237,8 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkMethodVis(ownerStart: U64, ownerLen: U64, mf: Func, offset: U64) -> Result[(), CompileDiagnostic] {
-        if mf.isPub { return <Result.Ok value=() /> }
+    inout fn methodIsVisible(mf: Func, offset: U64) -> Bool {
+        if mf.isPub { return true }
         // Provided bodies retain the module that authored the declaration;
         // conformance instantiation must not grant the caller new access.
         mut val ownerModule = self.moduleOf(offset: mf.defOffset)
@@ -249,7 +249,11 @@ pub impl Comp {
         } else if mf.defOffset == 0U64 {
             ownerModule = self.typeDefinitionModule(ref: mf.recvTy)
         }
-        if ownerModule == self.typeDeclModuleMissing() || ownerModule != self.moduleOf(offset: offset) {
+        return ownerModule != self.typeDeclModuleMissing() && ownerModule == self.moduleOf(offset: offset)
+    }
+
+    inout fn checkMethodVis(ownerStart: U64, ownerLen: U64, mf: Func, offset: U64) -> Result[(), CompileDiagnostic] {
+        if !self.methodIsVisible(mf: mf, offset: offset) {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "method is private (callable only in its defining module; put it in a `pub impl`)") />
         }
         return <Result.Ok value=() />

@@ -1,0 +1,13 @@
+use @Std/Io only { print }
+trait Default {
+    factory()
+}
+struct Options { val precision: I64 }
+impl Options as Default {
+    factory() { return <Options precision=2I64 /> }
+}
+fn create[T]() -> T where T: Default { return </> }
+fn main() {
+    val options: Options = create()
+    print(options.precision)
+}

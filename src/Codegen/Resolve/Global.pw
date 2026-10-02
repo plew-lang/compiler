@@ -450,10 +450,14 @@ pub impl Comp {
 
     // Memberwise construction participates with its declared field types, not
     // merely with the first written label. Reuse ordinary argument matching.
-    inout fn memberwiseConstructionMatches(receiver: U64, fields: MakeFieldRange) -> Result[Bool, CompileDiagnostic] {
+    inout fn memberwiseConstructionMatches(receiver: U64, fields: MakeFieldRange, offset: U64) -> Result[Bool, CompileDiagnostic] {
         val declaration = self.structIndexForType(ref: receiver)
         if declaration >= self.arena.structCount() { return <Result.Ok value=false /> }
-        val declared = self.arena.structAt(index: declaration).fields
+        val structure = self.arena.structAt(index: declaration)
+        if !structure.isExtern && !structure.isStructuralLayout && self.moduleOf(offset: structure.nameStart) != self.moduleOf(offset: offset) && !self.structHasPubFactory(structIndex: declaration) {
+            return <Result.Ok value=false />
+        }
+        val declared = structure.fields
         mut val index = 0U64
         while index < fields.len {
             val field = self.makeFieldAt(fields: fields, index: index)
@@ -503,14 +507,17 @@ pub impl Comp {
                     index += 1U64
                 }
                 val args = self.pushArgs(args: arguments)
-                val memberwise = (try self.memberwiseConstructionMatches(receiver: receiver, fields: fields))
+                val memberwise = (try self.memberwiseConstructionMatches(receiver: receiver, fields: fields, offset: typeStart))
                 mut val selected = self.arena.functionCount()
                 mut val rank = 0U64
+                mut val hidden = self.arena.functionCount()
                 for val candidate in candidates {
                     val function = self.arena.functionAt(index: candidate)
                     if function.extId == 0U64 && function.srcTraitId == 0U64 && self.receiverDeclarationMatches(f: function, receiverRef: receiver) {
                         val matchRank = (try self.callableArgMatchRank(f: function, args: args))
-                        if matchRank > rank {
+                        if !self.methodIsVisible(mf: function, offset: typeStart) {
+                            if matchRank != 0U64 && hidden == self.arena.functionCount() { hidden = candidate }
+                        } else if matchRank > rank {
                             rank = matchRank
                             selected = candidate
                         } else if matchRank == 2U64 {
@@ -534,6 +541,9 @@ pub impl Comp {
                     self.normalizeMemberwiseDefaultsAt(exprId: exprId)
                     return <Result.Ok value=() />
                 }
+                // A hidden candidate is retained only for the access diagnostic,
+                // never to introduce ambiguity among the visible candidates.
+                if selected == self.arena.functionCount() { selected = hidden }
                 if selected < self.arena.functionCount() {
                     val function = self.arena.functionAt(index: selected)
                     val recv = self.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)

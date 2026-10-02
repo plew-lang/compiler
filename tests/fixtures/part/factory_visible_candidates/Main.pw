@@ -1,0 +1,8 @@
+use ./Value only { Value, Memberwise }
+use @Std/Io only { print }
+fn main() {
+    val value = <Value value=7 />
+    val memberwise = <Memberwise value=1 />
+    print(value.raw)
+    print(memberwise.value)
+}
