@@ -1,0 +1,8 @@
+use @Std/Core only { Format }
+use @Std/Io only { print }
+fn text[T](value: T) -> String where T: Format { return "value={value}" }
+fn explicit[T](value: T) -> String where T: Format { return "value={value: </>}" }
+fn main() {
+    print(text(value: 42I64))
+    print(explicit(value: "text"))
+}

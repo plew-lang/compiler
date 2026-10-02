@@ -874,6 +874,18 @@ pub impl Comp {
     }
 
     inout fn recordStaticMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, resolution: StaticMemberResolution, resultTerm: U64) -> Result[(), CompileDiagnostic] {
+        // Selection fixes contextual construction arguments even when the
+        // receiver is still a type parameter. Publish those expressions before
+        // freezing argument sources; Mid must never receive an unresolved Make.
+        mut val argumentIndex = 0U64
+        while argumentIndex < args.len {
+            val argument = self.argAt(args: args, index: argumentIndex).expr
+            if self.pendingConstructionContexts.contains(argument) {
+                val expected = self.staticRequirementParamType(resolution: resolution, args: args, argIdx: argumentIndex)
+                if expected != 0U64 { try self.recordExpr(exprId: argument, expectedTerm: expected) }
+            }
+            argumentIndex += 1U64
+        }
         // Parent chains and match payloads read the expression term during
         // both Record walks, before call-template publication is enabled.
         self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
