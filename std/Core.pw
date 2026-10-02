@@ -6,6 +6,9 @@
 // methods below per instantiation. (Spec makes these ambient; for now a program
 // imports them explicitly with `use @Std/Core`.)
 
+// A fallible interface with this error type cannot produce an error value.
+pub enum Infallible {}
+
 // --- lang-item primitive scalar types (spec/15 core-library boundary) ---
 // Opaque intrinsic types (representation is the compiler's int*_t / PlewString mapping):
 // the language's built-in scalars. DEFINED here so their operator/Format/Eq/Ord/TryFrom

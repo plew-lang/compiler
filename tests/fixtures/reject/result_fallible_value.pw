@@ -1,0 +1,4 @@
+fn main() {
+    val result: Result[I64, String] = <Result.Ok value=42 />
+    val value = result.value()
+}

@@ -1,0 +1,18 @@
+use @Std/Core only { Infallible }
+use @Std/Io only { print }
+
+fn main() {
+    val success: Result[String, String] = <Result.Ok value="success" />
+    val failure: Result[String, String] = <Result.Err error="failure" />
+    print(success.ok().unwrap())
+    print(success.err().isNone())
+    print(failure.ok().isNone())
+    print(failure.err().unwrap())
+    print(success.ok().unwrap())
+    print(failure.err().unwrap())
+    val infallible: Result[String, Infallible] = <Result.Ok value="infallible" />
+    print(infallible.value())
+    print(infallible.value())
+    val unit: Result[(), Infallible] = <Result.Ok value=() />
+    unit.value()
+}

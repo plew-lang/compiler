@@ -15,7 +15,7 @@
 // (spec/15): its `K: Hash` bound and `SipHasher` resolve from @Std/Hash. `Array`'s
 // storage floor `Buffer` is a non-ambient primitive imported from @Std/Core.
 use @Std/Hash only { Hash, Hasher, SipHasher }
-use @Std/Core only { Buffer, Eq, Index, IndexSet, Iterator, Iterable }
+use @Std/Core only { Buffer, Eq, Index, IndexSet, Iterator, Iterable, Infallible }
 
 // Re-export the primitive scalar types from @Std/Core (where they are DEFINED, with
 // their operator/conversion witnesses — coherent). The re-export makes them ambient:
@@ -107,6 +107,18 @@ enum Result[T, E] {
 }
 
 pub impl[T, E] Result[T, E] {
+    fn ok() -> Optional[T] {
+        match self {
+            Result.Ok(val value) => { return <Optional.Some v=value /> }
+            Result.Err(val error) => { return <Optional.None /> }
+        }
+    }
+    fn err() -> Optional[E] {
+        match self {
+            Result.Ok(val value) => { return <Optional.None /> }
+            Result.Err(val error) => { return <Optional.Some v=error /> }
+        }
+    }
     // Is this `Ok`?
     fn isOk() -> Bool {
         match self {
@@ -133,6 +145,15 @@ pub impl[T, E] Result[T, E] {
         match self {
             Result.Ok(val value) => { return value }
             Result.Err(val error) => { panic "called unwrap on an Err Result" }
+        }
+    }
+}
+
+pub impl[T] Result[T, Infallible] {
+    fn value() -> T {
+        return match self {
+            Result.Ok(value: val value) => value
+            Result.Err(error: val error) => match error {}
         }
     }
 }
