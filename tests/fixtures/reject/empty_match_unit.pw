@@ -1,0 +1,4 @@
+fn invalid(value: ()) -> I64 {
+    return match value {}
+}
+fn main() {}

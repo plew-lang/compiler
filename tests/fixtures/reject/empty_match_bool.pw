@@ -1,0 +1,5 @@
+// Unit and Bool have inhabitants, so a zero-arm match is not exhaustive.
+fn invalid(value: Bool) -> I64 {
+    return match value {}
+}
+fn main() {}

@@ -68,9 +68,6 @@ pub impl Comp {
             Stmt.Match(val scrut, val arms) => {
                 // match is exhaustive (the body verifier checks exhaustiveness), so
                 // it diverges iff every arm's block diverges.
-                if arms.len == 0U64 {
-                    return false
-                }
                 mut val i: U64 = 0
                 while i < arms.len {
                     if !(self.blockDiverges(blkId: self.matchArmAt(arms: arms, index: i).body)) {

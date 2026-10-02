@@ -2424,6 +2424,14 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                     return buildMidIrrefutablePattern(c: inout c, state: inout state, semantic: semantic, sourceArms: sourceArms, scrutinee: scrutinee.place, hasScrutineeScope: hasScrutineeScope, scrutineeScope: scrutineeScope, hasGiveDestination: hasGiveDestination, giveDestination: giveDestination)
                 }
             }
+            if sourceArms.len == 0U64 {
+                // The frontend proves exhaustiveness for the selected enum.
+                // Preserve scrutinee evaluation above, then terminate this path.
+                if c.arena.enumAt(index: enumIndex).variants.count() != 0U64 { return <MidBuildError.UnsupportedMatch /> }
+                midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />)
+                if hasScrutineeScope { midCloseScope(state: inout state, scope: scrutineeScope) }
+                return <MidBuildError.None />
+            }
             val tagTerm: U64 = midDiscriminantType(c: c)
             if tagTerm == 0U64 { return <MidBuildError.MissingSemanticType /> }
             val tagLocal: U64 = addMidTemporary(state: inout state, typeTerm: tagTerm)

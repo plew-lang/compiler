@@ -115,6 +115,16 @@ pub impl Comp {
 
     inout fn checkMatchArmsEnum(scrut: U64, arms: MatchArmRange) -> Result[(), CompileDiagnostic] {
         val st0: TypeInfo = (try self.typeOf(id: scrut))
+        if arms.len == 0U64 {
+            val scrutineeType = self.typedIrRefOfInfo(ti: st0)
+            val enumIndex = self.enumIndexForType(ref: scrutineeType)
+            if enumIndex < self.arena.enumCount() {
+                if self.arena.enumAt(index: enumIndex).variants.count() == 0U64 {
+                    return <Result.Ok value=() />
+                }
+            }
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: scrut), msg: "an empty match requires an empty enum") />
+        }
         if st0.kind != 2 {
             return <Result.Ok value=() />
         }

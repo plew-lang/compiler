@@ -1971,6 +1971,8 @@ fn litFitsBits(value: U64, neg: Bool, bits: U64, sgn: Bool) -> Bool {
 // True if any arm dispatches on an enum variant or a struct pattern (so the match
 // must go through the enum emitter, not the scalar desugar).
 fn matchHasEnumOrStruct(arms: Array[MatchArmAst]) -> Bool {
+    // A zero-arm match is checked from its scrutinee type, not literal patterns.
+    if arms.count() == 0U64 { return true }
     mut val onlyDiscards: Bool = arms.count() > 0U64
     mut val i: U64 = 0
     while i < arms.count() {

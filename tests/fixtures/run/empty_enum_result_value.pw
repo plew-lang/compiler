@@ -1,0 +1,18 @@
+// Empty enums have no inhabitants; an empty match eliminates the error path.
+use @Std/Io only { print }
+
+enum Impossible {}
+
+fn success[T](result: Result[T, Impossible]) -> T {
+    return match result {
+        Result.Ok(value: val value) => value
+        Result.Err(error: val error) => match error {}
+    }
+}
+
+fn main() {
+    val number: Result[I64, Impossible] = <Result.Ok value=42 />
+    val text: Result[String, Impossible] = <Result.Ok value="empty enum" />
+    print(success(result: number))
+    print(success(result: text))
+}

@@ -91,6 +91,8 @@ pub impl Comp {
     }
 
     inout fn syntaxMatchHasEnumOrStruct(arms: SyntaxSlice) -> Bool {
+        // A zero-arm match is checked from its scrutinee type.
+        if syntaxMatchArmCount(file: self.syntax, arms: arms) == 0U64 { return true }
         mut val onlyDiscards: Bool = syntaxMatchArmCount(file: self.syntax, arms: arms) > 0U64
         mut val i: U64 = 0U64
         while i < syntaxMatchArmCount(file: self.syntax, arms: arms) {
