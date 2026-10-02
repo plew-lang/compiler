@@ -1,0 +1,22 @@
+use @Std/Io only { print }
+trait Allowed {}
+trait Narrow: Allowed {}
+struct Input {}
+impl Input as Allowed {}
+impl Input as Narrow {}
+trait Action { fn go[U](value: U) -> I64 where U: Narrow }
+struct Worker {}
+impl Worker as Action {
+    fn go[U](value: U) -> I64 where U: Allowed { return 7I64 }
+}
+struct GeneralWorker {}
+impl GeneralWorker as Action { fn go[U](value: U) -> I64 { return 8I64 } }
+fn invoke[T, U](action: T, value: U) -> I64 where T: Action, U: Narrow {
+    return action.go(value: value)
+}
+fn main() {
+    print(<Worker />.go(value: <Input />))
+    print(invoke(action: <Worker />, value: <Input />))
+    print(<GeneralWorker />.go(value: <Input />))
+    print(invoke(action: <GeneralWorker />, value: <Input />))
+}

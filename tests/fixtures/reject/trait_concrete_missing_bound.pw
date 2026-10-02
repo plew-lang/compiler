@@ -1,0 +1,5 @@
+trait Allowed {}
+trait Action { fn go[U](value: U) where U: Allowed }
+struct Worker {}
+impl Worker as Action { fn go[U](value: U) {} }
+fn main() { <Worker />.go(value: 7I64) }

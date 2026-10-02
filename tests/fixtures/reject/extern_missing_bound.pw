@@ -1,0 +1,3 @@
+trait Allowed {}
+extern(c) { fn external[U](value~: U) where U: Allowed }
+fn main() { external(7I64) }

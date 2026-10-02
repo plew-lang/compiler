@@ -478,11 +478,7 @@ pub impl Comp {
                             if !self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx).isAssoc {
                                 return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a type qualifier can only call an associated function") />
                             }
-                            mut val index: U64 = 0U64
-                            while index < args.len {
-                                try self.checkGenericTypeMatch(expectedRef: self.staticRequirementParamType(resolution: selected, args: args, argIdx: index), valueExpr: self.argAt(args: args, index: index).expr)
-                                index += 1U64
-                            }
+                            try self.checkSymbolicMethodArgs(fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args)
                         }
                         StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val declaration) => {
                             if !self.arena.functionAt(index: declaration).isAssoc {

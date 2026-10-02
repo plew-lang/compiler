@@ -526,18 +526,18 @@ pub impl[K, V] Dictionary[K, V] {
 // a missing read panics through `at`, while a write inserts or updates through
 // `insert`.  Keep those policy methods private implementation details rather
 // than giving the compiler a Dictionary-specific call path.
-pub impl[K, V] Dictionary[K, V] as Index[K] {
+pub impl[K, V] Dictionary[K, V] as Index[K] where K: Hash, K: Eq {
     type Output = V
 
-    fn index(key: K) -> V where K: Hash, K: Eq {
+    fn index(key: K) -> V {
         return self.at(key: key)
     }
 }
 
-pub impl[K, V] Dictionary[K, V] as IndexSet[K] {
+pub impl[K, V] Dictionary[K, V] as IndexSet[K] where K: Hash, K: Eq {
     type Value = V
 
-    inout fn indexSet(key: K, value~: V) where K: Hash, K: Eq {
+    inout fn indexSet(key: K, value~: V) {
         self.insert(key: key, value: value)
     }
 }

@@ -1,0 +1,4 @@
+trait Allowed {}
+trait Action { assoc fn go[U](value: U) where U: Allowed }
+fn invoke[T, U](value: U) where T: Action { T.go(value: value) }
+fn main() {}

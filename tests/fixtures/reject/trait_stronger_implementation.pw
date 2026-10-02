@@ -1,0 +1,5 @@
+trait Allowed {}
+trait Action { fn go[U](value: U) }
+struct Worker {}
+impl Worker as Action { fn go[U](value: U) where U: Allowed {} }
+fn main() {}
