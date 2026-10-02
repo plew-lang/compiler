@@ -1071,6 +1071,10 @@ pub impl Comp {
             stpi += 1
         }
         self.cur.typeParams = scopeTP
+        val savedWhereTypes = self.lowerWhereTypes
+        val savedWhereTraits = self.lowerWhereTraits
+        self.lowerWhereTypes = sig.whereTypes
+        self.lowerWhereTraits = sig.whereTraits
         val params: Array[Param] = (try self.lowerParams(params: sig.params))
         mut val retStart: U64 = 0
         mut val retLen: U64 = 0
@@ -1089,9 +1093,20 @@ pub impl Comp {
             retLen = selfName.nameLen
             retRef = self.lowerConstructionType(nameStart: retStart, nameLen: retLen, args: [], siteOffset: retStart)
         }
+        mut val signatureBounds: Array[ConformBound] = []
+        mut val boundIndex = 0U64
+        while boundIndex < sig.whereTypes.count() {
+            val subjectType = try self.normalizeProjectionType(t: sig.whereTypes[boundIndex], whereTypes: sig.whereTypes, whereTraits: sig.whereTraits)
+            val subject = (try self.lowerType(t: subjectType)).ref
+            val constraint = try self.lowerValueTraitConstraint(traitType: sig.whereTraitTypes[boundIndex], types: sig.whereTypes, traits: sig.whereTraits)
+            signatureBounds.append(<ConformBound subject=subject constraint=constraint offset=sig.whereTypes[boundIndex].span.start />)
+            boundIndex += 1U64
+        }
+        self.lowerWhereTypes = savedWhereTypes
+        self.lowerWhereTraits = savedWhereTraits
         self.cur.typeParams = savedTP
         val runtimeIntrinsic: RuntimeIntrinsicDeclaration = self.runtimeIntrinsicDeclaration(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
-        return <Result.Ok value=<Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=nameStart /> />
+        return <Result.Ok value=<Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=nameStart signatureBounds=self.pushConformBounds(bounds: signatureBounds) /> />
     }
 
     inout fn lowerSyntaxSigToFunc(sig: SyntaxSig, isExtern: Bool, isCExtern: Bool) -> Result[Func, CompileDiagnostic] {
@@ -1112,6 +1127,18 @@ pub impl Comp {
             i += 1U64
         }
         self.cur.typeParams = scope
+        val savedWhereTypes = self.lowerWhereSyntaxTypes
+        val savedWhereTraits = self.lowerWhereSyntaxTraits
+        mut val whereTypes: Array[TypeId] = []
+        mut val whereTraits: Array[Span] = []
+        mut val boundIndex = 0U64
+        while boundIndex < syntaxSigWhereCount(file: self.syntax, sig: sig) {
+            whereTypes.append(syntaxSigWhereType(file: self.syntax, sig: sig, index: boundIndex))
+            whereTraits.append(syntaxSigWhereTraitSpan(file: self.syntax, sig: sig, index: boundIndex))
+            boundIndex += 1U64
+        }
+        self.lowerWhereSyntaxTypes = whereTypes
+        self.lowerWhereSyntaxTraits = whereTraits
         mut val params: Array[Param] = []
         i = 0U64
         while i < syntaxSigParamCount(file: self.syntax, sig: sig) {
@@ -1138,9 +1165,19 @@ pub impl Comp {
             retLen = selfName.nameLen
             retRef = self.lowerConstructionType(nameStart: retStart, nameLen: retLen, args: [], siteOffset: retStart)
         }
+        mut val signatureBounds: Array[ConformBound] = []
+        boundIndex = 0U64
+        while boundIndex < syntaxSigWhereCount(file: self.syntax, sig: sig) {
+            val subject = (try self.lowerSyntaxType(id: syntaxSigWhereType(file: self.syntax, sig: sig, index: boundIndex))).ref
+            val constraint = try self.lowerSyntaxTraitConstraint(traitTy: syntaxSigWhereTraitType(file: self.syntax, sig: sig, index: boundIndex))
+            signatureBounds.append(<ConformBound subject=subject constraint=constraint offset=syntaxSigWhereParamSpan(file: self.syntax, sig: sig, index: boundIndex).start />)
+            boundIndex += 1U64
+        }
+        self.lowerWhereSyntaxTypes = savedWhereTypes
+        self.lowerWhereSyntaxTraits = savedWhereTraits
         self.cur.typeParams = savedTP
         val runtimeIntrinsic: RuntimeIntrinsicDeclaration = self.runtimeIntrinsicDeclarationSyntax(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
-        return <Result.Ok value=<Func nameStart=sig.name.start nameLen=sig.name.end - sig.name.start nameId=intern(c: inout self, start: sig.name.start, len: sig.name.end - sig.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=sig.name.start /> />
+        return <Result.Ok value=<Func nameStart=sig.name.start nameLen=sig.name.end - sig.name.start nameId=intern(c: inout self, start: sig.name.start, len: sig.name.end - sig.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=sig.name.start signatureBounds=self.pushConformBounds(bounds: signatureBounds) /> />
     }
 
     inout fn lowerTrait(t: TraitAst) -> Result[(), CompileDiagnostic] {

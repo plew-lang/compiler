@@ -353,7 +353,7 @@ pub impl Comp {
         val resolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: fnIdx, receiverRef: semanticReceiver, nameStart: nameStart, nameLen: nameLen, args: args))
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
-                val result: U64 = (try self.staticRequirementResultType(resolution: resolution))
+                val result: U64 = (try self.staticRequirementCallResultType(resolution: resolution, args: args))
                 if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) />}
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
@@ -1061,7 +1061,7 @@ pub impl Comp {
                         val staticResolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: (try self.inferType(id: recv)), nameStart: nameStart, nameLen: nameLen, args: args))
                         match staticResolution {
                             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
-                                val result: U64 = (try self.staticRequirementResultType(resolution: staticResolution))
+                                val result: U64 = (try self.staticRequirementCallResultType(resolution: staticResolution, args: args))
                                 if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) />}
                                 return <Result.Ok value=scalarInfo() />
                             }

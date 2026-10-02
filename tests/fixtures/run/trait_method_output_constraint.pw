@@ -1,0 +1,31 @@
+use @Std/Core only { TextOutput, FormatOptions, Infallible }
+use @Std/Io only { print }
+trait Render {
+    type Options: FormatOptions
+    fn render[Output](output: inout Output, options: Options) -> Result[(), Output.Error] where Output: TextOutput
+}
+struct Options { val marker: I64 }
+impl Options as FormatOptions { factory() { return <Options marker=7I64 /> } }
+struct Value {}
+impl Value as Render {
+    type Options = Options
+    fn render[Output](output: inout Output, options: Options) -> Result[(), Output.Error] where Output: TextOutput {
+        return output.write("value")
+    }
+}
+struct Counter { mut val count: U64 }
+impl Counter as TextOutput {
+    type Error = Infallible
+    inout fn write(text~: String) -> Result[(), Infallible] {
+        self.count += text.bytes().count()
+        return <Result.Ok value=() />
+    }
+}
+fn renderValue[T, Output](value: T, output: inout Output, options: T.Options = </>) -> Result[(), Output.Error] where T: Render, Output: TextOutput {
+    return value.render(output: inout output, options: options)
+}
+fn main() {
+    mut val counter = <Counter count=0U64 />
+    renderValue(value: <Value />, output: inout counter).value()
+    print(counter.count)
+}

@@ -1,0 +1,4 @@
+trait Allowed {}
+trait Action { fn go[U](value: U) where U: Allowed }
+fn invoke[T, U](action: T, value: U) where T: Action { action.go(value: value) }
+fn main() {}

@@ -737,7 +737,7 @@ pub impl Comp {
                         if paramIdx >= req.params.count() { return 0U64 }
                         val bound: TraitBound = self.declarationBound(source: boundRef)
                         val param: Param = self.funcParamAt(params: req.params, index: paramIdx)
-                        return self.staticRequirementType(ref: param.ty, traitDef: traitDef, receiverRef: bound.subject, traitArgs: bound.constraint.key.positionalArgs)
+                        return self.traitBoundTypeTerm(ref: param.ty, bound: bound, traitIndex: traitIdx)
                     }
                     StaticConformanceProof.AssumedSupertraitPath(source: val boundRef, steps: val steps) => {
                         if !self.declarationBoundIsValid(source: boundRef) || traitIdx >= self.decls.traitCount() { return 0U64 }
@@ -834,6 +834,24 @@ pub impl Comp {
         // here let an unrelated temporary receiver reinterpret abstract Self.
         val grounded: U64 = self.staticRequirementType(ref: req.retTy, traitDef: traitDef, receiverRef: receiverRef, traitArgs: traitArgs)
         return self.reifyBoundAssociatedTerms(ref: grounded, traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitDef.nameStart, traitArgs: traitArgs, predicates: predicates)
+    }
+
+    // Trait instance substitution and method binder substitution are distinct.
+    // The latter belongs to this call, including associated projections rooted
+    // in a method parameter (for example Output.Error).
+    inout fn staticRequirementCallResultType(resolution: StaticMemberResolution, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+        val result = try self.staticRequirementResultType(resolution: resolution)
+        match resolution {
+            StaticMemberResolution.Requirement(proof: _, val traitIdx, val reqIdx) => {
+                val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
+                if requirement.typeParams.count() != 0U64 {
+                    val arguments = try self.inferFnArgs(f: requirement, args: args)
+                    return <Result.Ok value=self.groundTermInEnvironment(ref: result, params: self.copyFuncBinds(binds: requirement.typeParams), values: arguments) />
+                }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=result />
     }
 
     inout fn staticRequirementResultType(resolution: StaticMemberResolution) -> Result[U64, CompileDiagnostic] {

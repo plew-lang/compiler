@@ -896,7 +896,7 @@ pub impl Comp {
                 val qualifier: U64 = self.symbolicCallQualifierTerm(exprId: valueExpr, receiverExpr: recv)
                 if qualifier != 0U64 {
                     val selected: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args))
-                    val result: U64 = (try self.staticRequirementResultType(resolution: selected))
+                    val result: U64 = (try self.staticRequirementCallResultType(resolution: selected, args: args))
                     if result != 0U64 { inferred = result }
                 }
             }

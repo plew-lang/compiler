@@ -2294,6 +2294,9 @@ pub struct Func {
     // declaration-anchored diagnostic reads fnAnchor (defOffset, nameStart fallback).
     // 0 for synthesized funcs (deinit walkers, witness sigs, the record `main`).
     pub val defOffset: U64 = 0
+    // Constraints authored on a bodyless trait/extern signature.
+    pub val signatureBounds: ConformBoundRange = <ConformBoundRange start=0U64 len=0U64 />
+
 }
 
 // A callable surface entry. Func is an implementation/body record; this table is

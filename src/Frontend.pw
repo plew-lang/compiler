@@ -28,7 +28,7 @@ use @Plew/Syntax only { SyntaxField, SyntaxVariant, syntaxDeclFieldCount, syntax
 use @Plew/Syntax only { DeclId, SyntaxDecl, syntaxDecl }
 use @Plew/Syntax only { syntaxDeclTypeParamCount, syntaxDeclTypeParamSpan, syntaxDeclTypeParamIsSendable }
 use @Plew/Syntax only { syntaxDeclParamCount, syntaxDeclParam, syntaxParam, syntaxDeclWhereCount, syntaxDeclWhereParamSpan, syntaxDeclWhereTraitSpan, syntaxDeclWhereType, syntaxDeclWhereTraitType }
-use @Plew/Syntax only { SigId, SyntaxSig, syntaxSig, syntaxSigTypeParamCount, syntaxSigTypeParamSpan, syntaxSigTypeParamIsSendable, syntaxSigParamCount, syntaxSigParam }
+use @Plew/Syntax only { SigId, SyntaxSig, syntaxSig, syntaxSigTypeParamCount, syntaxSigTypeParamSpan, syntaxSigTypeParamIsSendable, syntaxSigParamCount, syntaxSigParam, syntaxSigWhereCount, syntaxSigWhereType, syntaxSigWhereTraitType, syntaxSigWhereTraitSpan, syntaxSigWhereParamSpan }
 use @Plew/Syntax only { ExternId, SyntaxExtern, syntaxExtern, syntaxExternFnCount, syntaxExternFn, syntaxExternStructCount, syntaxExternStructNameSpan, syntaxExternStructSpan, syntaxExternStructTypeParamCount, syntaxExternStructTypeParamSpan, syntaxExternStructTypeParamIsSendable }
 use @Plew/Syntax only { DirectiveId, SyntaxDirective, DeriveReqId, SyntaxDeriveReq, syntaxDirective, syntaxDirectiveReqCount, syntaxDirectiveReq, syntaxDeriveReq, syntaxDeriveReqArgCount, syntaxDeriveReqArg, syntaxExternStructDirective }
 use @Plew/Syntax only { syntaxTraitSupertraitCount, syntaxTraitSupertrait, syntaxTraitSupertraitSpan, syntaxTraitAssocTypeCount, syntaxTraitAssocTypeSpan, syntaxTraitReqCount, syntaxTraitReq }

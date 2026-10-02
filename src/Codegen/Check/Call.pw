@@ -34,6 +34,27 @@ pub impl Comp {
                 // an unrelated nominal type with the same spelling has no role.
                 val methodParameters = self.copyFuncBinds(binds: requirement.typeParams)
                 val methodArguments = (try self.inferFnArgs(f: requirement, args: args))
+                if requirement.signatureBounds.len != 0U64 {
+                    mut val traitBound = <TraitBound subject=receiverRef constraint=<TraitConstraint key=<TraitInstanceKey owner=self.decls.traitAt(index: traitIdx).nameStart positionalArgs=[] /> positionalArgsOpen=false assocPredicates=[] /> offset=nameStart />
+                    match proof {
+                        StaticConformanceProof.AssumedBound(val source) => { traitBound = self.declarationBound(source: source) }
+                        StaticConformanceProof.AssumedSupertraitPath(val source, val steps) => { traitBound = self.assumedSupertraitBound(source: source, steps: steps) }
+                        StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: val proofReceiver, val traitArgs) => {
+                            traitBound = <TraitBound subject=proofReceiver constraint=<TraitConstraint key=<TraitInstanceKey owner=self.decls.traitAt(index: traitIdx).nameStart positionalArgs=traitArgs /> positionalArgsOpen=false assocPredicates=[] /> offset=nameStart />
+                        }
+                        _ => {}
+                    }
+                    mut val boundIndex = 0U64
+                    while boundIndex < requirement.signatureBounds.len {
+                        val bound = self.conformBoundAt(bounds: requirement.signatureBounds, index: boundIndex)
+                        val subject = self.groundTermInEnvironment(ref: self.traitBoundTypeTerm(ref: bound.subject, bound: traitBound, traitIndex: traitIdx), params: methodParameters, values: methodArguments)
+                        val constraint = self.groundTraitConstraintInEnvironment(constraint: self.traitConstraintInBound(constraint: bound.constraint, bound: traitBound, traitIndex: traitIdx), params: methodParameters, args: methodArguments)
+                        if !(try self.viewedTypeConformsTraitConstraint(ref: subject, constraint: constraint, assumptions: self.functionBoundAssumptions(fnIdx: fnIdx))) {
+                            return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "type argument does not conform to the trait required by the method's `where`") />
+                        }
+                        boundIndex += 1U64
+                    }
+                }
                 mut val index = 0U64
                 while index < args.len {
                     val parameterIndex = self.paramIndexForArg(params: requirement.params, args: args, argIdx: index)

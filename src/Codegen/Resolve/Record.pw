@@ -484,7 +484,7 @@ pub impl Comp {
                 if self.typeParameterQualifierTerm(exprId: receiverExpr) != 0U64 && !self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx).isAssoc {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a type qualifier can only call an associated function") />
                 }
-                try self.recordStaticMethodTemplate(exprId: exprId, receiver: receiver, args: args, resolution: staticResolution, resultTerm: (try self.staticRequirementResultType(resolution: staticResolution)))
+                try self.recordStaticMethodTemplate(exprId: exprId, receiver: receiver, args: args, resolution: staticResolution, resultTerm: (try self.staticRequirementCallResultType(resolution: staticResolution, args: args)))
             }
             StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val declaration) => {
                 if self.typeParameterQualifierTerm(exprId: receiverExpr) != 0U64 && !self.arena.functionAt(index: declaration).isAssoc {
@@ -565,7 +565,7 @@ pub impl Comp {
             val staticResolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
             match staticResolution {
                 StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
-                    val result: U64 = (try self.staticRequirementResultType(resolution: staticResolution))
+                    val result: U64 = (try self.staticRequirementCallResultType(resolution: staticResolution, args: args))
                     if result != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: result) }
                     try self.recordStaticMethodTemplate(exprId: exprId, receiver: receiverSource, args: args, resolution: staticResolution, resultTerm: result)
                     return <Result.Ok value=() />
@@ -1330,7 +1330,7 @@ pub impl Comp {
                         val resolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: baseTerm, nameStart: callStart, nameLen: callLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
                         match resolution {
                             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
-                                try self.recordStaticMethodTemplate(exprId: exprId, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: (try self.staticRequirementResultType(resolution: resolution)))
+                                try self.recordStaticMethodTemplate(exprId: exprId, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: (try self.staticRequirementCallResultType(resolution: resolution, args: args)))
                                 return <Result.Ok value=() />
                             }
                             StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
