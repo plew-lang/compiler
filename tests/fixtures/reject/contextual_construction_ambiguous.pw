@@ -1,0 +1,5 @@
+struct First { val value: I64 }
+struct Second { val value: I64 }
+fn consume(value: First) {}
+fn consume(value: Second) {}
+fn main() { consume(value: <value=1I64 />) }

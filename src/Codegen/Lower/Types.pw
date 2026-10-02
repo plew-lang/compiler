@@ -795,181 +795,91 @@ pub impl Comp {
         return <Result.Ok value=result />
     }
 
-    // Lower a call/construction argument list.
-    // The declared TypeRef of the parameter labelled `argLabel` of the free function
-    // `fnName`, or 0 when it can't be resolved unambiguously (no such function, an
-    // overloaded / generic / method candidate, or no matching label). The callee is
-    // declared before any body that calls it (source order), so its param types are
-    // registered TypeRefs here. Used to give a call-argument literal its context type.
-    inout fn callArgType(fnName: String, argLabel: String) -> U64 {
-        if fnName.bytes().count() == 0U64 {
-            return 0U64
-        }
-        if argLabel.bytes().count() == 0U64 {
-            return 0U64
-        }
-        val fnB: Bind = self.internBytes(s: fnName)
-        val fnId: U64 = intern(c: inout self, start: fnB.nameStart, len: fnB.nameLen)
-        val lb: Bind = self.internBytes(s: argLabel)
-        val lid: U64 = intern(c: inout self, start: lb.nameStart, len: lb.nameLen)
-        return self.callArgTypeByNameIds(nameId: fnId, labelId: lid, hasReceiver: false)
-    }
-
-    // SyntaxFile owns source spelling spans already.  Do not recreate Strings
-    // merely to perform the same declaration-identity lookup.
-    inout fn callArgTypeSpans(fnName: Span, argLabel: Span) -> U64 {
-        if fnName.end <= fnName.start || argLabel.end <= argLabel.start {
-            return 0U64
-        }
-        return self.callArgTypeByNameIds(nameId: intern(c: inout self, start: fnName.start, len: fnName.end - fnName.start), labelId: intern(c: inout self, start: argLabel.start, len: argLabel.end - argLabel.start), hasReceiver: false)
-    }
-
-    // The sole lookup rule for the conservative lowering-time argument context.
-    // A free function and a method differ only in the receiver bit; ambiguous or
-    // generic candidates intentionally produce no context rather than guessing.
-    inout fn callArgTypeByNameIds(nameId: U64, labelId: U64, hasReceiver: Bool) -> U64 {
-        mut val matchCount: U64 = 0
-        mut val resultTy: U64 = 0
-        mut val functionIndex = self.arena.firstFunctionNamed(nameId: nameId)
-        while functionIndex < self.arena.functionCount() {
-            val declaration = self.arena.functionAt(index: functionIndex)
-            if declaration.hasRecv == hasReceiver && declaration.typeParams.count() == 0U64 {
-                matchCount += 1
-                mut val parameterIndex: U64 = 0
-                while parameterIndex < declaration.params.count() {
-                    val parameter = self.funcParamAt(params: declaration.params, index: parameterIndex)
-                    if intern(c: inout self, start: parameter.nameStart, len: parameter.nameLen) == labelId {
-                        resultTy = parameter.ty
-                    }
-                    parameterIndex += 1
-                }
+    // Select only from the call's name and complete label sequence. Argument
+    // expressions do not participate: an omitted construction cannot choose
+    // the expected type that gives that same construction its meaning.
+    inout fn loweringCallCandidate(name: Span, args: ArgRange, hasReceiver: Bool) -> U64 {
+        if name.start == name.end { return self.arena.functionCount() }
+        mut val candidates: Array[U64] = []
+        if hasReceiver {
+            val nameId = intern(c: inout self, start: name.start, len: name.end - name.start)
+            mut val index = self.arena.firstFunctionNamed(nameId: nameId)
+            while index < self.arena.functionCount() {
+                if self.arena.functionAt(index: index).hasRecv { candidates.append(index) }
+                index = self.arena.nextFunctionNamed(index: index)
             }
-            functionIndex = self.arena.nextFunctionNamed(index: functionIndex)
+        } else {
+            candidates = self.visibleFreeFunctions(nameStart: name.start, nameLen: name.end - name.start)
         }
-        if matchCount == 1U64 {
-            return resultTy
+        mut val selected = self.arena.functionCount()
+        mut val index = 0U64
+        while index < candidates.count() {
+            val candidate = candidates[index]
+            val declaration = self.arena.functionAt(index: candidate)
+            if self.paramsLabelsOk(params: declaration.params, args: args) {
+                if selected < self.arena.functionCount() { return self.arena.functionCount() }
+                selected = candidate
+            }
+            index += 1U64
         }
-        return 0U64
+        return selected
     }
 
-    // Like callArgType but for a METHOD call `recv.name(label: …)`: the receiver type is
-    // not known at lowering, so resolve by method name + label across ALL methods. Only
-    // when exactly one non-generic method is named `methodName` (so the label maps to a
-    // single param type unambiguously) is the type adopted — otherwise 0 (context-free,
-    // no guess). Gives a record/dict/`()` literal method-argument its context type.
-    inout fn methodArgType(methodName: String, argLabel: String) -> U64 {
-        if methodName.bytes().count() == 0U64 {
-            return 0U64
-        }
-        if argLabel.bytes().count() == 0U64 {
-            return 0U64
-        }
-        val mnB: Bind = self.internBytes(s: methodName)
-        val mnId: U64 = intern(c: inout self, start: mnB.nameStart, len: mnB.nameLen)
-        val lb: Bind = self.internBytes(s: argLabel)
-        val lid: U64 = intern(c: inout self, start: lb.nameStart, len: lb.nameLen)
-        return self.callArgTypeByNameIds(nameId: mnId, labelId: lid, hasReceiver: true)
+    inout fn loweringArgumentType(candidate: U64, args: ArgRange, index: U64) -> U64 {
+        if candidate >= self.arena.functionCount() { return 0U64 }
+        val declaration = self.arena.functionAt(index: candidate)
+        if declaration.typeParams.count() != 0U64 { return 0U64 }
+        val parameter = self.paramIndexForArg(params: declaration.params, args: args, argIdx: index)
+        if parameter >= declaration.params.count() { return 0U64 }
+        return self.funcParamAt(params: declaration.params, index: parameter).ty
     }
 
-    inout fn methodArgTypeSpans(methodName: Span, argLabel: Span) -> U64 {
-        if methodName.end <= methodName.start || argLabel.end <= argLabel.start {
-            return 0U64
+    // Reserve the final contiguous argument range before recursive lowering.
+    // The label-only rows are private to this construction until all values
+    // have been filled; nested expressions append to their own ranges.
+    inout fn lowerArgs(args: Array[ArgAst], name: Span, hasReceiver: Bool = false) -> Result[ArgRange, CompileDiagnostic] {
+        val range = <ArgRange start=self.arena.argPool.count() len=args.count() />
+        mut val index = 0U64
+        while index < args.count() {
+            val argument = args[index]
+            mut val label = <Span start=0U64 end=0U64 />
+            if argument.hasLabel {
+                val binding = self.internBytes(s: argument.label)
+                label = <Span start=binding.nameStart end=binding.nameStart + binding.nameLen />
+            }
+            self.arena.argPool.append(self.appendLoweredArg(value: 0U64, isInout: argument.isInout, label: label, hasLabel: argument.hasLabel))
+            index += 1U64
         }
-        return self.callArgTypeByNameIds(nameId: intern(c: inout self, start: methodName.start, len: methodName.end - methodName.start), labelId: intern(c: inout self, start: argLabel.start, len: argLabel.end - argLabel.start), hasReceiver: true)
+        val candidate = self.loweringCallCandidate(name: name, args: range, hasReceiver: hasReceiver)
+        index = 0U64
+        while index < args.count() {
+            val context = self.loweringArgumentType(candidate: candidate, args: range, index: index)
+            val value = (try self.lowerExprWithCtx(e: args[index].value, ctxRef: context))
+            val argument = self.argAt(args: range, index: index)
+            self.arena.argPool.set(i: range.start + index, value: self.appendLoweredArg(value: value, isInout: argument.isInout, label: <Span start=argument.labelStart end=argument.labelStart + argument.labelLen />, hasLabel: argument.hasLabel))
+            index += 1U64
+        }
+        return <Result.Ok value=range />
     }
 
-    inout fn lowerArgs(args: Array[ArgAst], fnName: String) -> Result[Array[Arg], CompileDiagnostic] {
-        mut val out: Array[Arg] = []
-        mut val i: U64 = 0
-        while i < args.count() {
-            val a: ArgAst = args[i]
-            // flow the resolved parameter's type to a context-typed argument literal (a dict
-            // / record / `()` whose type is only known from the parameter). Defensive: 0
-            // falls back to context-free lowering (overloaded / generic / method calls).
-            val actx: U64 = self.callArgType(fnName: fnName, argLabel: a.label)
-            mut val e: U64 = 0
-            if actx != 0U64 {
-                e = (try self.lowerExprWithCtx(e: a.value, ctxRef: actx))
-            } else {
-                e = (try self.lowerExpr(e: a.value))
-            }
-            mut val label: Span = <Span start=0U64 end=0U64 />
-            if a.hasLabel {
-                val lb: Bind = self.internBytes(s: a.label)
-                label = <Span start=lb.nameStart end=lb.nameStart + lb.nameLen />
-            }
-            out.append(self.appendLoweredArg(value: e, isInout: a.isInout, label: label, hasLabel: a.hasLabel))
-            i += 1
+    inout fn lowerSyntaxArgs(expr: SyntaxExpr, name: Span, hasReceiver: Bool = false) -> Result[ArgRange, CompileDiagnostic] {
+        val range = <ArgRange start=self.arena.argPool.count() len=syntaxExprArgCount(file: self.syntax, expr: expr) />
+        mut val index = 0U64
+        while index < range.len {
+            val argument = syntaxArg(file: self.syntax, id: syntaxExprArg(file: self.syntax, expr: expr, index: index))
+            self.arena.argPool.append(self.appendLoweredArg(value: 0U64, isInout: argument.isInout, label: argument.label, hasLabel: argument.hasLabel))
+            index += 1U64
         }
-        return <Result.Ok value=out />
-    }
-
-    // Lower a method call's arguments, flowing each resolved parameter type (via
-    // methodArgType) to a context-typed argument literal. Mirrors lowerArgs but resolves
-    // by method name instead of free-fn name.
-    inout fn lowerMethodArgs(args: Array[ArgAst], methodName: String) -> Result[Array[Arg], CompileDiagnostic] {
-        mut val out: Array[Arg] = []
-        mut val i: U64 = 0
-        while i < args.count() {
-            val a: ArgAst = args[i]
-            val actx: U64 = self.methodArgType(methodName: methodName, argLabel: a.label)
-            mut val e: U64 = 0
-            if actx != 0U64 {
-                e = (try self.lowerExprWithCtx(e: a.value, ctxRef: actx))
-            } else {
-                e = (try self.lowerExpr(e: a.value))
-            }
-            mut val label: Span = <Span start=0U64 end=0U64 />
-            if a.hasLabel {
-                val lb: Bind = self.internBytes(s: a.label)
-                label = <Span start=lb.nameStart end=lb.nameStart + lb.nameLen />
-            }
-            out.append(self.appendLoweredArg(value: e, isInout: a.isInout, label: label, hasLabel: a.hasLabel))
-            i += 1
+        val candidate = self.loweringCallCandidate(name: name, args: range, hasReceiver: hasReceiver)
+        index = 0U64
+        while index < range.len {
+            val argument = syntaxArg(file: self.syntax, id: syntaxExprArg(file: self.syntax, expr: expr, index: index))
+            val context = self.loweringArgumentType(candidate: candidate, args: range, index: index)
+            val value = (try self.lowerSyntaxExprWithCtx(id: argument.value, ctxRef: context))
+            self.arena.argPool.set(i: range.start + index, value: self.appendLoweredArg(value: value, isInout: argument.isInout, label: argument.label, hasLabel: argument.hasLabel))
+            index += 1U64
         }
-        return <Result.Ok value=out />
-    }
-
-    // SyntaxFile counterpart of lowerArgs.  The source name remains a span so
-    // contextual literal typing uses the same declaration lookup without
-    // allocating a transient call-name String.
-    inout fn lowerSyntaxArgs(expr: SyntaxExpr, fnName: Span) -> Result[Array[Arg], CompileDiagnostic] {
-        mut val out: Array[Arg] = []
-        mut val i: U64 = 0U64
-        while i < syntaxExprArgCount(file: self.syntax, expr: expr) {
-            val a: SyntaxArg = syntaxArg(file: self.syntax, id: syntaxExprArg(file: self.syntax, expr: expr, index: i))
-            val actx: U64 = self.callArgTypeSpans(fnName: fnName, argLabel: a.label)
-            mut val value: U64 = 0U64
-            if actx != 0U64 {
-                value = (try self.lowerSyntaxExprWithCtx(id: a.value, ctxRef: actx))
-            } else {
-                value = (try self.lowerSyntaxExpr(id: a.value))
-            }
-            out.append(self.appendLoweredArg(value: value, isInout: a.isInout, label: a.label, hasLabel: a.hasLabel))
-            i += 1U64
-        }
-        return <Result.Ok value=out />
-    }
-
-    // SyntaxFile counterpart of lowerMethodArgs.  It is deliberately separate
-    // from free-call context lookup: a receiver call must remain ambiguous
-    // until method candidate selection, exactly as on the value-AST path.
-    inout fn lowerSyntaxMethodArgs(expr: SyntaxExpr, methodName: Span) -> Result[Array[Arg], CompileDiagnostic] {
-        mut val out: Array[Arg] = []
-        mut val i: U64 = 0U64
-        while i < syntaxExprArgCount(file: self.syntax, expr: expr) {
-            val a: SyntaxArg = syntaxArg(file: self.syntax, id: syntaxExprArg(file: self.syntax, expr: expr, index: i))
-            val actx: U64 = self.methodArgTypeSpans(methodName: methodName, argLabel: a.label)
-            mut val value: U64 = 0U64
-            if actx != 0U64 {
-                value = (try self.lowerSyntaxExprWithCtx(id: a.value, ctxRef: actx))
-            } else {
-                value = (try self.lowerSyntaxExpr(id: a.value))
-            }
-            out.append(self.appendLoweredArg(value: value, isInout: a.isInout, label: a.label, hasLabel: a.hasLabel))
-            i += 1U64
-        }
-        return <Result.Ok value=out />
+        return <Result.Ok value=range />
     }
 
     inout fn appendLoweredArg(value: U64, isInout: Bool, label: Span, hasLabel: Bool) -> Arg {

@@ -1,45 +1,26 @@
-use /Frontend only { Comp }
-use /Ir only { Bind, Func, Param }
+// Context comes from the visible callable and its whole label sequence.
 use @Std/Io only { write }
+use @Std/Core only { assert }
 
-fn add(compiler: inout Comp, name: Bind, label: Bind, typeRef: U64, receiver: Bool = false, generic: Bool = false) {
-    mut val binders: Array[Bind] = []
-    if generic { binders.append(name) }
-    val parameters = compiler.pushFuncParams(params: [<Param nameStart=label.nameStart nameLen=label.nameLen nameId=label.nameId
-        tyStart=0U64 tyLen=0U64 tyIsArray=false ty=typeRef isInout=false isMove=false isBorrow=false
-        noLabel=false hasDefault=false defaultExpr=0U64 />])
-    // Deliberately register only in Arena: this query includes non-callable rows.
-    compiler.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
-        typeParams=compiler.pushFuncBinds(binds: binders) params=parameters
-        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64
-        hasRecv=receiver recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false
-        isAssoc=false isAsync=false isExtern=false />)
+struct Value { val number: I64 = 7I64 }
+struct Reader {}
+impl Reader {
+    fn pick(value: Value) -> I64 { return value.number }
 }
-fn check(compiler: inout Comp, name: Bind, label: Bind, expected: U64, receiver: Bool = false) {
-    if compiler.callArgTypeByNameIds(nameId: name.nameId, labelId: label.nameId, hasReceiver: receiver) != expected {
-        panic "argument context changed"
-    }
+fn pick(value: Value) -> I64 { return value.number }
+fn pick(otherValue: Value) -> I64 { return otherValue.number }
+fn other(value: Value) -> I64 { return value.number }
+fn unlabeled(value~: Value) -> I64 { return value.number }
+fn defaults(first: Value = <Value />, second: Value) -> I64 {
+    return first.number + second.number
 }
 fn main() {
-    mut val compiler: Comp = <Comp />
-    val name = compiler.internBytes(s: "pick")
-    val other = compiler.internBytes(s: "other")
-    val label = compiler.internBytes(s: "value")
-    val otherLabel = compiler.internBytes(s: "otherValue")
-    check(compiler: inout compiler, name: name, label: label, expected: 0U64)
-    add(compiler: inout compiler, name: name, label: label, typeRef: 11U64, generic: true)
-    check(compiler: inout compiler, name: name, label: label, expected: 0U64)
-    add(compiler: inout compiler, name: other, label: label, typeRef: 22U64)
-    add(compiler: inout compiler, name: name, label: label, typeRef: 33U64, receiver: true)
-    add(compiler: inout compiler, name: name, label: label, typeRef: 44U64)
-    check(compiler: inout compiler, name: name, label: label, expected: 44U64)
-    check(compiler: inout compiler, name: name, label: label, expected: 33U64, receiver: true)
-    check(compiler: inout compiler, name: name, label: otherLabel, expected: 0U64)
-    // A second eligible function is ambiguous even if its parameter label differs.
-    add(compiler: inout compiler, name: name, label: otherLabel, typeRef: 55U64)
-    check(compiler: inout compiler, name: name, label: label, expected: 0U64)
-    check(compiler: inout compiler, name: name, label: otherLabel, expected: 0U64)
-    check(compiler: inout compiler, name: name, label: label, expected: 33U64, receiver: true)
-    if compiler.decls.callableCount() != 0U64 { panic "fixture registered a callable" }
+    val reader = <Reader />
+    assert(pick(value: <number=11I64 />) == 11I64)
+    assert(pick(otherValue: <number=22I64 />) == 22I64)
+    assert(other(value: <number=33I64 />) == 33I64)
+    assert(reader.pick(value: <number=44I64 />) == 44I64)
+    assert(unlabeled(<number=55I64 />) == 55I64)
+    assert(defaults(second: </>) == 14I64)
     write(s: "call-argument-name-context-ok\n")
 }

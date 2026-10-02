@@ -1,0 +1,27 @@
+use @Std/Io only { print }
+
+struct Number { val raw: I64 }
+impl Number {
+    factory(value: I64) { return <Number raw=value /> }
+    factory(value: String) { return <Number raw=42I64 /> }
+}
+
+struct Box { val value: I64 }
+impl Box {
+    factory(value: String) { return <Box value=43I64 /> }
+}
+
+fn consume(number: Number) -> I64 { return number.raw }
+fn consume(text: String) -> String { return text }
+
+fn main() {
+    val integer: Number = <Number value=7I64 />
+    val text: Number = <Number value="42" />
+    val inferred: Number = <value=8I64 />
+    print(integer.raw)
+    print(text.raw)
+    print(inferred.raw)
+    print(consume(number: <value=9I64 />))
+    val boxed: Box = <value="43" />
+    print(boxed.value)
+}
