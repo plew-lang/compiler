@@ -18,14 +18,14 @@ pub impl DeriveShow as Derive {
                 s.put(d.name)
                 s.put(" as Show {{\n    fn show() -> String {{\n        return \"")
                 s.put(d.name)
-                s.put(" {{ ")
+                s.put(" {{{{ ")
                 mut val i: U64 = 0
                 while i < d.fields.count() {
                     s.put(d.fields[i].name)
                     s.put(" ")
                     i += 1
                 }
-                s.put("}}\"\n    }}\n}}\n")
+                s.put("}}}}\"\n    }}\n}}\n")
                 return s.finish()
             }
             _ => { return "" }
