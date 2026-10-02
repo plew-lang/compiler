@@ -1,5 +1,6 @@
 // Lexically valid source spans can fail semantically without terminating the host.
 use ../../../src/StringLiteral only { decodeStringLiteral }
+use @Std/Core only { assert }
 use @Std/Io only { print }
 
 fn inspect(source: Array[U8]) {
@@ -12,9 +13,32 @@ fn inspect(source: Array[U8]) {
 }
 
 fn main() {
+    // Literal braces and a Unicode brace are decoded exactly once.
+    expect(source: [34U8, 123U8, 123U8, 125U8, 125U8, 34U8], bytes: [123U8, 125U8, 0U8])
+    expect(source: [34U8, 92U8, 117U8, 123U8, 55U8, 98U8, 125U8, 34U8], bytes: [123U8, 0U8])
+    // Head/middle/tail delimiters are not payload, including empty segments.
+    expect(source: [34U8, 97U8, 123U8], bytes: [97U8, 0U8])
+    expect(source: [125U8, 98U8, 123U8], bytes: [98U8, 0U8])
+    expect(source: [125U8, 99U8, 34U8], bytes: [99U8, 0U8])
+    expect(source: [125U8, 34U8], bytes: [0U8])
+    // Physical LF/CRLF folding removes indentation, but not a second newline.
+    expect(source: [34U8, 97U8, 92U8, 10U8, 32U8, 9U8, 98U8, 34U8], bytes: [97U8, 98U8, 0U8])
+    expect(source: [34U8, 97U8, 92U8, 13U8, 10U8, 32U8, 98U8, 34U8], bytes: [97U8, 98U8, 0U8])
+    expect(source: [34U8, 92U8, 10U8, 32U8, 10U8, 34U8], bytes: [10U8, 0U8])
+    expect(source: [34U8, 97U8, 10U8, 98U8, 34U8], bytes: [97U8, 10U8, 98U8, 0U8])
     // "\u{110000}" and "\u{D800}" expressed as source bytes.
     inspect(source: [34U8, 92U8, 117U8, 123U8, 49U8, 49U8, 48U8, 48U8, 48U8, 48U8, 125U8, 34U8])
     inspect(source: [34U8, 92U8, 117U8, 123U8, 68U8, 56U8, 48U8, 48U8, 125U8, 34U8])
     // A later valid U+10000 must still produce F0 90 80 80 and the trailing NUL.
     inspect(source: [34U8, 92U8, 117U8, 123U8, 49U8, 48U8, 48U8, 48U8, 48U8, 125U8, 34U8])
+}
+
+fn expect(source: Array[U8], bytes: Array[U8]) {
+    match decodeStringLiteral(source: source, start: 0U64, len: source.count()) {
+        Result.Ok(val value) => {
+            assert(value.count() == bytes.count())
+            for index in 0U64..<bytes.count() { assert(value[index] == bytes[index]) }
+        }
+        Result.Err(error: _) => { panic "expected valid literal bytes" }
+    }
 }

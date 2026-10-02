@@ -1,4 +1,5 @@
-// Decode a lexically valid quoted string span independently of LLVM and Comp.
+// Decode a lexically valid string or interpolation segment independently of LLVM
+// and Comp. Both forms include one opening and one closing delimiter byte.
 // The result includes a trailing NUL for native string storage.
 use @Std/Core only { truncU8 }
 //
@@ -11,10 +12,6 @@ fn escByte(nx: U8) -> U8 {
     return nx
 }
 
-// Decode a string literal's source span (start = the opening quote) to its actual
-// bytes plus a trailing NUL, mirroring strDecodedLen's escape model (a backslash
-// escapes the next byte). The trailing NUL makes it usable as a C string for
-// LLVMBuildGlobalStringPtr; the PlewString length excludes it.
 // Value of one ASCII hex digit (0-9 / a-f / A-F); 0 for anything else.
 fn hexDigitVal(b: U8) -> U64 {
     if b >= 48U8 && b <= 57U8 { return (b - 48U8) as U64 }
@@ -52,7 +49,11 @@ pub fn decodeStringLiteral(source: Array[U8], start: U64, len: U64) -> Result[Ar
     val end: U64 = start + len - 1
     while j < end {
         if source[j] == 92 {
-            if source[j + 1] == 117U8 {
+            if source[j + 1] == 10U8 || (source[j + 1] == 13U8 && j + 2U64 < end && source[j + 2U64] == 10U8) {
+                j += 2U64
+                if source[j - 1U64] == 13U8 { j += 1U64 }
+                while j < end && (source[j] == 32U8 || source[j] == 9U8) { j += 1U64 }
+            } else if source[j + 1] == 117U8 {
                 // \u{XXXX}: parse hex code point between braces, UTF-8 encode it.
                 mut val k: U64 = j + 2
                 if k < end && source[k] == 123U8 { k += 1 }
@@ -81,10 +82,12 @@ pub fn decodeStringLiteral(source: Array[U8], start: U64, len: U64) -> Result[Ar
             }
         } else {
             out.append(source[j])
+            if (source[j] == 123U8 || source[j] == 125U8) && j + 1U64 < end && source[j + 1U64] == source[j] {
+                j += 1U64
+            }
             j += 1
         }
     }
     out.append(0)
     return <Result.Ok value=out />
 }
-
