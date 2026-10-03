@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+trait Act { inout fn act() -> I64 }
+struct Counter { mut val n: I64 }
+impl Counter as Act {
+ inout fn act(value: I64 = 2I64) -> I64 { self.n += value return self.n }
+}
+mut val counter = <Counter n=1I64 />
+fn main() { print(counter#Act.act()) }

@@ -330,7 +330,9 @@ pub fn midPlaceForRecordedIdent(c: inout Comp, state: MidBuildState, exprId: U64
     if !local.found {
         match c.recordedGlobalAddress(exprId: exprId) {
             Optional.Some(v: val global) => {
-                if global.typeTerm != typeTerm { return <MidPlaceLookup /> }
+                // A receiver view selects methods without changing storage.
+                // Preserve the declared global type just as for lexical locals.
+                if !c.typeRefEq(a: c.typeRefWithoutOuterViews(ref: global.typeTerm), b: c.typeRefWithoutOuterViews(ref: typeTerm)) { return <MidPlaceLookup /> }
                 return <MidPlaceLookup found=true place=<MidPlace rootTag=2U64 local=0U64 globalTarget=global.declarationTarget globalMutable=global.mutable typeTerm=global.typeTerm /> />
             }
             _ => { return <MidPlaceLookup /> }

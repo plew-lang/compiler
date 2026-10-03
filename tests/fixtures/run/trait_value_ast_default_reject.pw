@@ -1,0 +1,24 @@
+use /Frontend only { Comp }
+use @Plew/Syntax as Syntax
+use @Std/Io only { print }
+fn main() {
+    val source = "trait T {{ fn foo(n: I64 = 1I64) -> I64 }}\n"
+    mut val lexer = <Syntax.Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    Syntax.lex(lx: inout lexer)
+    mut val parser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val values = Syntax.parseProgramAst(p: inout parser)
+    mut val legacy = <Comp />
+    legacy.appendSrc(from: source.bytes())
+    for val item in values { legacy.predeclareTraitItem(item: item) }
+    for val item in values {
+        match item {
+            Syntax.TopItemAst.Trait(t: val declaration) => {
+                match legacy.lowerTrait(t: declaration) {
+                    Result.Ok(value: _) => { print("value AST accepted") }
+                    Result.Err(error: _) => { print("value AST rejected") }
+                }
+            }
+            _ => {}
+        }
+    }
+}

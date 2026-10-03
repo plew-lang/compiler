@@ -1359,6 +1359,18 @@ pub impl Comp {
         return <Result.Ok value=<Func nameStart=sig.name.start nameLen=sig.name.end - sig.name.start nameId=intern(c: inout self, start: sig.name.start, len: sig.name.end - sig.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=sig.selfInout selfMove=sig.selfMove isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=sig.isAsync isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=sig.name.start signatureBounds=self.pushConformBounds(bounds: signatureBounds) /> />
     }
 
+    inout fn validateTraitRequirement(requirement: Func) -> Result[(), CompileDiagnostic] {
+        mut val index = 0U64
+        while index < requirement.params.count() {
+            val parameter = self.funcParamAt(params: requirement.params, index: index)
+            if parameter.hasDefault {
+                return <Result.Err error=self.diagnosticAt(offset: parameter.nameStart, msg: "trait requirements cannot declare default arguments; put the default on the implementation and declare the omitted-argument form as a separate requirement") />
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn lowerTrait(t: TraitAst) -> Result[(), CompileDiagnostic] {
         val nameStart: U64 = t.nameSpan.start
         val nameLen: U64 = t.nameSpan.end - t.nameSpan.start
@@ -1393,7 +1405,9 @@ pub impl Comp {
         mut val reqs: Array[Func] = []
         mut val ri: U64 = 0
         while ri < t.reqs.count() {
-            reqs.append((try self.lowerSigToFunc(sig: t.reqs[ri], isExtern: false, isCExtern: false)))
+            val requirement = try self.lowerSigToFunc(sig: t.reqs[ri], isExtern: false, isCExtern: false)
+            try self.validateTraitRequirement(requirement: requirement)
+            reqs.append(requirement)
             ri += 1
         }
         mut val associatedBounds: Array[TraitAssociatedBound] = []
@@ -1456,15 +1470,9 @@ pub impl Comp {
         i = 0U64
         while i < syntaxTraitReqCount(file: self.syntax, trait: t) {
             val requirement = syntaxSig(file: self.syntax, id: syntaxTraitReq(file: self.syntax, trait: t, index: i))
-            mut val parameterIndex = 0U64
-            while parameterIndex < syntaxSigParamCount(file: self.syntax, sig: requirement) {
-                val parameter = syntaxParam(file: self.syntax, id: syntaxSigParam(file: self.syntax, sig: requirement, index: parameterIndex))
-                if parameter.hasDefault {
-                    return <Result.Err error=self.diagnosticAt(offset: parameter.name.start, msg: "trait requirements cannot declare default arguments; put the default on the implementation and declare the omitted-argument form as a separate requirement") />
-                }
-                parameterIndex += 1U64
-            }
-            reqs.append((try self.lowerSyntaxSigToFunc(sig: requirement, isExtern: false, isCExtern: false)))
+            val lowered = try self.lowerSyntaxSigToFunc(sig: requirement, isExtern: false, isCExtern: false)
+            try self.validateTraitRequirement(requirement: lowered)
+            reqs.append(lowered)
             i += 1U64
         }
         mut val associatedBounds: Array[TraitAssociatedBound] = []

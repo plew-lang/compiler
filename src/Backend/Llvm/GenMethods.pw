@@ -91,9 +91,10 @@ pub impl LlvmCtx {
             val body = c.arena.bodyInstanceAt(index: bodyId - 1U64)
             if c.arena.bodyIsCallable(bodyId: bodyId) && body.fnIdx < c.arena.functionCount() {
                 val f = c.arena.functionAt(index: body.fnIdx)
-                // Provided copies are ordinary concrete method bodies. They
-                // must be declared even when requested without their caller.
-                if f.hasRecv && !f.isExtern && !c.methodRecvIsTrait(f: f) {
+                // The closed body graph already contains executable instances.
+                // Trait-origin declarations may have concrete environments,
+                // including when JIT requests a body without its caller.
+                if f.hasRecv && !f.isExtern {
                     if self.genMethSlotFor(bodyId: bodyId) == self.genMethBody.count() {
                         try self.declareOneGenMethod(c: inout c, bodyId: bodyId)
                     }
