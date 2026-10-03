@@ -306,7 +306,7 @@ pub impl Comp {
                         val receiverTerm: U64 = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen) }
                         val originSerial: U64 = self.nextExprOriginSerial
                         self.nextExprOriginSerial += 1U64
-                        try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId originSerial=originSerial receiverTerm=receiverTerm receiverIsType=true />)
+                        try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=originSerial receiverTerm=receiverTerm receiverIsType=true />)
                     }
                 }
             }
@@ -603,7 +603,7 @@ pub impl Comp {
                     self.arena.exprs[exprId] = <Expr.Method recv=recv nameStart=callStart nameLen=callLen args=args />
                     val origin = self.nextExprOriginSerial
                     self.nextExprOriginSerial += 1U64
-                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId originSerial=origin receiverTerm=receiver receiverIsType=true />)
+                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=receiver receiverIsType=true />)
                     return <Result.Ok value=() />
                 }
                 val memberwise = (try self.memberwiseConstructionMatches(receiver: receiver, fields: fields, offset: useOffset))
@@ -656,7 +656,7 @@ pub impl Comp {
                     self.arena.exprs[exprId] = <Expr.Method recv=recv nameStart=callStart nameLen=callLen args=args />
                     val origin = self.nextExprOriginSerial
                     self.nextExprOriginSerial += 1U64
-                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId originSerial=origin receiverTerm=receiver receiverIsType=true selectedFactory=<Optional.Some v=selected /> />)
+                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=receiver receiverIsType=true selectedFactory=<Optional.Some v=selected /> />)
                 } else {
                     self.arena.resolvedMemberwiseFactories.insert(exprId)
                     self.normalizeMemberwiseDefaultsAt(exprId: exprId)

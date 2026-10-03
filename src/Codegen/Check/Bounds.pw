@@ -1269,7 +1269,7 @@ pub impl Comp {
                     }
                     val expectedResult = self.groundTermInEnvironment(ref: self.traitBoundTypeTerm(ref: self.semanticCallableReturnTerm(function: requirement), bound: traitBound, traitIndex: traitIndex), params: parameters, values: arguments)
                     val actualResult = self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: function), params: [], values: [], selfRef: traitBound.subject)
-                    if !self.typeRefEq(a: expectedResult, b: actualResult) {
+                    if !(self.callableResultIsUnit(ref: expectedResult) && self.callableResultIsUnit(ref: actualResult)) && !self.typeRefEq(a: expectedResult, b: actualResult) {
                         if requirement.isFactory { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "factory return type does not match the trait requirement") /> }
                         return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation return type does not match the trait requirement") />
                     }
@@ -1382,7 +1382,7 @@ pub impl Comp {
         }
         val expectedResult = self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: witness), params: [], values: [], selfRef: witness.recvTy)
         val actualResult = self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: target), params: [], values: [], selfRef: witness.recvTy)
-        if !self.unifyPatterns(a: actualResult, aSide: 0U64, b: expectedResult, bSide: 1U64, aParams: targetParameters, bParams: rigidParameters, binds: inout bindings) { return false }
+        if !(self.callableResultIsUnit(ref: expectedResult) && self.callableResultIsUnit(ref: actualResult)) && !self.unifyPatterns(a: actualResult, aSide: 0U64, b: expectedResult, bSide: 1U64, aParams: targetParameters, bParams: rigidParameters, binds: inout bindings) { return false }
         return true
     }
 

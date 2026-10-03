@@ -2695,6 +2695,7 @@ pub impl ChainSite { factory }
 // An explicit call to a method named index remains an ordinary method call.
 pub enum SyntheticCallKind {
     Ordinary
+    Factory
     IndexRead
     IndexWrite
     Format

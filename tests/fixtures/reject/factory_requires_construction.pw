@@ -1,0 +1,3 @@
+struct P {val n:I64}
+impl P {factory real(n:I64){return <P n=n />}}
+fn main(){val p=P.real(n:1I64)}

@@ -1,0 +1,5 @@
+use @Std/Io only {print}
+struct P {}
+impl P {assoc fn fake()->I64{return 42I64}}
+fn main(){val p=<P.fake />
+print(p)}

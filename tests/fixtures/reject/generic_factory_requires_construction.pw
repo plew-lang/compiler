@@ -1,0 +1,5 @@
+trait Maker { factory make(value: I64) }
+fn build[T]() -> T where T: Maker { return T.make(value: 1I64) }
+struct Value { val number: I64 }
+impl Value as Maker { factory make(value: I64) { return <Value number=value /> } }
+fn main() { val value = build[Value]() }

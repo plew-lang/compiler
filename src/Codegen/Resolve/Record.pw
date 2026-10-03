@@ -324,6 +324,7 @@ pub impl Comp {
     inout fn recordParametricFreeCall(exprId: U64, callee: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         if callee >= self.arena.functionCount() { return <Result.Ok value=() /> }
         val f: Func = self.arena.functionAt(index: callee)
+        try self.checkCallDeclarationKind(exprId: exprId, declaration: f)
         mut val calleeArgs: Array[U64] = []
         if f.typeParams.count() > 0U64 {
             calleeArgs = self.inferParametricFnArgs(f: f, args: args)
@@ -513,6 +514,7 @@ pub impl Comp {
     inout fn recordParametricMethodCall(exprId: U64, callee: U64, receiverSource: CallTemplateReceiver, receiverTerm: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         if callee >= self.arena.functionCount() { return <Result.Ok value=() /> }
         val f: Func = self.arena.functionAt(index: callee)
+        try self.checkCallDeclarationKind(exprId: exprId, declaration: f)
         // Associated factories are syntactically method-shaped but have a
         // type qualifier, not a value receiver.  Their selected declaration
         // is complete without a receiver TypeTerm; the finalizer supplies the

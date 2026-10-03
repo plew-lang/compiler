@@ -5543,7 +5543,7 @@ pub impl Comp {
         // for a compiler-created occurrence.
         val fromOriginSerial: U64 = self.nextExprOriginSerial
         self.nextExprOriginSerial += 1U64
-        try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=fromCall originSerial=fromOriginSerial receiverTerm=stageRef />)
+        try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=fromCall kind=<SyntheticCallKind.Factory /> originSerial=fromOriginSerial receiverTerm=stageRef />)
         mut val someStmts: Array[U64] = []
         someStmts.append(self.pushStmt(s: <Stmt.Give value=fromCall />))
         val someBlk: U64 = self.pushBlock(stmts: someStmts)
@@ -5559,7 +5559,7 @@ pub impl Comp {
         self.arena.exprSpanStart[emptyCall] = memberStart
         val emptyOriginSerial: U64 = self.nextExprOriginSerial
         self.nextExprOriginSerial += 1U64
-        try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=emptyCall originSerial=emptyOriginSerial receiverTerm=stageRef />)
+        try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=emptyCall kind=<SyntheticCallKind.Factory /> originSerial=emptyOriginSerial receiverTerm=stageRef />)
         mut val noneStmts: Array[U64] = []
         noneStmts.append(self.pushStmt(s: <Stmt.Give value=emptyCall />))
         val noneBlk: U64 = self.pushBlock(stmts: noneStmts)

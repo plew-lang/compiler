@@ -44,7 +44,7 @@ pub impl Comp {
             SyntheticCallKind.IndexWrite => { return self.coreTraitOwner(name: "IndexSet", arity: 1U64) }
             SyntheticCallKind.Format => { return self.coreTraitOwner(name: "Format", arity: 0U64) }
             SyntheticCallKind.TextWrite => { return self.coreTraitOwner(name: "TextOutput", arity: 0U64) }
-            SyntheticCallKind.Ordinary => { return 0U64 }
+            SyntheticCallKind.Ordinary | SyntheticCallKind.Factory => { return 0U64 }
         }
     }
 
@@ -55,10 +55,28 @@ pub impl Comp {
                 SyntheticCallKind.Format => { return "string interpolation requires a Format implementation" }
                 SyntheticCallKind.TextWrite => { return "string construction requires a TextOutput implementation" }
                 SyntheticCallKind.IndexRead | SyntheticCallKind.IndexWrite => { return "subscript requires an Index implementation for reading or an IndexSet implementation for writing" }
-                SyntheticCallKind.Ordinary => {}
+                SyntheticCallKind.Ordinary | SyntheticCallKind.Factory => {}
             }
         }
         return "no matching implementation for the synthesized call"
+    }
+
+    fn isFactoryCall(exprId: U64) -> Bool {
+        val index = self.syntheticCallSiteIndex(exprId: exprId)
+        if index >= self.decls.syntheticCallSites.count() { return false }
+        match self.decls.syntheticCallSites[index].kind {
+            SyntheticCallKind.Factory => { return true }
+            _ => { return false }
+        }
+    }
+
+    inout fn checkCallDeclarationKind(exprId: U64, declaration: Func) -> Result[(), CompileDiagnostic] {
+        val construction = self.isFactoryCall(exprId: exprId)
+        if construction != declaration.isFactory {
+            val message = if construction { give "construction syntax requires a factory declaration" } else { give "a factory must be called using construction syntax" }
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: message) />
+        }
+        return <Result.Ok value=() />
     }
 
     inout fn writtenCallReceiverTemplate(exprId: U64, receiverExpr: U64) -> Result[CallTemplateReceiver, CompileDiagnostic] {
@@ -436,7 +454,6 @@ pub impl Comp {
             val promise = self.internBytes(s: "Promise")
             return self.pushType(t: <TypeRef nameStart=promise.nameStart nameLen=promise.nameLen args=[0U64] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
         }
-        if self.callableResultIsUnit(ref: function.retTy) { return 0U64 }
         return function.retTy
     }
 
@@ -893,6 +910,15 @@ pub impl Comp {
     }
 
     inout fn recordStaticMethodTemplate(exprId: U64, receiverTerm: U64, receiver: CallTemplateReceiver, args: ArgRange, resolution: StaticMemberResolution, resultTerm: U64) -> Result[(), CompileDiagnostic] {
+        match resolution {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIndex, reqIdx: val requirementIndex) => {
+                try self.checkCallDeclarationKind(exprId: exprId, declaration: self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: requirementIndex))
+            }
+            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => {
+                try self.checkCallDeclarationKind(exprId: exprId, declaration: self.arena.functionAt(index: callee))
+            }
+            _ => {}
+        }
         // Selection fixes contextual construction arguments even when the
         // receiver is still a type parameter. Publish those expressions before
         // freezing argument sources; Mid must never receive an unresolved Make.
@@ -1255,7 +1281,7 @@ pub impl Comp {
     fn functionDeclarationReturnsUnit(f: Func) -> Bool {
         // An async declaration's omitted payload result still yields a
         // Promise at the call site; it is not a Unit-valued call.
-        return !f.isAsync && self.callableResultIsUnit(ref: f.retTy)
+        return !f.hasRet && !f.isAsync
     }
 
     inout fn functionTypeReturnsUnit(ref: U64) -> Bool {

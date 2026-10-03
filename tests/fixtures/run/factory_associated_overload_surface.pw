@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+struct Entry { val number: I64 }
+impl Entry {
+ factory make(value: I64) { return <Entry number=value /> }
+ assoc fn make(value: String) -> I64 { return 7I64 }
+}
+fn main() {
+ val entry = <Entry.make value=2I64 />
+ print(entry.number)
+ print(Entry.make(value: "text"))
+}

@@ -6,6 +6,8 @@ struct First {}
 struct Second {}
 struct Third {}
 struct Fourth {}
+struct Fifth {}
+struct Sixth {}
 
 impl First as Implicit {
     fn act(value: I64 = 1I64) -> () { print(value) return () }
@@ -18,6 +20,9 @@ impl Third as Implicit { fn act() via perform }
 impl Fourth { fn perform(value: I64 = 4I64) { print(value) } }
 impl Fourth as Explicit { fn act() -> () via perform }
 
+impl Fifth as Implicit { fn act() -> () { print(5I64) return () } }
+impl Sixth as Explicit { fn act() { print(6I64) } }
+
 fn implicit[T](value: T) where T: Implicit { value.act() }
 fn explicit[T](value: T) where T: Explicit { value.act() }
 fn main() {
@@ -25,4 +30,6 @@ fn main() {
     explicit(value: <Second />)
     implicit(value: <Third />)
     explicit(value: <Fourth />)
+    implicit(value: <Fifth />)
+    explicit(value: <Sixth />)
 }

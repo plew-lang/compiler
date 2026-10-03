@@ -535,7 +535,7 @@ pub impl Comp {
     // A via declaration owns its requirement contract. Its synthesized body
     // forwards through an ordinary call, so argument passing, constraints and
     // ownership use the same semantic pipeline as an authored implementation.
-    inout fn lowerViaBody(params: Array[Param], receiver: Bind, receiverType: U64, target: Bind, isAssoc: Bool, isAsync: Bool, hasRet: Bool, offset: U64) -> Result[U64, CompileDiagnostic] {
+    inout fn lowerViaBody(params: Array[Param], receiver: Bind, receiverType: U64, target: Bind, isAssoc: Bool, isAsync: Bool, hasRet: Bool, resultType: U64, isFactory: Bool, offset: U64) -> Result[U64, CompileDiagnostic] {
         mut val arguments: Array[Arg] = []
         for val parameter in params {
             mut val value = self.pushExpr(e: <Expr.Ident start=parameter.nameStart len=parameter.nameLen />)
@@ -552,12 +552,21 @@ pub impl Comp {
         val call = self.pushExpr(e: <Expr.Method recv=receiverExpression nameStart=target.nameStart nameLen=target.nameLen args=self.pushArgs(args: arguments) />)
         self.arena.exprSpanStart[call] = offset
         if isAssoc {
-            try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call originSerial=self.arena.exprOriginSerial[call] receiverTerm=receiverType receiverIsType=true />)
+            try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call kind=if isFactory { give <SyntheticCallKind.Factory /> } else { give <SyntheticCallKind.Ordinary /> } originSerial=self.arena.exprOriginSerial[call] receiverTerm=receiverType receiverIsType=true />)
         }
         mut val result = call
         if isAsync {
             result = self.pushExpr(e: <Expr.Await operand=call />)
             self.arena.exprSpanStart[result] = offset
+        }
+        // Unit forwarding preserves the source ABI without treating a void
+        // call as a value. Signature validation independently requires the
+        // target result to be Unit, so this cannot discard a non-Unit result.
+        if hasRet && self.callableResultIsUnit(ref: resultType) {
+            val effect = self.pushStmt(s: <Stmt.ExprStmt expr=result />)
+            val unit = self.pushExpr(e: <Expr.Make typeStart=0U64 typeLen=0U64 variantStart=0U64 variantLen=0U64 isEnum=false ty=resultType fields=self.pushMakeFields(fields: []) />)
+            val finish = self.pushStmt(s: <Stmt.Return value=unit hasValue=true offset=offset />)
+            return <Result.Ok value=self.pushBlock(stmts: [effect, finish]) />
         }
         val statement = if hasRet {
             give self.pushStmt(s: <Stmt.Return value=result hasValue=true offset=offset />)
@@ -591,16 +600,18 @@ pub impl Comp {
 
     inout fn createCallableFormWitness(sourceIndex: U64, requirement: Func, parameters: FuncParamRange) -> Result[U64, CompileDiagnostic] {
         val source = self.arena.functionAt(index: sourceIndex)
+        val unitBridge = !source.isAsync && self.callableResultIsUnit(ref: source.retTy) && self.callableResultIsUnit(ref: requirement.retTy)
+        val result = if unitBridge { give requirement } else { give source }
         val receiver = <Bind nameStart=source.recvStart nameLen=source.recvLen fieldStart=source.recvStart fieldLen=source.recvLen />
         val target = <Bind nameStart=source.nameStart nameLen=source.nameLen fieldStart=source.nameStart fieldLen=source.nameLen />
         val body = try self.lowerViaBody(params: self.copyFuncParams(params: parameters), receiver: receiver,
             receiverType: source.recvTy, target: target, isAssoc: source.isAssoc, isAsync: source.isAsync,
-            hasRet: source.hasRet, offset: source.defOffset)
+            hasRet: result.hasRet, resultType: result.retTy, isFactory: source.isFactory, offset: source.defOffset)
         val index = self.arena.functionCount()
         try self.registerDeclaredFunc(f: <Func nameStart=requirement.nameStart nameLen=requirement.nameLen nameId=requirement.nameId
             recvId=source.recvId recvTy=source.recvTy recvPatternParams=source.recvPatternParams recvTraitArgs=source.recvTraitArgs
-            typeParams=source.typeParams params=parameters hasRet=source.hasRet retStart=source.retStart retLen=source.retLen
-            retIsArray=source.retIsArray retTy=source.retTy body=body hasRecv=source.hasRecv recvStart=source.recvStart recvLen=source.recvLen
+            typeParams=source.typeParams params=parameters hasRet=result.hasRet retStart=result.retStart retLen=result.retLen
+            retIsArray=result.retIsArray retTy=result.retTy body=body hasRecv=source.hasRecv recvStart=source.recvStart recvLen=source.recvLen
             selfInout=source.selfInout selfMove=source.selfMove isAssoc=source.isAssoc isFactory=source.isFactory
             isAnonymousFactory=source.isAnonymousFactory isAsync=source.isAsync isExtern=false isPub=source.isPub extId=source.extId
             originTraitId=source.originTraitId originTraitOwner=source.originTraitOwner originTraitArity=source.originTraitArity
@@ -619,7 +630,7 @@ pub impl Comp {
         return <Result.Ok value=index />
     }
 
-    fn conformanceHasDefaultParameters(conformance: Conform) -> Bool {
+    fn conformanceNeedsCallableForms(conformance: Conform, traitIndex: U64) -> Bool {
         mut val index = 0U64
         while index < conformance.witnessFuncIds.count() {
             val source = self.arena.functionAt(index: self.conformFuncIdAt(ids: conformance.witnessFuncIds, index: index))
@@ -627,6 +638,13 @@ pub impl Comp {
             while parameterIndex < source.params.count() {
                 if self.funcParamAt(params: source.params, index: parameterIndex).hasDefault { return true }
                 parameterIndex += 1U64
+            }
+            val trait = self.decls.traitAt(index: traitIndex)
+            mut val requirementIndex = 0U64
+            while requirementIndex < trait.reqs.count() {
+                val requirement = self.traitReqAt(reqs: trait.reqs, index: requirementIndex)
+                if source.nameId == requirement.nameId && source.hasRet != requirement.hasRet && !source.isAsync && self.callableResultIsUnit(ref: source.retTy) && self.callableResultIsUnit(ref: requirement.retTy) { return true }
+                requirementIndex += 1U64
             }
             index += 1U64
         }
@@ -638,29 +656,33 @@ pub impl Comp {
         while conformanceIndex < self.decls.conformCount() {
             val conformance = self.decls.conformAt(index: conformanceIndex)
             val traitIndex = self.resolveTraitDef(cf: conformance)
-            if !conformance.derived && traitIndex < self.decls.traitCount() && self.conformanceHasDefaultParameters(conformance: conformance) {
+            if !conformance.derived && traitIndex < self.decls.traitCount() && self.conformanceNeedsCallableForms(conformance: conformance, traitIndex: traitIndex) {
                 val trait = self.decls.traitAt(index: traitIndex)
                 mut val witnesses = self.copyConformWitnesses(witnesses: conformance.witnessed)
                 mut val functions = self.copyConformFuncIds(ids: conformance.witnessFuncIds)
                 val originalCount = functions.count()
+                mut val changed = false
                 mut val requirementIndex = 0U64
                 while requirementIndex < trait.reqs.count() {
                     val requirement = self.traitReqAt(reqs: trait.reqs, index: requirementIndex)
                     mut val selected = self.arena.functionCount()
+                    mut val selectedSourceIndex = 0U64
                     mut val selectedParameters = <FuncParamRange start=0U64 len=0U64 />
                     mut val found = false
                     mut val sourceIndex = 0U64
                     while sourceIndex < originalCount {
-                        val functionIndex = functions[sourceIndex]
+                        val functionIndex = self.conformFuncIdAt(ids: conformance.witnessFuncIds, index: sourceIndex)
                         val source = self.arena.functionAt(index: functionIndex)
                         val sameName = source.nameId == requirement.nameId || (source.isAnonymousFactory && requirement.isAnonymousFactory)
-                        if sameName && source.params.count() > requirement.params.count() && source.isFactory == requirement.isFactory && source.isAnonymousFactory == requirement.isAnonymousFactory {
+                        val unitBridge = !source.isAsync && source.hasRet != requirement.hasRet && self.callableResultIsUnit(ref: source.retTy) && self.callableResultIsUnit(ref: requirement.retTy)
+                        if sameName && (source.params.count() > requirement.params.count() || (source.params.count() == requirement.params.count() && unitBridge)) && source.isFactory == requirement.isFactory && source.isAnonymousFactory == requirement.isAnonymousFactory {
                             match self.callableFormParameters(source: source, requirement: requirement) {
                                 Optional.Some(v: val parameters) => {
                                     if self.conformanceParameterTypesMatch(cf: conformance, witness: source, requirement: requirement, parameters: parameters) {
                                         if found { return <Result.Err error=self.diagnosticAt(offset: conformance.defOffset, msg: "ambiguous callable form for trait requirement") /> }
                                         found = true
                                         selected = functionIndex
+                                        selectedSourceIndex = sourceIndex
                                         selectedParameters = parameters
                                     }
                                 }
@@ -670,13 +692,19 @@ pub impl Comp {
                         sourceIndex += 1U64
                     }
                     if found {
+                        changed = true
                         val adapter = try self.createCallableFormWitness(sourceIndex: selected, requirement: requirement, parameters: selectedParameters)
-                        witnesses.append(self.arena.functionAt(index: adapter))
-                        functions.append(adapter)
+                        if self.arena.functionAt(index: selected).params.count() == requirement.params.count() {
+                            witnesses.set(i: selectedSourceIndex, value: self.arena.functionAt(index: adapter))
+                            functions.set(i: selectedSourceIndex, value: adapter)
+                        } else {
+                            witnesses.append(self.arena.functionAt(index: adapter))
+                            functions.append(adapter)
+                        }
                     }
                     requirementIndex += 1U64
                 }
-                if functions.count() != originalCount {
+                if changed {
                     self.decls.completeConformWitnesses(index: conformanceIndex, witnesses: self.pushConformWitnesses(witnesses: witnesses), functions: self.pushConformFuncIds(ids: functions))
                 }
             }
@@ -782,7 +810,7 @@ pub impl Comp {
             self.cur.lowerRetTy = self.groundTermInEnvironment(ref: retRef, params: [], values: [], selfRef: recvTy)
         }
         val body: U64 = if m.isVia {
-            give (try self.lowerViaBody(params: params, receiver: recvN, receiverType: recvTy, target: <Bind nameStart=m.viaName.start nameLen=m.viaName.end - m.viaName.start fieldStart=m.viaName.start fieldLen=m.viaName.end - m.viaName.start />, isAssoc: isAssoc, isAsync: m.isAsync, hasRet: effHasRet, offset: m.name.start))
+            give (try self.lowerViaBody(params: params, receiver: recvN, receiverType: recvTy, target: <Bind nameStart=m.viaName.start nameLen=m.viaName.end - m.viaName.start fieldStart=m.viaName.start fieldLen=m.viaName.end - m.viaName.start />, isAssoc: isAssoc, isAsync: m.isAsync, hasRet: effHasRet, resultType: retRef, isFactory: m.isFactory, offset: m.name.start))
         } else {
             give  (try self.lowerSyntaxBlock(id: m.body))
         }
@@ -933,7 +961,7 @@ pub impl Comp {
             self.cur.lowerRetTy = self.groundTermInEnvironment(ref: retRef, params: [], values: [], selfRef: recvTy)
         }
         val body: U64 = if m.isVia {
-            give (try self.lowerViaBody(params: params, receiver: recvN, receiverType: recvTy, target: self.internBytes(s: m.viaName), isAssoc: isAssoc, isAsync: m.isAsync, hasRet: effHasRet, offset: m.nameSpan.start))
+            give (try self.lowerViaBody(params: params, receiver: recvN, receiverType: recvTy, target: self.internBytes(s: m.viaName), isAssoc: isAssoc, isAsync: m.isAsync, hasRet: effHasRet, resultType: retRef, isFactory: m.isFactory, offset: m.nameSpan.start))
         } else {
             give (try self.lowerBlock(b: m.body))
         }
