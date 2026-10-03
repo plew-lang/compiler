@@ -16,7 +16,7 @@ pub impl Score { factory }
 // finalizes the source-level `+` call.
 impl Score as Add[Score] {
     type Output = I64
-    assoc fn add(lhs: Score, rhs: Score) -> I64 { return lhs.value + rhs.value }
+    assoc fn add(lhs~: Score, rhs~: Score) -> I64 { return lhs.value + rhs.value }
 }
 
 fn main() {

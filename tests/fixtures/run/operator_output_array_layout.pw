@@ -8,7 +8,7 @@ pub impl Vector { factory }
 
 impl Point as Sub[Point] {
     type Output = Vector
-    assoc fn sub(lhs: Point, rhs: Point) -> Vector {
+    assoc fn sub(lhs~: Point, rhs~: Point) -> Vector {
         return <Vector dx=lhs.x - rhs.x dy=lhs.y - rhs.y />
     }
 }

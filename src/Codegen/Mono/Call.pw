@@ -890,20 +890,11 @@ pub impl Comp {
     // not an implementation detail that may be reconstructed from its ABI
     // receiver after view normalization.
     inout fn concreteStaticMemberProof(proof: StaticConformanceProof, traitIdx: U64, receiverRef: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
-        match proof {
-            StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => { return <Result.Ok value=self.cur.bodyEnvironment.proof />}
-            StaticConformanceProof.AssumedBound(source: val source) => {
-                match source {
-                    DeclarationBoundRef.MethodReceiver(index: _) => { return <Result.Ok value=self.cur.bodyEnvironment.proof /> }
-                    _ => {}
-                }
-            }
-            _ => {}
-        }
         if traitIdx >= self.decls.traitCount() { return <Result.Ok value=<StaticConformanceProof.Missing /> />}
         val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
         mut val arguments: Array[U64] = []
         match proof {
+            StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: val traitArgs) => { arguments = traitArgs }
             StaticConformanceProof.AssumedBound(source: val source) => { arguments = self.declarationBound(source: source).constraint.key.positionalArgs }
             StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => { arguments = self.assumedSupertraitBound(source: source, steps: steps).constraint.key.positionalArgs }
             _ => {}
@@ -916,7 +907,7 @@ pub impl Comp {
         for val source in self.typeRefViewSources(ref: receiverRef) {
             if source.traitOwner != 0U64 { sourceOwners.append(source.traitOwner) }
         }
-        return self.traitPatternProof(baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=grounded />, patternParams: <PatternBindInput.Values values=[] />, sourceOwners: sourceOwners)
+        return self.traitPatternProof(baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=grounded />, patternParams: <PatternBindInput.Values values=[] />, sourceOwners: sourceOwners, requireUniqueWitness: true)
     }
 
     inout fn bodyInstanceEnvironment(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
@@ -4084,7 +4075,7 @@ pub impl Comp {
                 if f.originTraitId != self.decls.traitAt(index: traitIdx).nameId || f.originTraitOwner != self.decls.traitAt(index: traitIdx).nameStart {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: static method selected a callable outside its proved trait") />
                 }
-                return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=args argumentSources=arguments proof=(try self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef)) resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> /> />
+                return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=args argumentSources=arguments proof=concreteProof resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> /> />
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: val traitIdx, callee: val declaration) => {
                 if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || traitIdx >= self.decls.traitCount() || declaration >= self.arena.functionCount() {

@@ -10,7 +10,7 @@ pub impl Vector { factory }
 
 impl Point as Sub[Point] {
     type Output = Vector
-    assoc fn sub(lhs: Point, rhs: Point) -> Vector {
+    assoc fn sub(lhs~: Point, rhs~: Point) -> Vector {
         return <Vector dx=lhs.x - rhs.x dy=lhs.y - rhs.y />
     }
 }
@@ -18,7 +18,7 @@ impl Point as Sub[Point] {
 // Self-output operators on the same type still work (Output = Vector here too).
 impl Vector as Add[Vector] {
     type Output = Vector
-    assoc fn add(lhs: Vector, rhs: Vector) -> Vector {
+    assoc fn add(lhs~: Vector, rhs~: Vector) -> Vector {
         return <Vector dx=lhs.dx + rhs.dx dy=lhs.dy + rhs.dy />
     }
 }
