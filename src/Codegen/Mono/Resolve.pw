@@ -508,9 +508,10 @@ pub impl Comp {
         }
         if a >= self.arena.typeTerms.count() || b >= self.arena.typeTerms.count() { return false }
         if !(self.typeTermRefSameHead(a: a, b: b)) { return false }
-        if self.typeTermRefChildCount(ref: a) != self.typeTermRefChildCount(ref: b) { return false }
+        val childCount = self.typeTermRefChildCount(ref: a)
+        if childCount != self.typeTermRefChildCount(ref: b) { return false }
         mut val i: U64 = 0U64
-        while i < self.typeTermRefChildCount(ref: a) {
+        while i < childCount {
             if self.typeTermRefIdentityChildLabel(ref: a, index: i) != self.typeTermRefIdentityChildLabel(ref: b, index: i) || !(self.typeRefEq(a: self.typeTermRefChildRef(ref: a, index: i), b: self.typeTermRefChildRef(ref: b, index: i))) { return false }
             i += 1U64
         }
