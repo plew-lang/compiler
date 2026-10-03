@@ -1,5 +1,0 @@
-trait Action { fn go() }
-struct Worker {}
-impl Worker { fn perform(value: I64 = 1I64) {} }
-impl Worker as Action { fn go() via perform }
-fn main() {}

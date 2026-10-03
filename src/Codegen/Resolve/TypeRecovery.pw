@@ -85,63 +85,77 @@ pub impl Comp {
         return intern(c: inout self, start: arg.labelStart, len: arg.labelLen) == param.nameId
     }
 
-    inout fn paramIndexForArg(params: FuncParamRange, args: ArgRange, argIdx: U64) -> U64 {
-        mut val ai: U64 = 0
-        mut val pi: U64 = 0
-        while pi < params.count() {
-            if ai < args.len {
-                if self.argMatchesParamLabel(param: self.funcParamAt(params: params, index: pi), arg: self.argAt(args: args, index: ai)) {
-                    if ai == argIdx {
-                        return pi
-                    }
-                    ai += 1U64
-                }
+    // Expressions and requirement signatures expose the same callable form.
+    // Keep omitted-parameter traversal here, shared by selection and adapters.
+    inout fn callableInputMatchesLabel(param: Param, input: CallableArgumentInput, index: U64) -> Bool {
+        match input {
+            CallableArgumentInput.Expressions(val range) => {
+                return self.argMatchesParamLabel(param: param, arg: self.argAt(args: range, index: index))
             }
-            pi += 1U64
+            CallableArgumentInput.Parameters(val range) => {
+                val supplied = self.funcParamAt(params: range, index: index)
+                return param.noLabel == supplied.noLabel && (param.noLabel || param.nameId == supplied.nameId)
+            }
+        }
+    }
+
+    inout fn callableNextParameter(params: FuncParamRange, input: CallableArgumentInput, index: U64, start: U64) -> U64 {
+        mut val position = start
+        while position < params.count() {
+            val parameter = self.funcParamAt(params: params, index: position)
+            if self.callableInputMatchesLabel(param: parameter, input: input, index: index) { return position }
+            if !parameter.hasDefault { return params.count() }
+            position += 1U64
+        }
+        return params.count()
+    }
+
+    inout fn callableInputLabelsOk(params: FuncParamRange, input: CallableArgumentInput) -> Bool {
+        if input.count() > params.count() { return false }
+        mut val position = 0U64
+        mut val index = 0U64
+        while index < input.count() {
+            position = self.callableNextParameter(params: params, input: input, index: index, start: position)
+            if position == params.count() { return false }
+            position += 1U64
+            index += 1U64
+        }
+        while position < params.count() {
+            if !self.funcParamAt(params: params, index: position).hasDefault { return false }
+            position += 1U64
+        }
+        return true
+    }
+
+    inout fn paramIndexForArg(params: FuncParamRange, args: ArgRange, argIdx: U64) -> U64 {
+        val input = <CallableArgumentInput.Expressions range=args />
+        mut val position = 0U64
+        mut val index = 0U64
+        while index < args.len {
+            position = self.callableNextParameter(params: params, input: input, index: index, start: position)
+            if position == params.count() || index == argIdx { return position }
+            position += 1U64
+            index += 1U64
         }
         return params.count()
     }
 
     inout fn argIndexForParam(params: FuncParamRange, args: ArgRange, paramIdx: U64) -> U64 {
-        mut val ai: U64 = 0
-        mut val pi: U64 = 0
-        while pi < params.count() {
-            if ai < args.len {
-                if self.argMatchesParamLabel(param: self.funcParamAt(params: params, index: pi), arg: self.argAt(args: args, index: ai)) {
-                    if pi == paramIdx {
-                        return ai
-                    }
-                    ai += 1U64
-                }
-            }
-            pi += 1U64
+        val input = <CallableArgumentInput.Expressions range=args />
+        mut val position = 0U64
+        mut val index = 0U64
+        while index < args.len {
+            position = self.callableNextParameter(params: params, input: input, index: index, start: position)
+            if position == paramIdx { return index }
+            if position >= params.count() || position > paramIdx { return args.len }
+            position += 1U64
+            index += 1U64
         }
         return args.len
     }
 
     inout fn paramsLabelsOk(params: FuncParamRange, args: ArgRange) -> Bool {
-        if args.len > params.count() {
-            return false
-        }
-        mut val ai: U64 = 0
-        mut val pi: U64 = 0
-        while pi < params.count() {
-            if ai < args.len {
-                if self.argMatchesParamLabel(param: self.funcParamAt(params: params, index: pi), arg: self.argAt(args: args, index: ai)) {
-                    ai += 1U64
-                } else {
-                    if !(self.funcParamAt(params: params, index: pi).hasDefault) {
-                        return false
-                    }
-                }
-            } else {
-                if !(self.funcParamAt(params: params, index: pi).hasDefault) {
-                    return false
-                }
-            }
-            pi += 1U64
-        }
-        return ai == args.len
+        return self.callableInputLabelsOk(params: params, input: <CallableArgumentInput.Expressions range=args />)
     }
 
     // Whether two type refs may be compared by FULL structural identity for overload

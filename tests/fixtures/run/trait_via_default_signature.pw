@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Action { fn go() -> I64 }
+struct Worker {}
+impl Worker { fn perform(value: I64 = 5I64) -> I64 { return value } }
+impl Worker as Action { fn go() -> I64 via perform }
+fn invoke[T](value: T) -> I64 where T: Action { return value.go() }
+fn main() {
+    val worker = <Worker />
+    print(worker.perform())
+    print(worker.go())
+    print(invoke(value: worker))
+}

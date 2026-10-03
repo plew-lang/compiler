@@ -23,6 +23,11 @@ part ./Ir/MonoWork
 
 // Read-only matching inputs retain their storage provenance. Pool-backed
 // inputs hold ranges, never snapshots of the entire append-only pool.
+pub enum CallableArgumentInput {
+    Expressions(range: ArgRange)
+    Parameters(range: FuncParamRange)
+}
+
 pub enum PatternBindInput {
     Values(values: Array[Bind])
     Conformance(range: ConformBindRange)

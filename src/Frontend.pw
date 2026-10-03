@@ -20,7 +20,7 @@ use ./KeywordSpans only { KeywordSpans }
 
 use @Std/Io only { print, write, writeByte, readFile, readFileBytes, eprint, fileExists }
 use @Std/Process only { exit }
-use ./Ir only { SemanticGlobalAddress, ModuleBinding, ImportOrigin, PatternBindInput, PatternTypeInput }
+use ./Ir only { SemanticGlobalAddress, ModuleBinding, ImportOrigin, CallableArgumentInput, PatternBindInput, PatternTypeInput }
 use ./Ir only { FinalDestruction, FinalDestructorCall, DestructionShape, DestructionDependencies }
 use @Std/Ffi only { cString, stringFromCString, arrayCPtr }
 use @Std/Core only { stringFromBytesUnchecked, truncU8 }

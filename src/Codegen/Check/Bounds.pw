@@ -1358,14 +1358,16 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // A forwarding call alone could accept omitted defaults or discard a
-    // result. Via instead promises the complete declared signature, including
-    // ownership modes. Match the implementation directionally: requirement
+    // Via uses the ordinary callable form, including omitted defaults, while
+    // preserving the requirement's result and ownership contract.
+    // Match the implementation directionally: requirement
     // binders remain rigid while the target's binders acquire one substitution.
     inout fn viaSignatureMatches(witness: Func, target: Func) -> Bool {
-        if witness.hasRecv != target.hasRecv || witness.isAssoc != target.isAssoc || witness.selfInout != target.selfInout || witness.selfMove != target.selfMove || witness.isAsync != target.isAsync || witness.hasRet != target.hasRet || witness.params.count() != target.params.count() {
+        if witness.hasRecv != target.hasRecv || witness.isAssoc != target.isAssoc || witness.selfInout != target.selfInout || witness.selfMove != target.selfMove || witness.isAsync != target.isAsync || witness.hasRet != target.hasRet {
             return false
         }
+        val input = <CallableArgumentInput.Parameters range=witness.params />
+        if !self.callableInputLabelsOk(params: target.params, input: input) { return false }
         mut val bindings: Array[UnifyBind] = []
         val targetParameters = <PatternBindInput.Function range=target.typeParams />
         val rigidParameters = <PatternBindInput.Values values=[] />
@@ -1373,9 +1375,12 @@ pub impl Comp {
             if !self.unifyPatterns(a: target.recvTy, aSide: 0U64, b: witness.recvTy, bSide: 1U64, aParams: targetParameters, bParams: rigidParameters, binds: inout bindings) { return false }
         }
         mut val index = 0U64
+        mut val targetIndex = 0U64
         while index < witness.params.count() {
             val expected = self.funcParamAt(params: witness.params, index: index)
-            val actual = self.funcParamAt(params: target.params, index: index)
+            targetIndex = self.callableNextParameter(params: target.params, input: input, index: index, start: targetIndex)
+            val actual = self.funcParamAt(params: target.params, index: targetIndex)
+            targetIndex += 1U64
             if expected.noLabel != actual.noLabel || (!expected.noLabel && expected.nameId != actual.nameId) || expected.isInout != actual.isInout || expected.isMove != actual.isMove || expected.isBorrow != actual.isBorrow { return false }
             val expectedType = self.groundTermInEnvironment(ref: expected.ty, params: [], values: [], selfRef: witness.recvTy)
             val actualType = self.groundTermInEnvironment(ref: actual.ty, params: [], values: [], selfRef: witness.recvTy)
