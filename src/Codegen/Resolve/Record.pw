@@ -711,6 +711,24 @@ pub impl Comp {
         if resultTerm == 0U64 { return <Result.Ok value=() /> }
         match self.arena.exprs[exprId] {
             Expr.Make(typeStart: val typeStart, typeLen: val typeLen, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: _, fields: val fields) => {
+                // Validate the resolved construction before publishing layout.
+                // Earlier verification can still see deferred contextual arguments.
+                val constructionType = resultTerm
+                val storage = self.fieldStorageTypeRef(receiverRef: constructionType)
+                if isEnum {
+                    if self.enumIndexForType(ref: constructionType) >= self.arena.enumCount() {
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "this type has no enum variant or named factory with this construction") />
+                    }
+                } else if storage == 0U64 || storage >= self.arena.typeCount() || (!self.arena.typeAt(index: storage).isRecord && self.structIndexForType(ref: storage) >= self.arena.structCount()) {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "this type has no memberwise factory; use a declared factory or enum variant") />
+                }
+                val storageDeclaration = self.structIndexForType(ref: storage)
+                if !isEnum && storageDeclaration < self.arena.structCount() {
+                    val declaration = self.arena.structAt(index: storageDeclaration)
+                    if declaration.isExtern && !declaration.isCExtern {
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "an opaque intrinsic type has no memberwise factory") />
+                    }
+                }
                 mut val elements: Array[SemanticAggregateElement] = []
                 mut val variantIndex: U64 = 0U64
                 mut val enumIndex: U64 = self.arena.enumCount()

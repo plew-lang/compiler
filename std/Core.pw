@@ -540,7 +540,7 @@ pub impl[T] Optional[T] as Chain {
 // (`F64 as Pow[F64]`, via a transcendental intrinsic) is additive and not yet provided.
 pub trait Pow[Exp] { type Output  assoc fn pow(base: Self, exp: Exp) -> Output }
 
-impl I8 as Pow[U64] {
+pub impl I8 as Pow[U64] {
     type Output = I8
     assoc fn pow(base: I8, exp: U64) -> I8 {
         mut val result: I8 = 1I8
@@ -549,7 +549,7 @@ impl I8 as Pow[U64] {
         return result
     }
 }
-impl I16 as Pow[U64] {
+pub impl I16 as Pow[U64] {
     type Output = I16
     assoc fn pow(base: I16, exp: U64) -> I16 {
         mut val result: I16 = 1I16
@@ -558,7 +558,7 @@ impl I16 as Pow[U64] {
         return result
     }
 }
-impl I32 as Pow[U64] {
+pub impl I32 as Pow[U64] {
     type Output = I32
     assoc fn pow(base: I32, exp: U64) -> I32 {
         mut val result: I32 = 1I32
@@ -567,7 +567,7 @@ impl I32 as Pow[U64] {
         return result
     }
 }
-impl I64 as Pow[U64] {
+pub impl I64 as Pow[U64] {
     type Output = Self
     assoc fn pow(base: Self, exp: U64) -> Self {
         mut val result: Self = 1I64
@@ -576,7 +576,7 @@ impl I64 as Pow[U64] {
         return result
     }
 }
-impl U8 as Pow[U64] {
+pub impl U8 as Pow[U64] {
     type Output = U8
     assoc fn pow(base: U8, exp: U64) -> U8 {
         mut val result: U8 = 1U8
@@ -585,7 +585,7 @@ impl U8 as Pow[U64] {
         return result
     }
 }
-impl U16 as Pow[U64] {
+pub impl U16 as Pow[U64] {
     type Output = U16
     assoc fn pow(base: U16, exp: U64) -> U16 {
         mut val result: U16 = 1U16
@@ -594,7 +594,7 @@ impl U16 as Pow[U64] {
         return result
     }
 }
-impl U32 as Pow[U64] {
+pub impl U32 as Pow[U64] {
     type Output = U32
     assoc fn pow(base: U32, exp: U64) -> U32 {
         mut val result: U32 = 1U32
@@ -603,7 +603,7 @@ impl U32 as Pow[U64] {
         return result
     }
 }
-impl U64 as Pow[U64] {
+pub impl U64 as Pow[U64] {
     type Output = U64
     assoc fn pow(base: U64, exp: U64) -> U64 {
         mut val result: U64 = 1U64

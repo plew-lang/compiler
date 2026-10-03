@@ -24,7 +24,7 @@ use @Std/Io only { write }
 
 // impl <ty> as <trn>[<ty>] { type Output = <ty>  assoc fn <meth>(lhs,rhs) { return <pfx><suf>(a:lhs, b:rhs) } }
 fn implBin(ty: String, trn: String, meth: String, pfx: String, suf: String) {
-    write(s: "impl ")
+    write(s: "pub impl ")
     write(s: ty)
     write(s: " as ")
     write(s: trn)
@@ -48,7 +48,7 @@ fn implBin(ty: String, trn: String, meth: String, pfx: String, suf: String) {
 
 // impl <ty> as <trn> { type Output = <ty>  assoc fn <meth>(value) { return <pfx><suf>(a: value) } }
 fn implUn(ty: String, trn: String, meth: String, pfx: String, suf: String) {
-    write(s: "impl ")
+    write(s: "pub impl ")
     write(s: ty)
     write(s: " as ")
     write(s: trn)
@@ -68,7 +68,7 @@ fn implUn(ty: String, trn: String, meth: String, pfx: String, suf: String) {
 
 // impl <ty> as Eq { assoc fn eq(lhs,rhs) -> Bool { return <pfx>Eq(a:lhs, b:rhs) } }
 fn implEq(ty: String, pfx: String) {
-    write(s: "impl ")
+    write(s: "pub impl ")
     write(s: ty)
     write(s: " as Eq {\n    assoc fn eq(lhs~: ")
     write(s: ty)
@@ -81,7 +81,7 @@ fn implEq(ty: String, pfx: String) {
 
 // impl <ty> as Ord { assoc fn compare(lhs,rhs) -> Ordering { Lt? Less : Eq? Equal : Greater } }
 fn implOrd(ty: String, pfx: String) {
-    write(s: "impl ")
+    write(s: "pub impl ")
     write(s: ty)
     write(s: " as Ord {\n    assoc fn compare(lhs~: ")
     write(s: ty)
@@ -151,7 +151,7 @@ fn stepValue(typeName: String, bits: String, isSigned: Bool) -> String {
 fn stepImplementation(typeName: String, maximum: String, signBit: String, isSigned: Bool) {
     val startBits = if isSigned { give "bitCastU64(n: start as I64)" } else { give "(start as U64)" }
     val endBits = if isSigned { give "bitCastU64(n: end as I64)" } else { give "(end as U64)" }
-    write(s: "impl " + typeName + " as Step {\n")
+    write(s: "pub impl " + typeName + " as Step {\n")
     write(s: "    assoc fn stepsBetween(start: " + typeName + ", end: " + typeName + ") -> (lower: U64, exact: Optional[U64]) {\n")
     write(s: "        if start > end { return (lower: 0U64, exact: <Optional.Some v=0U64 />) }\n")
     write(s: "        val startRank: U64 = (" + startBits + " & " + maximum + "U64) ^ " + signBit + "U64\n")
