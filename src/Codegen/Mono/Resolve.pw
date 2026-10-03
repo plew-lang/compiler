@@ -110,6 +110,22 @@ pub impl Comp {
         return false
     }
 
+    // A member source selector constrains the proof path, not whether the
+    // underlying type conforms. Keep declaration identity through every edge.
+    fn traitProofStateMatchesSources(state: TraitProofState, sourceOwners: Array[U64]) -> Bool {
+        if sourceOwners.count() == 0U64 { return true }
+        for val owner in sourceOwners {
+            if state.traitOwner == owner { return true }
+            for val witness in state.edges {
+                if witness.conformIdx != 0U64 && witness.conformIdx <= self.decls.conformCount() {
+                    val edge = self.decls.conformAt(index: witness.conformIdx - 1U64)
+                    if edge.traitStart == owner || edge.subjectTraitOwner == owner { return true }
+                }
+            }
+        }
+        return false
+    }
+
     inout fn traitProofStateSeen(states: Array[TraitProofState], candidate: TraitProofState) -> Bool {
         for val state in states {
             if state.traitOwner == candidate.traitOwner && state.traitId == candidate.traitId && self.sameProofTraitArgs(a: state.traitArgs, b: candidate.traitArgs) && self.sameTraitProofOrigin(a: state.origin, b: candidate.origin) && state.edges.count() == candidate.edges.count() {
@@ -211,23 +227,23 @@ pub impl Comp {
     // trait *pattern*.  The target pattern's declaration binders may bind;
     // the proof state's positional arguments stay rigid. Exact trait
     // instance lookup is the `patternParams=[]` specialization below.
-    inout fn traitPatternProof(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
+    inout fn traitPatternProof(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = [], sourceOwners: Array[U64] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
         if baseRef == 0U64 || baseRef >= self.arena.typeCount() { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
-        if self.arena.typeAt(index: baseRef).assocNameId == 0U64 { return self.traitPatternProofFromFacts(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions) }
-        for val active in self.activeProjectionProofs { if self.typeRefEq(a: active, b: baseRef) { return self.traitPatternProofFromFacts(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions) } }
+        if self.arena.typeAt(index: baseRef).assocNameId == 0U64 { return self.traitPatternProofFromFacts(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners) }
+        for val active in self.activeProjectionProofs { if self.typeRefEq(a: active, b: baseRef) { return self.traitPatternProofFromFacts(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners) } }
         self.activeProjectionProofs.append(baseRef)
-        val result = self.projectedTraitPatternProof(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)
+        val result = self.projectedTraitPatternProof(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners)
         self.activeProjectionProofs.removeLast()
         return result
     }
 
-    inout fn projectedTraitPatternProof(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
+    inout fn projectedTraitPatternProof(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = [], sourceOwners: Array[U64] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
         // An explicitly assumed projected constraint is already evidence for
         // that subject. Requiring the projection's parent conformance first
         // would lose a valid `where T#Parser.Output: Mark` premise. Schema-
         // derived constraints still require their parent proof below.
         if assumptions.count() != 0U64 {
-            val assumed = try self.traitPatternProofFromFacts(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, includeConcrete: false)
+            val assumed = try self.traitPatternProofFromFacts(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners, includeConcrete: false)
             match assumed { StaticConformanceProof.Missing => {} _ => { return <Result.Ok value=assumed /> } }
         }
         val projection = self.arena.typeAt(index: baseRef)
@@ -243,7 +259,7 @@ pub impl Comp {
         match prerequisite { StaticConformanceProof.Missing => { return <Result.Ok value=<StaticConformanceProof.Missing /> /> } _ => {} }
         val output = (try self.associatedOutputInProof(proof: prerequisite, traitOwner: owner, assocId: projection.assocNameId))
         if output != 0U64 && !self.typeRefEq(a: output, b: baseRef) {
-            return self.traitPatternProof(baseRef: output, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)
+            return self.traitPatternProof(baseRef: output, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners)
         }
         // Only an abstract declaration assumption authorizes its schema's
         // associated constraints. Concrete witnesses must validate the actual
@@ -273,7 +289,7 @@ pub impl Comp {
             }
             index += 1U64
         }
-        return self.traitPatternProofFromFacts(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: facts)
+        return self.traitPatternProofFromFacts(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: facts, sourceOwners: sourceOwners)
     }
 
     inout fn registerAssociatedBoundEvidence(evidence: AssociatedBoundEvidence) -> DeclarationBoundRef {
@@ -287,7 +303,7 @@ pub impl Comp {
         return <DeclarationBoundRef.AssociatedType index=index />
     }
 
-    inout fn traitPatternProofFromFacts(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = [], includeConcrete: Bool = true) -> Result[StaticConformanceProof, CompileDiagnostic] {
+    inout fn traitPatternProofFromFacts(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = [], sourceOwners: Array[U64] = [], includeConcrete: Bool = true) -> Result[StaticConformanceProof, CompileDiagnostic] {
         if baseRef >= self.arena.typeCount() { return <Result.Ok value=<StaticConformanceProof.Missing /> />}
         mut val pending: Array[TraitProofState] = []
         mut val seen: Array[TraitProofState] = []
@@ -298,7 +314,7 @@ pub impl Comp {
                     val traitIndex = self.decls.traitIndexByOffset(offset: bound.constraint.key.owner)
                     if traitIndex < self.decls.traitCount() {
                         val start = <TraitProofState origin=<TraitProofOrigin.Assumption source=source steps=[] /> traitOwner=bound.constraint.key.owner traitId=self.decls.traitAt(index: traitIndex).nameId traitArgs=bound.constraint.key.positionalArgs edges=[] />
-                        if start.traitOwner == traitOwner && (traitId == 0U64 || start.traitId == traitId) && (traitArgsOpen || self.typeRefListPatternMatches(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Values values=start.traitArgs />)) && (try self.traitProofStateSatisfies(state: start, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)) { return <Result.Ok value=self.traitProofStateEvidence(state: start) /> }
+                        if self.traitProofStateMatchesSources(state: start, sourceOwners: sourceOwners) && start.traitOwner == traitOwner && (traitId == 0U64 || start.traitId == traitId) && (traitArgsOpen || self.typeRefListPatternMatches(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Values values=start.traitArgs />)) && (try self.traitProofStateSatisfies(state: start, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)) { return <Result.Ok value=self.traitProofStateEvidence(state: start) /> }
                         if !self.traitProofStateSeen(states: seen, candidate: start) { seen.append(start) pending.append(start) }
                     }
                 }
@@ -313,7 +329,7 @@ pub impl Comp {
                     mut val edges: Array[WitnessMatch] = []
                     edges.append(witness)
                     val start: TraitProofState = <TraitProofState traitOwner=cf.traitStart traitId=cf.traitId traitArgs=(try self.groundedWitnessTraitArgs(cf: cf, witness: witness)) edges=edges />
-                    if start.traitOwner == traitOwner && (traitId == 0U64 || start.traitId == traitId) && (traitArgsOpen || self.typeRefListPatternMatches(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Values values=start.traitArgs />)) && (try self.traitProofStateSatisfies(state: start, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)) {
+                    if self.traitProofStateMatchesSources(state: start, sourceOwners: sourceOwners) && start.traitOwner == traitOwner && (traitId == 0U64 || start.traitId == traitId) && (traitArgsOpen || self.typeRefListPatternMatches(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Values values=start.traitArgs />)) && (try self.traitProofStateSatisfies(state: start, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)) {
                         return <Result.Ok value=self.traitProofStateEvidence(state: start) />
                     }
                     if !(self.traitProofStateSeen(states: seen, candidate: start)) {
@@ -344,7 +360,7 @@ pub impl Comp {
                                 val targetIndex = self.decls.traitIndexByOffset(offset: inherited.constraint.key.owner)
                                 if targetIndex < self.decls.traitCount() {
                                     val next = <TraitProofState origin=<TraitProofOrigin.Assumption source=source steps=nextSteps /> traitOwner=inherited.constraint.key.owner traitId=self.decls.traitAt(index: targetIndex).nameId traitArgs=inherited.constraint.key.positionalArgs edges=[] />
-                                    if next.traitOwner == traitOwner && (traitId == 0U64 || next.traitId == traitId) && (traitArgsOpen || self.typeRefListPatternMatches(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Values values=next.traitArgs />)) && (try self.traitProofStateSatisfies(state: next, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)) { return <Result.Ok value=self.traitProofStateEvidence(state: next) /> }
+                                    if self.traitProofStateMatchesSources(state: next, sourceOwners: sourceOwners) && next.traitOwner == traitOwner && (traitId == 0U64 || next.traitId == traitId) && (traitArgsOpen || self.typeRefListPatternMatches(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Values values=next.traitArgs />)) && (try self.traitProofStateSatisfies(state: next, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)) { return <Result.Ok value=self.traitProofStateEvidence(state: next) /> }
                                     if !self.assumedTraitInstanceSeen(states: seen, candidate: next, bound: inherited) { seen.append(next) pending.append(next) }
                                 }
                                 clause += 1U64
@@ -363,7 +379,7 @@ pub impl Comp {
                         mut val edges: Array[WitnessMatch] = state.edges
                         edges.append(witness)
                         val next: TraitProofState = <TraitProofState origin=state.origin traitOwner=edge.traitStart traitId=edge.traitId traitArgs=(try self.groundedWitnessTraitArgs(cf: edge, witness: witness)) edges=edges />
-                        if next.traitOwner == traitOwner && (traitId == 0U64 || next.traitId == traitId) && (traitArgsOpen || self.typeRefListPatternMatches(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Values values=next.traitArgs />)) && (try self.traitProofStateSatisfies(state: next, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)) {
+                        if self.traitProofStateMatchesSources(state: next, sourceOwners: sourceOwners) && next.traitOwner == traitOwner && (traitId == 0U64 || next.traitId == traitId) && (traitArgsOpen || self.typeRefListPatternMatches(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Values values=next.traitArgs />)) && (try self.traitProofStateSatisfies(state: next, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)) {
                             return <Result.Ok value=self.traitProofStateEvidence(state: next) />
                         }
                         if !(self.traitProofStateSeen(states: seen, candidate: next)) {

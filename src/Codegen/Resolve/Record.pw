@@ -484,13 +484,13 @@ pub impl Comp {
                 if self.typeParameterQualifierTerm(exprId: receiverExpr) != 0U64 && !self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx).isAssoc {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a type qualifier can only call an associated function") />
                 }
-                try self.recordStaticMethodTemplate(exprId: exprId, receiver: receiver, args: args, resolution: staticResolution, resultTerm: (try self.staticRequirementCallResultType(resolution: staticResolution, args: args)))
+                try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiver, args: args, resolution: staticResolution, resultTerm: (try self.staticRequirementCallResultType(resolution: staticResolution, args: args)))
             }
             StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val declaration) => {
                 if self.typeParameterQualifierTerm(exprId: receiverExpr) != 0U64 && !self.arena.functionAt(index: declaration).isAssoc {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a type qualifier can only call an associated function") />
                 }
-                try self.recordStaticMethodTemplate(exprId: exprId, receiver: receiver, args: args, resolution: staticResolution, resultTerm: self.parametricExprTerm(exprId: exprId))
+                try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiver, args: args, resolution: staticResolution, resultTerm: self.parametricExprTerm(exprId: exprId))
             }
             _ => {
                 try self.recordDynamicMethodCall(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -567,11 +567,11 @@ pub impl Comp {
                 StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
                     val result: U64 = (try self.staticRequirementCallResultType(resolution: staticResolution, args: args))
                     if result != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: result) }
-                    try self.recordStaticMethodTemplate(exprId: exprId, receiver: receiverSource, args: args, resolution: staticResolution, resultTerm: result)
+                    try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiverSource, args: args, resolution: staticResolution, resultTerm: result)
                     return <Result.Ok value=() />
                 }
                 StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
-                    try self.recordStaticMethodTemplate(exprId: exprId, receiver: receiverSource, args: args, resolution: staticResolution, resultTerm: self.parametricExprTerm(exprId: exprId))
+                    try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiverSource, args: args, resolution: staticResolution, resultTerm: self.parametricExprTerm(exprId: exprId))
                     return <Result.Ok value=() />
                 }
                 _ => {}
@@ -1411,11 +1411,11 @@ pub impl Comp {
                         val resolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: baseTerm, nameStart: callStart, nameLen: callLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
                         match resolution {
                             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
-                                try self.recordStaticMethodTemplate(exprId: exprId, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: (try self.staticRequirementCallResultType(resolution: resolution, args: args)))
+                                try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: baseTerm, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: (try self.staticRequirementCallResultType(resolution: resolution, args: args)))
                                 return <Result.Ok value=() />
                             }
                             StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
-                                try self.recordStaticMethodTemplate(exprId: exprId, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: self.parametricExprTerm(exprId: exprId))
+                                try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: baseTerm, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: self.parametricExprTerm(exprId: exprId))
                                 return <Result.Ok value=() />
                             }
                             _ => {}

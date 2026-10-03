@@ -912,7 +912,11 @@ pub impl Comp {
         for val argument in arguments {
             grounded.append((try self.groundTermForBody(ref: argument, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)))
         }
-        return <Result.Ok value=(try self.concreteConformanceProof(baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=grounded />)) />
+        mut val sourceOwners: Array[U64] = []
+        for val source in self.typeRefViewSources(ref: receiverRef) {
+            if source.traitOwner != 0U64 { sourceOwners.append(source.traitOwner) }
+        }
+        return self.traitPatternProof(baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=grounded />, patternParams: <PatternBindInput.Values values=[] />, sourceOwners: sourceOwners)
     }
 
     inout fn bodyInstanceEnvironment(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
@@ -3992,14 +3996,12 @@ pub impl Comp {
         val conformIdx: U64 = witness.conformIdx
         if conformIdx == 0U64 || conformIdx > self.decls.conformCount() { return <Result.Ok value=self.arena.functionCount() />}
         val conform: Conform = self.decls.conformAt(index: conformIdx - 1U64)
-        if self.traceCodegen { eprint(text: "[trace-codegen] proof edge=") eprintU64(n: conformIdx) eprint(text: " witnesses=") eprintU64(n: conform.witnessFuncIds.count()) eprint(text: "\n") }
         val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
         mut val wi: U64 = 0U64
         while wi < conform.witnessFuncIds.count() {
             val sourceIdx: U64 = self.conformFuncIdAt(ids: conform.witnessFuncIds, index: wi)
             if sourceIdx < self.arena.functionCount() {
                 val source: Func = self.arena.functionAt(index: sourceIdx)
-                if self.traceCodegen && source.nameId == req.nameId { eprint(text: "[trace-codegen] source=") eprintU64(n: sourceIdx) eprint(text: " parameters=") eprintU64(n: source.params.count()) eprint(text: "\n") }
                 if (try self.proofRequirementSelectorMatches(source: source, requirement: req, witness: witness, traitIdx: traitIdx, receiverRef: receiverRef, proof: proof)) {
                     // A concrete impl owns its witness body directly.  The
                     // proof's witnessFuncIds is already the exact semantic
@@ -4023,7 +4025,6 @@ pub impl Comp {
                         // target trait, not its subject).  This keeps a
                         // B-as-A witness distinct from another A witness that
                         // happens to have the same member name.
-                        if self.traceCodegen && candidate.isProvided && candidate.sourceWitnessFuncId == sourceIdx + 1U64 { eprint(text: "[trace-codegen] copy=") eprintU64(n: ci) eprint(text: " edge=") eprintU64(n: candidate.sourceConformIdx) eprint(text: "\n") }
                         if candidate.isProvided && candidate.sourceWitnessFuncId == sourceIdx + 1U64 && candidate.sourceConformIdx == conformIdx && candidate.originTraitId == self.decls.traitAt(index: traitIdx).nameId && candidate.originTraitOwner == self.decls.traitAt(index: traitIdx).nameStart {
                             return <Result.Ok value=ci />
                         }
@@ -4099,12 +4100,20 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: static provided-method proof has no concrete implementation") />
                 }
                 val f: Func = self.arena.functionAt(index: callee)
-                if f.originTraitId != self.decls.traitAt(index: traitIdx).nameId || f.originTraitOwner != self.decls.traitAt(index: traitIdx).nameStart {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: static provided method selected a callable outside its proved trait") />
+                // Availability is proved through the receiver trait, while a
+                // provided body may itself witness another trait (B as A).
+                // Preserve the selected source declaration rather than testing
+                // its body owner against the availability trait's identity.
+                if (try self.semanticBodyOwner(fnIdx: callee)) != (try self.semanticBodyOwner(fnIdx: declaration)) {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: static provided method selected a different source declaration") />
+                }
+                val bodyProof = (try self.providedBodyProof(f: f, receiverRef: receiverRef))
+                if self.proofIsMissing(proof: bodyProof) {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: static provided method has no body conformance proof") />
                 }
                 // Complete the result after enqueueSelectedCallee has inferred
                 // method arguments and selected the concrete body environment.
-                return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=args argumentSources=arguments proof=(try self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef)) resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> /> />
+                return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=args argumentSources=arguments proof=bodyProof resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> /> />
             }
             _ => {}
         }

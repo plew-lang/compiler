@@ -891,7 +891,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordStaticMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, resolution: StaticMemberResolution, resultTerm: U64) -> Result[(), CompileDiagnostic] {
+    inout fn recordStaticMethodTemplate(exprId: U64, receiverTerm: U64, receiver: CallTemplateReceiver, args: ArgRange, resolution: StaticMemberResolution, resultTerm: U64) -> Result[(), CompileDiagnostic] {
         // Selection fixes contextual construction arguments even when the
         // receiver is still a type parameter. Publish those expressions before
         // freezing argument sources; Mid must never receive an unresolved Make.
@@ -909,9 +909,42 @@ pub impl Comp {
         self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
-        val templateArgs: CallTemplateArgumentRange = (try self.directCallTemplateArgs(args: args))
+        mut val templateArgs: CallTemplateArgumentRange = (try self.directCallTemplateArgs(args: args))
         val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)
-        if index < self.decls.callTemplates.count() {
+        val hasPriorTemplate = index < self.decls.callTemplates.count()
+        // A provided declaration, unlike a requirement, owns defaults. Bind
+        // them while its lexical signature and caller receiver are available,
+        // using the same generator calls and evaluation plan as a Direct call.
+        match resolution {
+            StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
+                val function = self.arena.functionAt(index: callee)
+                if args.len != function.params.count() {
+                    val inferred = (try self.finalMethodEnvironment(f: function, receiverRef: receiverTerm, args: args))
+                    val environment = <InstanceEnvironment params=inferred.params args=inferred.args receiverRef=inferred.receiverRef proof=proof />
+                    mut val terms: Array[U64] = []
+                    mut val parameter = 0U64
+                    while parameter < function.params.count() {
+                        terms.append((try self.groundTermForBody(ref: self.funcParamAt(params: function.params, index: parameter).ty, environment: environment, selfRef: receiverTerm, itemRef: 0U64)))
+                        parameter += 1U64
+                    }
+                    mut val previous: Array[CallTemplateArgument] = []
+                    if hasPriorTemplate {
+                        match self.decls.callTemplates[index].kind {
+                            CallTemplateKind.StaticMethod(receiver: _, args: val priorArgs, resolution: _, resultTerm: _) => { previous = self.callTemplateArguments(range: priorArgs) }
+                            _ => {}
+                        }
+                    }
+                    match (try self.recordBoundCallArguments(callee: callee, args: self.callTemplateArguments(range: templateArgs), receiver: receiver,
+                        calleeTypeArgs: self.signatureTypeArguments(f: function, environment: environment), parameterTerms: terms,
+                        previous: previous, proof: proof, receiverTypeTerm: receiverTerm)) {
+                        Optional.Some(v: val completed) => { templateArgs = self.publishCallTemplateArguments(args: completed) }
+                        Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: provided method default arguments have an incomplete signature") /> }
+                    }
+                }
+            }
+            _ => {}
+        }
+        if hasPriorTemplate {
             val prior: CallTemplate = self.decls.callTemplates[index]
             self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />)
             return <Result.Ok value=() />

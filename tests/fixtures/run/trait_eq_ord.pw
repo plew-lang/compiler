@@ -7,10 +7,10 @@ use @Std/Core only { Eq, Ord, Ordering }
 struct Money { pub val cents: I64 }
 pub impl Money { factory }
 impl Money as Eq {
-    assoc fn eq(lhs: Money, rhs: Money) -> Bool { return lhs.cents == rhs.cents }
+    assoc fn eq(lhs~: Money, rhs~: Money) -> Bool { return lhs.cents == rhs.cents }
 }
 impl Money as Ord {
-    assoc fn compare(lhs: Money, rhs: Money) -> Ordering {
+    assoc fn compare(lhs~: Money, rhs~: Money) -> Ordering {
         if lhs.cents < rhs.cents { return <Ordering.Less /> }
         if lhs.cents > rhs.cents { return <Ordering.Greater /> }
         return <Ordering.Equal />
