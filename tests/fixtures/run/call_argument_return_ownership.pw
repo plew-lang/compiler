@@ -1,0 +1,18 @@
+use @Std/Io only { print }
+use @Std/Core only { Ref }
+unique struct Resource { deinit { print("drop") } }
+fn make() -> Ref[Resource] { return <Ref[Resource] value=<Resource /> /> }
+fn identity(value: Ref[Resource] = make()) -> Ref[Resource] { print("identity") return value }
+fn inspect(value: Ref[Resource]) -> String { print("inspect") return "result" }
+fn uniqueIdentity(value: move Resource) -> Resource { print("move") return move value }
+fn inspectUnique(value: borrow Resource) -> String { print("borrow") return "result" }
+fn main() {
+ print("temporary")
+ print(inspect(value: identity()))
+ print("named")
+ val resource = identity()
+ print(inspect(value: resource))
+ print("unique")
+ print(inspectUnique(value: uniqueIdentity(value: <Resource />)))
+ print("end")
+}

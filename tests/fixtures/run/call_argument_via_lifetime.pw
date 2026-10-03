@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+use @Std/Core only { Ref }
+unique struct Resource { val name: String deinit { print(self.name) } }
+fn make(name: String) -> Ref[Resource] { print(name) return <Ref[Resource] value=<Resource name=name /> /> }
+trait Read { fn read(value: Ref[Resource]) -> String }
+struct Worker { val resource: Ref[Resource] }
+impl Worker {
+ fn perform(first: Ref[Resource] = make(name: "default first"), value: Ref[Resource], last: Ref[Resource] = make(name: "default last")) -> String {
+   print("body") return value->name
+ }
+}
+impl Worker as Read { fn read(value: Ref[Resource]) -> String via perform }
+fn invoke[T](worker: T) -> String where T: Read { return worker.read(value: make(name: "explicit")) }
+fn main() {
+ val worker = <Worker resource=make(name: "worker") />
+ print("direct") print(worker.perform(value: make(name: "explicit")))
+ print("via") print(worker.read(value: make(name: "explicit")))
+ print("generic") print(invoke(worker: worker))
+ print("end")
+}

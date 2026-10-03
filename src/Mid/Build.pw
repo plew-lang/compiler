@@ -1960,7 +1960,13 @@ fn buildMidCallInto(c: inout Comp, state: inout MidBuildState, exprId: U64, dest
     val parentAggregates: Array[MidAggregateValue] = state.aggregateValues
     state.callValues = []
     state.aggregateValues = []
+    // The result home belongs to the enclosing evaluation. Argument and
+    // receiver temporaries belong to this call, including nested calls and
+    // synthesized default-argument forwarding. Drop elaboration closes their
+    // ownership after the call (and access writeback), before its consumer.
+    val evaluation = midOpenScope(state: inout state)
     val built: MidBuildError = buildMidCallEvaluation(c: inout c, state: inout state, exprId: exprId, destination: destination)
+    midFinishEvaluationScope(state: inout state, scope: evaluation)
     state.callValues = parentCalls
     state.aggregateValues = parentAggregates
     return built

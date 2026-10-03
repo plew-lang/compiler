@@ -1,0 +1,16 @@
+temporary
+identity
+inspect
+drop
+result
+named
+identity
+inspect
+result
+unique
+move
+borrow
+drop
+result
+end
+drop

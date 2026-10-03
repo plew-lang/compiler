@@ -1,0 +1,16 @@
+direct
+body
+drop default
+result
+trait
+body
+drop default
+result
+generic
+body
+drop default
+result
+erased
+body
+drop default
+result

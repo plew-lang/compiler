@@ -1,0 +1,18 @@
+use @Std/Io only { print }
+use @Std/Core only { Ref }
+unique struct Resource { deinit { print("drop default") } }
+fn make() -> Ref[Resource] { return <Ref[Resource] value=<Resource /> /> }
+trait Action { fn act() -> String }
+struct Worker {}
+impl Worker as Action {
+ fn act(resource: Ref[Resource] = make()) -> String { print("body") return "result" }
+}
+fn generic[T](worker: T) where T: Action { print(worker.act()) }
+fn main() {
+ val worker = <Worker />
+ print("direct") print(worker.act())
+ print("trait") print(worker#Action.act())
+ print("generic") generic(worker: worker)
+ val erased: any Action = worker
+ print("erased") print(erased.act())
+}
