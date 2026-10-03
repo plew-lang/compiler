@@ -1,0 +1,4 @@
+trait Build { result[String] factory(value: I64) }
+struct Item { val raw: I64 }
+impl Item as Build { result[I64] factory(value: I64) { return <Result.Err error=value /> } }
+fn main() {}

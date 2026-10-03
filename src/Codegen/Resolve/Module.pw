@@ -1084,7 +1084,8 @@ pub impl Comp {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         // a newtype inherits the underlying's assoc fns/factories (spec/10): resolve the
         // receiver name to the underlying so `Brand.checked(…)` finds Rgb's `checked`.
-        val rnu: Bind = self.newtypeUnderName(start: recvStart, len: recvLen)
+        val source = self.realTypeNameInModule(useMod: self.moduleOf(offset: recvStart), start: recvStart, len: recvLen)
+        val rnu: Bind = self.newtypeUnderName(start: source.nameStart, len: source.nameLen)
         val qRecvId: U64 = intern(c: inout self, start: rnu.nameStart, len: rnu.nameLen)
         mut val i: U64 = self.decls.firstCallableNamed(nameId: qNameId)
         while i < self.decls.callableCount() {

@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Maybe { optional factory(value: I64) }
+trait Checked { type Error result[Error] factory checked(value: I64) }
+struct Item { val raw: I64 }
+impl Item as Maybe { optional factory(value: I64) { return <Optional.Some v=<Item raw=value /> /> } }
+impl Item as Checked { type Error = String result[String] factory checked(value: I64) { return <Result.Ok value=<Item raw=value /> /> } }
+fn maybe[T](value: I64) -> Optional[T] where T: Maybe { return <T value=value /> }
+fn checked[T](value: I64) -> Result[T, String] where T: Checked[Error = String] { return <T.checked value=value /> }
+fn main() {
+    match maybe[Item](value: 7I64) { Optional.Some(v: val item) => { print(item.raw) } Optional.None => { panic "missing" } }
+    match checked[Item](value: 9I64) { Result.Ok(value: val item) => { print(item.raw) } Result.Err(error: _) => { panic "failed" } }
+}

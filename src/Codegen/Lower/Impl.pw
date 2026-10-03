@@ -1096,6 +1096,14 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    inout fn factoryRequirementReturn(selfRef: U64, kind: U64, errorRef: U64, offset: U64) -> U64 {
+        if kind == 0U64 { return selfRef }
+        val wrapper = self.internBytes(s: if kind == 1U64 { give "Optional" } else { give "Result" })
+        mut val arguments = [selfRef]
+        if kind == 2U64 { arguments.append(errorRef) }
+        return self.lowerConstructionType(nameStart: wrapper.nameStart, nameLen: wrapper.nameLen, args: arguments, siteOffset: offset)
+    }
+
     inout fn lowerSigToFunc(sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Result[Func, CompileDiagnostic] {
         val nameStart: U64 = sig.nameSpan.start
         val nameLen: U64 = sig.nameSpan.end - sig.nameSpan.start
@@ -1130,7 +1138,13 @@ pub impl Comp {
             val selfName = self.internBytes(s: "Self")
             retStart = selfName.nameStart
             retLen = selfName.nameLen
-            retRef = self.lowerConstructionType(nameStart: retStart, nameLen: retLen, args: [], siteOffset: retStart)
+            val selfRef = self.lowerConstructionType(nameStart: retStart, nameLen: retLen, args: [], siteOffset: retStart)
+            mut val errorRef = 0U64
+            if sig.factoryKind == 2U64 { errorRef = (try self.lowerType(t: sig.factoryErr)).ref }
+            retRef = self.factoryRequirementReturn(selfRef: selfRef, kind: sig.factoryKind, errorRef: errorRef, offset: nameStart)
+            val result = self.arena.typeAt(index: retRef)
+            retStart = result.nameStart
+            retLen = result.nameLen
         }
         mut val signatureBounds: Array[ConformBound] = []
         mut val boundIndex = 0U64
@@ -1204,7 +1218,13 @@ pub impl Comp {
             val selfName = self.internBytes(s: "Self")
             retStart = selfName.nameStart
             retLen = selfName.nameLen
-            retRef = self.lowerConstructionType(nameStart: retStart, nameLen: retLen, args: [], siteOffset: retStart)
+            val selfRef = self.lowerConstructionType(nameStart: retStart, nameLen: retLen, args: [], siteOffset: retStart)
+            mut val errorRef = 0U64
+            if sig.factoryKind == 2U64 { errorRef = (try self.lowerSyntaxType(id: sig.factoryErr)).ref }
+            retRef = self.factoryRequirementReturn(selfRef: selfRef, kind: sig.factoryKind, errorRef: errorRef, offset: sig.name.start)
+            val result = self.arena.typeAt(index: retRef)
+            retStart = result.nameStart
+            retLen = result.nameLen
         }
         mut val signatureBounds: Array[ConformBound] = []
         boundIndex = 0U64

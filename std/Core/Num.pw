@@ -62,7 +62,7 @@ impl I8 as Ord {
         return <Ordering.Greater />
     }
 }
-impl I8 as FixedWidthInteger {
+pub impl I8 as FixedWidthInteger {
     assoc fn wrappingAdd(lhs~: I8, rhs~: I8) -> I8 { return i8WrapAdd(a: lhs, b: rhs) }
     assoc fn wrappingSub(lhs~: I8, rhs~: I8) -> I8 { return i8WrapSub(a: lhs, b: rhs) }
     assoc fn wrappingMul(lhs~: I8, rhs~: I8) -> I8 { return i8WrapMul(a: lhs, b: rhs) }
@@ -145,7 +145,7 @@ impl I16 as Ord {
         return <Ordering.Greater />
     }
 }
-impl I16 as FixedWidthInteger {
+pub impl I16 as FixedWidthInteger {
     assoc fn wrappingAdd(lhs~: I16, rhs~: I16) -> I16 { return i16WrapAdd(a: lhs, b: rhs) }
     assoc fn wrappingSub(lhs~: I16, rhs~: I16) -> I16 { return i16WrapSub(a: lhs, b: rhs) }
     assoc fn wrappingMul(lhs~: I16, rhs~: I16) -> I16 { return i16WrapMul(a: lhs, b: rhs) }
@@ -228,7 +228,7 @@ impl I32 as Ord {
         return <Ordering.Greater />
     }
 }
-impl I32 as FixedWidthInteger {
+pub impl I32 as FixedWidthInteger {
     assoc fn wrappingAdd(lhs~: I32, rhs~: I32) -> I32 { return i32WrapAdd(a: lhs, b: rhs) }
     assoc fn wrappingSub(lhs~: I32, rhs~: I32) -> I32 { return i32WrapSub(a: lhs, b: rhs) }
     assoc fn wrappingMul(lhs~: I32, rhs~: I32) -> I32 { return i32WrapMul(a: lhs, b: rhs) }
@@ -311,7 +311,7 @@ impl I64 as Ord {
         return <Ordering.Greater />
     }
 }
-impl I64 as FixedWidthInteger {
+pub impl I64 as FixedWidthInteger {
     assoc fn wrappingAdd(lhs~: Self, rhs~: Self) -> Self { return i64WrapAdd(a: lhs, b: rhs) }
     assoc fn wrappingSub(lhs~: Self, rhs~: Self) -> Self { return i64WrapSub(a: lhs, b: rhs) }
     assoc fn wrappingMul(lhs~: Self, rhs~: Self) -> Self { return i64WrapMul(a: lhs, b: rhs) }
@@ -390,7 +390,7 @@ impl U8 as Ord {
         return <Ordering.Greater />
     }
 }
-impl U8 as FixedWidthInteger {
+pub impl U8 as FixedWidthInteger {
     assoc fn wrappingAdd(lhs~: U8, rhs~: U8) -> U8 { return u8WrapAdd(a: lhs, b: rhs) }
     assoc fn wrappingSub(lhs~: U8, rhs~: U8) -> U8 { return u8WrapSub(a: lhs, b: rhs) }
     assoc fn wrappingMul(lhs~: U8, rhs~: U8) -> U8 { return u8WrapMul(a: lhs, b: rhs) }
@@ -469,7 +469,7 @@ impl U16 as Ord {
         return <Ordering.Greater />
     }
 }
-impl U16 as FixedWidthInteger {
+pub impl U16 as FixedWidthInteger {
     assoc fn wrappingAdd(lhs~: U16, rhs~: U16) -> U16 { return u16WrapAdd(a: lhs, b: rhs) }
     assoc fn wrappingSub(lhs~: U16, rhs~: U16) -> U16 { return u16WrapSub(a: lhs, b: rhs) }
     assoc fn wrappingMul(lhs~: U16, rhs~: U16) -> U16 { return u16WrapMul(a: lhs, b: rhs) }
@@ -548,7 +548,7 @@ impl U32 as Ord {
         return <Ordering.Greater />
     }
 }
-impl U32 as FixedWidthInteger {
+pub impl U32 as FixedWidthInteger {
     assoc fn wrappingAdd(lhs~: U32, rhs~: U32) -> U32 { return u32WrapAdd(a: lhs, b: rhs) }
     assoc fn wrappingSub(lhs~: U32, rhs~: U32) -> U32 { return u32WrapSub(a: lhs, b: rhs) }
     assoc fn wrappingMul(lhs~: U32, rhs~: U32) -> U32 { return u32WrapMul(a: lhs, b: rhs) }
@@ -627,7 +627,7 @@ impl U64 as Ord {
         return <Ordering.Greater />
     }
 }
-impl U64 as FixedWidthInteger {
+pub impl U64 as FixedWidthInteger {
     assoc fn wrappingAdd(lhs~: U64, rhs~: U64) -> U64 { return u64WrapAdd(a: lhs, b: rhs) }
     assoc fn wrappingSub(lhs~: U64, rhs~: U64) -> U64 { return u64WrapSub(a: lhs, b: rhs) }
     assoc fn wrappingMul(lhs~: U64, rhs~: U64) -> U64 { return u64WrapMul(a: lhs, b: rhs) }

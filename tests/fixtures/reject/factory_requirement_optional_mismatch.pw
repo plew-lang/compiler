@@ -1,0 +1,4 @@
+trait Build { optional factory(value: I64) }
+struct X { val raw: I64 }
+impl X as Build { factory(value: I64) { return <X raw=value /> } }
+fn main() { val x = <X value=1I64 /> }

@@ -120,7 +120,7 @@ fn implWrapBin(ty: String, pfx: String, meth: String, suf: String) {
 // bottom out in the `<pfx>Wrap*` intrinsic floor (declared in Core.pw, lowered
 // raw/unchecked by genNumIntrinsic).
 fn implWrap(ty: String, pfx: String) {
-    write(s: "impl ")
+    write(s: "pub impl ")
     write(s: ty)
     write(s: " as FixedWidthInteger {\n")
     implWrapBin(ty: ty, pfx: pfx, meth: "wrappingAdd", suf: "WrapAdd")

@@ -1273,6 +1273,13 @@ pub impl Comp {
                         parameterIndex += 1U64
                     }
                     val parameters = self.copyFuncBinds(binds: requirement.typeParams)
+                    if requirement.isFactory {
+                        val expected = self.groundTermInEnvironment(ref: self.traitBoundTypeTerm(ref: requirement.retTy, bound: traitBound, traitIndex: traitIndex), params: parameters, values: arguments)
+                        val actual = self.groundTermInEnvironment(ref: function.retTy, params: [], values: [], selfRef: traitBound.subject)
+                        if !self.typeRefEq(a: expected, b: actual) {
+                            return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "factory return type does not match the trait requirement") />
+                        }
+                    }
                     mut val required: Array[ConformBound] = []
                     mut val boundIndex = 0U64
                     while boundIndex < requirement.signatureBounds.len {
