@@ -481,6 +481,7 @@ pub impl Comp {
 
     inout fn typeTermRefSameHead(a: U64, b: U64) -> Bool {
         if a >= self.arena.typeTerms.count() || b >= self.arena.typeTerms.count() { return false }
+        if a == b { return true }
         val ta = self.arena.typeTerms[a]
         val tb = self.arena.typeTerms[b]
         if ta.isRecord || tb.isRecord { return ta.isRecord && tb.isRecord && ta.isSendable == tb.isSendable }

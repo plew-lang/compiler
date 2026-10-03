@@ -298,8 +298,10 @@ pub impl Comp {
     inout fn sameBodyRuntimeRef(a: U64, b: U64) -> Bool {
         if a == b { return true }
         if a >= self.arena.typeCount() || b >= self.arena.typeCount() { return false }
-        val left: TypeRef = self.arena.typeAt(index: a)
-        val right: TypeRef = self.arena.typeAt(index: b)
+        // Runtime shape reads the canonical scalar term and pooled children;
+        // copying the owning TypeRef would retain unrelated semantic arrays.
+        val left = self.arena.typeTerms[a]
+        val right = self.arena.typeTerms[b]
         // Source facets (view, capability, associated-type spelling) are
         // resolved before this point.  The emitted receiver representation is
         // determined solely by its runtime head/arguments and existential bit.
@@ -318,12 +320,12 @@ pub impl Comp {
         } else if left.nameId != right.nameId {
             return false
         }
-        if left.isAny != right.isAny || left.args.count() != right.args.count() {
+        if left.isAny != right.isAny || left.args.len != right.args.len {
             return false
         }
         mut val i: U64 = 0U64
-        while i < left.args.count() {
-            if !(self.sameBodyRuntimeRef(a: left.args[i], b: right.args[i])) { return false }
+        while i < left.args.len {
+            if !(self.sameBodyRuntimeRef(a: self.arena.typeArgumentPool[left.args.start + i], b: self.arena.typeArgumentPool[right.args.start + i])) { return false }
             i += 1U64
         }
         return true
@@ -1641,10 +1643,15 @@ pub impl Comp {
     inout fn findBinTraitWitnessForRef(receiverRef: U64, name: String, rhsRef: U64, rhsUntyped: Bool) -> Result[U64, CompileDiagnostic] {
         mut val firstMatch = self.arena.functionCount()
         mut val intMatch = self.arena.functionCount()
-        mut val index: U64 = 0U64
+        val spelling = self.kwSpan(kw: name, kwLen: name.bytes().count())
+        if spelling.nameLen == 0U64 { return <Result.Ok value=self.arena.functionCount() /> }
+        val nameId = intern(c: inout self, start: spelling.nameStart, len: spelling.nameLen)
+        // The declaration index retains registration order and hidden witness
+        // forms. It excludes only functions with a different spelling.
+        mut val index = self.arena.firstFunctionNamed(nameId: nameId)
         while index < self.arena.functionCount() {
             val function = self.arena.functionAt(index: index)
-            if function.isAssoc && function.params.count() >= 2U64 && rangeEquals(bytes: self.arena.bytes, start: function.nameStart, len: function.nameLen, kw: name) {
+            if function.isAssoc && function.params.count() >= 2U64 {
                 // Candidate parameters use the same lexical receiver as the
                 // callable body. A caller's extra view selects visible members;
                 // it must not become Self inside an unrelated implementation.
@@ -1661,7 +1668,7 @@ pub impl Comp {
                     }
                 }
             }
-            index += 1U64
+            index = self.arena.nextFunctionNamed(index: index)
         }
         if intMatch < self.arena.functionCount() { return <Result.Ok value=intMatch />}
         return <Result.Ok value=firstMatch />

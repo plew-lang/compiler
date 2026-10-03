@@ -375,10 +375,11 @@ pub impl Comp {
                 }
             }
             ci = 0U64
-            while ci < self.decls.conformCount() {
-                val edge: Conform = self.decls.conformAt(index: ci)
+            while ci < self.decls.traitSubjectConformCount() {
+                val edgeIndex = self.decls.traitSubjectConformIndexAt(index: ci)
+                val edge: Conform = self.decls.conformAt(index: edgeIndex)
                 if edge.subjectTraitOwner != 0U64 && edge.typeStart == state.traitOwner && edge.typeId == state.traitId && self.proofSourceIsActive(baseRef: baseRef, extId: edge.extId) {
-                    val witness: WitnessMatch = self.traitSubjectWitnessMatch(conformIdx: ci, subjectArgs: state.traitArgs, selfRef: baseRef)
+                    val witness: WitnessMatch = self.traitSubjectWitnessMatch(conformIdx: edgeIndex, subjectArgs: state.traitArgs, selfRef: baseRef)
                     if witness.conformIdx != 0U64 && !self.traitProofPathContains(edges: state.edges, witness: witness) {
                         mut val edges: Array[WitnessMatch] = state.edges
                         edges.append(witness)
