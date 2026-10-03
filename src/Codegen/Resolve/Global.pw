@@ -323,7 +323,7 @@ pub impl Comp {
                 Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => {
                     try self.rewriteNamedFactoryConstructionAt(exprId: i)
                 }
-                Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
+                Expr.Cast(val operand, val tyStart, val tyLen, ty: val ty) => {
                     // `x as T` ⟺ `<T from=x/>` (spec/12): when `T` owns a `from` factory
                     // (an anonymous `factory(from: …)`), route the cast to it. Numeric casts
                     // are untouched (primitives have no `from` factory).
@@ -332,6 +332,10 @@ pub impl Comp {
                         mut val cargs: Array[Arg] = []
                         cargs.append(<Arg expr=operand isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
                         self.arena.exprs[i] = <Expr.Method recv=recv nameStart=fromN.nameStart nameLen=fromN.nameLen args=self.pushArgs(args: cargs) />
+                        val receiverTerm = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: tyStart, nameLen: tyLen) }
+                        val origin = self.nextExprOriginSerial
+                        self.nextExprOriginSerial += 1U64
+                        try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=i kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=receiverTerm receiverIsType=true />)
                     }
                 }
                 _ => {}

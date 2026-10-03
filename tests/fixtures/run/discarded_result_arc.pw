@@ -24,7 +24,7 @@ fn label(n: I64) -> String {
 fn main() {
     label(n: 1)                      // discarded String result
     label(n: 0) + label(n: 1)        // discarded concat of two temps
-    Wrap.tagged(tag: "x" + "y")      // discarded struct with heap field
+    <Wrap.tagged tag="x" + "y" />      // discarded struct with heap field
     val keep: String = label(n: 5)
     keep                             // discarded place read (borrow — must NOT free keep)
     print(keep)
