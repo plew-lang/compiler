@@ -637,6 +637,9 @@ pub impl Comp {
             Expr.Sequence(val body) => {
                 try self.checkBoundsBlock(blkId: body)
             }
+            Expr.Block(val body, offset: _) => {
+                try self.checkBoundsBlock(blkId: body)
+            }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.checkBoundsExpr(exprId: cond)
                 try self.checkBoundsBlock(blkId: thenBlk)
@@ -827,6 +830,10 @@ pub impl Comp {
         // type (`val x: I64 = if c { give a } else { give b }` with a: T).
         match self.arena.exprs[valueExpr] {
             Expr.Sequence(val body) => {
+                val value = self.tcBlockGiveValue(blockId: body)
+                if value != 0U64 { try self.checkGenericTypeMatch(expectedRef: expectedRef, valueExpr: value) }
+            }
+            Expr.Block(val body, offset: _) => {
                 val value = self.tcBlockGiveValue(blockId: body)
                 if value != 0U64 { try self.checkGenericTypeMatch(expectedRef: expectedRef, valueExpr: value) }
             }

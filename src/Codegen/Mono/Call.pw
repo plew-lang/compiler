@@ -5962,6 +5962,9 @@ pub impl Comp {
             Expr.Sequence(val body) => {
                 try self.scanBlockInsts(blkId: body)
             }
+            Expr.Block(val body, offset: _) => {
+                try self.scanBlockInsts(blkId: body)
+            }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.scanExprInsts(exprId: cond)
                 try self.scanBlockInsts(blkId: thenBlk)

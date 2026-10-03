@@ -245,6 +245,7 @@ pub impl Comp {
                 if value < self.arena.exprs.count() { return self.exprOffset(id: value) }
                 return 0U64
             }
+            Expr.Block(body: _, val offset) => { return offset }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => { return self.exprOffset(id: cond) }
             Expr.OptChain(val base, cont: _) => { return self.exprOffset(id: base) }
             Expr.ChainHole => { return 0 }

@@ -734,6 +734,8 @@ pub enum Expr {
     // MatchExpr). `else` is mandatory in value position (it must always yield).
     // Compiler-generated expression steps; no new full-expression lifetime.
     Sequence(body: U64)
+    // Source block expression: lexical ownership scope, unlike generated steps.
+    Block(body: U64, offset: U64)
     IfExpr(cond: U64, thenBlk: U64, elseBlk: U64)
     // `base?.<cont>` (optional chaining, spec/12): if `base` (a Chain type) yields a
     // value, the result wraps `cont` applied to that value, else empty — Swift-style

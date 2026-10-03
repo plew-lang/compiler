@@ -542,6 +542,10 @@ pub impl Comp {
                 try self.checkBranchYieldsValue(blkId: body, offset: self.exprOffset(id: id))
                 try self.verifyBlock(blockId: body)
             }
+            Expr.Block(val body, offset: _) => {
+                try self.checkBranchYieldsValue(blkId: body, offset: self.exprOffset(id: id))
+                try self.verifyBlock(blockId: body)
+            }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.verifyExpr(id: cond)
                 try self.checkBranchYieldsValue(blkId: thenBlk, offset: self.exprOffset(id: id))

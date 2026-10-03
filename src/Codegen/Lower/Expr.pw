@@ -288,6 +288,7 @@ pub impl Comp {
                     result = (try self.lowerScalarMatchExpr(scrut: scrut, arms: arms, span: span))
                 }
             }
+            ExprAst.BlockExpr(val body, val span) => { result = self.pushExpr(e: <Expr.Block body=(try self.lowerBlock(b: body)) offset=span.start />) }
             ExprAst.IfExpr(val cond, val thenBlk, val elseBlk, val span) => {
                 val cnd: U64 = (try self.lowerExpr(e: cond))
                 val tb: U64 = (try self.lowerBlock(b: thenBlk))
@@ -589,6 +590,7 @@ pub impl Comp {
                 val ty: PType = (try self.lowerSyntaxType(id: e.type0))
                 result = self.pushExpr(e: <Expr.Cast operand=(try self.lowerSyntaxExpr(id: e.child0)) tyStart=ty.start tyLen=ty.len ty=ty.ref />)
             }
+            SyntaxExprKind.BlockExpr => { result = self.pushExpr(e: <Expr.Block body=(try self.lowerSyntaxBlock(id: e.block0)) offset=e.span.start />) }
             SyntaxExprKind.IfExpr => {
                 result = self.pushExpr(e: <Expr.IfExpr cond=(try self.lowerSyntaxExpr(id: e.child0)) thenBlk=(try self.lowerSyntaxBlock(id: e.block0)) elseBlk=(try self.lowerSyntaxBlock(id: e.block1)) />)
             }

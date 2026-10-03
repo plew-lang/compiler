@@ -63,6 +63,10 @@ pub impl Comp {
                 val value = self.tcBlockGiveValue(blockId: body)
                 if value != 0U64 { try self.tcCheckValue(expectedRef: expectedRef, valueExpr: value, pos: "expression-sequence") }
             }
+            Expr.Block(val body, offset: _) => {
+                val value = self.tcBlockGiveValue(blockId: body)
+                if value != 0U64 { try self.tcCheckValue(expectedRef: expectedRef, valueExpr: value, pos: "expression-sequence") }
+            }
             Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
                 val tv: U64 = self.tcBlockGiveValue(blockId: thenBlk)
                 if tv != 0U64 {

@@ -865,6 +865,7 @@ fn midUnsupportedOperandForExpr(expressions: Array[Expr], exprId: U64) -> MidUns
         Expr.OptChain(base: _, cont: _) => { return <MidUnsupportedBuild.UnloweredView /> }
         Expr.ChainHole => { return <MidUnsupportedBuild.UnloweredView /> }
         Expr.MatchExpr(scrut: _, arms: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
+        Expr.Block(body: _, offset: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
         Expr.Sequence(body: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
         Expr.IfExpr(cond: _, thenBlk: _, elseBlk: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
         Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return <MidUnsupportedBuild.UnloweredReference /> }
@@ -1464,6 +1465,12 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.CastBoundary exprId=exprId sourceTerm=sourceTerm targetTerm=selectedTarget operand=source.operand /> />)
             if ownsUnique { return <MidOperandBuild operand=<MidOperand.Move place=destination /> /> }
             return <MidOperandBuild operand=<MidOperand.Copy place=destination /> />
+        }
+        Expr.Block(body: val body, offset: _) => {
+            val resultLocal = addMidTemporary(state: inout state, typeTerm: typeTerm)
+            val resultPlace = <MidPlace local=resultLocal typeTerm=typeTerm />
+            val error = buildMidBlockInto(c: inout c, state: inout state, blockId: body, hasGiveDestination: true, giveDestination: resultPlace)
+            return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> error=error />
         }
         Expr.Sequence(body: val body) => {
             val resultLocal = addMidTemporary(state: inout state, typeTerm: typeTerm)
