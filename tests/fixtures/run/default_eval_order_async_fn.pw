@@ -1,4 +1,5 @@
-// Async entry calls also build the ABI arg list in parameter declaration order.
+// Async entry calls evaluate explicit arguments before omitted defaults;
+// the ABI operand list still follows parameter declaration order.
 use @Std/Io only { print }
 use @Std/Async only { sleep }
 

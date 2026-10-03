@@ -404,7 +404,8 @@ pub struct SemanticAggregateElement {
     // Struct/enum storage uses the frontend-selected physical field slot.
     // Array elements are naturally indexed in source order and use the same
     // value for this field. `elements` follows Record's frozen evaluation order:
-    // declaration order for named construction, written order for records/arrays.
+    // explicit fields then omitted defaults for memberwise construction;
+    // written order for records/arrays, declaration order for enum payloads.
     pub val fieldIndex: U64
     // Navigation anchors only. The semantic identity is owner + aggregate
     // record; later Mid lookup may read an already-frozen call/aggregate at
@@ -891,7 +892,7 @@ pub struct Param {
     pub val noLabel: Bool
     // default argument `name: T = expr` (spec/04): when the call omits this
     // param, `defaultExpr` is emitted in its place. Omitted defaults need not be
-    // trailing; calls evaluate parameters in declaration order. `hasDefault`
+    // trailing; calls evaluate explicit arguments before omitted defaults. `hasDefault`
     // false = required.
     pub val hasDefault: Bool
     pub val defaultExpr: U64
@@ -2921,6 +2922,9 @@ pub enum CallArgumentSource {
 // navigation anchor for value evaluation.  Keeping them beside the semantic
 // type source prevents Mono from reopening an Expr solely to recover them.
 pub struct CallTemplateArgument {
+    // One-based position in the frozen evaluation schedule; zero uses the
+    // parameter position. Operand storage remains in callee parameter order.
+    pub val evaluationOrder: U64 = 0U64
     pub val isDispatchReceiver: Bool = false
     pub val source: CallArgumentSource
     pub val isInout: Bool

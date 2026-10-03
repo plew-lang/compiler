@@ -1969,7 +1969,29 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
     if !midTemplateIsCallable(template: template) {
         match template.kind { CallTemplateKind.Pending => { return <MidBuildError.MissingCallTemplate /> } _ => { return <MidBuildError.UnsupportedCallTemplate /> } }
     }
-    val sources: Array[CallTemplateArgument] = midTemplateArguments(c: c, template: template)
+    val parameters: Array[CallTemplateArgument] = midTemplateArguments(c: c, template: template)
+    mut val sources = parameters
+    mut val reordered = false
+    mut val parameterIndex = 0U64
+    while parameterIndex < parameters.count() {
+        val order = parameters[parameterIndex].evaluationOrder
+        if order != 0U64 && order != parameterIndex + 1U64 { reordered = true }
+        parameterIndex += 1U64
+    }
+    if reordered {
+        mut val occupied: Array[Bool] = []
+        for val parameter in parameters { occupied.append(false) }
+        parameterIndex = 0U64
+        while parameterIndex < parameters.count() {
+            val parameter = parameters[parameterIndex]
+            val order = if parameter.evaluationOrder == 0U64 { give parameterIndex } else { give parameter.evaluationOrder - 1U64 }
+            if order >= parameters.count() { return <MidBuildError.UnsupportedCallTemplate /> }
+            if occupied[order] { return <MidBuildError.UnsupportedCallTemplate /> }
+            occupied.set(i: order, value: true)
+            sources.set(i: order, value: parameter)
+            parameterIndex += 1U64
+        }
+    }
     val receiver: MidReceiverBuild = midCallReceiver(c: inout c, state: inout state, exprId: exprId, template: template)
     match receiver.error { MidBuildError.None => {} _ => { return receiver.error } }
     if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
@@ -2012,8 +2034,16 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
             ordinaryArgs.append(argument.operand)
             ordinaryI += 1U64
         }
+        mut val parameterArgs = ordinaryArgs
+        parameterIndex = 0U64
+        while reordered && parameterIndex < parameters.count() {
+            val parameter = parameters[parameterIndex]
+            val order = if parameter.evaluationOrder == 0U64 { give parameterIndex } else { give parameter.evaluationOrder - 1U64 }
+            parameterArgs.set(i: parameterIndex, value: ordinaryArgs[order])
+            parameterIndex += 1U64
+        }
         val ordinaryNext: U64 = midNewBlock(state: inout state)
-        midSetTerminator(state: inout state, terminator: <MidTerminator.Call callee=<MidCallTarget.Template site=template.siteKey /> receiver=receiver.receiver args=ordinaryArgs destination=destination target=ordinaryNext />)
+        midSetTerminator(state: inout state, terminator: <MidTerminator.Call callee=<MidCallTarget.Template site=template.siteKey /> receiver=receiver.receiver args=parameterArgs destination=destination target=ordinaryNext />)
         state.currentBlock = ordinaryNext
         return <MidBuildError.None />
     }
@@ -2032,8 +2062,16 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
         if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
         i += 1U64
     }
+    mut val parameterArgs = args
+    parameterIndex = 0U64
+    while reordered && parameterIndex < parameters.count() {
+        val parameter = parameters[parameterIndex]
+        val order = if parameter.evaluationOrder == 0U64 { give parameterIndex } else { give parameter.evaluationOrder - 1U64 }
+        parameterArgs.set(i: parameterIndex, value: args[order])
+        parameterIndex += 1U64
+    }
     val next: U64 = midNewBlock(state: inout state)
-    midSetTerminator(state: inout state, terminator: <MidTerminator.NormalizedCall callee=<MidCallTarget.Template site=template.siteKey /> receiver=receiver.receiver args=args destination=destination target=next />)
+    midSetTerminator(state: inout state, terminator: <MidTerminator.NormalizedCall callee=<MidCallTarget.Template site=template.siteKey /> receiver=receiver.receiver args=parameterArgs destination=destination target=next />)
     state.currentBlock = next
     return <MidBuildError.None />
 }

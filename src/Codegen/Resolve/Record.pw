@@ -772,12 +772,11 @@ pub impl Comp {
                     elements.append(<SemanticAggregateElement fieldIndex=fieldIndex exprId=field.value targetTerm=(try self.aggregateSlotTypeRef(resultRef: resultTerm, isEnum: isEnum, isArrayLiteral: false, variantIndex: variantIndex, fieldIndex: fieldIndex)) isBoxed=isBoxed term=self.parametricExprTerm(exprId: field.value) />)
                     i += 1U64
                 }
-                // Named memberwise construction evaluates in declaration
-                // order, regardless of the written attribute order. Freeze
-                // that order here, alongside each selected destination slot.
-                // Structural records have canonical layout slots but retain
-                // their written evaluation order; layout is not evaluation.
-                if !self.arena.typeTerms[resultTerm].isRecord {
+                // Memberwise fields retain written explicit order followed
+                // by defaults appended in declaration order. Destination slots
+                // are independent of evaluation. Enum payloads retain their
+                // existing declaration-order contract.
+                if isEnum {
                     mut val position: U64 = 1U64
                     while position < elements.count() {
                         val element = elements[position]

@@ -1,5 +1,4 @@
-// Method calls with a middle default evaluate provided/default params in
-// declaration order.
+// Method calls evaluate explicit arguments before omitted defaults.
 use @Std/Io only { print }
 
 fn mark(n: I64) -> I64 {

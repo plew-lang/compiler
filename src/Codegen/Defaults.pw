@@ -144,6 +144,7 @@ pub impl Comp {
         }
         val parameters: FuncParamRange = self.arena.functionAt(index: callee).params
         mut val completed: Array[CallTemplateArgument] = []
+        mut val defaultOrder = args.count() + 1U64
         index = 0U64
         while index < bindings.count() {
             match bindings[index] {
@@ -151,7 +152,10 @@ pub impl Comp {
                     // Record already resolved lexical local identity and call
                     // dependencies. Completion has no lexical cursor and must
                     // not reconstruct these facts from the source expression.
-                    completed.append(args[argumentIndex])
+                    val argument = args[argumentIndex]
+                    val order = if argument.evaluationOrder == 0U64 { give argumentIndex + 1U64 } else { give argument.evaluationOrder }
+                    completed.append(<CallTemplateArgument evaluationOrder=order isDispatchReceiver=argument.isDispatchReceiver
+                        source=argument.source isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
                 }
                 CallParameterBinding.Default(val generator) => {
                     mut val existing: U64 = self.arena.exprs.count()
@@ -173,7 +177,8 @@ pub impl Comp {
                     }
                     val call: U64 = (try self.recordDefaultArgumentCall(generator: generator, receiver: receiver, calleeTypeArgs: generatorArgs, resultTerm: parameterTerms[index], existingExpr: existing, proof: proof, receiverTypeTerm: receiverTypeTerm))
                     val parameter: Param = self.funcParamAt(params: parameters, index: index)
-                    completed.append(<CallTemplateArgument source=(try self.callArgumentSource(exprId: call)) isInout=false labelStart=parameter.nameStart labelLen=parameter.nameLen hasLabel=!parameter.noLabel />)
+                    completed.append(<CallTemplateArgument evaluationOrder=defaultOrder source=(try self.callArgumentSource(exprId: call)) isInout=false labelStart=parameter.nameStart labelLen=parameter.nameLen hasLabel=!parameter.noLabel />)
+                    defaultOrder += 1U64
                 }
             }
             index += 1U64

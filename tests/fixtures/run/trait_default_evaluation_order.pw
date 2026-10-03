@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+fn defaultValue() -> I64 { print("default") return 5I64 }
+fn suppliedValue() -> I64 { print("explicit") return 9I64 }
+trait Read { fn read(value: I64) -> I64 }
+struct Worker {}
+impl Worker as Read {
+    fn read(count: I64 = defaultValue(), value: I64) -> I64 { return count + value }
+}
+fn generic[T](receiver: T) -> I64 where T: Read { return receiver.read(value: suppliedValue()) }
+fn main() {
+    val worker = <Worker />
+    print("direct")
+    print(worker.read(value: suppliedValue()))
+    print("generic")
+    print(generic(receiver: worker))
+}
