@@ -459,7 +459,8 @@ pub impl Comp {
     }
 
     inout fn anonymousConstructionCandidates(typeStart: U64, typeLen: U64) -> Array[U64] {
-        val receiver = self.newtypeUnderName(start: typeStart, len: typeLen)
+        val source = self.realTypeNameInModule(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
+        val receiver = self.newtypeUnderName(start: source.nameStart, len: source.nameLen)
         val name = intern(c: inout self, start: receiver.nameStart, len: receiver.nameLen)
         return self.arena.anonymousFactoriesForReceiver(nameId: name)
     }

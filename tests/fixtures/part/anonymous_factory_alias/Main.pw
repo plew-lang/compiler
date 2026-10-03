@@ -1,0 +1,13 @@
+use ./Models only { Point as Alias }
+use @Std/Io only { print }
+
+fn main() {
+    val first: Alias = <value=1I64 />
+    val second = <Alias value=2I64 />
+    val third: Alias = <value="third" />
+    val fourth = <Alias value="fourth" />
+    print(first.number)
+    print(second.number)
+    print(third.number)
+    print(fourth.number)
+}

@@ -1,0 +1,28 @@
+use @Std/Io only { print }
+
+trait Implicit { fn act() }
+trait Explicit { fn act() -> () }
+struct First {}
+struct Second {}
+struct Third {}
+struct Fourth {}
+
+impl First as Implicit {
+    fn act(value: I64 = 1I64) -> () { print(value) return () }
+}
+impl Second as Explicit {
+    fn act(value: I64 = 2I64) { print(value) }
+}
+impl Third { fn perform(value: I64 = 3I64) -> () { print(value) return () } }
+impl Third as Implicit { fn act() via perform }
+impl Fourth { fn perform(value: I64 = 4I64) { print(value) } }
+impl Fourth as Explicit { fn act() -> () via perform }
+
+fn implicit[T](value: T) where T: Implicit { value.act() }
+fn explicit[T](value: T) where T: Explicit { value.act() }
+fn main() {
+    implicit(value: <First />)
+    explicit(value: <Second />)
+    implicit(value: <Third />)
+    explicit(value: <Fourth />)
+}

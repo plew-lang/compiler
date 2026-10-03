@@ -1255,7 +1255,7 @@ pub impl Comp {
                         parameterIndex += 1U64
                     }
                     val parameters = self.copyFuncBinds(binds: requirement.typeParams)
-                    if function.isAssoc != requirement.isAssoc || function.selfInout != requirement.selfInout || function.selfMove != requirement.selfMove || function.isAsync != requirement.isAsync || function.hasRet != requirement.hasRet {
+                    if function.isAssoc != requirement.isAssoc || function.selfInout != requirement.selfInout || function.selfMove != requirement.selfMove || function.isAsync != requirement.isAsync {
                         return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation calling convention does not match the trait requirement") />
                     }
                     parameterIndex = 0U64
@@ -1267,13 +1267,11 @@ pub impl Comp {
                         }
                         parameterIndex += 1U64
                     }
-                    if requirement.hasRet {
-                        val expected = self.groundTermInEnvironment(ref: self.traitBoundTypeTerm(ref: requirement.retTy, bound: traitBound, traitIndex: traitIndex), params: parameters, values: arguments)
-                        val actual = self.groundTermInEnvironment(ref: function.retTy, params: [], values: [], selfRef: traitBound.subject)
-                        if !self.typeRefEq(a: expected, b: actual) {
-                            if requirement.isFactory { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "factory return type does not match the trait requirement") /> }
-                            return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation return type does not match the trait requirement") />
-                        }
+                    val expectedResult = self.groundTermInEnvironment(ref: self.traitBoundTypeTerm(ref: self.semanticCallableReturnTerm(function: requirement), bound: traitBound, traitIndex: traitIndex), params: parameters, values: arguments)
+                    val actualResult = self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: function), params: [], values: [], selfRef: traitBound.subject)
+                    if !self.typeRefEq(a: expectedResult, b: actualResult) {
+                        if requirement.isFactory { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "factory return type does not match the trait requirement") /> }
+                        return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation return type does not match the trait requirement") />
                     }
                     mut val required: Array[ConformBound] = []
                     mut val boundIndex = 0U64
@@ -1358,7 +1356,7 @@ pub impl Comp {
     // Match the implementation directionally: requirement
     // binders remain rigid while the target's binders acquire one substitution.
     inout fn viaSignatureMatches(witness: Func, target: Func) -> Bool {
-        if witness.hasRecv != target.hasRecv || witness.isAssoc != target.isAssoc || witness.selfInout != target.selfInout || witness.selfMove != target.selfMove || witness.isAsync != target.isAsync || witness.hasRet != target.hasRet {
+        if witness.hasRecv != target.hasRecv || witness.isAssoc != target.isAssoc || witness.selfInout != target.selfInout || witness.selfMove != target.selfMove || witness.isAsync != target.isAsync {
             return false
         }
         val input = <CallableArgumentInput.Parameters range=witness.params />
@@ -1382,11 +1380,9 @@ pub impl Comp {
             if !self.unifyPatterns(a: actualType, aSide: 0U64, b: expectedType, bSide: 1U64, aParams: targetParameters, bParams: rigidParameters, binds: inout bindings) { return false }
             index += 1U64
         }
-        if witness.hasRet {
-            val expectedType = self.groundTermInEnvironment(ref: witness.retTy, params: [], values: [], selfRef: witness.recvTy)
-            val actualType = self.groundTermInEnvironment(ref: target.retTy, params: [], values: [], selfRef: witness.recvTy)
-            if !self.unifyPatterns(a: actualType, aSide: 0U64, b: expectedType, bSide: 1U64, aParams: targetParameters, bParams: rigidParameters, binds: inout bindings) { return false }
-        }
+        val expectedResult = self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: witness), params: [], values: [], selfRef: witness.recvTy)
+        val actualResult = self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: target), params: [], values: [], selfRef: witness.recvTy)
+        if !self.unifyPatterns(a: actualResult, aSide: 0U64, b: expectedResult, bSide: 1U64, aParams: targetParameters, bParams: rigidParameters, binds: inout bindings) { return false }
         return true
     }
 

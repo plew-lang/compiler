@@ -1,0 +1,5 @@
+trait Action { fn act() }
+struct Worker {}
+impl Worker { fn perform(value: I64 = 5I64) -> I64 { return value } }
+impl Worker as Action { fn act() via perform }
+fn main() {}

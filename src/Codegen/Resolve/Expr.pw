@@ -436,6 +436,7 @@ pub impl Comp {
             val promise = self.internBytes(s: "Promise")
             return self.pushType(t: <TypeRef nameStart=promise.nameStart nameLen=promise.nameLen args=[0U64] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
         }
+        if self.callableResultIsUnit(ref: function.retTy) { return 0U64 }
         return function.retTy
     }
 
@@ -1254,20 +1255,22 @@ pub impl Comp {
     fn functionDeclarationReturnsUnit(f: Func) -> Bool {
         // An async declaration's omitted payload result still yields a
         // Promise at the call site; it is not a Unit-valued call.
-        return !f.hasRet && !f.isAsync
+        return !f.isAsync && self.callableResultIsUnit(ref: f.retTy)
     }
 
     inout fn functionTypeReturnsUnit(ref: U64) -> Bool {
         if ref == 0U64 || ref >= self.arena.typeCount() || !self.isFnType(ref: ref) { return false }
         val signature: TypeRef = self.arena.typeAt(index: ref)
         if signature.args.count() == 0U64 { return false }
-        val result: U64 = signature.args[0U64]
-        if result == 0U64 { return true }
-        if result >= self.arena.typeCount() { return false }
-        val term: TypeRef = self.arena.typeAt(index: result)
-        // Function signatures preserve an omitted result as the parser's
-        // empty type node. This interpretation is valid only in this known
-        // signature result slot, never for an arbitrary missing expression.
+        return self.callableResultIsUnit(ref: signature.args[0U64])
+    }
+
+    // Only callable result slots interpret the omitted-type sentinel as ().
+    // Explicit () is represented by the same empty record as other annotations.
+    fn callableResultIsUnit(ref: U64) -> Bool {
+        if ref == 0U64 { return true }
+        if ref >= self.arena.typeCount() { return false }
+        val term = self.arena.typeAt(index: ref)
         return (term.isRecord && term.recordFieldTerms.count() == 0U64) || (term.nameLen == 0U64 && term.args.count() == 0U64 && term.paramId == 0U64 && term.assocNameId == 0U64 && !term.isAny)
     }
 

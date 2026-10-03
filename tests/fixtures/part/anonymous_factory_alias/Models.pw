@@ -1,0 +1,5 @@
+pub struct Point { pub val number: I64 }
+pub impl Point {
+    factory(value: I64) { return <Point number=value /> }
+    factory(value: String) { return <Point number=42I64 /> }
+}
