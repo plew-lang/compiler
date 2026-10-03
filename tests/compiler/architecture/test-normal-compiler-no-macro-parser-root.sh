@@ -65,10 +65,21 @@ fi
 # Concrete provided methods use the same finalized body identity, including
 # proof provenance. Excluding them here leaves a JIT-requested body undeclared
 # unless its caller happened to register it first.
-if ! rg -q 'f\.hasRecv && !f\.isExtern && !c\.methodRecvIsTrait' "$methods"; then
+if ! rg -Fq 'if f.hasRecv && !f.isExtern {' "$methods"; then
     echo "method declaration does not include every reachable concrete method" >&2
     exit 1
 fi
+if rg -q 'methodRecvIsTrait' "$methods"; then
+    echo "finalized method admission must not classify the original trait receiver again" >&2
+    exit 1
+fi
+# AOT callers can incidentally register this body; JIT must also emit it when
+# the concrete instance of a trait-origin provided method is requested alone.
+compiler="${PLEWC:-./bin/plewc}"
+jit_output=$(mktemp "${TMPDIR:-/tmp}/plew-provided-method-jit.XXXXXX")
+trap 'rm -f "$jit_output"' EXIT
+python3 ./scripts/support/watch-command.py -- "$compiler" --run tests/fixtures/run/provided_associated_forward_trait.pw > "$jit_output"
+diff -u tests/fixtures/run/provided_associated_forward_trait.out "$jit_output"
 if ! rg -Fq 'if self.genMethBody[slot] == bodyId { return slot }' "$methods"; then
     echo "method declaration cache loses finalized proof-carrying body identity" >&2
     exit 1

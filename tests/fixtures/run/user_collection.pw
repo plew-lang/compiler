@@ -50,7 +50,7 @@ pub impl[T] Stack[T] {
 
 fn main() {
     // (1) scalar element: pure floor mechanics, no ARC.
-    mut val nums: Stack[I64] = Stack.new()
+    mut val nums: Stack[I64] = <Stack.new />
     nums.push(10I64)
     nums.push(20I64)
     nums.push(30I64)
@@ -67,7 +67,7 @@ fn main() {
 
     // (2) ARC element (String): push retains, replaceTop is commit-then-release (§6-4),
     // peek value-returns (retains), pop moves the live String out to the caller.
-    mut val words: Stack[String] = Stack.new()
+    mut val words: Stack[String] = <Stack.new />
     words.push("alpha")
     words.push("beta")
     val top0: String = words.peek()
@@ -83,7 +83,7 @@ fn main() {
     // (3) value semantics: a copy CoW-shares the backing; a mutation on one side
     // privatizes so the two diverge (the floor's CoW gateway, driven through a user
     // collection's own methods).
-    mut val src: Stack[String] = Stack.new()
+    mut val src: Stack[String] = <Stack.new />
     src.push("x")
     src.push("y")
     mut val dup: Stack[String] = src         // CoW-share the backing buffer
