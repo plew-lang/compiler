@@ -1,0 +1,1 @@
+/Users/malt03/Documents/plew/meta/compiler/tests/fixtures/partreject/named_factory_private_explicit/Main.pw:2: method is private (callable only in its defining module; put it in a `pub impl`)
