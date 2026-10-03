@@ -567,6 +567,126 @@ pub impl Comp {
         return <Result.Ok value=self.pushBlock(stmts: [statement]) />
     }
 
+    // Project one callable form using exactly the ordinary argument traversal.
+    // Parameter types keep the implementation's lexical binders; conformance
+    // checking substitutes the requirement in its own environment.
+    inout fn callableFormParameters(source: Func, requirement: Func) -> Optional[FuncParamRange] {
+        val input = <CallableArgumentInput.Parameters range=requirement.params />
+        if !self.callableInputLabelsOk(params: source.params, input: input) { return <Optional.None /> }
+        mut val parameters: Array[Param] = []
+        mut val position = 0U64
+        mut val index = 0U64
+        while index < requirement.params.count() {
+            position = self.callableNextParameter(params: source.params, input: input, index: index, start: position)
+            val parameter = self.funcParamAt(params: source.params, index: position)
+            parameters.append(<Param nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId
+                tyStart=parameter.tyStart tyLen=parameter.tyLen tyNameId=parameter.tyNameId tyIsArray=parameter.tyIsArray ty=parameter.ty
+                isInout=parameter.isInout isMove=parameter.isMove isBorrow=parameter.isBorrow noLabel=parameter.noLabel
+                hasDefault=false defaultExpr=0U64 />)
+            position += 1U64
+            index += 1U64
+        }
+        return <Optional.Some v=self.pushFuncParams(params: parameters) />
+    }
+
+    inout fn createCallableFormWitness(sourceIndex: U64, requirement: Func, parameters: FuncParamRange) -> Result[U64, CompileDiagnostic] {
+        val source = self.arena.functionAt(index: sourceIndex)
+        val receiver = <Bind nameStart=source.recvStart nameLen=source.recvLen fieldStart=source.recvStart fieldLen=source.recvLen />
+        val target = <Bind nameStart=source.nameStart nameLen=source.nameLen fieldStart=source.nameStart fieldLen=source.nameLen />
+        val body = try self.lowerViaBody(params: self.copyFuncParams(params: parameters), receiver: receiver,
+            receiverType: source.recvTy, target: target, isAssoc: source.isAssoc, isAsync: source.isAsync,
+            hasRet: source.hasRet, offset: source.defOffset)
+        val index = self.arena.functionCount()
+        try self.registerDeclaredFunc(f: <Func nameStart=requirement.nameStart nameLen=requirement.nameLen nameId=requirement.nameId
+            recvId=source.recvId recvTy=source.recvTy recvPatternParams=source.recvPatternParams recvTraitArgs=source.recvTraitArgs
+            typeParams=source.typeParams params=parameters hasRet=source.hasRet retStart=source.retStart retLen=source.retLen
+            retIsArray=source.retIsArray retTy=source.retTy body=body hasRecv=source.hasRecv recvStart=source.recvStart recvLen=source.recvLen
+            selfInout=source.selfInout selfMove=source.selfMove isAssoc=source.isAssoc isFactory=source.isFactory
+            isAnonymousFactory=source.isAnonymousFactory isAsync=source.isAsync isExtern=false isPub=source.isPub extId=source.extId
+            originTraitId=source.originTraitId originTraitOwner=source.originTraitOwner originTraitArity=source.originTraitArity
+            provTraitArity=source.provTraitArity provTraitOwner=source.provTraitOwner sourceWitnessFuncId=index + 1U64
+            defOffset=source.defOffset />, registerSurface: false)
+        val boundCount = self.decls.funcBounds.count()
+        mut val boundIndex = 0U64
+        while boundIndex < boundCount {
+            val bound = self.decls.funcBounds[boundIndex]
+            if bound.fnIdx == sourceIndex {
+                self.decls.funcBounds.append(<FuncBound fnIdx=index paramStart=bound.paramStart paramLen=bound.paramLen
+                    paramNameId=bound.paramNameId paramTy=bound.paramTy constraint=bound.constraint />)
+            }
+            boundIndex += 1U64
+        }
+        return <Result.Ok value=index />
+    }
+
+    fn conformanceHasDefaultParameters(conformance: Conform) -> Bool {
+        mut val index = 0U64
+        while index < conformance.witnessFuncIds.count() {
+            val source = self.arena.functionAt(index: self.conformFuncIdAt(ids: conformance.witnessFuncIds, index: index))
+            mut val parameterIndex = 0U64
+            while parameterIndex < source.params.count() {
+                if self.funcParamAt(params: source.params, index: parameterIndex).hasDefault { return true }
+                parameterIndex += 1U64
+            }
+            index += 1U64
+        }
+        return false
+    }
+
+    inout fn prepareConformanceCallableForms() -> Result[(), CompileDiagnostic] {
+        mut val conformanceIndex = 0U64
+        while conformanceIndex < self.decls.conformCount() {
+            val conformance = self.decls.conformAt(index: conformanceIndex)
+            val traitIndex = self.resolveTraitDef(cf: conformance)
+            if !conformance.derived && traitIndex < self.decls.traitCount() && self.conformanceHasDefaultParameters(conformance: conformance) {
+                val trait = self.decls.traitAt(index: traitIndex)
+                mut val witnesses = self.copyConformWitnesses(witnesses: conformance.witnessed)
+                mut val functions = self.copyConformFuncIds(ids: conformance.witnessFuncIds)
+                val originalCount = functions.count()
+                mut val requirementIndex = 0U64
+                while requirementIndex < trait.reqs.count() {
+                    val requirement = self.traitReqAt(reqs: trait.reqs, index: requirementIndex)
+                    mut val selected = self.arena.functionCount()
+                    mut val selectedParameters = <FuncParamRange start=0U64 len=0U64 />
+                    mut val found = false
+                    mut val sourceIndex = 0U64
+                    while sourceIndex < originalCount {
+                        val functionIndex = functions[sourceIndex]
+                        val source = self.arena.functionAt(index: functionIndex)
+                        val sameName = source.nameId == requirement.nameId || (source.isAnonymousFactory && requirement.isAnonymousFactory)
+                        if sameName && source.params.count() > requirement.params.count() && source.isFactory == requirement.isFactory && source.isAnonymousFactory == requirement.isAnonymousFactory {
+                            match self.callableFormParameters(source: source, requirement: requirement) {
+                                Optional.Some(v: val parameters) => {
+                                    if self.paramSelectorEqSubst(cf: conformance, w: parameters, r: requirement.params,
+                                        recvStart: conformance.typeStart, recvLen: conformance.typeLen,
+                                        tps: self.copyTraitBinds(binds: trait.typeParams), targs: self.copyConformTypes(types: conformance.traitArgs)) {
+                                        if found { return <Result.Err error=self.diagnosticAt(offset: conformance.defOffset, msg: "ambiguous callable form for trait requirement") /> }
+                                        found = true
+                                        selected = functionIndex
+                                        selectedParameters = parameters
+                                    }
+                                }
+                                Optional.None => {}
+                            }
+                        }
+                        sourceIndex += 1U64
+                    }
+                    if found {
+                        val adapter = try self.createCallableFormWitness(sourceIndex: selected, requirement: requirement, parameters: selectedParameters)
+                        witnesses.append(self.arena.functionAt(index: adapter))
+                        functions.append(adapter)
+                    }
+                    requirementIndex += 1U64
+                }
+                if functions.count() != originalCount {
+                    self.decls.completeConformWitnesses(index: conformanceIndex, witnesses: self.pushConformWitnesses(witnesses: witnesses), functions: self.pushConformFuncIds(ids: functions))
+                }
+            }
+            conformanceIndex += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
     // The Syntax decoder deliberately converges on Func/Conform/AssocBinding,
     // not on a shadow MemberAst.  Its temporary arrays are semantic scopes and
     // pool payloads; no source tree is reconstructed or retained.

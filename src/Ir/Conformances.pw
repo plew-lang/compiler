@@ -12,4 +12,16 @@ pub impl Decls {
         }
         self.conformRows.append(declaration)
     }
+    // Complete declaration-owned callable forms before proofs are requested.
+    // The row identity and subject index remain stable.
+    inout fn completeConformWitnesses(index: U64, witnesses: ConformWitnessRange, functions: ConformFuncIdRange) {
+        val source = self.conformRows[index]
+        self.conformRows.set(i: index, value: <Conform
+            sourceModule=source.sourceModule typeStart=source.typeStart typeLen=source.typeLen typeId=source.typeId
+            subjectTraitOwner=source.subjectTraitOwner subjectTy=source.subjectTy subjectArgs=source.subjectArgs
+            typeParams=source.typeParams bounds=source.bounds typeArity=source.typeArity
+            traitStart=source.traitStart traitLen=source.traitLen traitId=source.traitId traitArgs=source.traitArgs
+            derived=source.derived isPub=source.isPub extId=source.extId viewRootId=source.viewRootId
+            defOffset=source.defOffset assocBindingIds=source.assocBindingIds witnessed=witnesses witnessFuncIds=functions />)
+    }
 }

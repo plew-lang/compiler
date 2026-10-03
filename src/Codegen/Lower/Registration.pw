@@ -652,7 +652,7 @@ pub impl Comp {
             }
         }
         val idx: U64 = self.arena.functionCount()
-        self.arena.registerFunction(f)
+        self.arena.registerFunction(f, registerSurface: registerSurface)
         mut val boundIndex = 0U64
         while boundIndex < f.signatureBounds.len {
             val bound = self.conformBoundAt(bounds: f.signatureBounds, index: boundIndex)

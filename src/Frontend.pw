@@ -1710,6 +1710,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     // conforming concrete type (before provided methods, so A's own provided
     // methods also reach the newly-conforming types). The headless form
     // `impl[T] T as A where T: B` is rejected separately (Verify.checkBlanketHeadless).
+    try c.prepareConformanceCallableForms()
     try c.instantiateTraitSubjectConforms()
     // trait provided methods (spec/08): copy each `impl Trait { }` provided
     // method onto every conforming type, so they ride normal method resolution.

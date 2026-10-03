@@ -113,7 +113,7 @@ pub impl Arena {
         self.enums.append(declaration)
     }
 
-    inout fn registerFunction(declaration~: Func) {
+    inout fn registerFunction(declaration~: Func, registerSurface: Bool = true) {
         mut val index: U64 = 0U64
         while index < declaration.typeParams.len {
             val parameter = self.funcBindAt(binds: declaration.typeParams, index: index)
@@ -129,7 +129,7 @@ pub impl Arena {
             self.functionNameNext[tail - 1U64] = entry
         }
         self.functionNameTails[declaration.nameId] = entry
-        if declaration.isAnonymousFactory {
+        if registerSurface && declaration.isAnonymousFactory {
             mut val factories = self.anonymousFactoriesByReceiver.getOr(key: declaration.recvId, fallback: [])
             factories.append(self.funcs.count())
             self.anonymousFactoriesByReceiver[declaration.recvId] = factories

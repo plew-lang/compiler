@@ -5,17 +5,17 @@ trait A {
 }
 trait B { factory() }
 trait C { factory(count: I64) }
-struct Both { val count: I64 }
-struct Omitted { val count: I64 }
-struct Supplied { val count: I64 }
+struct Both { val raw: I64 }
+struct Omitted { val raw: I64 }
+struct Supplied { val raw: I64 }
 impl Both as A {
-    factory(count: I64 = 5I64) { return <Both count=count /> }
+    factory(count: I64 = 5I64) { return <Both raw=count /> }
 }
 impl Omitted as B {
-    factory(count: I64 = 5I64) { return <Omitted count=count /> }
+    factory(count: I64 = 5I64) { return <Omitted raw=count /> }
 }
 impl Supplied as C {
-    factory(count: I64 = 5I64) { return <Supplied count=count /> }
+    factory(count: I64 = 5I64) { return <Supplied raw=count /> }
 }
 fn createA[T]() -> T where T: A { return <T /> }
 fn createAWithCount[T]() -> T where T: A { return <T count=9I64 /> }
@@ -36,12 +36,12 @@ fn main() {
     val explicitA: Both = createAWithCount()
     val b: Omitted = createB()
     val c: Supplied = createC()
-    print(a.count)
-    print(explicitA.count)
-    print(b.count)
-    print(c.count)
+    print(a.raw)
+    print(explicitA.raw)
+    print(b.raw)
+    print(c.raw)
     val direct = <Both />
-    print(direct.count)
+    print(direct.raw)
     val reader = <Reader />
     print(reader.read())
     print(readDefault(value: reader))
