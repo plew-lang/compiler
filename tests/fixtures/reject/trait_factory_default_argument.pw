@@ -1,0 +1,2 @@
+trait Invalid { factory(count: I64 = 5) }
+fn main() {}

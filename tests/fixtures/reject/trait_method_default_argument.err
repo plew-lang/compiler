@@ -1,0 +1,1 @@
+trait requirements cannot declare default arguments; put the default on the implementation and declare the omitted-argument form as a separate requirement

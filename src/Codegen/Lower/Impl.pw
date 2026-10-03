@@ -1337,7 +1337,16 @@ pub impl Comp {
         mut val reqs: Array[Func] = []
         i = 0U64
         while i < syntaxTraitReqCount(file: self.syntax, trait: t) {
-            reqs.append((try self.lowerSyntaxSigToFunc(sig: syntaxSig(file: self.syntax, id: syntaxTraitReq(file: self.syntax, trait: t, index: i)), isExtern: false, isCExtern: false)))
+            val requirement = syntaxSig(file: self.syntax, id: syntaxTraitReq(file: self.syntax, trait: t, index: i))
+            mut val parameterIndex = 0U64
+            while parameterIndex < syntaxSigParamCount(file: self.syntax, sig: requirement) {
+                val parameter = syntaxParam(file: self.syntax, id: syntaxSigParam(file: self.syntax, sig: requirement, index: parameterIndex))
+                if parameter.hasDefault {
+                    return <Result.Err error=self.diagnosticAt(offset: parameter.name.start, msg: "trait requirements cannot declare default arguments; put the default on the implementation and declare the omitted-argument form as a separate requirement") />
+                }
+                parameterIndex += 1U64
+            }
+            reqs.append((try self.lowerSyntaxSigToFunc(sig: requirement, isExtern: false, isCExtern: false)))
             i += 1U64
         }
         mut val associatedBounds: Array[TraitAssociatedBound] = []
