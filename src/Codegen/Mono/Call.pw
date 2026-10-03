@@ -3955,7 +3955,7 @@ pub impl Comp {
     // Requirement selection compares concrete parameter terms, not just arity.
     // The witness owns the impl substitutions; the target trait owns its binders.
     inout fn proofRequirementSelectorMatches(source: Func, requirement: Func, witness: WitnessMatch, traitIdx: U64, receiverRef: U64, proof: StaticConformanceProof) -> Result[Bool, CompileDiagnostic] {
-        if source.nameId != requirement.nameId || source.isAssoc != requirement.isAssoc || source.params.count() != requirement.params.count() { return <Result.Ok value=false />}
+        if source.nameId != requirement.nameId || source.isAssoc != requirement.isAssoc || source.isFactory != requirement.isFactory || source.isAnonymousFactory != requirement.isAnonymousFactory || source.params.count() != requirement.params.count() { return <Result.Ok value=false />}
         if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() || traitIdx >= self.decls.traitCount() { return <Result.Ok value=false />}
         val conform: Conform = self.decls.conformAt(index: witness.conformIdx - 1U64)
         val trait: TraitDef = self.decls.traitAt(index: traitIdx)

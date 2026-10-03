@@ -1,0 +1,3 @@
+pub struct Point { pub val n: I64 }
+impl Point { factory secret(n: I64) { return <Point n=n /> } }
+pub impl Point { factory public(n: I64) { return <Point n=n /> } }

@@ -202,6 +202,21 @@ pub impl Comp {
                 try self.checkCallArgCategories(nameStart: nameStart, nameLen: nameLen, args: args)
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+                val storage = self.fieldStorageTypeRef(receiverRef: ty)
+                if isEnum {
+                    if self.enumIndexForType(ref: ty) >= self.arena.enumCount() {
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "this type has no enum variant or named factory with this construction") />
+                    }
+                } else if storage == 0U64 || storage >= self.arena.typeCount() || (!self.arena.typeAt(index: storage).isRecord && self.structIndexForType(ref: storage) >= self.arena.structCount()) {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "this type has no memberwise factory; use a declared factory or enum variant") />
+                }
+                val storageDeclaration = self.structIndexForType(ref: storage)
+                if !isEnum && storageDeclaration < self.arena.structCount() {
+                    val declaration = self.arena.structAt(index: storageDeclaration)
+                    if declaration.isExtern && !declaration.isCExtern {
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "an opaque intrinsic type has no memberwise factory") />
+                    }
+                }
                 // enum variant construction (`<E.A x=1 />`) must specify EVERY payload
                 // field — a variant payload has no default values, so a missing field was
                 // silently constructed with garbage (spec/05). (Struct construction is

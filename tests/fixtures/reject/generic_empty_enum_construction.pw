@@ -1,0 +1,2 @@
+enum Empty[T] {}
+fn main() { val value: Empty[String] = </> }

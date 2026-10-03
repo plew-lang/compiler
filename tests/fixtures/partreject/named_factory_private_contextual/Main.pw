@@ -1,0 +1,2 @@
+use ./Models only { Point }
+fn main() { val point: Point = <.secret n=1I64 /> }

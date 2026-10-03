@@ -1,0 +1,6 @@
+use ./Models only { Point as Alias }
+use @Std/Io only { print }
+fn main() { val a: Alias = <.public n=1I64 />
+val b = <Alias.public n=2I64 />
+print(a.n)
+print(b.n) }

@@ -1259,6 +1259,9 @@ pub impl Comp {
                 val functionIndex = self.conformFuncIdAt(ids: conformance.witnessFuncIds, index: witnessIndex)
                 val function = self.arena.functionAt(index: functionIndex)
                 if function.nameId == requirement.nameId && self.paramSelectorEqSubst(cf: conformance, w: function.params, r: requirement.params, recvStart: conformance.typeStart, recvLen: conformance.typeLen, tps: self.copyTraitBinds(binds: trait.typeParams), targs: self.copyConformTypes(types: conformance.traitArgs)) {
+                    if function.isFactory != requirement.isFactory || function.isAnonymousFactory != requirement.isAnonymousFactory {
+                        return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "a factory requirement must be implemented by the matching factory declaration") />
+                    }
                     if function.typeParams.count() != conformance.typeParams.count() + requirement.typeParams.count() {
                         return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation generic parameters do not match the trait requirement") />
                     }

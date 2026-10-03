@@ -1,0 +1,6 @@
+use @Std/Io only { print }
+trait Build { factory(value: I64) }
+struct X { val raw: I64 }
+impl X as Build { assoc fn value(value: I64) -> X { return <X raw=value /> } }
+fn create[T](n: I64) -> T where T: Build { return <T value=n /> }
+fn main() { val x: X = create(n: 1I64) print(x.raw) }

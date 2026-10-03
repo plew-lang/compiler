@@ -1,0 +1,1 @@
+fn main() { val callback: fn() -> I64 = </> }

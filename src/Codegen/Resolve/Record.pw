@@ -1233,9 +1233,10 @@ pub impl Comp {
     }
 
     // All statically selected method surfaces use the same argument context.
-    inout fn recordSelectedMethodArguments(callee: U64, receiverTerm: U64, args: ArgRange, chainHoleRef: U64) -> Result[(), CompileDiagnostic] {
+    inout fn recordSelectedMethodArguments(callee: U64, receiverTerm: U64, args: ArgRange, chainHoleRef: U64, useOffset: U64) -> Result[(), CompileDiagnostic] {
         if callee < self.arena.functionCount() {
             val selectedMethod: Func = self.arena.functionAt(index: callee)
+            try self.checkMethodVis(ownerStart: selectedMethod.recvStart, ownerLen: selectedMethod.recvLen, mf: selectedMethod, offset: useOffset)
             mut val mk: U64 = 0U64
             while mk < args.len {
                 val parameterIndex: U64 = self.paramIndexForArg(params: selectedMethod.params, args: args, argIdx: mk)
@@ -1520,7 +1521,7 @@ pub impl Comp {
                     StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => { methodCallee = self.arena.functionCount() }
                     _ => {}
                 }
-                try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef)
+                try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, useOffset: self.exprOffset(id: exprId))
                 try self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverTerm: receiverTerm, args: args)
                 if methodCallee >= self.arena.functionCount() {
                     try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -1577,7 +1578,7 @@ pub impl Comp {
                     val surface: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
                     methodCallee = (try self.resolveExtMethodFinal(recv: recv, srcStart: surface.start, srcLen: surface.len, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args))
                 }
-                try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef)
+                try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, useOffset: self.exprOffset(id: exprId))
                 try self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: receiverSource, receiverTerm: receiverTerm, args: args)
                 if methodCallee >= self.arena.functionCount() {
                     try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
