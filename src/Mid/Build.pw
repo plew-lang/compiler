@@ -695,7 +695,9 @@ fn midEmitScopeExit(state: inout MidBuildState, scope: U64) {
 // An evaluation scope is a normal ownership scope, not a backend cleanup
 // convention. Return/break already emitted their exits before terminating.
 fn midFinishEvaluationScope(state: inout MidBuildState, scope: U64) {
-    if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
+    // An empty ownership range has no cleanup effect. Do not send a no-op
+    // marker through declaration analysis, instantiation, and drop dataflow.
+    if state.locals.count() > state.scopes[scope].firstLocal && midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
         midEmitScopeExit(state: inout state, scope: scope)
     }
     midCloseScope(state: inout state, scope: scope)
