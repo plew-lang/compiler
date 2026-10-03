@@ -6,8 +6,8 @@ unique struct Resource {
 }
 pub impl Resource { factory }
 
-// Construction admission is tested separately. These callers must own the
-// returned temporary even while the helper still uses legacy aggregate code.
+// Returned temporaries remain owned through their borrowing call. Nested
+// calls finish that ownership before the next condition operand is evaluated.
 fn resource(tag: I64) -> Resource { return <Resource tag=tag /> }
 fn positive(item: borrow Resource) -> Bool { return item.tag > 0I64 }
 fn below(item: borrow Resource, index: I64) -> Bool { return index < item.tag }

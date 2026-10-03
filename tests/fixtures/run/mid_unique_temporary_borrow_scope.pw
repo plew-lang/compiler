@@ -19,8 +19,8 @@ fn observe(first: Bool, second: Bool) {
 }
 fn consume(item: move Resource) { print("consume") }
 fn main() {
-    // The borrowed inner-call result lives through the outer call and all of
-    // its argument evaluation, rather than dying on the inner call edge.
+    // Inner-call argument and receiver temporaries end before evaluating the
+    // next outer argument. The named owner below retains its own lifetime.
     observe(first: positive(item: resource(tag: 1)), second: later())
     print("after argument")
     observe(first: resource(tag: 2).positive(), second: later())
