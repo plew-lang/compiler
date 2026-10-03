@@ -1,0 +1,6 @@
+use @Std/Io only { print }
+trait A[T] { fn act() -> T }
+struct X[T] { val raw: T }
+impl[T] X[T] as A[T] { fn act(count: I64 = 5I64) -> T { return self.raw } }
+fn invoke[V](item: V) -> I64 where V: A[I64] { return item.act() }
+fn main() { print(invoke(item: <X[I64] raw=9I64 />)) }

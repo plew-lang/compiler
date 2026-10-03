@@ -995,48 +995,30 @@ pub impl Comp {
         return 0U64
     }
 
-    inout fn paramSelectorEqSubst(cf: Conform, w: FuncParamRange, r: FuncParamRange, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64]) -> Bool {
-        if w.count() != r.count() {
-            return false
+    // Compare requirement types in the implementation's binder environment.
+    // Method binder spelling is immaterial; conformance binders remain rigid.
+    inout fn conformanceParameterTypesMatch(cf: Conform, witness: Func, requirement: Func, parameters: FuncParamRange) -> Bool {
+        if parameters.count() != requirement.params.count() || witness.typeParams.count() != cf.typeParams.count() + requirement.typeParams.count() { return false }
+        val traitIndex = self.resolveTraitDef(cf: cf)
+        if traitIndex >= self.decls.traitCount() { return false }
+        val bound = self.conformanceTraitBound(conformance: cf)
+        mut val arguments: Array[U64] = []
+        mut val index = 0U64
+        while index < requirement.typeParams.count() {
+            val parameter = self.funcBindAt(binds: witness.typeParams, index: cf.typeParams.count() + index)
+            arguments.append(self.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen paramId=parameter.paramId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />))
+            index += 1U64
         }
-        mut val i: U64 = 0
-        while i < w.count() {
-            val pw: Param = self.funcParamAt(params: w, index: i)
-            val pr: Param = self.funcParamAt(params: r, index: i)
-            if pw.nameId != pr.nameId {
-                return false
-            }
-            // a requirement param that substitutes to an `Array[Elem]` (e.g. `convert(from:
-            // Source)` with `impl String as TryFrom[Array[U8]]`): the witness side writes it
-            // as an array param (`from: Array[U8]`, head id = the ELEMENT), so compare arrayness
-            // + element rather than the bare head ("Array" vs "U8" would never match).
-            val arrTarg: U64 = self.substReqParamArrayElemRef(tps: tps, targs: targs, prStart: pr.tyStart, prLen: pr.tyLen)
-            if arrTarg != 0U64 {
-                if pw.tyIsArray {
-                    val elemRef: U64 = self.arena.typeAt(index: arrTarg).args[0]
-                    if pw.tyNameId == self.arena.typeTerms[elemRef].nameId {
-                        i += 1
-                    } else {
-                        return false
-                    }
-                } else {
-                    return false
-                }
-            } else {
-            val subId: U64 = self.substReqParamHeadId(cf: cf, recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs, prStart: pr.tyStart, prLen: pr.tyLen)
-            // the WITNESS side may also write `Self` (`fn eqTo(other: Self)` inside
-            // `impl P as MyEq`): substitute its Self -> the conforming type too, so the
-            // requirement's substituted Self (=recv) matches it. A concrete witness type
-            // (`other: P`) keeps its own head id (pw.tyNameId).
-            mut val wId: U64 = pw.tyNameId
-            if rangeEquals(bytes: self.arena.bytes, start: pw.tyStart, len: pw.tyLen, kw: "Self") {
-                wId = intern(c: inout self, start: recvStart, len: recvLen)
-            }
-            if wId != subId {
-                return false
-            }
-            i += 1
-            }
+        val binders = self.copyFuncBinds(binds: requirement.typeParams)
+        index = 0U64
+        while index < parameters.count() {
+            val actual = self.funcParamAt(params: parameters, index: index)
+            val expected = self.funcParamAt(params: requirement.params, index: index)
+            if actual.noLabel != expected.noLabel || (!expected.noLabel && actual.nameId != expected.nameId) { return false }
+            val expectedType = self.groundTermInEnvironment(ref: self.traitBoundTypeTerm(ref: expected.ty, bound: bound, traitIndex: traitIndex), params: binders, values: arguments)
+            val actualType = self.groundTermInEnvironment(ref: actual.ty, params: [], values: [], selfRef: bound.subject)
+            if !self.typeRefEq(a: expectedType, b: actualType) { return false }
+            index += 1U64
         }
         return true
     }
@@ -1079,7 +1061,7 @@ pub impl Comp {
         while i < witnessed.count() {
             val w: Func = witnessed[i]
             if w.nameId == r.nameId {
-                if self.paramSelectorEqSubst(cf: cf, w: w.params, r: r.params, recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs) {
+                if self.conformanceParameterTypesMatch(cf: cf, witness: w, requirement: r, parameters: w.params) {
                     if !(self.reqReturnMismatch(cf: cf, w: w, r: r, recvStart: recvStart, recvLen: recvLen)) {
                         return true
                     }
@@ -1258,7 +1240,7 @@ pub impl Comp {
             while witnessIndex < conformance.witnessFuncIds.count() {
                 val functionIndex = self.conformFuncIdAt(ids: conformance.witnessFuncIds, index: witnessIndex)
                 val function = self.arena.functionAt(index: functionIndex)
-                if function.nameId == requirement.nameId && self.paramSelectorEqSubst(cf: conformance, w: function.params, r: requirement.params, recvStart: conformance.typeStart, recvLen: conformance.typeLen, tps: self.copyTraitBinds(binds: trait.typeParams), targs: self.copyConformTypes(types: conformance.traitArgs)) {
+                if function.nameId == requirement.nameId && self.conformanceParameterTypesMatch(cf: conformance, witness: function, requirement: requirement, parameters: function.params) {
                     if function.isFactory != requirement.isFactory || function.isAnonymousFactory != requirement.isAnonymousFactory {
                         return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "a factory requirement must be implemented by the matching factory declaration") />
                     }
@@ -1273,11 +1255,24 @@ pub impl Comp {
                         parameterIndex += 1U64
                     }
                     val parameters = self.copyFuncBinds(binds: requirement.typeParams)
-                    if requirement.isFactory {
+                    if function.isAssoc != requirement.isAssoc || function.selfInout != requirement.selfInout || function.selfMove != requirement.selfMove || function.isAsync != requirement.isAsync || function.hasRet != requirement.hasRet {
+                        return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation calling convention does not match the trait requirement") />
+                    }
+                    parameterIndex = 0U64
+                    while parameterIndex < requirement.params.count() {
+                        val actual = self.funcParamAt(params: function.params, index: parameterIndex)
+                        val expected = self.funcParamAt(params: requirement.params, index: parameterIndex)
+                        if actual.isInout != expected.isInout || actual.isMove != expected.isMove || actual.isBorrow != expected.isBorrow {
+                            return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation parameter ownership does not match the trait requirement") />
+                        }
+                        parameterIndex += 1U64
+                    }
+                    if requirement.hasRet {
                         val expected = self.groundTermInEnvironment(ref: self.traitBoundTypeTerm(ref: requirement.retTy, bound: traitBound, traitIndex: traitIndex), params: parameters, values: arguments)
                         val actual = self.groundTermInEnvironment(ref: function.retTy, params: [], values: [], selfRef: traitBound.subject)
                         if !self.typeRefEq(a: expected, b: actual) {
-                            return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "factory return type does not match the trait requirement") />
+                            if requirement.isFactory { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "factory return type does not match the trait requirement") /> }
+                            return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation return type does not match the trait requirement") />
                         }
                     }
                     mut val required: Array[ConformBound] = []

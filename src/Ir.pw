@@ -2508,6 +2508,8 @@ pub struct Arena {
     mut val typeParameterNameIds: Set[U64] = Set.new()
     mut val concreteTypeNameIds: Set[U64] = Set.new()
     mut val funcs: Array[Func] = []
+    // Source-callable membership survives copies independently of body identity.
+    mut val functionSourceCallable: Array[Bool] = []
     mut val anonymousFactoriesByReceiver: Dictionary[U64, Array[U64]] = [:]
     mut val functionNameHeads: Dictionary[U64, U64] = [:]
     mut val functionNameTails: Dictionary[U64, U64] = [:]

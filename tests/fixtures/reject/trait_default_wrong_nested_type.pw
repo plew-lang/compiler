@@ -1,0 +1,4 @@
+trait A { fn act(value: Array[I64]) }
+struct X {}
+impl X as A { fn act(value: Array[String], count: I64 = 5I64) {} }
+fn main() {}

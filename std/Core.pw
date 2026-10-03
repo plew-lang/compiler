@@ -925,7 +925,7 @@ pub impl[T] Buffer[T] as Eq where T: Eq {
 // explicitly (not `@[Eq]`) so String — a pervasive stdlib type — stays clear of the
 // derive-synthesis path while still conforming to Eq for the witness/acceptance layer.
 pub impl String as Eq {
-    assoc fn eq(lhs: String, rhs: String) -> Bool {
+    assoc fn eq(lhs~: String, rhs~: String) -> Bool {
         return bufferEq(lhs: lhs.buffer, rhs: rhs.buffer)
     }
 }

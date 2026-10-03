@@ -1,0 +1,6 @@
+use @Std/Io only { print }
+trait A { fn act[T](value: T) -> T }
+struct X {}
+impl X as A { fn act[U](value: U, count: I64 = 5I64) -> U { return value } }
+fn invoke[V](item: V) -> I64 where V: A { return item.act(value: 9I64) }
+fn main() { print(invoke(item: <X />)) }

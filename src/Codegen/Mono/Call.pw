@@ -902,7 +902,17 @@ pub impl Comp {
         }
         if traitIdx >= self.decls.traitCount() { return <Result.Ok value=<StaticConformanceProof.Missing /> />}
         val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
-        return <Result.Ok value=(try self.concreteConformanceProof(baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=[] />)) />
+        mut val arguments: Array[U64] = []
+        match proof {
+            StaticConformanceProof.AssumedBound(source: val source) => { arguments = self.declarationBound(source: source).constraint.key.positionalArgs }
+            StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => { arguments = self.assumedSupertraitBound(source: source, steps: steps).constraint.key.positionalArgs }
+            _ => {}
+        }
+        mut val grounded: Array[U64] = []
+        for val argument in arguments {
+            grounded.append((try self.groundTermForBody(ref: argument, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)))
+        }
+        return <Result.Ok value=(try self.concreteConformanceProof(baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=grounded />)) />
     }
 
     inout fn bodyInstanceEnvironment(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
@@ -3960,36 +3970,15 @@ pub impl Comp {
         return <WitnessMatch />
     }
 
-    // Requirement selection compares concrete parameter terms, not just arity.
-    // The witness owns the impl substitutions; the target trait owns its binders.
+    // The proof already fixes the conformance and its substitution. Select
+    // its requirement in that declaration environment, using the same binder
+    // correspondence as conformance validation, rather than re-inferring a
+    // method binder from one particular runtime call.
     inout fn proofRequirementSelectorMatches(source: Func, requirement: Func, witness: WitnessMatch, traitIdx: U64, receiverRef: U64, proof: StaticConformanceProof) -> Result[Bool, CompileDiagnostic] {
-        if source.nameId != requirement.nameId || source.isAssoc != requirement.isAssoc || source.isFactory != requirement.isFactory || source.isAnonymousFactory != requirement.isAnonymousFactory || source.params.count() != requirement.params.count() { return <Result.Ok value=false />}
-        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() || traitIdx >= self.decls.traitCount() { return <Result.Ok value=false />}
-        val conform: Conform = self.decls.conformAt(index: witness.conformIdx - 1U64)
-        val trait: TraitDef = self.decls.traitAt(index: traitIdx)
-        mut val params: Array[Bind] = self.copyTraitBinds(binds: trait.typeParams)
-        mut val args: Array[U64] = (try self.groundedWitnessTraitArgs(cf: conform, witness: witness))
-        mut val associated: U64 = 0U64
-        while associated < trait.assocTypes.count() {
-            val binding: Bind = self.traitBindAt(binds: trait.assocTypes, index: associated)
-            params.append(binding)
-            args.append((try self.associatedOutputInProof(proof: proof, traitOwner: trait.nameStart, assocId: binding.nameId)))
-            associated += 1U64
-        }
-        val environment: InstanceEnvironment = <InstanceEnvironment params=params args=args receiverRef=receiverRef proof=proof />
-        mut val parameter: U64 = 0U64
-        while parameter < source.params.count() {
-            val actual: Param = self.funcParamAt(params: source.params, index: parameter)
-            val expected: Param = self.funcParamAt(params: requirement.params, index: parameter)
-            if actual.noLabel != expected.noLabel || (!actual.noLabel && actual.nameId != expected.nameId) { return <Result.Ok value=false />}
-            val actualTerm: U64 = (try self.groundWitnessTypeTerm(ref: actual.ty, params: <PatternBindInput.Conformance range=conform.typeParams />, matchResult: witness))
-            val actualRef: U64 = (try self.groundTermForBody(ref: actualTerm, environment: environment, selfRef: receiverRef, itemRef: 0U64))
-            val requiredTerm: U64 = self.groundTraitRequirementType(ref: expected.ty, traitIdx: traitIdx, receiverRef: receiverRef, params: params, args: args)
-            val requiredRef: U64 = (try self.groundTermForBody(ref: requiredTerm, environment: environment, selfRef: receiverRef, itemRef: 0U64))
-            if !self.typeRefEq(a: actualRef, b: requiredRef) { return <Result.Ok value=false />}
-            parameter += 1U64
-        }
-        return <Result.Ok value=true />
+        if source.nameId != requirement.nameId || source.isAssoc != requirement.isAssoc || source.isFactory != requirement.isFactory || source.isAnonymousFactory != requirement.isAnonymousFactory { return <Result.Ok value=false /> }
+        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() || traitIdx >= self.decls.traitCount() { return <Result.Ok value=false /> }
+        val conform = self.decls.conformAt(index: witness.conformIdx - 1U64)
+        return <Result.Ok value=self.conformanceParameterTypesMatch(cf: conform, witness: source, requirement: requirement, parameters: source.params) />
     }
 
     // Select a concrete member through the exact proof edge, not by
@@ -4003,12 +3992,14 @@ pub impl Comp {
         val conformIdx: U64 = witness.conformIdx
         if conformIdx == 0U64 || conformIdx > self.decls.conformCount() { return <Result.Ok value=self.arena.functionCount() />}
         val conform: Conform = self.decls.conformAt(index: conformIdx - 1U64)
+        if self.traceCodegen { eprint(text: "[trace-codegen] proof edge=") eprintU64(n: conformIdx) eprint(text: " witnesses=") eprintU64(n: conform.witnessFuncIds.count()) eprint(text: "\n") }
         val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
         mut val wi: U64 = 0U64
         while wi < conform.witnessFuncIds.count() {
             val sourceIdx: U64 = self.conformFuncIdAt(ids: conform.witnessFuncIds, index: wi)
             if sourceIdx < self.arena.functionCount() {
                 val source: Func = self.arena.functionAt(index: sourceIdx)
+                if self.traceCodegen && source.nameId == req.nameId { eprint(text: "[trace-codegen] source=") eprintU64(n: sourceIdx) eprint(text: " parameters=") eprintU64(n: source.params.count()) eprint(text: "\n") }
                 if (try self.proofRequirementSelectorMatches(source: source, requirement: req, witness: witness, traitIdx: traitIdx, receiverRef: receiverRef, proof: proof)) {
                     // A concrete impl owns its witness body directly.  The
                     // proof's witnessFuncIds is already the exact semantic
@@ -4032,6 +4023,7 @@ pub impl Comp {
                         // target trait, not its subject).  This keeps a
                         // B-as-A witness distinct from another A witness that
                         // happens to have the same member name.
+                        if self.traceCodegen && candidate.isProvided && candidate.sourceWitnessFuncId == sourceIdx + 1U64 { eprint(text: "[trace-codegen] copy=") eprintU64(n: ci) eprint(text: " edge=") eprintU64(n: candidate.sourceConformIdx) eprint(text: "\n") }
                         if candidate.isProvided && candidate.sourceWitnessFuncId == sourceIdx + 1U64 && candidate.sourceConformIdx == conformIdx && candidate.originTraitId == self.decls.traitAt(index: traitIdx).nameId && candidate.originTraitOwner == self.decls.traitAt(index: traitIdx).nameStart {
                             return <Result.Ok value=ci />
                         }

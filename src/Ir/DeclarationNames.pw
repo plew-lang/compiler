@@ -135,6 +135,11 @@ pub impl Arena {
             self.anonymousFactoriesByReceiver[declaration.recvId] = factories
         }
         self.funcs.append(declaration)
+        self.functionSourceCallable.append(registerSurface)
+    }
+
+    fn functionIsSourceCallable(index: U64) -> Bool {
+        return index < self.functionSourceCallable.count() && self.functionSourceCallable[index]
     }
 
     fn anonymousFactoriesForReceiver(nameId: U64) -> Array[U64] {

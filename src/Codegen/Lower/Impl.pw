@@ -657,9 +657,7 @@ pub impl Comp {
                         if sameName && source.params.count() > requirement.params.count() && source.isFactory == requirement.isFactory && source.isAnonymousFactory == requirement.isAnonymousFactory {
                             match self.callableFormParameters(source: source, requirement: requirement) {
                                 Optional.Some(v: val parameters) => {
-                                    if self.paramSelectorEqSubst(cf: conformance, w: parameters, r: requirement.params,
-                                        recvStart: conformance.typeStart, recvLen: conformance.typeLen,
-                                        tps: self.copyTraitBinds(binds: trait.typeParams), targs: self.copyConformTypes(types: conformance.traitArgs)) {
+                                    if self.conformanceParameterTypesMatch(cf: conformance, witness: source, requirement: requirement, parameters: parameters) {
                                         if found { return <Result.Err error=self.diagnosticAt(offset: conformance.defOffset, msg: "ambiguous callable form for trait requirement") /> }
                                         found = true
                                         selected = functionIndex

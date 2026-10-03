@@ -1,0 +1,4 @@
+trait A { fn act(value: I64) }
+struct X {}
+impl X as A { fn act(value: inout I64, count: I64 = 5I64) { value += count } }
+fn main() {}

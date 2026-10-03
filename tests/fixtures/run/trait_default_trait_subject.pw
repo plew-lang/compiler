@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Base {}
+trait Read { fn read() -> I64 }
+pub impl Base as Read { fn read(count: I64 = 5I64) -> I64 { return count } }
+struct X {}
+impl X as Base {}
+fn invoke[T](value: T) -> I64 where T: Read { return value.read() }
+fn main() {
+    val value = <X />
+    print(value.read())
+    print(invoke(value: value))
+}
