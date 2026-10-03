@@ -681,7 +681,10 @@ fn midOpenScope(state: inout MidBuildState) -> U64 {
 fn midCloseScope(state: inout MidBuildState, scope: U64) {
     if scope >= state.scopes.count() { return }
     val current: MidScope = state.scopes[scope]
-    state.scopes.set(i: scope, value: <MidScope parent=current.parent firstLocal=current.firstLocal localCount=state.locals.count() - current.firstLocal />)
+    val localCount = state.locals.count() - current.firstLocal
+    if current.localCount != localCount {
+        state.scopes.set(i: scope, value: <MidScope parent=current.parent firstLocal=current.firstLocal localCount=localCount />)
+    }
     state.currentScope = current.parent
 }
 
