@@ -1310,7 +1310,7 @@ pub impl Comp {
         // recursively reopens children whose semantic producer has already
         // written the exact term.  This keeps type recovery a compatibility
         // boundary rather than the universal source of semantic truth.
-        try self.prepareAnonymousConstruction(exprId: exprId, chainHoleRef: chainHoleRef)
+        try self.prepareFactoryConstruction(exprId: exprId, chainHoleRef: chainHoleRef)
         match self.arena.exprs[exprId] {
             // These literals have a type fixed by their own spelling.  Record
             // it as a TypeTerm directly instead of routing through TypeInfo;

@@ -557,14 +557,15 @@ pub impl Comp {
 
     // Run under Record's lexical scope. The selected declaration is carried
     // by the synthetic call, so later passes never redo factory selection.
-    inout fn prepareAnonymousConstruction(exprId: U64, chainHoleRef: U64) -> Result[(), CompileDiagnostic] {
+    inout fn prepareFactoryConstruction(exprId: U64, chainHoleRef: U64) -> Result[(), CompileDiagnostic] {
         val useOffset = self.exprOffset(id: exprId)
         match self.arena.exprs[exprId] {
-            Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, val ty, val fields) => {
-                if isEnum || self.arena.resolvedMemberwiseFactories.contains(exprId) { return <Result.Ok value=() /> }
+            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+                if self.arena.resolvedMemberwiseFactories.contains(exprId) { return <Result.Ok value=() /> }
                 val candidates = self.anonymousConstructionCandidates(typeStart: typeStart, typeLen: typeLen)
                 val receiver = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen) }
                 val abstractReceiver = receiver != 0U64 && receiver < self.arena.typeCount() && (self.arena.typeTerms[receiver].paramId != 0U64 || self.arena.typeTerms[receiver].assocNameId != 0U64)
+                if isEnum && !abstractReceiver { return <Result.Ok value=() /> }
                 if candidates.count() == 0U64 && !abstractReceiver { return <Result.Ok value=() /> }
                 mut val arguments: Array[Arg] = []
                 mut val index = 0U64
@@ -578,13 +579,17 @@ pub impl Comp {
                 if abstractReceiver {
                     mut val callStart = typeStart
                     mut val callLen = 0U64
-                    val resolution = try self.resolveAnonymousFactoryRequirement(receiver: receiver, args: args, offset: useOffset)
+                    val resolution = if isEnum {
+                        give try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiver, nameStart: variantStart, nameLen: variantLen, args: args)
+                    } else {
+                        give try self.resolveAnonymousFactoryRequirement(receiver: receiver, args: args, offset: useOffset)
+                    }
                     mut val factoryRequirement = false
                     match resolution {
                         StaticMemberResolution.Requirement(proof: _, val traitIdx, val reqIdx) => {
                             val trait = self.decls.traitAt(index: traitIdx)
                             val requirement = self.traitReqAt(reqs: trait.reqs, index: reqIdx)
-                            factoryRequirement = requirement.isAnonymousFactory
+                            factoryRequirement = requirement.isFactory && requirement.isAnonymousFactory != isEnum
                             callStart = requirement.nameStart
                             callLen = requirement.nameLen
                         }

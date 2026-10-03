@@ -7,6 +7,8 @@ impl Item as Checked { type Error = String result[String] factory checked(value:
 fn maybe[T](value: I64) -> Optional[T] where T: Maybe { return <T value=value /> }
 fn checked[T](value: I64) -> Result[T, String] where T: Checked[Error = String] { return <T.checked value=value /> }
 fn main() {
-    match maybe[Item](value: 7I64) { Optional.Some(v: val item) => { print(item.raw) } Optional.None => { panic "missing" } }
-    match checked[Item](value: 9I64) { Result.Ok(value: val item) => { print(item.raw) } Result.Err(error: _) => { panic "failed" } }
+    val optional: Optional[Item] = maybe(value: 7I64)
+    match optional { Optional.Some(v: val instance) => { print(instance.raw) } Optional.None => { panic "missing" } }
+    val result: Result[Item, String] = checked(value: 9I64)
+    match result { Result.Ok(value: val instance) => { print(instance.raw) } Result.Err(error: _) => { panic "failed" } }
 }

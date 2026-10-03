@@ -3529,6 +3529,14 @@ pub impl Comp {
                     self.traceMonoTypeHead(ref: result)
                     eprint(text: " carrier=")
                     self.traceMonoTypeHead(ref: carrierResult)
+                    eprint(text: " result-id=")
+                    eprintU64(n: result)
+                    eprint(text: " result-decl=")
+                    eprintU64(n: self.arena.typeTerms[result].declOffset)
+                    eprint(text: " carrier-id=")
+                    eprintU64(n: carrierResult)
+                    eprint(text: " carrier-decl=")
+                    eprintU64(n: self.arena.typeTerms[carrierResult].declOffset)
                     eprint(text: "\n")
                 }
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: final call result projection does not match its carrier or source result") />
