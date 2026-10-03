@@ -1134,9 +1134,8 @@ pub impl Comp {
     inout fn typeHasAssocFn(typeStart: U64, typeLen: U64, nameStart: U64, nameLen: U64) -> Bool {
         // a newtype inherits the underlying type's factories/assoc fns (spec/10): resolve
         // to the underlying so `<Brand.checked …/>` finds Rgb's `checked` factory.
-        val declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
-        mut val tnu: Bind = self.newtypeUnderName(start: typeStart, len: typeLen)
-        if declaration.nameLen != 0U64 { tnu = self.newtypeUnderName(start: declaration.nameStart, len: declaration.nameLen) }
+        val source = self.realTypeNameInModule(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
+        val tnu: Bind = self.newtypeUnderName(start: source.nameStart, len: source.nameLen)
         val tId: U64 = intern(c: inout self, start: tnu.nameStart, len: tnu.nameLen)
         val nId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = self.decls.firstCallableNamed(nameId: nId)
@@ -1190,9 +1189,8 @@ pub impl Comp {
     }
 
     inout fn typeHasAssocVal(typeStart: U64, typeLen: U64, nameStart: U64, nameLen: U64) -> Bool {
-        val declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
-        mut val tnu: Bind = self.newtypeUnderName(start: typeStart, len: typeLen)
-        if declaration.nameLen != 0U64 { tnu = self.newtypeUnderName(start: declaration.nameStart, len: declaration.nameLen) }
+        val source = self.realTypeNameInModule(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
+        val tnu: Bind = self.newtypeUnderName(start: source.nameStart, len: source.nameLen)
         val tId: U64 = intern(c: inout self, start: tnu.nameStart, len: tnu.nameLen)
         val nId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = self.decls.firstCallableNamed(nameId: nId)
