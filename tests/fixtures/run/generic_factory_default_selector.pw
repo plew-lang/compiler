@@ -1,5 +1,8 @@
 use @Std/Io only { print }
-trait Build { factory(first: I64 = 3I64, second: I64) }
+trait Build {
+    factory(second: I64)
+    factory(first: I64, second: I64)
+}
 struct X { val raw: I64 }
 impl X as Build { factory(first: I64 = 3I64, second: I64) { return <X raw=first + second /> } }
 fn create[T](n:I64) -> T where T: Build { return <T second=n /> }

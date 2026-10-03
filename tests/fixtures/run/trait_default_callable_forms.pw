@@ -1,0 +1,49 @@
+use @Std/Io only { print }
+trait A {
+    factory()
+    factory(count: I64)
+}
+trait B { factory() }
+trait C { factory(count: I64) }
+struct Both { val count: I64 }
+struct Omitted { val count: I64 }
+struct Supplied { val count: I64 }
+impl Both as A {
+    factory(count: I64 = 5I64) { return <Both count=count /> }
+}
+impl Omitted as B {
+    factory(count: I64 = 5I64) { return <Omitted count=count /> }
+}
+impl Supplied as C {
+    factory(count: I64 = 5I64) { return <Supplied count=count /> }
+}
+fn createA[T]() -> T where T: A { return <T /> }
+fn createAWithCount[T]() -> T where T: A { return <T count=9I64 /> }
+fn createB[T]() -> T where T: B { return <T /> }
+fn createC[T]() -> T where T: C { return <T count=9I64 /> }
+trait Read {
+    fn read() -> I64
+    fn read(count: I64) -> I64
+}
+struct Reader {}
+impl Reader as Read {
+    fn read(count: I64 = 5I64) -> I64 { return count }
+}
+fn readDefault[T](value: T) -> I64 where T: Read { return value.read() }
+fn readCount[T](value: T) -> I64 where T: Read { return value.read(count: 9I64) }
+fn main() {
+    val a: Both = createA()
+    val explicitA: Both = createAWithCount()
+    val b: Omitted = createB()
+    val c: Supplied = createC()
+    print(a.count)
+    print(explicitA.count)
+    print(b.count)
+    print(c.count)
+    val direct = <Both />
+    print(direct.count)
+    val reader = <Reader />
+    print(reader.read())
+    print(readDefault(value: reader))
+    print(readCount(value: reader))
+}
