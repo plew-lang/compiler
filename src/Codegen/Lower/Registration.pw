@@ -115,7 +115,7 @@ pub impl Comp {
         // Registration runs before the visibility pass annotates every
         // TypeRef with a declaration owner.  Compare owner identity whenever
         // both terms already carry it; later semantic consumers require it.
-        if ta.nameId != tb.nameId || (ta.hasDecl && tb.hasDecl && ta.declOffset != tb.declOffset) || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable { return false }
+        if ((ta.hasDecl && tb.hasDecl) && ta.declOffset != tb.declOffset) || (!(ta.hasDecl && tb.hasDecl) && ta.nameId != tb.nameId) || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable { return false }
         if ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId { return false }
         if ta.args.count() != tb.args.count() { return false }
         mut val i: U64 = 0
@@ -292,7 +292,7 @@ pub impl Comp {
         if a == 0U64 || b == 0U64 || a >= self.arena.typeCount() || b >= self.arena.typeCount() { return a == b }
         val ta: TypeTerm = self.arena.typeTerms[a]
         val tb: TypeTerm = self.arena.typeTerms[b]
-        if ta.nameId != tb.nameId || (ta.hasDecl && tb.hasDecl && ta.declOffset != tb.declOffset) || (!ignoreTopView && (ta.viewExtId != tb.viewExtId || !(self.sameTypeTermViewIdSet(a: ta.viewIds, b: tb.viewIds)))) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId || ta.args.len != tb.args.len || ta.assocTraitArgs.len != tb.assocTraitArgs.len { return false }
+        if ((ta.hasDecl && tb.hasDecl) && ta.declOffset != tb.declOffset) || (!(ta.hasDecl && tb.hasDecl) && ta.nameId != tb.nameId) || (!ignoreTopView && (ta.viewExtId != tb.viewExtId || !(self.sameTypeTermViewIdSet(a: ta.viewIds, b: tb.viewIds)))) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId || ta.args.len != tb.args.len || ta.assocTraitArgs.len != tb.assocTraitArgs.len { return false }
         mut val i: U64 = 0U64
         while i < ta.args.len {
             if !(self.unifyPatterns(a: self.arena.typeArgumentPool[ta.args.start + i], aSide: aSide, b: self.arena.typeArgumentPool[tb.args.start + i], bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }
