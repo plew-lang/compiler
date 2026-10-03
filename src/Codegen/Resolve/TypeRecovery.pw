@@ -193,7 +193,7 @@ pub impl Comp {
     // (used to discriminate same-label overloads — spec: overload by argument type).
     // An untyped integer literal (no suffix) matches any integer-typed parameter.
     inout fn argMatchesParam(argExpr: U64, p: Param) -> Result[Bool, CompileDiagnostic] {
-        if self.pendingConstructionContexts.contains(argExpr) { return <Result.Ok value=true /> }
+        if self.expressionNeedsConstructionContext(exprId: argExpr) { return <Result.Ok value=true /> }
         val ti: TypeInfo = (try self.argResolvedTypeInfo(argExpr: argExpr))
         if p.tyIsArray {
             if ti.kind == 3 {
@@ -336,7 +336,7 @@ pub impl Comp {
                 // A method-owned binder remains abstract at this stage.  It is
                 // intentionally inferred from the argument later; receiver
                 // binders, by contrast, are concrete in calleeEnvironment.
-                if expected != 0U64 && (try self.tyRefIsGround(ref: expected)) && !self.pendingConstructionContexts.contains(self.argAt(args: args, index: ai).expr) {
+                if expected != 0U64 && (try self.tyRefIsGround(ref: expected)) && !self.expressionNeedsConstructionContext(exprId: self.argAt(args: args, index: ai).expr) {
                     val actual: TypeInfo = (try self.groundSemanticExprTypeInfo(exprId: self.argAt(args: args, index: ai).expr, environment: callerEnvironment, selfRef: callerSelf, itemRef: callerItem))
                     if actual.kind == 2I64 {
                         // Keep this discriminator congruent with argMatchesParam:

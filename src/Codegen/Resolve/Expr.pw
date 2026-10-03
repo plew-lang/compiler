@@ -866,7 +866,7 @@ pub impl Comp {
                 val argument: U64 = self.argAt(args: args, index: index).expr
                 // The function signature supplies context before either the
                 // argument check or call-template publication can consume it.
-                if expected != 0U64 && self.pendingConstructionContexts.contains(argument) {
+                if expected != 0U64 && self.expressionNeedsConstructionContext(exprId: argument) {
                     try self.recordExpr(exprId: argument, expectedTerm: expected)
                 }
                 if self.cur.recordCallTemplates && expected != 0U64 && (try self.tyRefIsGround(ref: expected)) {
@@ -898,7 +898,7 @@ pub impl Comp {
         mut val argumentIndex = 0U64
         while argumentIndex < args.len {
             val argument = self.argAt(args: args, index: argumentIndex).expr
-            if self.pendingConstructionContexts.contains(argument) {
+            if self.expressionNeedsConstructionContext(exprId: argument) {
                 val expected = self.staticRequirementParamType(resolution: resolution, args: args, argIdx: argumentIndex)
                 if expected != 0U64 { try self.recordExpr(exprId: argument, expectedTerm: expected) }
             }
@@ -1467,7 +1467,7 @@ pub impl Comp {
     // without reopening the AST or reading Mono's ambient scan state.
     inout fn recordSemanticExprExpectedResult(exprId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
         if expectedTerm == 0U64 || expectedTerm >= self.arena.typeCount() { return <Result.Ok value=() /> }
-        if self.pendingConstructionContexts.contains(exprId) { try self.recordExpr(exprId: exprId, expectedTerm: expectedTerm) }
+        if self.expressionNeedsConstructionContext(exprId: exprId) { try self.recordExpr(exprId: exprId, expectedTerm: expectedTerm) }
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         try self.recordCallTemplateExpectedResult(exprId: exprId, expectedTerm: expectedTerm)

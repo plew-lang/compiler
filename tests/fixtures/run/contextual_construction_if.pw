@@ -1,0 +1,24 @@
+use @Std/Io only { print }
+struct Point { val value: I64 }
+fn point(flag: Bool) -> Point {
+    return if flag { give <value=1I64 /> } else { give <value=2I64 /> }
+}
+fn read(point: Point) -> I64 { return point.value }
+struct Reader {}
+impl Reader { fn read(point: Point) -> I64 { return point.value } }
+fn main() {
+    val first: Point = if true { give <value=3I64 /> } else { give <value=4I64 /> }
+    print(first.value)
+    print(point(flag: false).value)
+    print(read(point: if true {
+        val number = 5I64
+        give if false { give <value=0I64 /> } else { give <value=number /> }
+    } else { give <value=6I64 /> }))
+    print(<Reader />.read(point: if false { give <value=7I64 /> } else { give <value=8I64 /> }))
+    val closure = fn(point: Point) -> I64 { return point.value }
+    print(closure(if true { give <value=9I64 /> } else { give <value=10I64 /> }))
+    print("{7I64: if true { give </> } else { give </> }}")
+    mut val assigned: Point = <Point value=0I64 />
+    assigned = if false { give <value=11I64 /> } else { give <value=12I64 /> }
+    print(assigned.value)
+}

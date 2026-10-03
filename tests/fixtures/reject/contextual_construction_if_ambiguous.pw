@@ -1,0 +1,7 @@
+struct First { val value: I64 }
+struct Second { val value: I64 }
+fn accept(item: First) {}
+fn accept(item: Second) {}
+fn main() {
+    accept(item: if true { give <value=1I64 /> } else { give <value=2I64 /> })
+}

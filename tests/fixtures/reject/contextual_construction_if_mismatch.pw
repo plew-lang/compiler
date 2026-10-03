@@ -1,0 +1,4 @@
+struct Point { val value: I64 }
+fn main() {
+    val point: Point = if true { give <value=1I64 /> } else { give "wrong" }
+}

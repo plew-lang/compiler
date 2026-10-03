@@ -1219,6 +1219,19 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Contextual construction can be the result of a conditional, not only a
+    // direct argument. Do not use an unresolved branch as overload evidence.
+    inout fn expressionNeedsConstructionContext(exprId: U64) -> Bool {
+        if exprId >= self.arena.exprs.count() { return false }
+        if self.pendingConstructionContexts.contains(exprId) { return true }
+        match self.arena.exprs[exprId] {
+            Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
+                return self.expressionNeedsConstructionContext(exprId: self.blockGiveExpr(blkId: thenBlk)) || self.expressionNeedsConstructionContext(exprId: self.blockGiveExpr(blkId: elseBlk))
+            }
+            _ => { return false }
+        }
+    }
+
     // All statically selected method surfaces use the same argument context.
     inout fn recordSelectedMethodArguments(callee: U64, receiverTerm: U64, args: ArgRange, chainHoleRef: U64) -> Result[(), CompileDiagnostic] {
         if callee < self.arena.functionCount() {
@@ -1230,7 +1243,7 @@ pub impl Comp {
                     val parameter: Param = self.funcParamAt(params: selectedMethod.params, index: parameterIndex)
                     val mctx: U64 = (try self.groundFinalMethodParameter(f: selectedMethod, recvTy: self.typeInfoOfRef(ref: receiverTerm), args: args, parameterTerm: parameter.ty))
                     val argumentExpr: U64 = self.argAt(args: args, index: mk).expr
-                    if mctx != 0U64 && self.pendingConstructionContexts.contains(argumentExpr) { try self.recordExpr(exprId: argumentExpr, chainHoleRef: chainHoleRef, expectedTerm: mctx) }
+                    if mctx != 0U64 && self.expressionNeedsConstructionContext(exprId: argumentExpr) { try self.recordExpr(exprId: argumentExpr, chainHoleRef: chainHoleRef, expectedTerm: mctx) }
                     if mctx != 0U64 && (try self.tyRefIsGround(ref: mctx)) {
                         val parameterType: TypeInfo = self.typeInfoOfRef(ref: mctx)
                         try self.checkLitSpanCtx(id: argumentExpr, tyStart: parameterType.nameStart, tyLen: parameterType.nameLen, isArray: parameterType.kind == 3, ctxRef: mctx)
@@ -1250,8 +1263,12 @@ pub impl Comp {
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
     inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false) -> Result[(), CompileDiagnostic] {
+        // A deferred value block must be recorded again in its lexical scope
+        // once the selected parameter supplies its result context.
+        if expectedTerm == 0U64 && deferContext && self.expressionNeedsConstructionContext(exprId: exprId) {
+            return <Result.Ok value=() />
+        }
         if self.pendingConstructionContexts.contains(exprId) {
-            if expectedTerm == 0U64 && deferContext { return <Result.Ok value=() /> }
             val context = (try self.requireConstructionContext(ctxRef: expectedTerm, offset: self.exprOffset(id: exprId)))
             try self.resolveConstructionContext(exprId: exprId, context: context)
         }
@@ -1789,8 +1806,8 @@ pub impl Comp {
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.recordExpr(exprId: cond, chainHoleRef: chainHoleRef)
-                try self.recordBlock(blkId: thenBlk)
-                try self.recordBlock(blkId: elseBlk)
+                try self.recordBlock(blkId: thenBlk, expectedTerm: expectedTerm)
+                try self.recordBlock(blkId: elseBlk, expectedTerm: expectedTerm)
                 self.recordValueBlockResult(exprId: exprId, blockId: thenBlk)
             }
             Expr.OptChain(val base, val cont) => {
@@ -1964,7 +1981,7 @@ pub impl Comp {
     // Mirror checkBoundsStmt's SCOPE maintenance (Let/For/Match binds) without any of
     // its checks — the local env drives typeOf, so it must match what the backend's
     // own local table will hold at emission.
-    inout fn recordStmt(stmtId: U64) -> Result[(), CompileDiagnostic] {
+    inout fn recordStmt(stmtId: U64, expectedTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                 try self.collectRecordedType(ref: ty)
@@ -2069,14 +2086,14 @@ pub impl Comp {
                 }
             }
             Stmt.Panic(val msg, offset: _) => { try self.recordExpr(exprId: msg) }
-            Stmt.Give(val value) => { try self.recordExpr(exprId: value) }
+            Stmt.Give(val value) => { try self.recordExpr(exprId: value, expectedTerm: expectedTerm) }
             Stmt.Break(offset: _) => {}
             Stmt.Continue(offset: _) => {}
         }
         return <Result.Ok value=() />
     }
 
-    inout fn recordBlock(blkId: U64) -> Result[(), CompileDiagnostic] {
+    inout fn recordBlock(blkId: U64, expectedTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         if !self.genMode {
             match self.blockTypeUses.get(key: blkId) {
                 Optional.Some(v: val uses) => { try self.checkSourceTypeUses(types: uses) }
@@ -2086,7 +2103,7 @@ pub impl Comp {
         val mark: U64 = self.scopeMark()
         mut val i: U64 = 0
         while i < self.blockStmtCount(blkId: blkId) {
-            try self.recordStmt(stmtId: self.blockStmtAt(blkId: blkId, index: i))
+            try self.recordStmt(stmtId: self.blockStmtAt(blkId: blkId, index: i), expectedTerm: expectedTerm)
             i += 1
         }
         self.popLocals(mark: mark)

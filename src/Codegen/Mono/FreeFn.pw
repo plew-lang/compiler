@@ -261,7 +261,7 @@ pub impl Comp {
             while pi < f.params.count() {
                 val p: Param = self.funcParamAt(params: f.params, index: pi)
                 val supplied = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
-                if supplied < args.len && self.pendingConstructionContexts.contains(self.argAt(args: args, index: supplied).expr) {
+                if supplied < args.len && self.expressionNeedsConstructionContext(exprId: self.argAt(args: args, index: supplied).expr) {
                     pi += 1U64
                     continue
                 }
