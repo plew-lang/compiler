@@ -1,0 +1,18 @@
+use @Std/Io only { print }
+fn answer() -> I64 { return { val half = 21I64
+ give half * 2I64 } }
+fn sum(a: I64, b: I64) -> I64 { return a + b }
+fn tick(n: I64) -> I64 { print(n)
+ return n }
+fn main() {
+ val n = 1I64
+ val value = { val n = 2I64
+ give { give n + 1I64 } }
+ print(value)
+ print(n)
+ print(answer())
+ print(sum(a: tick(n: 4I64), b: { val x = tick(n: 5I64)
+ give x }))
+ val unit: () = { give () }
+ print(({ give 6I64 }) + 1I64)
+}

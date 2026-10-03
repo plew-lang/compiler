@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+struct Point { val n: I64 }
+enum Choice { Value(n: I64) }
+fn read(point: Point) -> I64 { return point.n }
+fn point() -> Point { return { give <n=2I64 /> } }
+fn identity[T](value: T) -> T { return { give value } }
+fn main() {
+ val value: Point = { give { give <n=1I64 /> } }
+ print(value.n)
+ print(point().n)
+ print(read(point: { val n = 3I64
+ give <n=n /> }))
+ val choice: Choice = { give <.Value n=4I64 /> }
+ match choice { Choice.Value(val n) => { print(n) } }
+ val callback = fn(point: Point) -> I64 { return point.n }
+ print(callback({ give <n=5I64 /> }))
+ val numbers: Array[I64] = [{ give 6 }, { give 7 }]
+ print(numbers[0])
+ print(identity(value: { give "generic" }))
+}

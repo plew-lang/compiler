@@ -1,0 +1,3 @@
+fn main() { val n = { val hidden = 1I64
+ give hidden }
+ val invalid = hidden }

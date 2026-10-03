@@ -1,0 +1,1 @@
+fn main() { val n: I64 = { give "wrong" } }

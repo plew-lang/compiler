@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+use @Std/Core only { Ref }
+unique struct Resource { val id: I64
+ deinit { print(self.id) } }
+fn main() {
+ print("begin")
+ val n = { val resource = <Resource id=1I64 />
+ give 42I64 }
+ print(n)
+ val kept: Ref[Resource] = { val owner = <Ref[Resource] value=<Resource id=2I64 /> />
+ give owner }
+ print("retained")
+ val done: () = { val owner = <Resource id=3I64 />
+ give () }
+ print("end")
+}

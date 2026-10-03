@@ -542,8 +542,10 @@ pub impl Comp {
                 try self.checkBranchYieldsValue(blkId: body, offset: self.exprOffset(id: id))
                 try self.verifyBlock(blockId: body)
             }
-            Expr.Block(val body, offset: _) => {
-                try self.checkBranchYieldsValue(blkId: body, offset: self.exprOffset(id: id))
+            Expr.Block(val body, val offset) => {
+                if !self.blockDiverges(blkId: body) && self.blockGiveExpr(blkId: body) >= self.arena.exprs.count() {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a block expression must end with `give` to yield a value (spec/11)") />
+                }
                 try self.verifyBlock(blockId: body)
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {

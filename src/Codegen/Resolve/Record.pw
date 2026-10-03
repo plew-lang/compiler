@@ -1244,6 +1244,7 @@ pub impl Comp {
         if exprId >= self.arena.exprs.count() { return false }
         if self.pendingConstructionContexts.contains(exprId) { return true }
         match self.arena.exprs[exprId] {
+            Expr.Block(val body, offset: _) => { return self.expressionNeedsConstructionContext(exprId: self.blockGiveExpr(blkId: body)) }
             Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
                 return self.expressionNeedsConstructionContext(exprId: self.blockGiveExpr(blkId: thenBlk)) || self.expressionNeedsConstructionContext(exprId: self.blockGiveExpr(blkId: elseBlk))
             }

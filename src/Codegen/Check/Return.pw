@@ -53,11 +53,84 @@ pub impl Comp {
         }
     }
 
+    // Expression evaluation can leave the enclosing function through a
+    // lexical block. Follow only operands that necessarily execute; closure
+    // bodies and the conditional part of optional chains are not evaluated here.
+    inout fn exprDiverges(exprId: U64) -> Bool {
+        if exprId >= self.arena.exprs.count() { return false }
+        match self.arena.exprs[exprId] {
+            Expr.Block(val body, offset: _) => { return self.blockDiverges(blkId: body) }
+            Expr.Sequence(val body) => { return self.blockDiverges(blkId: body) }
+            Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
+                return self.exprDiverges(exprId: cond) || (self.blockDiverges(blkId: thenBlk) && self.blockDiverges(blkId: elseBlk))
+            }
+            Expr.MatchExpr(val scrut, val arms) => {
+                if self.exprDiverges(exprId: scrut) { return true }
+                mut val index = 0U64
+                while index < arms.len {
+                    if !self.blockDiverges(blkId: self.matchArmAt(arms: arms, index: index).body) { return false }
+                    index += 1U64
+                }
+                return true
+            }
+            Expr.Binary(val op, val lhs, val rhs) => {
+                if self.exprDiverges(exprId: lhs) { return true }
+                if op == opAnd() || op == opOr() { return false }
+                return self.exprDiverges(exprId: rhs)
+            }
+            Expr.Unary(op: _, val operand) => { return self.exprDiverges(exprId: operand) }
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.exprDiverges(exprId: operand) }
+            Expr.Move(val operand, isBorrow: _) => { return self.exprDiverges(exprId: operand) }
+            Expr.Await(val operand) => { return self.exprDiverges(exprId: operand) }
+            Expr.Try(val expr) => { return self.exprDiverges(exprId: expr) }
+            Expr.Field(val base, nameStart: _, nameLen: _) => { return self.exprDiverges(exprId: base) }
+            Expr.Arrow(val base, nameStart: _, nameLen: _) => { return self.exprDiverges(exprId: base) }
+            Expr.Deref(val base) => { return self.exprDiverges(exprId: base) }
+            Expr.ExtView(val recv, source: _, strip: _) => { return self.exprDiverges(exprId: recv) }
+            Expr.Index(val base, val index) => { return self.exprDiverges(exprId: base) || self.exprDiverges(exprId: index) }
+            Expr.OptChain(val base, cont: _) => { return self.exprDiverges(exprId: base) }
+            Expr.Call(nameStart: _, nameLen: _, val args) => { return self.argumentsDiverge(args: args) }
+            Expr.Method(val recv, nameStart: _, nameLen: _, val args) => { return self.exprDiverges(exprId: recv) || self.argumentsDiverge(args: args) }
+            Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => { return self.exprDiverges(exprId: recv) || self.argumentsDiverge(args: args) }
+            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+                mut val index = 0U64
+                while index < fields.len {
+                    if self.exprDiverges(exprId: self.makeFieldAt(fields: fields, index: index).value) { return true }
+                    index += 1U64
+                }
+                return false
+            }
+            Expr.Array(val elems) => {
+                mut val index = 0U64
+                while index < elems.len {
+                    if self.exprDiverges(exprId: self.exprAt(exprs: elems, index: index)) { return true }
+                    index += 1U64
+                }
+                return false
+            }
+            _ => { return false }
+        }
+    }
+
+    inout fn argumentsDiverge(args: ArgRange) -> Bool {
+        mut val index = 0U64
+        while index < args.len {
+            if self.exprDiverges(exprId: self.argAt(args: args, index: index).expr) { return true }
+            index += 1U64
+        }
+        return false
+    }
+
     inout fn stmtDiverges(stmtId: U64) -> Bool {
         match self.arena.stmts[stmtId] {
+            Stmt.ExprStmt(val expr) => { return self.exprDiverges(exprId: expr) }
+            Stmt.Give(val value) => { return self.exprDiverges(exprId: value) }
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return self.exprDiverges(exprId: init) }
+            Stmt.Assign(val target, val value) => { return self.exprDiverges(exprId: target) || self.exprDiverges(exprId: value) }
             Stmt.Return(val value, val hasValue, offset: _) => { return true }
             Stmt.Panic(val msg, val offset) => { return true }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+                if self.exprDiverges(exprId: cond) { return true }
                 if hasElse {
                     if self.blockDiverges(blkId: thenBlk) {
                         return self.blockDiverges(blkId: elseBlk)
@@ -66,6 +139,7 @@ pub impl Comp {
                 return false
             }
             Stmt.Match(val scrut, val arms) => {
+                if self.exprDiverges(exprId: scrut) { return true }
                 // match is exhaustive (the body verifier checks exhaustiveness), so
                 // it diverges iff every arm's block diverges.
                 mut val i: U64 = 0
@@ -78,6 +152,7 @@ pub impl Comp {
                 return true
             }
             Stmt.While(val cond, val body) => {
+                if self.exprDiverges(exprId: cond) { return true }
                 // an unconditional `while true { … }` with no exiting `break` never falls
                 // through (it loops forever or leaves via return/panic inside).
                 if self.condIsLiteralTrue(id: cond) {

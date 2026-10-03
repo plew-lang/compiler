@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+fn localReturn() -> I64 { val unused: I64 = { return 1I64 } }
+fn statementReturn() -> I64 { { return 2I64 } }
+fn nestedReturn() -> I64 { val unused = { val inner: I64 = { return 3I64 }
+ give inner } }
+fn argumentReturn() -> I64 { print({ return 4I64 }) }
+fn binaryReturn() -> I64 { val unused: I64 = 1I64 + { return 5I64 } }
+fn main() {
+ print(localReturn())
+ print(statementReturn())
+ print(nestedReturn())
+ print(argumentReturn())
+ print(binaryReturn())
+}

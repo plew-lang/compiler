@@ -1,0 +1,2 @@
+use @Std/Io only { print }
+fn main() { print("{({ give 1I64 })}") }
