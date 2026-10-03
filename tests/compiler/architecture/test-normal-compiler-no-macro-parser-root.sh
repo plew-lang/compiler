@@ -62,8 +62,15 @@ if rg -q 'while gi < c\.monoWork\.genInsts\.count\(\)' "$methods"; then
     echo "generic-method declaration still treats every generic layout as executable" >&2
     exit 1
 fi
-if ! rg -q 'f\.hasRecv && !f\.isExtern && !f\.isProvided && !c\.methodRecvIsTrait' "$methods"; then
-    echo "ordinary method table accepts proof-carrying provided bodies" >&2
+# Concrete provided methods use the same finalized body identity, including
+# proof provenance. Excluding them here leaves a JIT-requested body undeclared
+# unless its caller happened to register it first.
+if ! rg -q 'f\.hasRecv && !f\.isExtern && !c\.methodRecvIsTrait' "$methods"; then
+    echo "method declaration does not include every reachable concrete method" >&2
+    exit 1
+fi
+if ! rg -Fq 'if self.genMethBody[slot] == bodyId { return slot }' "$methods"; then
+    echo "method declaration cache loses finalized proof-carrying body identity" >&2
     exit 1
 fi
 
