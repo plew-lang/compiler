@@ -1,1 +1,1 @@
-/Users/malt03/Documents/plew/meta/compiler/tests/fixtures/reject/empty_enum_construction.pw:2: this type has no memberwise factory; use a declared factory or enum variant
+this type has no memberwise factory; use a declared factory or enum variant

@@ -1,1 +1,1 @@
-/Users/malt03/Documents/plew/meta/compiler/tests/fixtures/reject/factory_requirement_assoc_witness.pw:4: a factory requirement must be implemented by the matching factory declaration
+a factory requirement must be implemented by the matching factory declaration

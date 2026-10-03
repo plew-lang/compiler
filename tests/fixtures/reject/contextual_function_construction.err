@@ -1,1 +1,1 @@
-/Users/malt03/Documents/plew/meta/compiler/tests/fixtures/reject/contextual_function_construction.pw:1: this type has no memberwise factory; use a declared factory or enum variant
+this type has no memberwise factory; use a declared factory or enum variant
