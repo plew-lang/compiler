@@ -30,7 +30,14 @@ pub impl Comp {
     inout fn stmtHasLoopBreak(stmtId: U64) -> Bool {
         match self.arena.stmts[stmtId] {
             Stmt.Break(offset: _) => { return true }
+            Stmt.ExprStmt(val expr) => { return self.exprHasLoopBreak(exprId: expr) }
+            Stmt.Give(val value) => { return self.exprHasLoopBreak(exprId: value) }
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return self.exprHasLoopBreak(exprId: init) }
+            Stmt.Assign(val target, val value) => { return self.exprHasLoopBreak(exprId: target) || self.exprHasLoopBreak(exprId: value) }
+            Stmt.Return(val value, val hasValue, offset: _) => { return hasValue && self.exprHasLoopBreak(exprId: value) }
+            Stmt.Panic(val msg, offset: _) => { return self.exprHasLoopBreak(exprId: msg) }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+                if self.exprHasLoopBreak(exprId: cond) { return true }
                 if self.blockHasLoopBreak(blkId: thenBlk) {
                     return true
                 }
@@ -40,6 +47,7 @@ pub impl Comp {
                 return false
             }
             Stmt.Match(val scrut, val arms) => {
+                if self.exprHasLoopBreak(exprId: scrut) { return true }
                 mut val i: U64 = 0
                 while i < arms.len {
                     if self.blockHasLoopBreak(blkId: self.matchArmAt(arms: arms, index: i).body) {
@@ -49,8 +57,79 @@ pub impl Comp {
                 }
                 return false
             }
+            // Loop headers evaluate outside the loop body's break target.
+            Stmt.While(val cond, body: _) => { return self.exprHasLoopBreak(exprId: cond) }
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, val isRange, inclusive: _, val iter, val rangeHi, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {
+                return self.exprHasLoopBreak(exprId: iter) || (isRange && self.exprHasLoopBreak(exprId: rangeHi))
+            }
             _ => { return false }
         }
+    }
+
+    // A break in an evaluated expression exits the current loop. Conditional
+    // operands may execute, but closure bodies belong to another invocation.
+    inout fn exprHasLoopBreak(exprId: U64) -> Bool {
+        if exprId >= self.arena.exprs.count() { return false }
+        match self.arena.exprs[exprId] {
+            Expr.Block(val body, offset: _) => { return self.blockHasLoopBreak(blkId: body) }
+            Expr.Sequence(val body) => { return self.blockHasLoopBreak(blkId: body) }
+            Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
+                return self.exprHasLoopBreak(exprId: cond) || (self.blockHasLoopBreak(blkId: thenBlk) || self.blockHasLoopBreak(blkId: elseBlk))
+            }
+            Expr.MatchExpr(val scrut, val arms) => {
+                if self.exprHasLoopBreak(exprId: scrut) { return true }
+                mut val index = 0U64
+                while index < arms.len {
+                    if self.blockHasLoopBreak(blkId: self.matchArmAt(arms: arms, index: index).body) { return true }
+                    index += 1U64
+                }
+                return false
+            }
+            Expr.Binary(val op, val lhs, val rhs) => {
+                if self.exprHasLoopBreak(exprId: lhs) { return true }
+                return self.exprHasLoopBreak(exprId: rhs)
+            }
+            Expr.Unary(op: _, val operand) => { return self.exprHasLoopBreak(exprId: operand) }
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.exprHasLoopBreak(exprId: operand) }
+            Expr.Move(val operand, isBorrow: _) => { return self.exprHasLoopBreak(exprId: operand) }
+            Expr.Await(val operand) => { return self.exprHasLoopBreak(exprId: operand) }
+            Expr.Try(val expr) => { return self.exprHasLoopBreak(exprId: expr) }
+            Expr.Field(val base, nameStart: _, nameLen: _) => { return self.exprHasLoopBreak(exprId: base) }
+            Expr.Arrow(val base, nameStart: _, nameLen: _) => { return self.exprHasLoopBreak(exprId: base) }
+            Expr.Deref(val base) => { return self.exprHasLoopBreak(exprId: base) }
+            Expr.ExtView(val recv, source: _, strip: _) => { return self.exprHasLoopBreak(exprId: recv) }
+            Expr.Index(val base, val index) => { return self.exprHasLoopBreak(exprId: base) || self.exprHasLoopBreak(exprId: index) }
+            Expr.OptChain(val base, val cont) => { return self.exprHasLoopBreak(exprId: base) || self.exprHasLoopBreak(exprId: cont) }
+            Expr.Call(nameStart: _, nameLen: _, val args) => { return self.argumentsHaveLoopBreak(args: args) }
+            Expr.Method(val recv, nameStart: _, nameLen: _, val args) => { return self.exprHasLoopBreak(exprId: recv) || self.argumentsHaveLoopBreak(args: args) }
+            Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => { return self.exprHasLoopBreak(exprId: recv) || self.argumentsHaveLoopBreak(args: args) }
+            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+                mut val index = 0U64
+                while index < fields.len {
+                    if self.exprHasLoopBreak(exprId: self.makeFieldAt(fields: fields, index: index).value) { return true }
+                    index += 1U64
+                }
+                return false
+            }
+            Expr.Array(val elems) => {
+                mut val index = 0U64
+                while index < elems.len {
+                    if self.exprHasLoopBreak(exprId: self.exprAt(exprs: elems, index: index)) { return true }
+                    index += 1U64
+                }
+                return false
+            }
+            _ => { return false }
+        }
+    }
+
+    inout fn argumentsHaveLoopBreak(args: ArgRange) -> Bool {
+        mut val index = 0U64
+        while index < args.len {
+            if self.exprHasLoopBreak(exprId: self.argAt(args: args, index: index).expr) { return true }
+            index += 1U64
+        }
+        return false
     }
 
     // Expression evaluation can leave the enclosing function through a
@@ -159,6 +238,9 @@ pub impl Comp {
                     return !self.blockHasLoopBreak(blkId: body)
                 }
                 return false
+            }
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, val isRange, inclusive: _, val iter, val rangeHi, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {
+                return self.exprDiverges(exprId: iter) || (isRange && self.exprDiverges(exprId: rangeHi))
             }
             _ => { return false }
         }

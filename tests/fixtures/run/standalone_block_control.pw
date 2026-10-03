@@ -1,0 +1,24 @@
+use @Std/Io only { print }
+fn defaulted(value: I64 = { val n = 8I64
+ give n }) -> I64 { return value }
+fn captured() -> fn() -> I64 {
+ return { val n = 9I64
+ give fn() -> I64 { return n } }
+}
+fn checked(fail: Bool) -> Result[I64, I64] {
+ val n = { val value: Result[I64, I64] = if fail { give <.Err error=3I64 /> } else { give <.Ok value=7I64 /> }
+ give try value }
+ return <.Ok value=n />
+}
+fn main() {
+ print(defaulted())
+ val callback = captured()
+ print(callback())
+ print(checked(fail: false).unwrapOr(fallback: 0I64))
+ print(checked(fail: true).unwrapOr(fallback: 0I64))
+ mut val n = 0I64
+ while true { val ignored: () = { n += 1I64
+ break
+ give () } }
+ print(n)
+}
