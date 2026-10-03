@@ -1,0 +1,22 @@
+use @Std/Io only { print }
+struct Point { val value: I64 }
+enum Choice { Value(value: I64) Empty }
+fn point(choice: Choice) -> Point {
+    return match choice {
+        Choice.Value(val value) => <value=value />
+        Choice.Empty => <value=0I64 />
+    }
+}
+fn read(points: Array[Point]) -> I64 { return points[0U64].value }
+fn main() {
+    val points: Array[Point] = [<value=1I64 />, <value=2I64 />]
+    print(points[1U64].value)
+    print(point(choice: <Choice.Value value=3I64 />).value)
+    print(read(points: [<value=4I64 />]))
+    print(read(points: match <Choice.Value value=5I64 /> {
+        Choice.Value(val value) => [<value=value />]
+        Choice.Empty => []
+    }))
+    val nested: Array[Array[Point]] = [[<value=6I64 />]]
+    print(nested[0U64][0U64].value)
+}

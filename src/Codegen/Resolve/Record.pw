@@ -1228,8 +1228,23 @@ pub impl Comp {
             Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
                 return self.expressionNeedsConstructionContext(exprId: self.blockGiveExpr(blkId: thenBlk)) || self.expressionNeedsConstructionContext(exprId: self.blockGiveExpr(blkId: elseBlk))
             }
-            _ => { return false }
+            Expr.MatchExpr(scrut: _, val arms) => {
+                mut val index = 0U64
+                while index < arms.len {
+                    if self.expressionNeedsConstructionContext(exprId: self.blockGiveExpr(blkId: self.matchArmAt(arms: arms, index: index).body)) { return true }
+                    index += 1U64
+                }
+            }
+            Expr.Array(val elems) => {
+                mut val index = 0U64
+                while index < elems.len {
+                    if self.expressionNeedsConstructionContext(exprId: self.exprAt(exprs: elems, index: index)) { return true }
+                    index += 1U64
+                }
+            }
+            _ => {}
         }
+        return false
     }
 
     // All statically selected method surfaces use the same argument context.
@@ -1706,9 +1721,14 @@ pub impl Comp {
                 try self.recordSemanticAggregate(exprId: exprId)
             }
             Expr.Array(val elems) => {
+                mut val elementContext = 0U64
+                if expectedTerm != 0U64 && expectedTerm < self.arena.typeCount() {
+                    val context = self.arena.typeAt(index: expectedTerm)
+                    if context.args.count() == 1U64 && self.typeInfoOfRef(ref: expectedTerm).kind == 3I64 { elementContext = context.args[0U64] }
+                }
                 mut val i: U64 = 0
                 while i < elems.len {
-                    try self.recordExpr(exprId: self.exprAt(exprs: elems, index: i), chainHoleRef: chainHoleRef)
+                    try self.recordExpr(exprId: self.exprAt(exprs: elems, index: i), chainHoleRef: chainHoleRef, expectedTerm: elementContext)
                     i += 1
                 }
                 // an array literal types as `Array[E]` from its first element (exprType
@@ -1782,7 +1802,7 @@ pub impl Comp {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
                     try self.scanAddArmBinds(a: a, scrutTi: self.semanticExprTypeInfo(exprId: scrut))
-                    try self.recordBlock(blkId: a.body)
+                    try self.recordBlock(blkId: a.body, expectedTerm: expectedTerm)
                     self.popLocals(mark: mark)
                     ai += 1
                 }

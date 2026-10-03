@@ -514,6 +514,47 @@ pub impl Comp {
         return <Result.Ok value=true />
     }
 
+    // Anonymous factories have selectors, not a source-level method name.
+    // Enumerate applicable requirement selectors, then reuse the ordinary
+    // symbolic proof and argument ranking for the declared member identity.
+    inout fn resolveAnonymousFactoryRequirement(receiver: U64, args: ArgRange, offset: U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
+        mut val selected: StaticMemberResolution = <StaticMemberResolution.Missing />
+        mut val selectedTrait = self.decls.traitCount()
+        mut val selectedRequirement = 0U64
+        mut val bestRank = 0U64
+        mut val traitIndex = 0U64
+        while traitIndex < self.decls.traitCount() {
+            val trait = self.decls.traitAt(index: traitIndex)
+            mut val requirementIndex = 0U64
+            while requirementIndex < trait.reqs.count() {
+                val requirement = self.traitReqAt(reqs: trait.reqs, index: requirementIndex)
+                if requirement.isAnonymousFactory && self.paramsLabelsOk(params: requirement.params, args: args) {
+                    val resolution = try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiver, nameStart: requirement.nameStart, nameLen: requirement.nameLen, args: args, requiredTraitOwner: trait.nameStart)
+                    match resolution {
+                        StaticMemberResolution.Requirement(proof: _, val traitIdx, val reqIdx) => {
+                            val resolved = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
+                            if resolved.isAnonymousFactory {
+                                val rank = try self.staticRequirementMatchRank(resolution: resolution, requirement: resolved, args: args)
+                                if rank > bestRank {
+                                    selected = resolution
+                                    selectedTrait = traitIdx
+                                    selectedRequirement = reqIdx
+                                    bestRank = rank
+                                } else if rank != 0U64 && rank == bestRank && (selectedTrait != traitIdx || selectedRequirement != reqIdx) {
+                                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "ambiguous anonymous factory requirement") />
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                requirementIndex += 1U64
+            }
+            traitIndex += 1U64
+        }
+        return <Result.Ok value=selected />
+    }
+
     // Run under Record's lexical scope. The selected declaration is carried
     // by the synthetic call, so later passes never redo factory selection.
     inout fn prepareAnonymousConstruction(exprId: U64, chainHoleRef: U64) -> Result[(), CompileDiagnostic] {
@@ -537,17 +578,15 @@ pub impl Comp {
                 if abstractReceiver {
                     mut val callStart = typeStart
                     mut val callLen = 0U64
-                    if fields.len != 0U64 {
-                        val first = self.makeFieldAt(fields: fields, index: 0U64)
-                        callStart = first.nameStart
-                        callLen = first.nameLen
-                    }
-                    val resolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiver, nameStart: callStart, nameLen: callLen, args: args))
+                    val resolution = try self.resolveAnonymousFactoryRequirement(receiver: receiver, args: args, offset: useOffset)
                     mut val factoryRequirement = false
                     match resolution {
                         StaticMemberResolution.Requirement(proof: _, val traitIdx, val reqIdx) => {
                             val trait = self.decls.traitAt(index: traitIdx)
-                            factoryRequirement = self.traitReqAt(reqs: trait.reqs, index: reqIdx).isAnonymousFactory
+                            val requirement = self.traitReqAt(reqs: trait.reqs, index: reqIdx)
+                            factoryRequirement = requirement.isAnonymousFactory
+                            callStart = requirement.nameStart
+                            callLen = requirement.nameLen
                         }
                         _ => {}
                     }
