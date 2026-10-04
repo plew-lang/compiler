@@ -146,7 +146,7 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < syntaxMatchArmCount(file: self.syntax, arms: arms) {
             val arm: SyntaxMatchArm = syntaxMatchArm(file: self.syntax, id: syntaxMatchArmAt(file: self.syntax, arms: arms, index: i))
-            if syntaxPattern(file: self.syntax, id: arm.pat).isWildcard { return i }
+            if syntaxPattern(file: self.syntax, id: arm.pat).isWildcard { return syntaxMatchArmCount(file: self.syntax, arms: arms) - 1U64 }
             i += 1U64
         }
         if self.syntaxLitArmsAreBoolExhaustive(arms: arms) { return syntaxMatchArmCount(file: self.syntax, arms: arms) - 1U64 }
@@ -161,7 +161,23 @@ pub impl Comp {
     inout fn lowerSyntaxScalarArmCond(lhsStart: U64, lhsLen: U64, arm: SyntaxMatchArm) -> Result[ScalarCond, CompileDiagnostic] {
         val pattern: SyntaxPattern = syntaxPattern(file: self.syntax, id: arm.pat)
         if pattern.isValuePattern { return <Result.Ok value=<ScalarCond hasCond=true cond=(try self.lowerSyntaxLitEq(lhsStart: lhsStart, lhsLen: lhsLen, literal: pattern.lit)) /> />}
-        return <Result.Ok value=<ScalarCond hasCond=false cond=0U64 /> />
+        return <Result.Ok value=<ScalarCond hasCond=true cond=self.pushExpr(e: <Expr.Int value=1U64 offset=pattern.span.start isBool=true tyStart=0U64 tyLen=0U64 isNeg=false />) /> />
+    }
+
+    inout fn scalarTerminalBlock(body: U64, condition: ScalarCond, isWildcard: Bool, isExpr: Bool, offset: U64) -> U64 {
+        if isWildcard { return body }
+        val message = self.internBytes(s: "unreachable exhaustive scalar match")
+        val text = self.pushExpr(e: <Expr.Str start=message.nameStart len=message.nameLen />)
+        mut val fallback: Array[U64] = []
+        fallback.append(self.pushStmt(s: <Stmt.Panic msg=text offset=offset />))
+        val fallbackBlock = self.blockOfStmts(stmts: fallback)
+        if !isExpr {
+            mut val statements: Array[U64] = []
+            statements.append(self.pushStmt(s: <Stmt.If cond=condition.cond thenBlk=body elseBlk=fallbackBlock hasElse=true />))
+            return self.blockOfStmts(stmts: statements)
+        }
+        val expression = self.pushExpr(e: <Expr.IfExpr cond=condition.cond thenBlk=body elseBlk=fallbackBlock />)
+        return self.blockOfGive(giveExpr: expression)
     }
 
     // Pattern bindings belong to the selected arm's lexical block. Sharing
@@ -206,6 +222,9 @@ pub impl Comp {
             mut val emptyStmts: Array[U64] = []
             elseBlock = self.blockOfStmts(stmts: emptyStmts)
         }
+        val terminalArm = syntaxMatchArm(file: self.syntax, id: syntaxMatchArmAt(file: self.syntax, arms: stmt.arms, index: elseIdx))
+        val terminalPattern = syntaxPattern(file: self.syntax, id: terminalArm.pat)
+        elseBlock = self.scalarTerminalBlock(body: elseBlock, condition: (try self.lowerSyntaxScalarArmCond(lhsStart: tmp.nameStart, lhsLen: tmp.nameLen, arm: terminalArm)), isWildcard: terminalPattern.isWildcard, isExpr: false, offset: stmt.span.start)
         mut val head: U64 = 0U64
         mut val haveHead: Bool = false
         mut val i: U64 = armCount
@@ -318,6 +337,9 @@ pub impl Comp {
             fallback.append(self.pushStmt(s: <Stmt.Give value=self.pushExpr(e: <Expr.Int value=0U64 offset=span.start isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />) />))
             currentElse = self.blockOfStmts(stmts: fallback)
         }
+        val terminalArm = syntaxMatchArm(file: self.syntax, id: syntaxMatchArmAt(file: self.syntax, arms: arms, index: elseIdx))
+        val terminalPattern = syntaxPattern(file: self.syntax, id: terminalArm.pat)
+        currentElse = self.scalarTerminalBlock(body: currentElse, condition: (try self.lowerSyntaxScalarArmCond(lhsStart: lhsStart, lhsLen: lhsLen, arm: terminalArm)), isWildcard: terminalPattern.isWildcard, isExpr: true, offset: span.start)
         mut val head: U64 = 0U64
         mut val haveHead: Bool = false
         mut val i: U64 = armCount
@@ -382,12 +404,12 @@ pub impl Comp {
 pub impl Comp {
 
     // Build a scalar-match arm's condition: `__mtmp == lit` for a literal arm; a wildcard
-    // yields hasCond=false (it is the terminal `else`).
+    // yields true, preserving source order even before unreachable later arms.
     inout fn lowerScalarArmCond(lhsStart: U64, lhsLen: U64, arm: MatchArmAst) -> Result[ScalarCond, CompileDiagnostic] {
         if arm.pattern.isValuePattern {
             return <Result.Ok value=<ScalarCond hasCond=true cond=(try self.lowerLitEq(lhsStart: lhsStart, lhsLen: lhsLen, lit: arm.pattern.lit)) /> />
         }
-        return <Result.Ok value=<ScalarCond hasCond=false cond=0 /> />
+        return <Result.Ok value=<ScalarCond hasCond=true cond=self.pushExpr(e: <Expr.Int value=1U64 offset=arm.pattern.span.start isBool=true tyStart=0U64 tyLen=0U64 isNeg=false />) /> />
     }
 }
 
@@ -413,13 +435,13 @@ pub impl Comp {
 
 pub impl Comp {
 
-    // Find the terminal `else` arm of a scalar match: the first wildcard, or (for an
-    // exhaustive Bool match) the last arm. Returns arms.count() if none.
+    // An exhaustive scalar match uses its last arm as the terminal block.
+    // Earlier wildcard arms remain unconditional branches in source order.
     inout fn scalarMatchElseIdx(arms: Array[MatchArmAst]) -> U64 {
         mut val i: U64 = 0
         while i < arms.count() {
             if arms[i].pattern.isWildcard {
-                return i
+                return arms.count() - 1U64
             }
             i += 1
         }
@@ -449,6 +471,7 @@ pub impl Comp {
             mut val es: Array[U64] = []
             elseBlkId = self.blockOfStmts(stmts: es)
         }
+        elseBlkId = self.scalarTerminalBlock(body: elseBlkId, condition: (try self.lowerScalarArmCond(lhsStart: tmp.nameStart, lhsLen: tmp.nameLen, arm: arms[elseIdx])), isWildcard: arms[elseIdx].pattern.isWildcard, isExpr: false, offset: span.start)
         mut val headStmt: U64 = 0
         mut val haveHead: Bool = false
         mut val k: U64 = arms.count()
@@ -521,6 +544,7 @@ pub impl Comp {
             es.append(self.pushStmt(s: <Stmt.Give value=self.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />) />))
             curElseBlk = self.blockOfStmts(stmts: es)
         }
+        curElseBlk = self.scalarTerminalBlock(body: curElseBlk, condition: (try self.lowerScalarArmCond(lhsStart: lhsStart, lhsLen: lhsLen, arm: arms[elseIdx])), isWildcard: arms[elseIdx].pattern.isWildcard, isExpr: true, offset: span.start)
         mut val headExpr: U64 = 0
         mut val haveHead: Bool = false
         mut val k: U64 = arms.count()

@@ -1,0 +1,6 @@
+fn main() {
+    val result = match 1I64 {
+        val n => n
+        missingValue => 2I64
+    }
+}

@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+fn main() {
+    val result = match 1I64 {
+        mut val n => {
+            n += 1
+            give n
+        }
+        1I64 => 99I64
+    }
+    print(result)
+    match 1I64 {
+        val n => { print(n) }
+        1I64 => { print(99I64) }
+    }
+    print(match 2I64 {
+        0I64 => 99I64
+        _ => 3I64
+        2I64 => 99I64
+    })
+}
