@@ -63,14 +63,20 @@ pub enum DiagnosticLocation {
     File(path: String, line: I64)
 }
 
+pub enum DiagnosticSeverity { Error Warning }
+
 pub struct CompileDiagnostic {
+    pub val severity: DiagnosticSeverity = <DiagnosticSeverity.Error />
     pub val location: DiagnosticLocation
     pub val message: String
 }
 pub impl CompileDiagnostic { factory }
 
 pub fn emitDiagnostic(diagnostic: CompileDiagnostic) {
-    eprint(text: "plewc: error: ")
+    match diagnostic.severity {
+        DiagnosticSeverity.Error => { eprint(text: "plewc: error: ") }
+        DiagnosticSeverity.Warning => { eprint(text: "plewc: warning: ") }
+    }
     match diagnostic.location {
         DiagnosticLocation.Unpositioned => {
             eprint(text: diagnostic.message)
@@ -90,6 +96,10 @@ pub fn emitDiagnostic(diagnostic: CompileDiagnostic) {
     eprint(text: ": ")
     eprint(text: diagnostic.message)
     eprint(text: "\n")
+}
+
+pub fn emitDiagnostics(diagnostics: Array[CompileDiagnostic]) {
+    for val diagnostic in diagnostics { emitDiagnostic(diagnostic: diagnostic) }
 }
 
 // Compatibility adapters for call sites that still require terminal failure.

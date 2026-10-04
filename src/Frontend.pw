@@ -49,7 +49,7 @@ use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkg
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
-use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, DiagnosticLocation, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, DiagnosticLocation, DiagnosticSeverity, emitDiagnostic, eprintInt, digitByte, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -116,6 +116,11 @@ pub struct InterpolationWrite {
 pub impl InterpolationWrite { factory }
 
 pub struct Comp {
+    // Nonfatal diagnostics remain owned by the compilation/session. Only the
+    // driver decides how to display them; requesting a body emits no process IO.
+    pub mut val pendingDiagnostics: Array[CompileDiagnostic] = []
+    pub mut val reportedUnreachableArms: Set[U64] = Set.new()
+
     // Source bytes are append-only within a session. Only successfully decoded
     // literals are published; Mid and LLVM share this immutable value by offset.
     pub mut val decodedStringLiterals: Dictionary[U64, Array[U8]] = [:]
@@ -283,11 +288,7 @@ pub impl IntTy { factory }
 
 // One scalar-match arm's `if` condition. A wildcard has none (it is the terminal
 // `else`). (Used by Lower/Match's scalar-match lowering; a Frontend-internal helper.)
-pub struct ScalarCond {
-    pub val hasCond: Bool
-    pub val cond: U64
-}
-pub impl ScalarCond { factory }
+
 
 // ---- arena helpers ----
 //
@@ -377,6 +378,12 @@ pub impl Comp {
 
     fn bindAt(binds: BindRange, index: U64) -> Bind {
         return self.arena.bindPool[binds.start + index]
+    }
+
+    inout fn takeDiagnostics() -> Array[CompileDiagnostic] {
+        val diagnostics = self.pendingDiagnostics
+        self.pendingDiagnostics = []
+        return diagnostics
     }
 
     fn patternInfo(arm: MatchArm) -> PatInfo {
@@ -1986,80 +1993,6 @@ fn litFitsBits(value: U64, neg: Bool, bits: U64, sgn: Bool) -> Bool {
     if bits == 16 { return value <= 65535 }
     if bits == 32 { return value <= 4294967295 }
     return true
-}
-
-// ---- scalar (literal) match desugar (spec/11) ----
-// A `match` that does NOT dispatch on enum variants or struct destructuring — its
-// arms are only bare literals (`0`/`"x"`/`true`/`-1`) and wildcards — is not an enum
-// match: it desugars here into a single-eval scrutinee binding plus an `==` if/else
-// chain, reusing the operator-witness `==` and the existing if-codegen. The arena's
-// Stmt.Match / Expr.MatchExpr never see a literal/scalar pattern, so the backend
-// enum-tag match emitter stays untouched.
-// True if any arm dispatches on an enum variant or a struct pattern (so the match
-// must go through the enum emitter, not the scalar desugar).
-fn matchHasEnumOrStruct(arms: Array[MatchArmAst]) -> Bool {
-    // A zero-arm match is checked from its scrutinee type, not literal patterns.
-    if arms.count() == 0U64 { return true }
-    mut val onlyDiscards: Bool = arms.count() > 0U64
-    mut val i: U64 = 0
-    while i < arms.count() {
-        val p: PatternAst = arms[i].pattern
-        if !p.isWildcard || p.captureName.bytes().count() > 0U64 { onlyDiscards = false }
-        if !(p.isWildcard) {
-            if !(p.isValuePattern) {
-                return true
-            }
-        }
-        i += 1
-    }
-    return onlyDiscards
-}
-
-// True if the arms are exactly the two boolean literals `true` and `false` (a
-// structurally exhaustive Bool match — no wildcard needed, spec/11). Used to allow
-// `match b { true => … false => … }`.
-fn litArmsAreBoolExhaustive(arms: Array[MatchArmAst]) -> Bool {
-    mut val sawTrue: Bool = false
-    mut val sawFalse: Bool = false
-    mut val i: U64 = 0
-    while i < arms.count() {
-        val p: PatternAst = arms[i].pattern
-        if p.isWildcard {
-            return false
-        }
-        if p.isValuePattern {
-            match p.lit {
-                ExprAst.IntLit(val value, val isBool, tySuffix: _, literalSpan: _, tySuffixSpan: _, span: _) => {
-                    if isBool {
-                        if value == 1U64 {
-                            sawTrue = true
-                        }
-                        if value == 0U64 {
-                            sawFalse = true
-                        }
-                    } else {
-                        return false
-                    }
-                }
-                _ => { return false }
-            }
-        } else {
-            return false
-        }
-        i += 1
-    }
-    return sawTrue && sawFalse
-}
-
-fn matchHasCapture(arms: Array[MatchArmAst]) -> Bool {
-    mut val i: U64 = 0
-    while i < arms.count() {
-        if arms[i].pattern.captureName.bytes().count() > 0 {
-            return true
-        }
-        i += 1
-    }
-    return false
 }
 
 // True if a value-match arm block diverges (`=> panic …` / `=> return …`) rather

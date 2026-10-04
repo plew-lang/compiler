@@ -2524,6 +2524,16 @@ fn traceMidUnsupportedMatch(c: Comp, state: MidBuildState, stmtId: U64, reason: 
 // Bound fields are independent values: the original aggregate may be
 // overwritten inside the arm. Ordinary Copy/Drop owns those snapshots.
 fn buildMidPatternBindings(c: inout Comp, state: inout MidBuildState, semantic: SemanticMatch, arm: SemanticMatchArm, scrutinee: MidPlace, traceId: U64) -> MidBuildError {
+    if arm.hasCapture {
+        val captured = midBindingNeedsCaptureCell(closures: c.decls.semanticClosures, sourceFunction: state.sourceFunction, bindingTarget: arm.captureTarget)
+        val local = addMidLocal(state: inout state, declarationTarget: arm.captureTarget, typeTerm: semantic.scrutineeTerm, isUnique: midTermIsUnique(c: inout c, term: semantic.scrutineeTerm), isParameter: false, ownsAtEntry: false, isBorrowed: false, isCaptureCell: captured)
+        val operand = if semantic.isConsuming { give <MidOperand.Move place=scrutinee /> } else { give <MidOperand.Copy place=scrutinee /> }
+        val destination = <MidPlace local=local typeTerm=semantic.scrutineeTerm />
+        val value = <MidRvalue.Use operand=operand />
+        if captured { midAppendStatement(state: inout state, statement: <MidStatement.InitializeCaptureCell destination=destination value=value />) }
+        else { midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=value />) }
+        return <MidBuildError.None />
+    }
     match semantic.kind {
         SemanticMatchKind.Enum(val enumIndex) => {
                 if semantic.isConsuming { buildMidConsumingEnumArm(c: inout c, state: inout state, semantic: semantic, arm: arm, source: scrutinee, enumIndex: enumIndex) }
@@ -2555,16 +2565,8 @@ fn buildMidPatternBindings(c: inout Comp, state: inout MidBuildState, semantic: 
         _ => {}
     }
     match semantic.kind {
-        SemanticMatchKind.Wildcard => {
-            if arm.hasCapture {
-                val captured = midBindingNeedsCaptureCell(closures: c.decls.semanticClosures, sourceFunction: state.sourceFunction, bindingTarget: arm.captureTarget)
-                val local = addMidLocal(state: inout state, declarationTarget: arm.captureTarget, typeTerm: semantic.scrutineeTerm, isUnique: midTermIsUnique(c: inout c, term: semantic.scrutineeTerm), isParameter: false, ownsAtEntry: false, isBorrowed: false, isCaptureCell: captured)
-                val operand = if semantic.isConsuming { give <MidOperand.Move place=scrutinee /> } else { give <MidOperand.Copy place=scrutinee /> }
-                val destination = <MidPlace local=local typeTerm=semantic.scrutineeTerm />
-                val value = <MidRvalue.Use operand=operand />
-                if captured { midAppendStatement(state: inout state, statement: <MidStatement.InitializeCaptureCell destination=destination value=value />) }
-                else { midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=value />) }
-            } else if semantic.isConsuming { midAppendStatement(state: inout state, statement: <MidStatement.Drop place=scrutinee />) }
+        SemanticMatchKind.Value => {
+            if semantic.isConsuming { midAppendStatement(state: inout state, statement: <MidStatement.Drop place=scrutinee />) }
         }
         _ => {}
     }
@@ -2761,7 +2763,7 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
             mut val enumIndex: U64 = 0U64
             match semantic.kind {
                 SemanticMatchKind.Enum(enumIndex: val selected) => { enumIndex = selected }
-                SemanticMatchKind.Wildcard => {
+                SemanticMatchKind.Value => {
                     return buildMidIrrefutablePattern(c: inout c, state: inout state, semantic: semantic, continuation: continuation, scrutinee: scrutinee.place, hasScrutineeScope: hasScrutineeScope, scrutineeScope: scrutineeScope, blockResult: blockResult)
                 }
                 SemanticMatchKind.Struct(layoutTerm: _) => {

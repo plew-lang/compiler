@@ -1,9 +1,8 @@
-// The arena includes the unconditional predicate for the terminal wildcard.
-// Value-position literal matches must preserve the existing single-evaluation
-// give-block wrapper; they are not a direct enum MatchExpr.
+// Scalar matches retain subject and ordered patterns for the common typed pipeline.
 use @Plew/Syntax only { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxTopItemPayload, syntaxBlock, syntaxBlockStmt, syntaxStmt }
 use @Std/Io only { print }
 use /Frontend only { Comp }
+use /Ir only { Expr }
 
 fn main() {
     val source = "fn body() {{ val result = match 1I8 {{ 1I8 => {{ give 2I8 }} _ => {{ give 3I8 }} }} }}\n"
@@ -19,8 +18,15 @@ fn main() {
     mut val c: Comp = <Comp />
     c.appendSrc(from: source.bytes())
     c.syntax = file
-    c.lowerSyntaxExpr(id: letStmt.child0).unwrap()
-    print(c.arena.blocks.count())
-    print(c.arena.stmts.count())
-    print(c.arena.exprs.count())
+    val expression = c.lowerSyntaxExpr(id: letStmt.child0).unwrap()
+    match c.arena.exprs[expression] {
+        Expr.MatchExpr(scrut: _, val arms) => {
+            print(arms.len)
+            print(c.matchArmAt(arms: arms, index: 0U64).isValuePattern)
+            print(c.matchArmAt(arms: arms, index: 1U64).isWildcard)
+            print(c.blockStmtCount(blkId: c.matchArmAt(arms: arms, index: 0U64).body))
+            print(c.blockStmtCount(blkId: c.matchArmAt(arms: arms, index: 1U64).body))
+        }
+        _ => { print(99U64) }
+    }
 }

@@ -447,7 +447,7 @@ pub impl Comp {
             if a.isWildcard {
                 return true
             }
-            if spansEqual(c: inout self, aStart: a.variantStart, aLen: a.variantLen, bStart: variantStart, bLen: variantLen) {
+            if !a.isValuePattern && spansEqual(c: inout self, aStart: a.variantStart, aLen: a.variantLen, bStart: variantStart, bLen: variantLen) {
                 return true
             }
             i += 1
@@ -455,49 +455,43 @@ pub impl Comp {
         return false
     }
 
-    // Acceptance soundness: spec requires match to be exhaustive (Rust-style). A
-    // match is exhaustive iff it has a `_` wildcard, or every variant of the
-    // scrutinee's enum is covered by some arm. (This compiler's match is always
-    // over an enum, and has no `val x` catch-all arm, so those are the only cases.)
-    inout fn matchExhaustive(arms: MatchArmRange) -> Bool {
-        mut val enumStart: U64 = 0
-        mut val enumLen: U64 = 0
-        mut val i: U64 = 0
-        while i < arms.len {
-            val a: MatchArm = self.matchArmAt(arms: arms, index: i)
-            if a.isWildcard {
-                return true
-            }
-            if enumLen == 0 {
-                if a.enumLen > 0 {
-                    enumStart = a.enumStart
-                    enumLen = a.enumLen
-                }
-            }
-            i += 1
-        }
-        if enumLen == 0 {
-            return true
-        }
-        val qEnum: U64 = intern(c: inout self, start: enumStart, len: enumLen)
-        mut val ei: U64 = 0
-        while ei < self.arena.enumCount() {
-            val e: EnumDef = self.arena.enumAt(index: ei)
-            if e.nameId == qEnum {
-                val vars: Array[Variant] = e.variants
-                mut val vi: U64 = 0
-                while vi < vars.count() {
-                    val v: Variant = vars[vi]
-                    if !(self.armCovers(arms: arms, variantStart: v.nameStart, variantLen: v.nameLen)) {
-                        return false
+    // Coverage follows the subject's type and each pattern's meaning. Runtime
+    // Eq tests do not cover an enum variant merely because their names match.
+    inout fn matchExhaustive(scrut: U64, arms: MatchArmRange) -> Result[Bool, CompileDiagnostic] {
+        mut val sawTrue = false
+        mut val sawFalse = false
+        mut val index = 0U64
+        while index < arms.len {
+            val arm = self.matchArmAt(arms: arms, index: index)
+            if arm.isWildcard || arm.isStruct { return <Result.Ok value=true /> }
+            if arm.isValuePattern {
+                match self.arena.exprs[arm.valueExpr] {
+                    Expr.Int(val value, offset: _, val isBool, tyStart: _, tyLen: _, isNeg: _) => {
+                        if isBool {
+                            if value == 0U64 { sawFalse = true }
+                            if value == 1U64 { sawTrue = true }
+                        }
                     }
-                    vi += 1
+                    _ => {}
                 }
-                return true
             }
-            ei += 1
+            index += 1U64
         }
-        return true
+        mut val type = self.semanticExprTerm(exprId: scrut)
+        if type == 0U64 { type = self.typedIrRefOfInfo(ti: (try self.typeOf(id: scrut))) }
+        val enumIndex = self.enumIndexForType(ref: self.lexicalLayoutReceiver(receiverTerm: type))
+        if enumIndex < self.arena.enumCount() {
+            val variants = self.arena.enumAt(index: enumIndex).variants
+            for val variant in variants {
+                if !self.armCovers(arms: arms, variantStart: variant.nameStart, variantLen: variant.nameLen) { return <Result.Ok value=false /> }
+            }
+            return <Result.Ok value=true />
+        }
+        if sawTrue && sawFalse {
+            val name = self.kwSpan(kw: "Bool", kwLen: 4U64)
+            return <Result.Ok value=self.typeRefEq(a: type, b: self.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)) />
+        }
+        return <Result.Ok value=false />
     }
 
     // Tag index of `Enum.Variant` (the variant's position in its enum declaration).

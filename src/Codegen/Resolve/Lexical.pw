@@ -69,6 +69,7 @@ pub impl Comp {
             val arm = self.matchArmAt(arms: arms, index: index)
             if arm.isValuePattern { self.resolveLexicalModuleExpr(id: arm.valueExpr, names: inout names) }
             val mark = names.count()
+            if arm.captureLen != 0U64 { names.append(intern(c: inout self, start: arm.captureStart, len: arm.captureLen)) }
             self.resolveLexicalModuleBinds(binds: arm.binds, names: inout names)
             self.resolveLexicalModuleBlock(blockId: arm.body, names: inout names)
             names.truncate(count: mark)

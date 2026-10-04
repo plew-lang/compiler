@@ -177,6 +177,12 @@ else
     fail=$((fail + 1)); failed="$failed check-command"
 fi
 
+if python3 -B ./tests/tooling/test-match-diagnostics.py --compiler "$PLEWC"; then
+    echo "PASS match-diagnostics"
+else
+    fail=$((fail + 1)); failed="$failed match-diagnostics"
+fi
+
 if sh ./tests/tooling/test-cli-options.sh; then
     :
 else

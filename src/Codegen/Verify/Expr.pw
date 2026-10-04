@@ -19,10 +19,6 @@ pub impl Comp {
                 try self.checkPatternEnum(scrut: clause.value, a: clause.pattern)
                 try self.checkDestructureComplete(a: clause.pattern, scrut: clause.value)
                 try self.verifyAddArmBinds(a: clause.pattern, scrut: clause.value)
-                if clause.pattern.captureLen != 0U64 {
-                    val info = try self.typeOf(id: clause.value)
-                    self.addLocal(nameStart: clause.pattern.captureStart, nameLen: clause.pattern.captureLen, tyStart: info.nameStart, tyLen: info.nameLen, isArray: info.kind == 3, ty: self.typedIrRefOfInfo(ti: info), isInout: false, isMut: clause.pattern.captureMutable, owned: false)
-                }
             } else {
                 try self.checkLitCtx(id: clause.value, eKind: 0, eBits: 0, eSgn: false)
                 try self.checkCondBool(cond: clause.value)
@@ -547,7 +543,7 @@ pub impl Comp {
                 try self.checkMatchAccessMode(scrut: scrut, arms: arms)
                 try self.verifyExpr(id: scrut)
                 try self.checkMatchArmsEnum(scrut: scrut, arms: arms)
-                if !(self.matchExhaustive(arms: arms)) {
+                if !((try self.matchExhaustive(scrut: scrut, arms: arms))) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: scrut), msg: "match must be exhaustive: cover all variants or add a wildcard") />
                 }
                 mut val ai: U64 = 0
@@ -916,9 +912,7 @@ pub impl Comp {
     }
 
     inout fn verifyAddArmBinds(a: PatInfo, scrut: U64) -> Result[(), CompileDiagnostic] {
-        if a.isWildcard || a.isValuePattern {
-            return <Result.Ok value=() />
-        }
+        if a.isWildcard || a.isValuePattern { return self.addPatternBinds(a: a, scrut: scrut) }
         if a.isStruct {
             // a struct destructure requires a scrutinee OF that struct type (spec/11). A
             // mismatched / non-struct scrutinee (`match anI64 { P { … } }`, or an unknown
@@ -948,6 +942,11 @@ pub impl Comp {
     }
 
     inout fn addPatternBinds(a: PatInfo, scrut: U64) -> Result[(), CompileDiagnostic] {
+        if a.captureLen != 0U64 {
+            val info = try self.typeOf(id: scrut)
+            val term = self.typedIrRefOfInfo(ti: info)
+            self.addLocal(nameStart: a.captureStart, nameLen: a.captureLen, tyStart: info.nameStart, tyLen: info.nameLen, isArray: info.kind == 3, ty: term, isInout: false, isMut: a.captureMutable, owned: self.matchConsumesValue(scrut: scrut, typeTerm: term))
+        }
         if a.isWildcard || a.isValuePattern {
             return <Result.Ok value=() />
         }

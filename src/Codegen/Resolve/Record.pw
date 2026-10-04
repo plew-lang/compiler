@@ -971,7 +971,12 @@ pub impl Comp {
             patterns.append(self.patternInfo(arm: arm))
             index += 1U64
         }
-        return self.recordSemanticPatterns(matchSource: matchSource, scrut: scrut, arms: patterns)
+        try self.recordSemanticPatterns(matchSource: matchSource, scrut: scrut, arms: patterns)
+        if self.cur.recordCallTemplates {
+            if !(try self.matchExhaustive(scrut: scrut, arms: arms)) { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: scrut), msg: "match must be exhaustive: cover all variants or add a wildcard") /> }
+            self.recordMatchWarnings(scrut: scrut, arms: arms)
+        }
+        return <Result.Ok value=() />
     }
 
     // Extend the success environment only. The caller restores its mark before
@@ -1020,7 +1025,7 @@ pub impl Comp {
                 }
                 bindIndex += 1U64
             }
-            selectedArms.append(<SemanticMatchArm hasValueTest=arm.isValuePattern testExpr=arm.testExpr payloads=payloads />)
+            selectedArms.append(<SemanticMatchArm hasValueTest=arm.isValuePattern testExpr=arm.testExpr captureTarget=arm.captureStart hasCapture=arm.captureLen != 0U64 payloads=payloads />)
             armIndex += 1U64
         }
         try self.putSemanticMatch(fact: <SemanticMatch isConsuming=isConsuming ownerFnIdx=self.cur.checkFn matchSource=matchSource scrutineeTerm=scrutineeTerm kind=<SemanticMatchKind.Struct layoutTerm=storage /> arms=selectedArms />)
@@ -1031,17 +1036,17 @@ pub impl Comp {
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
         val scrutineeTerm: U64 = self.parametricExprTerm(exprId: scrut)
         if scrutineeTerm == 0U64 || scrutineeTerm >= self.arena.typeCount() { return <Result.Ok value=() /> }
-        mut val onlyDiscards: Bool = arms.count() > 0U64
-        mut val discardArms: Array[SemanticMatchArm] = []
-        mut val discardIndex: U64 = 0U64
-        while discardIndex < arms.count() {
-            val arm = arms[discardIndex]
-            if !arm.isWildcard || arm.binds.len != 0U64 { onlyDiscards = false }
-            discardArms.append(<SemanticMatchArm captureTarget=arm.captureStart hasCapture=arm.captureLen != 0U64 />)
-            discardIndex += 1U64
+        mut val onlyValuePatterns: Bool = arms.count() > 0U64
+        mut val valueArms: Array[SemanticMatchArm] = []
+        mut val valueIndex: U64 = 0U64
+        while valueIndex < arms.count() {
+            val arm = arms[valueIndex]
+            if (!arm.isWildcard && !arm.isValuePattern) || arm.binds.len != 0U64 { onlyValuePatterns = false }
+            valueArms.append(<SemanticMatchArm hasValueTest=arm.isValuePattern testExpr=arm.testExpr captureTarget=arm.captureStart hasCapture=arm.captureLen != 0U64 />)
+            valueIndex += 1U64
         }
-        if onlyDiscards {
-            try self.putSemanticMatch(fact: <SemanticMatch isConsuming=self.matchConsumesValue(scrut: scrut, typeTerm: scrutineeTerm) ownerFnIdx=self.cur.checkFn matchSource=matchSource scrutineeTerm=scrutineeTerm kind=<SemanticMatchKind.Wildcard /> arms=discardArms />)
+        if onlyValuePatterns {
+            try self.putSemanticMatch(fact: <SemanticMatch isConsuming=self.matchConsumesValue(scrut: scrut, typeTerm: scrutineeTerm) ownerFnIdx=self.cur.checkFn matchSource=matchSource scrutineeTerm=scrutineeTerm kind=<SemanticMatchKind.Value /> arms=valueArms />)
             return <Result.Ok value=() />
         }
         // Patterns select the lexical declaration's shape, while the match
@@ -1060,7 +1065,7 @@ pub impl Comp {
             if arm.isValuePattern {
                 selectedArms.append(<SemanticMatchArm hasValueTest=true testExpr=arm.testExpr />)
             } else if arm.isWildcard {
-                selectedArms.append(<SemanticMatchArm />)
+                selectedArms.append(<SemanticMatchArm captureTarget=arm.captureStart hasCapture=arm.captureLen != 0U64 />)
             } else {
                 val variantIndex: U64 = self.variantIndexInDeclaration(enumIndex: enumIndex, nameStart: arm.variantStart, nameLen: arm.variantLen)
                 if variantIndex >= self.arena.enumAt(index: enumIndex).variants.count() { return <Result.Ok value=() /> }
@@ -1932,6 +1937,10 @@ pub impl Comp {
                             }
                         }
                         try self.rewriteOptChainToChainMatch(exprId: exprId, base: base, cont: cont, memberStart: self.exprOffset(id: exprId), headStart: baseInfo.nameStart, headLen: baseInfo.nameLen, stageRef: stageRef)
+                        // Generated match nodes must satisfy the same typed
+                        // contract before declaration verification as written
+                        // matches. Revisit the replacement, not the old chain.
+                        try self.recordExpr(exprId: exprId, chainHoleRef: chainHoleRef, expectedTerm: expectedTerm)
                     }
                 }
             }

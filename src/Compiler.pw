@@ -6,7 +6,7 @@ use ./CompilerExecution only { executeProgram }
 use ./CheckedProgram only { CheckedProgram, ProgramCheckResult, prepareCheckedProgram, ExecutableCompilationResult }
 use ./Backend only { emitLlvmRuntime, lowerLlvm, lowerPreparedLlvm, nativeCpu, LlvmModule, LlvmLoweringResult }
 use ./SourceAccess only { SourceAccess }
-use ./Diag only { CompileDiagnostic, emitDiagnostic }
+use ./Diag only { CompileDiagnostic, emitDiagnostic, emitDiagnostics }
 
 extern(c) {
     fn plew_llvm_initialize_worker(trace~: I32)
@@ -92,7 +92,9 @@ fn compileSource(sources: SourceAccess, firstArgument: I64, emitText: Bool = fal
     match CheckedProgram.check(input: request.input, sources: request.sources, options: request.options) {
         ProgramCheckResult.Failure(diagnostic: val diagnostic) => { return <CompilationResult.Failure diagnostic=diagnostic /> }
         ProgramCheckResult.Success(program: val program) => {
-            match prepareCheckedProgram(checked: move program) {
+            mut val checked = move program
+            emitDiagnostics(diagnostics: checked.takeDiagnostics())
+            match prepareCheckedProgram(checked: move checked) {
                 ExecutableCompilationResult.Failure(diagnostic: val diagnostic) => { return <CompilationResult.Failure diagnostic=diagnostic /> }
                 ExecutableCompilationResult.Success(compilation: val compilation) => {
                     mut val executable = move compilation
@@ -105,6 +107,7 @@ fn compileSource(sources: SourceAccess, firstArgument: I64, emitText: Bool = fal
 }
 
 fn finishCompilation(c: inout Comp, lowered: move LlvmLoweringResult, emitText: Bool) -> CompilationResult {
+    emitDiagnostics(diagnostics: c.takeDiagnostics())
     match move lowered {
         LlvmLoweringResult.Success(module: val module) => {
             if emitText { module.writeText(c: inout c) }
@@ -135,7 +138,10 @@ pub fn compileObject(sources: SourceAccess, firstArgument: I64, output: String, 
 pub fn runCheck(sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1I64) {
     val request = frontendRequest(sources: sources, firstArgument: firstArgument)
     match CheckedProgram.check(input: request.input, sources: request.sources, options: request.options) {
-        ProgramCheckResult.Success(program: val program) => {}
+        ProgramCheckResult.Success(program: val program) => {
+            mut val checked = move program
+            emitDiagnostics(diagnostics: checked.takeDiagnostics())
+        }
         ProgramCheckResult.Failure(diagnostic: val diagnostic) => {
             emitDiagnostic(diagnostic: diagnostic)
             exit(code: 1I64)

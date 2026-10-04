@@ -71,7 +71,7 @@ pub impl Comp {
                 if !self.exprCompletesNormally(exprId: write.value) {
                     mut val statements: Array[U64] = [self.pushStmt(s: <Stmt.ExprStmt expr=write.value />)]
                     if write.options != 0U64 { statements.append(self.pushStmt(s: <Stmt.ExprStmt expr=write.options />)) }
-                    val body = self.blockOfStmts(stmts: statements)
+                    val body = self.pushBlock(stmts: statements)
                     self.arena.exprs.set(i: exprId, value: <Expr.Sequence body=body />)
                 }
             }
@@ -86,7 +86,7 @@ pub impl Comp {
         val stringRef = self.stringCoreType(name: "String")
         val result = self.stringStorageMake(typeRef: stringRef, buffer: buffer, offset: span.start)
         stmts.append(self.pushStmt(s: <Stmt.Give value=result />))
-        val body = self.blockOfStmts(stmts: stmts)
+        val body = self.pushBlock(stmts: stmts)
         val block = self.pushExpr(e: <Expr.Sequence body=body />)
         self.arena.exprSpanStart[block] = span.start
         return block

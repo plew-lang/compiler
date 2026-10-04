@@ -5,7 +5,7 @@ use ./CheckedProgram only { CompilerSession, CompilerSessionResult }
 use ./Frontend only { FrontendInput, FrontendOptions }
 use ./SourceAccess only { SourceAccess }
 use ./Backend only { LlvmJit, LlvmJitCreation, LlvmLoweringResult, ProgramArguments }
-use ./Diag only { emitDiagnostic }
+use ./Diag only { emitDiagnostic, emitDiagnostics }
 use @Std/Io only { eprint }
 use @Std/Core only { MutableRef }
 
@@ -50,13 +50,17 @@ pub fn executeProgram(input: FrontendInput, sources: SourceAccess,
                 LlvmJitCreation.Success(jit: val created) => {
                     val execution: MutableRef[ProcessExecution] = <MutableRef value=<ProcessExecution jit=move created arguments=<ProgramArguments.copied arguments=arguments /> registration=move registration /> />
                     processExecution = <Optional.Some v=execution />
-                    match shared->lowerDeclarations() {
+                    val declarations = shared->lowerDeclarations()
+                    emitDiagnostics(diagnostics: shared->takeDiagnostics())
+                    match move declarations {
                         LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) return 1I32 }
                         LlvmLoweringResult.Success(module: val module) => {
                             if execution->jit.registerDeclarations(module: move module, sessionId: id) != 0I32 { return 1I32 }
                         }
                     }
-                    match shared->lowerGlobalStorage() {
+                    val globals = shared->lowerGlobalStorage()
+                    emitDiagnostics(diagnostics: shared->takeDiagnostics())
+                    match move globals {
                         LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) return 1I32 }
                         LlvmLoweringResult.Success(module: val module) => {
                             if execution->jit.add(module: move module) != 0I32 { return 1I32 }

@@ -275,18 +275,8 @@ pub impl Comp {
                 val pt: PType = (try self.lowerType(t: ty))
                 result = self.pushExpr(e: <Expr.Cast operand=o tyStart=pt.start tyLen=pt.len ty=pt.ref />)
             }
-            ExprAst.MatchExpr(val scrut, val arms, val span) => {
-                if matchHasEnumOrStruct(arms: arms) {
-                    if matchHasCapture(arms: arms) {
-                        result = (try self.lowerEnumMatchCaptureExpr(scrut: scrut, arms: arms, span: span))
-                    } else {
-                        val s: U64 = (try self.lowerExpr(e: scrut))
-                        val ma: MatchArmRange = (try self.lowerMatchArms(arms: arms, isExpr: true))
-                        result = self.pushExpr(e: <Expr.MatchExpr scrut=s arms=ma />)
-                    }
-                } else {
-                    result = (try self.lowerScalarMatchExpr(scrut: scrut, arms: arms, span: span))
-                }
+            ExprAst.MatchExpr(val scrut, val arms, span: _) => {
+                result = self.pushExpr(e: <Expr.MatchExpr scrut=(try self.lowerExpr(e: scrut)) arms=(try self.lowerMatchArms(arms: arms, isExpr: true)) />)
             }
             ExprAst.BlockExpr(val body, val span) => { result = self.pushExpr(e: <Expr.Block body=(try self.lowerBlock(b: body)) offset=span.start />) }
             ExprAst.IfChain(val conditions, val thenBlk, val elseBlk, span: _) => {

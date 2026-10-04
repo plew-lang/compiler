@@ -3344,7 +3344,7 @@ pub impl Comp {
         val source: SemanticMatch = self.decls.semanticMatches[sourceIndex]
         mut val kind: SemanticMatchKind = source.kind
         match source.kind {
-            SemanticMatchKind.Wildcard => {}
+            SemanticMatchKind.Value => {}
             SemanticMatchKind.Enum(enumIndex: _) => {}
             SemanticMatchKind.Struct(layoutTerm: val term) => {
                 val layout = (try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
@@ -6089,6 +6089,13 @@ pub impl Comp {
     }
 
     inout fn scanAddFinalPatternBinds(a: PatInfo, matchSource: MatchSource, armIndex: U64) -> Result[(), CompileDiagnostic] {
+        if a.captureLen != 0U64 {
+            val matchIndex = self.finalMatchIndex(bodyId: self.currentBodyInstanceId(), matchSource: matchSource)
+            if matchIndex >= self.arena.finalMatches.count() { return <Result.Err error=self.diagnosticAt(offset: a.captureStart, msg: "internal error: finalized match capture was not recorded") /> }
+            val fact = self.arena.finalMatches[matchIndex]
+            val info = self.typeInfoOfRef(ref: fact.scrutineeTypeRef)
+            self.addLocal(nameStart: a.captureStart, nameLen: a.captureLen, tyStart: info.nameStart, tyLen: info.nameLen, isArray: info.kind == 3, ty: fact.scrutineeTypeRef, isInout: false, isMut: a.captureMutable, owned: fact.isConsuming)
+        }
         mut val bi: U64 = 0
         while bi < a.binds.len {
             val bd: Bind = self.bindAt(binds: a.binds, index: bi)
@@ -6136,11 +6143,7 @@ pub impl Comp {
                 val source = <MatchSource.Condition clauseIndex=conditions.start + index />
                 try self.finalizeCurrentBodyMatch(matchSource: source)
                 try self.scanAddFinalPatternBinds(a: clause.pattern, matchSource: source, armIndex: 0U64)
-                if clause.pattern.captureLen != 0U64 {
-                    val term = try self.groundTypeRef(ref: self.semanticExprTerm(exprId: clause.value))
-                    val info = self.typeInfoOfRef(ref: term)
-                    self.addLocal(nameStart: clause.pattern.captureStart, nameLen: clause.pattern.captureLen, tyStart: info.nameStart, tyLen: info.nameLen, isArray: info.kind == 3, ty: term, isInout: false, isMut: clause.pattern.captureMutable, owned: false)
-                }
+
             }
             index += 1U64
         }

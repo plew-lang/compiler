@@ -1,9 +1,8 @@
-// The arena includes the unconditional predicate for the terminal wildcard.
-// Literal match lowering must retain the value-AST single-evaluation if-chain
-// form instead of exposing a scalar pattern to enum-match codegen.
+// Scalar matches retain subject and ordered patterns for the common typed pipeline.
 use @Plew/Syntax only { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxTopItemPayload }
 use @Std/Io only { print }
 use /Frontend only { Comp }
+use /Ir only { Stmt }
 
 fn main() {
     val source = "fn body() {{ match value {{ 1I8 => {{}} _ => {{}} }} }}\n"
@@ -18,8 +17,13 @@ fn main() {
     c.appendSrc(from: source.bytes())
     c.syntax = file
     val root = c.lowerSyntaxBlock(id: decl.body).unwrap()
-    print(c.arena.blocks.count())
-    print(c.arena.stmts.count())
-    print(c.arena.exprs.count())
     print(c.blockStmtCount(blkId: root))
+    match c.arena.stmts[c.blockStmtAt(blkId: root, index: 0U64)] {
+        Stmt.Match(scrut: _, val arms) => {
+            print(arms.len)
+            print(c.matchArmAt(arms: arms, index: 0U64).isValuePattern)
+            print(c.matchArmAt(arms: arms, index: 1U64).isWildcard)
+        }
+        _ => { print(99U64) }
+    }
 }

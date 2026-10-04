@@ -65,6 +65,8 @@ pub unique enum CompilerSessionResult {
 }
 
 pub impl CompilerSession {
+    inout fn takeDiagnostics() -> Array[CompileDiagnostic] { return self.compiler.takeDiagnostics() }
+
     assoc fn open(input: FrontendInput, sources: SourceAccess,
                   options: FrontendOptions = <FrontendOptions />) -> CompilerSessionResult {
         mut val compiler = <Comp />
@@ -371,6 +373,8 @@ pub unique enum ExecutableCompilationResult {
 }
 
 pub impl CheckedProgram {
+    inout fn takeDiagnostics() -> Array[CompileDiagnostic] { return self.session.takeDiagnostics() }
+
     assoc fn check(input: FrontendInput, sources: SourceAccess,
                    options: FrontendOptions = <FrontendOptions />) -> ProgramCheckResult {
         // gen deliberately checks a different target; it cannot issue this proof.

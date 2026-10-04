@@ -6,6 +6,55 @@
 // separate concern — e.g. a match on a type parameter).
 
 pub impl Comp {
+    inout fn warnUnreachableArm(arm: MatchArm) {
+        if arm.offset == 0U64 || self.reportedUnreachableArms.contains(arm.offset) { return }
+        self.reportedUnreachableArms.insert(arm.offset)
+        val location = self.diagnosticAt(offset: arm.offset, msg: "unreachable match arm: earlier patterns already cover it (spec/11)")
+        self.pendingDiagnostics.append(<CompileDiagnostic severity=<DiagnosticSeverity.Warning /> location=location.location message=location.message />)
+    }
+
+    // Coverage is structural: arbitrary Eq calls (including repeated reads of
+    // the same existing value) neither cover variants nor erase later effects.
+    inout fn recordMatchWarnings(scrut: U64, arms: MatchArmRange) {
+        val term = self.semanticExprTerm(exprId: scrut)
+        val enumIndex = self.enumIndexForType(ref: self.lexicalLayoutReceiver(receiverTerm: term))
+        val boolName = self.kwSpan(kw: "Bool", kwLen: 4U64)
+        val isBool = self.typeRefEq(a: term, b: self.simpleTypeRef(nameStart: boolName.nameStart, nameLen: boolName.nameLen))
+        mut val variants: Set[U64] = Set.new()
+        mut val allCovered = false
+        mut val sawTrue = false
+        mut val sawFalse = false
+        mut val index = 0U64
+        while index < arms.len {
+            val arm = self.matchArmAt(arms: arms, index: index)
+            mut val unreachable = allCovered || (isBool && sawTrue && sawFalse)
+            if enumIndex < self.arena.enumCount() && variants.count() == self.arena.enumAt(index: enumIndex).variants.count() { unreachable = true }
+            if arm.isWildcard || arm.isStruct {
+                allCovered = true
+            } else if arm.isValuePattern {
+                if isBool {
+                    match self.arena.exprs[arm.valueExpr] {
+                        Expr.Int(val value, offset: _, val isBool, tyStart: _, tyLen: _, isNeg: _) => {
+                            if isBool {
+                                if value == 0U64 { if sawFalse { unreachable = true } sawFalse = true }
+                                if value == 1U64 { if sawTrue { unreachable = true } sawTrue = true }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            } else if enumIndex < self.arena.enumCount() {
+                val variant = self.variantIndexInDeclaration(enumIndex: enumIndex, nameStart: arm.variantStart, nameLen: arm.variantLen)
+                if variant < self.arena.enumAt(index: enumIndex).variants.count() {
+                    if variants.contains(variant) { unreachable = true }
+                    variants.insert(variant)
+                }
+            }
+            if unreachable { self.warnUnreachableArm(arm: arm) }
+            index += 1U64
+        }
+    }
+
     inout fn checkArmBinds(a: MatchArm) -> Result[(), CompileDiagnostic] {
         return self.checkPatternBinds(a: self.patternInfo(arm: a))
     }
