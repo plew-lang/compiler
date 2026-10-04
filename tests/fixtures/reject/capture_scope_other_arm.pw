@@ -1,0 +1,2 @@
+fn main() { val result = match 1I64 { 0I64 => hidden
+val hidden => 2I64 } }

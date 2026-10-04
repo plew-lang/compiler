@@ -1,0 +1,4 @@
+use @Std/Io only { print }
+fn main() { match 1I64 { 0I64 => {}
+val hidden => {} }
+print(hidden) }
