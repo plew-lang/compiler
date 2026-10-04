@@ -2105,9 +2105,14 @@ pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64, compl
     match c.arena.stmts[stmtId] {
         Stmt.Let(mutable: val mutable, nameStart: val nameStart, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => {
             val term = c.decls.semanticLetTerms.getOr(key: stmtId, fallback: 0U64)
-            if term == 0U64 { return <MidBuildError.MissingSemanticType /> }
             val isUnique = c.arena.typeTermIsUnique(ref: term)
-            val destinationLocal: U64 = addMidLocal(state: inout state, declarationTarget: nameStart, typeTerm: term, isUnique: isUnique, isParameter: false, ownsAtEntry: false, isCaptureCell: midBindingNeedsCaptureCell(closures: c.decls.semanticClosures, sourceFunction: state.sourceFunction, bindingTarget: nameStart))
+            // A binding is created only if its initializer produces a value.
+            // Keep known destinations in the lexical scope, but require their
+            // type only after the initializer's normal continuation exists.
+            mut val destinationLocal = state.locals.count()
+            if term != 0U64 {
+                destinationLocal = addMidLocal(state: inout state, declarationTarget: nameStart, typeTerm: term, isUnique: isUnique, isParameter: false, ownsAtEntry: false, isCaptureCell: midBindingNeedsCaptureCell(closures: c.decls.semanticClosures, sourceFunction: state.sourceFunction, bindingTarget: nameStart))
+            }
             val destination: MidPlace = <MidPlace local=destinationLocal typeTerm=term />
             // The named destination belongs to the enclosing lexical scope;
             // only its initializer dependencies belong to this full expression.
@@ -2127,6 +2132,11 @@ pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64, compl
                     return operandResult.error
                 }
             }
+            if !midCurrentBlockIsOpen(state: state) {
+                if completeEvaluation { midFinishEvaluationScope(state: inout state, scope: evaluation) }
+                return <MidBuildError.None />
+            }
+            if term == 0U64 { return <MidBuildError.MissingSemanticType /> }
             if state.locals[destinationLocal].isCaptureCell {
                 midAppendStatement(state: inout state, statement: <MidStatement.InitializeCaptureCell destination=destination value=<MidRvalue.StorageBoundary stmtId=stmtId targetTerm=term operand=midReturnOperand(c: inout c, operand: operandResult.operand, typeTerm: c.semanticExprTerm(exprId: init)) /> />)
             } else {
