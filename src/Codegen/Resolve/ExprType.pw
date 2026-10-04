@@ -1345,6 +1345,7 @@ pub impl Comp {
                 }
                 return <Result.Ok value=self.typeInfoOfRef(ref: rr) />
             }
+            Expr.MatchSubject(val scrut) => { return <Result.Ok value=self.semanticExprTypeInfo(exprId: scrut) /> }
             Expr.ChainHole => {
                 // the unwrapped chain Value, set by chainStageResultRef while typing `cont`.
                 if chainHoleRef != 0U64 {

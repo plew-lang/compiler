@@ -252,6 +252,7 @@ pub impl Comp {
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => { return self.exprOffset(id: cond) }
             Expr.OptChain(val base, cont: _) => { return self.exprOffset(id: base) }
+            Expr.MatchSubject(val scrut) => { return self.exprOffset(id: scrut) }
             Expr.ChainHole => { return 0 }
             Expr.Try(val expr) => { return self.exprOffset(id: expr) }
             Expr.Arrow(val base, val nameStart, val nameLen) => { return self.exprOffset(id: base) }

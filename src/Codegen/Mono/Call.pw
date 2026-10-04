@@ -5986,6 +5986,7 @@ pub impl Comp {
                 mut val ai: U64 = 0
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
+                    if a.isValuePattern && a.testExpr != 0U64 { try self.scanExprInsts(exprId: a.testExpr) }
                     val mark: U64 = self.scopeMark()
                     try self.scanAddFinalMatchArmBinds(a: a, matchSource: <MatchSource.Expression exprId=exprId />, armIndex: ai)
                     try self.scanBlockInsts(blkId: a.body)
@@ -6433,6 +6434,7 @@ pub impl Comp {
                 mut val ai: U64 = 0
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
+                    if a.isValuePattern && a.testExpr != 0U64 { try self.scanExprInsts(exprId: a.testExpr) }
                     val mark: U64 = self.scopeMark()
                     try self.scanAddFinalMatchArmBinds(a: a, matchSource: <MatchSource.Statement stmtId=stmtId />, armIndex: ai)
                     try self.scanBlockInsts(blkId: a.body)

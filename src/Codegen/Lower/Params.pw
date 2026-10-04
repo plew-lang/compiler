@@ -100,6 +100,7 @@ pub impl Comp {
     }
 
     inout fn lowerPatternInfo(p: PatternAst) -> Result[PatInfo, CompileDiagnostic] {
+        if p.isValuePattern { return <Result.Ok value=<PatInfo isValuePattern=true valueExpr=(try self.lowerExpr(e: p.lit)) isWildcard=false enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=<BindRange start=0U64 len=0U64 /> isStruct=false /> /> }
         if p.isWildcard {
             val capture = self.lowerTypeName(name: p.captureName, span: p.captureNameSpan)
             return <Result.Ok value=<PatInfo captureStart=capture.nameStart captureLen=capture.nameLen captureMutable=p.captureMutable isWildcard=true enumStart=0 enumLen=0 variantStart=0 variantLen=0 binds=<BindRange start=0U64 len=0U64 /> isStruct=false /> />

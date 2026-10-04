@@ -553,6 +553,10 @@ pub impl Comp {
                 mut val ai: U64 = 0
                 while ai < arms.len {
                     val arm: MatchArm = self.matchArmAt(arms: arms, index: ai)
+                    if arm.isValuePattern {
+                        if arm.testExpr != 0U64 { try self.verifyExpr(id: arm.testExpr) }
+                        else { try self.verifyExpr(id: arm.valueExpr) }
+                    }
                     val armMark: U64 = self.scopeMark()
                     try self.checkDestructureComplete(a: self.patternInfo(arm: arm), scrut: scrut)
                     try self.verifyAddArmBinds(a: self.patternInfo(arm: arm), scrut: scrut)
@@ -912,7 +916,7 @@ pub impl Comp {
     }
 
     inout fn verifyAddArmBinds(a: PatInfo, scrut: U64) -> Result[(), CompileDiagnostic] {
-        if a.isWildcard {
+        if a.isWildcard || a.isValuePattern {
             return <Result.Ok value=() />
         }
         if a.isStruct {
@@ -944,7 +948,7 @@ pub impl Comp {
     }
 
     inout fn addPatternBinds(a: PatInfo, scrut: U64) -> Result[(), CompileDiagnostic] {
-        if a.isWildcard {
+        if a.isWildcard || a.isValuePattern {
             return <Result.Ok value=() />
         }
         val st: TypeInfo = (try self.typeOf(id: scrut))

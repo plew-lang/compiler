@@ -380,7 +380,7 @@ pub impl Comp {
     }
 
     fn patternInfo(arm: MatchArm) -> PatInfo {
-        return <PatInfo captureStart=arm.captureStart captureLen=arm.captureLen captureMutable=arm.captureMutable isWildcard=arm.isWildcard enumStart=arm.enumStart enumLen=arm.enumLen variantStart=arm.variantStart variantLen=arm.variantLen binds=arm.binds isStruct=arm.isStruct />
+        return <PatInfo isValuePattern=arm.isValuePattern valueExpr=arm.valueExpr testExpr=arm.testExpr captureStart=arm.captureStart captureLen=arm.captureLen captureMutable=arm.captureMutable isWildcard=arm.isWildcard enumStart=arm.enumStart enumLen=arm.enumLen variantStart=arm.variantStart variantLen=arm.variantLen binds=arm.binds isStruct=arm.isStruct />
     }
     inout fn pushConditionClauses(conditions: Array[ConditionClause]) -> ConditionClauseRange {
         val start = self.arena.conditionClausePool.count()

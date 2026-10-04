@@ -295,7 +295,9 @@ pub impl Comp {
                 if self.exprContainsAwait(exprId: scrut) { return true }
                 mut val i: U64 = 0
                 while i < arms.len {
-                    if self.blockContainsAwait(blockId: self.matchArmAt(arms: arms, index: i).body) { return true }
+                    val arm = self.matchArmAt(arms: arms, index: i)
+                    if arm.isValuePattern && self.exprContainsAwait(exprId: arm.valueExpr) { return true }
+                    if self.blockContainsAwait(blockId: arm.body) { return true }
                     i += 1U64
                 }
                 return false
@@ -394,7 +396,9 @@ pub impl Comp {
                 if self.exprContainsAwait(exprId: scrut) { return true }
                 mut val i: U64 = 0
                 while i < arms.len {
-                    if self.blockContainsAwait(blockId: self.matchArmAt(arms: arms, index: i).body) { return true }
+                    val arm = self.matchArmAt(arms: arms, index: i)
+                    if arm.isValuePattern && self.exprContainsAwait(exprId: arm.valueExpr) { return true }
+                    if self.blockContainsAwait(blockId: arm.body) { return true }
                     i += 1U64
                 }
                 return false

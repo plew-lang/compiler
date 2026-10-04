@@ -522,6 +522,8 @@ pub impl SemanticMatchPayload { factory }
 // hasVariant=true. Struct arms carry field bindings without a variant;
 // wildcard arms have no payloads. Indices are declaration slots, not names.
 pub struct SemanticMatchArm {
+    pub val hasValueTest: Bool = false
+    pub val testExpr: U64 = 0U64
     pub val captureTarget: U64 = 0U64
     pub val hasCapture: Bool = false
     pub val hasVariant: Bool = false
@@ -747,6 +749,8 @@ pub enum Expr {
     // arm yields an expression (MatchArm.body is an Expr index, not a Block).
     // Lowers to a C statement-expression.
     MatchExpr(scrut: U64, arms: MatchArmRange)
+    // Read the already evaluated match subject; never evaluate scrut again.
+    MatchSubject(scrut: U64)
     // value-position `if cond { ... give a } else { ... give b }`: each branch is
     // a block ending in `give`. Lowers to a C statement-expression (like
     // MatchExpr). `else` is mandatory in value position (it must always yield).
@@ -810,6 +814,9 @@ pub struct PatternBindingType {
 pub impl PatternBindingType { factory }
 
 pub struct MatchArm {
+    pub val isValuePattern: Bool = false
+    pub val valueExpr: U64 = 0U64
+    pub mut val testExpr: U64 = 0U64
     pub val captureMutable: Bool = false
     pub val orGroup: U64 = 0U64
     pub val captureStart: U64 = 0U64
@@ -836,6 +843,9 @@ pub struct MatchArm {
 // The pattern part of a match arm (everything before `=>`), shared by statement
 // and expression match parsing. Mirrors MatchArm minus the body.
 pub struct PatInfo {
+    pub val isValuePattern: Bool = false
+    pub val valueExpr: U64 = 0U64
+    pub val testExpr: U64 = 0U64
     pub val captureStart: U64 = 0U64
     pub val captureLen: U64 = 0U64
     pub val captureMutable: Bool = false

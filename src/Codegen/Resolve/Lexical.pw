@@ -67,6 +67,7 @@ pub impl Comp {
         mut val index = 0U64
         while index < arms.len {
             val arm = self.matchArmAt(arms: arms, index: index)
+            if arm.isValuePattern { self.resolveLexicalModuleExpr(id: arm.valueExpr, names: inout names) }
             val mark = names.count()
             self.resolveLexicalModuleBinds(binds: arm.binds, names: inout names)
             self.resolveLexicalModuleBlock(blockId: arm.body, names: inout names)
@@ -160,6 +161,7 @@ pub impl Comp {
             Expr.Ident(start: _, len: _) => {}
             Expr.Str(start: _, len: _) => {}
             Expr.ChainHole => {}
+            Expr.MatchSubject(scrut: _) => {}
         }
     }
 

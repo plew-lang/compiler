@@ -11,7 +11,7 @@ pub impl Comp {
     }
 
     inout fn checkPatternBinds(a: PatInfo) -> Result[(), CompileDiagnostic] {
-        if a.isWildcard {
+        if a.isWildcard || a.isValuePattern {
             return <Result.Ok value=() />
         }
         val identity = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: a.enumStart), start: a.enumStart, len: a.enumLen)
