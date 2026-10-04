@@ -1,3 +1,4 @@
+// The arena includes the unconditional predicate for the terminal wildcard.
 // Literal match lowering must retain the value-AST single-evaluation if-chain
 // form instead of exposing a scalar pattern to enum-match codegen.
 use @Plew/Syntax only { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxTopItemPayload }

@@ -1,3 +1,4 @@
+// The arena includes the unconditional predicate for the terminal wildcard.
 // Value-position literal matches must preserve the existing single-evaluation
 // give-block wrapper; they are not a direct enum MatchExpr.
 use @Plew/Syntax only { Lexer, P, DeclId, lex, parseProgramSyntaxFile, syntaxDecl, syntaxFileTopLevel, syntaxTopItemPayload, syntaxBlock, syntaxBlockStmt, syntaxStmt }
