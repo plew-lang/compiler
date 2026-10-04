@@ -1,248 +1,145 @@
-// Part of compile-time checks (root: _.pw): return-path divergence
-// analysis.
-
-// Does control fall off the end of this block, or does it always leave via
-// return/panic/diverging-control? True = always diverges (never falls through).
+// Normal continuation and loop escape are shared source-flow facts.
 
 pub impl Comp {
-    inout fn blockDiverges(blkId: U64) -> Bool {
-        mut val i: U64 = 0
-        while i < self.blockStmtCount(blkId: blkId) {
-            if self.stmtDiverges(stmtId: self.blockStmtAt(blkId: blkId, index: i)) {
-                return true
-            }
-            i += 1
-        }
-        return false
+    inout fn blockCompletesNormally(blkId: U64) -> Bool {
+        return self.blockCompletion(blkId: blkId).normal
     }
 
-    inout fn blockHasLoopBreak(blkId: U64) -> Bool {
-        mut val i: U64 = 0
-        while i < self.blockStmtCount(blkId: blkId) {
-            if self.stmtHasLoopBreak(stmtId: self.blockStmtAt(blkId: blkId, index: i)) {
-                return true
-            }
-            i += 1
-        }
-        return false
+    inout fn exprCompletesNormally(exprId: U64) -> Bool {
+        return self.exprCompletion(exprId: exprId).normal
     }
 
-    inout fn stmtHasLoopBreak(stmtId: U64) -> Bool {
-        match self.arena.stmts[stmtId] {
-            Stmt.Break(offset: _) => { return true }
-            Stmt.ExprStmt(val expr) => { return self.exprHasLoopBreak(exprId: expr) }
-            Stmt.Give(val value) => { return self.exprHasLoopBreak(exprId: value) }
-            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return self.exprHasLoopBreak(exprId: init) }
-            Stmt.Assign(val target, val value) => { return self.exprHasLoopBreak(exprId: target) || self.exprHasLoopBreak(exprId: value) }
-            Stmt.Return(val value, val hasValue, offset: _) => { return hasValue && self.exprHasLoopBreak(exprId: value) }
-            Stmt.Panic(val msg, offset: _) => { return self.exprHasLoopBreak(exprId: msg) }
-            Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-                if self.exprHasLoopBreak(exprId: cond) { return true }
-                if self.blockHasLoopBreak(blkId: thenBlk) {
-                    return true
-                }
-                if hasElse {
-                    return self.blockHasLoopBreak(blkId: elseBlk)
-                }
-                return false
-            }
-            Stmt.Match(val scrut, val arms) => {
-                if self.exprHasLoopBreak(exprId: scrut) { return true }
-                mut val i: U64 = 0
-                while i < arms.len {
-                    if self.blockHasLoopBreak(blkId: self.matchArmAt(arms: arms, index: i).body) {
-                        return true
-                    }
-                    i += 1
-                }
-                return false
-            }
-            // Loop headers evaluate outside the loop body's break target.
-            Stmt.While(val cond, body: _) => { return self.exprHasLoopBreak(exprId: cond) }
-            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, val isRange, inclusive: _, val iter, val rangeHi, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {
-                return self.exprHasLoopBreak(exprId: iter) || (isRange && self.exprHasLoopBreak(exprId: rangeHi))
-            }
-            _ => { return false }
-        }
-    }
-
-    // A break in an evaluated expression exits the current loop. Conditional
-    // operands may execute, but closure bodies belong to another invocation.
-    inout fn exprHasLoopBreak(exprId: U64) -> Bool {
-        if exprId >= self.arena.exprs.count() { return false }
+    // Only structural value-control nodes need a continuation check at a type
+    // boundary. Their source statements are still checked by the lexical walk.
+    inout fn valueControlHasNoResult(exprId: U64) -> Bool {
         match self.arena.exprs[exprId] {
-            Expr.Block(val body, offset: _) => { return self.blockHasLoopBreak(blkId: body) }
-            Expr.Sequence(val body) => { return self.blockHasLoopBreak(blkId: body) }
-            Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-                return self.exprHasLoopBreak(exprId: cond) || (self.blockHasLoopBreak(blkId: thenBlk) || self.blockHasLoopBreak(blkId: elseBlk))
-            }
-            Expr.MatchExpr(val scrut, val arms) => {
-                if self.exprHasLoopBreak(exprId: scrut) { return true }
-                mut val index = 0U64
-                while index < arms.len {
-                    if self.blockHasLoopBreak(blkId: self.matchArmAt(arms: arms, index: index).body) { return true }
-                    index += 1U64
-                }
-                return false
-            }
-            Expr.Binary(val op, val lhs, val rhs) => {
-                if self.exprHasLoopBreak(exprId: lhs) { return true }
-                return self.exprHasLoopBreak(exprId: rhs)
-            }
-            Expr.Unary(op: _, val operand) => { return self.exprHasLoopBreak(exprId: operand) }
-            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.exprHasLoopBreak(exprId: operand) }
-            Expr.Move(val operand, isBorrow: _) => { return self.exprHasLoopBreak(exprId: operand) }
-            Expr.Await(val operand) => { return self.exprHasLoopBreak(exprId: operand) }
-            Expr.Try(val expr) => { return self.exprHasLoopBreak(exprId: expr) }
-            Expr.Field(val base, nameStart: _, nameLen: _) => { return self.exprHasLoopBreak(exprId: base) }
-            Expr.Arrow(val base, nameStart: _, nameLen: _) => { return self.exprHasLoopBreak(exprId: base) }
-            Expr.Deref(val base) => { return self.exprHasLoopBreak(exprId: base) }
-            Expr.ExtView(val recv, source: _, strip: _) => { return self.exprHasLoopBreak(exprId: recv) }
-            Expr.Index(val base, val index) => { return self.exprHasLoopBreak(exprId: base) || self.exprHasLoopBreak(exprId: index) }
-            Expr.OptChain(val base, val cont) => { return self.exprHasLoopBreak(exprId: base) || self.exprHasLoopBreak(exprId: cont) }
-            Expr.Call(nameStart: _, nameLen: _, val args) => { return self.argumentsHaveLoopBreak(args: args) }
-            Expr.Method(val recv, nameStart: _, nameLen: _, val args) => { return self.exprHasLoopBreak(exprId: recv) || self.argumentsHaveLoopBreak(args: args) }
-            Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => { return self.exprHasLoopBreak(exprId: recv) || self.argumentsHaveLoopBreak(args: args) }
-            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
-                mut val index = 0U64
-                while index < fields.len {
-                    if self.exprHasLoopBreak(exprId: self.makeFieldAt(fields: fields, index: index).value) { return true }
-                    index += 1U64
-                }
-                return false
-            }
-            Expr.Array(val elems) => {
-                mut val index = 0U64
-                while index < elems.len {
-                    if self.exprHasLoopBreak(exprId: self.exprAt(exprs: elems, index: index)) { return true }
-                    index += 1U64
-                }
-                return false
-            }
+            Expr.Block(body: _, offset: _) | Expr.Sequence(body: _) | Expr.IfExpr(cond: _, thenBlk: _, elseBlk: _) | Expr.MatchExpr(scrut: _, arms: _) => { return !self.exprCompletesNormally(exprId: exprId) }
             _ => { return false }
         }
     }
 
-    inout fn argumentsHaveLoopBreak(args: ArgRange) -> Bool {
+    inout fn blockCompletion(blkId: U64) -> SourceCompletion {
+        mut val flow = <SourceCompletion />
         mut val index = 0U64
-        while index < args.len {
-            if self.exprHasLoopBreak(exprId: self.argAt(args: args, index: index).expr) { return true }
+        while index < self.blockStmtCount(blkId: blkId) && flow.normal {
+            flow = completionThen(prefix: flow, next: self.stmtCompletion(stmtId: self.blockStmtAt(blkId: blkId, index: index)))
             index += 1U64
         }
-        return false
+        return flow
     }
 
-    // Expression evaluation can leave the enclosing function through a
-    // lexical block. Follow only operands that necessarily execute; closure
-    // bodies and the conditional part of optional chains are not evaluated here.
-    inout fn exprDiverges(exprId: U64) -> Bool {
-        if exprId >= self.arena.exprs.count() { return false }
-        match self.arena.exprs[exprId] {
-            Expr.Block(val body, offset: _) => { return self.blockDiverges(blkId: body) }
-            Expr.Sequence(val body) => { return self.blockDiverges(blkId: body) }
-            Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-                return self.exprDiverges(exprId: cond) || (self.blockDiverges(blkId: thenBlk) && self.blockDiverges(blkId: elseBlk))
-            }
-            Expr.MatchExpr(val scrut, val arms) => {
-                if self.exprDiverges(exprId: scrut) { return true }
-                mut val index = 0U64
-                while index < arms.len {
-                    if !self.blockDiverges(blkId: self.matchArmAt(arms: arms, index: index).body) { return false }
-                    index += 1U64
-                }
-                return true
-            }
-            Expr.Binary(val op, val lhs, val rhs) => {
-                if self.exprDiverges(exprId: lhs) { return true }
-                if op == opAnd() || op == opOr() { return false }
-                return self.exprDiverges(exprId: rhs)
-            }
-            Expr.Unary(op: _, val operand) => { return self.exprDiverges(exprId: operand) }
-            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.exprDiverges(exprId: operand) }
-            Expr.Move(val operand, isBorrow: _) => { return self.exprDiverges(exprId: operand) }
-            Expr.Await(val operand) => { return self.exprDiverges(exprId: operand) }
-            Expr.Try(val expr) => { return self.exprDiverges(exprId: expr) }
-            Expr.Field(val base, nameStart: _, nameLen: _) => { return self.exprDiverges(exprId: base) }
-            Expr.Arrow(val base, nameStart: _, nameLen: _) => { return self.exprDiverges(exprId: base) }
-            Expr.Deref(val base) => { return self.exprDiverges(exprId: base) }
-            Expr.ExtView(val recv, source: _, strip: _) => { return self.exprDiverges(exprId: recv) }
-            Expr.Index(val base, val index) => { return self.exprDiverges(exprId: base) || self.exprDiverges(exprId: index) }
-            Expr.OptChain(val base, cont: _) => { return self.exprDiverges(exprId: base) }
-            Expr.Call(nameStart: _, nameLen: _, val args) => { return self.argumentsDiverge(args: args) }
-            Expr.Method(val recv, nameStart: _, nameLen: _, val args) => { return self.exprDiverges(exprId: recv) || self.argumentsDiverge(args: args) }
-            Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => { return self.exprDiverges(exprId: recv) || self.argumentsDiverge(args: args) }
-            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
-                mut val index = 0U64
-                while index < fields.len {
-                    if self.exprDiverges(exprId: self.makeFieldAt(fields: fields, index: index).value) { return true }
-                    index += 1U64
-                }
-                return false
-            }
-            Expr.Array(val elems) => {
-                mut val index = 0U64
-                while index < elems.len {
-                    if self.exprDiverges(exprId: self.exprAt(exprs: elems, index: index)) { return true }
-                    index += 1U64
-                }
-                return false
-            }
-            _ => { return false }
-        }
-    }
-
-    inout fn argumentsDiverge(args: ArgRange) -> Bool {
+    inout fn armsCompletion(arms: MatchArmRange) -> SourceCompletion {
+        mut val flow = <SourceCompletion normal=false />
         mut val index = 0U64
-        while index < args.len {
-            if self.exprDiverges(exprId: self.argAt(args: args, index: index).expr) { return true }
+        while index < arms.len {
+            flow = completionChoice(first: flow, second: self.blockCompletion(blkId: self.matchArmAt(arms: arms, index: index).body))
             index += 1U64
         }
-        return false
+        return flow
     }
 
-    inout fn stmtDiverges(stmtId: U64) -> Bool {
-        match self.arena.stmts[stmtId] {
-            Stmt.ExprStmt(val expr) => { return self.exprDiverges(exprId: expr) }
-            Stmt.Give(val value) => { return self.exprDiverges(exprId: value) }
-            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return self.exprDiverges(exprId: init) }
-            Stmt.Assign(val target, val value) => { return self.exprDiverges(exprId: target) || self.exprDiverges(exprId: value) }
-            Stmt.Return(val value, val hasValue, offset: _) => { return true }
-            Stmt.Panic(val msg, val offset) => { return true }
-            Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-                if self.exprDiverges(exprId: cond) { return true }
-                if hasElse {
-                    if self.blockDiverges(blkId: thenBlk) {
-                        return self.blockDiverges(blkId: elseBlk)
-                    }
+    inout fn argumentsCompletion(args: ArgRange) -> SourceCompletion {
+        mut val flow = <SourceCompletion />
+        mut val index = 0U64
+        while index < args.len && flow.normal {
+            flow = completionThen(prefix: flow, next: self.exprCompletion(exprId: self.argAt(args: args, index: index).expr))
+            index += 1U64
+        }
+        return flow
+    }
+
+    inout fn exprCompletion(exprId: U64) -> SourceCompletion {
+        if exprId >= self.arena.exprs.count() { return <SourceCompletion /> }
+        match self.arena.exprs[exprId] {
+            Expr.Block(val body, offset: _) | Expr.Sequence(val body) => { return self.blockCompletion(blkId: body) }
+            Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
+                val condition = self.exprCompletion(exprId: cond)
+                if !condition.normal { return condition }
+                return completionThen(prefix: condition, next: completionChoice(first: self.blockCompletion(blkId: thenBlk), second: self.blockCompletion(blkId: elseBlk)))
+            }
+            Expr.MatchExpr(val scrut, val arms) => {
+                val subject = self.exprCompletion(exprId: scrut)
+                if !subject.normal { return subject }
+                return completionThen(prefix: subject, next: self.armsCompletion(arms: arms))
+            }
+            Expr.Binary(val op, val lhs, val rhs) => {
+                val left = self.exprCompletion(exprId: lhs)
+                if !left.normal { return left }
+                mut val right = self.exprCompletion(exprId: rhs)
+                if op == opAnd() || op == opOr() { right = completionChoice(first: right, second: <SourceCompletion />) }
+                return completionThen(prefix: left, next: right)
+            }
+            Expr.Unary(op: _, val operand) | Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) | Expr.Move(val operand, isBorrow: _) | Expr.Await(val operand) => { return self.exprCompletion(exprId: operand) }
+            Expr.Try(val expr) => { return self.exprCompletion(exprId: expr) }
+            Expr.Field(val base, nameStart: _, nameLen: _) | Expr.Arrow(val base, nameStart: _, nameLen: _) | Expr.Deref(val base) => { return self.exprCompletion(exprId: base) }
+            Expr.ExtView(val recv, source: _, strip: _) => { return self.exprCompletion(exprId: recv) }
+            Expr.Index(val base, val index) => { return completionThen(prefix: self.exprCompletion(exprId: base), next: self.exprCompletion(exprId: index)) }
+            Expr.OptChain(val base, val cont) => {
+                return completionThen(prefix: self.exprCompletion(exprId: base), next: completionChoice(first: self.exprCompletion(exprId: cont), second: <SourceCompletion />))
+            }
+            Expr.Call(nameStart: _, nameLen: _, val args) => { return self.argumentsCompletion(args: args) }
+            Expr.Method(val recv, nameStart: _, nameLen: _, val args) | Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
+                return completionThen(prefix: self.exprCompletion(exprId: recv), next: self.argumentsCompletion(args: args))
+            }
+            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+                mut val flow = <SourceCompletion />
+                mut val index = 0U64
+                while index < fields.len && flow.normal {
+                    flow = completionThen(prefix: flow, next: self.exprCompletion(exprId: self.makeFieldAt(fields: fields, index: index).value))
+                    index += 1U64
                 }
-                return false
+                return flow
+            }
+            Expr.Array(val elems) => {
+                mut val flow = <SourceCompletion />
+                mut val index = 0U64
+                while index < elems.len && flow.normal {
+                    flow = completionThen(prefix: flow, next: self.exprCompletion(exprId: self.exprAt(exprs: elems, index: index)))
+                    index += 1U64
+                }
+                return flow
+            }
+            _ => { return <SourceCompletion /> }
+        }
+    }
+
+    inout fn stmtCompletion(stmtId: U64) -> SourceCompletion {
+        match self.arena.stmts[stmtId] {
+            Stmt.ExprStmt(val expr) => { return self.exprCompletion(exprId: expr) }
+            Stmt.Give(val value) => { return self.exprCompletion(exprId: value) }
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return self.exprCompletion(exprId: init) }
+            Stmt.Assign(val target, val value) => { return completionThen(prefix: self.exprCompletion(exprId: target), next: self.exprCompletion(exprId: value)) }
+            Stmt.Return(val value, val hasValue, offset: _) => {
+                mut val flow = <SourceCompletion />
+                if hasValue { flow = self.exprCompletion(exprId: value) }
+                return completionThen(prefix: flow, next: <SourceCompletion normal=false />)
+            }
+            Stmt.Panic(val msg, offset: _) => { return completionThen(prefix: self.exprCompletion(exprId: msg), next: <SourceCompletion normal=false />) }
+            Stmt.Break(offset: _) => { return <SourceCompletion normal=false breaks=true /> }
+            Stmt.Continue(offset: _) => { return <SourceCompletion normal=false /> }
+            Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+                val condition = self.exprCompletion(exprId: cond)
+                if !condition.normal { return condition }
+                mut val alternate = <SourceCompletion />
+                if hasElse { alternate = self.blockCompletion(blkId: elseBlk) }
+                return completionThen(prefix: condition, next: completionChoice(first: self.blockCompletion(blkId: thenBlk), second: alternate))
             }
             Stmt.Match(val scrut, val arms) => {
-                if self.exprDiverges(exprId: scrut) { return true }
-                // match is exhaustive (the body verifier checks exhaustiveness), so
-                // it diverges iff every arm's block diverges.
-                mut val i: U64 = 0
-                while i < arms.len {
-                    if !(self.blockDiverges(blkId: self.matchArmAt(arms: arms, index: i).body)) {
-                        return false
-                    }
-                    i += 1
-                }
-                return true
+                val subject = self.exprCompletion(exprId: scrut)
+                if !subject.normal { return subject }
+                return completionThen(prefix: subject, next: self.armsCompletion(arms: arms))
             }
             Stmt.While(val cond, val body) => {
-                if self.exprDiverges(exprId: cond) { return true }
-                // an unconditional `while true { … }` with no exiting `break` never falls
-                // through (it loops forever or leaves via return/panic inside).
-                if self.condIsLiteralTrue(id: cond) {
-                    return !self.blockHasLoopBreak(blkId: body)
-                }
-                return false
+                val condition = self.exprCompletion(exprId: cond)
+                if !condition.normal { return condition }
+                val normal = !self.condIsLiteralTrue(id: cond) || self.blockCompletion(blkId: body).breaks
+                return completionThen(prefix: condition, next: <SourceCompletion normal=normal />)
             }
             Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, val isRange, inclusive: _, val iter, val rangeHi, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {
-                return self.exprDiverges(exprId: iter) || (isRange && self.exprDiverges(exprId: rangeHi))
+                val iterator = self.exprCompletion(exprId: iter)
+                if !isRange { return iterator }
+                return completionThen(prefix: iterator, next: self.exprCompletion(exprId: rangeHi))
             }
-            _ => { return false }
         }
     }
 
@@ -264,7 +161,7 @@ pub impl Comp {
         if !f.hasRet || f.isExtern || f.isAsync || f.body == 0U64 || self.nameIsMain(f: f) {
             return <Result.Ok value=() />
         }
-        if !self.blockDiverges(blkId: f.body) {
+        if self.blockCompletesNormally(blkId: f.body) {
             return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "this function has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (Plew does not implicitly return the last expression)") />
         }
         return <Result.Ok value=() />

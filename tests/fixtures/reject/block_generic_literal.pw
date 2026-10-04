@@ -1,0 +1,2 @@
+fn bad[T]() -> T { return { give 1 } }
+fn main() { }

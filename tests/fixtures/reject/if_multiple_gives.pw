@@ -1,0 +1,2 @@
+fn main() { val x: I64 = if true { give 1I64
+ give 2I64 } else { give 3I64 } }

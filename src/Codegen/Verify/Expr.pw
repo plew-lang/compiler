@@ -100,7 +100,7 @@ pub impl Comp {
                         retIsUnit = true
                     }
                     if !(retIsUnit) {
-                        if !(self.blockDiverges(blkId: body)) {
+                        if self.blockCompletesNormally(blkId: body) {
                             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "this closure has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (spec/04)") />
                         }
                     }
@@ -543,7 +543,7 @@ pub impl Comp {
                 try self.verifyBlock(blockId: body)
             }
             Expr.Block(val body, val offset) => {
-                if !self.blockDiverges(blkId: body) && self.blockGiveExpr(blkId: body) >= self.arena.exprs.count() {
+                if self.blockCompletesNormally(blkId: body) && self.blockGiveExpr(blkId: body) >= self.arena.exprs.count() {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a block expression must end with `give` to yield a value (spec/11)") />
                 }
                 try self.verifyBlock(blockId: body)
@@ -848,7 +848,7 @@ pub impl Comp {
     // has no type from context". Reject it with a clear message. A branch that always
     // diverges (return/panic/…) needs no give.
     inout fn checkBranchYieldsValue(blkId: U64, offset: U64) -> Result[(), CompileDiagnostic] {
-        if self.blockDiverges(blkId: blkId) {
+        if !self.blockCompletesNormally(blkId: blkId) {
             return <Result.Ok value=() />
         }
         if self.blockGiveExpr(blkId: blkId) >= self.arena.exprs.count() {

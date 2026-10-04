@@ -807,6 +807,7 @@ pub impl Comp {
         if self.cur.checkFn >= self.arena.functionCount() {
             return <Result.Ok value=() />
         }
+        if self.valueControlHasNoResult(exprId: valueExpr) { return <Result.Ok value=() /> }
         // an untyped numeric literal cannot flow into a type parameter / Self: `val y: T = 5`
         // is invalid — T is opaque, and no bound makes it numeric-literal-receptive (spec/06).
         if expectedRef < self.arena.typeCount() {
@@ -826,44 +827,8 @@ pub impl Comp {
                 }
             }
         }
-        // a value-position if/match: each branch's `give` value must match the expected
-        // type (`val x: I64 = if c { give a } else { give b }` with a: T).
-        match self.arena.exprs[valueExpr] {
-            Expr.Sequence(val body) => {
-                val value = self.tcBlockGiveValue(blockId: body)
-                if value != 0U64 { try self.checkGenericTypeMatch(expectedRef: expectedRef, valueExpr: value) }
-            }
-            Expr.Block(val body, offset: _) => {
-                val value = self.tcBlockGiveValue(blockId: body)
-                if value != 0U64 { try self.checkGenericTypeMatch(expectedRef: expectedRef, valueExpr: value) }
-            }
-            Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
-                val tv: U64 = self.tcBlockGiveValue(blockId: thenBlk)
-                if tv != 0U64 {
-                    try self.checkGenericTypeMatch(expectedRef: expectedRef, valueExpr: tv)
-                }
-                val ev: U64 = self.tcBlockGiveValue(blockId: elseBlk)
-                if ev != 0U64 {
-                    try self.checkGenericTypeMatch(expectedRef: expectedRef, valueExpr: ev)
-                }
-            }
-            Expr.MatchExpr(scrut: _, val arms) => {
-                mut val ai: U64 = 0
-                while ai < arms.len {
-                    val arm: MatchArm = self.matchArmAt(arms: arms, index: ai)
-                    if !(arm.isDiverge) {
-                        if arm.binds.len == 0U64 {
-                            val g: U64 = self.blockGiveExpr(blkId: arm.body)
-                            if g < self.arena.exprs.count() {
-                                try self.checkGenericTypeMatch(expectedRef: expectedRef, valueExpr: g)
-                            }
-                        }
-                    }
-                    ai += 1
-                }
-            }
-            _ => {}
-        }
+        // Record checks each value block while its bindings are live; the
+        // enclosing generic check consumes the recorded result, not its AST.
         if (try self.genericCheckMakeFields(expectedRef: expectedRef, valueExpr: valueExpr)) {
             return <Result.Ok value=() />
         }

@@ -55,3 +55,7 @@ tests/fixtures/run/string_interpolation_options_lifetime.pw
 # Value blocks leaving before their result binding or interpolation write.
 tests/fixtures/run/standalone_block_return.pw
 tests/fixtures/run/block_interpolation_divergence.pw
+
+# Value-block local loop exits and interpolation options returning early.
+block_loop_completion
+interpolation_options_return

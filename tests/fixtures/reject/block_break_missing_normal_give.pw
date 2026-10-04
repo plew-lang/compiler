@@ -1,0 +1,1 @@
+fn main() { while true { val x: I64 = if true { break } else { 1I64 } } }

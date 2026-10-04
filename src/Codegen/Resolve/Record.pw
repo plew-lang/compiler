@@ -1058,7 +1058,7 @@ pub impl Comp {
 
     // Expected-result refinement reads only previously recorded child facts.
     inout fn recordValueBlockResult(exprId: U64, blockId: U64) -> Bool {
-        if self.blockDiverges(blkId: blockId) { return false }
+        if !self.blockCompletesNormally(blkId: blockId) { return false }
         val value = self.blockGiveExpr(blkId: blockId)
         if value >= self.arena.exprs.count() { return false }
         val term = self.semanticExprTerm(exprId: value)
@@ -1072,13 +1072,14 @@ pub impl Comp {
     inout fn recordValueBlock(exprId: U64, blockId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
         val mark = self.scopeMark()
         try self.recordBlockContents(blkId: blockId, expectedTerm: expectedTerm)
-        if !self.blockDiverges(blkId: blockId) {
+        if self.blockCompletesNormally(blkId: blockId) {
             val value = self.blockGiveExpr(blkId: blockId)
             if value < self.arena.exprs.count() {
                 mut val resultTerm = expectedTerm
                 if resultTerm == 0U64 { resultTerm = self.semanticExprTerm(exprId: exprId) }
                 if resultTerm != 0U64 {
                     try self.tcCheckValue(expectedRef: resultTerm, valueExpr: value, pos: "block-result")
+                    try self.checkGenericTypeMatch(expectedRef: resultTerm, valueExpr: value)
                 } else {
                     resultTerm = self.parametricExprTerm(exprId: value)
                 }
@@ -2134,8 +2135,17 @@ pub impl Comp {
             }
         }
         mut val i: U64 = 0
+        mut val hasGive = false
         while i < self.blockStmtCount(blkId: blkId) {
-            try self.recordStmt(stmtId: self.blockStmtAt(blkId: blkId, index: i), expectedTerm: expectedTerm)
+            val statement = self.blockStmtAt(blkId: blkId, index: i)
+            match self.arena.stmts[statement] {
+                Stmt.Give(val value) => {
+                    if hasGive { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: value), msg: "a block may contain only one `give` (spec/11)") /> }
+                    hasGive = true
+                }
+                _ => {}
+            }
+            try self.recordStmt(stmtId: statement, expectedTerm: expectedTerm)
             i += 1
         }
         return <Result.Ok value=() />

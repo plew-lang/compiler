@@ -68,7 +68,7 @@ pub impl Comp {
             Optional.Some(v: val write) => {
                 self.pendingInterpolationWrites.remove(key: exprId)
                 try self.recordExpr(exprId: write.value)
-                if self.exprDiverges(exprId: write.value) {
+                if !self.exprCompletesNormally(exprId: write.value) {
                     mut val statements: Array[U64] = [self.pushStmt(s: <Stmt.ExprStmt expr=write.value />)]
                     if write.options != 0U64 { statements.append(self.pushStmt(s: <Stmt.ExprStmt expr=write.options />)) }
                     val body = self.blockOfStmts(stmts: statements)

@@ -1,0 +1,26 @@
+use @Std/Io only { print }
+fn block[T](value: T) -> T {
+    val item = "outer"
+    return { val item = value
+        give item }
+}
+fn branch[T](value: T, flag: Bool) -> T {
+    val item = "outer"
+    return if flag { val item = value
+        give item } else { give value }
+}
+fn arm[T](value: T, flag: Bool) -> T {
+    val item = "outer"
+    return match flag {
+        true => { val item = value
+            give item }
+        false => value
+    }
+}
+fn main() {
+    print(block(value: 1I64))
+    print(branch(value: 2I64, flag: true))
+    print(branch(value: 3I64, flag: false))
+    print(arm(value: 4I64, flag: true))
+    print(arm(value: 5I64, flag: false))
+}

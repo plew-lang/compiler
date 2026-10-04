@@ -1,0 +1,57 @@
+use @Std/Io only { print }
+use @Std/Core only { Ref }
+unique struct Resource {
+    val id: I64
+    deinit { print(self.id) }
+}
+fn block() -> I64 {
+    while true {
+        val held = <Ref[Resource] value=<Resource id=10I64 /> />
+        val unused: I64 = { break }
+    }
+    return 1I64
+}
+fn branch(flag: Bool) -> I64 {
+    while true {
+        val held = <Ref[Resource] value=<Resource id=20I64 /> />
+        val unused: I64 = if flag { break } else { break }
+    }
+    return 2I64
+}
+fn arm(flag: Bool) -> I64 {
+    while true {
+        val held = <Ref[Resource] value=<Resource id=30I64 /> />
+        val unused: I64 = match flag { true => { break } false => { break } }
+    }
+    return 3I64
+}
+fn main() {
+    print(block())
+    print(branch(flag: true))
+    print(arm(flag: false))
+    mut val index = 0I64
+    while index < 2I64 {
+        index += 1I64
+        val unused: I64 = { continue }
+    }
+    print(index)
+    val nested: I64 = { while true { break }
+        give 7I64 }
+    print(nested)
+    while true {
+        val text = "{ { break } }"
+    }
+    mut val step = 0I64
+    while true {
+        val value: I64 = if step == 0I64 { give 8I64 } else { break }
+        print(value)
+        step += 1I64
+    }
+    step = 0I64
+    while step < 2I64 {
+        step += 1I64
+        val value: I64 = match step { 1I64 => { continue } _ => 9I64 }
+        print(value)
+    }
+    print("done")
+}

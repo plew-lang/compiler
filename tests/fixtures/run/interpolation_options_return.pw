@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+fn block() -> String { return "{1I64: { return "block" }}" }
+fn branch(flag: Bool) -> String { return "{1I64: if flag { return "then" } else { return "else" }}" }
+fn arm(flag: Bool) -> String { return "{1I64: match flag { true => { return "true" } false => { return "false" } }}" }
+fn main() {
+    print(block())
+    print(branch(flag: true))
+    print(branch(flag: false))
+    print(arm(flag: true))
+    print(arm(flag: false))
+}

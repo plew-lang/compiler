@@ -529,7 +529,7 @@ pub impl Comp {
     // Before Record, every value block still follows the same normal-result
     // rule; a diverging arm never supplies the result of another arm.
     inout fn valueBlockTypeInfo(blockId: U64, chainHoleRef: U64) -> Result[Optional[TypeInfo], CompileDiagnostic] {
-        if self.blockDiverges(blkId: blockId) { return <Result.Ok value=<Optional.None /> /> }
+        if !self.blockCompletesNormally(blkId: blockId) { return <Result.Ok value=<Optional.None /> /> }
         val value = self.blockGiveExpr(blkId: blockId)
         if value >= self.arena.exprs.count() { return <Result.Ok value=<Optional.None /> /> }
         val term = self.semanticExprTerm(exprId: value)

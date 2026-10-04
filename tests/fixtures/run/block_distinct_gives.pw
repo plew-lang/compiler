@@ -1,0 +1,5 @@
+use @Std/Io only { print }
+fn main() {
+    val value: I64 = { give if true { give { give 1I64 } } else { give 2I64 } }
+    print(value)
+}

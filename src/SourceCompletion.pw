@@ -1,0 +1,18 @@
+// Source control flow records normal continuation and an escape to the
+// enclosing loop. Return/panic/continue have no normal continuation. A loop
+// consumes its body's break edges; closure bodies belong to another invocation.
+pub struct SourceCompletion {
+    pub val normal: Bool = true
+    pub val breaks: Bool = false
+}
+pub impl SourceCompletion { factory }
+
+pub fn completionThen(prefix: SourceCompletion, next: SourceCompletion) -> SourceCompletion {
+    if !prefix.normal { return prefix }
+    return <SourceCompletion normal=next.normal breaks=prefix.breaks || next.breaks />
+}
+
+pub fn completionChoice(first: SourceCompletion, second: SourceCompletion) -> SourceCompletion {
+    return <SourceCompletion normal=first.normal || second.normal breaks=first.breaks || second.breaks />
+}
+

@@ -1,3 +1,4 @@
+use ./SourceCompletion only { SourceCompletion, completionThen, completionChoice }
 use ./PublicSurfaceIndex only { PublicSurfaceIndex }
 use ./Ir only { AssociatedBoundEvidence, TraitConstraintRange, SupertraitRef, TraitProofOrigin, DeclarationBoundRef, TraitBound, TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
 use @Plew/Syntax only { syntaxTraitAssocType, syntaxAssociatedTypeBound }

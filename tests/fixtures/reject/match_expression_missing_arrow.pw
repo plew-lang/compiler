@@ -1,0 +1,1 @@
+fn main() { val x = match true { true 1I64 false 2I64 } }

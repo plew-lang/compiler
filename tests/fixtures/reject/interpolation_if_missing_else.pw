@@ -1,0 +1,1 @@
+fn main() { val s = "{if false { give 1I64 } { give 2I64 }}" }

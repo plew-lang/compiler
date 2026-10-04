@@ -1,0 +1,4 @@
+fn bad[T](value: T) -> T { val item = value
+ return { val item = "wrong"
+ give item } }
+fn main() { }
