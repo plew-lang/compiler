@@ -1,0 +1,3 @@
+fn main() {
+    val value = if false { give 1I64 } else { give "text" }
+}

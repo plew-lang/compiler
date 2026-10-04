@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+fn plain(flag: Bool) -> String {
+    val value = if flag { return "early" } else { give "late" }
+    return value
+}
+fn interpolated(flag: Bool) -> String {
+    return "value: {if flag { return "early" } else { give "late" }}"
+}
+fn main() {
+    print(plain(flag: true))
+    print(plain(flag: false))
+    print(interpolated(flag: true))
+    print(interpolated(flag: false))
+}

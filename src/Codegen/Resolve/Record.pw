@@ -1,28 +1,6 @@
-// Part of name/type resolution (root: _.pw): typed-IR parametric-type
-// recording (rustc writeback analog) — a DEDICATED, check-free walk over every
-// function body that stores each expression's PARAMETRIC type in
-// Comp.semanticExprTypes (type params left as `T`, trait `self` left as `Self`).
-// The backend substitutes the instance's type args at read time (groundedTypeOf
-// -> groundTypeRef), so one recording serves every instantiation.
-//
-// Why a separate pass (and not a hook inside checkGenericBodies / verify):
-// recording needs an ENV the check passes must not have — a parametric
-// `self` ref (`Dictionary[K,V]`) and coverage of non-generic bodies — and
-// setting that env inside a check pass changes what the checks see (measured:
-// reject tests started accepting). This walk runs exprType/typeOf only
-// (read-only type recovery), never a compileErrorAt-carrying check.
-//
-// Body sharing is the reason the store is parametric: a generic template's one
-// body is emitted per instance, and a trait provided method's body is SHARED by
-// every conformer copy (instantiateProvidedMethods reuses `f.body`). Recording a
-// concrete type would be wrong for every other instance — so copies
-// (srcTraitId != 0) are skipped and the template records `Self`/`T` forms that
-// ground differently under each instance env.
-//
-// Known holes (recorded as 0 -> groundedTypeOf falls back to typeCache/typeOf):
-// backend-synthesized exprs (async lowering), generic struct field-default
-// exprs, and any node this walk cannot scope (they surface in the Task-#3
-// shadow and are closed there).
+// Lexical semantic recording owns parametric expression facts and the
+// checks that require local or pattern bindings. Consumers ground these
+// facts under a BodyInstance; they do not repeat lexical type inference.
 
 use ../../Ir only { InstanceEnvironment, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload }
 
@@ -1078,18 +1056,37 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // The value of an expression block is its final `give`.  Read the term
-    // after Record has visited the block, while its lexical arm bindings have
-    // already supplied the give expression's own SemanticExprType.  This is a
-    // producer boundary: it never re-runs exprType/typeOf after the block's
-    // scope has been popped.
+    // Expected-result refinement reads only previously recorded child facts.
     inout fn recordValueBlockResult(exprId: U64, blockId: U64) -> Bool {
-        val giveExpr: U64 = self.blockGiveExpr(blkId: blockId)
-        if giveExpr >= self.arena.exprs.count() { return false }
-        val term: U64 = self.parametricExprTerm(exprId: giveExpr)
+        if self.blockDiverges(blkId: blockId) { return false }
+        val value = self.blockGiveExpr(blkId: blockId)
+        if value >= self.arena.exprs.count() { return false }
+        val term = self.semanticExprTerm(exprId: value)
         if term == 0U64 { return false }
         self.recordSemanticExprTerm(exprId: exprId, term: term)
         return true
+    }
+
+    // Check and publish a block result while its local and pattern bindings
+    // are still in scope. All value-control forms share this boundary.
+    inout fn recordValueBlock(exprId: U64, blockId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
+        val mark = self.scopeMark()
+        try self.recordBlockContents(blkId: blockId, expectedTerm: expectedTerm)
+        if !self.blockDiverges(blkId: blockId) {
+            val value = self.blockGiveExpr(blkId: blockId)
+            if value < self.arena.exprs.count() {
+                mut val resultTerm = expectedTerm
+                if resultTerm == 0U64 { resultTerm = self.semanticExprTerm(exprId: exprId) }
+                if resultTerm != 0U64 {
+                    try self.tcCheckValue(expectedRef: resultTerm, valueExpr: value, pos: "block-result")
+                } else {
+                    resultTerm = self.parametricExprTerm(exprId: value)
+                }
+                self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
+            }
+        }
+        self.popLocals(mark: mark)
+        return <Result.Ok value=() />
     }
 
     // `readExpr` is a synthetic Index.index call made by Lower.  The candidate
@@ -1822,38 +1819,21 @@ pub impl Comp {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
                     try self.scanAddArmBinds(a: a, scrutTi: self.semanticExprTypeInfo(exprId: scrut))
-                    try self.recordBlock(blkId: a.body, expectedTerm: expectedTerm)
+                    try self.recordValueBlock(exprId: exprId, blockId: a.body, expectedTerm: expectedTerm)
                     self.popLocals(mark: mark)
                     ai += 1
                 }
-                // The type checker verifies that all non-diverging arms agree.
-                // Select the first recorded value solely as that canonical
-                // term; resolving it after `popLocals` would lose arm payload
-                // binders such as `Choice.First(value: Box[T])`.
-                mut val resultArm: U64 = 0U64
-                while resultArm < arms.len {
-                    val arm: MatchArm = self.matchArmAt(arms: arms, index: resultArm)
-                    if !(arm.isDiverge) {
-                        self.recordValueBlockResult(exprId: exprId, blockId: arm.body)
-                        resultArm = arms.len
-                    } else {
-                        resultArm += 1U64
-                    }
-                }
             }
             Expr.Sequence(val body) => {
-                try self.recordBlock(blkId: body)
-                self.recordValueBlockResult(exprId: exprId, blockId: body)
+                try self.recordValueBlock(exprId: exprId, blockId: body, expectedTerm: expectedTerm)
             }
             Expr.Block(val body, offset: _) => {
-                try self.recordBlock(blkId: body, expectedTerm: expectedTerm)
-                self.recordValueBlockResult(exprId: exprId, blockId: body)
+                try self.recordValueBlock(exprId: exprId, blockId: body, expectedTerm: expectedTerm)
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.recordExpr(exprId: cond, chainHoleRef: chainHoleRef)
-                try self.recordBlock(blkId: thenBlk, expectedTerm: expectedTerm)
-                try self.recordBlock(blkId: elseBlk, expectedTerm: expectedTerm)
-                self.recordValueBlockResult(exprId: exprId, blockId: thenBlk)
+                try self.recordValueBlock(exprId: exprId, blockId: thenBlk, expectedTerm: expectedTerm)
+                try self.recordValueBlock(exprId: exprId, blockId: elseBlk, expectedTerm: expectedTerm)
             }
             Expr.OptChain(val base, val cont) => {
                 // This form rewrites itself to MatchExpr below. Preserve its
@@ -2139,19 +2119,24 @@ pub impl Comp {
     }
 
     inout fn recordBlock(blkId: U64, expectedTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        val mark = self.scopeMark()
+        try self.recordBlockContents(blkId: blkId, expectedTerm: expectedTerm)
+        self.popLocals(mark: mark)
+        return <Result.Ok value=() />
+    }
+
+    inout fn recordBlockContents(blkId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
         if !self.genMode {
             match self.blockTypeUses.get(key: blkId) {
                 Optional.Some(v: val uses) => { try self.checkSourceTypeUses(types: uses) }
                 Optional.None => {}
             }
         }
-        val mark: U64 = self.scopeMark()
         mut val i: U64 = 0
         while i < self.blockStmtCount(blkId: blkId) {
             try self.recordStmt(stmtId: self.blockStmtAt(blkId: blkId, index: i), expectedTerm: expectedTerm)
             i += 1
         }
-        self.popLocals(mark: mark)
         return <Result.Ok value=() />
     }
 
