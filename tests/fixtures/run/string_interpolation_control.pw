@@ -1,0 +1,32 @@
+use @Std/Core only { Ref }
+use @Std/Io only { print }
+unique struct Resource { val id: I64
+ deinit { print(self.id) } }
+fn tick(value: I64) -> I64 { print(value)
+ return value }
+fn early() -> String {
+ return "prefix{ { val held = <Ref[Resource] value=<Resource id=4I64 /> />
+ return "returned"
+ give 0I64 } }{tick(value: 99I64)}"
+}
+fn failed() -> Result[I64, Bool] { return <.Err error=true /> }
+fn propagate() -> Result[String, Bool] {
+ val text = "prefix{ { val held = <Ref[Resource] value=<Resource id=5I64 /> />
+ give try failed() } }{tick(value: 99I64)}"
+ return <.Ok value=text />
+}
+fn main() {
+ print("{{ give 42 }}")
+ print("{ { give 42I64 } }")
+ print("{({ give 43I64 })}")
+ print("{match true { true => { give 44I64 } false => { give 0I64 } }}")
+ print("{45I64: match true { true => { give </> } false => { give </> } }}")
+ print("{ { give { give 46I64 } } : { give </> }}")
+ print("outer={ { give "inner={ { give 47I64 } }" } }")
+ print("{ { give tick(value: 1I64) } : { tick(value: 2I64)
+ give </> }}{tick(value: 3I64)}")
+ print("{ { val held = <Ref[Resource] value=<Resource id=6I64 /> />
+ give 48I64 } }")
+ print(early())
+ print(propagate().isErr())
+}
