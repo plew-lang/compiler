@@ -1074,6 +1074,9 @@ pub impl Comp {
         mut val resultTerm = expectedTerm
         if resultTerm == 0U64 { resultTerm = self.semanticExprTerm(exprId: exprId) }
         val completes = self.blockCompletesNormally(blkId: blockId)
+        while self.arena.semanticValueBlockCompletion.count() <= blockId { self.arena.semanticValueBlockCompletion.append(0U8) }
+        self.arena.semanticValueBlockCompletion.set(i: blockId, value: if completes { give 1U8 } else { give 2U8 })
+        if !completes { resultTerm = 0U64 }
         try self.recordBlockContents(blkId: blockId, resultContext: <BlockResultContext.Value expectedTerm=resultTerm completes=completes />)
         if completes {
             val value = self.blockGiveExpr(blkId: blockId)

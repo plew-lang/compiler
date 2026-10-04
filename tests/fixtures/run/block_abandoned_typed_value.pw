@@ -1,0 +1,32 @@
+use @Std/Io only { print }
+
+fn standalone() -> I64 {
+    val result: Array[String] = { give [1I64]
+        return 3I64 }
+    return 0I64
+}
+fn conditional(flag: Bool) -> I64 {
+    val result = if flag { give "discarded"
+        return 5I64 } else { give 7I64 }
+    return result
+}
+fn matched(flag: Bool) -> I64 {
+    val result = match flag {
+        true => { give ["discarded"]
+        return 11I64 }
+        false => 13I64
+    }
+    return result
+}
+fn closure() -> I64 {
+    val result = { give fn() -> I64 { return 42I64 }
+        return 17I64 }
+}
+fn main() {
+    print(standalone())
+    print(conditional(flag: true))
+    print(conditional(flag: false))
+    print(matched(flag: true))
+    print(matched(flag: false))
+    print(closure())
+}

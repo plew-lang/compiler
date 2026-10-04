@@ -1515,6 +1515,9 @@ pub impl Comp {
     }
 
     inout fn recordBlockExpectedResult(blkId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
+        // An abandoned give is an evaluated temporary, not the value of this
+        // block. Later bidirectional inference must preserve that distinction.
+        if !self.blockCompletesNormally(blkId: blkId) { return <Result.Ok value=() /> }
         val value = self.blockGiveExpr(blkId: blkId)
         if value < self.arena.exprs.count() {
             try self.recordSemanticExprExpectedResult(exprId: value, expectedTerm: expectedTerm)

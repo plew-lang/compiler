@@ -1,0 +1,24 @@
+use @Std/Io only { print }
+
+fn direct() -> I64 {
+    val unused = !({ return 7I64 })
+    return 0I64
+}
+fn conditional(flag: Bool) -> I64 {
+    val unused = -(if flag { return 11I64 } else { return 13I64 })
+    return 0I64
+}
+fn matched(flag: Bool) -> I64 {
+    val unused = !(match flag {
+        true => { return 17I64 }
+        false => { return 19I64 }
+    })
+    return 0I64
+}
+fn main() {
+    print(direct())
+    print(conditional(flag: true))
+    print(conditional(flag: false))
+    print(matched(flag: true))
+    print(matched(flag: false))
+}

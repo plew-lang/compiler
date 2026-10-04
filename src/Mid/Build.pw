@@ -19,11 +19,11 @@ struct MidGiveDestination {
 }
 enum MidBlockResult {
     Forbidden
-    Store(destination: MidPlace)
-    Scoped(destinations: Array[MidGiveDestination])
+    Value(destination: MidPlace, abandoned: Array[MidGiveDestination])
 }
 
 fn appendMidGiveDestinations(c: inout Comp, state: inout MidBuildState, blockId: U64, destinations: inout Array[MidGiveDestination]) {
+    if blockId >= c.arena.semanticValueBlockCompletion.count() || c.arena.semanticValueBlockCompletion[blockId] != 2U8 { return }
     val block = c.arena.blocks[blockId]
     mut val index = 0U64
     while index < block.stmtLen {
@@ -40,7 +40,6 @@ fn appendMidGiveDestinations(c: inout Comp, state: inout MidBuildState, blockId:
 }
 
 fn midBlockResult(c: inout Comp, state: inout MidBuildState, destination: MidPlace, exprId: U64) -> MidBlockResult {
-    if destination.typeTerm != 0U64 { return <MidBlockResult.Store destination=destination /> }
     mut val destinations: Array[MidGiveDestination] = []
     match c.arena.exprs[exprId] {
         Expr.Block(body: val body, offset: _) => { appendMidGiveDestinations(c: inout c, state: inout state, blockId: body, destinations: inout destinations) }
@@ -58,7 +57,7 @@ fn midBlockResult(c: inout Comp, state: inout MidBuildState, destination: MidPla
         }
         _ => {}
     }
-    return <MidBlockResult.Scoped destinations=destinations />
+    return <MidBlockResult.Value destination=destination abandoned=destinations />
 }
 
 // The frontend owns synthetic primitive identity and ownership classification.
@@ -1011,10 +1010,18 @@ fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U6
     // value result depends on the frozen call descriptor, including ground
     // source types; do not substitute the callee binder in the caller environment.
     val recipe: U64 = if returnsUnit { give 0U64 } else { give template.resultTypeRecipe }
-    val local: U64 = addMidTemporary(state: inout state, typeTerm: 0U64, isUnique: ownsUnique, typeRecipe: recipe)
+    // Reserve the result's lifetime before evaluating its inputs, but publish
+    // its type recipe only if those inputs reach the actual call. A return in
+    // an operand leaves no call result for instantiation to resolve.
+    val scope = state.currentScope
+    val local: U64 = addMidTemporary(state: inout state, typeTerm: 0U64)
     val place: MidPlace = <MidPlace local=local typeTerm=0U64 typeRecipe=recipe />
     val built: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: exprId, destination: place)
     match built { MidBuildError.None => {} _ => { return <MidOperandBuild operand=<MidOperand.Copy place=place /> error=built /> } }
+    if !midCurrentBlockIsOpen(state: state) {
+        return <MidOperandBuild operand=<MidOperand.Copy place=<MidPlace local=local typeTerm=0U64 /> /> />
+    }
+    state.locals.set(i: local, value: <MidLocalDecl typeTerm=0U64 typeRecipe=recipe sourceScope=scope isUnique=ownsUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 />)
     state.callValues.append(<MidCallValue siteKey=siteKey place=place />)
     // A call result has the same ownership as a freshly built aggregate.
     // Never let a unique result enter a consuming call as a Copy.
@@ -2367,12 +2374,14 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
                 val term = c.semanticExprTerm(exprId: value)
                 val destination = match blockResult {
                     MidBlockResult.Forbidden => { return <MidBuildError.UnsupportedGive /> }
-                    MidBlockResult.Store(val destination) => { give destination }
-                    MidBlockResult.Scoped(val destinations) => {
+                    MidBlockResult.Value(val destination, val abandoned) => {
+                        mut val selected = destination
                         mut val index = 0U64
-                        while index < destinations.count() && destinations[index].exprId != value { index += 1U64 }
-                        if index == destinations.count() { return <MidBuildError.MissingSemanticType /> }
-                        give destinations[index].place
+                        while index < abandoned.count() {
+                            if abandoned[index].exprId == value { selected = abandoned[index].place }
+                            index += 1U64
+                        }
+                        give selected
                     }
                 }
                 val operand = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: value, typeTerm: term, allowAccessMarker: false)
@@ -2395,8 +2404,10 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
         i += 1U64
     }
     match blockResult {
-        MidBlockResult.Scoped(destinations: _) => {
-            if midCurrentBlockIsOpen(state: state) { result = <MidBuildError.MissingSemanticType /> }
+        MidBlockResult.Value(destination: _, abandoned: _) => {
+            if blockId >= c.arena.semanticValueBlockCompletion.count() { result = <MidBuildError.MissingSemanticType /> }
+            else if c.arena.semanticValueBlockCompletion[blockId] == 0U8 { result = <MidBuildError.MissingSemanticType /> }
+            else if c.arena.semanticValueBlockCompletion[blockId] == 2U8 && midCurrentBlockIsOpen(state: state) { result = <MidBuildError.MissingSemanticType /> }
         }
         _ => {}
     }

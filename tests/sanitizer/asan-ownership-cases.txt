@@ -60,3 +60,5 @@ tests/fixtures/run/block_interpolation_divergence.pw
 tests/fixtures/run/block_loop_completion.pw
 tests/fixtures/run/interpolation_options_return.pw
 tests/fixtures/run/block_abandoned_result.pw
+tests/fixtures/run/block_abandoned_typed_value.pw
+tests/fixtures/run/block_unary_divergence.pw

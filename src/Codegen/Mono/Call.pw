@@ -5099,6 +5099,11 @@ pub impl Comp {
             for parameter in signature.parameterTypes { try self.enqueueFinalDestruction(typeRef: parameter) }
             try self.enqueueFinalDestruction(typeRef: signature.resultType)
             try self.enqueueFinalDestruction(typeRef: signature.bodyResultType)
+            if signature.closureSignatureId != 0U64 {
+                // A closure literal owns its function value even when it is
+                // never passed to a call or bound to an authored local.
+                try self.enqueueFinalDestruction(typeRef: self.arena.closureSignature(bodyId: bodyId).functionTypeTerm)
+            }
             state.signatures += 1U64
         }
         while state.aggregates < self.arena.finalAggregates.count() {

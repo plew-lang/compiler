@@ -2482,6 +2482,8 @@ pub struct Arena {
     // arena rather than Comp so every public user of Comp depends only on Arena,
     // and so the entry has the same lifetime/identity as its Expr.
     pub mut val semanticExprTypes: Array[SemanticExprType] = []
+    // Record-time normal continuation of value blocks; absent rows are not facts.
+    pub mut val semanticValueBlockCompletion: Array[U8] = []
     // Deferred semantic type-source recipes are a separate dependency graph;
     // TypeRef remains the canonical structural type arena. IDs are one-based.
     pub mut val semanticTypeRecipes: Array[SemanticTypeRecipe] = []
