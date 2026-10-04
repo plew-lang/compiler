@@ -1,0 +1,32 @@
+use @Std/Io only { print }
+fn pick[T](value: T) -> T {
+    return {
+        val item = value
+        give item
+        val item = "later"
+    }
+}
+fn main() {
+    val block: I64 = {
+        val item = 1I64
+        give item
+        val item = "later"
+    }
+    val branch: I64 = if true {
+        val item = 2I64
+        give item
+        val item = "later"
+    } else { give 0I64 }
+    val arm: I64 = match true {
+        true => {
+            val item = 3I64
+            give item
+            val item = "later"
+        }
+        false => 0I64
+    }
+    print(block)
+    print(branch)
+    print(arm)
+    print(pick(value: 4I64))
+}

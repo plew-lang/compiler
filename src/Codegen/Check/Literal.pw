@@ -244,9 +244,25 @@ pub impl Comp {
                 try self.checkMakeFields(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: instance, fields: fields)
             }
             Expr.Array(val elems) => {
+                // The array's recorded type survives value-control wrappers.
+                // Element validation consumes that fact instead of replacing
+                // it with the scalar context of the enclosing traversal.
+                mut val elementTerm = 0U64
+                val arrayTerm = self.semanticExprTerm(exprId: id)
+                if arrayTerm != 0U64 && arrayTerm < self.arena.typeCount() {
+                    val arrayType = self.arena.typeAt(index: arrayTerm)
+                    if arrayType.args.count() == 1U64 && self.typeInfoOfRef(ref: arrayTerm).kind == 3I64 {
+                        elementTerm = arrayType.args[0U64]
+                    }
+                }
                 mut val i: U64 = 0
                 while i < elems.len {
-                    try self.checkLitCtx(id: self.exprAt(exprs: elems, index: i), eKind: eKind, eBits: eBits, eSgn: eSgn)
+                    val element = self.exprAt(exprs: elems, index: i)
+                    if elementTerm != 0U64 {
+                        try self.checkLitTi(id: element, ti: self.typeInfoOfRef(ref: elementTerm))
+                    } else {
+                        try self.checkLitCtx(id: element, eKind: eKind, eBits: eBits, eSgn: eSgn)
+                    }
                     i += 1
                 }
             }

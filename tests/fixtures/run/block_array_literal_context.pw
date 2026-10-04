@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+fn main() {
+    val block: Array[U8] = { give [255] }
+    val branch: Array[U8] = if true { give [254] } else { give [0] }
+    val arm: Array[U8] = match true { true => [253] false => [0] }
+    val nested: Array[Array[U8]] = { give [[252]] }
+    print(block[0])
+    print(branch[0])
+    print(arm[0])
+    print(nested[0][0])
+}

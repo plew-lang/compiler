@@ -1071,16 +1071,13 @@ pub impl Comp {
     // are still in scope. All value-control forms share this boundary.
     inout fn recordValueBlock(exprId: U64, blockId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
         val mark = self.scopeMark()
-        try self.recordBlockContents(blkId: blockId, expectedTerm: expectedTerm)
+        mut val resultTerm = expectedTerm
+        if resultTerm == 0U64 { resultTerm = self.semanticExprTerm(exprId: exprId) }
+        try self.recordBlockContents(blkId: blockId, expectedTerm: resultTerm)
         if self.blockCompletesNormally(blkId: blockId) {
             val value = self.blockGiveExpr(blkId: blockId)
             if value < self.arena.exprs.count() {
-                mut val resultTerm = expectedTerm
-                if resultTerm == 0U64 { resultTerm = self.semanticExprTerm(exprId: exprId) }
-                if resultTerm != 0U64 {
-                    try self.tcCheckValue(expectedRef: resultTerm, valueExpr: value, pos: "block-result")
-                    try self.checkGenericTypeMatch(expectedRef: resultTerm, valueExpr: value)
-                } else {
+                if resultTerm == 0U64 {
                     resultTerm = self.parametricExprTerm(exprId: value)
                 }
                 self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
@@ -2113,7 +2110,13 @@ pub impl Comp {
                 }
             }
             Stmt.Panic(val msg, offset: _) => { try self.recordExpr(exprId: msg) }
-            Stmt.Give(val value) => { try self.recordExpr(exprId: value, expectedTerm: expectedTerm) }
+            Stmt.Give(val value) => {
+                try self.recordExpr(exprId: value, expectedTerm: expectedTerm)
+                // Validate at the source position: later declarations can shadow
+                // this binding even before the enclosing scope is popped.
+                try self.tcCheckValue(expectedRef: expectedTerm, valueExpr: value, pos: "block-result")
+                try self.checkGenericTypeMatch(expectedRef: expectedTerm, valueExpr: value)
+            }
             Stmt.Break(offset: _) => {}
             Stmt.Continue(offset: _) => {}
         }
