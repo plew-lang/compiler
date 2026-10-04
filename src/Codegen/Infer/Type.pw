@@ -53,10 +53,6 @@ pub impl Comp {
             }
             _ => {}
         }
-        // Record owns lexical resolution. A later check must not resolve a
-        // child identifier again in an enclosing (possibly shadowed) scope.
-        val recorded = self.semanticExprTerm(exprId: id)
-        if recorded != 0U64 { return <Result.Ok value=recorded /> }
         val ti: TypeInfo = (try self.typeOf(id: id))
         if ti.ref != 0U64 {
             return <Result.Ok value=ti.ref />
