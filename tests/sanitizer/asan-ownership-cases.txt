@@ -51,3 +51,7 @@ tests/fixtures/run/trait_via_ownership.pw
 tests/fixtures/run/string_interpolation_order.pw
 tests/fixtures/run/string_interpolation_lifetime.pw
 tests/fixtures/run/string_interpolation_options_lifetime.pw
+
+# Value blocks leaving before their result binding or interpolation write.
+tests/fixtures/run/standalone_block_return.pw
+tests/fixtures/run/block_interpolation_divergence.pw
