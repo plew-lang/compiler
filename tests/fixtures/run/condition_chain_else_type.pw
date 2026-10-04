@@ -1,0 +1,6 @@
+use @Std/Io only { print }
+fn main() {
+    val value = "outer"
+    val answer: String = if (item: val value) = (item: 2I64) && false { give "inner" } else { give value }
+    print(answer)
+}

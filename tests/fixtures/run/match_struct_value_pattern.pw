@@ -1,0 +1,5 @@
+use @Std/Io only { print }
+use @Std/Core only { Eq }
+struct S { val x: I64 }
+impl S as Eq { assoc fn eq(lhs~: Self, rhs~: Self) -> Bool { return lhs.x == rhs.x } }
+fn main() { val expected = <S x=2I64 /> print(match <S x=2I64 /> { expected => 7I64 S { val x } => x }) }

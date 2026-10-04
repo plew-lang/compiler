@@ -1,0 +1,3 @@
+fn main() {
+    val result = if (item: val hidden) = (item: 2I64) && false { give hidden } else { give hidden }
+}

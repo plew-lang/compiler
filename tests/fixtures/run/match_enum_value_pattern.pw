@@ -1,0 +1,6 @@
+use @Std/Io only { print }
+use @Std/Core only { Eq }
+enum E { A B }
+impl E as Eq { assoc fn eq(lhs~: Self, rhs~: Self) -> Bool { return tag(e: lhs) == tag(e: rhs) } }
+fn tag(e: E) -> I64 { return match e { E.A => 1I64 E.B => 2I64 } }
+fn main() { val expected = <E.A /> print(match <E.A /> { expected => 7I64 E.B => 8I64 _ => 9I64 }) }

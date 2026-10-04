@@ -1,0 +1,10 @@
+// Condition bindings belong to later clauses and the success body, never else.
+use @Std/Io only { print }
+fn main() {
+    val value = 9I64
+    print(if (item: val value) = (item: 2I64) && false { give value } else { give value })
+    if (item: val value) = (item: 2I64) && false { print(value) } else { print(value) }
+    print(if (item: val value) = (item: 2I64) && value == 2I64 { give value } else { give value })
+    print(if (item: val value) = (item: 2I64) && false { give value } else if value == 9I64 { give 3I64 } else { give 4I64 })
+    print(value)
+}
