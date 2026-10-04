@@ -1073,8 +1073,9 @@ pub impl Comp {
         val mark = self.scopeMark()
         mut val resultTerm = expectedTerm
         if resultTerm == 0U64 { resultTerm = self.semanticExprTerm(exprId: exprId) }
-        try self.recordBlockContents(blkId: blockId, expectedTerm: resultTerm)
-        if self.blockCompletesNormally(blkId: blockId) {
+        val completes = self.blockCompletesNormally(blkId: blockId)
+        try self.recordBlockContents(blkId: blockId, expectedTerm: resultTerm, checkResult: completes)
+        if completes {
             val value = self.blockGiveExpr(blkId: blockId)
             if value < self.arena.exprs.count() {
                 if resultTerm == 0U64 {
@@ -2112,10 +2113,6 @@ pub impl Comp {
             Stmt.Panic(val msg, offset: _) => { try self.recordExpr(exprId: msg) }
             Stmt.Give(val value) => {
                 try self.recordExpr(exprId: value, expectedTerm: expectedTerm)
-                // Validate at the source position: later declarations can shadow
-                // this binding even before the enclosing scope is popped.
-                try self.tcCheckValue(expectedRef: expectedTerm, valueExpr: value, pos: "block-result")
-                try self.checkGenericTypeMatch(expectedRef: expectedTerm, valueExpr: value)
             }
             Stmt.Break(offset: _) => {}
             Stmt.Continue(offset: _) => {}
@@ -2130,7 +2127,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordBlockContents(blkId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
+    inout fn recordBlockContents(blkId: U64, expectedTerm: U64, checkResult: Bool = false) -> Result[(), CompileDiagnostic] {
         if !self.genMode {
             match self.blockTypeUses.get(key: blkId) {
                 Optional.Some(v: val uses) => { try self.checkSourceTypeUses(types: uses) }
@@ -2149,6 +2146,17 @@ pub impl Comp {
                 _ => {}
             }
             try self.recordStmt(stmtId: statement, expectedTerm: expectedTerm)
+            if checkResult {
+                match self.arena.stmts[statement] {
+                    Stmt.Give(val value) => {
+                        // Keep source-position binding identity. A block that
+                        // never completes has no outward result to constrain.
+                        try self.tcCheckValue(expectedRef: expectedTerm, valueExpr: value, pos: "block-result")
+                        try self.checkGenericTypeMatch(expectedRef: expectedTerm, valueExpr: value)
+                    }
+                    _ => {}
+                }
+            }
             i += 1
         }
         return <Result.Ok value=() />

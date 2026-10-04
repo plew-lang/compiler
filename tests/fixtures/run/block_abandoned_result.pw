@@ -1,0 +1,32 @@
+use @Std/Io only { print }
+use @Std/Core only { Ref }
+unique struct Resource {
+    val id: I64
+    deinit { print(self.id) }
+}
+fn returned() -> I64 {
+    val unused = {
+        give <Ref[Resource] value=<Resource id=1I64 /> />
+        print("after give")
+        return 7I64
+    }
+    return 0I64
+}
+fn main() {
+    print(returned())
+    while true {
+        val unused = {
+            give <Ref[Resource] value=<Resource id=2I64 /> />
+            break
+        }
+    }
+    mut val index = 0I64
+    while index < 1I64 {
+        index += 1I64
+        val unused = {
+            give <Ref[Resource] value=<Resource id=3I64 /> />
+            continue
+        }
+    }
+    print("end")
+}

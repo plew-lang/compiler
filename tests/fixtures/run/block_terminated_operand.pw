@@ -1,0 +1,13 @@
+use @Std/Io only { print }
+fn subject() -> I64 {
+    val unused: I64 = match { return 7I64 } { _ => 1I64 }
+    return unused
+}
+fn casted() -> I64 {
+    val unused = { return 8I64 } as I64
+    return unused
+}
+fn main() {
+    print(subject())
+    print(casted())
+}
