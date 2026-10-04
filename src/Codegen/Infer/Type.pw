@@ -226,6 +226,19 @@ pub impl Comp {
                 return <Result.Ok value=(try self.recordsCompatible(teRef: er, tinRef: ir)) />
             }
         }
+        if self.isFnType(ref: exp) || self.isFnType(ref: inferred) {
+            if !(self.isFnType(ref: exp)) || !(self.isFnType(ref: inferred)) { return <Result.Ok value=false /> }
+            if te.args.len != tin.args.len { return <Result.Ok value=false /> }
+            mut val index: U64 = 0U64
+            while index < te.args.len {
+                if self.typeTermRefIdentityChildLabel(ref: exp, index: index) != self.typeTermRefIdentityChildLabel(ref: inferred, index: index) { return <Result.Ok value=false /> }
+                val expectedChild = self.arena.typeArgumentPool[te.args.start + index]
+                val inferredChild = self.arena.typeArgumentPool[tin.args.start + index]
+                if !((try self.typesCompatible(expected: expectedChild, inferred: inferredChild))) { return <Result.Ok value=false /> }
+                index += 1U64
+            }
+            return <Result.Ok value=true />
+        }
         return <Result.Ok value=(try self.compatNamed(expectedRef: exp, inferredRef: inferred, te: te, tin: tin)) />
     }
 

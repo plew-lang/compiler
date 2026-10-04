@@ -1,0 +1,10 @@
+use @Std/Io only { print }
+fn apply(callback: fn(value: I64) -> I64) -> I64 { return callback(value: 7I64) }
+fn main() {
+    val block = { give fn(value: I64) -> I64 { return value } }
+    val branch = if true { give block } else { give fn(value: I64) -> I64 { return value + 1I64 } }
+    val matched = match true { true => branch false => block }
+    print(apply(callback: matched))
+    val positional: fn(I64) -> I64 = { give fn(number~: I64) -> I64 { return number } }
+    print(positional(9I64))
+}

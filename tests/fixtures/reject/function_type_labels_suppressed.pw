@@ -1,0 +1,4 @@
+// Function labels are type identity through every value expression.
+fn main() {
+    val callback: fn(value: I64) -> I64 = fn(value~: I64) -> I64 { return value }
+}

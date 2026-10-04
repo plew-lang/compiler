@@ -1,0 +1,3 @@
+use @Std/Io only { print }
+fn take(f:fn(a:I64)->I64){print(f(a:1I64))}
+fn main(){take(f:{give fn(b:I64)->I64{return b}})}

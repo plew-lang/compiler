@@ -374,12 +374,11 @@ pub impl Comp {
     }
 
     // Only labels that alter the semantic type identity belong in equality.
-    // Ordinary `argLabels` also carry function parameter names, which are
-    // call syntax rather than function-type identity. Existentials are the
-    // exception: their labels bind associated outputs (`any P[Item=I64]`).
+    // Function parameter labels (including suppression) and existential
+    // associated-output labels must survive canonicalization and equality.
     inout fn typeTermIdentityChildLabel(t: TypeRef, index: U64) -> U64 {
         if t.isRecord || t.assocNameId != 0U64 { return self.typeTermChildLabel(t: t, index: index) }
-        if t.isAny && index < t.argLabels.count() { return t.argLabels[index] }
+        if (t.isAny || rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "fn")) && index < t.argLabels.count() { return t.argLabels[index] }
         return 0U64
     }
 
@@ -454,8 +453,8 @@ pub impl Comp {
             if traitIndex < t.assocTraitArgLabels.len { return self.arena.typeAssocArgumentLabelPool[t.assocTraitArgLabels.start + traitIndex] }
             return 0U64
         }
-        // Non-existential argument labels are call syntax, not type identity.
-        if t.isAny && index < t.argLabels.len { return self.arena.typeArgumentLabelPool[t.argLabels.start + index] }
+        // Function parameter labels and existential associated labels are type identity.
+        if (t.isAny || self.isFnType(ref: ref)) && index < t.argLabels.len { return self.arena.typeArgumentLabelPool[t.argLabels.start + index] }
         return 0U64
     }
 

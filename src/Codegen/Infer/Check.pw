@@ -7,10 +7,6 @@ pub impl Comp {
             return <Result.Ok value=() />
         }
         if self.valueControlHasNoResult(exprId: valueExpr) { return <Result.Ok value=() /> }
-        // a function VALUE (closure literal / function reference) flowing into a fn-typed
-        // position must match the signature, everywhere tcCheckValue runs (binding, return,
-        // arg, struct field, array element). isFnType-gated, so a no-op otherwise.
-        try self.checkFnValueSig(declTy: expectedRef, init: valueExpr)
         // a void function's result is `()` — using it where a typed value is expected
         // (`val x: I64 = doNothing()`) is a type error (spec/04).
         if (try self.exprIsVoidCall(id: valueExpr)) {
@@ -94,6 +90,27 @@ pub impl Comp {
         val inferred: U64 = (try self.inferType(id: valueExpr))
         if (try self.typesCompatible(expected: expectedRef, inferred: inferred)) {
             return <Result.Ok value=() />
+        }
+        if !self.tcLog && self.isFnType(ref: expectedRef) && self.isFnType(ref: inferred) {
+            val expectedGround = try self.groundTypeRef(ref: expectedRef)
+            val expected = self.arena.typeTerms[expectedGround]
+            val actual = self.arena.typeTerms[inferred]
+            if expected.args.len != actual.args.len {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "function value has the wrong number of parameters for the expected function type (spec/04)") />
+            }
+            mut val index = 0U64
+            while index < expected.args.len {
+                if self.typeTermRefIdentityChildLabel(ref: expectedGround, index: index) != self.typeTermRefIdentityChildLabel(ref: inferred, index: index) {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "function value's parameter label does not match the expected function type (spec/04)") />
+                }
+                if !((try self.typesCompatible(expected: self.arena.typeArgumentPool[expected.args.start + index], inferred: self.arena.typeArgumentPool[actual.args.start + index]))) {
+                    if index == 0U64 {
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "function value's return type does not match the expected function type (spec/04)") />
+                    }
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "function value's parameter type does not match the expected function type (spec/04)") />
+                }
+                index += 1U64
+            }
         }
         if expectedRef < self.arena.typeCount() {
             val expectedGround: U64 = (try self.groundTypeRef(ref: expectedRef))

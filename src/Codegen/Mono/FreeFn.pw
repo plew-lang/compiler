@@ -112,14 +112,16 @@ pub impl Comp {
 
     inout fn closureFnTypeRef(params: Array[Param], retTy: U64) -> U64 {
         val fnName: Bind = self.kwSpan(kw: "fn", kwLen: 2)
-        mut val args: Array[U64] = []
-        args.append(retTy)
-        mut val i: U64 = 0
+        mut val args: Array[U64] = [retTy]
+        mut val labels: Array[U64] = [0U64]
+        mut val i: U64 = 0U64
         while i < params.count() {
             args.append(params[i].ty)
-            i += 1
+            if params[i].noLabel { labels.append(0U64) }
+            else { labels.append(params[i].nameId) }
+            i += 1U64
         }
-        return self.pushType(t: <TypeRef nameStart=fnName.nameStart nameLen=fnName.nameLen args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+        return self.pushType(t: <TypeRef nameStart=fnName.nameStart nameLen=fnName.nameLen args=args argLabels=labels isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
     }
 
     inout fn unifyTypeParam(paramRef: U64, argRef: U64, tpStart: U64, tpLen: U64) -> U64 {
