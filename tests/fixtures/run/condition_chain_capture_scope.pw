@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+
+fn main() {
+    val value = 9I64
+    print(if val value = 2I64 && false { give value } else { give value })
+    print(if val value = 2I64 && true { give value } else { give value })
+    print(if val value = 2I64 {
+        val callback = fn() -> I64 { return value }
+        give callback()
+    } else { give value })
+}

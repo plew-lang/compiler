@@ -6,11 +6,23 @@
 // (`=> panic`/`=> return`) is flagged so the backend excludes it from the PHI.
 
 pub impl Comp {
+    // A value pattern is an ordinary Eq test. It creates no binding scope;
+    // evaluate the subject first, followed by the authored comparison value.
+    inout fn lowerValueCondition(subject: U64, pattern: U64) -> ConditionClause {
+        val comparison = self.pushExpr(e: <Expr.Binary op=opEq() lhs=subject rhs=pattern />)
+        return <ConditionClause isBinding=false value=comparison pattern=<PatInfo isWildcard=true enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=<BindRange start=0U64 len=0U64 /> isStruct=false /> />
+    }
+
     inout fn lowerConditionClauses(conditions: Array[CondClause]) -> Result[ConditionClauseRange, CompileDiagnostic] {
         mut val lowered: Array[ConditionClause] = []
         for val condition in conditions {
-            val pattern = try self.lowerPatternInfo(p: condition.pattern)
-            lowered.append(<ConditionClause isBinding=condition.isBinding value=(try self.lowerExpr(e: condition.expr)) pattern=pattern />)
+            val value = try self.lowerExpr(e: condition.expr)
+            if condition.isBinding && condition.pattern.isValuePattern {
+                lowered.append(self.lowerValueCondition(subject: value, pattern: (try self.lowerExpr(e: condition.pattern.lit))))
+            } else {
+                val pattern = try self.lowerPatternInfo(p: condition.pattern)
+                lowered.append(<ConditionClause isBinding=condition.isBinding value=value pattern=pattern />)
+            }
         }
         return <Result.Ok value=self.pushConditionClauses(conditions: lowered) />
     }
@@ -20,9 +32,17 @@ pub impl Comp {
         mut val index = 0U64
         while index < conditions.count {
             val condition = syntaxConditionClause(file: self.syntax, conditions: conditions, index: index)
-            mut val pattern = <PatInfo isWildcard=true enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=<BindRange start=0U64 len=0U64 /> isStruct=false />
-            if condition.isBinding { pattern = try self.lowerSyntaxPatternInfo(pattern: syntaxPattern(file: self.syntax, id: condition.pattern)) }
-            lowered.append(<ConditionClause isBinding=condition.isBinding value=(try self.lowerSyntaxExpr(id: condition.expr)) pattern=pattern />)
+            val value = try self.lowerSyntaxExpr(id: condition.expr)
+            if condition.isBinding {
+                val pattern = syntaxPattern(file: self.syntax, id: condition.pattern)
+                if pattern.isValuePattern {
+                    lowered.append(self.lowerValueCondition(subject: value, pattern: (try self.lowerSyntaxExpr(id: pattern.lit))))
+                } else {
+                    lowered.append(<ConditionClause isBinding=true value=value pattern=(try self.lowerSyntaxPatternInfo(pattern: pattern)) />)
+                }
+            } else {
+                lowered.append(<ConditionClause isBinding=false value=value pattern=<PatInfo isWildcard=true enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=<BindRange start=0U64 len=0U64 /> isStruct=false /> />)
+            }
             index += 1U64
         }
         return <Result.Ok value=self.pushConditionClauses(conditions: lowered) />
