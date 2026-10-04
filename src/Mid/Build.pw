@@ -2517,6 +2517,9 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                 subjectTerm = c.decls.semanticMatches[semanticIndex].scrutineeTerm
             }
             mut val scrutinee = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: scrut, typeTerm: subjectTerm)
+            // Keep the source ownership form before rvalues acquire a stable
+            // match home; that home does not turn a temporary into bare storage.
+            val hasSourceStorage = scrutinee.found
             // A statement match consumes its scrutinee expression exactly once,
             // but tag reads and every arm payload projection need a stable
             // place for the lifetime of the complete arm CFG.  Normalize an
@@ -2564,7 +2567,7 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                 traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "arm-count")
                 return <MidBuildError.UnsupportedMatch />
             }
-            if !semantic.isConsuming && midTermIsUnique(c: inout c, term: subjectTerm) {
+            if !semantic.isConsuming && hasSourceStorage && midTermIsUnique(c: inout c, term: subjectTerm) {
                 traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "unique-storage-scrutinee")
                 return <MidBuildError.UnsupportedMatch />
             }
