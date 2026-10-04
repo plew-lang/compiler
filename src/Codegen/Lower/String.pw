@@ -52,7 +52,30 @@ pub impl Comp {
         try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call kind=kind originSerial=self.arena.exprOriginSerial[call] receiverTerm=0U64 />)
         val successName = self.internBytes(s: "value")
         val success = self.pushExpr(e: <Expr.Method recv=call nameStart=successName.nameStart nameLen=successName.nameLen args=self.pushArgs(args: []) />)
+        if !literal {
+            self.pendingInterpolationWrites.insert(key: success, value: <InterpolationWrite value=value options=options />)
+        }
         stmts.append(self.pushStmt(s: <Stmt.ExprStmt expr=success />))
+        return <Result.Ok value=() />
+    }
+
+    // Formatting is an operation on a normally produced value. Keep source
+    // operands in the tree for checking, but do not impose generated calls
+    // (or a generated default Options construction) on a path with no value.
+    inout fn prepareInterpolationWrite(exprId: U64) -> Result[(), CompileDiagnostic] {
+        match self.pendingInterpolationWrites.get(key: exprId) {
+            Optional.None => { return <Result.Ok value=() /> }
+            Optional.Some(v: val write) => {
+                self.pendingInterpolationWrites.remove(key: exprId)
+                try self.recordExpr(exprId: write.value)
+                if self.exprDiverges(exprId: write.value) {
+                    mut val statements: Array[U64] = [self.pushStmt(s: <Stmt.ExprStmt expr=write.value />)]
+                    if write.options != 0U64 { statements.append(self.pushStmt(s: <Stmt.ExprStmt expr=write.options />)) }
+                    val body = self.blockOfStmts(stmts: statements)
+                    self.arena.exprs.set(i: exprId, value: <Expr.Sequence body=body />)
+                }
+            }
+        }
         return <Result.Ok value=() />
     }
 

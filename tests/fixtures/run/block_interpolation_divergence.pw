@@ -1,0 +1,27 @@
+use @Std/Io only { print }
+use @Std/Core only { Ref }
+unique struct Resource {
+    val id: I64
+    deinit { print(self.id) }
+}
+fn tick() -> I64 { print("unexpected")
+    return 0I64
+}
+fn block() -> String {
+    return "prefix{ { val held = <Ref[Resource] value=<Resource id=1I64 /> />
+        return "block"
+    } }{tick()}"
+}
+fn conditional(flag: Bool) -> String {
+    return "prefix{if flag { return "then" } else { return "else" }}{tick()}"
+}
+fn matched(flag: Bool) -> String {
+    return "prefix{match flag { true => { return "true" } false => { return "false" } }}{tick()}"
+}
+fn main() {
+    print(block())
+    print(conditional(flag: true))
+    print(conditional(flag: false))
+    print(matched(flag: true))
+    print(matched(flag: false))
+}

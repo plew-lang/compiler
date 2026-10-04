@@ -1,0 +1,2 @@
+fn f() -> String { return "{ { return 42I64 } }" }
+fn main() { f() }

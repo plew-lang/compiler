@@ -104,6 +104,14 @@ pub struct FinalDependencies {
 }
 pub impl FinalDependencies { factory }
 
+// Source operands of a string write, retained until lexical checking has
+// established whether evaluating the displayed value completes normally.
+pub struct InterpolationWrite {
+    pub val value: U64
+    pub val options: U64
+}
+pub impl InterpolationWrite { factory }
+
 pub struct Comp {
     // Source bytes are append-only within a session. Only successfully decoded
     // literals are published; Mid and LLVM share this immutable value by offset.
@@ -199,6 +207,7 @@ pub struct Comp {
     pub mut val loweringTypeUses: Array[U64] = []
     // Source constructions awaiting a parameter or result expectation.
     pub mut val pendingConstructionContexts: Set[U64] = Set.new()
+    pub mut val pendingInterpolationWrites: Dictionary[U64, InterpolationWrite] = [:]
     pub mut val expressionTypeUses: Dictionary[U64, Array[U64]] = [:]
     pub mut val blockTypeUses: Dictionary[U64, Array[U64]] = [:]
     pub mut val checkedTypeUses: Set[U64] = Set.new()
