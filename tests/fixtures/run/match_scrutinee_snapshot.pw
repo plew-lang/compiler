@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+use @Std/Core only { Eq }
+struct Item { val value: I64 }
+impl Item { factory }
+mut val subject = <Item value=1 />
+impl Item as Eq {
+    assoc fn eq(lhs~: Item, rhs~: Item) -> Bool {
+        subject = <Item value=2 />
+        return lhs.value == rhs.value
+    }
+}
+fn main() {
+    val zero = <Item value=0 />
+    val two = <Item value=2 />
+    print(match subject { zero => 0I64 two => 2I64 _ => 9I64 })
+    subject = <Item value=1 />
+    match subject { zero => { print(0I64) } two => { print(2I64) } _ => { print(9I64) } }
+    subject = <Item value=1 />
+    print(match { give subject } { zero => 0I64 two => 2I64 _ => 9I64 })
+}

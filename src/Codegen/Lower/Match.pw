@@ -303,26 +303,13 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // The value-side scalar transformation deliberately mirrors
-    // lowerScalarMatchExpr.  In particular, only an identifier scrutinee may be
-    // repeated; every other scrutinee (and every capture match) receives one
-    // temporary binding before the if-expression chain is built.
+    // Every match observes one value, including an identifier whose storage
+    // a later equality comparison may mutate.
     inout fn lowerSyntaxScalarMatchExpr(scrut: ExprId, arms: SyntaxSlice, span: Span) -> Result[U64, CompileDiagnostic] {
-        val source: SyntaxExpr = syntaxExpr(file: self.syntax, id: scrut)
-        mut val scrutIsIdent: Bool = false
-        match source.kind {
-            SyntaxExprKind.Ident => { scrutIsIdent = true }
-            _ => {}
-        }
-        mut val lhsStart: U64 = source.name.start
-        mut val lhsLen: U64 = source.name.end - source.name.start
         self.cur.lowerTmpSeq += 1U64
         val tmp: Bind = self.internTmpName(prefix: "__mtmp", n: self.cur.lowerTmpSeq)
-        if self.syntaxMatchHasCapture(arms: arms) { scrutIsIdent = false }
-        if !(scrutIsIdent) {
-            lhsStart = tmp.nameStart
-            lhsLen = tmp.nameLen
-        }
+        val lhsStart: U64 = tmp.nameStart
+        val lhsLen: U64 = tmp.nameLen
         val elseIdx: U64 = self.syntaxScalarMatchElseIdx(arms: arms)
         val armCount: U64 = syntaxMatchArmCount(file: self.syntax, arms: arms)
         val haveElse: Bool = elseIdx < armCount
@@ -357,7 +344,6 @@ pub impl Comp {
             }
         }
         if !(haveHead) { head = self.pushExpr(e: <Expr.Block body=currentElse offset=span.start />) }
-        if scrutIsIdent { return <Result.Ok value=head />}
         mut val thenStmts: Array[U64] = []
         thenStmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=(try self.lowerSyntaxExpr(id: scrut)) />))
         thenStmts.append(self.pushStmt(s: <Stmt.Give value=head />))
@@ -502,33 +488,12 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Desugar an expression-position scalar (literal) match into a value. A simple `Ident`
-    // scrutinee is inlined into each `==` (single-eval is free); any other scrutinee
-    // is bound once in a `give`-block wrapper. Returns the arena Expr index.
+    // Value-AST entry uses the same single-evaluation rule as SyntaxFile.
     inout fn lowerScalarMatchExpr(scrut: ExprAst, arms: Array[MatchArmAst], span: Span) -> Result[U64, CompileDiagnostic] {
-        mut val scrutIsIdent: Bool = false
-        mut val lhsStart: U64 = 0
-        mut val lhsLen: U64 = 0
-        match scrut {
-            ExprAst.Ident(val name, span: _) => {
-                val nb: Bind = self.internBytes(s: name)
-                lhsStart = nb.nameStart
-                lhsLen = nb.nameLen
-                scrutIsIdent = true
-            }
-            _ => {}
-        }
-        // capture bindings need a stable scrutinee temporary, so force the
-        // __mtmp wrapper (not the inline-Ident shortcut) when any arm captures.
-        if matchHasCapture(arms: arms) {
-            scrutIsIdent = false
-        }
         self.cur.lowerTmpSeq += 1U64
-        mut val tmp: Bind = self.internTmpName(prefix: "__mtmp", n: self.cur.lowerTmpSeq)
-        if !(scrutIsIdent) {
-            lhsStart = tmp.nameStart
-            lhsLen = tmp.nameLen
-        }
+        val tmp: Bind = self.internTmpName(prefix: "__mtmp", n: self.cur.lowerTmpSeq)
+        val lhsStart: U64 = tmp.nameStart
+        val lhsLen: U64 = tmp.nameLen
         val elseIdx: U64 = self.scalarMatchElseIdx(arms: arms)
         val haveElse: Bool = elseIdx < arms.count()
         if !(haveElse) {
@@ -565,10 +530,7 @@ pub impl Comp {
         if !(haveHead) {
             headExpr = self.pushExpr(e: <Expr.Block body=curElseBlk offset=span.start />)
         }
-        if scrutIsIdent {
-            return <Result.Ok value=headExpr />
-        }
-        // non-Ident scrutinee (or a capture binding): bind it once in a `give`-block
+        // Bind the scrutinee once in a `give`-block
         // wrapper `if true { val __mtmp = scrut; give head } else { panic }`.
         // The dead `else` diverges (panic), so genLlvmIfExpr excludes it from the result
         // PHI — no dummy value is needed (and it cannot reference a capture binding).
