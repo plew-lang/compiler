@@ -1,6 +1,23 @@
 // Resolve module-qualified value names after lowering, with lexical value
 // scopes available. This pass does not infer types or perform overload lookup.
 pub impl Comp {
+    inout fn resolveLexicalModuleConditionChain(conditions: ConditionClauseRange, thenBlk: U64, elseBlk: U64, names: inout Array[U64]) {
+        val mark = names.count()
+        mut val index = 0U64
+        while index < conditions.len {
+            val clause = self.conditionClauseAt(conditions: conditions, index: index)
+            self.resolveLexicalModuleExpr(id: clause.value, names: inout names)
+            if clause.isBinding {
+                self.resolveLexicalModuleBinds(binds: clause.pattern.binds, names: inout names)
+                if clause.pattern.captureLen != 0U64 { names.append(intern(c: inout self, start: clause.pattern.captureStart, len: clause.pattern.captureLen)) }
+            }
+            index += 1U64
+        }
+        self.resolveLexicalModuleBlock(blockId: thenBlk, names: inout names)
+        names.truncate(count: mark)
+        self.resolveLexicalModuleBlock(blockId: elseBlk, names: inout names)
+    }
+
     inout fn lexicalNameBound(names: Array[U64], start: U64, len: U64) -> Bool {
         val nameId = intern(c: inout self, start: start, len: len)
         return idInSet(set: names, id: nameId)
@@ -118,6 +135,7 @@ pub impl Comp {
             Expr.Block(val body, offset: _) => {
                 self.resolveLexicalModuleBlock(blockId: body, names: inout names)
             }
+            Expr.IfChain(val conditions, val thenBlk, val elseBlk) => { self.resolveLexicalModuleConditionChain(conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk, names: inout names) }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 self.resolveLexicalModuleExpr(id: cond, names: inout names)
                 self.resolveLexicalModuleBlock(blockId: thenBlk, names: inout names)
@@ -162,6 +180,7 @@ pub impl Comp {
                 Stmt.Return(val value, val hasValue, offset: _) => { if hasValue { self.resolveLexicalModuleExpr(id: value, names: inout names) } }
                 Stmt.Give(val value) => { self.resolveLexicalModuleExpr(id: value, names: inout names) }
                 Stmt.Panic(val msg, offset: _) => { self.resolveLexicalModuleExpr(id: msg, names: inout names) }
+                Stmt.IfChain(val conditions, val thenBlk, val elseBlk) => { self.resolveLexicalModuleConditionChain(conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk, names: inout names) }
                 Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
                     self.resolveLexicalModuleExpr(id: cond, names: inout names)
                     self.resolveLexicalModuleBlock(blockId: thenBlk, names: inout names)

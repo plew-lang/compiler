@@ -882,7 +882,7 @@ pub impl Comp {
 
     fn semanticMatchHash(ownerFnIdx: U64, matchSource: MatchSource) -> U64 {
         val modulus: U64 = 4294967291U64
-        val encoded: U64 = match matchSource { MatchSource.Statement(stmtId: val id) => { give id * 2U64 } MatchSource.Expression(exprId: val id) => { give id * 2U64 + 1U64 } }
+        val encoded: U64 = match matchSource { MatchSource.Statement(stmtId: val id) => { give id * 3U64 } MatchSource.Expression(exprId: val id) => { give id * 3U64 + 1U64 } MatchSource.Condition(clauseIndex: val id) => { give id * 3U64 + 2U64 } }
         return (((ownerFnIdx % modulus + encoded % modulus) * 65537U64) + 29U64) % modulus
     }
 
@@ -890,6 +890,7 @@ pub impl Comp {
         match a {
             MatchSource.Statement(stmtId: val left) => { match b { MatchSource.Statement(stmtId: val right) => { return left == right } _ => { return false } } }
             MatchSource.Expression(exprId: val left) => { match b { MatchSource.Expression(exprId: val right) => { return left == right } _ => { return false } } }
+            MatchSource.Condition(clauseIndex: val left) => { match b { MatchSource.Condition(clauseIndex: val right) => { return left == right } _ => { return false } } }
         }
     }
 
@@ -954,7 +955,35 @@ pub impl Comp {
 
     // Freeze struct field bindings while Record owns name-to-layout work.
     // Missing or invalid terms leave no fact; Mid must not reconstruct them.
-    inout fn recordStructPattern(matchSource: MatchSource, isConsuming: Bool, scrutineeTerm: U64, layoutReceiver: U64, arms: MatchArmRange) -> Result[(), CompileDiagnostic] {
+    inout fn recordSemanticMatch(matchSource: MatchSource, scrut: U64, arms: MatchArmRange) -> Result[(), CompileDiagnostic] {
+        mut val patterns: Array[PatInfo] = []
+        mut val index = 0U64
+        while index < arms.len {
+            patterns.append(self.patternInfo(arm: self.matchArmAt(arms: arms, index: index)))
+            index += 1U64
+        }
+        return self.recordSemanticPatterns(matchSource: matchSource, scrut: scrut, arms: patterns)
+    }
+
+    // Extend the success environment only. The caller restores its mark before
+    // visiting the single failure continuation.
+    inout fn recordConditionClauses(conditions: ConditionClauseRange) -> Result[(), CompileDiagnostic] {
+        mut val index = 0U64
+        while index < conditions.len {
+            val clause = self.conditionClauseAt(conditions: conditions, index: index)
+            try self.recordExpr(exprId: clause.value)
+            if clause.isBinding {
+                try self.checkPatternBinds(a: clause.pattern)
+                val wildcard = <PatInfo isWildcard=true enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=<BindRange start=0U64 len=0U64 /> isStruct=false />
+                try self.recordSemanticPatterns(matchSource: <MatchSource.Condition clauseIndex=conditions.start + index />, scrut: clause.value, arms: [clause.pattern, wildcard])
+                try self.scanAddPatternBinds(a: clause.pattern, scrutTi: self.semanticExprTypeInfo(exprId: clause.value))
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn recordStructPattern(matchSource: MatchSource, isConsuming: Bool, scrutineeTerm: U64, layoutReceiver: U64, arms: Array[PatInfo]) -> Result[(), CompileDiagnostic] {
         val storage: U64 = self.fieldStorageTypeRef(receiverRef: layoutReceiver)
         if storage == 0U64 || storage >= self.arena.typeCount() { return <Result.Ok value=() /> }
         val declaration: TypeRef = self.arena.typeAt(index: storage)
@@ -964,8 +993,8 @@ pub impl Comp {
         if !declaration.isRecord { fieldCount = self.arena.structAt(index: structIndex).fields.count() }
         mut val selectedArms: Array[SemanticMatchArm] = []
         mut val armIndex: U64 = 0U64
-        while armIndex < arms.len {
-            val arm: MatchArm = self.matchArmAt(arms: arms, index: armIndex)
+        while armIndex < arms.count() {
+            val arm: PatInfo = arms[armIndex]
             if !arm.isStruct && !arm.isWildcard { return <Result.Ok value=() /> }
             mut val payloads: Array[SemanticMatchPayload] = []
             mut val bindIndex: U64 = 0U64
@@ -989,17 +1018,17 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordSemanticMatch(matchSource: MatchSource, scrut: U64, arms: MatchArmRange) -> Result[(), CompileDiagnostic] {
+    inout fn recordSemanticPatterns(matchSource: MatchSource, scrut: U64, arms: Array[PatInfo]) -> Result[(), CompileDiagnostic] {
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
         val scrutineeTerm: U64 = self.parametricExprTerm(exprId: scrut)
         if scrutineeTerm == 0U64 || scrutineeTerm >= self.arena.typeCount() { return <Result.Ok value=() /> }
-        mut val onlyDiscards: Bool = arms.len > 0U64
+        mut val onlyDiscards: Bool = arms.count() > 0U64
         mut val discardArms: Array[SemanticMatchArm] = []
         mut val discardIndex: U64 = 0U64
-        while discardIndex < arms.len {
-            val arm = self.matchArmAt(arms: arms, index: discardIndex)
+        while discardIndex < arms.count() {
+            val arm = arms[discardIndex]
             if !arm.isWildcard || arm.binds.len != 0U64 { onlyDiscards = false }
-            discardArms.append(<SemanticMatchArm />)
+            discardArms.append(<SemanticMatchArm captureTarget=arm.captureStart hasCapture=arm.captureLen != 0U64 />)
             discardIndex += 1U64
         }
         if onlyDiscards {
@@ -1016,8 +1045,8 @@ pub impl Comp {
         }
         mut val selectedArms: Array[SemanticMatchArm] = []
         mut val armIndex: U64 = 0U64
-        while armIndex < arms.len {
-            val arm: MatchArm = self.matchArmAt(arms: arms, index: armIndex)
+        while armIndex < arms.count() {
+            val arm: PatInfo = arms[armIndex]
             if arm.isStruct { return <Result.Ok value=() /> }
             if arm.isWildcard {
                 selectedArms.append(<SemanticMatchArm />)
@@ -1244,7 +1273,7 @@ pub impl Comp {
         if self.pendingConstructionContexts.contains(exprId) { return true }
         match self.arena.exprs[exprId] {
             Expr.Block(val body, offset: _) => { return self.expressionNeedsConstructionContext(exprId: self.blockGiveExpr(blkId: body)) }
-            Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
+            Expr.IfChain(conditions: _, val thenBlk, val elseBlk) | Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
                 return self.expressionNeedsConstructionContext(exprId: self.blockGiveExpr(blkId: thenBlk)) || self.expressionNeedsConstructionContext(exprId: self.blockGiveExpr(blkId: elseBlk))
             }
             Expr.MatchExpr(scrut: _, val arms) => {
@@ -1837,6 +1866,13 @@ pub impl Comp {
             Expr.Block(val body, offset: _) => {
                 try self.recordValueBlock(exprId: exprId, blockId: body, expectedTerm: expectedTerm)
             }
+            Expr.IfChain(val conditions, val thenBlk, val elseBlk) => {
+                val mark = self.scopeMark()
+                try self.recordConditionClauses(conditions: conditions)
+                try self.recordValueBlock(exprId: exprId, blockId: thenBlk, expectedTerm: expectedTerm)
+                self.popLocals(mark: mark)
+                try self.recordValueBlock(exprId: exprId, blockId: elseBlk, expectedTerm: expectedTerm)
+            }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.recordExpr(exprId: cond, chainHoleRef: chainHoleRef)
                 try self.recordValueBlock(exprId: exprId, blockId: thenBlk, expectedTerm: expectedTerm)
@@ -2042,6 +2078,13 @@ pub impl Comp {
                     try self.recordExpr(exprId: value, expectedTerm: expected)
                     try self.recordArrayLitCtx(exprId: value, ctxRef: expected)
                 }
+            }
+            Stmt.IfChain(val conditions, val thenBlk, val elseBlk) => {
+                val mark = self.scopeMark()
+                try self.recordConditionClauses(conditions: conditions)
+                try self.recordBlock(blkId: thenBlk)
+                self.popLocals(mark: mark)
+                try self.recordBlock(blkId: elseBlk)
             }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
                 try self.recordExpr(exprId: cond)

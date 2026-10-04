@@ -157,6 +157,15 @@ pub impl Comp {
                     }
                 }
             }
+            Stmt.IfChain(val conditions, val thenBlk, val elseBlk) => {
+                val mark = self.scopeMark()
+                val savedBB = self.cur.branchBase
+                try self.verifyConditionClauses(conditions: conditions)
+                try self.verifyBlock(blockId: thenBlk)
+                self.popLocals(mark: mark)
+                try self.verifyBlock(blockId: elseBlk)
+                self.cur.branchBase = savedBB
+            }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
                 try self.checkLitCtx(id: cond, eKind: 0, eBits: 0, eSgn: false)
                 try self.checkCondBool(cond: cond)
@@ -288,8 +297,8 @@ pub impl Comp {
                     val armMark: U64 = self.scopeMark()
                     val savedArmBB: U64 = self.cur.branchBase
                     self.cur.branchBase = armMark
-                    try self.checkDestructureComplete(a: arm, scrut: scrut)
-                    try self.verifyAddArmBinds(a: arm, scrut: scrut)
+                    try self.checkDestructureComplete(a: self.patternInfo(arm: arm), scrut: scrut)
+                    try self.verifyAddArmBinds(a: self.patternInfo(arm: arm), scrut: scrut)
                     try self.verifyBlock(blockId: arm.body)
                     self.cur.branchBase = savedArmBB
                     self.popLocals(mark: armMark)

@@ -9,6 +9,30 @@
 // only the checks checkLitCtx does not perform.
 
 pub impl Comp {
+    inout fn verifyConditionClauses(conditions: ConditionClauseRange) -> Result[(), CompileDiagnostic] {
+        mut val index = 0U64
+        while index < conditions.len {
+            val clause = self.conditionClauseAt(conditions: conditions, index: index)
+            try self.verifyExpr(id: clause.value)
+            if clause.isBinding {
+                try self.checkPatternAccessMode(scrut: clause.value, isStruct: clause.pattern.isStruct)
+                try self.checkPatternEnum(scrut: clause.value, a: clause.pattern)
+                try self.checkDestructureComplete(a: clause.pattern, scrut: clause.value)
+                try self.verifyAddArmBinds(a: clause.pattern, scrut: clause.value)
+                if clause.pattern.captureLen != 0U64 {
+                    val info = try self.typeOf(id: clause.value)
+                    self.addLocal(nameStart: clause.pattern.captureStart, nameLen: clause.pattern.captureLen, tyStart: info.nameStart, tyLen: info.nameLen, isArray: info.kind == 3, ty: self.typedIrRefOfInfo(ti: info), isInout: false, isMut: clause.pattern.captureMutable, owned: false)
+                }
+            } else {
+                try self.checkLitCtx(id: clause.value, eKind: 0, eBits: 0, eSgn: false)
+                try self.checkCondBool(cond: clause.value)
+            }
+            self.cur.branchBase = self.scopeMark()
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn moveOperandIsAggregatePartial(id: U64) -> Bool {
         // Indexed reads are synthetic calls after Lower. Classify the saved
         // source place, not the getter call used to read it.
@@ -530,8 +554,8 @@ pub impl Comp {
                 while ai < arms.len {
                     val arm: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val armMark: U64 = self.scopeMark()
-                    try self.checkDestructureComplete(a: arm, scrut: scrut)
-                    try self.verifyAddArmBinds(a: arm, scrut: scrut)
+                    try self.checkDestructureComplete(a: self.patternInfo(arm: arm), scrut: scrut)
+                    try self.verifyAddArmBinds(a: self.patternInfo(arm: arm), scrut: scrut)
                     try self.checkBranchYieldsValue(blkId: arm.body, offset: self.exprOffset(id: id))
                     try self.verifyBlock(blockId: arm.body)
                     self.popLocals(mark: armMark)
@@ -547,6 +571,17 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a block expression must end with `give` to yield a value (spec/11)") />
                 }
                 try self.verifyBlock(blockId: body)
+            }
+            Expr.IfChain(val conditions, val thenBlk, val elseBlk) => {
+                val mark = self.scopeMark()
+                val savedBB = self.cur.branchBase
+                try self.verifyConditionClauses(conditions: conditions)
+                try self.checkBranchYieldsValue(blkId: thenBlk, offset: self.exprOffset(id: id))
+                try self.checkBranchYieldsValue(blkId: elseBlk, offset: self.exprOffset(id: id))
+                try self.verifyBlock(blockId: thenBlk)
+                self.popLocals(mark: mark)
+                try self.verifyBlock(blockId: elseBlk)
+                self.cur.branchBase = savedBB
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.verifyExpr(id: cond)
@@ -787,7 +822,7 @@ pub impl Comp {
     // before; now a missing field is a loud error, so adding a field to a struct makes
     // existing patterns fail (catching silent take-misses). Generic-struct patterns
     // (`Box[I32] { … }`) resolve fields via the generic def.
-    inout fn checkDestructureComplete(a: MatchArm, scrut: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkDestructureComplete(a: PatInfo, scrut: U64) -> Result[(), CompileDiagnostic] {
         // a pattern names each field at most once — a duplicate bind would read the
         // same field into two locals while completeness lets another field slip.
         mut val di: U64 = 0
@@ -819,7 +854,7 @@ pub impl Comp {
                     bindingIndex += 1U64
                 }
                 if a.binds.len != record.recordFieldTerms.count() {
-                    return <Result.Err error=self.diagnosticAt(offset: armDiagOffset(c: inout self, a: a), msg: "record pattern must bind or discard every field (spec/11)") />
+                    return <Result.Err error=self.diagnosticAt(offset: patternDiagOffset(c: inout self, a: a), msg: "record pattern must bind or discard every field (spec/11)") />
                 }
                 return <Result.Ok value=() />
             }
@@ -876,7 +911,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn verifyAddArmBinds(a: MatchArm, scrut: U64) -> Result[(), CompileDiagnostic] {
+    inout fn verifyAddArmBinds(a: PatInfo, scrut: U64) -> Result[(), CompileDiagnostic] {
         if a.isWildcard {
             return <Result.Ok value=() />
         }
@@ -888,15 +923,15 @@ pub impl Comp {
             if a.enumLen == 0U64 {
                 val subject = try self.destructureSubjectType(info: st, isElement: false)
                 if subject == 0U64 || subject >= self.arena.typeCount() || !self.arena.typeAt(index: subject).isRecord {
-                    return <Result.Err error=self.diagnosticAt(offset: armDiagOffset(c: inout self, a: a), msg: "record pattern requires a record value") />
+                    return <Result.Err error=self.diagnosticAt(offset: patternDiagOffset(c: inout self, a: a), msg: "record pattern requires a record value") />
                 }
             } else if st.nameLen > 0U64 {
                 if !self.structPatternMatches(typeStart: a.enumStart, typeLen: a.enumLen, subjectRef: (try self.destructureSubjectType(info: st, isElement: false))) {
-                    return <Result.Err error=self.diagnosticAt(offset: armDiagOffset(c: inout self, a: a), msg: "struct destructure pattern type does not match the scrutinee type") />
+                    return <Result.Err error=self.diagnosticAt(offset: patternDiagOffset(c: inout self, a: a), msg: "struct destructure pattern type does not match the scrutinee type") />
                 }
             }
         }
-        try self.addArmBinds(a: a, scrut: scrut)
+        try self.addPatternBinds(a: a, scrut: scrut)
         return <Result.Ok value=() />
     }
 
@@ -905,6 +940,10 @@ pub impl Comp {
     // which must see a give-value's payload binds at their real type but must not
     // re-emit verifyAddArmBinds's destructure diagnostic (that walk runs first).
     inout fn addArmBinds(a: MatchArm, scrut: U64) -> Result[(), CompileDiagnostic] {
+        return self.addPatternBinds(a: self.patternInfo(arm: a), scrut: scrut)
+    }
+
+    inout fn addPatternBinds(a: PatInfo, scrut: U64) -> Result[(), CompileDiagnostic] {
         if a.isWildcard {
             return <Result.Ok value=() />
         }

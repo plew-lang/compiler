@@ -498,6 +498,7 @@ pub impl SemanticClosure { factory }
 pub enum MatchSource {
     Statement(stmtId: U64)
     Expression(exprId: U64)
+    Condition(clauseIndex: U64)
 }
 
 // One selected field projection in a match arm.  `bindTarget` is the
@@ -521,6 +522,8 @@ pub impl SemanticMatchPayload { factory }
 // hasVariant=true. Struct arms carry field bindings without a variant;
 // wildcard arms have no payloads. Indices are declaration slots, not names.
 pub struct SemanticMatchArm {
+    pub val captureTarget: U64 = 0U64
+    pub val hasCapture: Bool = false
     pub val hasVariant: Bool = false
     pub val variantIndex: U64 = 0U64
     pub val payloads: Array[SemanticMatchPayload] = []
@@ -652,6 +655,20 @@ pub struct MatchArmRange {
 }
 pub impl MatchArmRange { factory }
 
+// Conditions retain ordered lexical binding tests until typed CFG building.
+pub struct ConditionClauseRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl ConditionClauseRange { factory }
+pub struct ConditionClause {
+    pub val isBinding: Bool
+    pub val value: U64
+    pub val pattern: PatInfo
+}
+pub impl ConditionClause { factory }
+
+
 // Immutable payload ranges for a Conform row. Conformance lookup is among the
 // hottest frontend paths; keeping the row scalar is required so inspecting an
 // edge does not retain/drop every generic argument, binder, and witness list.
@@ -738,6 +755,7 @@ pub enum Expr {
     // Source block expression: lexical ownership scope, unlike generated steps.
     Block(body: U64, offset: U64)
     IfExpr(cond: U64, thenBlk: U64, elseBlk: U64)
+    IfChain(conditions: ConditionClauseRange, thenBlk: U64, elseBlk: U64)
     // `base?.<cont>` (optional chaining, spec/12): if `base` (a Chain type) yields a
     // value, the result wraps `cont` applied to that value, else empty — Swift-style
     // propagation over the WHOLE trailing chain. `cont` is a member-access expr tree
@@ -818,6 +836,9 @@ pub struct MatchArm {
 // The pattern part of a match arm (everything before `=>`), shared by statement
 // and expression match parsing. Mirrors MatchArm minus the body.
 pub struct PatInfo {
+    pub val captureStart: U64 = 0U64
+    pub val captureLen: U64 = 0U64
+    pub val captureMutable: Bool = false
     pub val isWildcard: Bool
     pub val enumStart: U64
     pub val enumLen: U64
@@ -852,6 +873,7 @@ pub enum Stmt {
     // value-returning-function diagnostic). 0 for synthesized returns.
     Return(value: U64, hasValue: Bool, offset: U64)
     If(cond: U64, thenBlk: U64, elseBlk: U64, hasElse: Bool)
+    IfChain(conditions: ConditionClauseRange, thenBlk: U64, elseBlk: U64)
     While(cond: U64, body: U64)
     // `for val name in iter { body }`. isRange: iter is `lo ..(< | =) hi`
     // (inclusive picks <=); otherwise iter is an array, walked by index.
@@ -2481,6 +2503,7 @@ pub struct Arena {
     // Array of these arena-lifetime children.
     pub mut val bindPool: Array[Bind] = []
     pub mut val matchArmPool: Array[MatchArm] = []
+    pub mut val conditionClausePool: Array[ConditionClause] = []
     // Complete semantic type entry per expression node. Kept with the expression
     // arena rather than Comp so every public user of Comp depends only on Arena,
     // and so the entry has the same lifetime/identity as its Expr.

@@ -6,6 +6,28 @@
 // (`=> panic`/`=> return`) is flagged so the backend excludes it from the PHI.
 
 pub impl Comp {
+    inout fn lowerConditionClauses(conditions: Array[CondClause]) -> Result[ConditionClauseRange, CompileDiagnostic] {
+        mut val lowered: Array[ConditionClause] = []
+        for val condition in conditions {
+            val pattern = try self.lowerPatternInfo(p: condition.pattern)
+            lowered.append(<ConditionClause isBinding=condition.isBinding value=(try self.lowerExpr(e: condition.expr)) pattern=pattern />)
+        }
+        return <Result.Ok value=self.pushConditionClauses(conditions: lowered) />
+    }
+
+    inout fn lowerSyntaxConditionClauses(conditions: SyntaxSlice) -> Result[ConditionClauseRange, CompileDiagnostic] {
+        mut val lowered: Array[ConditionClause] = []
+        mut val index = 0U64
+        while index < conditions.count {
+            val condition = syntaxConditionClause(file: self.syntax, conditions: conditions, index: index)
+            mut val pattern = <PatInfo isWildcard=true enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=<BindRange start=0U64 len=0U64 /> isStruct=false />
+            if condition.isBinding { pattern = try self.lowerSyntaxPatternInfo(pattern: syntaxPattern(file: self.syntax, id: condition.pattern)) }
+            lowered.append(<ConditionClause isBinding=condition.isBinding value=(try self.lowerSyntaxExpr(id: condition.expr)) pattern=pattern />)
+            index += 1U64
+        }
+        return <Result.Ok value=self.pushConditionClauses(conditions: lowered) />
+    }
+
     inout fn lowerMatchArms(arms: Array[MatchArmAst], isExpr: Bool) -> Result[MatchArmRange, CompileDiagnostic] {
         mut val out: Array[MatchArm] = []
         mut val i: U64 = 0
@@ -30,7 +52,7 @@ pub impl Comp {
 
     inout fn lowerSyntaxPatternInfo(pattern: SyntaxPattern) -> Result[PatInfo, CompileDiagnostic] {
         if pattern.isWildcard {
-            return <Result.Ok value=<PatInfo isWildcard=true enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=<BindRange start=0U64 len=0U64 /> isStruct=false /> />
+            return <Result.Ok value=<PatInfo captureStart=pattern.captureName.start captureLen=pattern.captureName.end - pattern.captureName.start captureMutable=pattern.captureMutable isWildcard=true enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=<BindRange start=0U64 len=0U64 /> isStruct=false /> />
         }
         mut val binds: Array[Bind] = []
         mut val i: U64 = 0U64
@@ -871,6 +893,9 @@ pub impl Comp {
                 if s.flag0 { value = (try self.lowerSyntaxExprWithCtx(id: s.child0, ctxRef: self.cur.lowerRetTy)) }
                 return <Result.Ok value=self.pushStmt(s: <Stmt.Return value=value hasValue=s.flag0 offset=s.span.start />) />
             }
+            SyntaxStmtKind.IfChain => {
+                return <Result.Ok value=self.pushStmt(s: <Stmt.IfChain conditions=(try self.lowerSyntaxConditionClauses(conditions: s.conditions)) thenBlk=(try self.lowerSyntaxBlock(id: s.block0)) elseBlk=(try self.lowerSyntaxBlock(id: s.block1)) />) />
+            }
             SyntaxStmtKind.If => {
                 mut val elseBlock: U64 = 0U64
                 if s.flag0 { elseBlock = (try self.lowerSyntaxBlock(id: s.block1)) }
@@ -983,6 +1008,9 @@ pub impl Comp {
                     v = (try self.lowerExprWithCtx(e: value, ctxRef: self.cur.lowerRetTy))
                 }
                 result = self.pushStmt(s: <Stmt.Return value=v hasValue=hasValue offset=span.start />)
+            }
+            StmtAst.IfChain(val conditions, val thenBlk, val elseBlk, span: _) => {
+                result = self.pushStmt(s: <Stmt.IfChain conditions=(try self.lowerConditionClauses(conditions: conditions)) thenBlk=(try self.lowerBlock(b: thenBlk)) elseBlk=(try self.lowerBlock(b: elseBlk)) />)
             }
             StmtAst.If(val cond, val thenBlk, val elseBlk, val hasElse, val span) => {
                 val cnd: U64 = (try self.lowerExpr(e: cond))

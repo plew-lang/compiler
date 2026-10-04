@@ -900,6 +900,7 @@ fn midFreezeMatchSourceTag(matchSource: MatchSource) -> U64 {
     match matchSource {
         MatchSource.Statement(stmtId: _) => { return 0U64 }
         MatchSource.Expression(exprId: _) => { return 1U64 }
+        MatchSource.Condition(clauseIndex: _) => { return 2U64 }
     }
 }
 
@@ -907,6 +908,7 @@ fn midFreezeMatchSourceId(matchSource: MatchSource) -> U64 {
     match matchSource {
         MatchSource.Statement(stmtId: val stmtId) => { return stmtId }
         MatchSource.Expression(exprId: val exprId) => { return exprId }
+        MatchSource.Condition(clauseIndex: val index) => { return index }
     }
 }
 
@@ -1032,6 +1034,8 @@ fn midFreezeStatement(arena: inout MidCanonicalArena, statement: MidStatement) {
             match matchSource {
                 MatchSource.Statement(stmtId: val id) => { sourceId = id }
                 MatchSource.Expression(exprId: val id) => { sourceTag = 1U64
+                    sourceId = id }
+                MatchSource.Condition(clauseIndex: val id) => { sourceTag = 2U64
                     sourceId = id }
             }
             arena.statements.append(<MidStatementNode tag=13U64 source=midFreezePlace(arena: inout arena, place: source) enumIndex=enumIndex variantIndex=variantIndex sourceTag=sourceTag sourceStmt=sourceId enumDestinations=<MidRange start=start len=destinations.count() /> />)
@@ -1242,7 +1246,7 @@ pub fn canonicalMidBodyIsWellFormed(arena: MidCanonicalArena, body: MidCanonical
             if statement.source != 0U64 && !midCanonicalPlaceIsWellFormed(arena: arena, place: statement.source) { return false }
             if statement.value != 0U64 && !midCanonicalRvalueIsWellFormed(arena: arena, rvalue: statement.value) { return false }
             if statement.tag == 13U64 {
-                if statement.source == 0U64 || statement.destination != 0U64 || statement.value != 0U64 || statement.sourceTag > 1U64 || !midRangeFits(range: statement.enumDestinations, count: arena.enumDestinations.count()) { return false }
+                if statement.source == 0U64 || statement.destination != 0U64 || statement.value != 0U64 || statement.sourceTag > 2U64 || !midRangeFits(range: statement.enumDestinations, count: arena.enumDestinations.count()) { return false }
                 val source = arena.places[statement.source - 1U64]
                 if source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= node.locals.len { return false }
                 mut val output: U64 = 0U64

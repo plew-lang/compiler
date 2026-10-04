@@ -3271,7 +3271,7 @@ pub impl Comp {
 
     fn finalMatchHash(bodyId: U64, matchSource: MatchSource) -> U64 {
         val modulus: U64 = 4294967291U64
-        val encoded: U64 = match matchSource { MatchSource.Statement(stmtId: val id) => { give id * 2U64 } MatchSource.Expression(exprId: val id) => { give id * 2U64 + 1U64 } }
+        val encoded: U64 = match matchSource { MatchSource.Statement(stmtId: val id) => { give id * 3U64 } MatchSource.Expression(exprId: val id) => { give id * 3U64 + 1U64 } MatchSource.Condition(clauseIndex: val id) => { give id * 3U64 + 2U64 } }
         return (((bodyId % modulus + encoded % modulus) * 65537U64) + 31U64) % modulus
     }
 
@@ -5970,6 +5970,7 @@ pub impl Comp {
             Expr.Block(val body, offset: _) => {
                 try self.scanBlockInsts(blkId: body)
             }
+            Expr.IfChain(val conditions, val thenBlk, val elseBlk) => { try self.scanConditionChain(conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk) }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.scanExprInsts(exprId: cond)
                 try self.scanBlockInsts(blkId: thenBlk)
@@ -6035,6 +6036,13 @@ pub impl Comp {
     // they deliberately recover an abstract field type from the declaration.
     // Mono must use scanAddFinalMatchArmBinds below instead.
     inout fn scanAddArmBinds(a: MatchArm, scrutTi: TypeInfo) -> Result[(), CompileDiagnostic] {
+        return self.scanAddPatternBinds(a: self.patternInfo(arm: a), scrutTi: scrutTi)
+    }
+
+    inout fn scanAddPatternBinds(a: PatInfo, scrutTi: TypeInfo) -> Result[(), CompileDiagnostic] {
+        if a.captureLen != 0U64 {
+            self.addLocal(nameStart: a.captureStart, nameLen: a.captureLen, tyStart: scrutTi.nameStart, tyLen: scrutTi.nameLen, isArray: scrutTi.kind == 3, ty: self.typedIrRefOfInfo(ti: scrutTi), isInout: false, isMut: a.captureMutable, owned: false)
+        }
         if a.isStruct {
             try self.addForStructBinds(et: scrutTi, binds: a.binds)
             return <Result.Ok value=() />
@@ -6076,6 +6084,10 @@ pub impl Comp {
     }
 
     inout fn scanAddFinalMatchArmBinds(a: MatchArm, matchSource: MatchSource, armIndex: U64) -> Result[(), CompileDiagnostic] {
+        return self.scanAddFinalPatternBinds(a: self.patternInfo(arm: a), matchSource: matchSource, armIndex: armIndex)
+    }
+
+    inout fn scanAddFinalPatternBinds(a: PatInfo, matchSource: MatchSource, armIndex: U64) -> Result[(), CompileDiagnostic] {
         mut val bi: U64 = 0
         while bi < a.binds.len {
             val bd: Bind = self.bindAt(binds: a.binds, index: bi)
@@ -6111,6 +6123,30 @@ pub impl Comp {
         val ref: U64 = (try self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: init, term: self.semanticExprTerm(exprId: init), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         val info: TypeInfo = self.typeInfoOfRef(ref: ref)
         return <Result.Ok value=<LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=ref /> />
+    }
+
+    inout fn scanConditionChain(conditions: ConditionClauseRange, thenBlk: U64, elseBlk: U64) -> Result[(), CompileDiagnostic] {
+        val mark = self.scopeMark()
+        mut val index = 0U64
+        while index < conditions.len {
+            val clause = self.conditionClauseAt(conditions: conditions, index: index)
+            try self.scanExprInsts(exprId: clause.value)
+            if clause.isBinding {
+                val source = <MatchSource.Condition clauseIndex=conditions.start + index />
+                try self.finalizeCurrentBodyMatch(matchSource: source)
+                try self.scanAddFinalPatternBinds(a: clause.pattern, matchSource: source, armIndex: 0U64)
+                if clause.pattern.captureLen != 0U64 {
+                    val term = try self.groundTypeRef(ref: self.semanticExprTerm(exprId: clause.value))
+                    val info = self.typeInfoOfRef(ref: term)
+                    self.addLocal(nameStart: clause.pattern.captureStart, nameLen: clause.pattern.captureLen, tyStart: info.nameStart, tyLen: info.nameLen, isArray: info.kind == 3, ty: term, isInout: false, isMut: clause.pattern.captureMutable, owned: false)
+                }
+            }
+            index += 1U64
+        }
+        try self.scanBlockInsts(blkId: thenBlk)
+        self.popLocals(mark: mark)
+        try self.scanBlockInsts(blkId: elseBlk)
+        return <Result.Ok value=() />
     }
 
     inout fn scanStmtInsts(stmtId: U64) -> Result[(), CompileDiagnostic] {
@@ -6161,6 +6197,7 @@ pub impl Comp {
                     try self.finalizeCurrentBodyReturn(exprId: value)
                 }
             }
+            Stmt.IfChain(val conditions, val thenBlk, val elseBlk) => { try self.scanConditionChain(conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk) }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
                 try self.scanExprInsts(exprId: cond)
                 try self.scanBlockInsts(blkId: thenBlk)

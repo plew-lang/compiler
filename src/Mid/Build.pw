@@ -4,7 +4,7 @@ use ../Diag only { CompileDiagnostic }
 // recovering a place by spelling from the AST.
 
 use ../Frontend only { Comp }
-use ../Ir only { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+use ../Ir only { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, ConditionClauseRange, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
 use ../Diag only { eprintU64 }
 use @Std/Io only { eprint }
 use ../Ops only { opAnd, opOr }
@@ -20,6 +20,34 @@ struct MidGiveDestination {
 enum MidBlockResult {
     Forbidden
     Value(destination: MidPlace, abandoned: Array[MidGiveDestination])
+}
+
+// Pattern tests and ownership are shared by match arms and condition clauses.
+// Only their selected continuation differs; failure exits the binding scopes
+// before entering the single, outer-scope else block.
+enum MidPatternContinuation {
+    Arms(arms: MatchArmRange)
+    Condition(conditions: ConditionClauseRange, nextIndex: U64, thenBlk: U64, failureTarget: U64, enclosingScope: U64)
+}
+
+fn midPatternArmCount(continuation: MidPatternContinuation) -> U64 {
+    match continuation {
+        MidPatternContinuation.Arms(val arms) => { return arms.len }
+        MidPatternContinuation.Condition(conditions: _, nextIndex: _, thenBlk: _, failureTarget: _, enclosingScope: _) => { return 2U64 }
+    }
+}
+
+fn buildMidPatternContinuation(c: inout Comp, state: inout MidBuildState, continuation: MidPatternContinuation, armIndex: U64, blockResult: MidBlockResult) -> MidBuildError {
+    match continuation {
+        MidPatternContinuation.Arms(val arms) => { return buildMidBlockInto(c: inout c, state: inout state, blockId: c.matchArmAt(arms: arms, index: armIndex).body, blockResult: blockResult) }
+        MidPatternContinuation.Condition(val conditions, val nextIndex, val thenBlk, val failureTarget, val enclosingScope) => {
+            if armIndex == 0U64 { return buildMidConditionClauses(c: inout c, state: inout state, conditions: conditions, index: nextIndex, thenBlk: thenBlk, failureTarget: failureTarget, enclosingScope: enclosingScope, blockResult: blockResult) }
+            val cleanup = midEmitScopeExitsTo(state: inout state, enclosingScope: enclosingScope)
+            match cleanup { MidBuildError.None => {} _ => { return cleanup } }
+            midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=failureTarget />)
+            return <MidBuildError.None />
+        }
+    }
 }
 
 fn appendMidGiveDestinations(c: inout Comp, state: inout MidBuildState, blockId: U64, destinations: inout Array[MidGiveDestination]) {
@@ -45,6 +73,10 @@ fn midBlockResult(c: inout Comp, state: inout MidBuildState, destination: MidPla
         Expr.Block(body: val body, offset: _) => { appendMidGiveDestinations(c: inout c, state: inout state, blockId: body, destinations: inout destinations) }
         Expr.Sequence(body: val body) => { appendMidGiveDestinations(c: inout c, state: inout state, blockId: body, destinations: inout destinations) }
         Expr.IfExpr(cond: _, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
+            appendMidGiveDestinations(c: inout c, state: inout state, blockId: thenBlk, destinations: inout destinations)
+            appendMidGiveDestinations(c: inout c, state: inout state, blockId: elseBlk, destinations: inout destinations)
+        }
+        Expr.IfChain(conditions: _, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
             appendMidGiveDestinations(c: inout c, state: inout state, blockId: thenBlk, destinations: inout destinations)
             appendMidGiveDestinations(c: inout c, state: inout state, blockId: elseBlk, destinations: inout destinations)
         }
@@ -821,11 +853,11 @@ fn midEmitAllScopeExits(state: inout MidBuildState) {
     }
 }
 
-// Leave all active lexical scopes strictly inside a loop's enclosing scope.
+// Leave all active lexical scopes strictly inside the selected enclosing scope.
 // The enclosing function/block scope itself remains live after either break or
 // continue.  The builder records only the boundary marker; drop elaboration
 // decides whether it becomes Drop or ConditionalDrop.
-fn midEmitLoopScopeExits(state: inout MidBuildState, enclosingScope: U64) -> MidBuildError {
+fn midEmitScopeExitsTo(state: inout MidBuildState, enclosingScope: U64) -> MidBuildError {
     mut val scope: U64 = state.currentScope
     while scope != enclosingScope {
         if scope >= state.scopes.count() { return <MidBuildError.InvalidBlock /> }
@@ -842,7 +874,7 @@ fn buildMidLoopExit(state: inout MidBuildState, isContinue: Bool) -> MidBuildErr
         if isContinue { return <MidBuildError.UnsupportedContinue /> }
         return <MidBuildError.UnsupportedBreak />
     }
-    val cleanup: MidBuildError = midEmitLoopScopeExits(state: inout state, enclosingScope: state.currentLoopEnclosingScope())
+    val cleanup: MidBuildError = midEmitScopeExitsTo(state: inout state, enclosingScope: state.currentLoopEnclosingScope())
     match cleanup { MidBuildError.None => {} _ => { return cleanup } }
     if isContinue {
         midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=state.currentLoopContinueTarget() />)
@@ -918,6 +950,7 @@ fn midUnsupportedOperandForExpr(expressions: Array[Expr], exprId: U64) -> MidUns
         Expr.Block(body: _, offset: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
         Expr.Sequence(body: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
         Expr.IfExpr(cond: _, thenBlk: _, elseBlk: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
+        Expr.IfChain(conditions: _, thenBlk: _, elseBlk: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
         Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return <MidUnsupportedBuild.UnloweredReference /> }
         Expr.Deref(base: _) => { return <MidUnsupportedBuild.UnloweredReference /> }
         Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => { return <MidUnsupportedBuild.UnloweredClosure /> }
@@ -1550,10 +1583,16 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
                 _ => { return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> error=lowered /> }
             }
         }
+        Expr.IfChain(conditions: val conditions, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
+            val resultLocal = addMidTemporary(state: inout state, typeTerm: typeTerm)
+            val resultPlace = <MidPlace local=resultLocal typeTerm=typeTerm />
+            val error = buildMidConditionChain(c: inout c, state: inout state, conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk, blockResult: midBlockResult(c: inout c, state: inout state, destination: resultPlace, exprId: exprId))
+            return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> error=error />
+        }
         Expr.MatchExpr(scrut: val scrut, arms: val arms) => {
             val resultLocal: U64 = addMidTemporary(state: inout state, typeTerm: typeTerm)
             val resultPlace: MidPlace = <MidPlace local=resultLocal typeTerm=typeTerm />
-            val lowered: MidBuildError = buildMidPatternMatch(c: inout c, state: inout state, matchSource: <MatchSource.Expression exprId=exprId />, scrut: scrut, sourceArms: arms, blockResult: midBlockResult(c: inout c, state: inout state, destination: resultPlace, exprId: exprId), traceId: exprId)
+            val lowered: MidBuildError = buildMidPatternMatch(c: inout c, state: inout state, matchSource: <MatchSource.Expression exprId=exprId />, scrut: scrut, continuation: <MidPatternContinuation.Arms arms=arms />, blockResult: midBlockResult(c: inout c, state: inout state, destination: resultPlace, exprId: exprId), traceId: exprId)
             match lowered {
                 MidBuildError.None => { return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> /> }
                 _ => { return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> error=lowered /> }
@@ -2335,6 +2374,9 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
             Stmt.If(cond: _, thenBlk: _, elseBlk: _, hasElse: _) => {
                 result = buildMidIf(c: inout c, state: inout state, stmtId: stmtId)
             }
+            Stmt.IfChain(conditions: val conditions, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
+                result = buildMidConditionChain(c: inout c, state: inout state, conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk, blockResult: <MidBlockResult.Forbidden />)
+            }
             Stmt.Return(value: _, hasValue: _, offset: _) => {
                 val evaluation: U64 = midOpenScope(state: inout state)
                 result = buildMidReturn(c: inout c, state: inout state, stmtId: stmtId)
@@ -2457,14 +2499,22 @@ fn traceMidUnsupportedMatch(c: Comp, state: MidBuildState, stmtId: U64, reason: 
 // A struct pattern is irrefutable. Bind the first arm in the current CFG;
 // Bound fields are independent values: the original aggregate may be
 // overwritten inside the arm. Ordinary Copy/Drop owns those snapshots.
-fn buildMidIrrefutablePattern(c: inout Comp, state: inout MidBuildState, semantic: SemanticMatch, sourceArms: MatchArmRange, scrutinee: MidPlace, hasScrutineeScope: Bool, scrutineeScope: U64, blockResult: MidBlockResult) -> MidBuildError {
-    if semantic.arms.count() == 0U64 || sourceArms.len == 0U64 { return <MidBuildError.UnsupportedMatch /> }
+fn buildMidIrrefutablePattern(c: inout Comp, state: inout MidBuildState, semantic: SemanticMatch, continuation: MidPatternContinuation, scrutinee: MidPlace, hasScrutineeScope: Bool, scrutineeScope: U64, blockResult: MidBlockResult) -> MidBuildError {
+    if semantic.arms.count() == 0U64 || midPatternArmCount(continuation: continuation) == 0U64 { return <MidBuildError.UnsupportedMatch /> }
     val bindingMark: U64 = state.bindings.count()
     val armScope: U64 = midOpenScope(state: inout state)
     val arm: SemanticMatchArm = semantic.arms[0U64]
     match semantic.kind {
         SemanticMatchKind.Wildcard => {
-            if semantic.isConsuming { midAppendStatement(state: inout state, statement: <MidStatement.Drop place=scrutinee />) }
+            if arm.hasCapture {
+                val captured = midBindingNeedsCaptureCell(closures: c.decls.semanticClosures, sourceFunction: state.sourceFunction, bindingTarget: arm.captureTarget)
+                val local = addMidLocal(state: inout state, declarationTarget: arm.captureTarget, typeTerm: semantic.scrutineeTerm, isUnique: midTermIsUnique(c: inout c, term: semantic.scrutineeTerm), isParameter: false, ownsAtEntry: false, isBorrowed: false, isCaptureCell: captured)
+                val operand = if semantic.isConsuming { give <MidOperand.Move place=scrutinee /> } else { give <MidOperand.Copy place=scrutinee /> }
+                val destination = <MidPlace local=local typeTerm=semantic.scrutineeTerm />
+                val value = <MidRvalue.Use operand=operand />
+                if captured { midAppendStatement(state: inout state, statement: <MidStatement.InitializeCaptureCell destination=destination value=value />) }
+                else { midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=value />) }
+            } else if semantic.isConsuming { midAppendStatement(state: inout state, statement: <MidStatement.Drop place=scrutinee />) }
         }
         _ => {}
     }
@@ -2478,7 +2528,7 @@ fn buildMidIrrefutablePattern(c: inout Comp, state: inout MidBuildState, semanti
         midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=<MidPlace local=local typeTerm=payload.fieldTerm /> value=<MidRvalue.Use operand=<MidOperand.Copy place=field /> /> />)
         payloadIndex += 1U64
     }
-    val result: MidBuildError = buildMidBlockInto(c: inout c, state: inout state, blockId: c.matchArmAt(arms: sourceArms, index: 0U64).body, blockResult: blockResult)
+    val result: MidBuildError = buildMidPatternContinuation(c: inout c, state: inout state, continuation: continuation, armIndex: 0U64, blockResult: blockResult)
     if midCurrentBlockIsOpen(state: state) {
         midEmitScopeExit(state: inout state, scope: armScope)
         if hasScrutineeScope { midEmitScopeExit(state: inout state, scope: scrutineeScope) }
@@ -2521,7 +2571,7 @@ fn buildMidConsumingEnumArm(c: inout Comp, state: inout MidBuildState, semantic:
     }
 }
 
-fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: MatchSource, scrut: U64, sourceArms: MatchArmRange, blockResult: MidBlockResult, traceId: U64) -> MidBuildError {
+fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: MatchSource, scrut: U64, continuation: MidPatternContinuation, blockResult: MidBlockResult, traceId: U64) -> MidBuildError {
             val semanticIndex: U64 = (match c.semanticMatchIndex(ownerFnIdx: state.sourceFunction, matchSource: matchSource) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return <MidBuildError.Frontend diagnostic=diagnostic /> } })
             mut val subjectTerm = c.semanticExprTerm(exprId: scrut)
             if semanticIndex < c.decls.semanticMatches.count() {
@@ -2574,7 +2624,7 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                 return <MidBuildError.UnsupportedMatch />
             }
             val semantic = c.decls.semanticMatches[semanticIndex]
-            if semantic.arms.count() != sourceArms.len {
+            if semantic.arms.count() != midPatternArmCount(continuation: continuation) {
                 traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "arm-count")
                 return <MidBuildError.UnsupportedMatch />
             }
@@ -2586,13 +2636,13 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
             match semantic.kind {
                 SemanticMatchKind.Enum(enumIndex: val selected) => { enumIndex = selected }
                 SemanticMatchKind.Wildcard => {
-                    return buildMidIrrefutablePattern(c: inout c, state: inout state, semantic: semantic, sourceArms: sourceArms, scrutinee: scrutinee.place, hasScrutineeScope: hasScrutineeScope, scrutineeScope: scrutineeScope, blockResult: blockResult)
+                    return buildMidIrrefutablePattern(c: inout c, state: inout state, semantic: semantic, continuation: continuation, scrutinee: scrutinee.place, hasScrutineeScope: hasScrutineeScope, scrutineeScope: scrutineeScope, blockResult: blockResult)
                 }
                 SemanticMatchKind.Struct(layoutTerm: _) => {
-                    return buildMidIrrefutablePattern(c: inout c, state: inout state, semantic: semantic, sourceArms: sourceArms, scrutinee: scrutinee.place, hasScrutineeScope: hasScrutineeScope, scrutineeScope: scrutineeScope, blockResult: blockResult)
+                    return buildMidIrrefutablePattern(c: inout c, state: inout state, semantic: semantic, continuation: continuation, scrutinee: scrutinee.place, hasScrutineeScope: hasScrutineeScope, scrutineeScope: scrutineeScope, blockResult: blockResult)
                 }
             }
-            if sourceArms.len == 0U64 {
+            if midPatternArmCount(continuation: continuation) == 0U64 {
                 // The frontend proves exhaustiveness for the selected enum.
                 // Preserve scrutinee evaluation above, then terminate this path.
                 if c.arena.enumAt(index: enumIndex).variants.count() != 0U64 { return <MidBuildError.UnsupportedMatch /> }
@@ -2677,8 +2727,7 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                     }
                     payloadIndex += 1U64
                 }
-                val sourceArm = c.matchArmAt(arms: sourceArms, index: armIndex)
-                val armResult: MidBuildError = buildMidBlockInto(c: inout c, state: inout state, blockId: sourceArm.body, blockResult: blockResult)
+                val armResult: MidBuildError = buildMidPatternContinuation(c: inout c, state: inout state, continuation: continuation, armIndex: armIndex, blockResult: blockResult)
                 match armResult { MidBuildError.None => {} _ => { return armResult } }
                 if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
                     midEmitScopeExit(state: inout state, scope: armScope)
@@ -2705,9 +2754,54 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
 pub fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
-        Stmt.Match(scrut: val scrut, arms: val arms) => { return buildMidPatternMatch(c: inout c, state: inout state, matchSource: <MatchSource.Statement stmtId=stmtId />, scrut: scrut, sourceArms: arms, blockResult: <MidBlockResult.Forbidden />, traceId: stmtId) }
+        Stmt.Match(scrut: val scrut, arms: val arms) => { return buildMidPatternMatch(c: inout c, state: inout state, matchSource: <MatchSource.Statement stmtId=stmtId />, scrut: scrut, continuation: <MidPatternContinuation.Arms arms=arms />, blockResult: <MidBlockResult.Forbidden />, traceId: stmtId) }
         _ => { return <MidBuildError.InvalidStatement /> }
     }
+}
+
+fn buildMidConditionClauses(c: inout Comp, state: inout MidBuildState, conditions: ConditionClauseRange, index: U64, thenBlk: U64, failureTarget: U64, enclosingScope: U64, blockResult: MidBlockResult) -> MidBuildError {
+    if index == conditions.len { return buildMidBlockInto(c: inout c, state: inout state, blockId: thenBlk, blockResult: blockResult) }
+    val clause = c.conditionClauseAt(conditions: conditions, index: index)
+    if clause.isBinding {
+        return buildMidPatternMatch(c: inout c, state: inout state, matchSource: <MatchSource.Condition clauseIndex=conditions.start + index />, scrut: clause.value, continuation: <MidPatternContinuation.Condition conditions=conditions nextIndex=index + 1U64 thenBlk=thenBlk failureTarget=failureTarget enclosingScope=enclosingScope />, blockResult: blockResult, traceId: clause.value)
+    }
+    val condition = materializeMidCondition(c: inout c, state: inout state, exprId: clause.value)
+    match condition.error { MidBuildError.None => {} _ => { return condition.error } }
+    if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
+    val success = midNewBlock(state: inout state)
+    val failure = midNewBlock(state: inout state)
+    midSetTerminator(state: inout state, terminator: <MidTerminator.Switch discriminant=condition.operand values=[1I64] targets=[success] otherwise=failure />)
+    state.currentBlock = failure
+    val cleanup = midEmitScopeExitsTo(state: inout state, enclosingScope: enclosingScope)
+    match cleanup { MidBuildError.None => {} _ => { return cleanup } }
+    midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=failureTarget />)
+    state.currentBlock = success
+    return buildMidConditionClauses(c: inout c, state: inout state, conditions: conditions, index: index + 1U64, thenBlk: thenBlk, failureTarget: failureTarget, enclosingScope: enclosingScope, blockResult: blockResult)
+}
+
+fn buildMidConditionChain(c: inout Comp, state: inout MidBuildState, conditions: ConditionClauseRange, thenBlk: U64, elseBlk: U64, blockResult: MidBlockResult) -> MidBuildError {
+    val enclosingScope = state.currentScope
+    val bindingMark = state.bindings.count()
+    val failureTarget = midNewBlock(state: inout state)
+    val joinTarget = midNewBlock(state: inout state)
+    val chainScope = midOpenScope(state: inout state)
+    val result = buildMidConditionClauses(c: inout c, state: inout state, conditions: conditions, index: 0U64, thenBlk: thenBlk, failureTarget: failureTarget, enclosingScope: enclosingScope, blockResult: blockResult)
+    match result { MidBuildError.None => {} _ => { return result } }
+    if midCurrentBlockIsOpen(state: state) {
+        midEmitScopeExit(state: inout state, scope: chainScope)
+        midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
+    }
+    midCloseScope(state: inout state, scope: chainScope)
+    state.bindings.truncate(count: bindingMark)
+    state.currentBlock = failureTarget
+    if midBlockHasIncoming(state: state, target: failureTarget) {
+        val failureResult = buildMidBlockInto(c: inout c, state: inout state, blockId: elseBlk, blockResult: blockResult)
+        match failureResult { MidBuildError.None => {} _ => { return failureResult } }
+        if midCurrentBlockIsOpen(state: state) { midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />) }
+    } else { midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />) }
+    state.currentBlock = joinTarget
+    if !midBlockHasIncoming(state: state, target: joinTarget) { midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />) }
+    return <MidBuildError.None />
 }
 
 // Statement and value-position `if` have the same CFG: the only distinction

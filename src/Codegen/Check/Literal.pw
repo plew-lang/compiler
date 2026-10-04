@@ -274,7 +274,7 @@ pub impl Comp {
                 val value = self.blockGiveExpr(blkId: body)
                 if value < self.arena.exprs.count() { try self.checkLitCtx(id: value, eKind: eKind, eBits: eBits, eSgn: eSgn) }
             }
-            Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
+            Expr.IfChain(conditions: _, val thenBlk, val elseBlk) | Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
                 // a value-position `if`'s result is its branches' `give` values, so the
                 // surrounding context flows to each give (an else-if chain recurses here
                 // via the nested IfExpr give). The condition is self-typed (Bool).

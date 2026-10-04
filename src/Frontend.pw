@@ -1,3 +1,5 @@
+use ./Ir only { ConditionClause, ConditionClauseRange }
+use @Plew/Syntax only { CondClause, syntaxConditionClause }
 use ./SourceCompletion only { SourceCompletion, BlockResultContext, completionThen, completionChoice }
 use ./PublicSurfaceIndex only { PublicSurfaceIndex }
 use ./Ir only { PatternBindingType, AssociatedBoundEvidence, TraitConstraintRange, SupertraitRef, TraitProofOrigin, DeclarationBoundRef, TraitBound, TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
@@ -377,6 +379,17 @@ pub impl Comp {
         return self.arena.bindPool[binds.start + index]
     }
 
+    fn patternInfo(arm: MatchArm) -> PatInfo {
+        return <PatInfo captureStart=arm.captureStart captureLen=arm.captureLen captureMutable=arm.captureMutable isWildcard=arm.isWildcard enumStart=arm.enumStart enumLen=arm.enumLen variantStart=arm.variantStart variantLen=arm.variantLen binds=arm.binds isStruct=arm.isStruct />
+    }
+    inout fn pushConditionClauses(conditions: Array[ConditionClause]) -> ConditionClauseRange {
+        val start = self.arena.conditionClausePool.count()
+        for val condition in conditions { self.arena.conditionClausePool.append(condition) }
+        return <ConditionClauseRange start=start len=conditions.count() />
+    }
+    fn conditionClauseAt(conditions: ConditionClauseRange, index: U64) -> ConditionClause {
+        return self.arena.conditionClausePool[conditions.start + index]
+    }
     inout fn pushMatchArms(arms: Array[MatchArm]) -> MatchArmRange {
         val start: U64 = self.arena.matchArmPool.count()
         mut val i: U64 = 0U64
@@ -2137,7 +2150,7 @@ fn scalarInfo() -> TypeInfo {
 // A reliable source offset for a match-arm diagnostic: a bind's original-source
 // offset (set by lowerBinds) if present, else the (possibly re-interned) pattern
 // type-name offset as a fallback.
-fn armDiagOffset(c: inout Comp, a: MatchArm) -> U64 {
+fn patternDiagOffset(c: inout Comp, a: PatInfo) -> U64 {
     if a.binds.len > 0U64 {
         val bind: Bind = c.bindAt(binds: a.binds, index: 0U64)
         if bind.offset > 0U64 {

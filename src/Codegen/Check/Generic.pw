@@ -8,6 +8,21 @@
 // via the receiver, so the capability check uses traitProvidesMember.
 
 pub impl Comp {
+    inout fn checkBoundsConditionChain(conditions: ConditionClauseRange, thenBlk: U64, elseBlk: U64) -> Result[(), CompileDiagnostic] {
+        val mark = self.scopeMark()
+        mut val index = 0U64
+        while index < conditions.len {
+            val clause = self.conditionClauseAt(conditions: conditions, index: index)
+            try self.checkBoundsExpr(exprId: clause.value)
+            if clause.isBinding { try self.scanAddPatternBinds(a: clause.pattern, scrutTi: (try self.typeOf(id: clause.value))) }
+            index += 1U64
+        }
+        try self.checkBoundsBlock(blkId: thenBlk)
+        self.popLocals(mark: mark)
+        try self.checkBoundsBlock(blkId: elseBlk)
+        return <Result.Ok value=() />
+    }
+
     // The `Item` spelling in a provided trait body is not a nominal type. It
     // denotes the selected trait's associated output on abstract `Self`. Keep
     // that fact as a projection term during declaration checking, so a nested
@@ -640,6 +655,7 @@ pub impl Comp {
             Expr.Block(val body, offset: _) => {
                 try self.checkBoundsBlock(blkId: body)
             }
+            Expr.IfChain(val conditions, val thenBlk, val elseBlk) => { try self.checkBoundsConditionChain(conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk) }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.checkBoundsExpr(exprId: cond)
                 try self.checkBoundsBlock(blkId: thenBlk)
@@ -955,6 +971,7 @@ pub impl Comp {
                     }
                 }
             }
+            Stmt.IfChain(val conditions, val thenBlk, val elseBlk) => { try self.checkBoundsConditionChain(conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk) }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
                 try self.checkBoundsExpr(exprId: cond)
                 try self.checkBoundsBlock(blkId: thenBlk)

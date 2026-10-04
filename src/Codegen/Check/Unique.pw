@@ -306,6 +306,14 @@ pub impl Comp {
             Expr.Block(val body, offset: _) => {
                 return self.blockContainsAwait(blockId: body)
             }
+            Expr.IfChain(val conditions, val thenBlk, val elseBlk) => {
+                mut val index = 0U64
+                while index < conditions.len {
+                    if self.exprContainsAwait(exprId: self.conditionClauseAt(conditions: conditions, index: index).value) { return true }
+                    index += 1U64
+                }
+                return self.blockContainsAwait(blockId: thenBlk) || self.blockContainsAwait(blockId: elseBlk)
+            }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 if self.exprContainsAwait(exprId: cond) { return true }
                 if self.blockContainsAwait(blockId: thenBlk) { return true }
@@ -358,6 +366,14 @@ pub impl Comp {
             Stmt.Return(val value, val hasValue, offset: _) => {
                 if hasValue { return self.exprContainsAwait(exprId: value) }
                 return false
+            }
+            Stmt.IfChain(val conditions, val thenBlk, val elseBlk) => {
+                mut val index = 0U64
+                while index < conditions.len {
+                    if self.exprContainsAwait(exprId: self.conditionClauseAt(conditions: conditions, index: index).value) { return true }
+                    index += 1U64
+                }
+                return self.blockContainsAwait(blockId: thenBlk) || self.blockContainsAwait(blockId: elseBlk)
             }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
                 if self.exprContainsAwait(exprId: cond) { return true }

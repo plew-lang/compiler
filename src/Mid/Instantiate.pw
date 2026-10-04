@@ -374,6 +374,7 @@ fn instantiateCanonicalCastBoundary(c: inout Comp, bodyId: U64, rvalueId: U64, e
 
 fn canonicalMatchSource(sourceTag: U64, sourceId: U64) -> MatchSource {
     if sourceTag == 0U64 { return <MatchSource.Statement stmtId=sourceId /> }
+    if sourceTag == 2U64 { return <MatchSource.Condition clauseIndex=sourceId /> }
     return <MatchSource.Expression exprId=sourceId />
 }
 
@@ -413,7 +414,7 @@ fn instantiateCanonicalEnumMatchRvalue(c: inout Comp, rvalueId: U64, environment
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
     val source = c.mid.rvalues[rvalueId - 1U64]
     if source.tag < 11U64 || source.tag > 15U64 || source.place == 0U64 || source.place > c.mid.places.count() { return 0U64 }
-    if source.sourceTag > 1U64 {
+    if source.sourceTag > 2U64 {
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
         return 0U64
     }
@@ -619,7 +620,7 @@ fn traceMidInstantiationRvalue(c: Comp, sourceFunction: U64, rvalueId: U64) {
 
 fn instantiateCanonicalEnumDestructure(c: inout Comp, source: MidStatementNode, environment: BodyInstance, bodyId: U64, error: inout MidInstantiateError) -> Bool {
     val matchIndex = c.finalMatchIndex(bodyId: bodyId, matchSource: canonicalMatchSource(sourceTag: source.sourceTag, sourceId: source.sourceStmt))
-    if source.sourceTag > 1U64 || matchIndex >= c.arena.finalMatches.count() {
+    if source.sourceTag > 2U64 || matchIndex >= c.arena.finalMatches.count() {
         error = <MidInstantiateError.MissingFinalResolution />
         return false
     }

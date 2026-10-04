@@ -506,7 +506,7 @@ fn verifyCanonicalMidFlagInitialization(arena: MidCanonicalArena, canonical: Mid
 fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: MidStatementNode, states: inout MidOwnershipStates, block: U64, stage: MidVerificationStage) -> MidVerification {
     val executable = stage.isExecutable()
     val invalid = <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block />
-    if statement.source == 0U64 || statement.source > c.mid.places.count() || statement.sourceTag > 1U64 || statement.enumDestinations.start > c.mid.enumDestinations.count() || statement.enumDestinations.len > c.mid.enumDestinations.count() - statement.enumDestinations.start { return invalid }
+    if statement.source == 0U64 || statement.source > c.mid.places.count() || statement.sourceTag > 2U64 || statement.enumDestinations.start > c.mid.enumDestinations.count() || statement.enumDestinations.len > c.mid.enumDestinations.count() - statement.enumDestinations.start { return invalid }
     val source = c.mid.places[statement.source - 1U64]
     if source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || source.local >= body.locals.len { return invalid }
     val owner = c.mid.locals[body.locals.start + source.local]
@@ -514,6 +514,7 @@ fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: M
     match states[source.local] { MidOwnership.Owned => {} _ => { return invalid } }
     mut val key: MatchSource = <MatchSource.Statement stmtId=statement.sourceStmt />
     if statement.sourceTag == 1U64 { key = <MatchSource.Expression exprId=statement.sourceStmt /> }
+    if statement.sourceTag == 2U64 { key = <MatchSource.Condition clauseIndex=statement.sourceStmt /> }
     mut val finalPayloadStart = 0U64
     mut val symbolicPayloads: Array[SemanticMatchPayload] = []
     if stage.isDeclaration() {

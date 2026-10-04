@@ -1,6 +1,18 @@
 // Normal continuation and loop escape are shared source-flow facts.
 
 pub impl Comp {
+    inout fn conditionChainCompletion(conditions: ConditionClauseRange, thenBlk: U64, elseBlk: U64) -> SourceCompletion {
+        mut val flow = self.blockCompletion(blkId: thenBlk)
+        val failure = self.blockCompletion(blkId: elseBlk)
+        mut val index = conditions.len
+        while index > 0U64 {
+            index -= 1U64
+            val clause = self.conditionClauseAt(conditions: conditions, index: index)
+            flow = completionThen(prefix: self.exprCompletion(exprId: clause.value), next: completionChoice(first: flow, second: failure))
+        }
+        return flow
+    }
+
     inout fn blockCompletesNormally(blkId: U64) -> Bool {
         return self.blockCompletion(blkId: blkId).normal
     }
@@ -13,7 +25,7 @@ pub impl Comp {
     // boundary. Their source statements are still checked by the lexical walk.
     inout fn valueControlHasNoResult(exprId: U64) -> Bool {
         match self.arena.exprs[exprId] {
-            Expr.Block(body: _, offset: _) | Expr.Sequence(body: _) | Expr.IfExpr(cond: _, thenBlk: _, elseBlk: _) | Expr.MatchExpr(scrut: _, arms: _) => { return !self.exprCompletesNormally(exprId: exprId) }
+            Expr.IfChain(conditions: _, thenBlk: _, elseBlk: _) | Expr.Block(body: _, offset: _) | Expr.Sequence(body: _) | Expr.IfExpr(cond: _, thenBlk: _, elseBlk: _) | Expr.MatchExpr(scrut: _, arms: _) => { return !self.exprCompletesNormally(exprId: exprId) }
             _ => { return false }
         }
     }
@@ -52,6 +64,9 @@ pub impl Comp {
         if exprId >= self.arena.exprs.count() { return <SourceCompletion /> }
         match self.arena.exprs[exprId] {
             Expr.Block(val body, offset: _) | Expr.Sequence(val body) => { return self.blockCompletion(blkId: body) }
+            Expr.IfChain(val conditions, val thenBlk, val elseBlk) => {
+                return self.conditionChainCompletion(conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk)
+            }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 val condition = self.exprCompletion(exprId: cond)
                 if !condition.normal { return condition }
@@ -117,6 +132,9 @@ pub impl Comp {
             Stmt.Panic(val msg, offset: _) => { return completionThen(prefix: self.exprCompletion(exprId: msg), next: <SourceCompletion normal=false />) }
             Stmt.Break(offset: _) => { return <SourceCompletion normal=false breaks=true /> }
             Stmt.Continue(offset: _) => { return <SourceCompletion normal=false /> }
+            Stmt.IfChain(val conditions, val thenBlk, val elseBlk) => {
+                return self.conditionChainCompletion(conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk)
+            }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
                 val condition = self.exprCompletion(exprId: cond)
                 if !condition.normal { return condition }

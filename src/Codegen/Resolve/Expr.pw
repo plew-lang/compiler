@@ -1554,7 +1554,7 @@ pub impl Comp {
                 try self.recordBlockExpectedResult(blkId: body, expectedTerm: expectedTerm)
                 self.recordValueBlockResult(exprId: exprId, blockId: body)
             }
-            Expr.IfExpr(cond: _, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
+            Expr.IfChain(conditions: _, val thenBlk, val elseBlk) | Expr.IfExpr(cond: _, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
                 try self.recordBlockExpectedResult(blkId: thenBlk, expectedTerm: expectedTerm)
                 try self.recordBlockExpectedResult(blkId: elseBlk, expectedTerm: expectedTerm)
                 if !self.recordValueBlockResult(exprId: exprId, blockId: thenBlk) {

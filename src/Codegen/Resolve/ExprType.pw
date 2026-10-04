@@ -1317,7 +1317,7 @@ pub impl Comp {
                     Optional.None => { return <Result.Ok value=scalarInfo() /> }
                 }
             }
-            Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
+            Expr.IfChain(conditions: _, val thenBlk, val elseBlk) | Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
                 val recorded = self.semanticExprTerm(exprId: id)
                 if recorded != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: recorded) /> }
                 match (try self.valueBlockTypeInfo(blockId: thenBlk, chainHoleRef: chainHoleRef)) {

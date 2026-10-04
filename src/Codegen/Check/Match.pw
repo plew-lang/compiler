@@ -7,6 +7,10 @@
 
 pub impl Comp {
     inout fn checkArmBinds(a: MatchArm) -> Result[(), CompileDiagnostic] {
+        return self.checkPatternBinds(a: self.patternInfo(arm: a))
+    }
+
+    inout fn checkPatternBinds(a: PatInfo) -> Result[(), CompileDiagnostic] {
         if a.isWildcard {
             return <Result.Ok value=() />
         }

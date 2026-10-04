@@ -246,6 +246,10 @@ pub impl Comp {
                 return 0U64
             }
             Expr.Block(body: _, val offset) => { return offset }
+            Expr.IfChain(val conditions, thenBlk: _, elseBlk: _) => {
+                if conditions.len > 0U64 { return self.exprOffset(id: self.conditionClauseAt(conditions: conditions, index: 0U64).value) }
+                return 0U64
+            }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => { return self.exprOffset(id: cond) }
             Expr.OptChain(val base, cont: _) => { return self.exprOffset(id: base) }
             Expr.ChainHole => { return 0 }
