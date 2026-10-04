@@ -1,0 +1,15 @@
+use @Std/Io only { print }
+fn main() {
+    val point = (x: 3I64, y: 7I64)
+    val sum = match point { (x: val left, y: val right) => left + right }
+    print(sum)
+    val changed = match point {
+        (mut val x, y: _) => {
+            x += 1I64
+            give x
+        }
+    }
+    print(changed)
+    print(point.x)
+    if (x: val left, y: val right) = point { print(left + right) }
+}

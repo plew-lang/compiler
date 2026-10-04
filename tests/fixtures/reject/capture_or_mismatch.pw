@@ -1,0 +1,1 @@
+fn main() { match 1I64 { mut val x | val x => {} } }

@@ -50,14 +50,14 @@ pub impl Comp {
                 try self.scanAddArmBinds(a: arm, scrutTi: subject)
                 mut val bindings: Array[PatternBindingType] = []
                 if arm.captureLen != 0U64 {
-                    bindings.append(<PatternBindingType nameId=intern(c: inout self, start: arm.captureStart, len: arm.captureLen) term=self.typedIrRefOfInfo(ti: subject) />)
+                    bindings.append(<PatternBindingType nameId=intern(c: inout self, start: arm.captureStart, len: arm.captureLen) term=self.typedIrRefOfInfo(ti: subject) isMutable=arm.captureMutable />)
                 }
                 mut val bindingIndex = 0U64
                 while bindingIndex < arm.binds.len {
                     val binding = self.bindAt(binds: arm.binds, index: bindingIndex)
                     if binding.nameLen != 0U64 {
                         val local = try self.typedLocal(index: self.localIndexByName(start: binding.nameStart, len: binding.nameLen))
-                        bindings.append(<PatternBindingType nameId=intern(c: inout self, start: binding.nameStart, len: binding.nameLen) term=local.ty />)
+                        bindings.append(<PatternBindingType nameId=intern(c: inout self, start: binding.nameStart, len: binding.nameLen) term=local.ty isMutable=binding.isMutable />)
                     }
                     bindingIndex += 1U64
                 }
@@ -67,14 +67,14 @@ pub impl Comp {
                     expected = bindings
                 } else {
                     if expected.count() != bindings.count() {
-                        return <Result.Err error=self.diagnosticAt(offset: arm.orGroup - 1U64, msg: "or-pattern alternatives must bind the same names and types (spec/11)") />
+                        return <Result.Err error=self.diagnosticAt(offset: arm.orGroup - 1U64, msg: "or-pattern alternatives must bind the same names and types, with matching mutability (spec/11)") />
                     }
                     for val wanted in expected {
                         mut val found = false
                         for val actual in bindings {
-                            if wanted.nameId == actual.nameId && self.typeRefEq(a: wanted.term, b: actual.term) { found = true }
+                            if wanted.nameId == actual.nameId && wanted.isMutable == actual.isMutable && self.typeRefEq(a: wanted.term, b: actual.term) { found = true }
                         }
-                        if !found { return <Result.Err error=self.diagnosticAt(offset: arm.orGroup - 1U64, msg: "or-pattern alternatives must bind the same names and types (spec/11)") /> }
+                        if !found { return <Result.Err error=self.diagnosticAt(offset: arm.orGroup - 1U64, msg: "or-pattern alternatives must bind the same names and types, with matching mutability (spec/11)") /> }
                     }
                 }
             }

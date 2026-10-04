@@ -1993,7 +1993,7 @@ fn matchHasEnumOrStruct(arms: Array[MatchArmAst]) -> Bool {
         val p: PatternAst = arms[i].pattern
         if !p.isWildcard || p.captureName.bytes().count() > 0U64 { onlyDiscards = false }
         if !(p.isWildcard) {
-            if !(p.isLiteral) {
+            if !(p.isValuePattern) {
                 return true
             }
         }
@@ -2014,7 +2014,7 @@ fn litArmsAreBoolExhaustive(arms: Array[MatchArmAst]) -> Bool {
         if p.isWildcard {
             return false
         }
-        if p.isLiteral {
+        if p.isValuePattern {
             match p.lit {
                 ExprAst.IntLit(val value, val isBool, tySuffix: _, literalSpan: _, tySuffixSpan: _, span: _) => {
                     if isBool {
@@ -2036,16 +2036,6 @@ fn litArmsAreBoolExhaustive(arms: Array[MatchArmAst]) -> Bool {
         i += 1
     }
     return sawTrue && sawFalse
-}
-
-fn armGiveExprAst(arm: MatchArmAst) -> ExprAst {
-    if arm.body.stmts.count() > 0 {
-        match arm.body.stmts[0] {
-            StmtAst.Give(val value, val span) => { return value }
-            _ => {}
-        }
-    }
-    return emptyExpr()
 }
 
 fn matchHasCapture(arms: Array[MatchArmAst]) -> Bool {

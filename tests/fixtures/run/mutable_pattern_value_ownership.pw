@@ -1,0 +1,21 @@
+use @Std/Io only { print }
+enum Box { Items(values: Array[I64]) }
+fn main() {
+    val item = <Box.Items values=[3I64] />
+    val changed = match item {
+        Box.Items(mut val values) => {
+            values[0] = 7I64
+            give values[0]
+        }
+    }
+    print(changed)
+    print(match item { Box.Items(val values) => values[0] })
+    val record = (values: [11I64])
+    print(match record {
+        (mut val values) => {
+            values[0] = 13I64
+            give values[0]
+        }
+    })
+    print(record.values[0])
+}

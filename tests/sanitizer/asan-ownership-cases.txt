@@ -62,3 +62,5 @@ tests/fixtures/run/interpolation_options_return.pw
 tests/fixtures/run/block_abandoned_result.pw
 tests/fixtures/run/block_abandoned_typed_value.pw
 tests/fixtures/run/block_unary_divergence.pw
+tests/fixtures/run/mutable_pattern_value_ownership.pw
+tests/fixtures/run/match_single_arm_body.pw

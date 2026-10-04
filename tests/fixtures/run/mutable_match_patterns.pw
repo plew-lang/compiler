@@ -1,0 +1,28 @@
+use @Std/Io only { print }
+enum Counter { Value(count: I64) }
+fn main() {
+    val original = 3I64
+    val changed = match original {
+        mut val value => {
+            value += 2I64
+            give value
+        }
+    }
+    print(changed)
+    print(original)
+    val item = <Counter.Value count=7I64 />
+    val first = match item {
+        Counter.Value(mut val count) => {
+            count += 1I64
+            give count
+        }
+    }
+    val second = match item {
+        Counter.Value(count: mut val value) => {
+            value += 3I64
+            give value
+        }
+    }
+    print(first)
+    print(second)
+}

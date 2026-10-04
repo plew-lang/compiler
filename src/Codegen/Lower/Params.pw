@@ -82,7 +82,7 @@ pub impl Comp {
             val b: BindAst = binds[i]
             val nm: Bind = self.internBytes(s: b.name)
             val fd: Bind = self.internBytes(s: b.field)
-            out.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen nameId=nm.nameId fieldStart=fd.nameStart fieldLen=fd.nameLen offset=b.span.start />)
+            out.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen nameId=nm.nameId fieldStart=fd.nameStart fieldLen=fd.nameLen offset=b.span.start isMutable=b.isMutable />)
             i += 1
         }
         return self.pushBinds(binds: out)
@@ -102,6 +102,9 @@ pub impl Comp {
     inout fn lowerPatternInfo(p: PatternAst) -> Result[PatInfo, CompileDiagnostic] {
         if p.isWildcard {
             return <Result.Ok value=<PatInfo isWildcard=true enumStart=0 enumLen=0 variantStart=0 variantLen=0 binds=<BindRange start=0U64 len=0U64 /> isStruct=false /> />
+        }
+        if p.isRecord {
+            return <Result.Ok value=<PatInfo isWildcard=false enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=self.lowerBinds(binds: p.binds) isStruct=true /> />
         }
         mut val names: Array[Span] = []
         if p.typePath.count() != 0U64 {

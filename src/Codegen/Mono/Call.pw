@@ -6044,7 +6044,7 @@ pub impl Comp {
             val bd: Bind = self.bindAt(binds: a.binds, index: bi)
             if bd.nameLen != 0U64 {
                 val bti: TypeInfo = (try self.genericEnumFieldTypeInfo(instRef: self.typedIrRefOfInfo(ti: scrutTi), variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen))
-                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: self.typedIrRefOfInfo(ti: bti), isInout: false, isMut: false, owned: false)
+                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: self.typedIrRefOfInfo(ti: bti), isInout: false, isMut: bd.isMutable, owned: false)
             }
             bi += 1U64
         }
@@ -6091,7 +6091,7 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: bd.nameStart, msg: "internal error: finalized match binding was not recorded") />
             } else {
                 val bti: TypeInfo = self.typeInfoOfRef(ref: payloadRef)
-                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: payloadRef, isInout: false, isMut: false, owned: false)
+                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: payloadRef, isInout: false, isMut: bd.isMutable, owned: false)
             }
             bi += 1
         }

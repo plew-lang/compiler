@@ -32,6 +32,16 @@ pub impl Comp {
         if pattern.isWildcard {
             return <Result.Ok value=<PatInfo isWildcard=true enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=<BindRange start=0U64 len=0U64 /> isStruct=false /> />
         }
+        mut val binds: Array[Bind] = []
+        mut val i: U64 = 0U64
+        while i < syntaxPatternBindCount(file: self.syntax, pattern: pattern) {
+            val bind: SyntaxBind = syntaxBind(file: self.syntax, id: syntaxPatternBind(file: self.syntax, pattern: pattern, index: i))
+            binds.append(<Bind nameStart=bind.name.start nameLen=bind.name.end - bind.name.start fieldStart=bind.field.start fieldLen=bind.field.end - bind.field.start offset=bind.span.start isMutable=bind.isMutable />)
+            i += 1U64
+        }
+        if pattern.isRecord {
+            return <Result.Ok value=<PatInfo isWildcard=false enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=self.pushBinds(binds: binds) isStruct=true /> />
+        }
         mut val names: Array[Span] = []
         if pattern.typePath.count != 0U64 {
             val path = <SyntaxType namePath=pattern.typePath name=pattern.typeName args=<SyntaxSlice start=0 count=0 /> span=pattern.span extView=<Span start=0 end=0 /> viewNames=<SyntaxSlice start=0 count=0 /> projectionTrait=<Span start=0 end=0 /> projectionTraitArgs=<SyntaxSlice start=0 count=0 /> projectionTraitArgLabels=<SyntaxSlice start=0 count=0 /> projectionAssoc=<Span start=0 end=0 /> isAny=false argLabels=<SyntaxSlice start=0 count=0 /> isSendable=false isRecord=false />
@@ -48,13 +58,6 @@ pub impl Comp {
         val typeName = names[head]
         mut val variant = <Span start=0U64 end=0U64 />
         if !pattern.isStruct { variant = names[head + 1U64] }
-        mut val binds: Array[Bind] = []
-        mut val i: U64 = 0U64
-        while i < syntaxPatternBindCount(file: self.syntax, pattern: pattern) {
-            val bind: SyntaxBind = syntaxBind(file: self.syntax, id: syntaxPatternBind(file: self.syntax, pattern: pattern, index: i))
-            binds.append(<Bind nameStart=bind.name.start nameLen=bind.name.end - bind.name.start fieldStart=bind.field.start fieldLen=bind.field.end - bind.field.start offset=bind.span.start />)
-            i += 1U64
-        }
         return <Result.Ok value=<PatInfo isWildcard=false enumStart=typeName.start enumLen=typeName.end - typeName.start variantStart=variant.start variantLen=variant.end - variant.start binds=self.pushBinds(binds: binds) isStruct=pattern.isStruct /> />
     }
 
@@ -84,7 +87,7 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: pattern.span.start, msg: "internal: enum-match capture binding was not desugared") />
             }
             val info: PatInfo = (try self.lowerSyntaxPatternInfo(pattern: pattern))
-            out.append(<MatchArm orGroup=arm.orGroup captureStart=pattern.captureName.start captureLen=pattern.captureName.end - pattern.captureName.start isWildcard=info.isWildcard enumStart=info.enumStart enumLen=info.enumLen variantStart=info.variantStart variantLen=info.variantLen binds=info.binds body=(try self.lowerSyntaxBlock(id: arm.body)) isStruct=info.isStruct isDiverge=isExpr && self.syntaxArmBlockDiverges(arm: arm) />)
+            out.append(<MatchArm orGroup=arm.orGroup captureMutable=pattern.captureMutable captureStart=pattern.captureName.start captureLen=pattern.captureName.end - pattern.captureName.start isWildcard=info.isWildcard enumStart=info.enumStart enumLen=info.enumLen variantStart=info.variantStart variantLen=info.variantLen binds=info.binds body=(try self.lowerSyntaxBlock(id: arm.body)) isStruct=info.isStruct isDiverge=isExpr && self.syntaxArmBlockDiverges(arm: arm) />)
             i += 1U64
         }
         return <Result.Ok value=self.pushMatchArms(arms: out) />
@@ -100,7 +103,7 @@ pub impl Comp {
             val pattern: SyntaxPattern = syntaxPattern(file: self.syntax, id: arm.pat)
             if !pattern.isWildcard || pattern.captureName.end > pattern.captureName.start { onlyDiscards = false }
             if !(pattern.isWildcard) {
-                if !(pattern.isLiteral) { return true }
+                if !(pattern.isValuePattern) { return true }
             }
             i += 1U64
         }
@@ -125,7 +128,7 @@ pub impl Comp {
         while i < syntaxMatchArmCount(file: self.syntax, arms: arms) {
             val arm: SyntaxMatchArm = syntaxMatchArm(file: self.syntax, id: syntaxMatchArmAt(file: self.syntax, arms: arms, index: i))
             val pattern: SyntaxPattern = syntaxPattern(file: self.syntax, id: arm.pat)
-            if pattern.isWildcard || !(pattern.isLiteral) { return false }
+            if pattern.isWildcard || !(pattern.isValuePattern) { return false }
             val literal: SyntaxExpr = syntaxExpr(file: self.syntax, id: pattern.lit)
             match literal.kind {
                 SyntaxExprKind.IntLit => {}
@@ -157,7 +160,7 @@ pub impl Comp {
 
     inout fn lowerSyntaxScalarArmCond(lhsStart: U64, lhsLen: U64, arm: SyntaxMatchArm) -> Result[ScalarCond, CompileDiagnostic] {
         val pattern: SyntaxPattern = syntaxPattern(file: self.syntax, id: arm.pat)
-        if pattern.isLiteral { return <Result.Ok value=<ScalarCond hasCond=true cond=(try self.lowerSyntaxLitEq(lhsStart: lhsStart, lhsLen: lhsLen, literal: pattern.lit)) /> />}
+        if pattern.isValuePattern { return <Result.Ok value=<ScalarCond hasCond=true cond=(try self.lowerSyntaxLitEq(lhsStart: lhsStart, lhsLen: lhsLen, literal: pattern.lit)) /> />}
         return <Result.Ok value=<ScalarCond hasCond=false cond=0U64 /> />
     }
 
@@ -168,7 +171,7 @@ pub impl Comp {
             val pattern: SyntaxPattern = syntaxPattern(file: self.syntax, id: arm.pat)
             if pattern.captureName.end > pattern.captureName.start {
                 val recv: U64 = self.pushExpr(e: <Expr.Ident start=sourceStart len=sourceLen />)
-                stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=pattern.captureName.start nameLen=pattern.captureName.end - pattern.captureName.start tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=recv />))
+                stmts.append(self.pushStmt(s: <Stmt.Let mutable=pattern.captureMutable nameStart=pattern.captureName.start nameLen=pattern.captureName.end - pattern.captureName.start tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=recv />))
             }
             i += 1U64
         }
@@ -227,7 +230,7 @@ pub impl Comp {
             mut val body: U64 = (try self.lowerSyntaxBlock(id: arm.body))
             if pattern.captureName.end > pattern.captureName.start {
                 val capture: U64 = self.pushExpr(e: <Expr.Ident start=captureSourceStart len=captureSourceLen />)
-                val letStmt: U64 = self.pushStmt(s: <Stmt.Let mutable=false nameStart=pattern.captureName.start nameLen=pattern.captureName.end - pattern.captureName.start tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=capture />)
+                val letStmt: U64 = self.pushStmt(s: <Stmt.Let mutable=pattern.captureMutable nameStart=pattern.captureName.start nameLen=pattern.captureName.end - pattern.captureName.start tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=capture />)
                 mut val prefixed: Array[U64] = []
                 prefixed.append(letStmt)
                 mut val si: U64 = 0U64
@@ -237,7 +240,7 @@ pub impl Comp {
                 }
                 body = self.blockOfStmts(stmts: prefixed)
             }
-            out.append(<MatchArm orGroup=arm.orGroup captureStart=pattern.captureName.start captureLen=pattern.captureName.end - pattern.captureName.start isWildcard=info.isWildcard enumStart=info.enumStart enumLen=info.enumLen variantStart=info.variantStart variantLen=info.variantLen binds=info.binds body=body isStruct=info.isStruct isDiverge=isExpr && self.syntaxArmBlockDiverges(arm: arm) />)
+            out.append(<MatchArm orGroup=arm.orGroup captureMutable=pattern.captureMutable captureStart=pattern.captureName.start captureLen=pattern.captureName.end - pattern.captureName.start isWildcard=info.isWildcard enumStart=info.enumStart enumLen=info.enumLen variantStart=info.variantStart variantLen=info.variantLen binds=info.binds body=body isStruct=info.isStruct isDiverge=isExpr && self.syntaxArmBlockDiverges(arm: arm) />)
             i += 1U64
         }
         return <Result.Ok value=self.pushMatchArms(arms: out) />
@@ -265,20 +268,6 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // A value arm is represented by its terminal `give` statement.  This is the
-    // SyntaxFile equivalent of armGiveExprAst: the AST itself is never rebuilt.
-    inout fn syntaxArmGiveExpr(arm: SyntaxMatchArm) -> ExprId {
-        val block: SyntaxBlock = syntaxBlock(file: self.syntax, id: arm.body)
-        if syntaxBlockStmtCount(file: self.syntax, block: block) > 0U64 {
-            val first: SyntaxStmt = syntaxStmt(file: self.syntax, id: syntaxBlockStmt(file: self.syntax, block: block, index: 0U64))
-            match first.kind {
-                SyntaxStmtKind.Give => { return first.child0 }
-                _ => {}
-            }
-        }
-        return <ExprId raw=0U64 />
-    }
-
     // The value-side scalar transformation deliberately mirrors
     // lowerScalarMatchExpr.  In particular, only an identifier scrutinee may be
     // repeated; every other scrutinee (and every capture match) receives one
@@ -304,13 +293,6 @@ pub impl Comp {
         if !(haveElse) {
             return <Result.Err error=self.diagnosticAt(offset: span.start, msg: "a value `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)") />
         }
-        mut val valueGive: ExprId = <ExprId raw=0U64 />
-        mut val mi: U64 = 0U64
-        while mi < armCount {
-            val arm: SyntaxMatchArm = syntaxMatchArm(file: self.syntax, id: syntaxMatchArmAt(file: self.syntax, arms: arms, index: mi))
-            if !(self.syntaxArmBlockDiverges(arm: arm)) { valueGive = self.syntaxArmGiveExpr(arm: arm) }
-            mi += 1U64
-        }
         mut val currentElse: U64 = 0U64
         if haveElse {
             currentElse = (try self.lowerSyntaxBlock(id: syntaxMatchArm(file: self.syntax, id: syntaxMatchArmAt(file: self.syntax, arms: arms, index: elseIdx)).body))
@@ -335,7 +317,7 @@ pub impl Comp {
                 }
             }
         }
-        if !(haveHead) { head = (try self.lowerSyntaxExpr(id: valueGive)) }
+        if !(haveHead) { head = self.pushExpr(e: <Expr.Block body=currentElse offset=span.start />) }
         if scrutIsIdent { return <Result.Ok value=head />}
         mut val thenStmts: Array[U64] = []
         thenStmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=(try self.lowerSyntaxExpr(id: scrut)) />))
@@ -385,7 +367,7 @@ pub impl Comp {
     // Build a scalar-match arm's condition: `__mtmp == lit` for a literal arm; a wildcard
     // yields hasCond=false (it is the terminal `else`).
     inout fn lowerScalarArmCond(lhsStart: U64, lhsLen: U64, arm: MatchArmAst) -> Result[ScalarCond, CompileDiagnostic] {
-        if arm.pattern.isLiteral {
+        if arm.pattern.isValuePattern {
             return <Result.Ok value=<ScalarCond hasCond=true cond=(try self.lowerLitEq(lhsStart: lhsStart, lhsLen: lhsLen, lit: arm.pattern.lit)) /> />
         }
         return <Result.Ok value=<ScalarCond hasCond=false cond=0 /> />
@@ -424,7 +406,7 @@ pub impl Comp {
             if cn.bytes().count() > 0 {
                 val cap: Bind = self.internBytes(s: cn)
                 val recv: U64 = self.pushExpr(e: <Expr.Ident start=srcStart len=srcLen />)
-                stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=cap.nameStart nameLen=cap.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=recv />))
+                stmts.append(self.pushStmt(s: <Stmt.Let mutable=arms[i].pattern.captureMutable nameStart=cap.nameStart nameLen=cap.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=recv />))
             }
             i += 1
         }
@@ -527,16 +509,6 @@ pub impl Comp {
         if !(haveElse) {
             return <Result.Err error=self.diagnosticAt(offset: span.start, msg: "a value `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)") />
         }
-        // a value-giving arm's give AST, re-lowered for the dead `else` of the non-Ident
-        // wrapper (any value arm has the match's result type).
-        mut val valueGive: ExprAst = emptyExpr()
-        mut val mi: U64 = 0
-        while mi < arms.count() {
-            if !(armBlockDiverges(b: arms[mi].body)) {
-                valueGive = armGiveExprAst(arm: arms[mi])
-            }
-            mi += 1
-        }
         // build the if/else chain over real arm blocks (each gives or diverges). The else
         // chain begins as the else arm's block; each cond arm wraps the running chain.
         mut val curElseBlk: U64 = 0
@@ -565,7 +537,7 @@ pub impl Comp {
             }
         }
         if !(haveHead) {
-            headExpr = (try self.lowerExpr(e: valueGive))
+            headExpr = self.pushExpr(e: <Expr.Block body=curElseBlk offset=span.start />)
         }
         if scrutIsIdent {
             return <Result.Ok value=headExpr />
@@ -626,7 +598,7 @@ pub impl Comp {
                 captureStart = capN.nameStart
                 captureLen = capN.nameLen
                 val scapId: U64 = self.pushExpr(e: <Expr.Ident start=scapStart len=scapLen />)
-                val capLet: U64 = self.pushStmt(s: <Stmt.Let mutable=false nameStart=capN.nameStart nameLen=capN.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=scapId />)
+                val capLet: U64 = self.pushStmt(s: <Stmt.Let mutable=arm.pattern.captureMutable nameStart=capN.nameStart nameLen=capN.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=scapId />)
                 mut val ns: Array[U64] = []
                 ns.append(capLet)
                 mut val k: U64 = 0
@@ -636,7 +608,7 @@ pub impl Comp {
                 }
                 bodyIdx = self.blockOfStmts(stmts: ns)
             }
-            ma.append(<MatchArm orGroup=arm.orGroup captureStart=captureStart captureLen=captureLen isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=bodyIdx isStruct=pi.isStruct isDiverge=diverge />)
+            ma.append(<MatchArm orGroup=arm.orGroup captureMutable=arm.pattern.captureMutable captureStart=captureStart captureLen=captureLen isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=bodyIdx isStruct=pi.isStruct isDiverge=diverge />)
             i += 1
         }
         return <Result.Ok value=self.pushMatchArms(arms: ma) />
@@ -1168,7 +1140,7 @@ pub impl Comp {
                 nameStart = nb.nameStart
                 nameLen = nb.nameLen
             }
-            out.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=binds[bi].fieldStart fieldLen=binds[bi].field.bytes().count() offset=binds[bi].span.start />)
+            out.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=binds[bi].fieldStart fieldLen=binds[bi].field.bytes().count() offset=binds[bi].span.start isMutable=binds[bi].isMutable />)
             bi += 1
         }
         return self.pushBinds(binds: out)
@@ -1179,7 +1151,7 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < syntaxStmtBindCount(file: self.syntax, stmt: stmt) {
             val bind: SyntaxBind = syntaxBind(file: self.syntax, id: syntaxStmtBind(file: self.syntax, stmt: stmt, index: i))
-            out.append(<Bind nameStart=bind.name.start nameLen=bind.name.end - bind.name.start fieldStart=bind.field.start fieldLen=bind.field.end - bind.field.start offset=bind.span.start />)
+            out.append(<Bind nameStart=bind.name.start nameLen=bind.name.end - bind.name.start fieldStart=bind.field.start fieldLen=bind.field.end - bind.field.start offset=bind.span.start isMutable=bind.isMutable />)
             i += 1U64
         }
         return self.pushBinds(binds: out)
@@ -1207,7 +1179,7 @@ pub impl Comp {
                     self.arena.exprSpanStart[target] = bind.span.start
                     stmts.append(self.pushStmt(s: <Stmt.Assign target=target value=field />))
                 } else {
-                    stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=bind.name.start nameLen=bind.name.end - bind.name.start tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=field />))
+                    stmts.append(self.pushStmt(s: <Stmt.Let mutable=bind.isMutable nameStart=bind.name.start nameLen=bind.name.end - bind.name.start tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=field />))
                 }
             }
             i += 1U64
@@ -1231,7 +1203,7 @@ pub impl Comp {
                 val field: U64 = self.pushExpr(e: <Expr.Field base=receiver nameStart=binding.fieldStart nameLen=binding.fieldLen />)
                 self.arena.exprSpanStart[receiver] = binding.offset
                 self.arena.exprSpanStart[field] = binding.offset
-                statements.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=binding.nameStart nameLen=binding.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=field />))
+                statements.append(self.pushStmt(s: <Stmt.Let mutable=binding.isMutable nameStart=binding.nameStart nameLen=binding.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=field />))
             }
             index += 1U64
         }

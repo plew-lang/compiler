@@ -571,6 +571,7 @@ pub struct MakeField {
 // (Also reused elsewhere as a plain (name) span pair — array element names,
 // part directives — where the field span is just set equal to the name.)
 pub struct Bind {
+    pub val isMutable: Bool = false
     pub val nameStart: U64
     pub val nameLen: U64
     // interned name id (Phase D): set by internBytes for every re-interned name, so
@@ -784,12 +785,14 @@ pub enum Expr {
 // [{ val f ... }] => block`. The pattern names the enum and variant, so codegen
 // resolves the tag index and field types without any type inference.
 pub struct PatternBindingType {
+    pub val isMutable: Bool = false
     pub val nameId: U64
     pub val term: U64
 }
 pub impl PatternBindingType { factory }
 
 pub struct MatchArm {
+    pub val captureMutable: Bool = false
     pub val orGroup: U64 = 0U64
     pub val captureStart: U64 = 0U64
     pub val captureLen: U64 = 0U64
@@ -2482,7 +2485,7 @@ pub struct Arena {
     // arena rather than Comp so every public user of Comp depends only on Arena,
     // and so the entry has the same lifetime/identity as its Expr.
     pub mut val semanticExprTypes: Array[SemanticExprType] = []
-    // Record-time normal continuation of value blocks; absent rows are not facts.
+    // Record-time value-block completion: 0 absent, 1 normal, 2 no normal exit.
     pub mut val semanticValueBlockCompletion: Array[U8] = []
     // Deferred semantic type-source recipes are a separate dependency graph;
     // TypeRef remains the canonical structural type arena. IDs are one-based.

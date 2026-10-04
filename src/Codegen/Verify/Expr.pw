@@ -804,6 +804,25 @@ pub impl Comp {
             di += 1
         }
         if a.isStruct {
+            if a.enumLen == 0U64 {
+                val subject = try self.typeOf(id: scrut)
+                val storage = self.fieldStorageTypeRef(receiverRef: self.typedIrRefOfInfo(ti: subject))
+                if storage == 0U64 || storage >= self.arena.typeCount() { return <Result.Ok value=() /> }
+                val record = self.arena.typeAt(index: storage)
+                if !record.isRecord { return <Result.Ok value=() /> }
+                mut val bindingIndex = 0U64
+                while bindingIndex < a.binds.len {
+                    val binding = self.bindAt(binds: a.binds, index: bindingIndex)
+                    if self.fieldIndexOfReceiver(receiverRef: storage, fieldStart: binding.fieldStart, fieldLen: binding.fieldLen) >= record.recordFieldTerms.count() {
+                        return <Result.Err error=self.diagnosticAt(offset: binding.offset, msg: "no such field in the record pattern") />
+                    }
+                    bindingIndex += 1U64
+                }
+                if a.binds.len != record.recordFieldTerms.count() {
+                    return <Result.Err error=self.diagnosticAt(offset: armDiagOffset(c: inout self, a: a), msg: "record pattern must bind or discard every field (spec/11)") />
+                }
+                return <Result.Ok value=() />
+            }
             val identity = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: a.enumStart), start: a.enumStart, len: a.enumLen)
             val si = self.arena.structIndexByOffset(offset: identity.nameStart)
             if si < self.arena.structCount() {
@@ -866,7 +885,12 @@ pub impl Comp {
             // mismatched / non-struct scrutinee (`match anI64 { P { … } }`, or an unknown
             // `P`) used to crash the field lookup (out-of-bounds) — reject cleanly.
             val st: TypeInfo = (try self.typeOf(id: scrut))
-            if st.nameLen > 0U64 {
+            if a.enumLen == 0U64 {
+                val subject = try self.destructureSubjectType(info: st, isElement: false)
+                if subject == 0U64 || subject >= self.arena.typeCount() || !self.arena.typeAt(index: subject).isRecord {
+                    return <Result.Err error=self.diagnosticAt(offset: armDiagOffset(c: inout self, a: a), msg: "record pattern requires a record value") />
+                }
+            } else if st.nameLen > 0U64 {
                 if !self.structPatternMatches(typeStart: a.enumStart, typeLen: a.enumLen, subjectRef: (try self.destructureSubjectType(info: st, isElement: false))) {
                     return <Result.Err error=self.diagnosticAt(offset: armDiagOffset(c: inout self, a: a), msg: "struct destructure pattern type does not match the scrutinee type") />
                 }
@@ -901,7 +925,7 @@ pub impl Comp {
                 } else {
                     ft = (try self.genericFieldTypeInfo(instRef: self.typedIrRefOfInfo(ti: st), fieldStart: bd.fieldStart, fieldLen: bd.fieldLen))
                 }
-                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: ownsPayload)
+                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: bd.isMutable, owned: ownsPayload)
                 bi += 1
             }
         } else {
@@ -914,7 +938,7 @@ pub impl Comp {
                 // Bind concrete and generic payloads through the subject's
                 // declaration identity, preserving its exact field TypeTerm.
                 val bti: TypeInfo = (try self.genericEnumFieldTypeInfo(instRef: self.typedIrRefOfInfo(ti: st), variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen))
-                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: self.typedIrRefOfInfo(ti: bti), isInout: false, isMut: false, owned: ownsPayload)
+                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: self.typedIrRefOfInfo(ti: bti), isInout: false, isMut: bd.isMutable, owned: ownsPayload)
                 bi += 1
             }
         }

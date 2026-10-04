@@ -1,0 +1,1 @@
+fn main() { val x = match (a: 1I64, b: 2I64) { (val a) => a } }

@@ -1813,7 +1813,8 @@ pub impl Comp {
     // canonical struct an annotated record type lowers to (ensureRecordStruct),
     // so both spellings are one structural type. Returns 0 when any field
     // value's type is not inferable here (an unsuffixed literal keeps its
-    // "no type from context" report; array-typed fields are not modeled).
+    // "no type from context" report). Recorded field terms include arrays and
+    // other composite values, without reconstructing them from the legacy head.
     inout fn inferRecordMakeRef(fields: MakeFieldRange) -> Result[U64, CompileDiagnostic] {
         // the empty record `()` is the unit value — self-description degenerates to
         // the zero-field canonical struct `()` (the same struct an annotated
@@ -1824,14 +1825,12 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < fields.len {
             val mf: MakeField = self.makeFieldAt(fields: fields, index: i)
-            val ti: TypeInfo = (try self.exprType(id: mf.value))
-            if ti.kind == 3 || ti.nameLen == 0U64 {
-                return <Result.Ok value=0U64 />
-            }
-            mut val fref: U64 = ti.ref
+            mut val fref = self.parametricExprTerm(exprId: mf.value)
             if fref == 0U64 {
-                fref = self.simpleTypeRef(nameStart: ti.nameStart, nameLen: ti.nameLen)
+                fref = self.typedIrRefOfInfo(ti: (try self.exprType(id: mf.value)))
             }
+            if fref == 0U64 { return <Result.Ok value=0U64 /> }
+            val ti = self.typeInfoOfRef(ref: fref)
             mut val nb: Array[U8] = []
             mut val k: U64 = 0
             while k < mf.nameLen {
@@ -1839,7 +1838,7 @@ pub impl Comp {
                 k += 1
             }
             names.append(stringFromBytesUnchecked(nb))
-            tys.append(<PType start=ti.nameStart len=ti.nameLen isArray=false ref=fref />)
+            tys.append(<PType start=ti.nameStart len=ti.nameLen isArray=ti.kind == 3I64 ref=fref />)
             terms.append(fref)
             i += 1
         }

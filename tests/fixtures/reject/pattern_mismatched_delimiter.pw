@@ -1,0 +1,5 @@
+enum Counter { Value(count: I64) }
+fn main() {
+    val item = <Counter.Value count=7I64 />
+    match item { Counter.Value(val count} => {} }
+}

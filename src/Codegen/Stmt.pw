@@ -344,7 +344,7 @@ pub impl Comp {
         while bi < binds.len {
             val bd: Bind = self.bindAt(binds: binds, index: bi)
             val ft: TypeInfo = (try self.forBindFieldType(et: et, bd: bd))
-            self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
+            self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: bd.isMutable, owned: false)
             bi += 1
         }
         return <Result.Ok value=() />

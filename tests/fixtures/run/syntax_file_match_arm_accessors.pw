@@ -17,7 +17,7 @@ fn main() {
         _ => { print(0U64) }
     }
     print(syntaxStmtMatchArmCount(file: file, stmt: matchStmt))
-    if pattern.isLiteral { print(1U64) } else { print(0U64) }
+    if pattern.isValuePattern { print(1U64) } else { print(0U64) }
     match literal.kind {
         SyntaxExprKind.IntLit => { print(1U64) }
         _ => { print(0U64) }

@@ -1,0 +1,22 @@
+use @Std/Io only { print }
+fn early() -> I64 {
+    val result = match 1I64 { _ => { return 17I64 } }
+    return 0I64
+}
+fn main() {
+    val first = match 3I64 {
+        val value => {
+            print(7I64)
+            give value
+        }
+    }
+    print(first)
+    val second = match 1I64 {
+        _ => {
+            print(11I64)
+            give 13I64
+        }
+    }
+    print(second)
+    print(early())
+}

@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+fn main() {
+    val expected = 3I64
+    print(match 3I64 { expected => 7I64 _ => 0I64 })
+    print(match 2I64 { expected => 0I64 _ => 11I64 })
+    match 3I64 { expected => { print(13I64) } _ => {} }
+    if expected = 3I64 { print(17I64) }
+}
