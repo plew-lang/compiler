@@ -1,0 +1,21 @@
+use @Std/Io only { print }
+fn main() {
+    val outside = {
+        val x = 10I64
+        -3I64
+        give x
+    }
+    val inside = "{ {
+        val x = 10I64
+        -3I64
+        give x
+    } }"
+    val conditional = "{if true {
+        val x = 10I64
+        -3I64
+        give x
+    } else { give 0I64 }}"
+    print("{outside}")
+    print(inside)
+    print(conditional)
+}

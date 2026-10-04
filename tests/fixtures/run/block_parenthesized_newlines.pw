@@ -1,0 +1,24 @@
+use @Std/Io only { print }
+fn main() {
+    val plain = {
+        val x = 10I64
+        -3I64
+        give x
+    }
+    val paren = ({
+        val x = 10I64
+        -3I64
+        give x
+    })
+    val conditional = if true {
+        val x = 10I64
+        -3I64
+        give x
+    } else { give 0I64 }
+    val parenConditional = (if true {
+        val x = 10I64
+        -3I64
+        give x
+    } else { give 0I64 })
+    print("{plain},{paren},{conditional},{parenConditional}")
+}
