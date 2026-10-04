@@ -16,3 +16,10 @@ pub fn completionChoice(first: SourceCompletion, second: SourceCompletion) -> So
     return <SourceCompletion normal=first.normal || second.normal breaks=first.breaks || second.breaks />
 }
 
+
+// Source block result context distinguishes statements from value regions.
+// A value region still evaluates give when it has no normal continuation.
+pub enum BlockResultContext {
+    Statement
+    Value(expectedTerm: U64, completes: Bool)
+}

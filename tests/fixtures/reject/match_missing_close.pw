@@ -1,0 +1,3 @@
+fn main() {}
+val number = match true { true => 1I64 false => 2I64
+

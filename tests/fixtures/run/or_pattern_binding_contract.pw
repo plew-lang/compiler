@@ -1,0 +1,26 @@
+use @Std/Io only { print }
+enum Choice {
+    First(left: I64)
+    Second(right: I64)
+    Empty
+}
+fn value(choice: Choice) -> I64 {
+    return match choice {
+        Choice.First(left: val item) | Choice.Second(right: val item) => item
+        Choice.Empty => 0I64
+    }
+}
+enum Tree {
+    Leaf(value: I64)
+    Branch(next: Tree)
+}
+fn capture(tree: Tree) -> I64 {
+    return match tree {
+        Tree.Branch(next: val item) | val item => 1I64
+    }
+}
+fn main() {
+    print(value(choice: <Choice.First left=2I64 />))
+    print(value(choice: <Choice.Second right=3I64 />))
+    print(capture(tree: <Tree.Leaf value=4I64 />))
+}

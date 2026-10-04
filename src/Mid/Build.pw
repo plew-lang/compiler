@@ -10,17 +10,55 @@ use @Std/Io only { eprint }
 use ../Ops only { opAnd, opOr }
 use ./Ir only { midLocalIsOwnedTemporary, MidEnumDestination, MidRange, MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidCallArgument, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
 
-// A value block can publish a result or keep its evaluated give value only
-// for its own lifetime. Statement blocks do not admit give at all.
+// Allocate result owners before entering value-block scopes. Even a block
+// without normal completion can evaluate give; each such value has its own
+// actual type and the same enclosing evaluation lifetime as a normal result.
+struct MidGiveDestination {
+    val exprId: U64
+    val place: MidPlace
+}
 enum MidBlockResult {
     Forbidden
     Store(destination: MidPlace)
-    Scoped
+    Scoped(destinations: Array[MidGiveDestination])
 }
 
-fn midBlockResult(destination: MidPlace) -> MidBlockResult {
-    if destination.typeTerm == 0U64 { return <MidBlockResult.Scoped /> }
-    return <MidBlockResult.Store destination=destination />
+fn appendMidGiveDestinations(c: inout Comp, state: inout MidBuildState, blockId: U64, destinations: inout Array[MidGiveDestination]) {
+    val block = c.arena.blocks[blockId]
+    mut val index = 0U64
+    while index < block.stmtLen {
+        match c.arena.stmts[c.arena.blockStmtPool[block.stmtStart + index]] {
+            Stmt.Give(value: val value) => {
+                val term = c.semanticExprTerm(exprId: value)
+                val local = addMidTemporary(state: inout state, typeTerm: term, isUnique: midTermIsUnique(c: inout c, term: term))
+                destinations.append(<MidGiveDestination exprId=value place=<MidPlace local=local typeTerm=term /> />)
+            }
+            _ => {}
+        }
+        index += 1U64
+    }
+}
+
+fn midBlockResult(c: inout Comp, state: inout MidBuildState, destination: MidPlace, exprId: U64) -> MidBlockResult {
+    if destination.typeTerm != 0U64 { return <MidBlockResult.Store destination=destination /> }
+    mut val destinations: Array[MidGiveDestination] = []
+    match c.arena.exprs[exprId] {
+        Expr.Block(body: val body, offset: _) => { appendMidGiveDestinations(c: inout c, state: inout state, blockId: body, destinations: inout destinations) }
+        Expr.Sequence(body: val body) => { appendMidGiveDestinations(c: inout c, state: inout state, blockId: body, destinations: inout destinations) }
+        Expr.IfExpr(cond: _, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
+            appendMidGiveDestinations(c: inout c, state: inout state, blockId: thenBlk, destinations: inout destinations)
+            appendMidGiveDestinations(c: inout c, state: inout state, blockId: elseBlk, destinations: inout destinations)
+        }
+        Expr.MatchExpr(scrut: _, arms: val arms) => {
+            mut val index = 0U64
+            while index < arms.len {
+                appendMidGiveDestinations(c: inout c, state: inout state, blockId: c.matchArmAt(arms: arms, index: index).body, destinations: inout destinations)
+                index += 1U64
+            }
+        }
+        _ => {}
+    }
+    return <MidBlockResult.Scoped destinations=destinations />
 }
 
 // The frontend owns synthetic primitive identity and ownership classification.
@@ -1483,13 +1521,13 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
         Expr.Block(body: val body, offset: _) => {
             val resultLocal = addMidTemporary(state: inout state, typeTerm: typeTerm)
             val resultPlace = <MidPlace local=resultLocal typeTerm=typeTerm />
-            val error = buildMidBlockInto(c: inout c, state: inout state, blockId: body, blockResult: midBlockResult(destination: resultPlace))
+            val error = buildMidBlockInto(c: inout c, state: inout state, blockId: body, blockResult: midBlockResult(c: inout c, state: inout state, destination: resultPlace, exprId: exprId))
             return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> error=error />
         }
         Expr.Sequence(body: val body) => {
             val resultLocal = addMidTemporary(state: inout state, typeTerm: typeTerm)
             val resultPlace = <MidPlace local=resultLocal typeTerm=typeTerm />
-            val error = buildMidBlockInto(c: inout c, state: inout state, blockId: body, blockResult: midBlockResult(destination: resultPlace), expressionSequence: true)
+            val error = buildMidBlockInto(c: inout c, state: inout state, blockId: body, blockResult: midBlockResult(c: inout c, state: inout state, destination: resultPlace, exprId: exprId), expressionSequence: true)
             return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> error=error />
         }
         Expr.IfExpr(cond: val cond, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
@@ -1499,7 +1537,7 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             // consumer may materialize an uninitialized result.
             val resultLocal: U64 = addMidTemporary(state: inout state, typeTerm: typeTerm)
             val resultPlace: MidPlace = <MidPlace local=resultLocal typeTerm=typeTerm />
-            val lowered: MidBuildError = buildMidIfCfg(c: inout c, state: inout state, cond: cond, thenBlk: thenBlk, elseBlk: elseBlk, hasElse: true, blockResult: midBlockResult(destination: resultPlace))
+            val lowered: MidBuildError = buildMidIfCfg(c: inout c, state: inout state, cond: cond, thenBlk: thenBlk, elseBlk: elseBlk, hasElse: true, blockResult: midBlockResult(c: inout c, state: inout state, destination: resultPlace, exprId: exprId))
             match lowered {
                 MidBuildError.None => { return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> /> }
                 _ => { return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> error=lowered /> }
@@ -1508,7 +1546,7 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
         Expr.MatchExpr(scrut: val scrut, arms: val arms) => {
             val resultLocal: U64 = addMidTemporary(state: inout state, typeTerm: typeTerm)
             val resultPlace: MidPlace = <MidPlace local=resultLocal typeTerm=typeTerm />
-            val lowered: MidBuildError = buildMidPatternMatch(c: inout c, state: inout state, matchSource: <MatchSource.Expression exprId=exprId />, scrut: scrut, sourceArms: arms, blockResult: midBlockResult(destination: resultPlace), traceId: exprId)
+            val lowered: MidBuildError = buildMidPatternMatch(c: inout c, state: inout state, matchSource: <MatchSource.Expression exprId=exprId />, scrut: scrut, sourceArms: arms, blockResult: midBlockResult(c: inout c, state: inout state, destination: resultPlace, exprId: exprId), traceId: exprId)
             match lowered {
                 MidBuildError.None => { return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> /> }
                 _ => { return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> error=lowered /> }
@@ -2330,8 +2368,11 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
                 val destination = match blockResult {
                     MidBlockResult.Forbidden => { return <MidBuildError.UnsupportedGive /> }
                     MidBlockResult.Store(val destination) => { give destination }
-                    MidBlockResult.Scoped => {
-                        give <MidPlace local=addMidTemporary(state: inout state, typeTerm: term, isUnique: midTermIsUnique(c: inout c, term: term)) typeTerm=term />
+                    MidBlockResult.Scoped(val destinations) => {
+                        mut val index = 0U64
+                        while index < destinations.count() && destinations[index].exprId != value { index += 1U64 }
+                        if index == destinations.count() { return <MidBuildError.MissingSemanticType /> }
+                        give destinations[index].place
                     }
                 }
                 val operand = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: value, typeTerm: term, allowAccessMarker: false)
@@ -2352,6 +2393,12 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
         }
         match result { MidBuildError.None => {} _ => { i = block.stmtLen } }
         i += 1U64
+    }
+    match blockResult {
+        MidBlockResult.Scoped(destinations: _) => {
+            if midCurrentBlockIsOpen(state: state) { result = <MidBuildError.MissingSemanticType /> }
+        }
+        _ => {}
     }
     if !expressionSequence {
         if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {

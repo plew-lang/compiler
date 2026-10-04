@@ -6,6 +6,7 @@ unique struct Resource {
 }
 fn returned() -> I64 {
     val unused = {
+        val inner = <Ref[Resource] value=<Resource id=10I64 /> />
         give <Ref[Resource] value=<Resource id=1I64 /> />
         print("after give")
         return 7I64
@@ -16,6 +17,7 @@ fn main() {
     print(returned())
     while true {
         val unused = {
+            val inner = <Ref[Resource] value=<Resource id=20I64 /> />
             give <Ref[Resource] value=<Resource id=2I64 /> />
             break
         }
@@ -24,6 +26,7 @@ fn main() {
     while index < 1I64 {
         index += 1I64
         val unused = {
+            val inner = <Ref[Resource] value=<Resource id=30I64 /> />
             give <Ref[Resource] value=<Resource id=3I64 /> />
             continue
         }

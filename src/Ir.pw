@@ -783,7 +783,16 @@ pub enum Expr {
 // One arm of a match: either `_ => block` (wildcard) or `Enum.Variant
 // [{ val f ... }] => block`. The pattern names the enum and variant, so codegen
 // resolves the tag index and field types without any type inference.
+pub struct PatternBindingType {
+    pub val nameId: U64
+    pub val term: U64
+}
+pub impl PatternBindingType { factory }
+
 pub struct MatchArm {
+    pub val orGroup: U64 = 0U64
+    pub val captureStart: U64 = 0U64
+    pub val captureLen: U64 = 0U64
     pub val isWildcard: Bool
     pub val enumStart: U64
     pub val enumLen: U64

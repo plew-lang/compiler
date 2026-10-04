@@ -1,0 +1,2 @@
+enum Choice { First(value: I64) Second(value: Bool) }
+fn main() { val chosen = <Choice.First value=2I64 /> val number = match chosen { Choice.First(value: val item) | Choice.Second(value: val item) => 1I64 } }

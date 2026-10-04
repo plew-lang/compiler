@@ -22,7 +22,7 @@ pub impl Comp {
             if isExpr {
                 diverge = armBlockDiverges(b: arm.body)
             }
-            out.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body isStruct=pi.isStruct isDiverge=diverge />)
+            out.append(<MatchArm orGroup=arm.orGroup isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body isStruct=pi.isStruct isDiverge=diverge />)
             i += 1
         }
         return <Result.Ok value=self.pushMatchArms(arms: out) />
@@ -84,7 +84,7 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: pattern.span.start, msg: "internal: enum-match capture binding was not desugared") />
             }
             val info: PatInfo = (try self.lowerSyntaxPatternInfo(pattern: pattern))
-            out.append(<MatchArm isWildcard=info.isWildcard enumStart=info.enumStart enumLen=info.enumLen variantStart=info.variantStart variantLen=info.variantLen binds=info.binds body=(try self.lowerSyntaxBlock(id: arm.body)) isStruct=info.isStruct isDiverge=isExpr && self.syntaxArmBlockDiverges(arm: arm) />)
+            out.append(<MatchArm orGroup=arm.orGroup captureStart=pattern.captureName.start captureLen=pattern.captureName.end - pattern.captureName.start isWildcard=info.isWildcard enumStart=info.enumStart enumLen=info.enumLen variantStart=info.variantStart variantLen=info.variantLen binds=info.binds body=(try self.lowerSyntaxBlock(id: arm.body)) isStruct=info.isStruct isDiverge=isExpr && self.syntaxArmBlockDiverges(arm: arm) />)
             i += 1U64
         }
         return <Result.Ok value=self.pushMatchArms(arms: out) />
@@ -237,7 +237,7 @@ pub impl Comp {
                 }
                 body = self.blockOfStmts(stmts: prefixed)
             }
-            out.append(<MatchArm isWildcard=info.isWildcard enumStart=info.enumStart enumLen=info.enumLen variantStart=info.variantStart variantLen=info.variantLen binds=info.binds body=body isStruct=info.isStruct isDiverge=isExpr && self.syntaxArmBlockDiverges(arm: arm) />)
+            out.append(<MatchArm orGroup=arm.orGroup captureStart=pattern.captureName.start captureLen=pattern.captureName.end - pattern.captureName.start isWildcard=info.isWildcard enumStart=info.enumStart enumLen=info.enumLen variantStart=info.variantStart variantLen=info.variantLen binds=info.binds body=body isStruct=info.isStruct isDiverge=isExpr && self.syntaxArmBlockDiverges(arm: arm) />)
             i += 1U64
         }
         return <Result.Ok value=self.pushMatchArms(arms: out) />
@@ -619,8 +619,12 @@ pub impl Comp {
             if isExpr {
                 diverge = armBlockDiverges(b: arm.body)
             }
+            mut val captureStart = 0U64
+            mut val captureLen = 0U64
             if arm.pattern.captureName.bytes().count() > 0 {
                 val capN: Bind = self.internBytes(s: arm.pattern.captureName)
+                captureStart = capN.nameStart
+                captureLen = capN.nameLen
                 val scapId: U64 = self.pushExpr(e: <Expr.Ident start=scapStart len=scapLen />)
                 val capLet: U64 = self.pushStmt(s: <Stmt.Let mutable=false nameStart=capN.nameStart nameLen=capN.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=scapId />)
                 mut val ns: Array[U64] = []
@@ -632,7 +636,7 @@ pub impl Comp {
                 }
                 bodyIdx = self.blockOfStmts(stmts: ns)
             }
-            ma.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=bodyIdx isStruct=pi.isStruct isDiverge=diverge />)
+            ma.append(<MatchArm orGroup=arm.orGroup captureStart=captureStart captureLen=captureLen isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=bodyIdx isStruct=pi.isStruct isDiverge=diverge />)
             i += 1
         }
         return <Result.Ok value=self.pushMatchArms(arms: ma) />

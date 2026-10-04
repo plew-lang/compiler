@@ -36,6 +36,53 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Or alternatives retain their source group until their binding types
+    // are known. Executing a shared body is not a substitute for this check.
+    inout fn checkOrPatternTypes(arms: MatchArmRange, scrut: U64) -> Result[(), CompileDiagnostic] {
+        mut val group = 0U64
+        mut val expected: Array[PatternBindingType] = []
+        mut val index = 0U64
+        while index < arms.len {
+            val arm = self.matchArmAt(arms: arms, index: index)
+            if arm.orGroup != 0U64 {
+                val mark = self.scopeMark()
+                val subject = self.semanticExprTypeInfo(exprId: scrut)
+                try self.scanAddArmBinds(a: arm, scrutTi: subject)
+                mut val bindings: Array[PatternBindingType] = []
+                if arm.captureLen != 0U64 {
+                    bindings.append(<PatternBindingType nameId=intern(c: inout self, start: arm.captureStart, len: arm.captureLen) term=self.typedIrRefOfInfo(ti: subject) />)
+                }
+                mut val bindingIndex = 0U64
+                while bindingIndex < arm.binds.len {
+                    val binding = self.bindAt(binds: arm.binds, index: bindingIndex)
+                    if binding.nameLen != 0U64 {
+                        val local = try self.typedLocal(index: self.localIndexByName(start: binding.nameStart, len: binding.nameLen))
+                        bindings.append(<PatternBindingType nameId=intern(c: inout self, start: binding.nameStart, len: binding.nameLen) term=local.ty />)
+                    }
+                    bindingIndex += 1U64
+                }
+                self.popLocals(mark: mark)
+                if group != arm.orGroup {
+                    group = arm.orGroup
+                    expected = bindings
+                } else {
+                    if expected.count() != bindings.count() {
+                        return <Result.Err error=self.diagnosticAt(offset: arm.orGroup - 1U64, msg: "or-pattern alternatives must bind the same names and types (spec/11)") />
+                    }
+                    for val wanted in expected {
+                        mut val found = false
+                        for val actual in bindings {
+                            if wanted.nameId == actual.nameId && self.typeRefEq(a: wanted.term, b: actual.term) { found = true }
+                        }
+                        if !found { return <Result.Err error=self.diagnosticAt(offset: arm.orGroup - 1U64, msg: "or-pattern alternatives must bind the same names and types (spec/11)") /> }
+                    }
+                }
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn checkMatchArmBinds(arms: MatchArmRange) -> Result[(), CompileDiagnostic] {
         mut val index = 0U64
         while index < arms.len {

@@ -1,6 +1,6 @@
-use ./SourceCompletion only { SourceCompletion, completionThen, completionChoice }
+use ./SourceCompletion only { SourceCompletion, BlockResultContext, completionThen, completionChoice }
 use ./PublicSurfaceIndex only { PublicSurfaceIndex }
-use ./Ir only { AssociatedBoundEvidence, TraitConstraintRange, SupertraitRef, TraitProofOrigin, DeclarationBoundRef, TraitBound, TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
+use ./Ir only { PatternBindingType, AssociatedBoundEvidence, TraitConstraintRange, SupertraitRef, TraitProofOrigin, DeclarationBoundRef, TraitBound, TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
 use @Plew/Syntax only { syntaxTraitAssocType, syntaxAssociatedTypeBound }
 use ./StringLiteral only { decodeStringLiteral }
 use ./SourceAccess only { SourceAccess }

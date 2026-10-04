@@ -1074,7 +1074,7 @@ pub impl Comp {
         mut val resultTerm = expectedTerm
         if resultTerm == 0U64 { resultTerm = self.semanticExprTerm(exprId: exprId) }
         val completes = self.blockCompletesNormally(blkId: blockId)
-        try self.recordBlockContents(blkId: blockId, expectedTerm: resultTerm, checkResult: completes)
+        try self.recordBlockContents(blkId: blockId, resultContext: <BlockResultContext.Value expectedTerm=resultTerm completes=completes />)
         if completes {
             val value = self.blockGiveExpr(blkId: blockId)
             if value < self.arena.exprs.count() {
@@ -1813,6 +1813,7 @@ pub impl Comp {
                 // Validate labels before publishing lexical pattern bindings.
                 try self.checkMatchArmBinds(arms: arms)
                 try self.recordExpr(exprId: scrut, chainHoleRef: chainHoleRef)
+                try self.checkOrPatternTypes(arms: arms, scrut: scrut)
                 try self.recordSemanticMatch(matchSource: <MatchSource.Expression exprId=exprId />, scrut: scrut, arms: arms)
                 mut val ai: U64 = 0
                 while ai < arms.len {
@@ -2099,6 +2100,7 @@ pub impl Comp {
                 // Validate labels before publishing lexical pattern bindings.
                 try self.checkMatchArmBinds(arms: arms)
                 try self.recordExpr(exprId: scrut)
+                try self.checkOrPatternTypes(arms: arms, scrut: scrut)
                 try self.recordSemanticMatch(matchSource: <MatchSource.Statement stmtId=stmtId />, scrut: scrut, arms: arms)
                 mut val ai: U64 = 0
                 while ai < arms.len {
@@ -2120,14 +2122,25 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordBlock(blkId: U64, expectedTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+    inout fn recordBlock(blkId: U64) -> Result[(), CompileDiagnostic] {
         val mark = self.scopeMark()
-        try self.recordBlockContents(blkId: blkId, expectedTerm: expectedTerm)
+        try self.recordBlockContents(blkId: blkId, resultContext: <BlockResultContext.Statement />)
         self.popLocals(mark: mark)
         return <Result.Ok value=() />
     }
 
-    inout fn recordBlockContents(blkId: U64, expectedTerm: U64, checkResult: Bool = false) -> Result[(), CompileDiagnostic] {
+    inout fn recordBlockContents(blkId: U64, resultContext: BlockResultContext) -> Result[(), CompileDiagnostic] {
+        mut val expectedTerm = 0U64
+        mut val checkResult = false
+        mut val permitsGive = false
+        match resultContext {
+            BlockResultContext.Statement => {}
+            BlockResultContext.Value(expectedTerm: val expected, val completes) => {
+                expectedTerm = expected
+                checkResult = completes
+                permitsGive = true
+            }
+        }
         if !self.genMode {
             match self.blockTypeUses.get(key: blkId) {
                 Optional.Some(v: val uses) => { try self.checkSourceTypeUses(types: uses) }
@@ -2140,6 +2153,7 @@ pub impl Comp {
             val statement = self.blockStmtAt(blkId: blkId, index: i)
             match self.arena.stmts[statement] {
                 Stmt.Give(val value) => {
+                    if !permitsGive { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: value), msg: "`give` is only allowed in a value block (spec/11)") /> }
                     if hasGive { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: value), msg: "a block may contain only one `give` (spec/11)") /> }
                     hasGive = true
                 }

@@ -1,0 +1,1 @@
+fn main() { for val item in [1I64] { give item } }
