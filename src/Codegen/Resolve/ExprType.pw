@@ -525,6 +525,19 @@ pub impl Comp {
     // A continuation AST has exactly one parent stage, so this is not a general
     // context cache: the parent supplies its parametric Value term and recursive
     // children receive that same input explicitly.
+    // Compatibility queries consume recorded child facts when available.
+    // Before Record, every value block still follows the same normal-result
+    // rule; a diverging arm never supplies the result of another arm.
+    inout fn valueBlockTypeInfo(blockId: U64, chainHoleRef: U64) -> Result[Optional[TypeInfo], CompileDiagnostic] {
+        if self.blockDiverges(blkId: blockId) { return <Result.Ok value=<Optional.None /> /> }
+        val value = self.blockGiveExpr(blkId: blockId)
+        if value >= self.arena.exprs.count() { return <Result.Ok value=<Optional.None /> /> }
+        val term = self.semanticExprTerm(exprId: value)
+        if term != 0U64 { return <Result.Ok value=<Optional.Some v=self.typeInfoOfRef(ref: term) /> /> }
+        val info = try self.exprTypeWithChainHole(id: value, chainHoleRef: chainHoleRef)
+        return <Result.Ok value=<Optional.Some v=info /> />
+    }
+
     inout fn exprTypeWithChainHole(id: U64, chainHoleRef: U64) -> Result[TypeInfo, CompileDiagnostic] {
         val e: Expr = self.arena.exprs[id]
         match e {
@@ -1280,43 +1293,41 @@ pub impl Comp {
                 if ty != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: ty) /> }
                 return <Result.Ok value=self.typeInfoOfName(start: tyStart, len: tyLen, isArray: false) />
             }
-            Expr.MatchExpr(val scrut, val arms) => {
-                // a desugared non-Optional `?.` records its result type (its arm's give value
-                // references a bound `__chainVal` not in scope from here, so re-deriving fails).
-                val cr: U64 = (try self.chainResultRef(exprId: id))
-                if cr != 0 {
-                    return <Result.Ok value=self.typeInfoOfRef(ref: cr) />
-                }
-                // the result type is the give value of the first non-diverging arm.
-                mut val mai: U64 = 0
-                while mai < arms.len {
-                    val arm: MatchArm = self.matchArmAt(arms: arms, index: mai)
-                    if !(arm.isDiverge) {
-                        val mg: U64 = self.blockGiveExpr(blkId: arm.body)
-                        if mg < self.arena.exprs.count() {
-                            return <Result.Ok value=(try self.exprTypeWithChainHole(id: mg, chainHoleRef: chainHoleRef)) />
-                        }
+            Expr.MatchExpr(scrut: _, val arms) => {
+                val recorded = self.semanticExprTerm(exprId: id)
+                if recorded != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: recorded) /> }
+                val cr = try self.chainResultRef(exprId: id)
+                if cr != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: cr) /> }
+                mut val index = 0U64
+                while index < arms.len {
+                    val arm = self.matchArmAt(arms: arms, index: index)
+                    match (try self.valueBlockTypeInfo(blockId: arm.body, chainHoleRef: chainHoleRef)) {
+                        Optional.Some(v: val info) => { return <Result.Ok value=info /> }
+                        Optional.None => {}
                     }
-                    mai += 1
+                    index += 1U64
                 }
                 return <Result.Ok value=scalarInfo() />
             }
-            Expr.Sequence(val body) => {
-                val value = self.blockGiveExpr(blkId: body)
-                if value < self.arena.exprs.count() { return self.exprTypeWithChainHole(id: value, chainHoleRef: chainHoleRef) }
-                return <Result.Ok value=scalarInfo() />
-            }
-            Expr.Block(val body, offset: _) => {
-                val value = self.blockGiveExpr(blkId: body)
-                if value < self.arena.exprs.count() { return self.exprTypeWithChainHole(id: value, chainHoleRef: chainHoleRef) }
-                return <Result.Ok value=scalarInfo() />
-            }
-            Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-                val g: U64 = self.blockGiveExpr(blkId: thenBlk)
-                if g < self.arena.exprs.count() {
-                    return <Result.Ok value=(try self.exprTypeWithChainHole(id: g, chainHoleRef: chainHoleRef)) />
+            Expr.Sequence(val body) | Expr.Block(val body, offset: _) => {
+                val recorded = self.semanticExprTerm(exprId: id)
+                if recorded != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: recorded) /> }
+                match (try self.valueBlockTypeInfo(blockId: body, chainHoleRef: chainHoleRef)) {
+                    Optional.Some(v: val info) => { return <Result.Ok value=info /> }
+                    Optional.None => { return <Result.Ok value=scalarInfo() /> }
                 }
-                return <Result.Ok value=scalarInfo() />
+            }
+            Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
+                val recorded = self.semanticExprTerm(exprId: id)
+                if recorded != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: recorded) /> }
+                match (try self.valueBlockTypeInfo(blockId: thenBlk, chainHoleRef: chainHoleRef)) {
+                    Optional.Some(v: val info) => { return <Result.Ok value=info /> }
+                    Optional.None => {}
+                }
+                match (try self.valueBlockTypeInfo(blockId: elseBlk, chainHoleRef: chainHoleRef)) {
+                    Optional.Some(v: val info) => { return <Result.Ok value=info /> }
+                    Optional.None => { return <Result.Ok value=scalarInfo() /> }
+                }
             }
             Expr.OptChain(val base, val cont) => {
                 // once the mono scan records the ChainSite, its stage result `Head[U]` is
