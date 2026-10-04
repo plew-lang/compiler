@@ -57,5 +57,5 @@ tests/fixtures/run/standalone_block_return.pw
 tests/fixtures/run/block_interpolation_divergence.pw
 
 # Value-block local loop exits and interpolation options returning early.
-block_loop_completion
-interpolation_options_return
+tests/fixtures/run/block_loop_completion.pw
+tests/fixtures/run/interpolation_options_return.pw
