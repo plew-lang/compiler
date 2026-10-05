@@ -1,6 +1,4 @@
-// A Mid-built return of a payloadless enum is still an aggregate value.  The
-// builder's MidOperandBuild must retain its default MidBuildError.None tag
-// while materializing the enum and carrying it through a conditional return.
+// A payloadless enum remains a value through generic conditional returns.
 use @Std/Core only { Ordering }
 use @Std/Io only { print }
 

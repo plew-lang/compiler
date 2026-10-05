@@ -1,6 +1,5 @@
-// `MidOperandBuild` is a tagged operand followed by MidBuildError.  A Mid
-// builder propagates its tail error after inspecting it; the first field must
-// never overwrite the following enum tag during aggregate return/copy.
+// Aggregate return/copy must preserve the error tag following a wide enum
+// payload, including paths that inspect and propagate the error.
 use @Std/Io only { print }
 
 enum Operand {

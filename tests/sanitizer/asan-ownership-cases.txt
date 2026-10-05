@@ -73,3 +73,4 @@ tests/fixtures/run/match_value_pattern_snapshot.pw
 
 # Aggregate evaluation may terminate before a result is constructed.
 tests/fixtures/run/noncompleting_aggregate_cleanup.pw
+tests/fixtures/run/mid_evaluation_no_continuation.pw
