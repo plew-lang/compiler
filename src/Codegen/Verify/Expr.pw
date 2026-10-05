@@ -13,15 +13,14 @@ pub impl Comp {
         mut val index = 0U64
         while index < conditions.len {
             val clause = self.conditionClauseAt(conditions: conditions, index: index)
-            try self.verifyExpr(id: clause.value)
             if clause.isBinding {
+                try self.verifyExpr(id: clause.value)
                 try self.checkPatternAccessMode(scrut: clause.value, isStruct: clause.pattern.isStruct)
                 try self.checkPatternEnum(scrut: clause.value, a: clause.pattern)
                 try self.checkDestructureComplete(a: clause.pattern, scrut: clause.value)
                 try self.verifyAddArmBinds(a: clause.pattern, scrut: clause.value)
             } else {
-                try self.checkLitCtx(id: clause.value, eKind: 0, eBits: 0, eSgn: false)
-                try self.checkCondBool(cond: clause.value)
+                try self.verifyBoolCondition(cond: clause.value)
             }
             self.cur.branchBase = self.scopeMark()
             index += 1U64
@@ -584,7 +583,7 @@ pub impl Comp {
                 self.cur.branchBase = savedBB
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-                try self.verifyExpr(id: cond)
+                try self.verifyBoolCondition(cond: cond)
                 try self.checkBranchYieldsValue(blkId: thenBlk, offset: self.exprOffset(id: id))
                 try self.checkBranchYieldsValue(blkId: elseBlk, offset: self.exprOffset(id: id))
                 try self.verifyBlock(blockId: thenBlk)

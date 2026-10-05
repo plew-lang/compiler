@@ -171,7 +171,11 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkCondBool(cond: U64) -> Result[(), CompileDiagnostic] {
+    // Every value used as a branch condition crosses this boundary, whether
+    // the branch is a statement, an expression, a loop, or a chain clause.
+    inout fn verifyBoolCondition(cond: U64) -> Result[(), CompileDiagnostic] {
+        try self.checkLitCtx(id: cond, eKind: 0, eBits: 0, eSgn: false)
+        try self.verifyExpr(id: cond)
         val bs: Bind = self.kwSpan(kw: "Bool", kwLen: 4U64)
         if bs.nameLen == 0U64 {
             return <Result.Ok value=() />

@@ -167,9 +167,7 @@ pub impl Comp {
                 self.cur.branchBase = savedBB
             }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-                try self.checkLitCtx(id: cond, eKind: 0, eBits: 0, eSgn: false)
-                try self.checkCondBool(cond: cond)
-                try self.verifyExpr(id: cond)
+                try self.verifyBoolCondition(cond: cond)
                 // locals already in scope are "outside" this branch (a `move` of one
                 // inside would be conditional) — mark the boundary for the move guard.
                 val savedBB: U64 = self.cur.branchBase
@@ -181,9 +179,7 @@ pub impl Comp {
                 self.cur.branchBase = savedBB
             }
             Stmt.While(val cond, val body) => {
-                try self.checkLitCtx(id: cond, eKind: 0, eBits: 0, eSgn: false)
-                try self.checkCondBool(cond: cond)
-                try self.verifyExpr(id: cond)
+                try self.verifyBoolCondition(cond: cond)
                 val savedBB: U64 = self.cur.branchBase
                 self.cur.branchBase = self.scopeMark()
                 self.cur.verifyLoopDepth = self.cur.verifyLoopDepth + 1U64

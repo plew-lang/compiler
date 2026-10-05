@@ -1,0 +1,3 @@
+fn main() {
+    val result = if () { give 1I64 } else { give 2I64 }
+}

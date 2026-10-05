@@ -1,0 +1,4 @@
+struct Flag { val value: Bool }
+fn main() {
+    val result = if <Flag value=true /> { give 1I64 } else { give 2I64 }
+}
