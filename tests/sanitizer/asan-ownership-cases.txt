@@ -77,3 +77,7 @@ tests/fixtures/run/mid_evaluation_no_continuation.pw
 
 # Context-completed closure signatures and Unit return cleanup.
 tests/fixtures/run/closure_contextual_generic.pw
+
+# Give exit cleanup and mutable destructured capture-cell initialization.
+tests/fixtures/run/give_exits_block.pw
+tests/fixtures/run/pattern_mutable_capture.pw
