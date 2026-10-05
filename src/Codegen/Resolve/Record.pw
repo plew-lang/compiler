@@ -1330,7 +1330,11 @@ pub impl Comp {
                     index += 1U64
                 }
             }
-            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+            Expr.Make(typeStart: _, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, val fields) => {
+                // A nominal constructor/factory owns the context for its
+                // arguments. Only an untyped structural record propagates its
+                // children's demand to the surrounding expression.
+                if isEnum || typeLen != 0U64 { return false }
                 mut val index = 0U64
                 while index < fields.len {
                     if self.expressionNeedsConstructionContext(exprId: self.makeFieldAt(fields: fields, index: index).value) { return true }
