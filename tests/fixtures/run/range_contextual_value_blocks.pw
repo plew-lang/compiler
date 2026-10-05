@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+fn consume(value: HalfOpenRange[I32]) { print(value.start) print(value.end) }
+fn result() -> ClosedRange[U64] { return { give 2 ..= 3 } }
+struct Defaults { val span: HalfOpenRange[I64] = { give 4 ..< 5 } }
+fn main() {
+    consume(value: { give 0 ..< 2 })
+    val closed = result()
+    print(closed.start)
+    print(closed.end)
+    val defaults = <Defaults />
+    print(defaults.span.start)
+    print(defaults.span.end)
+    for val value: I32 in { give 0 } ..< { give 2 } { print(value) }
+}

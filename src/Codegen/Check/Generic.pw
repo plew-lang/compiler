@@ -986,7 +986,7 @@ pub impl Comp {
                 try self.checkBoundsExpr(exprId: cond)
                 try self.checkBoundsBlock(blkId: body)
             }
-            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
+            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, varTy: _, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
                 val forMark: U64 = self.scopeMark()
                 try self.checkBoundsExpr(exprId: iter)
                 if isRange {

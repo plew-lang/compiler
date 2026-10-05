@@ -199,7 +199,7 @@ pub impl Comp {
                 }
                 return false
             }
-            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) => {
+            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) | Expr.Range(rangeTy: _, endpoints: val elems) => {
                 mut val i: U64 = 0
                 while i < elems.len {
                     if self.exprMentionsAny(exprId: self.exprAt(exprs: elems, index: i), forbidden: forbidden) {
@@ -269,7 +269,7 @@ pub impl Comp {
                 }
                 return false
             }
-            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) => {
+            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) | Expr.Range(rangeTy: _, endpoints: val elems) => {
                 mut val i: U64 = 0
                 while i < elems.len {
                     if self.exprContainsAwait(exprId: self.exprAt(exprs: elems, index: i)) { return true }
@@ -387,7 +387,7 @@ pub impl Comp {
                 if self.exprContainsAwait(exprId: cond) { return true }
                 return self.blockContainsAwait(blockId: body)
             }
-            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, val iter, val rangeHi, val body, isStruct: _, patStart: _, patLen: _, binds: _) => {
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, isRange: _, inclusive: _, val iter, val rangeHi, val body, isStruct: _, patStart: _, patLen: _, binds: _) => {
                 if self.exprContainsAwait(exprId: iter) { return true }
                 if self.exprContainsAwait(exprId: rangeHi) { return true }
                 return self.blockContainsAwait(blockId: body)

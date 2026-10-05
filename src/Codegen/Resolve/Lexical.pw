@@ -119,7 +119,7 @@ pub impl Comp {
             Expr.Move(val operand, isBorrow: _) => { self.resolveLexicalModuleExpr(id: operand, names: inout names) }
             Expr.Await(val operand) => { self.resolveLexicalModuleExpr(id: operand, names: inout names) }
             Expr.Try(val expr) => { self.resolveLexicalModuleExpr(id: expr, names: inout names) }
-            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) => {
+            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) | Expr.Range(rangeTy: _, endpoints: val elems) => {
                 mut val index = 0U64
                 while index < elems.len { self.resolveLexicalModuleExpr(id: self.exprAt(exprs: elems, index: index), names: inout names) index += 1U64 }
             }
@@ -193,7 +193,7 @@ pub impl Comp {
                     self.resolveLexicalModuleExpr(id: cond, names: inout names)
                     self.resolveLexicalModuleBlock(blockId: body, names: inout names)
                 }
-                Stmt.For(val varStart, val varLen, varTyStart: _, varTyLen: _, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, patStart: _, patLen: _, val binds) => {
+                Stmt.For(val varStart, val varLen, varTyStart: _, varTyLen: _, varTy: _, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, patStart: _, patLen: _, val binds) => {
                     self.resolveLexicalModuleExpr(id: iter, names: inout names)
                     if isRange { self.resolveLexicalModuleExpr(id: rangeHi, names: inout names) }
                     val loopMark = names.count()

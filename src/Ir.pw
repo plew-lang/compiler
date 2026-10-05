@@ -738,6 +738,7 @@ pub enum Expr {
     Array(elems: ExprRange)
     // Source-order alternating key/value expressions; Record elaborates it.
     Dictionary(entries: ExprRange)
+    Range(rangeTy: U64, endpoints: ExprRange)
     Index(base: U64, index: U64)
     Method(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange)
     // `recv#Src.name(args)` (spec/09): a method call through an extension view.
@@ -898,7 +899,7 @@ pub enum Stmt {
     // arr` — patStart/patLen name the written struct type and binds list the
     // fields to bind from each element (varStart/varLen unused then). isStruct
     // false is the single-binding form (binds empty).
-    For(varStart: U64, varLen: U64, varTyStart: U64, varTyLen: U64, isRange: Bool, inclusive: Bool, iter: U64, rangeHi: U64, body: U64, isStruct: Bool, patStart: U64, patLen: U64, binds: BindRange)
+    For(varStart: U64, varLen: U64, varTyStart: U64, varTyLen: U64, varTy: U64, isRange: Bool, inclusive: Bool, iter: U64, rangeHi: U64, body: U64, isStruct: Bool, patStart: U64, patLen: U64, binds: BindRange)
     Match(scrut: U64, arms: MatchArmRange)
     // `panic <msg>`: a diverging statement (spec: unrecoverable, never returns).
     // msg is a String expression; offset is the `panic` keyword for diagnostics.

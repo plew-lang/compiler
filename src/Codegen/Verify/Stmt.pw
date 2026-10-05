@@ -187,7 +187,7 @@ pub impl Comp {
                 self.cur.verifyLoopDepth = self.cur.verifyLoopDepth - 1U64
                 self.cur.branchBase = savedBB
             }
-            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
+            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, varTy: _, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
                 try self.verifyExpr(id: iter)
                 // a record loop pattern lowered to this For: check its bind list
                 // against the ELEMENT record's fields (spec/03).

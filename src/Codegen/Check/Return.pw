@@ -96,7 +96,7 @@ pub impl Comp {
                 }
                 return flow
             }
-            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) => {
+            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) | Expr.Range(rangeTy: _, endpoints: val elems) => {
                 mut val flow = <SourceCompletion />
                 mut val index = 0U64
                 while index < elems.len && flow.normal {
@@ -144,7 +144,7 @@ pub impl Comp {
                 val normal = !self.condIsLiteralTrue(id: cond) || self.blockCompletion(blkId: body).breaks
                 return completionThen(prefix: condition, next: <SourceCompletion normal=normal />)
             }
-            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, val isRange, inclusive: _, val iter, val rangeHi, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, val isRange, inclusive: _, val iter, val rangeHi, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {
                 val iterator = self.exprCompletion(exprId: iter)
                 if !isRange { return iterator }
                 return completionThen(prefix: iterator, next: self.exprCompletion(exprId: rangeHi))

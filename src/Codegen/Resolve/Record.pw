@@ -1470,6 +1470,18 @@ pub impl Comp {
             return <Result.Ok value=() />
         }
         match self.arena.exprs[exprId] {
+            Expr.Range(val rangeTy, val endpoints) => {
+                val head = self.arena.typeAt(index: rangeTy)
+                val start = self.internBytes(s: "start")
+                val end = self.internBytes(s: "end")
+                val offset = self.exprOffset(id: exprId)
+                val fields: Array[MakeField] = [
+                    <MakeField nameStart=start.nameStart nameLen=start.nameLen value=self.exprAt(exprs: endpoints, index: 0U64) offset=offset />,
+                    <MakeField nameStart=end.nameStart nameLen=end.nameLen value=self.exprAt(exprs: endpoints, index: 1U64) offset=offset />
+                ]
+                self.arena.exprs.set(i: exprId, value: <Expr.Make typeStart=head.nameStart typeLen=head.nameLen variantStart=0U64 variantLen=0U64 isEnum=false ty=rangeTy fields=self.pushMakeFields(fields: fields) />)
+            }
+
             Expr.Dictionary(val entries) => {
                 if !self.hasDictionaryLiteralContext(ctxRef: expectedTerm) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)") />
@@ -2261,9 +2273,19 @@ pub impl Comp {
                 try self.recordExpr(exprId: cond)
                 try self.recordBlock(blkId: body)
             }
-            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, patStart: _, patLen: _, val binds) => {
+            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val varTy, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, patStart: _, patLen: _, val binds) => {
                 val forMark: U64 = self.scopeMark()
-                try self.recordExpr(exprId: iter)
+                mut val iteratorContext = 0U64
+                if varTy != 0U64 {
+                    match self.arena.exprs[iter] {
+                        Expr.Range(val rangeTy, endpoints: _) => {
+                            val head = self.arena.typeAt(index: rangeTy)
+                            iteratorContext = self.rebuildTypeTerm(t: head, args: [varTy], assocTraitArgs: head.assocTraitArgs)
+                        }
+                        _ => {}
+                    }
+                }
+                try self.recordExpr(exprId: iter, expectedTerm: iteratorContext)
                 if isRange {
                     try self.recordExpr(exprId: rangeHi)
                     // the annotated var type if any (`for i: U64 in a..b`); an unannotated

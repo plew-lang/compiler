@@ -271,7 +271,7 @@ pub impl Comp {
                 mut val i: U64 = 0
                 while i < fields.len { self.collectGlobalDeps(id: self.makeFieldAt(fields: fields, index: i).value, into: inout into) i += 1 }
             }
-            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) => {
+            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) | Expr.Range(rangeTy: _, endpoints: val elems) => {
                 mut val i: U64 = 0
                 while i < elems.len { self.collectGlobalDeps(id: self.exprAt(exprs: elems, index: i), into: inout into) i += 1 }
             }

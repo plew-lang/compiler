@@ -1800,7 +1800,7 @@ pub impl Comp {
             mut val end: U64 = 0U64
             if exprId < self.arena.stmts.count() {
                 match self.arena.stmts[exprId] {
-                    Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, val iter, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {
+                    Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, isRange: _, inclusive: _, val iter, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {
                         start = self.exprOffset(id: iter)
                         if iter < self.arena.exprSpanEnd.count() { end = self.arena.exprSpanEnd[iter] }
                     }
@@ -6229,7 +6229,7 @@ pub impl Comp {
                 if !(try self.scanValueContinuation(exprId: cond)) { return <Result.Ok value=() /> }
                 try self.scanBlockInsts(blkId: body)
             }
-            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
+            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, varTy: _, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
                 val forMark: U64 = self.scopeMark()
                 if !(try self.scanValueContinuation(exprId: iter)) { return <Result.Ok value=() /> }
                 if isRange {
