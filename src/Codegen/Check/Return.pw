@@ -28,7 +28,7 @@ pub impl Comp {
             flow = completionThen(prefix: flow, next: self.stmtCompletion(stmtId: self.blockStmtAt(blkId: blkId, index: index)))
             index += 1U64
         }
-        return flow
+        return <SourceCompletion normal=flow.normal || flow.gives breaks=flow.breaks />
     }
 
     inout fn armsCompletion(arms: MatchArmRange) -> SourceCompletion {
@@ -112,7 +112,7 @@ pub impl Comp {
     inout fn stmtCompletion(stmtId: U64) -> SourceCompletion {
         match self.arena.stmts[stmtId] {
             Stmt.ExprStmt(val expr) => { return self.exprCompletion(exprId: expr) }
-            Stmt.Give(val value) => { return self.exprCompletion(exprId: value) }
+            Stmt.Give(val value) => { return completionThen(prefix: self.exprCompletion(exprId: value), next: <SourceCompletion normal=false gives=true />) }
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return self.exprCompletion(exprId: init) }
             Stmt.Assign(val target, val value) => { return completionThen(prefix: self.exprCompletion(exprId: target), next: self.exprCompletion(exprId: value)) }
             Stmt.Return(val value, val hasValue, offset: _) => {

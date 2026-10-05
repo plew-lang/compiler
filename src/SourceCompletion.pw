@@ -4,21 +4,22 @@
 pub struct SourceCompletion {
     pub val normal: Bool = true
     pub val breaks: Bool = false
+    pub val gives: Bool = false
 }
 pub impl SourceCompletion { factory }
 
 pub fn completionThen(prefix: SourceCompletion, next: SourceCompletion) -> SourceCompletion {
     if !prefix.normal { return prefix }
-    return <SourceCompletion normal=next.normal breaks=prefix.breaks || next.breaks />
+    return <SourceCompletion normal=next.normal breaks=prefix.breaks || next.breaks gives=prefix.gives || next.gives />
 }
 
 pub fn completionChoice(first: SourceCompletion, second: SourceCompletion) -> SourceCompletion {
-    return <SourceCompletion normal=first.normal || second.normal breaks=first.breaks || second.breaks />
+    return <SourceCompletion normal=first.normal || second.normal breaks=first.breaks || second.breaks gives=first.gives || second.gives />
 }
 
 
 // Source block result context distinguishes statements from value regions.
-// A value region still evaluates give when it has no normal continuation.
+// Give leaves the current block; block completion consumes that local edge.
 pub enum BlockResultContext {
     Statement
     Value(expectedTerm: U64, completes: Bool)

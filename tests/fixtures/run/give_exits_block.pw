@@ -1,0 +1,21 @@
+use @Std/Io only { print }
+fn main() {
+    val block = { give 1I64
+        print("unreachable block") }
+    val branch = if true { give 2I64
+        print("unreachable if") } else { give 0I64 }
+    val arm = match true {
+        true => { give 3I64
+            print("unreachable match") }
+        false => 0I64
+    }
+    val nested = { val inner = { give 4I64
+        print("unreachable inner") }
+        print(inner)
+        give 5I64
+        print("unreachable outer") }
+    print(block)
+    print(branch)
+    print(arm)
+    print(nested)
+}

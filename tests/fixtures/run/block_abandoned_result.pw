@@ -19,8 +19,9 @@ fn main() {
         val unused = {
             val inner = <Ref[Resource] value=<Resource id=20I64 /> />
             give <Ref[Resource] value=<Resource id=2I64 /> />
-            break
+            print("unreachable")
         }
+        break
     }
     mut val index = 0I64
     while index < 1I64 {
