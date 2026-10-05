@@ -377,6 +377,15 @@ pub impl Comp {
     // Record the parametric result and the independently-carried source call
     // selection.  The result is a plain TypeTerm; callee/receiver/substitution
     // remain provenance so canonical type identity cannot depend on a call.
+    // Record and declaration verification share the selected signature's
+    // substitution. Final CallTemplates are published only after verification.
+    inout fn freeCallParameterEnvironment(f: Func, args: ArgRange) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        if f.typeParams.count() == 0U64 { return <Result.Ok value=<InstanceEnvironment /> /> }
+        val inferred = try self.inferFnArgs(f: f, args: args)
+        if !self.fnArgsAllResolved(args: inferred) { return <Result.Ok value=<InstanceEnvironment /> /> }
+        return <Result.Ok value=<InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=inferred /> />
+    }
+
     inout fn recordParametricFreeCall(exprId: U64, callee: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         if callee >= self.arena.functionCount() { return <Result.Ok value=() /> }
         val f: Func = self.arena.functionAt(index: callee)
@@ -1644,19 +1653,15 @@ pub impl Comp {
                     // A complete substitution may contain caller-owned symbolic
                     // terms. These are valid context in a generic declaration;
                     // only unresolved callee binders must stay out of the body.
-                    mut val canSubstitute = cf.typeParams.count() == 0U64
-                    mut val inferred: Array[U64] = []
-                    if cf.typeParams.count() > 0U64 {
-                        inferred = (try self.inferFnArgs(f: cf, args: args))
-                        canSubstitute = self.fnArgsAllResolved(args: inferred)
-                    }
+                    val parameterEnvironment = try self.freeCallParameterEnvironment(f: cf, args: args)
+                    val canSubstitute = cf.typeParams.count() == 0U64 || parameterEnvironment.args.count() == cf.typeParams.count()
                     mut val k: U64 = 0
                     while k < args.len {
                         val parameterIndex = self.paramIndexForArg(params: cf.params, args: args, argIdx: k)
                         if parameterIndex < ps.count() {
                             mut val cctx: U64 = ps[parameterIndex].ty
                             if cctx != 0U64 && canSubstitute && cf.typeParams.count() != 0U64 {
-                                cctx = try self.groundTermForBody(ref: cctx, environment: <InstanceEnvironment params=self.copyFuncBinds(binds: cf.typeParams) args=inferred />, selfRef: 0U64, itemRef: 0U64)
+                                cctx = try self.groundTermForBody(ref: cctx, environment: parameterEnvironment, selfRef: 0U64, itemRef: 0U64)
                             }
                             if cctx != 0U64 && (canSubstitute || (try self.tyRefIsGround(ref: cctx))) {
                                 try self.recordSemanticExprExpectedResult(exprId: self.argAt(args: args, index: k).expr, expectedTerm: cctx)
