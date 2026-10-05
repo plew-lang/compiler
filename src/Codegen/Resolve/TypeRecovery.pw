@@ -203,11 +203,36 @@ pub impl Comp {
         return <Result.Ok value=(try self.exprType(id: argExpr)) />
     }
 
+    // A contextual function still supplies authored labels and annotated
+    // components before its body is checked. Use this partial structural
+    // evidence during selection without publishing an incomplete signature.
+    inout fn contextualArgumentMatchesType(exprId: U64, expected: U64) -> Result[Bool, CompileDiagnostic] {
+        if self.expressionNeedsTypeContext(exprId: exprId, allowPartialFunction: true) { return <Result.Ok value=true /> }
+        val info = try self.exprType(id: exprId)
+        if !self.isFnType(ref: info.ref) { return <Result.Ok value=true /> }
+        if !self.isFnType(ref: expected) { return <Result.Ok value=!(try self.tyRefIsGround(ref: expected)) /> }
+        val actual = self.arena.typeAt(index: info.ref)
+        val target = self.arena.typeAt(index: expected)
+        if actual.args.count() != target.args.count() || actual.argLabels.count() != target.argLabels.count() { return <Result.Ok value=false /> }
+        mut val index = 0U64
+        while index < actual.args.count() {
+            if index < actual.argLabels.count() && actual.argLabels[index] != target.argLabels[index] { return <Result.Ok value=false /> }
+            val source = actual.args[index]
+            val destination = target.args[index]
+            if source != 0U64 && (try self.tyRefIsGround(ref: source)) && (try self.tyRefIsGround(ref: destination)) {
+                val same = if index == 0U64 && self.callableResultIsUnit(ref: source) && self.callableResultIsUnit(ref: destination) { give true } else { give self.typeRefEq(a: source, b: destination) }
+                if !same { return <Result.Ok value=false /> }
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=true />
+    }
+
     // Whether an argument's recovered type matches a parameter's declared type head
     // (used to discriminate same-label overloads — spec: overload by argument type).
     // An untyped integer literal (no suffix) matches any integer-typed parameter.
     inout fn argMatchesParam(argExpr: U64, p: Param) -> Result[Bool, CompileDiagnostic] {
-        if self.expressionNeedsConstructionContext(exprId: argExpr) { return <Result.Ok value=true /> }
+        if self.expressionNeedsTypeContext(exprId: argExpr) { return self.contextualArgumentMatchesType(exprId: argExpr, expected: p.ty) }
         val ti: TypeInfo = (try self.argResolvedTypeInfo(argExpr: argExpr))
         if p.tyIsArray {
             if ti.kind == 3 {
@@ -350,7 +375,10 @@ pub impl Comp {
                 // A method-owned binder remains abstract at this stage.  It is
                 // intentionally inferred from the argument later; receiver
                 // binders, by contrast, are concrete in calleeEnvironment.
-                if expected != 0U64 && (try self.tyRefIsGround(ref: expected)) && !self.expressionNeedsConstructionContext(exprId: self.argAt(args: args, index: ai).expr) {
+                if expected != 0U64 && self.expressionNeedsTypeContext(exprId: self.argAt(args: args, index: ai).expr) {
+                    if !(try self.contextualArgumentMatchesType(exprId: self.argAt(args: args, index: ai).expr, expected: expected)) { allMatch = false }
+                }
+                if expected != 0U64 && (try self.tyRefIsGround(ref: expected)) && !self.expressionNeedsTypeContext(exprId: self.argAt(args: args, index: ai).expr) {
                     val actual: TypeInfo = (try self.groundSemanticExprTypeInfo(exprId: self.argAt(args: args, index: ai).expr, environment: callerEnvironment, selfRef: callerSelf, itemRef: callerItem))
                     if actual.kind == 2I64 {
                         // Keep this discriminator congruent with argMatchesParam:

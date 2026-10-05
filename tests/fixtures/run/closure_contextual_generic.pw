@@ -1,0 +1,28 @@
+use @Std/Io only { print }
+
+fn selected[T](first: T, second: T) -> T {
+    val select: fn(first: T, second: T) -> T = fn(first, second) { return second }
+    return select(first: first, second: second)
+}
+fn apply[T, U](value: T, transform: fn(value: T) -> U) -> U {
+    return transform(value: value)
+}
+fn outer[T](value: T) -> T { return apply(value: value, transform: fn(value) -> T { return value }) }
+fn main() {
+    print(outer(value: 42I64))
+    print(selected(first: 1I64, second: 42I64))
+    print(selected(first: "first", second: "second"))
+    print(apply(value: 42I64, transform: fn(value) -> I64 { return value }))
+    print(apply(value: 42I64, transform: { give fn(value) -> I64 { return value } }))
+    print(apply(value: 42I64, transform: if true { give fn(value) -> I64 { return value } } else { give fn(value) -> I64 { return 0I64 } }))
+    print(apply(value: 42I64, transform: match true { true => fn(value) -> I64 { return value } false => fn(value) -> I64 { return 0I64 } }))
+    val text = "captured"
+    val describe: fn(value: I64) -> String = fn(value) { return text }
+    print(describe(value: 42I64))
+    val implicit: fn() -> () = fn() { print("implicit") }
+    implicit()
+    val explicit: fn() -> () = fn() -> () { print("explicit") }
+    explicit()
+    val returned: fn() -> () = fn() { print("returned") return () }
+    returned()
+}

@@ -1,0 +1,1 @@
+fn main() { val callback: fn(value: I64) -> I64 = { give fn(other) { return other } } }

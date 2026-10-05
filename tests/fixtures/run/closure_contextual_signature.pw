@@ -1,0 +1,54 @@
+use @Std/Io only { print }
+
+fn invoke(callback: fn(value: I64) -> I64) -> I64 { return callback(value: 42I64) }
+
+fn main() {
+    // result omission through direct.
+    val resultdirect: fn(value: I64) -> I64 = fn(value: I64) { return value }
+    print(resultdirect(value: 42I64))
+    print(invoke(callback: fn(value: I64) { return value }))
+    // result omission through block.
+    val resultblock: fn(value: I64) -> I64 = { give fn(value: I64) { return value } }
+    print(resultblock(value: 42I64))
+    print(invoke(callback: { give fn(value: I64) { return value } }))
+    // result omission through if.
+    val resultif: fn(value: I64) -> I64 = if true { give fn(value: I64) { return value } } else { give fn(value: I64) { return value } }
+    print(resultif(value: 42I64))
+    print(invoke(callback: if true { give fn(value: I64) { return value } } else { give fn(value: I64) { return value } }))
+    // result omission through match.
+    val resultmatch: fn(value: I64) -> I64 = match true { true => fn(value: I64) { return value } false => fn(value: I64) { return value } }
+    print(resultmatch(value: 42I64))
+    print(invoke(callback: match true { true => fn(value: I64) { return value } false => fn(value: I64) { return value } }))
+    // parameter omission through direct.
+    val parameterdirect: fn(value: I64) -> I64 = fn(value) -> I64 { return value }
+    print(parameterdirect(value: 42I64))
+    print(invoke(callback: fn(value) -> I64 { return value }))
+    // parameter omission through block.
+    val parameterblock: fn(value: I64) -> I64 = { give fn(value) -> I64 { return value } }
+    print(parameterblock(value: 42I64))
+    print(invoke(callback: { give fn(value) -> I64 { return value } }))
+    // parameter omission through if.
+    val parameterif: fn(value: I64) -> I64 = if true { give fn(value) -> I64 { return value } } else { give fn(value) -> I64 { return value } }
+    print(parameterif(value: 42I64))
+    print(invoke(callback: if true { give fn(value) -> I64 { return value } } else { give fn(value) -> I64 { return value } }))
+    // parameter omission through match.
+    val parametermatch: fn(value: I64) -> I64 = match true { true => fn(value) -> I64 { return value } false => fn(value) -> I64 { return value } }
+    print(parametermatch(value: 42I64))
+    print(invoke(callback: match true { true => fn(value) -> I64 { return value } false => fn(value) -> I64 { return value } }))
+    // both omission through direct.
+    val bothdirect: fn(value: I64) -> I64 = fn(value) { return value }
+    print(bothdirect(value: 42I64))
+    print(invoke(callback: fn(value) { return value }))
+    // both omission through block.
+    val bothblock: fn(value: I64) -> I64 = { give fn(value) { return value } }
+    print(bothblock(value: 42I64))
+    print(invoke(callback: { give fn(value) { return value } }))
+    // both omission through if.
+    val bothif: fn(value: I64) -> I64 = if true { give fn(value) { return value } } else { give fn(value) { return value } }
+    print(bothif(value: 42I64))
+    print(invoke(callback: if true { give fn(value) { return value } } else { give fn(value) { return value } }))
+    // both omission through match.
+    val bothmatch: fn(value: I64) -> I64 = match true { true => fn(value) { return value } false => fn(value) { return value } }
+    print(bothmatch(value: 42I64))
+    print(invoke(callback: match true { true => fn(value) { return value } false => fn(value) { return value } }))
+}

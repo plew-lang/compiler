@@ -465,6 +465,7 @@ pub impl SemanticClosureCapture { factory }
 // synthetic BodyInstance key and an environment parameter which is not a
 // source-level parameter.
 pub struct SemanticClosureParameter {
+    pub val nameLen: U64 = 0U64
     pub val bindingTarget: U64 = 0U64
     pub val typeTerm: U64 = 0U64
     pub val isInout: Bool = false

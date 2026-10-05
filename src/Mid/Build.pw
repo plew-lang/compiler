@@ -2532,7 +2532,12 @@ pub fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
             }
             // Copy retains into the ABI result place and Move transfers there;
             // only then may lexical cleanup destroy the source locals.
-            if !state.hasReturnPlace { return <MidBuildError.InvalidFunction /> }
+            if !state.hasReturnPlace {
+                if !c.callableResultIsUnit(ref: term) { return <MidBuildError.InvalidFunction /> }
+                midEmitAllScopeExits(state: inout state)
+                midSetTerminator(state: inout state, terminator: <MidTerminator.Return />)
+                return <MidBuildError.None />
+            }
             val destination: MidPlace = <MidPlace local=state.returnPlace typeTerm=state.returnTypeTerm />
             midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=state.returnTypeTerm operand=midReturnOperand(c: inout c, operand: operandValue, typeTerm: term) /> />)
             midEmitAllScopeExits(state: inout state)

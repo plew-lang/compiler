@@ -29,9 +29,8 @@ pub impl LlvmCtx {
         }
         mut val rty: LLVMTypeRef = self.voidty
         if t.args.count() > 0U64 {
-            val rt: TypeRef = c.arena.typeAt(index: t.args[0])
-            // a `()` return (the unnamed unit record) is void; any named type is a value.
-            if rt.nameLen != 0U64 {
+            // Unit has no ABI payload, including an explicitly annotated empty record.
+            if !c.callableResultIsUnit(ref: t.args[0]) {
                 rty = (try self.llvmTypeOfRef(c: inout c, ref: t.args[0]))
             }
         }

@@ -5106,7 +5106,13 @@ pub impl Comp {
             if signature.closureSignatureId != 0U64 {
                 // A closure literal owns its function value even when it is
                 // never passed to a call or bound to an authored local.
-                try self.enqueueFinalDestruction(typeRef: self.arena.closureSignature(bodyId: bodyId).functionTypeTerm)
+                val functionType = self.arena.closureSignature(bodyId: bodyId).functionTypeTerm
+                try self.enqueueFinalDestruction(typeRef: functionType)
+                // Source result terms remain observable as expression values
+                // even when the ABI erases a Unit result to void.
+                for component in self.arena.typeAt(index: functionType).args {
+                    try self.enqueueFinalDestruction(typeRef: component)
+                }
             }
             state.signatures += 1U64
         }
@@ -5331,13 +5337,45 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Complete only omitted annotations from the consumer's function type.
+    // Authored labels and explicit types remain evidence for normal matching.
+    inout fn resolveClosureFunctionType(exprId: U64, parameters: Array[Param], hasReturn: Bool, returnType: U64, expectedTerm: U64) -> Result[U64, CompileDiagnostic] {
+        val recorded = self.semanticExprTerm(exprId: exprId)
+        if recorded != 0U64 { return <Result.Ok value=recorded /> }
+        val contextual = self.isFnType(ref: expectedTerm)
+        mut val expected: Array[U64] = []
+        if contextual { expected = self.arena.typeAt(index: expectedTerm).args }
+        if contextual && expected.count() != parameters.count() + 1U64 {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "closure parameter count does not match the expected function type") />
+        }
+        mut val result = returnType
+        if !hasReturn && contextual { result = expected[0U64] }
+        mut val types: Array[U64] = [result]
+        mut val labels: Array[U64] = [0U64]
+        mut val index = 0U64
+        while index < parameters.count() {
+            val parameter = parameters[index]
+            mut val type = parameter.ty
+            if type == 0U64 && contextual { type = expected[index + 1U64] }
+            if type == 0U64 {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "cannot infer closure parameter type; provide a function type context or an explicit annotation") />
+            }
+            types.append(type)
+            labels.append(if parameter.noLabel { give 0U64 } else { give parameter.nameId })
+            index += 1U64
+        }
+        val name = self.kwSpan(kw: "fn", kwLen: 2U64)
+        return <Result.Ok value=self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=types argLabels=labels />) />
+    }
+
     inout fn publishSemanticClosure(ownerFnIdx: U64, closureId: U64, parameters: Array[Param], hasReturn: Bool, returnTypeTerm: U64, bodyBlock: U64) -> Result[(), CompileDiagnostic] {
         val captures: Array[SemanticClosureCapture] = []
+        val signature = self.arena.typeAt(index: self.semanticExprTerm(exprId: closureId))
         mut val frozenParameters: Array[SemanticClosureParameter] = []
         mut val parameterI: U64 = 0U64
         while parameterI < parameters.count() {
             val parameter: Param = parameters[parameterI]
-            frozenParameters.append(<SemanticClosureParameter bindingTarget=parameter.nameStart typeTerm=parameter.ty isInout=parameter.isInout isMove=parameter.isMove isBorrow=parameter.isBorrow />)
+            frozenParameters.append(<SemanticClosureParameter bindingTarget=parameter.nameStart nameLen=parameter.nameLen typeTerm=signature.args[parameterI + 1U64] isInout=parameter.isInout isMove=parameter.isMove isBorrow=parameter.isBorrow />)
             parameterI += 1U64
         }
         try self.putSemanticClosure(closure: <SemanticClosure ownerFnIdx=(try self.semanticBodyOwner(fnIdx: ownerFnIdx)) exprId=closureId bodyKey=self.closureBodyKey(closureId: closureId) functionTypeTerm=self.semanticExprTerm(exprId: closureId) bodyBlock=bodyBlock parameters=frozenParameters hasReturn=hasReturn returnTypeTerm=returnTypeTerm captures=captures />)
@@ -5422,7 +5460,7 @@ pub impl Comp {
             else { passings.append(<CallArgumentPassing.Borrow />) }
             parameterIndex += 1U64
         }
-        self.arena.setClosureSignature(bodyId: closureBodyId, parameters: parameters, passings: passings, result: signature.args[0U64], closure: <ClosureSignature declarationIndex=index + 1U64 templatesClosed=(try self.callTemplatesClosedForBody(fnIdx: ownerFnIdx)) environmentDropBodyId=dropBodyId functionTypeTerm=functionType captures=captures />)
+        self.arena.setClosureSignature(bodyId: closureBodyId, parameters: parameters, passings: passings, result: if closure.hasReturn { give signature.args[0U64] } else { give 0U64 }, closure: <ClosureSignature declarationIndex=index + 1U64 templatesClosed=(try self.callTemplatesClosedForBody(fnIdx: ownerFnIdx)) environmentDropBodyId=dropBodyId functionTypeTerm=functionType captures=captures />)
         typeI = 0U64
         while typeI < signature.args.count() { try self.scanType(ref: signature.args[typeI]) typeI += 1U64 }
         captureI = 0U64
@@ -5466,13 +5504,9 @@ pub impl Comp {
             self.addLocal(nameStart: capture.bindingTarget, nameLen: capture.nameLen, tyStart: info.nameStart, tyLen: info.nameLen, isArray: info.kind == 3, ty: capture.typeTerm, isInout: false, isMut: mutable, owned: false)
         }
         self.cur.captureMark = self.scopeMark()
-        match self.arena.exprs[closure.exprId] {
-            Expr.Closure(params: val parameters, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
-                for parameter in parameters {
-                    self.addLocal(nameStart: parameter.nameStart, nameLen: parameter.nameLen, tyStart: parameter.tyStart, tyLen: parameter.tyLen, isArray: parameter.tyIsArray, ty: parameter.ty, isInout: parameter.isInout, isMut: false, owned: false)
-                }
-            }
-            _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: closure declaration lost its expression") /> }
+        for parameter in closure.parameters {
+            val info = self.typeInfoOfRef(ref: parameter.typeTerm)
+            self.addLocal(nameStart: parameter.bindingTarget, nameLen: parameter.nameLen, tyStart: info.nameStart, tyLen: info.nameLen, isArray: info.kind == 3, ty: parameter.typeTerm, isInout: parameter.isInout, isMut: false, owned: parameter.isMove)
         }
         return self.scanBlockInsts(blkId: closure.bodyBlock)
     }
