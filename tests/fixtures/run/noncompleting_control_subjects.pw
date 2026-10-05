@@ -1,0 +1,45 @@
+use @Std/Io only { print }
+fn iterable() -> I64 {
+    for val n in { return 7I64
+        give [1I64] } { print(n) }
+}
+fn captured() -> I64 {
+    return match { return 8I64 } { val value => 0I64 }
+}
+fn conditional() -> I64 {
+    if val value = { return 9I64 } { print(0I64) }
+}
+fn loopCondition() -> I64 {
+    while val value = { return 10I64 } { print(0I64) }
+}
+fn chain(flag: Bool) -> I64 {
+    if flag && val value = { return 11I64 } { print(0I64) }
+    else { return 12I64 }
+}
+fn loopBreak() -> I64 {
+    while true {
+        for val n in { break
+            give [1I64] } { print(n) }
+    }
+    return 13I64
+}
+fn loopContinue() -> I64 {
+    mut val count = 0I64
+    while count < 2I64 {
+        count += 1I64
+        for val n in { continue
+            give [1I64] } { print(n) }
+        print(99I64)
+    }
+    return count
+}
+fn main() {
+    print(iterable())
+    print(captured())
+    print(conditional())
+    print(loopCondition())
+    print(chain(flag: true))
+    print(chain(flag: false))
+    print(loopBreak())
+    print(loopContinue())
+}

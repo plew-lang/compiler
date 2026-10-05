@@ -55,7 +55,8 @@ fn appendMidGiveDestinations(c: inout Comp, state: inout MidBuildState, blockId:
     val block = c.arena.blocks[blockId]
     mut val index = 0U64
     while index < block.stmtLen {
-        match c.arena.stmts[c.arena.blockStmtPool[block.stmtStart + index]] {
+        val statement = c.arena.blockStmtPool[block.stmtStart + index]
+        match c.arena.stmts[statement] {
             Stmt.Give(value: val value) => {
                 val term = c.semanticExprTerm(exprId: value)
                 val local = addMidTemporary(state: inout state, typeTerm: term, isUnique: midTermIsUnique(c: inout c, term: term))
@@ -63,6 +64,7 @@ fn appendMidGiveDestinations(c: inout Comp, state: inout MidBuildState, blockId:
             }
             _ => {}
         }
+        if !c.stmtCompletion(stmtId: statement).normal { break }
         index += 1U64
     }
 }
@@ -3015,6 +3017,15 @@ pub fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> 
 pub fn buildMidFor(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     match c.arena.stmts[stmtId] {
         Stmt.For(varStart: val varStart, varLen: _, varTyStart: _, varTyLen: _, isRange: val isRange, inclusive: _, iter: val iter, rangeHi: _, body: val body, isStruct: val isStruct, patStart: _, patLen: _, binds: _) => {
+            // The protocol and its storage exist only after the iterable
+            // evaluation has produced a value. A terminating evaluation has
+            // no iterator result or Item recipe to instantiate.
+            if c.valueControlHasNoResult(exprId: iter) {
+                val evaluation = midOpenScope(state: inout state)
+                val input = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: iter, typeTerm: c.semanticExprTerm(exprId: iter), allowAccessMarker: false)
+                midFinishEvaluationScope(state: inout state, scope: evaluation)
+                return input.error
+            }
             if isRange || isStruct { return <MidBuildError.UnsupportedFor /> }
             mut val recipe: ForTypeRecipe = <ForTypeRecipe />
             mut val index: U64 = 0U64

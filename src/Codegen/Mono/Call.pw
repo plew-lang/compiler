@@ -5972,7 +5972,7 @@ pub impl Comp {
             }
             Expr.IfChain(val conditions, val thenBlk, val elseBlk) => { try self.scanConditionChain(conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk) }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-                try self.scanExprInsts(exprId: cond)
+                if !(try self.scanValueContinuation(exprId: cond)) { return <Result.Ok value=() /> }
                 try self.scanBlockInsts(blkId: thenBlk)
                 try self.scanBlockInsts(blkId: elseBlk)
             }
@@ -5981,8 +5981,8 @@ pub impl Comp {
                 // under the ACTIVE env — every fn instance grounds the stage anew (the
                 // AST rewrite is shared; the groundings are not).
                 try self.registerChainSiteInsts(exprId: exprId)
+                if !(try self.scanValueContinuation(exprId: scrut)) { return <Result.Ok value=() /> }
                 try self.finalizeCurrentBodyMatch(matchSource: <MatchSource.Expression exprId=exprId />)
-                try self.scanExprInsts(exprId: scrut)
                 mut val ai: U64 = 0
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
@@ -6133,12 +6133,24 @@ pub impl Comp {
         return <Result.Ok value=<LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=ref /> />
     }
 
+    // Record has already checked source syntax and types. Executable
+    // finalization follows only normal continuation after evaluating a value.
+    inout fn scanValueContinuation(exprId: U64) -> Result[Bool, CompileDiagnostic] {
+        try self.scanExprInsts(exprId: exprId)
+        return <Result.Ok value=self.exprCompletesNormally(exprId: exprId) />
+    }
+
     inout fn scanConditionChain(conditions: ConditionClauseRange, thenBlk: U64, elseBlk: U64) -> Result[(), CompileDiagnostic] {
         val mark = self.scopeMark()
         mut val index = 0U64
         while index < conditions.len {
             val clause = self.conditionClauseAt(conditions: conditions, index: index)
-            try self.scanExprInsts(exprId: clause.value)
+            if !(try self.scanValueContinuation(exprId: clause.value)) {
+                self.popLocals(mark: mark)
+                // Earlier clauses can still fail before reaching this value.
+                if index > 0U64 { try self.scanBlockInsts(blkId: elseBlk) }
+                return <Result.Ok value=() />
+            }
             if clause.isBinding {
                 val source = <MatchSource.Condition clauseIndex=conditions.start + index />
                 try self.finalizeCurrentBodyMatch(matchSource: source)
@@ -6203,21 +6215,21 @@ pub impl Comp {
             }
             Stmt.IfChain(val conditions, val thenBlk, val elseBlk) => { try self.scanConditionChain(conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk) }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-                try self.scanExprInsts(exprId: cond)
+                if !(try self.scanValueContinuation(exprId: cond)) { return <Result.Ok value=() /> }
                 try self.scanBlockInsts(blkId: thenBlk)
                 if hasElse {
                     try self.scanBlockInsts(blkId: elseBlk)
                 }
             }
             Stmt.While(val cond, val body) => {
-                try self.scanExprInsts(exprId: cond)
+                if !(try self.scanValueContinuation(exprId: cond)) { return <Result.Ok value=() /> }
                 try self.scanBlockInsts(blkId: body)
             }
             Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
                 val forMark: U64 = self.scopeMark()
-                try self.scanExprInsts(exprId: iter)
+                if !(try self.scanValueContinuation(exprId: iter)) { return <Result.Ok value=() /> }
                 if isRange {
-                    try self.scanExprInsts(exprId: rangeHi)
+                    if !(try self.scanValueContinuation(exprId: rangeHi)) { return <Result.Ok value=() /> }
                     // type the loop var so generic calls on it in the body (`print(i)`)
                     // ground: the annotation if given, else the bound's own type.
                     mut val rtS: U64 = varTyStart
@@ -6432,7 +6444,7 @@ pub impl Comp {
                 self.popLocals(mark: forMark)
             }
             Stmt.Match(val scrut, val arms) => {
-                try self.scanExprInsts(exprId: scrut)
+                if !(try self.scanValueContinuation(exprId: scrut)) { return <Result.Ok value=() /> }
                 try self.finalizeCurrentBodyMatch(matchSource: <MatchSource.Statement stmtId=stmtId />)
                 mut val ai: U64 = 0
                 while ai < arms.len {
@@ -6457,7 +6469,9 @@ pub impl Comp {
         val mark: U64 = self.scopeMark()
         mut val i: U64 = 0
         while i < self.blockStmtCount(blkId: blkId) {
-            try self.scanStmtInsts(stmtId: self.blockStmtAt(blkId: blkId, index: i))
+            val statement = self.blockStmtAt(blkId: blkId, index: i)
+            try self.scanStmtInsts(stmtId: statement)
+            if !self.stmtCompletion(stmtId: statement).normal { break }
             i += 1
         }
         self.popLocals(mark: mark)
