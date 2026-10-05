@@ -8,9 +8,9 @@
 pub impl Comp {
     // A value pattern is an ordinary Eq test. It creates no binding scope;
     // evaluate the subject first, followed by the authored comparison value.
-    inout fn lowerValueCondition(subject: U64, pattern: U64) -> ConditionClause {
+    inout fn lowerValueCondition(subject: U64, pattern: U64, isWhileCondition: Bool) -> ConditionClause {
         val comparison = self.pushExpr(e: <Expr.Binary op=opEq() lhs=subject rhs=pattern />)
-        return <ConditionClause isBinding=false value=comparison pattern=<PatInfo isWildcard=true enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=<BindRange start=0U64 len=0U64 /> isStruct=false /> />
+        return <ConditionClause isWhileCondition=isWhileCondition isBinding=false value=comparison pattern=<PatInfo isWildcard=true enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=<BindRange start=0U64 len=0U64 /> isStruct=false /> />
     }
 
     inout fn lowerConditionClauses(conditions: Array[CondClause]) -> Result[ConditionClauseRange, CompileDiagnostic] {
@@ -18,10 +18,10 @@ pub impl Comp {
         for val condition in conditions {
             val value = try self.lowerExpr(e: condition.expr)
             if condition.isBinding && condition.pattern.isValuePattern {
-                lowered.append(self.lowerValueCondition(subject: value, pattern: (try self.lowerExpr(e: condition.pattern.lit))))
+                lowered.append(self.lowerValueCondition(subject: value, pattern: (try self.lowerExpr(e: condition.pattern.lit)), isWhileCondition: condition.isWhileCondition))
             } else {
                 val pattern = try self.lowerPatternInfo(p: condition.pattern)
-                lowered.append(<ConditionClause isBinding=condition.isBinding value=value pattern=pattern />)
+                lowered.append(<ConditionClause isWhileCondition=condition.isWhileCondition isBinding=condition.isBinding value=value pattern=pattern />)
             }
         }
         return <Result.Ok value=self.pushConditionClauses(conditions: lowered) />
@@ -36,12 +36,12 @@ pub impl Comp {
             if condition.isBinding {
                 val pattern = syntaxPattern(file: self.syntax, id: condition.pattern)
                 if pattern.isValuePattern {
-                    lowered.append(self.lowerValueCondition(subject: value, pattern: (try self.lowerSyntaxExpr(id: pattern.lit))))
+                    lowered.append(self.lowerValueCondition(subject: value, pattern: (try self.lowerSyntaxExpr(id: pattern.lit)), isWhileCondition: condition.isWhileCondition))
                 } else {
-                    lowered.append(<ConditionClause isBinding=true value=value pattern=(try self.lowerSyntaxPatternInfo(pattern: pattern)) />)
+                    lowered.append(<ConditionClause isWhileCondition=condition.isWhileCondition isBinding=true value=value pattern=(try self.lowerSyntaxPatternInfo(pattern: pattern)) />)
                 }
             } else {
-                lowered.append(<ConditionClause isBinding=false value=value pattern=<PatInfo isWildcard=true enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=<BindRange start=0U64 len=0U64 /> isStruct=false /> />)
+                lowered.append(<ConditionClause isWhileCondition=condition.isWhileCondition isBinding=false value=value pattern=<PatInfo isWildcard=true enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=<BindRange start=0U64 len=0U64 /> isStruct=false /> />)
             }
             index += 1U64
         }

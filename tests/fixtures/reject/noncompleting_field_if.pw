@@ -1,0 +1,5 @@
+fn test() -> I64 {
+    val value = (if true { return 7I64 } else { return 8I64 }).value
+    return 9I64
+}
+fn main() { test() }

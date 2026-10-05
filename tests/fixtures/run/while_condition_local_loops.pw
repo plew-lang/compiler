@@ -1,0 +1,22 @@
+use @Std/Io only { print }
+fn main() {
+    mut val count = 0I64
+    while {
+        mut val local = 0I64
+        while local < 3I64 {
+            local += 1I64
+            if local == 1I64 { continue }
+            break
+        }
+        count += local
+        give false
+    } {}
+    while val flag = {
+        while true { break }
+        give true
+    } && flag {
+        count += 1I64
+        break
+    }
+    print(count)
+}

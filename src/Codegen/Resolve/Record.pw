@@ -1743,6 +1743,9 @@ pub impl Comp {
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 try self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
+                if !self.exprCompletesNormally(exprId: base) {
+                    return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "field access requires a receiver that can produce a value (spec/11)") />
+                }
                 // Field selection is a structural type-term operation. Once the
                 // receiver has been recorded, derive the exact field term here
                 // rather than forcing every BodyInstance to re-walk Field in

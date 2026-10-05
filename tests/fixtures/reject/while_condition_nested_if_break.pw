@@ -1,0 +1,7 @@
+fn main() {
+    while true {
+        while if true { break
+give true } else { give false } {}
+        break
+    }
+}

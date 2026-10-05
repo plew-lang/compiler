@@ -9,17 +9,32 @@
 // only the checks checkLitCtx does not perform.
 
 pub impl Comp {
+    // A while header cannot inherit a surrounding loop target. Loops created
+    // inside the expression establish their own ordinary targets.
+    inout fn verifyConditionValue(id: U64, isBool: Bool, isWhileCondition: Bool) -> Result[(), CompileDiagnostic] {
+        val savedDepth = self.cur.verifyLoopDepth
+        val savedCondition = self.cur.verifyWhileCondition
+        if isWhileCondition {
+            self.cur.verifyLoopDepth = 0U64
+            self.cur.verifyWhileCondition = true
+        }
+        val checked = if isBool { give self.verifyBoolCondition(cond: id) } else { give self.verifyExpr(id: id) }
+        self.cur.verifyLoopDepth = savedDepth
+        self.cur.verifyWhileCondition = savedCondition
+        return checked
+    }
+
     inout fn verifyConditionClauses(conditions: ConditionClauseRange) -> Result[(), CompileDiagnostic] {
         mut val index = 0U64
         while index < conditions.len {
             val clause = self.conditionClauseAt(conditions: conditions, index: index)
             if clause.isBinding {
-                try self.verifyExpr(id: clause.value)
+                try self.verifyConditionValue(id: clause.value, isBool: false, isWhileCondition: clause.isWhileCondition)
                 try self.checkPatternAccessMode(scrut: clause.value, isStruct: clause.pattern.isStruct)
                 try self.checkDestructureComplete(a: clause.pattern, scrut: clause.value)
                 try self.verifyAddArmBinds(a: clause.pattern, scrut: clause.value)
             } else {
-                try self.verifyBoolCondition(cond: clause.value)
+                try self.verifyConditionValue(id: clause.value, isBool: true, isWhileCondition: clause.isWhileCondition)
             }
             self.cur.branchBase = self.scopeMark()
             index += 1U64
@@ -106,9 +121,12 @@ pub impl Comp {
                 // a closure is a function boundary: `break`/`continue` inside it do not
                 // target an enclosing loop, so reset the loop depth across its body.
                 val sLoopDepth: U64 = self.cur.verifyLoopDepth
+                val savedWhileCondition = self.cur.verifyWhileCondition
+                self.cur.verifyWhileCondition = false
                 self.cur.verifyLoopDepth = 0U64
                 try self.verifyBlock(blockId: body)
                 self.cur.verifyLoopDepth = sLoopDepth
+                self.cur.verifyWhileCondition = savedWhileCondition
                 // a closure with a declared NON-unit return type must return on every path,
                 // like a function (`fn()->I64 { }` is missing its return; `fn()->() { }` is
                 // void and exempt). spec/04.

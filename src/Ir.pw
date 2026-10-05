@@ -667,6 +667,7 @@ pub struct ConditionClauseRange {
 }
 pub impl ConditionClauseRange { factory }
 pub struct ConditionClause {
+    pub val isWhileCondition: Bool = false
     pub val isBinding: Bool
     pub val value: U64
     pub val pattern: PatInfo
@@ -3534,6 +3535,7 @@ pub struct Cursor {
     // Declaration capture recording uses a 1-based SemanticClosure row.
     pub mut val recordClosureIndex: U64 = 0U64
     pub mut val recordCaptureMark: U64 = 0U64
+    pub mut val verifyWhileCondition: Bool = false
     pub mut val verifyLoopDepth: U64 = 0
     pub mut val verifyMovedIdx: Array[U64] = []
     pub mut val branchBase: U64 = 0

@@ -179,7 +179,7 @@ pub impl Comp {
                 self.cur.branchBase = savedBB
             }
             Stmt.While(val cond, val body) => {
-                try self.verifyBoolCondition(cond: cond)
+                try self.verifyConditionValue(id: cond, isBool: true, isWhileCondition: true)
                 val savedBB: U64 = self.cur.branchBase
                 self.cur.branchBase = self.scopeMark()
                 self.cur.verifyLoopDepth = self.cur.verifyLoopDepth + 1U64
@@ -321,11 +321,17 @@ pub impl Comp {
             }
             Stmt.Break(val offset) => {
                 if self.cur.verifyLoopDepth == 0U64 {
+                    if self.cur.verifyWhileCondition {
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`break` cannot target a surrounding loop from a while condition (spec/11)") />
+                    }
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`break` outside a loop (spec/11)") />
                 }
             }
             Stmt.Continue(val offset) => {
                 if self.cur.verifyLoopDepth == 0U64 {
+                    if self.cur.verifyWhileCondition {
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`continue` cannot target a surrounding loop from a while condition (spec/11)") />
+                    }
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`continue` outside a loop (spec/11)") />
                 }
             }

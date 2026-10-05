@@ -1,0 +1,7 @@
+fn main() {
+    while true {
+        while val flag = true && { continue
+give true } {}
+        break
+    }
+}
