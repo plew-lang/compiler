@@ -94,15 +94,16 @@ pub impl Comp {
         if expected >= self.arena.typeCount() || inferred >= self.arena.typeCount() {
             return <Result.Ok value=true />
         }
-        // ground the expected type through any active generic env (a `-> T` return / `T`
-        // param resolves to the concrete instantiation argument); inferred is grounded.
+        // Normalize both sides in the same lexical environment. Inferred
+        // locals can retain associated projections from their written annotation.
         val exp: U64 = (try self.groundTypeRef(ref: expected))
-        if exp >= self.arena.typeCount() {
+        val actual: U64 = (try self.groundTypeRef(ref: inferred))
+        if exp >= self.arena.typeCount() || actual >= self.arena.typeCount() {
             return <Result.Ok value=true />
         }
         val te = self.arena.typeTerms[exp]
-        val tin = self.arena.typeTerms[inferred]
-        if te.isSendable && !((try self.typeRefIsSendable(ref: inferred))) {
+        val tin = self.arena.typeTerms[actual]
+        if te.isSendable && !((try self.typeRefIsSendable(ref: actual))) {
             return <Result.Ok value=false />
         }
         if te.isAny || tin.isAny {
@@ -113,8 +114,8 @@ pub impl Comp {
             // existing `any` source is left to the conservative pass-through.
             if te.isAny {
                 if !(tin.isAny) {
-                    if self.isActiveTypeParam(t: self.arena.typeAt(index: inferred)) {
-                        if !(self.activeTypeParamConformsToTrait(source: self.arena.typeAt(index: inferred), trait: self.arena.typeAt(index: exp))) {
+                    if self.isActiveTypeParam(t: self.arena.typeAt(index: actual)) {
+                        if !(self.activeTypeParamConformsToTrait(source: self.arena.typeAt(index: actual), trait: self.arena.typeAt(index: exp))) {
                             return <Result.Ok value=false />
                         }
                         return <Result.Ok value=true />
@@ -125,7 +126,7 @@ pub impl Comp {
                         // instance query as `where`: a witness for `P[I64]`
                         // does not construct an `any P[String]` box.
                         val constraint: TraitConstraint = self.existentialTraitConstraint(ref: exp)
-                        if !((try self.conformsTraitConstraint(ref: inferred, constraint: constraint))) {
+                        if !((try self.conformsTraitConstraint(ref: actual, constraint: constraint))) {
                             return <Result.Ok value=false />
                         }
                     }
@@ -138,7 +139,7 @@ pub impl Comp {
         val eFloat: Bool = self.isFloatType(start: te.nameStart, len: te.nameLen)
         val iFloat: Bool = self.isFloatType(start: tin.nameStart, len: tin.nameLen)
         if eFloat && iFloat {
-            return <Result.Ok value=self.typeRefEq(a: exp, b: inferred) />
+            return <Result.Ok value=self.typeRefEq(a: exp, b: actual) />
         }
         if eFloat || iFloat {
             // one side float, the other not: a mismatch UNLESS the non-float side is an
@@ -165,7 +166,7 @@ pub impl Comp {
         if eTp {
             if iTp {
                 // both are this function's parameters: compatible iff the SAME one.
-                return <Result.Ok value=te.paramId == tin.paramId && te.viewExtId == tin.viewExtId && self.sameCompatibilityViewSet(expectedRef: exp, inferredRef: inferred) />
+                return <Result.Ok value=te.paramId == tin.paramId && te.viewExtId == tin.viewExtId && self.sameCompatibilityViewSet(expectedRef: exp, inferredRef: actual) />
             }
             // T vs a CONCRETE type -> incompatible; T vs unknown / another param -> lenient.
             if self.isConcreteType(type: tin) {
@@ -204,7 +205,7 @@ pub impl Comp {
             // and then take the ordinary structural path; it is not a second
             // equality rule.
             mut val er: U64 = exp
-            mut val ir: U64 = inferred
+            mut val ir: U64 = actual
             if !(te.isRecord) {
                 if te.nameLen == 0U64 || self.arena.bytes[te.nameStart] != 40U8 { return <Result.Ok value=false />}
                 er = (try self.recordTypeTermForLayout(name: <Bind nameStart=te.nameStart nameLen=te.nameLen fieldStart=0U64 fieldLen=0U64 />))
@@ -226,12 +227,12 @@ pub impl Comp {
                 return <Result.Ok value=(try self.recordsCompatible(teRef: er, tinRef: ir)) />
             }
         }
-        if self.isFnType(ref: exp) || self.isFnType(ref: inferred) {
-            if !(self.isFnType(ref: exp)) || !(self.isFnType(ref: inferred)) { return <Result.Ok value=false /> }
+        if self.isFnType(ref: exp) || self.isFnType(ref: actual) {
+            if !(self.isFnType(ref: exp)) || !(self.isFnType(ref: actual)) { return <Result.Ok value=false /> }
             if te.args.len != tin.args.len { return <Result.Ok value=false /> }
             mut val index: U64 = 0U64
             while index < te.args.len {
-                if self.typeTermRefIdentityChildLabel(ref: exp, index: index) != self.typeTermRefIdentityChildLabel(ref: inferred, index: index) { return <Result.Ok value=false /> }
+                if self.typeTermRefIdentityChildLabel(ref: exp, index: index) != self.typeTermRefIdentityChildLabel(ref: actual, index: index) { return <Result.Ok value=false /> }
                 val expectedChild = self.arena.typeArgumentPool[te.args.start + index]
                 val inferredChild = self.arena.typeArgumentPool[tin.args.start + index]
                 if !((try self.typesCompatible(expected: expectedChild, inferred: inferredChild))) { return <Result.Ok value=false /> }
@@ -239,7 +240,7 @@ pub impl Comp {
             }
             return <Result.Ok value=true />
         }
-        return <Result.Ok value=(try self.compatNamed(expectedRef: exp, inferredRef: inferred, te: te, tin: tin)) />
+        return <Result.Ok value=(try self.compatNamed(expectedRef: exp, inferredRef: actual, te: te, tin: tin)) />
     }
 
     // Structural field-by-field compatibility of two Record TypeTerms.
