@@ -53,20 +53,9 @@ pub impl Comp {
             }
             _ => {}
         }
-        // Use the same recorded/contextual expression type as call inference.
-        // The syntax-only adapter can lose operand-derived floating width.
-        val ti: TypeInfo = (try self.exprType(id: id))
-        if ti.ref != 0U64 {
-            return <Result.Ok value=ti.ref />
-        }
-        if ti.nameLen == 0U64 {
-            return <Result.Ok value=0U64 />
-        }
-        // arrays (kind 3): conservative for now — their element comparison is deferred.
-        if ti.kind == 3 {
-            return <Result.Ok value=0U64 />
-        }
-        return <Result.Ok value=self.simpleTypeRef(nameStart: ti.nameStart, nameLen: ti.nameLen) />
+        // Call inference and value compatibility consume the same body-local
+        // semantic term, including recorded operand context and projections.
+        return self.groundedTypeOf(id: id)
     }
 
     // The empty-view case needs no owned array. Preserve the existing set
