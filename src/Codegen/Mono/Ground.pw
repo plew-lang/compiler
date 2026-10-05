@@ -90,7 +90,10 @@ pub impl Comp {
                 if params[pi].paramId == t.paramId {
                     val replacement: U64 = values[pi]
                     if replacement != ref {
-                        val grounded: U64 = self.groundTermInEnvironment(ref: replacement, params: params, values: values, selfRef: selfRef, itemRef: itemRef)
+                        // Substitution values belong to the caller's scope.
+                        // Reapplying this map would capture its binders and
+                        // infinitely expand recursive T -> Container[T].
+                        val grounded = self.groundTermInEnvironment(ref: replacement, params: [], values: [], selfRef: selfRef, itemRef: itemRef)
                         return self.typeRefWithAddedViewSources(ref: grounded, additions: self.typeRefViewSources(ref: ref))
                     }
                     return ref
@@ -117,7 +120,10 @@ pub impl Comp {
                 if termNameId == binder.nameId || (binder.nameId == 0U64 && spansEqual(c: inout self, aStart: t.nameStart, aLen: t.nameLen, bStart: binder.nameStart, bLen: binder.nameLen)) {
                     val replacement: U64 = values[pi]
                     if replacement != ref {
-                        val grounded: U64 = self.groundTermInEnvironment(ref: replacement, params: params, values: values, selfRef: selfRef, itemRef: itemRef)
+                        // Substitution values belong to the caller's scope.
+                        // Reapplying this map would capture its binders and
+                        // infinitely expand recursive T -> Container[T].
+                        val grounded = self.groundTermInEnvironment(ref: replacement, params: [], values: [], selfRef: selfRef, itemRef: itemRef)
                         return self.typeRefWithAddedViewSources(ref: grounded, additions: self.typeRefViewSources(ref: ref))
                     }
                     return ref

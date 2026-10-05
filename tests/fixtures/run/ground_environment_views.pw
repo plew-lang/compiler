@@ -69,5 +69,14 @@ fn main() {
         if compiler.groundTermInEnvironment(ref: untouched, params: [binder], values: []) != untouched { panic "missing replacement changed a type" }
         if compiler.groundTermInEnvironment(ref: untouched, params: [], values: [argument]) != untouched { panic "unbound replacement changed a type" }
     }
+    // Substitution is simultaneous: caller terms are not substituted again,
+    // even when a recursive call reuses the same lexical binder identities.
+    val bareParameter = compiler.pushType(t: <TypeRef nameStart=binderName.nameStart nameLen=binderName.nameLen paramId=11U64 args=[] />)
+    val recursiveArgument = compiler.pushType(t: <TypeRef nameStart=containerName.nameStart nameLen=containerName.nameLen args=[bareParameter] />)
+    val recursiveResult = compiler.groundTermInEnvironment(ref: bareParameter, params: [binder], values: [recursiveArgument])
+    if !compiler.typeRefEq(a: recursiveResult, b: recursiveArgument) { panic "replacement recursively substituted" }
+    val secondBinder = <Bind nameStart=binderName.nameStart nameLen=binderName.nameLen nameId=binderName.nameId paramId=22U64 fieldStart=0U64 fieldLen=0U64 />
+    val simultaneous = compiler.groundTermInEnvironment(ref: bareParameter, params: [binder, secondBinder], values: [foreign, argument])
+    if !compiler.typeRefEq(a: simultaneous, b: foreign) { panic "replacement captured caller binder" }
     write(s: "ground-environment-views-ok\n")
 }
