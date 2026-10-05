@@ -1,0 +1,7 @@
+use @Std/Io only { print }
+fn invoke(callback: fn(value: I64) -> I64) -> I64 { return callback(value: 42I64) }
+fn invoke(callback: fn(value: String) -> String) -> String { return callback(value: "ok") }
+fn main() {
+    print(invoke(callback: if true { give fn(value: I64) { return value } } else { give fn(value) { return value } }))
+    print(invoke(callback: match true { true => { give fn(value: I64) { return value } } false => { give fn(value) { return value } } }))
+}

@@ -3,6 +3,40 @@
 // transition so still-free-function callers (Resolve/ExprType) can reach them.
 
 pub impl Comp {
+    inout fn findBinTraitWitnessForRef(receiverRef: U64, name: String, rhsRef: U64, rhsUntyped: Bool) -> Result[U64, CompileDiagnostic] {
+        mut val firstMatch = self.arena.functionCount()
+        mut val intMatch = self.arena.functionCount()
+        val spelling = self.kwSpan(kw: name, kwLen: name.bytes().count())
+        if spelling.nameLen == 0U64 { return <Result.Ok value=self.arena.functionCount() /> }
+        val nameId = intern(c: inout self, start: spelling.nameStart, len: spelling.nameLen)
+        // The declaration index retains registration order and hidden witness
+        // forms. It excludes only functions with a different spelling.
+        mut val index = self.arena.firstFunctionNamed(nameId: nameId)
+        while index < self.arena.functionCount() {
+            val function = self.arena.functionAt(index: index)
+            if function.isAssoc && function.params.count() >= 2U64 {
+                // Candidate parameters use the same lexical receiver as the
+                // callable body. A caller's extra view selects visible members;
+                // it must not become Self inside an unrelated implementation.
+                val implementationReceiver = self.canonicalBodyReceiverRef(fnIdx: index, recvInstRef: receiverRef)
+                val witness = (try self.methodReceiverEnvironment(f: function, instRef: implementationReceiver))
+                if witness.conformIdx != 0U64 {
+                    val parameter = self.funcParamAt(params: function.params, index: 1U64)
+                    val rhs = (try self.groundWitnessTypeTerm(ref: parameter.ty, params: <PatternBindInput.Function range=function.typeParams />, matchResult: witness))
+                    if rhsRef != 0U64 && self.typeRefEq(a: rhs, b: rhsRef) { return <Result.Ok value=index />}
+                    if rhsUntyped {
+                        if firstMatch == self.arena.functionCount() { firstMatch = index }
+                        val rhsType = self.arena.typeAt(index: rhs)
+                        if intMatch == self.arena.functionCount() && self.isIntType(start: rhsType.nameStart, len: rhsType.nameLen) { intMatch = index }
+                    }
+                }
+            }
+            index = self.arena.nextFunctionNamed(index: index)
+        }
+        if intMatch < self.arena.functionCount() { return <Result.Ok value=intMatch />}
+        return <Result.Ok value=firstMatch />
+    }
+
     // One concrete unary selector for declaration-time typing and final call
     // publication. The result comes from the selected declaration, not from
     // an assumption that Neg/Not/BitNot return their receiver type.

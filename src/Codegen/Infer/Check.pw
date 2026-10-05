@@ -191,23 +191,19 @@ pub impl Comp {
         if l >= self.arena.typeCount() || r >= self.arena.typeCount() {
             return <Result.Ok value=() />
         }
-        // comparison is `Eq`/`Ord` on the SAME type (no Rhs), so the operands must match
-        // for EVERY type (`"a" == 1I64`, `aI32 < bI64`) — not just primitives.
-        if isCompare {
-            try self.tcCheckValue(expectedRef: l, valueExpr: rhs, pos: "compare")
-            return <Result.Ok value=() />
-        }
-        // a PRIMITIVE numeric LHS forces the RHS to be the SAME type — a primitive's
-        // operator witnesses are all same-type (`impl I32 as Add[I32]`, `Ord` on Self,
-        // `Shl[I32]`), and `a OP b` always dispatches on the LHS type. So the RHS must
-        // match `l` whether it is another primitive (`3I32 + 5I64`), a non-numeric
-        // primitive (`1I64 + true`), or any other type — there is no `Add[Bool]` /
-        // `Add[Money]` on a primitive int. typesCompatible preserves numeric widths
-        // and the int↔float rejection. A non-numeric LHS (a user type whose `Add[Rhs]`
-        // may legitimately differ) is excluded here — its witness is checked elsewhere.
-        val lNum: Bool = self.isIntType(start: self.arena.typeTerms[l].nameStart, len: self.arena.typeTerms[l].nameLen) || self.isFloatType(start: self.arena.typeTerms[l].nameStart, len: self.arena.typeTerms[l].nameLen)
-        if lNum {
-            try self.tcCheckValue(expectedRef: l, valueExpr: rhs, pos: "binop")
+        // A receiver view selects an implementation; it is not necessarily
+        // the selected witness's RHS type. Share the concrete selector with
+        // call finalization instead of equating those two types.
+        val lNum = self.isIntType(start: self.arena.typeTerms[l].nameStart, len: self.arena.typeTerms[l].nameLen) || self.isFloatType(start: self.arena.typeTerms[l].nameStart, len: self.arena.typeTerms[l].nameLen)
+        if isCompare || lNum {
+            val method = if op == opEq() || op == opNe() { give "eq" }
+                else if isCompare { give "compare" }
+                else { give binTraitMethodName(op: op) }
+            val selected = try self.findBinTraitWitnessForRef(receiverRef: l, name: method, rhsRef: r, rhsUntyped: false)
+            if selected < self.arena.functionCount() { return <Result.Ok value=() /> }
+            // Abstract or otherwise unselected operands retain their strict
+            // compatibility obligation; an absent witness is not acceptance.
+            try self.tcCheckValue(expectedRef: l, valueExpr: rhs, pos: if isCompare { give "compare" } else { give "binop" })
         }
         return <Result.Ok value=() />
     }
