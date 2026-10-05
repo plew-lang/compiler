@@ -2245,6 +2245,14 @@ pub impl Comp {
             }
             i += 1
         }
+        match self.blockExitRequirements.get(key: blkId) {
+            Optional.Some(v: val offset) => {
+                if self.blockCompletesNormally(blkId: blkId) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`guard` else block must diverge (end in return / break / continue / panic) — spec/11") />
+                }
+            }
+            Optional.None => {}
+        }
         return <Result.Ok value=() />
     }
 

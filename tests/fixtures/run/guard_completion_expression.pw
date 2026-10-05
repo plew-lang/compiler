@@ -1,0 +1,21 @@
+use @Std/Io only { print }
+fn block() -> I64 {
+    guard false { val value = { return 7I64 } }
+    return 0I64
+}
+fn branches(flag: Bool) -> I64 {
+    guard false { val value = if flag { return 8I64 } else { return 9I64 } }
+    return 0I64
+}
+fn binding() -> I64 {
+    guard Optional.Some(v: val value) = <Optional[I64].None /> {
+        val result = { return 10I64 }
+    }
+    return value
+}
+fn main() {
+    print(block())
+    print(branches(flag: true))
+    print(branches(flag: false))
+    print(binding())
+}

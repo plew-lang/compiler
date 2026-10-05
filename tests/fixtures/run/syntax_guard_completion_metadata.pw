@@ -1,0 +1,18 @@
+use @Plew/Syntax as Syntax
+use @Std/Io only { print }
+fn main() {
+    // Syntax preserves the requirement; semantic analysis checks the exit.
+    val block = Syntax.parseBlockFrom(source: "{{ guard false {{}} }}", start: 0U64)
+    match block.stmts[0U64] {
+        Syntax.StmtAst.If(cond: _, thenBlk: _, val elseBlk, hasElse: _, span: _) => { print(elseBlk.guardElseOffset > 0U64) }
+        _ => { print(false) }
+    }
+    val source = "fn sample() {{ guard false {{}} }}"
+    val item = Syntax.parseItem(source: source, start: 0U64, end: source.bytes().count())
+    mut val file = <Syntax.SyntaxFile.empty />
+    val root = file.freezeTopItem(ast: item)
+    val decl = Syntax.syntaxDecl(file: file, id: <Syntax.DeclId raw=Syntax.syntaxTopItemPayload(file: file, item: root) />)
+    val body = Syntax.syntaxBlock(file: file, id: decl.body)
+    val branch = Syntax.syntaxStmt(file: file, id: Syntax.syntaxBlockStmt(file: file, block: body, index: 0U64))
+    print(Syntax.syntaxBlock(file: file, id: branch.block1).guardElseOffset > 0U64)
+}
