@@ -196,6 +196,9 @@ pub impl Comp {
         // call finalization instead of equating those two types.
         val lNum = self.isIntType(start: self.arena.typeTerms[l].nameStart, len: self.arena.typeTerms[l].nameLen) || self.isFloatType(start: self.arena.typeTerms[l].nameStart, len: self.arena.typeTerms[l].nameLen)
         if isCompare || lNum {
+            // Matching types already satisfy this compatibility check; the
+            // ordinary witness check remains responsible for availability.
+            if (try self.typesCompatible(expected: l, inferred: r)) { return <Result.Ok value=() /> }
             val method = if op == opEq() || op == opNe() { give "eq" }
                 else if isCompare { give "compare" }
                 else { give binTraitMethodName(op: op) }
