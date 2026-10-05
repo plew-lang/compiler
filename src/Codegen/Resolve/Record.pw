@@ -688,7 +688,36 @@ pub impl Comp {
     inout fn recordSemanticAggregate(exprId: U64) -> Result[(), CompileDiagnostic] {
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
         val resultTerm: U64 = self.parametricExprTerm(exprId: exprId)
-        if resultTerm == 0U64 { return <Result.Ok value=() /> }
+        if resultTerm == 0U64 {
+            if self.exprCompletesNormally(exprId: exprId) { return <Result.Ok value=() /> }
+            // A construction can have an ordered evaluation without ever
+            // producing a typed aggregate. Preserve that evaluation explicitly;
+            // neither a made-up layout nor a made-up element type is needed.
+            mut val values: Array[U64] = []
+            match self.arena.exprs[exprId] {
+                Expr.Array(val elems) => {
+                    mut val index = 0U64
+                    while index < elems.len { values.append(self.exprAt(exprs: elems, index: index))
+                        index += 1U64 }
+                }
+                Expr.Make(typeStart: _, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, val fields) => {
+                    // Only a structural record has no declared layout owner.
+                    // Nominal constructors must still resolve and validate it.
+                    if isEnum || typeLen != 0U64 || self.pendingConstructionContexts.contains(exprId) { return <Result.Ok value=() /> }
+                    mut val index = 0U64
+                    while index < fields.len { values.append(self.makeFieldAt(fields: fields, index: index).value)
+                        index += 1U64 }
+                }
+                _ => { return <Result.Ok value=() /> }
+            }
+            mut val elements: Array[SemanticAggregateElement] = []
+            mut val index = 0U64
+            while index < values.count() {
+                elements.append(<SemanticAggregateElement fieldIndex=index exprId=values[index] targetTerm=0U64 isBoxed=false term=self.parametricExprTerm(exprId: values[index]) />)
+                index += 1U64
+            }
+            return self.putSemanticAggregate(aggregate: <SemanticAggregate ownerFnIdx=self.cur.checkFn exprId=exprId kind=<SemanticAggregateKind.EvaluationOnly /> resultTerm=0U64 fieldCount=elements.count() elements=elements />)
+        }
         match self.arena.exprs[exprId] {
             Expr.Make(typeStart: val typeStart, typeLen: val typeLen, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: _, fields: val fields) => {
                 // Validate the resolved construction before publishing layout.
@@ -1298,6 +1327,13 @@ pub impl Comp {
                 mut val index = 0U64
                 while index < arms.len {
                     if self.expressionNeedsConstructionContext(exprId: self.blockGiveExpr(blkId: self.matchArmAt(arms: arms, index: index).body)) { return true }
+                    index += 1U64
+                }
+            }
+            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+                mut val index = 0U64
+                while index < fields.len {
+                    if self.expressionNeedsConstructionContext(exprId: self.makeFieldAt(fields: fields, index: index).value) { return true }
                     index += 1U64
                 }
             }

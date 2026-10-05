@@ -1178,6 +1178,7 @@ fn materializeMidAggregateValue(c: inout Comp, state: inout MidBuildState, aggre
     state.callValues = parentCalls
     state.aggregateValues = parentAggregates
     match built.error { MidBuildError.None => {} _ => { return built } }
+    if !midCurrentBlockIsOpen(state: state) { return built }
     match built.operand {
         MidOperand.Copy(place: val place) => {
             state.aggregateValues.append(<MidAggregateValue exprId=aggregate.exprId place=place />)
@@ -1252,8 +1253,6 @@ fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggreg
     // Record.  Instantiation freezes the corresponding ValueConversionProof;
     // do not pre-reject contextual existential elements here merely because
     // their source term differs from the selected slot term.
-    val local: U64 = addMidTemporary(state: inout state, typeTerm: aggregate.resultTerm, isUnique: ownsUnique)
-    val writeDestination: MidPlace = <MidPlace local=local typeTerm=aggregate.resultTerm />
     mut val captures: Array[Bool] = []
     mut val elementIndex = 0U64
     while elementIndex < aggregate.elements.count() { captures.append(false)
@@ -1286,7 +1285,18 @@ fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggreg
         elements.append(<MidAggregateElement fieldIndex=element.fieldIndex operand=evaluated targetTerm=element.targetTerm isBoxed=element.isBoxed />)
         i += 1U64
     }
+    // Only a completed evaluation needs aggregate storage and a result type.
+    // A terminating child has already emitted its ordinary cleanup/escape and
+    // returned above; it never reaches a placeholder aggregate assignment.
+    if aggregate.resultTerm == 0U64 {
+        return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.MissingSemanticType /> />
+    }
+    val local = addMidTemporary(state: inout state, typeTerm: aggregate.resultTerm, isUnique: ownsUnique)
+    val writeDestination = <MidPlace local=local typeTerm=aggregate.resultTerm />
     match aggregate.kind {
+        SemanticAggregateKind.EvaluationOnly => {
+            return <MidOperandBuild operand=<MidOperand.Copy place=writeDestination /> error=<MidBuildError.InvalidStatement /> />
+        }
         SemanticAggregateKind.Struct => {
             midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=writeDestination value=<MidRvalue.Aggregate exprId=aggregate.exprId kind=<MidAggregateKind.Struct /> resultTerm=aggregate.resultTerm fieldCount=aggregate.fieldCount elements=elements /> />)
         }
@@ -3020,7 +3030,7 @@ pub fn buildMidFor(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> Mi
             // The protocol and its storage exist only after the iterable
             // evaluation has produced a value. A terminating evaluation has
             // no iterator result or Item recipe to instantiate.
-            if c.valueControlHasNoResult(exprId: iter) {
+            if !c.exprCompletesNormally(exprId: iter) {
                 val evaluation = midOpenScope(state: inout state)
                 val input = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: iter, typeTerm: c.semanticExprTerm(exprId: iter), allowAccessMarker: false)
                 midFinishEvaluationScope(state: inout state, scope: evaluation)

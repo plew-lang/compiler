@@ -392,6 +392,9 @@ pub impl SemanticExprType { factory }
 // child values. Record freezes it before Mid lowering so neither Mid nor LLVM
 // has to reopen JSX labels, enum spelling, or a collection API.
 pub enum SemanticAggregateKind {
+    // Ordered construction operands with no normal result. There are no
+    // layout slots or conversions; each child retains its own semantic type.
+    EvaluationOnly
     Struct
     // Declaration identity as well as variant slot is frozen here.  The
     // backend may consult this identity only for physical layout, never recover

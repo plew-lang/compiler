@@ -21,15 +21,6 @@ pub impl Comp {
         return self.exprCompletion(exprId: exprId).normal
     }
 
-    // Only structural value-control nodes need a continuation check at a type
-    // boundary. Their source statements are still checked by the lexical walk.
-    inout fn valueControlHasNoResult(exprId: U64) -> Bool {
-        match self.arena.exprs[exprId] {
-            Expr.IfChain(conditions: _, thenBlk: _, elseBlk: _) | Expr.Block(body: _, offset: _) | Expr.Sequence(body: _) | Expr.IfExpr(cond: _, thenBlk: _, elseBlk: _) | Expr.MatchExpr(scrut: _, arms: _) => { return !self.exprCompletesNormally(exprId: exprId) }
-            _ => { return false }
-        }
-    }
-
     inout fn blockCompletion(blkId: U64) -> SourceCompletion {
         mut val flow = <SourceCompletion />
         mut val index = 0U64

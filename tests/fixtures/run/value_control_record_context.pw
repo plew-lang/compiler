@@ -1,0 +1,22 @@
+use @Std/Io only { print }
+struct Point { val value: U8 }
+fn record() -> (value: U8) {
+    return { give (value: 255) }
+}
+fn consume(value: (point: Point)) -> U8 { return value.point.value }
+fn main() {
+    val block: (value: U8) = { give (value: 255) }
+    val branch: (value: U8) = if true { give (value: 254) } else { give (value: 253) }
+    val selected: (value: U8) = match true { true => (value: 252) false => (value: 251) }
+    val chain: (value: U8) = if val flag = true && flag { give (value: 250) } else { give (value: 249) }
+    val nested: (outer: (point: Point)) = { give (outer: (point: <value=248 />)) }
+    val array: Array[(value: U8)] = [(value: 247)]
+    print(block.value)
+    print(branch.value)
+    print(selected.value)
+    print(chain.value)
+    print(nested.outer.point.value)
+    print(array[0].value)
+    print(record().value)
+    print(consume(value: { give (point: <value=246 />) }))
+}

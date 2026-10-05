@@ -1459,7 +1459,19 @@ pub impl Comp {
         // Their synthetic layout declaration is not the owner of a
         // surrounding generic field's binders. Keep the expected
         // record's labelled children as the semantic slot types.
-        if expected.isRecord && !isEnum && writtenTerm != 0U64 && writtenTerm < self.arena.typeCount() && self.arena.typeTerms[writtenTerm].isRecord && fields.len == expected.recordFieldTerms.len {
+        mut val isRecord = false
+        if !isEnum && !self.pendingConstructionContexts.contains(exprId) {
+            match self.arena.exprs[exprId] {
+                Expr.Make(typeStart: _, val typeLen, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => { isRecord = typeLen == 0U64 }
+                _ => {}
+            }
+            if writtenTerm != 0U64 && writtenTerm < self.arena.typeCount() { isRecord = isRecord || self.arena.typeTerms[writtenTerm].isRecord }
+        }
+        // A structural literal owns its labels before it owns a result type.
+        // Lower may supply a hint, but a missing hint cannot block semantic
+        // context from reaching the fields. Pending nominal constructors are
+        // resolved by their own producer before reaching this boundary.
+        if expected.isRecord && isRecord && fields.len == expected.recordFieldTerms.len {
             acceptsContext = true
             mut val fieldIndex: U64 = 0U64
             while fieldIndex < fields.len {

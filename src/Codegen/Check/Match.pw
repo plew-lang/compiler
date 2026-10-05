@@ -24,7 +24,7 @@ pub impl Comp {
         }
         // A non-completing subject has no value to match, but authored names
         // and variants above still obey the ordinary source visibility rules.
-        if self.valueControlHasNoResult(exprId: scrut) { return <Result.Ok value=() /> }
+        if !self.exprCompletesNormally(exprId: scrut) { return <Result.Ok value=() /> }
         val subject = self.lexicalLayoutReceiver(receiverTerm: self.parametricExprTerm(exprId: scrut))
         val subjectEnum = self.enumIndexForType(ref: subject)
         if subjectEnum < self.arena.enumCount() && subjectEnum != enumIndex {

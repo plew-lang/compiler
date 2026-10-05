@@ -827,7 +827,7 @@ pub impl Comp {
         if self.cur.checkFn >= self.arena.functionCount() {
             return <Result.Ok value=() />
         }
-        if self.valueControlHasNoResult(exprId: valueExpr) { return <Result.Ok value=() /> }
+        if !self.exprCompletesNormally(exprId: valueExpr) { return <Result.Ok value=() /> }
         // an untyped numeric literal cannot flow into a type parameter / Self: `val y: T = 5`
         // is invalid — T is opaque, and no bound makes it numeric-literal-receptive (spec/06).
         if expectedRef < self.arena.typeCount() {

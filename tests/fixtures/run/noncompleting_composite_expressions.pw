@@ -1,0 +1,44 @@
+use @Std/Io only { print }
+fn make(value: I64) -> Array[I64] { return [value] }
+fn range() -> I64 {
+    for val n in 0I64..<{ return 7I64 } { print(n) }
+    return 99I64
+}
+fn array() -> I64 {
+    val values = [{ return 8I64 }, 1I64]
+    return 99I64
+}
+fn branch() -> I64 {
+    val values = [if true { return 9I64 } else { return 99I64 }]
+    return 99I64
+}
+fn selected() -> I64 {
+    val values = [match true { true => { return 10I64 } false => { return 99I64 } }]
+    return 99I64
+}
+fn iterable() -> I64 {
+    for val n in [1I64, { return 11I64 }] { print(n) }
+    return 99I64
+}
+fn call() -> I64 {
+    for val n in make(value: { return 12I64 }) { print(n) }
+    return 99I64
+}
+fn record() -> I64 {
+    val value = (value: { return 13I64 })
+    return 99I64
+}
+fn nestedRecordArray() -> I64 {
+    val value = [(values: [{ return 14I64 }])]
+    return 99I64
+}
+fn main() {
+    print(range())
+    print(array())
+    print(branch())
+    print(selected())
+    print(iterable())
+    print(call())
+    print(record())
+    print(nestedRecordArray())
+}

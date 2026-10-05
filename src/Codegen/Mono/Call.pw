@@ -3254,6 +3254,10 @@ pub impl Comp {
         val sourceIndex: U64 = (try self.semanticAggregateIndex(ownerFnIdx: self.cur.bodyFnIdx, exprId: exprId))
         if sourceIndex >= self.decls.semanticAggregates.count() { return <Result.Ok value=() /> }
         val aggregate: SemanticAggregate = self.decls.semanticAggregates[sourceIndex]
+        match aggregate.kind {
+            SemanticAggregateKind.EvaluationOnly => { return <Result.Ok value=() /> }
+            _ => {}
+        }
         mut val targets: Array[U64] = []
         mut val conversions: Array[ValueConversionProof] = []
         mut val i: U64 = 0U64
