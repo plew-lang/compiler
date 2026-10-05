@@ -856,6 +856,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                     val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                     if destination.rootTag != 1U64 { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                     if destination.projections.len == 0U64 && destination.local < states.count() {
+                        if c.mid.locals[body.locals.start + destination.local].isCaptureCell { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                         match states[destination.local] { MidOwnership.Consumed => {} _ => { return <MidVerification error=<MidVerifyError.LiveInitialization /> block=blockI local=destination.local /> } }
                         if !c.mid.locals[body.locals.start + destination.local].isBorrowed { states.set(index: destination.local, state: <MidOwnership.Owned />) }
                     }

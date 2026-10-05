@@ -1,0 +1,23 @@
+use @Std/Io only { print }
+enum Payload { Items(values: Array[String]) }
+fn main() {
+    val f: fn() -> I64 = match (number: 5I64) {
+        (number: mut val number) => {
+            number = 7I64
+            give fn() -> I64 { return number }
+        }
+    }
+    print(f())
+    val g: fn() -> String = match <Payload.Items values=["before"] /> {
+        Payload.Items(values: mut val values) => {
+            values[0] = "after"
+            give fn() -> String { return values[0] }
+        }
+    }
+    print(g())
+    if Payload.Items(values: mut val values) = <Payload.Items values=["condition"] /> {
+        val h = fn() -> String { return values[0] }
+        values[0] = "updated"
+        print(h())
+    }
+}

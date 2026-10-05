@@ -2332,6 +2332,16 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
 // Mid local plus an explicit assignment.  It is intentionally narrow, but it
 // is a real frontend consumer: types come from Stmt/Record, identifier operands
 // come from TypeCache, and no legacy type recovery is reachable from this path.
+// All lexical bindings use their declared storage class for initialization.
+// Reading/writing a capture-cell place assumes its holder is already initialized.
+fn midInitializeBinding(state: inout MidBuildState, destination: MidPlace, value: MidRvalue) {
+    if state.locals[destination.local].isCaptureCell {
+        midAppendStatement(state: inout state, statement: <MidStatement.InitializeCaptureCell destination=destination value=value />)
+    } else {
+        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=value />)
+    }
+}
+
 pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64, completeEvaluation: Bool = true) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
@@ -2368,11 +2378,7 @@ pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64, compl
                 }
             }
             if term == 0U64 { return <MidBuildError.MissingSemanticType /> }
-            if state.locals[destinationLocal].isCaptureCell {
-                midAppendStatement(state: inout state, statement: <MidStatement.InitializeCaptureCell destination=destination value=<MidRvalue.StorageBoundary stmtId=stmtId targetTerm=term operand=midReturnOperand(c: inout c, operand: operandValue, typeTerm: c.semanticExprTerm(exprId: init)) /> />)
-            } else {
-                midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.StorageBoundary stmtId=stmtId targetTerm=term operand=midReturnOperand(c: inout c, operand: operandValue, typeTerm: c.semanticExprTerm(exprId: init)) /> />)
-            }
+            midInitializeBinding(state: inout state, destination: destination, value: <MidRvalue.StorageBoundary stmtId=stmtId targetTerm=term operand=midReturnOperand(c: inout c, operand: operandValue, typeTerm: c.semanticExprTerm(exprId: init)) />)
             if completeEvaluation { midFinishEvaluationScope(state: inout state, scope: evaluation) }
             val ended = c.decls.semanticBindingEnds.getOr(key: stmtId, fallback: 0U64)
             if ended != 0U64 {
@@ -2657,8 +2663,7 @@ fn buildMidPatternBindings(c: inout Comp, state: inout MidBuildState, semantic: 
         val operand = if semantic.isConsuming { give <MidOperand.Move place=scrutinee /> } else { give <MidOperand.Copy place=scrutinee /> }
         val destination = <MidPlace local=local typeTerm=semantic.scrutineeTerm />
         val value = <MidRvalue.Use operand=operand />
-        if captured { midAppendStatement(state: inout state, statement: <MidStatement.InitializeCaptureCell destination=destination value=value />) }
-        else { midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=value />) }
+        midInitializeBinding(state: inout state, destination: destination, value: value)
         return <MidBuildError.None />
     }
     match semantic.kind {
@@ -2681,9 +2686,9 @@ fn buildMidPatternBindings(c: inout Comp, state: inout MidBuildState, semantic: 
                     val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: false, isParameter: false, ownsAtEntry: false, isBorrowed: false, isCaptureCell: midBindingNeedsCaptureCell(closures: c.decls.semanticClosures, sourceFunction: state.sourceFunction, bindingTarget: payload.bindTarget))
                     val destination: MidPlace = <MidPlace local=local typeTerm=payload.fieldTerm />
                     if payload.isBoxed {
-                        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadBoxedCopy place=scrutinee enumIndex=enumIndex variantIndex=arm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=semantic.matchSource resultTerm=payload.fieldTerm /> />)
+                        midInitializeBinding(state: inout state, destination: destination, value: <MidRvalue.EnumPayloadBoxedCopy place=scrutinee enumIndex=enumIndex variantIndex=arm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=semantic.matchSource resultTerm=payload.fieldTerm />)
                     } else {
-                        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadCopy place=scrutinee enumIndex=enumIndex variantIndex=arm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=semantic.matchSource resultTerm=payload.fieldTerm /> />)
+                        midInitializeBinding(state: inout state, destination: destination, value: <MidRvalue.EnumPayloadCopy place=scrutinee enumIndex=enumIndex variantIndex=arm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=semantic.matchSource resultTerm=payload.fieldTerm />)
                     }
                     payloadIndex += 1U64
                 }
@@ -2704,7 +2709,7 @@ fn buildMidPatternBindings(c: inout Comp, state: inout MidBuildState, semantic: 
         mut val projections: Array[MidProjection] = scrutinee.projections
         projections.append(<MidProjection.Field index=payload.fieldIndex typeTerm=payload.fieldTerm isBoxed=payload.isBoxed />)
         val field: MidPlace = <MidPlace rootTag=scrutinee.rootTag local=scrutinee.local globalTarget=scrutinee.globalTarget globalMutable=scrutinee.globalMutable projections=projections typeTerm=payload.fieldTerm />
-        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=<MidPlace local=local typeTerm=payload.fieldTerm /> value=<MidRvalue.Use operand=<MidOperand.Copy place=field /> /> />)
+        midInitializeBinding(state: inout state, destination: <MidPlace local=local typeTerm=payload.fieldTerm />, value: <MidRvalue.Use operand=<MidOperand.Copy place=field /> />)
         payloadIndex += 1U64
     }
     return <MidBuildError.None />
@@ -2753,8 +2758,7 @@ fn buildMidConsumingEnumArm(c: inout Comp, state: inout MidBuildState, semantic:
             val local = addMidLocal(state: inout state, declarationTarget: field.bindTarget, typeTerm: field.fieldTerm, isUnique: midTermIsUnique(c: inout c, term: field.fieldTerm), isParameter: false, ownsAtEntry: false, isBorrowed: false, isCaptureCell: captured)
             val destination = <MidPlace local=local typeTerm=field.fieldTerm />
             val value = <MidRvalue.Use operand=<MidOperand.Move place=payload /> />
-            if captured { midAppendStatement(state: inout state, statement: <MidStatement.InitializeCaptureCell destination=destination value=value />) }
-            else { midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=value />) }
+            midInitializeBinding(state: inout state, destination: destination, value: value)
         }
         index += 1U64
     }

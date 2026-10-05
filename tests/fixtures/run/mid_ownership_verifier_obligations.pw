@@ -62,4 +62,25 @@ fn flagCase(correct: Bool, clearConsumed: Bool = true) {
         _ => { assert(false) }
     }
 }
-fn main() { check(mode: 0U64) check(mode: 1U64) check(mode: 2U64) flagCase(correct: false) check(mode: 3U64) flagCase(correct: true) check(mode: 4U64) check(mode: 5U64) flagCase(correct: true, clearConsumed: false) }
+fn cellCase(correct: Bool) {
+    mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val name = c.internBytes(s: "String")
+    val t = c.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    c.enqueueFinalDestruction(typeRef: t).unwrap()
+    val source = <MidPlace local=0U64 typeTerm=t />
+    val cell = <MidPlace local=1U64 typeTerm=t />
+    val value = <MidRvalue.Use operand=<MidOperand.Move place=source /> />
+    val init = if correct { give <MidStatement.InitializeCaptureCell destination=cell value=value /> }
+        else { give <MidStatement.Assign destination=cell value=value /> }
+    val body = c.mid.store(body: <MidBody locals=[
+        <MidLocalDecl typeTerm=t sourceScope=0U64 isUnique=false isParameter=true ownsAtEntry=true />,
+        <MidLocalDecl typeTerm=t sourceScope=0U64 isUnique=false isParameter=false isCaptureCell=true />
+    ] blocks=[<MidBlock statements=[init, <MidStatement.Drop place=cell />] terminator=<MidTerminator.Return /> />] />)
+    match verifyExecutableCanonicalMidBody(c: inout c, canonical: body).error {
+        MidVerifyError.None => { assert(correct) print("cell-accepted") }
+        MidVerifyError.DropUnavailable => { assert(!correct) print("cell-rejected") }
+        _ => { assert(false) }
+    }
+}
+fn main() { cellCase(correct: false) cellCase(correct: true) check(mode: 0U64) check(mode: 1U64) check(mode: 2U64) flagCase(correct: false) check(mode: 3U64) flagCase(correct: true) check(mode: 4U64) check(mode: 5U64) flagCase(correct: true, clearConsumed: false) }
