@@ -119,7 +119,7 @@ pub impl Comp {
             Expr.Move(val operand, isBorrow: _) => { self.resolveLexicalModuleExpr(id: operand, names: inout names) }
             Expr.Await(val operand) => { self.resolveLexicalModuleExpr(id: operand, names: inout names) }
             Expr.Try(val expr) => { self.resolveLexicalModuleExpr(id: expr, names: inout names) }
-            Expr.Array(val elems) => {
+            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) => {
                 mut val index = 0U64
                 while index < elems.len { self.resolveLexicalModuleExpr(id: self.exprAt(exprs: elems, index: index), names: inout names) index += 1U64 }
             }

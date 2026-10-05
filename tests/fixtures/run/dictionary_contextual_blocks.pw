@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+fn consume(values: Dictionary[String, I64]) { print(values.count()) }
+fn result() -> Dictionary[String, I64] { return { give ["result": 4] } }
+fn main() {
+    val block: Dictionary[String, I64] = { give ["block": 1] }
+    val branch: Dictionary[String, I64] = if true { give ["if": 2] } else { give [:] }
+    val selected: Dictionary[String, I64] = match true {
+        true => { give ["match": 3] }
+        false => { give [:] }
+    }
+    print(block.count())
+    print(branch.count())
+    print(selected.count())
+    consume(values: { give ["argument": 5] })
+    print(result().count())
+}

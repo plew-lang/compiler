@@ -4,6 +4,64 @@
 use ../../Ir only { InstanceEnvironment }
 
 pub impl Comp {
+    inout fn normalizeMemberwiseDefaultsAt(exprId: U64) {
+        match self.arena.exprs[exprId] {
+            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+                // Structural records own their written fields. Their
+                // synthetic layout identity is not a nominal declaration
+                // from which omitted memberwise defaults may be inherited.
+                val structuralRecord = ty != 0U64 && ty < self.arena.typeCount() && self.arena.typeTerms[ty].isRecord
+                if !isEnum && typeLen != 0U64 && !structuralRecord {
+                    mut val values: Array[MakeField] = []
+                    mut val i: U64 = 0U64
+                    while i < fields.len {
+                        values.append(self.makeFieldAt(fields: fields, index: i))
+                        i += 1U64
+                    }
+                    mut val declaration = <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
+                    if ty != 0U64 && ty < self.arena.typeCount() {
+                        val term = self.arena.typeTerms[ty]
+                        if term.hasDecl { declaration = <Bind nameStart=term.declOffset nameLen=1U64 fieldStart=0U64 fieldLen=0U64 /> }
+                    }
+                    if declaration.nameLen == 0U64 { declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen) }
+                    if declaration.nameLen != 0U64 {
+                        self.appendOmittedMakeDefaults(out: inout values, structIndex: self.arena.structIndexByOffset(offset: declaration.nameStart))
+                    }
+                    if values.count() != fields.len {
+                        self.arena.exprs.set(i: exprId, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=ty fields=self.pushMakeFields(fields: values) />)
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    inout fn appendOmittedMakeDefaults(out: inout Array[MakeField], structIndex: U64) {
+        if structIndex >= self.arena.structCount() { return }
+        val declared: Array[FieldDef] = self.arena.structAt(index: structIndex).fields
+        mut val fi: U64 = 0U64
+        while fi < declared.count() {
+            val fld: FieldDef = declared[fi]
+            if fld.hasDefault {
+                mut val supplied: Bool = false
+                mut val mi: U64 = 0U64
+                while mi < out.count() {
+                    if spansEqual(c: inout self, aStart: out[mi].nameStart, aLen: out[mi].nameLen, bStart: fld.nameStart, bLen: fld.nameLen) {
+                        supplied = true
+                        mi = out.count()
+                    } else {
+                        mi += 1U64
+                    }
+                }
+                if !supplied {
+                    out.append(<MakeField nameStart=fld.nameStart nameLen=fld.nameLen value=fld.defaultVal offset=fld.nameStart origin=<MakeFieldOrigin.DeclarationDefault /> />)
+                }
+            }
+            fi += 1U64
+        }
+    }
+
+
     fn globalInitializerPrepared(target: U64) -> Bool {
         mut val index: U64 = 0U64
         while index < self.preparedGlobalTargets.count() {
@@ -213,7 +271,7 @@ pub impl Comp {
                 mut val i: U64 = 0
                 while i < fields.len { self.collectGlobalDeps(id: self.makeFieldAt(fields: fields, index: i).value, into: inout into) i += 1 }
             }
-            Expr.Array(val elems) => {
+            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) => {
                 mut val i: U64 = 0
                 while i < elems.len { self.collectGlobalDeps(id: self.exprAt(exprs: elems, index: i), into: inout into) i += 1 }
             }
@@ -571,7 +629,11 @@ pub impl Comp {
                 val receiver = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen) }
                 val abstractReceiver = receiver != 0U64 && receiver < self.arena.typeCount() && (self.arena.typeTerms[receiver].paramId != 0U64 || self.arena.typeTerms[receiver].assocNameId != 0U64)
                 if isEnum && !abstractReceiver { return <Result.Ok value=() /> }
-                if candidates.count() == 0U64 && !abstractReceiver { return <Result.Ok value=() /> }
+                if candidates.count() == 0U64 && !abstractReceiver {
+                    self.normalizeMemberwiseDefaultsAt(exprId: exprId)
+                    self.arena.resolvedMemberwiseFactories.insert(exprId)
+                    return <Result.Ok value=() />
+                }
                 mut val arguments: Array[Arg] = []
                 mut val index = 0U64
                 while index < fields.len {

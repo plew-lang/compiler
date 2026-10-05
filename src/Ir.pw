@@ -736,6 +736,8 @@ pub enum Expr {
     Make(typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: MakeFieldRange)
     Str(start: U64, len: U64)
     Array(elems: ExprRange)
+    // Source-order alternating key/value expressions; Record elaborates it.
+    Dictionary(entries: ExprRange)
     Index(base: U64, index: U64)
     Method(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange)
     // `recv#Src.name(args)` (spec/09): a method call through an extension view.

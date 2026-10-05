@@ -145,10 +145,9 @@ pub impl Comp {
     // (synthesized after buildExprTyTable) is classified but not cached.
     inout fn recordIdent(id: U64, start: U64, len: U64, tpFn: U64) -> I64 {
         val b: IdentBinding = self.resolveIdent(start: start, len: len, tpFn: tpFn)
-        if id < self.typeCache.identBind.count() {
-            self.typeCache.identBind.set(i: id, value: b.code)
-            self.typeCache.identTarget.set(i: id, value: b.target)
-        }
+        self.ensureExprTySlot(exprId: id)
+        self.typeCache.identBind.set(i: id, value: b.code)
+        self.typeCache.identTarget.set(i: id, value: b.target)
         return b.code
     }
 

@@ -374,12 +374,12 @@ pub impl Comp {
                     tyIsArray = ty.isArray
                     tyRef = ty.ref
                 }
-                return <Result.Ok value=self.pushStmt(s: <Stmt.Let mutable=s.flag0 nameStart=s.name.start nameLen=s.name.end - s.name.start tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=(try self.lowerSyntaxExprWithCtx(id: s.child0, ctxRef: tyRef)) />) />
+                return <Result.Ok value=self.pushStmt(s: <Stmt.Let mutable=s.flag0 nameStart=s.name.start nameLen=s.name.end - s.name.start tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=(try self.lowerSyntaxExpr(id: s.child0)) />) />
             }
             SyntaxStmtKind.ExprStmt => { return <Result.Ok value=self.pushStmt(s: <Stmt.ExprStmt expr=(try self.lowerSyntaxExpr(id: s.child0)) />) />}
             SyntaxStmtKind.Return => {
                 mut val value: U64 = 0U64
-                if s.flag0 { value = (try self.lowerSyntaxExprWithCtx(id: s.child0, ctxRef: self.cur.lowerRetTy)) }
+                if s.flag0 { value = (try self.lowerSyntaxExpr(id: s.child0)) }
                 return <Result.Ok value=self.pushStmt(s: <Stmt.Return value=value hasValue=s.flag0 offset=s.span.start />) />
             }
             SyntaxStmtKind.IfChain => {
@@ -463,7 +463,7 @@ pub impl Comp {
                     tyIsArray = pt.isArray
                     tyRef = pt.ref
                 }
-                val iv: U64 = (try self.lowerExprWithCtx(e: init, ctxRef: tyRef))
+                val iv: U64 = (try self.lowerExpr(e: init))
                 result = self.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=iv />)
             }
             StmtAst.Assign(val op, val target, val value, val span) => {
@@ -496,7 +496,7 @@ pub impl Comp {
             StmtAst.Return(val value, val hasValue, val span) => {
                 mut val v: U64 = 0
                 if hasValue {
-                    v = (try self.lowerExprWithCtx(e: value, ctxRef: self.cur.lowerRetTy))
+                    v = (try self.lowerExpr(e: value))
                 }
                 result = self.pushStmt(s: <Stmt.Return value=v hasValue=hasValue offset=span.start />)
             }

@@ -890,7 +890,7 @@ pub impl Comp {
                 }
                 return <Result.Ok value=<TypeInfo kind=2 nameStart=typeStart nameLen=typeLen ref=0 /> />
             }
-            Expr.Array(val elems) => { return <Result.Ok value=scalarInfo() />}
+            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) => { return <Result.Ok value=scalarInfo() />}
             Expr.Index(val base, val index) => {
                 val bt: TypeInfo = (try self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef))
                 if bt.kind == 3 {

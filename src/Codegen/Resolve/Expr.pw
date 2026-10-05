@@ -16,11 +16,11 @@ pub impl Comp {
         return self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=1U64 term=term />)
     }
 
-    // Allocate the typed-AST cache (one slot per expression node), all unfilled.
-    // Called once before emission; expr ids are stable by then.
-    inout fn buildExprTyTable() {
-        mut val i: U64 = 0
-        while i < self.arena.exprs.count() {
+    // Semantic elaboration can append expressions after initial lowering.
+    // Every publisher owns allocation of its destination slot.
+    inout fn ensureExprTySlot(exprId: U64) {
+        mut val i: U64 = self.typeCache.kind.count()
+        while i <= exprId {
             self.typeCache.kind.append(typeUnfilled())
             self.typeCache.start.append(0)
             self.typeCache.len.append(0)
@@ -31,6 +31,10 @@ pub impl Comp {
             self.typeCache.identTarget.append(identNoTarget())
             i += 1
         }
+    }
+
+    inout fn buildExprTyTable() {
+        if self.arena.exprs.count() != 0U64 { self.ensureExprTySlot(exprId: self.arena.exprs.count() - 1U64) }
     }
 }
 

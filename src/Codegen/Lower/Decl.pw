@@ -277,7 +277,7 @@ pub impl Comp {
         mut val hasDefault: Bool = false
         mut val defaultVal: U64 = 0
         if f.hasDefault {
-            defaultVal = (try self.lowerExprWithCtx(e: f.defaultVal, ctxRef: tyRef))
+            defaultVal = (try self.lowerExpr(e: f.defaultVal))
             hasDefault = true
         }
         return <Result.Ok value=<FieldDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) tyIsArray=tyIsArray ty=tyRef isMut=f.isMut hasDefault=hasDefault defaultVal=defaultVal vis=f.vis /> />
@@ -298,7 +298,7 @@ pub impl Comp {
     inout fn lowerSyntaxFieldDef(f: SyntaxField) -> Result[FieldDef, CompileDiagnostic] {
         val pt: PType = (try self.lowerSyntaxType(id: f.ty))
         mut val defaultVal: U64 = 0U64
-        if f.hasDefault { defaultVal = (try self.lowerSyntaxExprWithCtx(id: f.defaultVal, ctxRef: pt.ref)) }
+        if f.hasDefault { defaultVal = (try self.lowerSyntaxExpr(id: f.defaultVal)) }
         return <Result.Ok value=<FieldDef nameStart=f.name.start nameLen=f.name.end - f.name.start nameId=intern(c: inout self, start: f.name.start, len: f.name.end - f.name.start) tyStart=pt.start tyLen=pt.len tyNameId=intern(c: inout self, start: pt.start, len: pt.len) tyIsArray=pt.isArray ty=pt.ref isMut=f.isMut hasDefault=f.hasDefault defaultVal=defaultVal vis=f.vis /> />
     }
 
@@ -368,7 +368,7 @@ pub impl Comp {
             val p: SyntaxParam = syntaxParam(file: self.syntax, id: syntaxDeclParam(file: self.syntax, decl: d, index: i))
             val ty: PType = (try self.lowerSyntaxType(id: p.ty))
             mut val defaultExpr: U64 = 0U64
-            if p.hasDefault { defaultExpr = (try self.lowerSyntaxExprWithCtx(id: p.defaultVal, ctxRef: ty.ref)) }
+            if p.hasDefault { defaultExpr = (try self.lowerSyntaxExpr(id: p.defaultVal)) }
             val name: Bind = <Bind nameStart=p.name.start nameLen=p.name.end - p.name.start fieldStart=p.name.start fieldLen=p.name.end - p.name.start offset=p.name.start />
             out.append(self.appendLoweredParam(name: name, hasType: true, ty: ty, isInout: p.isInout, isMove: p.isMove, isBorrow: p.isBorrow, noLabel: p.noLabel, hasDefault: p.hasDefault, defaultExpr: defaultExpr))
             i += 1U64

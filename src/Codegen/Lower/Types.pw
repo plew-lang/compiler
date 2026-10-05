@@ -89,26 +89,6 @@ pub impl Comp {
     }
 
 
-    inout fn requireConstructionContext(ctxRef: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
-        if ctxRef == 0U64 || ctxRef >= self.arena.typeCount() {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a construction with an omitted type requires a unique expected type") />
-        }
-        return <Result.Ok value=ctxRef />
-    }
-
-    inout fn contextualConstructionType(nameStart: U64, nameLen: U64, args: Array[U64], siteOffset: U64, ctxRef: U64, isVariant: Bool) -> U64 {
-        if !isVariant && args.count() == 0U64 && ctxRef != 0U64 && ctxRef < self.arena.typeCount() {
-            val context = self.arena.typeAt(index: ctxRef)
-            if context.args.count() != 0U64 && spansEqual(c: inout self, aStart: nameStart, aLen: nameLen, bStart: context.nameStart, bLen: context.nameLen) {
-                val written = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: siteOffset), start: nameStart, len: nameLen)
-                val expected = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: context.siteOffset), start: context.nameStart, len: context.nameLen)
-                if written.nameLen != 0U64 && expected.nameLen != 0U64 && written.nameStart == expected.nameStart { return ctxRef }
-                if written.nameLen == 0U64 && expected.nameLen == 0U64 && self.sameModuleBinding(left: self.moduleBindingAt(nameStart: nameStart, nameLen: nameLen), right: self.moduleBindingAt(nameStart: context.nameStart, nameLen: context.nameLen)) { return ctxRef }
-            }
-        }
-        return self.lowerConstructionType(nameStart: nameStart, nameLen: nameLen, args: args, siteOffset: siteOffset)
-    }
-
     // Construction heads retain the same lexical identity as written type
     // annotations, including when their explicit argument list is empty.
     inout fn lowerConstructionType(nameStart: U64, nameLen: U64, args: Array[U64], siteOffset: U64) -> U64 {
@@ -795,45 +775,6 @@ pub impl Comp {
         return <Result.Ok value=result />
     }
 
-    // Select only from the call's name and complete label sequence. Argument
-    // expressions do not participate: an omitted construction cannot choose
-    // the expected type that gives that same construction its meaning.
-    inout fn loweringCallCandidate(name: Span, args: ArgRange, hasReceiver: Bool) -> U64 {
-        if name.start == name.end { return self.arena.functionCount() }
-        mut val candidates: Array[U64] = []
-        if hasReceiver {
-            val nameId = intern(c: inout self, start: name.start, len: name.end - name.start)
-            mut val index = self.arena.firstFunctionNamed(nameId: nameId)
-            while index < self.arena.functionCount() {
-                if self.arena.functionAt(index: index).hasRecv { candidates.append(index) }
-                index = self.arena.nextFunctionNamed(index: index)
-            }
-        } else {
-            candidates = self.visibleFreeFunctions(nameStart: name.start, nameLen: name.end - name.start)
-        }
-        mut val selected = self.arena.functionCount()
-        mut val index = 0U64
-        while index < candidates.count() {
-            val candidate = candidates[index]
-            val declaration = self.arena.functionAt(index: candidate)
-            if self.paramsLabelsOk(params: declaration.params, args: args) {
-                if selected < self.arena.functionCount() { return self.arena.functionCount() }
-                selected = candidate
-            }
-            index += 1U64
-        }
-        return selected
-    }
-
-    inout fn loweringArgumentType(candidate: U64, args: ArgRange, index: U64) -> U64 {
-        if candidate >= self.arena.functionCount() { return 0U64 }
-        val declaration = self.arena.functionAt(index: candidate)
-        if declaration.typeParams.count() != 0U64 { return 0U64 }
-        val parameter = self.paramIndexForArg(params: declaration.params, args: args, argIdx: index)
-        if parameter >= declaration.params.count() { return 0U64 }
-        return self.funcParamAt(params: declaration.params, index: parameter).ty
-    }
-
     // Reserve the final contiguous argument range before recursive lowering.
     // The label-only rows are private to this construction until all values
     // have been filled; nested expressions append to their own ranges.
@@ -850,11 +791,9 @@ pub impl Comp {
             self.arena.argPool.append(self.appendLoweredArg(value: 0U64, isInout: argument.isInout, label: label, hasLabel: argument.hasLabel))
             index += 1U64
         }
-        val candidate = self.loweringCallCandidate(name: name, args: range, hasReceiver: hasReceiver)
         index = 0U64
         while index < args.count() {
-            val context = self.loweringArgumentType(candidate: candidate, args: range, index: index)
-            val value = (try self.lowerExprWithCtx(e: args[index].value, ctxRef: context))
+            val value = (try self.lowerExpr(e: args[index].value))
             val argument = self.argAt(args: range, index: index)
             self.arena.argPool.set(i: range.start + index, value: self.appendLoweredArg(value: value, isInout: argument.isInout, label: <Span start=argument.labelStart end=argument.labelStart + argument.labelLen />, hasLabel: argument.hasLabel))
             index += 1U64
@@ -870,12 +809,10 @@ pub impl Comp {
             self.arena.argPool.append(self.appendLoweredArg(value: 0U64, isInout: argument.isInout, label: argument.label, hasLabel: argument.hasLabel))
             index += 1U64
         }
-        val candidate = self.loweringCallCandidate(name: name, args: range, hasReceiver: hasReceiver)
         index = 0U64
         while index < range.len {
             val argument = syntaxArg(file: self.syntax, id: syntaxExprArg(file: self.syntax, expr: expr, index: index))
-            val context = self.loweringArgumentType(candidate: candidate, args: range, index: index)
-            val value = (try self.lowerSyntaxExprWithCtx(id: argument.value, ctxRef: context))
+            val value = (try self.lowerSyntaxExpr(id: argument.value))
             self.arena.argPool.set(i: range.start + index, value: self.appendLoweredArg(value: value, isInout: argument.isInout, label: argument.label, hasLabel: argument.hasLabel))
             index += 1U64
         }
@@ -887,148 +824,13 @@ pub impl Comp {
     }
 }
 
-// The declared TypeRef of field `fieldName` on the type being constructed (a struct,
-// or an enum variant's payload), or 0 when the owner / field can't be resolved. The
-// owner type's declaration is lowered before any body that constructs it (source
-// order), so its field types are registered TypeRefs here. Used to give a
-// construction-field literal (`<Box m=[:] />`, `<Shape.Point at=(x:1,y:2) />`) its
-// context type so an otherwise un-inferable dict / record / unit literal resolves.
 pub impl Comp {
-    // Field context follows the already resolved construction owner, never a
-    // process-wide spelling lookup. Newtypes inherit their underlying fields.
-    inout fn makeFieldTypeForType(typeRef: U64, variantId: U64, isEnum: Bool, fieldId: U64) -> U64 {
-        mut val owner = typeRef
-        mut val remaining = self.arena.newtypeCount()
-        while remaining != 0U64 {
-            val underlying = self.arena.newtypeUnderlying(ref: owner)
-            if underlying == 0U64 { break }
-            owner = underlying
-            remaining -= 1U64
-        }
-        if isEnum {
-            val ei = self.enumIndexForType(ref: owner)
-            if ei >= self.arena.enumCount() { return 0U64 }
-            mut val vi = 0U64
-            while vi < self.arena.enumAt(index: ei).variants.count() {
-                if self.arena.enumVariantAt(enumIndex: ei, variantIndex: vi).nameId == variantId {
-                    mut val fi = 0U64
-                    while fi < self.arena.enumVariantAt(enumIndex: ei, variantIndex: vi).fields.count() {
-                        val field = self.arena.enumFieldAt(enumIndex: ei, variantIndex: vi, fieldIndex: fi)
-                        if intern(c: inout self, start: field.nameStart, len: field.nameLen) == fieldId { return field.ty }
-                        fi += 1U64
-                    }
-                }
-                vi += 1U64
-            }
-            return 0U64
-        }
-        val si = self.structIndexForType(ref: owner)
-        if si >= self.arena.structCount() { return 0U64 }
-        mut val fi = 0U64
-        while fi < self.arena.structAt(index: si).fields.count() {
-            val field = self.arena.structFieldAt(structIndex: si, fieldIndex: fi)
-            if intern(c: inout self, start: field.nameStart, len: field.nameLen) == fieldId { return field.ty }
-            fi += 1U64
-        }
-        return 0U64
-    }
-}
-
-pub impl Comp {
-
-    // Materialize memberwise-factory defaults as ordinary Make fields.  A field
-    // default is evaluated at this construction site, not in a backend-only
-    // implicit path.  Keeping it in the Make expression means Verify, Mono's
-    // final-callee walk, and LLVM all consume one identical expression tree.
-    // Run only after ALL declarations have been lowered and custom factories
-    // have been selected. Lowering one file cannot know the fields of a later
-    // imported declaration; adding defaults before factory selection can also
-    // change the written label set used to select a custom factory.
-    inout fn normalizeMemberwiseDefaults() {
-        val limit: U64 = self.arena.exprs.count()
-        mut val exprId: U64 = 0U64
-        while exprId < limit {
-            if !self.constructionHasAnonymousFactories(exprId: exprId) {
-                self.normalizeMemberwiseDefaultsAt(exprId: exprId)
-            }
-            exprId += 1U64
-        }
-    }
-
-    inout fn normalizeMemberwiseDefaultsAt(exprId: U64) {
-        match self.arena.exprs[exprId] {
-            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
-                // Structural records own their written fields. Their
-                // synthetic layout identity is not a nominal declaration
-                // from which omitted memberwise defaults may be inherited.
-                val structuralRecord = ty != 0U64 && ty < self.arena.typeCount() && self.arena.typeTerms[ty].isRecord
-                if !isEnum && typeLen != 0U64 && !structuralRecord {
-                    mut val values: Array[MakeField] = []
-                    mut val i: U64 = 0U64
-                    while i < fields.len {
-                        values.append(self.makeFieldAt(fields: fields, index: i))
-                        i += 1U64
-                    }
-                    mut val declaration = <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
-                    if ty != 0U64 && ty < self.arena.typeCount() {
-                        val term = self.arena.typeTerms[ty]
-                        if term.hasDecl { declaration = <Bind nameStart=term.declOffset nameLen=1U64 fieldStart=0U64 fieldLen=0U64 /> }
-                    }
-                    if declaration.nameLen == 0U64 { declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen) }
-                    if declaration.nameLen != 0U64 {
-                        self.appendOmittedMakeDefaults(out: inout values, structIndex: self.arena.structIndexByOffset(offset: declaration.nameStart))
-                    }
-                    if values.count() != fields.len {
-                        self.arena.exprs.set(i: exprId, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=ty fields=self.pushMakeFields(fields: values) />)
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    inout fn appendOmittedMakeDefaults(out: inout Array[MakeField], structIndex: U64) {
-        if structIndex >= self.arena.structCount() { return }
-        val declared: Array[FieldDef] = self.arena.structAt(index: structIndex).fields
-        mut val fi: U64 = 0U64
-        while fi < declared.count() {
-            val fld: FieldDef = declared[fi]
-            if fld.hasDefault {
-                mut val supplied: Bool = false
-                mut val mi: U64 = 0U64
-                while mi < out.count() {
-                    if spansEqual(c: inout self, aStart: out[mi].nameStart, aLen: out[mi].nameLen, bStart: fld.nameStart, bLen: fld.nameLen) {
-                        supplied = true
-                        mi = out.count()
-                    } else {
-                        mi += 1U64
-                    }
-                }
-                if !supplied {
-                    out.append(<MakeField nameStart=fld.nameStart nameLen=fld.nameLen value=fld.defaultVal offset=fld.nameStart origin=<MakeFieldOrigin.DeclarationDefault /> />)
-                }
-            }
-            fi += 1U64
-        }
-    }
-
-    inout fn lowerMakeFields(fields: Array[MakeFieldAst], typeRef: U64, variant: String, isEnum: Bool) -> Result[Array[MakeField], CompileDiagnostic] {
+    inout fn lowerMakeFields(fields: Array[MakeFieldAst]) -> Result[Array[MakeField], CompileDiagnostic] {
         mut val out: Array[MakeField] = []
         mut val i: U64 = 0
         while i < fields.count() {
             val f: MakeFieldAst = fields[i]
-            // flow the field's declared type to its value so a context-typed literal in a
-            // construction field infers (a dict / record / `()` whose type is only known
-            // from the field). Defensive: 0 falls back to context-free lowering.
-            val fieldName = self.internBytes(s: f.name)
-            val variantName = self.internBytes(s: variant)
-            val fctx = self.makeFieldTypeForType(typeRef: typeRef, variantId: intern(c: inout self, start: variantName.nameStart, len: variantName.nameLen), isEnum: isEnum, fieldId: intern(c: inout self, start: fieldName.nameStart, len: fieldName.nameLen))
-            mut val v: U64 = 0
-            if fctx != 0U64 {
-                v = (try self.lowerExprWithCtx(e: f.value, ctxRef: fctx))
-            } else {
-                v = (try self.lowerExpr(e: f.value))
-            }
+            val v = try self.lowerExpr(e: f.value)
             val nm: Bind = self.internBytes(s: f.name)
             out.append(<MakeField nameStart=nm.nameStart nameLen=nm.nameLen value=v offset=f.span.start />)
             i += 1
@@ -1036,20 +838,13 @@ pub impl Comp {
         return <Result.Ok value=out />
     }
 
-    // SyntaxFile counterpart of lowerMakeFields. The declaration lookup is by
-    // resolved TypeRef, including synthesized anonymous-record contexts.
-    inout fn lowerSyntaxMakeFields(expr: SyntaxExpr, typeRef: U64, variantId: U64, isEnum: Bool) -> Result[Array[MakeField], CompileDiagnostic] {
+    // SyntaxFile counterpart: preserve field expressions without type lookup.
+    inout fn lowerSyntaxMakeFields(expr: SyntaxExpr) -> Result[Array[MakeField], CompileDiagnostic] {
         mut val out: Array[MakeField] = []
         mut val i: U64 = 0U64
         while i < syntaxExprMakeFieldCount(file: self.syntax, expr: expr) {
             val f: SyntaxMakeField = syntaxMakeField(file: self.syntax, id: syntaxExprMakeField(file: self.syntax, expr: expr, index: i))
-            val fctx: U64 = self.makeFieldTypeForType(typeRef: typeRef, variantId: variantId, isEnum: isEnum, fieldId: intern(c: inout self, start: f.name.start, len: f.name.end - f.name.start))
-            mut val value: U64 = 0U64
-            if fctx != 0U64 {
-                value = (try self.lowerSyntaxExprWithCtx(id: f.value, ctxRef: fctx))
-            } else {
-                value = (try self.lowerSyntaxExpr(id: f.value))
-            }
+            val value = try self.lowerSyntaxExpr(id: f.value)
             out.append(<MakeField nameStart=f.name.start nameLen=f.name.end - f.name.start value=value offset=f.span.start />)
             i += 1U64
         }
@@ -1083,46 +878,8 @@ pub impl Comp {
     // Make node typed as `ctxRef` (a `Dictionary[K, V]` TypeRef). The dict's columns are
     // `Buffer[K]`/`Buffer[V]`/`Buffer[U64]` (the storage floor) — built via `Buffer.new()`,
     // whose element type is inferred from the field type at codegen.
-    inout fn synthEmptyDict(ctxRef: U64) -> Result[U64, CompileDiagnostic] {
-        val ct: TypeRef = self.arena.typeAt(index: ctxRef)
-        val kN: Bind = self.internBytes(s: "keys")
-        val vN: Bind = self.internBytes(s: "vals")
-        val hN: Bind = self.internBytes(s: "hashes")
-        val bN: Bind = self.internBytes(s: "buckets")
-        val cN: Bind = self.internBytes(s: "entryCount")
-        val emptyKeys: U64 = (try self.synthBufferNew(elemRef: ct.args[0]))
-        val emptyVals: U64 = (try self.synthBufferNew(elemRef: ct.args[1]))
-        val u64N: Bind = self.internBytes(s: "U64")
-        val u64Ref: U64 = self.simpleTypeRef(nameStart: u64N.nameStart, nameLen: u64N.nameLen)
-        val emptyHashes: U64 = (try self.synthBufferNew(elemRef: u64Ref))
-        val emptyBuckets: U64 = (try self.synthBufferNew(elemRef: u64Ref))
-        val zero: U64 = self.pushExpr(e: <Expr.Int value=0 offset=0 isBool=false tyStart=u64N.nameStart tyLen=u64N.nameLen isNeg=false />)
-        mut val fields: Array[MakeField] = []
-        // Dict storage fields are generated by lowering, not written by the caller.
-        // Their explicit provenance grants construction access; offsets only diagnose.
-        fields.append(<MakeField nameStart=kN.nameStart nameLen=kN.nameLen value=emptyKeys offset=kN.nameStart origin=<MakeFieldOrigin.Synthesized /> />)
-        fields.append(<MakeField nameStart=vN.nameStart nameLen=vN.nameLen value=emptyVals offset=vN.nameStart origin=<MakeFieldOrigin.Synthesized /> />)
-        fields.append(<MakeField nameStart=hN.nameStart nameLen=hN.nameLen value=emptyHashes offset=hN.nameStart origin=<MakeFieldOrigin.Synthesized /> />)
-        fields.append(<MakeField nameStart=bN.nameStart nameLen=bN.nameLen value=emptyBuckets offset=bN.nameStart origin=<MakeFieldOrigin.Synthesized /> />)
-        fields.append(<MakeField nameStart=cN.nameStart nameLen=cN.nameLen value=zero offset=cN.nameStart origin=<MakeFieldOrigin.Synthesized /> />)
-        return <Result.Ok value=self.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=self.pushMakeFields(fields: fields) />) />
-    }
-
-    // Lower a dictionary literal `[k0: v0, ...]` / `[:]` (spec/02). The K/V types come
-    // from the binding/return context (`ctxRef` must be a `Dictionary[K, V]` TypeRef):
-    // there is no element-based inference, so the literal needs a context type (an
-    // annotated `let`/`return`), just like an empty array does. Lowers to a
-    // value-position block:
-    //   if (1) { mut val __dl: Dictionary[K,V] = <empty>; __dl.insert(k, v); ...;
-    //            give move __dl } else { give <empty> }
-    // `give move __dl` transfers the freshly-built dictionary out with no deep copy —
-    // the temp is marked moved so the scope exit does not release it (the caller's
-    // binding owns it). The else branch is dead (the cond is the constant `1`) but must
-    // still yield a `Dictionary[K,V]` so the value-position block type-checks.
-    inout fn lowerDictLit(keys: Array[ExprAst], vals: Array[ExprAst], ctxRef: U64, span: Span) -> Result[U64, CompileDiagnostic] {
-        if !(self.hasDictionaryLiteralContext(ctxRef: ctxRef)) {
-            return <Result.Err error=self.diagnosticAt(offset: span.start, msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)") />
-        }
+    // Preserve source entries; semantic analysis owns construction and typing.
+    inout fn lowerDictLit(keys: Array[ExprAst], vals: Array[ExprAst], span: Span) -> Result[U64, CompileDiagnostic] {
         mut val loweredKeys: Array[U64] = []
         mut val loweredVals: Array[U64] = []
         mut val i: U64 = 0U64
@@ -1131,16 +888,10 @@ pub impl Comp {
             loweredVals.append((try self.lowerExpr(e: vals[i])))
             i += 1U64
         }
-        return <Result.Ok value=(try self.lowerDictLitValues(keys: loweredKeys, vals: loweredVals, ctxRef: ctxRef, span: span)) />
+        return <Result.Ok value=self.lowerDictionaryEntries(keys: loweredKeys, values: loweredVals) />
     }
 
-    // SyntaxFile decoder for a dictionary literal. Validate the contextual type
-    // before reading entries, exactly like the value-AST route: an invalid
-    // container must not cause unrelated child diagnostics first.
-    inout fn lowerSyntaxDictLit(expr: SyntaxExpr, ctxRef: U64) -> Result[U64, CompileDiagnostic] {
-        if !(self.hasDictionaryLiteralContext(ctxRef: ctxRef)) {
-            return <Result.Err error=self.diagnosticAt(offset: expr.span.start, msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)") />
-        }
+    inout fn lowerSyntaxDictLit(expr: SyntaxExpr) -> Result[U64, CompileDiagnostic] {
         mut val keys: Array[U64] = []
         mut val vals: Array[U64] = []
         mut val i: U64 = 0U64
@@ -1149,56 +900,17 @@ pub impl Comp {
             vals.append((try self.lowerSyntaxExpr(id: syntaxExprDictValue(file: self.syntax, expr: expr, index: i))))
             i += 1U64
         }
-        return <Result.Ok value=(try self.lowerDictLitValues(keys: keys, vals: vals, ctxRef: ctxRef, span: expr.span)) />
+        return <Result.Ok value=self.lowerDictionaryEntries(keys: keys, values: vals) />
     }
 
-    inout fn hasDictionaryLiteralContext(ctxRef: U64) -> Bool {
-        if ctxRef != 0U64 {
-            if ctxRef < self.arena.typeCount() {
-                val ct: TypeRef = self.arena.typeAt(index: ctxRef)
-                if rangeEquals(bytes: self.arena.bytes, start: ct.nameStart, len: ct.nameLen, kw: "Dictionary") {
-                    if ct.args.count() >= 2U64 {
-                        return true
-                    }
-                }
-            }
+    inout fn lowerDictionaryEntries(keys: Array[U64], values: Array[U64]) -> U64 {
+        mut val entries: Array[U64] = []
+        mut val index = 0U64
+        while index < keys.count() {
+            entries.append(keys[index])
+            entries.append(values[index])
+            index += 1U64
         }
-        return false
-    }
-
-    // The shared semantic construction for an already-lowered dictionary entry
-    // sequence.  Value-AST and SyntaxFile decoders differ only in how they
-    // produce these expression IDs; the dictionary desugar itself is singular.
-    inout fn lowerDictLitValues(keys: Array[U64], vals: Array[U64], ctxRef: U64, span: Span) -> Result[U64, CompileDiagnostic] {
-        val ct: TypeRef = self.arena.typeAt(index: ctxRef)
-        val dlN: Bind = self.internBytes(s: "__dl")
-        mut val stmts: Array[U64] = []
-        val initMake: U64 = (try self.synthEmptyDict(ctxRef: ctxRef))
-        stmts.append(self.pushStmt(s: <Stmt.Let mutable=true nameStart=dlN.nameStart nameLen=dlN.nameLen tyStart=ct.nameStart tyLen=ct.nameLen tyIsArray=false ty=ctxRef init=initMake />))
-        val insN: Bind = self.internBytes(s: "insert")
-        val keyL: Bind = self.internBytes(s: "key")
-        val valL: Bind = self.internBytes(s: "value")
-        mut val i: U64 = 0
-        while i < keys.count() {
-            val recv: U64 = self.pushExpr(e: <Expr.Ident start=dlN.nameStart len=dlN.nameLen />)
-            mut val args: Array[Arg] = []
-            args.append(<Arg expr=keys[i] isInout=false labelStart=keyL.nameStart labelLen=keyL.nameLen hasLabel=true />)
-            args.append(<Arg expr=vals[i] isInout=false labelStart=valL.nameStart labelLen=valL.nameLen hasLabel=true />)
-            val m: U64 = self.pushExpr(e: <Expr.Method recv=recv nameStart=insN.nameStart nameLen=insN.nameLen args=self.pushArgs(args: args) />)
-            stmts.append(self.pushStmt(s: <Stmt.ExprStmt expr=m />))
-            i += 1
-        }
-        val giveRecv: U64 = self.pushExpr(e: <Expr.Ident start=dlN.nameStart len=dlN.nameLen />)
-        val mv: U64 = self.pushExpr(e: <Expr.Move operand=giveRecv isBorrow=false />)
-        stmts.append(self.pushStmt(s: <Stmt.Give value=mv />))
-        val thenBlk: U64 = self.pushBlock(stmts: stmts)
-        mut val elseStmts: Array[U64] = []
-        val elseDict: U64 = (try self.synthEmptyDict(ctxRef: ctxRef))
-        elseStmts.append(self.pushStmt(s: <Stmt.Give value=elseDict />))
-        val elseBlk: U64 = self.pushBlock(stmts: elseStmts)
-        val cond: U64 = self.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />)
-        val rid: U64 = self.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=thenBlk elseBlk=elseBlk />)
-        self.arena.exprSpanStart[rid] = span.start
-        return <Result.Ok value=rid />
+        return self.pushExpr(e: <Expr.Dictionary entries=self.pushExprs(exprs: entries) />)
     }
 }

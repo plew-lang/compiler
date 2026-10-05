@@ -96,7 +96,7 @@ pub impl Comp {
                 }
                 return flow
             }
-            Expr.Array(val elems) => {
+            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) => {
                 mut val flow = <SourceCompletion />
                 mut val index = 0U64
                 while index < elems.len && flow.normal {

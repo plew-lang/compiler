@@ -1,10 +1,8 @@
-// Dictionary literals are context-typed. SyntaxFile lowering must validate and
-// consume that context before lowering its entry IDs, then use the one shared
-// dictionary desugar used by the value-AST route.
+// Dictionary source entries survive lowering without an expected type.
 use @Plew/Syntax only { Lexer, P, StmtId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
 use @Std/Io only { print }
 use /Frontend only { Comp }
-use /Ir only { Expr, TypeRef }
+use /Ir only { Expr }
 
 fn main() {
     val source = "val table = [1I8: 2I8]\n"
@@ -18,14 +16,19 @@ fn main() {
     mut val c: Comp = <Comp />
     c.appendSrc(from: source.bytes())
     c.syntax = file
-    val dictName = c.internBytes(s: "Dictionary")
-    val i8Name = c.internBytes(s: "I8")
-    val i8 = c.simpleTypeRef(nameStart: i8Name.nameStart, nameLen: i8Name.nameLen)
-    val ctx = c.pushType(t: <TypeRef nameStart=dictName.nameStart nameLen=dictName.nameLen args=[i8, i8] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
-    val root = c.lowerSyntaxExprWithCtx(id: stmt.child0, ctxRef: ctx).unwrap()
-    print(c.arena.exprs.count())
+    val root = c.lowerSyntaxExpr(id: stmt.child0).unwrap()
     match c.arena.exprs[root] {
-        Expr.IfExpr(cond: _, thenBlk: _, elseBlk: _) => { print(1U64) }
+        Expr.Dictionary(val entries) => {
+            print(entries.len)
+            match c.arena.exprs[c.exprAt(exprs: entries, index: 0U64)] {
+                Expr.Int(val value, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { print(value) }
+                _ => { print(99U64) }
+            }
+            match c.arena.exprs[c.exprAt(exprs: entries, index: 1U64)] {
+                Expr.Int(val value, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { print(value) }
+                _ => { print(99U64) }
+            }
+        }
         _ => { print(99U64) }
     }
 }

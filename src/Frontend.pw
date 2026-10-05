@@ -1722,7 +1722,6 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     // Defaults depend on the complete declaration set, not file load order.
     // Custom factories have already consumed their written label sets; only
     // structural memberwise Make nodes remain for default materialization.
-    c.normalizeMemberwiseDefaults()
     // module-level variable init order (spec/15): topologically sort globals so a
     // forward reference in an initializer reads the already-initialized value.
     try c.orderGlobalsByDependency()

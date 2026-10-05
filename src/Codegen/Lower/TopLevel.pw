@@ -243,7 +243,7 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < dir.reqs.count() {
             val r: DeriveReqAst = dir.reqs[i]
-            val args: Array[MakeField] = (try self.lowerMakeFields(fields: r.args, typeRef: 0U64, variant: "", isEnum: false))
+            val args: Array[MakeField] = (try self.lowerMakeFields(fields: r.args))
             self.parseScratch.pendingDerives.append(<DeriveReq typeStart=0 typeLen=0 isEnum=false nameStart=r.nameSpan.start nameLen=r.nameSpan.end - r.nameSpan.start declStart=0 declEnd=0 args=args />)
             i += 1
         }

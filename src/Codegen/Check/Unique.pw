@@ -199,7 +199,7 @@ pub impl Comp {
                 }
                 return false
             }
-            Expr.Array(val elems) => {
+            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) => {
                 mut val i: U64 = 0
                 while i < elems.len {
                     if self.exprMentionsAny(exprId: self.exprAt(exprs: elems, index: i), forbidden: forbidden) {
@@ -269,7 +269,7 @@ pub impl Comp {
                 }
                 return false
             }
-            Expr.Array(val elems) => {
+            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) => {
                 mut val i: U64 = 0
                 while i < elems.len {
                     if self.exprContainsAwait(exprId: self.exprAt(exprs: elems, index: i)) { return true }

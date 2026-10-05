@@ -21,7 +21,7 @@ pub impl Comp {
             mut val hasDefault: Bool = false
             mut val defaultExpr: U64 = 0
             if p.hasDefault {
-                defaultExpr = (try self.lowerExprWithCtx(e: p.defaultVal, ctxRef: ty.ref))
+                defaultExpr = (try self.lowerExpr(e: p.defaultVal))
                 hasDefault = true
             }
             out.append(self.appendLoweredParam(name: nm, hasType: hasType, ty: ty, isInout: p.isInout, isMove: p.isMove, isBorrow: p.isBorrow, noLabel: p.noLabel, hasDefault: hasDefault, defaultExpr: defaultExpr))
@@ -48,7 +48,7 @@ pub impl Comp {
             mut val hasDefault: Bool = false
             mut val defaultExpr: U64 = 0U64
             if p.hasDefault {
-                defaultExpr = (try self.lowerSyntaxExprWithCtx(id: p.defaultVal, ctxRef: ty.ref))
+                defaultExpr = (try self.lowerSyntaxExpr(id: p.defaultVal))
                 hasDefault = true
             }
             val name: Bind = <Bind nameStart=p.name.start nameLen=p.name.end - p.name.start fieldStart=p.name.start fieldLen=p.name.end - p.name.start />
