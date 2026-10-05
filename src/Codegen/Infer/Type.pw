@@ -53,7 +53,9 @@ pub impl Comp {
             }
             _ => {}
         }
-        val ti: TypeInfo = (try self.typeOf(id: id))
+        // Use the same recorded/contextual expression type as call inference.
+        // The syntax-only adapter can lose operand-derived floating width.
+        val ti: TypeInfo = (try self.exprType(id: id))
         if ti.ref != 0U64 {
             return <Result.Ok value=ti.ref />
         }
