@@ -1749,10 +1749,6 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     // enum's own explicit deinit body is v1-rejected; active payloads still drop.
     // (Distinct generic type-param names are checked per-bracket in lowerTypeParamNames,
     // before impl++method lists merge.)
-    if c.genMode {
-        try c.checkFieldDefaults()
-        try c.checkParamDefaults()
-    }
     // Generation retains its independent whole-input structural checks.
     // Ordinary compilation validates returns and patterns within each body.
     if c.genMode {
@@ -1868,6 +1864,17 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
     tracePhase(c: inout c, label: "default-generators:start")
     try c.prepareDefaultArgumentGenerators()
     c.prepareFieldDefaultGenerators()
+    // Default expressions use the same lexical semantic request in generation
+    // and ordinary compilation. They cannot be type-checked before Record
+    // supplies their generator's return context.
+    val defaultLimit = c.arena.functionCount()
+    mut val defaultIndex = 0U64
+    while defaultIndex < defaultLimit {
+        if c.decls.defaultGeneratorOrigins.contains(key: defaultIndex) {
+            try c.prepareLexicalBody(fnIdx: defaultIndex)
+        }
+        defaultIndex += 1U64
+    }
     tracePhase(c: inout c, label: "default-generators:done")
     // TypeTerm recording deliberately precedes generic checking, but a
     // CallTemplate is source-selection evidence and needs the verified

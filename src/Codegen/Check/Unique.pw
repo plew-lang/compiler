@@ -472,23 +472,9 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkFieldDefault(structure: U64, field: U64) -> Result[(), CompileDiagnostic] {
-        try self.checkFieldDefaultRestrictions(structure: structure, field: field)
-        return self.checkFieldDefaultValue(structure: structure, field: field)
-    }
 
-    inout fn checkFieldDefaults() -> Result[(), CompileDiagnostic] {
-        mut val structure = 0U64
-        while structure < self.arena.structCount() {
-            mut val field = 0U64
-            while field < self.arena.structAt(index: structure).fields.count() {
-                try self.checkFieldDefault(structure: structure, field: field)
-                field += 1U64
-            }
-            structure += 1U64
-        }
-        return <Result.Ok value=() />
-    }
+
+
 
     // Access-mode validity on parameters (spec/03): a unique-type parameter needs a
     // mode (`move`/`borrow`/`inout`); a copyable-type parameter rejects `move` (a
@@ -639,23 +625,9 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkParamDefault(function: U64, parameter: U64) -> Result[(), CompileDiagnostic] {
-        try self.checkParamDefaultRestrictions(function: function, parameter: parameter)
-        return self.checkParamDefaultValue(function: function, parameter: parameter)
-    }
 
-    inout fn checkParamDefaults() -> Result[(), CompileDiagnostic] {
-        mut val function = 0U64
-        while function < self.arena.functionCount() {
-            mut val parameter = 0U64
-            while parameter < self.arena.functionAt(index: function).params.count() {
-                try self.checkParamDefault(function: function, parameter: parameter)
-                parameter += 1U64
-            }
-            function += 1U64
-        }
-        return <Result.Ok value=() />
-    }
+
+
 
     // Called in the generator's lexical type environment, before its body is
     // recorded. Placed aliases share this original declaration's one request.

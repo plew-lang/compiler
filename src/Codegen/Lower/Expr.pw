@@ -110,7 +110,7 @@ pub impl Comp {
             }
             ExprAst.Call(val name, nameSpan: _, val args, val span) => {
                 // ORIGINAL offset (name is at the call's span start) — feeds moduleOf.
-                val a = (try self.lowerArgs(args: args, name: <Span start=span.start end=span.start + name.bytes().count() />))
+                val a = (try self.lowerArgs(args: args))
                 result = self.pushExpr(e: <Expr.Call nameStart=span.start nameLen=name.bytes().count() args=a />)
             }
             ExprAst.Field(val base, val name, val nameSpan, val span) => {
@@ -123,7 +123,7 @@ pub impl Comp {
             }
             ExprAst.Method(val recv, val name, val nameSpan, val args, val span) => {
                 val recvId = (try self.lowerExpr(e: recv))
-                val loweredArgs = (try self.lowerArgs(args: args, name: nameSpan, hasReceiver: true))
+                val loweredArgs = (try self.lowerArgs(args: args))
                 result = self.pushExpr(e: <Expr.Method recv=recvId nameStart=nameSpan.start nameLen=name.bytes().count() args=loweredArgs />)
             }
             ExprAst.ArrowMethod(val recv, val name, val nameSpan, val args, val span) => {
@@ -132,12 +132,12 @@ pub impl Comp {
                 // — the backend resolves `Deref`'s struct/type and self-place from the cell.
                 val r: U64 = (try self.lowerExpr(e: recv))
                 val d: U64 = self.pushExpr(e: <Expr.Deref base=r />)
-                val a = (try self.lowerArgs(args: args, name: nameSpan, hasReceiver: true))
+                val a = (try self.lowerArgs(args: args))
                 result = self.pushExpr(e: <Expr.Method recv=d nameStart=nameSpan.start nameLen=name.bytes().count() args=a />)
             }
             ExprAst.ExtMethod(val recv, val src, srcSpan: _, val name, nameSpan: _, val args, val span) => {
                 val r: U64 = (try self.lowerExpr(e: recv))
-                val a = (try self.lowerArgs(args: args, name: <Span start=0U64 end=0U64 />))
+                val a = (try self.lowerArgs(args: args))
                 val nm: Bind = self.internBytes(s: name)
                 result = self.pushExpr(e: <Expr.ExtMethod recv=r source=self.lowerViewSource(siteOffset: span.start, text: src) nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
             }
@@ -377,7 +377,7 @@ pub impl Comp {
                 result = self.pushExpr(e: <Expr.Binary op=e.op lhs=lhs rhs=rhs />)
             }
             SyntaxExprKind.Call => {
-                val args = (try self.lowerSyntaxArgs(expr: e, name: e.name))
+                val args = (try self.lowerSyntaxArgs(expr: e))
                 result = self.pushExpr(e: <Expr.Call nameStart=e.name.start nameLen=e.name.end - e.name.start args=args />)
             }
             SyntaxExprKind.Field => {
@@ -385,18 +385,18 @@ pub impl Comp {
             }
             SyntaxExprKind.Method => {
                 val recv = (try self.lowerSyntaxExpr(id: e.child0))
-                val args = (try self.lowerSyntaxArgs(expr: e, name: e.name, hasReceiver: true))
+                val args = (try self.lowerSyntaxArgs(expr: e))
                 result = self.pushExpr(e: <Expr.Method recv=recv nameStart=e.name.start nameLen=e.name.end - e.name.start args=args />)
             }
             SyntaxExprKind.ArrowMethod => {
                 val recv: U64 = (try self.lowerSyntaxExpr(id: e.child0))
                 val deref: U64 = self.pushExpr(e: <Expr.Deref base=recv />)
-                val args = (try self.lowerSyntaxArgs(expr: e, name: e.name, hasReceiver: true))
+                val args = (try self.lowerSyntaxArgs(expr: e))
                 result = self.pushExpr(e: <Expr.Method recv=deref nameStart=e.name.start nameLen=e.name.end - e.name.start args=args />)
             }
             SyntaxExprKind.ExtMethod => {
                 val recv: U64 = (try self.lowerSyntaxExpr(id: e.child0))
-                val args = (try self.lowerSyntaxArgs(expr: e, name: <Span start=0U64 end=0U64 />))
+                val args = (try self.lowerSyntaxArgs(expr: e))
                 result = self.pushExpr(e: <Expr.ExtMethod recv=recv source=self.lowerViewSourceSpan(siteOffset: e.span.start, start: e.text.start, len: e.text.end - e.text.start) nameStart=e.name.start nameLen=e.name.end - e.name.start args=args />)
             }
             SyntaxExprKind.Arrow => {

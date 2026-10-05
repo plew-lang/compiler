@@ -778,7 +778,7 @@ pub impl Comp {
     // Reserve the final contiguous argument range before recursive lowering.
     // The label-only rows are private to this construction until all values
     // have been filled; nested expressions append to their own ranges.
-    inout fn lowerArgs(args: Array[ArgAst], name: Span, hasReceiver: Bool = false) -> Result[ArgRange, CompileDiagnostic] {
+    inout fn lowerArgs(args: Array[ArgAst]) -> Result[ArgRange, CompileDiagnostic] {
         val range = <ArgRange start=self.arena.argPool.count() len=args.count() />
         mut val index = 0U64
         while index < args.count() {
@@ -801,7 +801,7 @@ pub impl Comp {
         return <Result.Ok value=range />
     }
 
-    inout fn lowerSyntaxArgs(expr: SyntaxExpr, name: Span, hasReceiver: Bool = false) -> Result[ArgRange, CompileDiagnostic] {
+    inout fn lowerSyntaxArgs(expr: SyntaxExpr) -> Result[ArgRange, CompileDiagnostic] {
         val range = <ArgRange start=self.arena.argPool.count() len=syntaxExprArgCount(file: self.syntax, expr: expr) />
         mut val index = 0U64
         while index < range.len {
@@ -873,11 +873,6 @@ pub impl Comp {
         return <Result.Ok value=call />
     }
 
-    // Build a fresh empty
-    // `<Dictionary keys=Buffer.new() vals=Buffer.new() hashes=Buffer.new() buckets=Buffer.new() entryCount=0U64 />`
-    // Make node typed as `ctxRef` (a `Dictionary[K, V]` TypeRef). The dict's columns are
-    // `Buffer[K]`/`Buffer[V]`/`Buffer[U64]` (the storage floor) — built via `Buffer.new()`,
-    // whose element type is inferred from the field type at codegen.
     // Preserve source entries; semantic analysis owns construction and typing.
     inout fn lowerDictLit(keys: Array[ExprAst], vals: Array[ExprAst], span: Span) -> Result[U64, CompileDiagnostic] {
         mut val loweredKeys: Array[U64] = []

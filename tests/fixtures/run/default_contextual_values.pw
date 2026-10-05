@@ -1,0 +1,17 @@
+use @Std/Io only { print }
+
+struct Point { val value: I64 = 7 }
+struct Defaults {
+    val point: Point = </>
+    val entries: Dictionary[String, I64] = { give ["field": 1] }
+}
+fn inspect(point: Point = </>, entries: Dictionary[String, I64] = if true { give ["argument": 2] } else { give [:] }) {
+    print(point.value)
+    print(entries.count())
+}
+fn main() {
+    val defaults = <Defaults />
+    print(defaults.point.value)
+    print(defaults.entries.count())
+    inspect()
+}
