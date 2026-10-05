@@ -39,17 +39,21 @@ pub impl Comp {
     inout fn warnUnreachableArm(arm: MatchArm) {
         if arm.offset == 0U64 || self.reportedUnreachableArms.contains(arm.offset) { return }
         self.reportedUnreachableArms.insert(arm.offset)
-        val location = self.diagnosticAt(offset: arm.offset, msg: "unreachable match arm: earlier patterns already cover it (spec/11)")
+        val message = if arm.orGroup == 0U64 { give "unreachable match arm: earlier patterns already cover it (spec/11)" } else { give "unreachable match alternative: earlier patterns already cover it (spec/11)" }
+        val location = self.diagnosticAt(offset: arm.offset, msg: message)
         self.pendingDiagnostics.append(<CompileDiagnostic severity=<DiagnosticSeverity.Warning /> location=location.location message=location.message />)
     }
 
     // Coverage is structural: arbitrary Eq calls (including repeated reads of
     // the same existing value) neither cover variants nor erase later effects.
-    inout fn recordMatchWarnings(scrut: U64, arms: MatchArmRange) {
+    inout fn recordMatchWarnings(scrut: U64, arms: MatchArmRange) -> Result[(), CompileDiagnostic] {
         val term = self.semanticExprTerm(exprId: scrut)
         val enumIndex = self.enumIndexForType(ref: self.lexicalLayoutReceiver(receiverTerm: term))
         val boolName = self.kwSpan(kw: "Bool", kwLen: 4U64)
         val isBool = self.typeRefEq(a: term, b: self.simpleTypeRef(nameStart: boolName.nameStart, nameLen: boolName.nameLen))
+        mut val positiveIntegers: Set[U64] = Set.new()
+        mut val negativeIntegers: Set[U64] = Set.new()
+        mut val strings: Array[Array[U8]] = []
         mut val variants: Set[U64] = Set.new()
         mut val allCovered = false
         mut val sawTrue = false
@@ -62,16 +66,30 @@ pub impl Comp {
             if arm.isWildcard || arm.isStruct {
                 allCovered = true
             } else if arm.isValuePattern {
-                if isBool {
-                    match self.arena.exprs[arm.valueExpr] {
-                        Expr.Int(val value, offset: _, val isBool, tyStart: _, tyLen: _, isNeg: _) => {
-                            if isBool {
-                                if value == 0U64 { if sawFalse { unreachable = true } sawFalse = true }
-                                if value == 1U64 { if sawTrue { unreachable = true } sawTrue = true }
-                            }
+                match self.arena.exprs[arm.valueExpr] {
+                    Expr.Int(val value, offset: _, val isBool, tyStart: _, tyLen: _, val isNeg) => {
+                        if isBool {
+                            if value == 0U64 { if sawFalse { unreachable = true } sawFalse = true }
+                            if value == 1U64 { if sawTrue { unreachable = true } sawTrue = true }
+                        } else if isNeg && value != 0U64 {
+                            if negativeIntegers.contains(value) { unreachable = true }
+                            negativeIntegers.insert(value)
+                        } else {
+                            if positiveIntegers.contains(value) { unreachable = true }
+                            positiveIntegers.insert(value)
                         }
-                        _ => {}
                     }
+                    Expr.Str(val start, val len) => {
+                        // Decode once using the same bytes consumed by LLVM;
+                        // distinct escape spellings can denote the same value.
+                        try self.prepareStringLiteral(start: start, len: len)
+                        val bytes = self.decodedStringLiterals.at(key: start)
+                        for val previous in strings {
+                            if self.matchLiteralBytesEqual(first: previous, second: bytes) { unreachable = true }
+                        }
+                        if !unreachable { strings.append(bytes) }
+                    }
+                    _ => {}
                 }
             } else if enumIndex < self.arena.enumCount() {
                 val variant = self.variantIndexInDeclaration(enumIndex: enumIndex, nameStart: arm.variantStart, nameLen: arm.variantLen)
@@ -83,6 +101,7 @@ pub impl Comp {
             if unreachable { self.warnUnreachableArm(arm: arm) }
             index += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     inout fn checkArmBinds(a: MatchArm) -> Result[(), CompileDiagnostic] {
@@ -197,5 +216,16 @@ pub impl Comp {
             xi += 1
         }
         return <Result.Ok value=() />
+    }
+
+    // Literal identity is byte equality, independent of user-defined Eq witnesses.
+    fn matchLiteralBytesEqual(first: Array[U8], second: Array[U8]) -> Bool {
+        if first.count() != second.count() { return false }
+        mut val index = 0U64
+        while index < first.count() {
+            if first[index] != second[index] { return false }
+            index += 1U64
+        }
+        return true
     }
 }

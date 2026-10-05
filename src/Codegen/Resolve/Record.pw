@@ -975,7 +975,7 @@ pub impl Comp {
         try self.recordSemanticPatterns(matchSource: matchSource, scrut: scrut, arms: patterns)
         if self.cur.recordCallTemplates {
             if !(try self.matchExhaustive(scrut: scrut, arms: arms)) { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: scrut), msg: "match must be exhaustive: cover all variants or add a wildcard") /> }
-            self.recordMatchWarnings(scrut: scrut, arms: arms)
+            try self.recordMatchWarnings(scrut: scrut, arms: arms)
         }
         return <Result.Ok value=() />
     }

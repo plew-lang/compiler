@@ -79,6 +79,9 @@ fn main() {
     print(pick(value: 1U64))
 }
 ''', ['3'], '2\n2\n', 1),
+        ('integer', 'use @Std/Io only { print }\nfn main() {\n    print(match -1I64 {\n        1I64 => 1I64\n        -1I64 => 2I64\n        -1I64 => 3I64\n        1I64 => 4I64\n        _ => 5I64\n    })\n}\n', ['6', '7'], '2\n', 2),
+        ('string-escapes', 'use @Std/Io only { print }\nfn main() {\n    print(match "a" {\n        "a" => 1I64\n        "\\u{61}" => 2I64\n        _ => 3I64\n    })\n}\n', ['5'], '1\n', 1),
+        ('or-partial', 'use @Std/Io only { print }\nfn main() {\n    print(match false {\n        true => 1I64\n        true | false => 2I64\n    })\n}\n', [('5', 'alternative')], '2\n', 1),
     ]
     with tempfile.TemporaryDirectory(prefix='plew-match-diagnostics-') as temporary:
         for name, source, lines, output, lazy_count in cases:
@@ -93,8 +96,9 @@ fn main() {
                             if line.startswith(f'plewc: warning: {path}:')]
                 expected_lines = lines if mode != '--run' else lines[:lazy_count]
                 assert len(warnings) == len(expected_lines), (name, mode, warnings, expected_lines)
-                for warning, line in zip(warnings, expected_lines):
-                    assert warning == f'plewc: warning: {path}:{line}: unreachable match arm: earlier patterns already cover it (spec/11)', warning
+                for warning, expected in zip(warnings, expected_lines):
+                    line, kind = expected if isinstance(expected, tuple) else (expected, 'arm')
+                    assert warning == f'plewc: warning: {path}:{line}: unreachable match {kind}: earlier patterns already cover it (spec/11)', warning
                 if mode == '--check':
                     assert result.stdout == '', (name, mode, result.stdout)
                 elif mode == '--run':
