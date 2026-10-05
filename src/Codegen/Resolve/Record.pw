@@ -2447,7 +2447,7 @@ pub impl Comp {
             self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
             self.cur.typeArgs = []
             self.cur.checkFn = fnIdx
-            if !recordCallTemplates { try self.checkDefaultGenerator(fnIdx: fnIdx) }
+            if !recordCallTemplates { try self.checkDefaultGeneratorRestrictions(fnIdx: fnIdx) }
             mut val pi: U64 = 0
             while pi < f.params.count() {
                 val p: Param = self.funcParamAt(params: f.params, index: pi)
@@ -2455,11 +2455,12 @@ pub impl Comp {
                 // After preparation the generator is the sole Record
                 // owner of this expression and of its lexical locals.
                 if p.hasDefault && self.decls.defaultGeneratorRanges.count() == 0U64 {
-                    try self.recordExpr(exprId: p.defaultExpr)
+                    try self.recordExpr(exprId: p.defaultExpr, expectedTerm: p.ty)
                 }
                 pi += 1
             }
             try self.recordBlock(blkId: f.body)
+            if !recordCallTemplates { try self.checkDefaultGenerator(fnIdx: fnIdx) }
         }
         return <Result.Ok value=() />
     }
