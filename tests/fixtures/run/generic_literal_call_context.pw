@@ -1,0 +1,10 @@
+use @Std/Io only { print }
+fn first[T](values: Array[T]) -> T { return values[0] }
+fn identity[T](value: T) -> T { return value }
+fn main() {
+    print(first[I64](values: [42]))
+    print(first[I64](values: { give [43] }))
+    print(first[I64](values: if true { give [44] } else { give [0] }))
+    print(first[I64](values: match true { true => [45] false => [0] }))
+    print(identity[I64](value: 46))
+}

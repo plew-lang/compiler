@@ -266,19 +266,35 @@ pub impl Comp {
         val f: Func = self.arena.functionAt(index: fi)
         try self.tcCheckGenericArgConsistency(f: f, args: args)
         val ps: Array[Param] = self.copyFuncParams(params: f.params)
+        mut val environment = <InstanceEnvironment />
+        if f.typeParams.count() != 0U64 {
+            val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: id)
+            val templateIndex = self.decls.callTemplateIndex(siteKey: site)
+            mut val typeArgs: Array[U64] = []
+            if templateIndex < self.decls.callTemplates.count() {
+                match self.decls.callTemplates[templateIndex].kind {
+                    CallTemplateKind.Direct(callee: val selected, receiver: _, args: _, calleeTypeArgs: val recorded, proofId: _) => {
+                        if selected == fi { typeArgs = self.callTemplateTypeArgs(range: recorded) }
+                    }
+                    _ => {}
+                }
+            } else if self.genMode {
+                // The generation checker has no recorded body templates.
+                typeArgs = try self.inferFnArgs(f: f, args: args)
+            }
+            if typeArgs.count() == f.typeParams.count() {
+                environment = <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=typeArgs />
+            }
+        }
         mut val i: U64 = 0
         while i < args.len {
             val pi: U64 = self.paramIndexForArg(params: f.params, args: args, argIdx: i)
             if pi < ps.count() {
                 val p: Param = ps[pi]
                 try self.checkArgInoutMode(p: p, arg: self.argAt(args: args, index: i))
-                try self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
-                // full type-compatibility (not just literal context): a non-literal VALUE
-                // argument whose type disagrees with the parameter (a closure with the wrong
-                // return type for a `fn(...)->R` param, etself.) — checkLitSpan only sees
-                // literals. tcCheckValue rejects only DEFINITE mismatches (unknown/generic
-                // types pass through).
-                try self.tcCheckValue(expectedRef: p.ty, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
+                val parameterType = try self.groundTermForBody(ref: p.ty, environment: environment, selfRef: 0U64, itemRef: 0U64)
+                try self.checkLitTi(id: self.argAt(args: args, index: i).expr, ti: self.typeInfoOfRef(ref: parameterType))
+                try self.tcCheckValue(expectedRef: parameterType, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
             } else {
                 try self.checkLitCtx(id: self.argAt(args: args, index: i).expr, eKind: 0, eBits: 0, eSgn: false)
             }
@@ -358,21 +374,21 @@ pub impl Comp {
                 val ps: Array[Param] = self.copyFuncParams(params: mf.params)
                 val genericRecv: Bool = self.isGenericInst(ref: rt.ref)
                 mut val environment = <InstanceEnvironment />
-                if genericRecv { environment = (try self.finalMethodEnvironment(f: mf, receiverRef: rt.ref, args: args)) }
+                if genericRecv || mf.typeParams.count() != 0U64 { environment = (try self.finalMethodEnvironment(f: mf, receiverRef: rt.ref, args: args)) }
                 mut val i: U64 = 0
                 while i < args.len {
                     val pi: U64 = self.paramIndexForArg(params: mf.params, args: args, argIdx: i)
                     if pi < ps.count() {
                         val p: Param = ps[pi]
                         try self.checkArgInoutMode(p: p, arg: self.argAt(args: args, index: i))
-                        if genericRecv {
+                        if genericRecv || mf.typeParams.count() != 0U64 {
                             // Parameter checking uses the same lexical receiver and
                             // method substitutions as return typing and finalization.
                             val parameterType = (try self.groundFinalMethodSignatureInEnvironment(f: mf, environment: environment, signatureTerm: p.ty))
                             try self.checkLitTi(id: self.argAt(args: args, index: i).expr, ti: self.typeInfoOfRef(ref: parameterType))
                             try self.tcCheckValue(expectedRef: parameterType, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
                         } else {
-                            try self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                            try self.checkLitTi(id: self.argAt(args: args, index: i).expr, ti: self.typeInfoOfRef(ref: p.ty))
                             try self.tcCheckValue(expectedRef: p.ty, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
                         }
                     } else {
@@ -473,7 +489,7 @@ pub impl Comp {
                                 }
                             }
                             if !(checkedGround) {
-                                try self.checkLitSpan(id: self.argAt(args: args, index: k).expr, tyStart: ap.tyStart, tyLen: ap.tyLen, isArray: ap.tyIsArray)
+                                try self.checkLitTi(id: self.argAt(args: args, index: k).expr, ti: self.typeInfoOfRef(ref: ap.ty))
                                 try self.tcCheckValue(expectedRef: ap.ty, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
                             }
                         }

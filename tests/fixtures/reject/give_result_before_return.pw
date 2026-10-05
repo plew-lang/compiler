@@ -1,0 +1,6 @@
+fn wrong() -> I64 {
+    val result: Array[String] = { give [1I64]
+        return 3I64 }
+    return 0I64
+}
+fn main() { wrong() }

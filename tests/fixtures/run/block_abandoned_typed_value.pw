@@ -1,18 +1,18 @@
 use @Std/Io only { print }
 
 fn standalone() -> I64 {
-    val result: Array[String] = { give [1I64]
+    val result: Array[I64] = { give [1I64]
         return 3I64 }
-    return 0I64
+    return result[0]
 }
 fn conditional(flag: Bool) -> I64 {
-    val result = if flag { give "discarded"
+    val result = if flag { give 4I64
         return 5I64 } else { give 7I64 }
     return result
 }
 fn matched(flag: Bool) -> I64 {
     val result = match flag {
-        true => { give ["discarded"]
+        true => { give 10I64
         return 11I64 }
         false => 13I64
     }
@@ -21,6 +21,7 @@ fn matched(flag: Bool) -> I64 {
 fn closure() -> I64 {
     val result = { give fn() -> I64 { return 42I64 }
         return 17I64 }
+    return result()
 }
 fn main() {
     print(standalone())
