@@ -1,0 +1,36 @@
+use @Plew/Syntax as Syntax
+use @Std/Io only { print }
+fn show(file: Syntax.SyntaxFile, item: Syntax.TopItemId) {
+    val decl = Syntax.syntaxDecl(file: file, id: <Syntax.DeclId raw=Syntax.syntaxTopItemPayload(file: file, item: item) />)
+    val body = Syntax.syntaxBlock(file: file, id: decl.body)
+    val loopStmt = Syntax.syntaxStmt(file: file, id: Syntax.syntaxBlockStmt(file: file, block: body, index: 0U64))
+    val loopBody = Syntax.syntaxBlock(file: file, id: loopStmt.block0)
+    val chain = Syntax.syntaxStmt(file: file, id: Syntax.syntaxBlockStmt(file: file, block: loopBody, index: 0U64))
+    print(Syntax.syntaxConditionClause(file: file, conditions: chain.conditions, index: 0U64).isWhileCondition)
+    print(Syntax.syntaxConditionClause(file: file, conditions: chain.conditions, index: 1U64).isWhileCondition)
+}
+fn main() {
+    val source = "fn sample() {{ while val flag = true && flag {{ break }} }}"
+    mut val lexer = <Syntax.Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    Syntax.lex(lx: inout lexer)
+    mut val parser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val direct = Syntax.parseProgramSyntaxFile(p: inout parser)
+    show(file: direct, item: Syntax.syntaxFileTopLevel(file: direct, index: 0U64))
+    val item = Syntax.parseItem(source: source, start: 0U64, end: source.bytes().count())
+    mut val frozen = <Syntax.SyntaxFile.empty />
+    val root = frozen.freezeTopItem(ast: item)
+    show(file: frozen, item: root)
+    val block = Syntax.parseBlockFrom(source: "{{ while val flag = true && flag {{ break }} }}", start: 0U64)
+    match block.stmts[0U64] {
+        Syntax.StmtAst.While(cond: _, val body, span: _) => {
+            match body.stmts[0U64] {
+                Syntax.StmtAst.IfChain(val conditions, thenBlk: _, elseBlk: _, span: _) => {
+                    print(conditions[0U64].isWhileCondition)
+                    print(conditions[1U64].isWhileCondition)
+                }
+                _ => { print(false) }
+            }
+        }
+        _ => { print(false) }
+    }
+}
