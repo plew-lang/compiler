@@ -70,3 +70,6 @@ tests/fixtures/run/condition_chain_capture_scope.pw
 tests/fixtures/run/match_capture_enum.pw
 tests/fixtures/run/match_capture_scope.pw
 tests/fixtures/run/match_value_pattern_snapshot.pw
+
+# Aggregate evaluation may terminate before a result is constructed.
+tests/fixtures/run/noncompleting_aggregate_cleanup.pw

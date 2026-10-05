@@ -1,0 +1,5 @@
+fn test() -> I64 {
+    val values: Array[I64] = ["wrong", { return 7I64 }]
+    return 9I64
+}
+fn main() { test() }
