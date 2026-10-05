@@ -25,6 +25,16 @@ fn main() {
     compiler.arena.registerEnum(<EnumDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[] variants=[] isUnique=true defOffset=300U64 />)
     val enumeration = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=300U64 />)
     assert(compiler.arena.typeTermIsUnique(ref: enumeration))
+    // A parameter's spelling is never a nominal lookup key. Both nominal
+    // namespaces contain Resource, so each lookup must reject the parameter.
+    assert(compiler.structIndexForType(ref: parameter) == compiler.arena.structCount())
+    assert(compiler.enumIndexForType(ref: parameter) == compiler.arena.enumCount())
+    val projection = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] projectionReceiver=parameter assocNameId=name.nameId />)
+    assert(compiler.structIndexForType(ref: projection) == compiler.arena.structCount())
+    assert(compiler.enumIndexForType(ref: projection) == compiler.arena.enumCount())
+    assert(compiler.structIndexForType(ref: copyable) == 0U64)
+    assert(compiler.structIndexForType(ref: resource) == 1U64)
+    assert(compiler.enumIndexForType(ref: enumeration) == 0U64)
     // Newtype edges retain identity even when every declaration is homonymous.
     compiler.arena.registerNewtype(<NewtypeDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId underStart=name.nameStart underLen=name.nameLen underRef=resource defOffset=400U64 />)
     val wrapper = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=400U64 />)

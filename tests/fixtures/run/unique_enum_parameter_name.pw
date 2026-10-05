@@ -1,0 +1,18 @@
+use @Std/Io only { print }
+
+unique struct Resource { val id: I64
+    deinit { print(self.id) }
+}
+unique enum E { Item(owner: String, discarded: Resource) Empty }
+struct Box[E] { val value: E }
+fn make() -> E { return <E.Item owner="owner" discarded=<Resource id=2I64 /> /> }
+fn main() {
+    val box = <Box[I64] value=7I64 />
+    print(box.value)
+    val kept = match make() {
+        E.Item(val owner, discarded: _) => { print(3I64)
+            give owner }
+        E.Empty => "empty"
+    }
+    print(kept)
+}

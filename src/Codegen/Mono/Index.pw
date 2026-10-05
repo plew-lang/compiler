@@ -7,9 +7,12 @@ pub impl Comp {
     // Resolved nominal identity wins over authored spelling. Generated
     // legacy terms without identity retain their existing name lookup until
     // their producer is migrated; a missing resolved identity never falls back.
+    // Parameters, projections and structural/existential types are not nominal
+    // declarations, even when their authored spelling names one.
     inout fn structIndexForType(ref: U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return self.arena.structCount() }
         val term = self.arena.typeTerms[ref]
+        if term.paramId != 0U64 || term.assocNameId != 0U64 || term.projectionReceiver != 0U64 || term.isRecord || term.isAny { return self.arena.structCount() }
         if term.hasDecl { return self.arena.structIndexByOffset(offset: term.declOffset) }
         return self.anyStructIndex(nameStart: term.nameStart, nameLen: term.nameLen)
     }
@@ -17,6 +20,7 @@ pub impl Comp {
     inout fn enumIndexForType(ref: U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return self.arena.enumCount() }
         val term = self.arena.typeTerms[ref]
+        if term.paramId != 0U64 || term.assocNameId != 0U64 || term.projectionReceiver != 0U64 || term.isRecord || term.isAny { return self.arena.enumCount() }
         if term.hasDecl { return self.arena.enumIndexByOffset(offset: term.declOffset) }
         return self.anyEnumIndex(nameStart: term.nameStart, nameLen: term.nameLen)
     }
