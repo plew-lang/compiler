@@ -799,17 +799,27 @@ pub impl Comp {
                 return <Result.Ok value=() />
             }
         }
-        val sidx: U64 = self.structIndexForType(ref: subjectRef)
-        if sidx >= self.arena.structCount() {
-            return <Result.Ok value=() />
+        if subjectRef == 0U64 || subjectRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
+        val subject = self.arena.typeAt(index: subjectRef)
+        // Structural records carry their own field identity. They must not be
+        // rediscovered as a synthetic nominal declaration by spelling.
+        mut val labels: Array[U64] = subject.recordFieldLabels
+        if !subject.isRecord {
+            val declaration = self.structIndexForType(ref: subjectRef)
+            if declaration >= self.arena.structCount() { return <Result.Ok value=() /> }
+            val fields = self.arena.structAt(index: declaration).fields
+            mut val field = 0U64
+            while field < fields.count() {
+                labels.append(fields[field].nameId)
+                field += 1U64
+            }
         }
-        val sd: StructDef = self.arena.structAt(index: sidx)
         mut val bi: U64 = 0
         while bi < site.binds.len {
             val bind: Bind = self.bindAt(binds: site.binds, index: bi)
             // each named field must exist on the record (also covers a typo'd
             // `nope: _` discard, which synthesizes no Field read)…
-            if !(self.structFieldsContain(fields: sd.fields, fieldStart: bind.fieldStart, fieldLen: bind.fieldLen)) {
+            if !(idInSet(set: labels, id: intern(c: inout self, start: bind.fieldStart, len: bind.fieldLen))) {
                 return <Result.Err error=self.diagnosticAt(offset: bind.offset, msg: "no such field on this value's type (a record-destructure shorthand bind must spell the field's name — rename with `fieldName: val newName`)") />
             }
             // …and only once.
@@ -823,12 +833,9 @@ pub impl Comp {
             }
             bi += 1
         }
-        mut val fi: U64 = 0
-        while fi < sd.fields.count() {
-            if !(self.bindsCoverField(binds: site.binds, fieldStart: sd.fields[fi].nameStart, fieldLen: sd.fields[fi].nameLen)) {
-                return <Result.Err error=self.diagnosticAt(offset: site.offset, msg: "a record destructure must bind or discard every field (a field is missing — bind it or use `label: _`; `..` is not allowed, spec/03)") />
-            }
-            fi += 1
+        // Existing, distinct labels cover the shape exactly iff counts agree.
+        if site.binds.len != labels.count() {
+            return <Result.Err error=self.diagnosticAt(offset: site.offset, msg: "a record destructure must bind or discard every field (a field is missing — bind it or use `label: _`; `..` is not allowed, spec/03)") />
         }
         return <Result.Ok value=() />
     }
