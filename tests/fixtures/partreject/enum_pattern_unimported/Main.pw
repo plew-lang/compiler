@@ -1,0 +1,2 @@
+use ./A only { make }
+fn main() { val value = match make() { Hidden.X => 1I64 Hidden.Y => 2I64 } }

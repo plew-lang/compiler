@@ -1,0 +1,2 @@
+enum A { X }
+fn main() { if A.X = 1I64 { val value = 1I64 } }

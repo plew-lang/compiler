@@ -1,0 +1,2 @@
+enum A { X Y }
+fn main() { val value = match <A.X /> { Missing.X => 1I64 Missing.Y => 2I64 } }

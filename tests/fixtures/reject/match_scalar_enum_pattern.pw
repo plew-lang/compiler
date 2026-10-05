@@ -1,0 +1,2 @@
+enum A { X }
+fn main() { val value = match 1I64 { A.X => 1I64 _ => 2I64 } }

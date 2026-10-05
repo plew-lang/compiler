@@ -960,6 +960,7 @@ pub impl Comp {
         mut val index = 0U64
         while index < arms.len {
             mut val arm = self.matchArmAt(arms: arms, index: index)
+            try self.checkEnumPatternSubject(scrut: scrut, pattern: self.patternInfo(arm: arm))
             if arm.isValuePattern {
                 if arm.testExpr == 0U64 {
                     val subject = self.pushExpr(e: <Expr.MatchSubject scrut=scrut />)
@@ -987,6 +988,7 @@ pub impl Comp {
             val clause = self.conditionClauseAt(conditions: conditions, index: index)
             try self.recordExpr(exprId: clause.value)
             if clause.isBinding {
+                try self.checkEnumPatternSubject(scrut: clause.value, pattern: clause.pattern)
                 try self.checkPatternBinds(a: clause.pattern)
                 val wildcard = <PatInfo isWildcard=true enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=<BindRange start=0U64 len=0U64 /> isStruct=false />
                 try self.recordSemanticPatterns(matchSource: <MatchSource.Condition clauseIndex=conditions.start + index />, scrut: clause.value, arms: [clause.pattern, wildcard])

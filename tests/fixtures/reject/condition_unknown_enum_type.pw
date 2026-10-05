@@ -1,0 +1,2 @@
+enum A { X(n: I64) Y }
+fn main() { if Missing.X(val n) = <A.X n=7I64 /> { val value = n } }

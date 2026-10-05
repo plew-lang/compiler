@@ -1,0 +1,2 @@
+pub enum Hidden { X Y }
+pub fn make() -> Hidden { return <Hidden.X /> }
