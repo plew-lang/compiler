@@ -11,7 +11,8 @@ fn inferredArgument(c: inout Comp, pattern: U64, expected: U64, params: FuncBind
     c.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 typeParams=params params=valueParams
         hasRet=true retStart=0U64 retLen=0U64 retIsArray=false retTy=pattern body=0U64
         hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
-    val kind = c.completeCallTemplateResult(kind: <CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=c.publishCallTemplateArguments(args: []) calleeTypeArgs=c.publishCallTemplateTypeArgs(args: [0U64]) proofId=c.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />) />, expectedTerm: expected)
+    val expression = c.pushExpr(e: <Expr.Call nameStart=0U64 nameLen=0U64 args=c.pushArgs(args: []) />)
+    val kind = c.completeCallTemplateResult(exprId: expression, kind: <CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=c.publishCallTemplateArguments(args: []) calleeTypeArgs=c.publishCallTemplateTypeArgs(args: [0U64]) proofId=c.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />) />, expectedTerm: expected).unwrap()
     match kind {
         CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val range, proofId: _) => {
             val args = c.callTemplateTypeArgs(range: range)

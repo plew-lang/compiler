@@ -107,9 +107,8 @@ pub impl Comp {
             if !te.isAny { return <Result.Ok value=<TypeCompatibility.Incompatible /> /> }
             // a CONCRETE value coercing INTO `any P` must conform to P (spec/08) — else its
             // existential box has no vtable entry and a member call null-dereferences at
-            // runtime. Check the conformance table when the source is a known concrete
-            // struct/enum; a generic param (id 0, conforms via its `where` bound) or an
-            // existing `any` source is left to the conservative pass-through.
+            // runtime. Symbolic parameters use their lexical assumptions; nominal
+            // instances use the complete conformance query.
             if te.isAny {
                 if !(tin.isAny) {
                     if self.isActiveTypeParam(t: self.arena.typeAt(index: actual)) {
@@ -118,16 +117,12 @@ pub impl Comp {
                         }
                         return <Result.Ok value=<TypeCompatibility.Compatible /> />
                     }
-                    val srcId: U64 = self.knownNamedTypeIdForTerm(type: tin)
-                    if srcId == 0U64 { return <Result.Ok value=<TypeCompatibility.Unresolved /> /> }
-                    if srcId != 0U64 {
-                        // Existential formation uses the same complete trait
-                        // instance query as `where`: a witness for `P[I64]`
-                        // does not construct an `any P[String]` box.
-                        val constraint: TraitConstraint = self.existentialTraitConstraint(ref: exp)
-                        if !((try self.conformsTraitConstraint(ref: actual, constraint: constraint))) {
-                            return <Result.Ok value=<TypeCompatibility.Incompatible /> />
-                        }
+                    // Formation requires the full trait-instance proof. Candidate
+                    // filters exclude generic declarations and cannot decide
+                    // compatibility of an instantiated nominal type.
+                    val constraint: TraitConstraint = self.existentialTraitConstraint(ref: exp)
+                    if !((try self.conformsTraitConstraint(ref: actual, constraint: constraint))) {
+                        return <Result.Ok value=<TypeCompatibility.Incompatible /> />
                     }
                 }
             }
