@@ -1837,12 +1837,30 @@ pub impl Comp {
     }
 
     inout fn recordBlockExpectedResult(blkId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
-        // A block whose evaluation cannot produce a value contributes no
-        // result constraint (for example, its give operand returns).
-        if !self.blockCompletion(blkId: blkId).source.normal { return <Result.Ok value=() /> }
+        // This is a construction-time refinement, not a type reader. Reuse
+        // recorded completion when present and refresh the result fact after
+        // contextualizing the child; parents consume only the published fact.
+        mut val typing: SemanticValueBlockTyping = <SemanticValueBlockTyping.Pending />
+        if blkId < self.arena.semanticValueBlocks.count() { typing = self.arena.semanticValueBlocks[blkId] }
+        match typing {
+            SemanticValueBlockTyping.Checked(val completion, resultTerm: _) => {
+                if !completion.source.normal { return <Result.Ok value=() /> }
+            }
+            SemanticValueBlockTyping.Pending => {
+                if !self.blockCompletion(blkId: blkId).source.normal { return <Result.Ok value=() /> }
+            }
+        }
         val value = self.blockGiveExpr(blkId: blkId)
         if value < self.arena.exprs.count() {
             try self.recordSemanticExprExpectedResult(exprId: value, expectedTerm: expectedTerm)
+            match typing {
+                SemanticValueBlockTyping.Checked(val completion, val resultTerm) => {
+                    mut val refined = self.semanticExprTerm(exprId: value)
+                    if refined == 0U64 { refined = resultTerm }
+                    self.arena.semanticValueBlocks.set(i: blkId, value: <SemanticValueBlockTyping.Checked completion=completion resultTerm=refined />)
+                }
+                SemanticValueBlockTyping.Pending => {}
+            }
         }
         return <Result.Ok value=() />
     }

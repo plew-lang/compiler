@@ -1229,15 +1229,18 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Expected-result refinement reads only previously recorded child facts.
+    // Expected-result refinement publishes the block fact before its parent
+    // reads it. A reader must not reopen a lexical give in a different scope.
     inout fn recordValueBlockResult(exprId: U64, blockId: U64) -> Bool {
-        if !self.blockCompletion(blkId: blockId).source.normal { return false }
-        val value = self.blockGiveExpr(blkId: blockId)
-        if value >= self.arena.exprs.count() { return false }
-        val term = self.semanticExprTerm(exprId: value)
-        if term == 0U64 { return false }
-        self.recordSemanticExprTerm(exprId: exprId, term: term)
-        return true
+        if blockId >= self.arena.semanticValueBlocks.count() { return false }
+        match self.arena.semanticValueBlocks[blockId] {
+            SemanticValueBlockTyping.Pending => { return false }
+            SemanticValueBlockTyping.Checked(val completion, val resultTerm) => {
+                if !completion.source.normal || resultTerm == 0U64 { return false }
+                self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
+                return true
+            }
+        }
     }
 
     // Check and publish a block result while its local and pattern bindings

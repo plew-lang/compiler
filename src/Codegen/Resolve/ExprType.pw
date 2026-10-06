@@ -574,6 +574,17 @@ pub impl Comp {
     // Before Record, every value block still follows the same normal-result
     // rule; a diverging arm never supplies the result of another arm.
     inout fn valueBlockTypeInfo(blockId: U64, chainHoleRef: U64) -> Result[Optional[TypeInfo], CompileDiagnostic] {
+        if blockId < self.arena.semanticValueBlocks.count() {
+            match self.arena.semanticValueBlocks[blockId] {
+                SemanticValueBlockTyping.Checked(val completion, val resultTerm) => {
+                    if !completion.source.normal || resultTerm == 0U64 { return <Result.Ok value=<Optional.None /> /> }
+                    return <Result.Ok value=<Optional.Some v=self.typeInfoOfRef(ref: resultTerm) /> />
+                }
+                SemanticValueBlockTyping.Pending => {}
+            }
+        }
+        // Only pre-Record construction queries may infer from syntax. A
+        // recorded zero result is not permission to repeat that inference.
         if !self.blockCompletion(blkId: blockId).source.normal { return <Result.Ok value=<Optional.None /> /> }
         val value = self.blockGiveExpr(blkId: blockId)
         if value >= self.arena.exprs.count() { return <Result.Ok value=<Optional.None /> /> }
