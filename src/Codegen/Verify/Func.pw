@@ -170,7 +170,7 @@ pub impl Comp {
         while i < self.blockStmtCount(blkId: blockId) {
             val statement = self.blockStmtAt(blkId: blockId, index: i)
             try self.verifyStmt(stmtId: statement)
-            if reachable && !self.stmtCompletion(stmtId: statement).normal {
+            if reachable && !self.stmtCompletion(stmtId: statement).execution.normal {
                 exitMoves = self.cur.verifyMovedIdx
                 reachable = false
             }

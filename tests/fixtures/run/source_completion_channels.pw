@@ -1,0 +1,60 @@
+use /SourceCompletion only { SourceCompletion, CompletionTransfer, completionTransfer, completionThen, completionChoice, completionBlock, completionLoop }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn main() {
+    val returning = completionTransfer(transfer: <CompletionTransfer.Return />)
+    val giving = completionTransfer(transfer: <CompletionTransfer.Give />)
+    val breaking = completionTransfer(transfer: <CompletionTransfer.Break />)
+    val continuing = completionTransfer(transfer: <CompletionTransfer.Continue />)
+    val diverging = completionTransfer(transfer: <CompletionTransfer.Diverge />)
+    val endless = completionLoop(body: <SourceCompletion />, maySkip: false)
+
+    // loop {}; give value: the static result exists, but no execution exit does.
+    val resultBlock = completionBlock(flow: completionThen(prefix: endless, next: giving))
+    assert(resultBlock.source.normal)
+    assert(!resultBlock.execution.normal)
+    assert(!resultBlock.source.gives)
+    assert(!resultBlock.execution.gives)
+
+    // loop {}; return value: the unreachable region still has a return boundary.
+    val deadReturn = completionThen(prefix: endless, next: returning)
+    assert(!deadReturn.source.normal && deadReturn.source.returns)
+    assert(!deadReturn.execution.normal && !deadReturn.execution.returns)
+
+    // An unreachable give after return cannot invent a block result.
+    val invalidResult = completionBlock(flow: completionThen(prefix: returning, next: giving))
+    assert(!invalidResult.source.normal && invalidResult.source.returns)
+    assert(!invalidResult.execution.normal && invalidResult.execution.returns)
+
+    // A return/endless choice warns; two explicitly divergent branches do not continue.
+    val mixed = completionChoice(first: returning, second: endless)
+    assert(mixed.source.normal && !mixed.execution.normal)
+    val allDiverging = completionChoice(first: returning, second: diverging)
+    assert(!allDiverging.source.normal && !allDiverging.execution.normal)
+    assert(allDiverging.source.returns && allDiverging.source.diverges)
+    val valueBranch = completionChoice(first: completionBlock(flow: giving), second: returning)
+    assert(valueBranch.source.normal && valueBranch.execution.normal)
+
+    // loop { return value }: preserve the execution transfer, not source divergence.
+    val returningLoop = completionLoop(body: returning, maySkip: false)
+    assert(returningLoop.source.normal && !returningLoop.source.returns)
+    assert(!returningLoop.execution.normal && returningLoop.execution.returns)
+
+    // A block does not consume an enclosing loop's exits; that loop does.
+    val breakBlock = completionBlock(flow: breaking)
+    assert(!breakBlock.source.normal && breakBlock.source.breaks)
+    val brokenLoop = completionLoop(body: breakBlock, maySkip: false)
+    assert(brokenLoop.source.normal && brokenLoop.execution.normal)
+    assert(!brokenLoop.source.breaks && !brokenLoop.execution.breaks)
+    val continuedLoop = completionLoop(body: completionBlock(flow: continuing), maySkip: false)
+    assert(continuedLoop.source.normal && !continuedLoop.execution.normal)
+    assert(!continuedLoop.source.continues && !continuedLoop.execution.continues)
+
+    // An inner loop's break cannot escape its enclosing loop.
+    val nested = completionLoop(body: brokenLoop, maySkip: false)
+    assert(nested.source.normal && !nested.execution.normal)
+    val optionalLoop = completionLoop(body: returning, maySkip: true)
+    assert(optionalLoop.execution.normal && optionalLoop.execution.returns)
+    print("ok")
+}

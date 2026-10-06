@@ -1,6 +1,6 @@
 use ./Ir only { TypeCompatibility, ConditionClause, ConditionClauseRange }
 use @Plew/Syntax only { CondClause, syntaxConditionClause }
-use ./SourceCompletion only { SourceCompletion, BlockResultContext, completionThen, completionChoice }
+use ./SourceCompletion only { SourceCompletion, CompletionEdges, CompletionTransfer, BlockResultContext, completionThen, completionChoice, completionTransfer, completionBlock, completionLoop }
 use ./PublicSurfaceIndex only { PublicSurfaceIndex }
 use ./Ir only { PatternBindingType, AssociatedBoundEvidence, TraitConstraintRange, SupertraitRef, TraitProofOrigin, DeclarationBoundRef, TraitBound, TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
 use @Plew/Syntax only { syntaxTraitAssocType, syntaxAssociatedTypeBound }

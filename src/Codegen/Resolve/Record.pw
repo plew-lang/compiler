@@ -2442,7 +2442,7 @@ pub impl Comp {
                 _ => {}
             }
             try self.recordStmt(stmtId: statement, expectedTerm: expectedTerm)
-            if reachable { reachable = self.stmtCompletion(stmtId: statement).normal }
+            if reachable { reachable = self.stmtCompletion(stmtId: statement).execution.normal }
             if checkResult {
                 match self.arena.stmts[statement] {
                     Stmt.Give(val value) => {

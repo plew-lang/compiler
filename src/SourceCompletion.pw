@@ -1,22 +1,74 @@
-// Source control flow records normal continuation and an escape to the
-// enclosing loop. Return/panic/continue have no normal continuation. A loop
-// consumes its body's break edges; closure bodies belong to another invocation.
-pub struct SourceCompletion {
+// Exits are relative to the lexical region being summarized. Blocks consume
+// give; loops consume break/continue; a function boundary consumes return.
+// Closure bodies are separate invocations and never contribute construction exits.
+pub struct CompletionEdges {
     pub val normal: Bool = true
-    pub val breaks: Bool = false
     pub val gives: Bool = false
+    pub val breaks: Bool = false
+    pub val continues: Bool = false
+    pub val returns: Bool = false
+    pub val diverges: Bool = false
+}
+pub impl CompletionEdges { factory }
+
+// Source typing deliberately continues after a loop, even when execution
+// cannot. Keep the two channels through composition, not in consumer heuristics.
+pub struct SourceCompletion {
+    pub val source: CompletionEdges = <CompletionEdges />
+    pub val execution: CompletionEdges = <CompletionEdges />
 }
 pub impl SourceCompletion { factory }
 
-pub fn completionThen(prefix: SourceCompletion, next: SourceCompletion) -> SourceCompletion {
+pub enum CompletionTransfer {
+    Give
+    Return
+    Break
+    Continue
+    Diverge
+}
+
+fn edgesThen(prefix: CompletionEdges, next: CompletionEdges) -> CompletionEdges {
     if !prefix.normal { return prefix }
-    return <SourceCompletion normal=next.normal breaks=prefix.breaks || next.breaks gives=prefix.gives || next.gives />
+    return <CompletionEdges normal=next.normal gives=prefix.gives || next.gives breaks=prefix.breaks || next.breaks continues=prefix.continues || next.continues returns=prefix.returns || next.returns diverges=prefix.diverges || next.diverges />
+}
+
+fn edgesChoice(first: CompletionEdges, second: CompletionEdges) -> CompletionEdges {
+    return <CompletionEdges normal=first.normal || second.normal gives=first.gives || second.gives breaks=first.breaks || second.breaks continues=first.continues || second.continues returns=first.returns || second.returns diverges=first.diverges || second.diverges />
+}
+
+fn blockEdges(flow: CompletionEdges) -> CompletionEdges {
+    return <CompletionEdges normal=flow.normal || flow.gives breaks=flow.breaks continues=flow.continues returns=flow.returns diverges=flow.diverges />
+}
+
+pub fn completionThen(prefix: SourceCompletion, next: SourceCompletion) -> SourceCompletion {
+    return <SourceCompletion source=edgesThen(prefix: prefix.source, next: next.source) execution=edgesThen(prefix: prefix.execution, next: next.execution) />
 }
 
 pub fn completionChoice(first: SourceCompletion, second: SourceCompletion) -> SourceCompletion {
-    return <SourceCompletion normal=first.normal || second.normal breaks=first.breaks || second.breaks gives=first.gives || second.gives />
+    return <SourceCompletion source=edgesChoice(first: first.source, second: second.source) execution=edgesChoice(first: first.execution, second: second.execution) />
 }
 
+pub fn completionTransfer(transfer: CompletionTransfer) -> SourceCompletion {
+    mut val edges = <CompletionEdges normal=false />
+    match transfer {
+        CompletionTransfer.Give => { edges = <CompletionEdges normal=false gives=true /> }
+        CompletionTransfer.Return => { edges = <CompletionEdges normal=false returns=true /> }
+        CompletionTransfer.Break => { edges = <CompletionEdges normal=false breaks=true /> }
+        CompletionTransfer.Continue => { edges = <CompletionEdges normal=false continues=true /> }
+        CompletionTransfer.Diverge => { edges = <CompletionEdges normal=false diverges=true /> }
+    }
+    return <SourceCompletion source=edges execution=edges />
+}
+
+pub fn completionBlock(flow: SourceCompletion) -> SourceCompletion {
+    return <SourceCompletion source=blockEdges(flow: flow.source) execution=blockEdges(flow: flow.execution) />
+}
+
+pub fn completionLoop(body: SourceCompletion, maySkip: Bool) -> SourceCompletion {
+    // A body's return is an execution exit, not a source-level divergence of
+    // the loop statement. Only the condition/iterator is composed outside here.
+    return <SourceCompletion execution=<CompletionEdges normal=maySkip || body.execution.breaks returns=body.execution.returns diverges=body.execution.diverges /> />
+}
 
 // Source block result context distinguishes statements from value regions.
 // Give leaves the current block; block completion consumes that local edge.

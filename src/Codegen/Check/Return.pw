@@ -1,4 +1,4 @@
-// Normal continuation and loop escape are shared source-flow facts.
+// Source continuation and execution exits share one compositional analysis.
 
 pub impl Comp {
     inout fn warnUnreachableStatement(stmtId: U64) {
@@ -22,25 +22,26 @@ pub impl Comp {
     }
 
     inout fn blockCompletesNormally(blkId: U64) -> Bool {
-        return self.blockCompletion(blkId: blkId).normal
+        return self.blockCompletion(blkId: blkId).execution.normal
     }
 
     inout fn exprCompletesNormally(exprId: U64) -> Bool {
-        return self.exprCompletion(exprId: exprId).normal
+        return self.exprCompletion(exprId: exprId).execution.normal
     }
 
     inout fn blockCompletion(blkId: U64) -> SourceCompletion {
         mut val flow = <SourceCompletion />
         mut val index = 0U64
-        while index < self.blockStmtCount(blkId: blkId) && flow.normal {
+        while index < self.blockStmtCount(blkId: blkId) && (flow.source.normal || flow.execution.normal) {
             flow = completionThen(prefix: flow, next: self.stmtCompletion(stmtId: self.blockStmtAt(blkId: blkId, index: index)))
             index += 1U64
         }
-        return <SourceCompletion normal=flow.normal || flow.gives breaks=flow.breaks />
+        return completionBlock(flow: flow)
     }
 
     inout fn armsCompletion(arms: MatchArmRange) -> SourceCompletion {
-        mut val flow = <SourceCompletion normal=false />
+        if arms.len == 0U64 { return completionTransfer(transfer: <CompletionTransfer.Diverge />) }
+        mut val flow = <SourceCompletion source=<CompletionEdges normal=false /> execution=<CompletionEdges normal=false /> />
         mut val index = 0U64
         while index < arms.len {
             if !self.unreachableMatchArms.contains(arms.start + index) {
@@ -54,7 +55,7 @@ pub impl Comp {
     inout fn argumentsCompletion(args: ArgRange) -> SourceCompletion {
         mut val flow = <SourceCompletion />
         mut val index = 0U64
-        while index < args.len && flow.normal {
+        while index < args.len && (flow.source.normal || flow.execution.normal) {
             flow = completionThen(prefix: flow, next: self.exprCompletion(exprId: self.argAt(args: args, index: index).expr))
             index += 1U64
         }
@@ -70,17 +71,17 @@ pub impl Comp {
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 val condition = self.exprCompletion(exprId: cond)
-                if !condition.normal { return condition }
+                if !condition.source.normal && !condition.execution.normal { return condition }
                 return completionThen(prefix: condition, next: completionChoice(first: self.blockCompletion(blkId: thenBlk), second: self.blockCompletion(blkId: elseBlk)))
             }
             Expr.MatchExpr(val scrut, val arms) => {
                 val subject = self.exprCompletion(exprId: scrut)
-                if !subject.normal { return subject }
+                if !subject.source.normal && !subject.execution.normal { return subject }
                 return completionThen(prefix: subject, next: self.armsCompletion(arms: arms))
             }
             Expr.Binary(val op, val lhs, val rhs) => {
                 val left = self.exprCompletion(exprId: lhs)
-                if !left.normal { return left }
+                if !left.source.normal && !left.execution.normal { return left }
                 mut val right = self.exprCompletion(exprId: rhs)
                 if op == opAnd() || op == opOr() { right = completionChoice(first: right, second: <SourceCompletion />) }
                 return completionThen(prefix: left, next: right)
@@ -100,7 +101,7 @@ pub impl Comp {
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
                 mut val flow = <SourceCompletion />
                 mut val index = 0U64
-                while index < fields.len && flow.normal {
+                while index < fields.len && (flow.source.normal || flow.execution.normal) {
                     flow = completionThen(prefix: flow, next: self.exprCompletion(exprId: self.makeFieldAt(fields: fields, index: index).value))
                     index += 1U64
                 }
@@ -109,7 +110,7 @@ pub impl Comp {
             Expr.Array(val elems) | Expr.Dictionary(entries: val elems) | Expr.Range(rangeTy: _, endpoints: val elems) => {
                 mut val flow = <SourceCompletion />
                 mut val index = 0U64
-                while index < elems.len && flow.normal {
+                while index < elems.len && (flow.source.normal || flow.execution.normal) {
                     flow = completionThen(prefix: flow, next: self.exprCompletion(exprId: self.exprAt(exprs: elems, index: index)))
                     index += 1U64
                 }
@@ -122,42 +123,42 @@ pub impl Comp {
     inout fn stmtCompletion(stmtId: U64) -> SourceCompletion {
         match self.arena.stmts[stmtId] {
             Stmt.ExprStmt(val expr) => { return self.exprCompletion(exprId: expr) }
-            Stmt.Give(val value) => { return completionThen(prefix: self.exprCompletion(exprId: value), next: <SourceCompletion normal=false gives=true />) }
+            Stmt.Give(val value) => { return completionThen(prefix: self.exprCompletion(exprId: value), next: completionTransfer(transfer: <CompletionTransfer.Give />)) }
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return self.exprCompletion(exprId: init) }
             Stmt.Assign(val target, val value) => { return completionThen(prefix: self.exprCompletion(exprId: target), next: self.exprCompletion(exprId: value)) }
             Stmt.Return(val value, val hasValue, offset: _) => {
                 mut val flow = <SourceCompletion />
                 if hasValue { flow = self.exprCompletion(exprId: value) }
-                return completionThen(prefix: flow, next: <SourceCompletion normal=false />)
+                return completionThen(prefix: flow, next: completionTransfer(transfer: <CompletionTransfer.Return />))
             }
-            Stmt.Panic(val msg, offset: _) => { return completionThen(prefix: self.exprCompletion(exprId: msg), next: <SourceCompletion normal=false />) }
-            Stmt.Break(offset: _) => { return <SourceCompletion normal=false breaks=true /> }
-            Stmt.Continue(offset: _) => { return <SourceCompletion normal=false /> }
+            Stmt.Panic(val msg, offset: _) => { return completionThen(prefix: self.exprCompletion(exprId: msg), next: completionTransfer(transfer: <CompletionTransfer.Diverge />)) }
+            Stmt.Break(offset: _) => { return completionTransfer(transfer: <CompletionTransfer.Break />) }
+            Stmt.Continue(offset: _) => { return completionTransfer(transfer: <CompletionTransfer.Continue />) }
             Stmt.IfChain(val conditions, val thenBlk, val elseBlk) => {
                 return self.conditionChainCompletion(conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk)
             }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
                 val condition = self.exprCompletion(exprId: cond)
-                if !condition.normal { return condition }
+                if !condition.source.normal && !condition.execution.normal { return condition }
                 mut val alternate = <SourceCompletion />
                 if hasElse { alternate = self.blockCompletion(blkId: elseBlk) }
                 return completionThen(prefix: condition, next: completionChoice(first: self.blockCompletion(blkId: thenBlk), second: alternate))
             }
             Stmt.Match(val scrut, val arms) => {
                 val subject = self.exprCompletion(exprId: scrut)
-                if !subject.normal { return subject }
+                if !subject.source.normal && !subject.execution.normal { return subject }
                 return completionThen(prefix: subject, next: self.armsCompletion(arms: arms))
             }
             Stmt.While(val cond, val body) => {
                 val condition = self.exprCompletion(exprId: cond)
-                if !condition.normal { return condition }
-                val normal = !self.condIsLiteralTrue(id: cond) || self.blockCompletion(blkId: body).breaks
-                return completionThen(prefix: condition, next: <SourceCompletion normal=normal />)
+                if !condition.source.normal && !condition.execution.normal { return condition }
+                val loopFlow = completionLoop(body: self.blockCompletion(blkId: body), maySkip: !self.condIsLiteralTrue(id: cond))
+                return completionThen(prefix: condition, next: loopFlow)
             }
-            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, val isRange, inclusive: _, val iter, val rangeHi, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {
-                val iterator = self.exprCompletion(exprId: iter)
-                if !isRange { return iterator }
-                return completionThen(prefix: iterator, next: self.exprCompletion(exprId: rangeHi))
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, val isRange, inclusive: _, val iter, val rangeHi, val body, isStruct: _, patStart: _, patLen: _, binds: _) => {
+                mut val iterator = self.exprCompletion(exprId: iter)
+                if isRange { iterator = completionThen(prefix: iterator, next: self.exprCompletion(exprId: rangeHi)) }
+                return completionThen(prefix: iterator, next: completionLoop(body: self.blockCompletion(blkId: body), maySkip: true))
             }
         }
     }
