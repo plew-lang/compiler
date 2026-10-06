@@ -526,6 +526,7 @@ pub impl SemanticMatchPayload { factory }
 // hasVariant=true. Struct arms carry field bindings without a variant;
 // wildcard arms have no payloads. Indices are declaration slots, not names.
 pub struct SemanticMatchArm {
+    pub mut val isReachable: Bool = true
     pub val hasValueTest: Bool = false
     pub val testExpr: U64 = 0U64
     pub val captureTarget: U64 = 0U64

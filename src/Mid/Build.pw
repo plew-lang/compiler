@@ -2774,6 +2774,10 @@ fn buildMidOrderedPatternMatch(c: inout Comp, state: inout MidBuildState, semant
     mut val armIndex = 0U64
     while armIndex < semantic.arms.count() && midCurrentBlockIsOpen(state: state) {
         val arm = semantic.arms[armIndex]
+        if !arm.isReachable {
+            armIndex += 1U64
+            continue
+        }
         val selected = midNewBlock(state: inout state)
         val next = midNewBlock(state: inout state)
         mut val refutable = false
@@ -2934,7 +2938,7 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                 // Source arms are ordered. A variant is covered by its first
                 // arm, and the first wildcard covers every remaining variant.
                 // Unreachable source arms have no CFG block or ownership edge.
-                mut val reachable: Bool = otherwise == mismatchTarget
+                mut val reachable: Bool = arm.isReachable && otherwise == mismatchTarget
                 val tag: I64 = midEnumTagForVariantSlot(slot: arm.variantIndex)
                 if reachable && arm.hasVariant {
                     mut val previous: U64 = 0U64

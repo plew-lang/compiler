@@ -43,7 +43,9 @@ pub impl Comp {
         mut val flow = <SourceCompletion normal=false />
         mut val index = 0U64
         while index < arms.len {
-            flow = completionChoice(first: flow, second: self.blockCompletion(blkId: self.matchArmAt(arms: arms, index: index).body))
+            if !self.unreachableMatchArms.contains(arms.start + index) {
+                flow = completionChoice(first: flow, second: self.blockCompletion(blkId: self.matchArmAt(arms: arms, index: index).body))
+            }
             index += 1U64
         }
         return flow

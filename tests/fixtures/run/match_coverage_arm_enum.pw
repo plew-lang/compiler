@@ -1,0 +1,2 @@
+use @Std/Io only { print }
+enum E{A B} fn f()->I64{match <E.A />{_=>{return 1I64} E.A=>{print(2I64)}}} fn main(){print(f())}

@@ -1,0 +1,13 @@
+use @Std/Io only { print }
+unique struct Resource { val id: I64
+ deinit { print(self.id) } }
+fn consume(x: move Resource) { print(90I64) }
+fn test(flag: Bool) {
+ val r = <Resource id=1I64 />
+ val value = match flag { true => { give 7I64
+ consume(x: move r) } false => 8I64 }
+ print(value)
+ consume(x: move r)
+}
+fn main() { test(flag: true)
+ test(flag: false) }

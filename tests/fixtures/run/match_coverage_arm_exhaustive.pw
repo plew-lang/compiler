@@ -1,0 +1,2 @@
+use @Std/Io only { print }
+fn f(flag:Bool)->I64{match flag{true=>{return 1I64} false=>{return 2I64} _=>{print(3I64)}}} fn main(){print(f(flag:true))}

@@ -1091,7 +1091,20 @@ pub impl Comp {
         try self.recordSemanticPatterns(matchSource: matchSource, scrut: scrut, arms: patterns)
         if self.cur.recordCallTemplates {
             if !(try self.matchExhaustive(scrut: scrut, arms: arms)) { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: scrut), msg: "match must be exhaustive: cover all variants or add a wildcard") /> }
-            try self.recordMatchWarnings(scrut: scrut, arms: arms)
+        }
+        try self.recordMatchCoverage(scrut: scrut, arms: arms)
+        val semanticIndex = try self.semanticMatchIndex(ownerFnIdx: self.cur.checkFn, matchSource: matchSource)
+        if semanticIndex < self.decls.semanticMatches.count() {
+            val fact = self.decls.semanticMatches[semanticIndex]
+            mut val selectedArms = fact.arms
+            index = 0U64
+            while index < selectedArms.count() {
+                mut val selected = selectedArms[index]
+                selected.isReachable = !self.unreachableMatchArms.contains(arms.start + index)
+                selectedArms.set(i: index, value: selected)
+                index += 1U64
+            }
+            try self.putSemanticMatch(fact: <SemanticMatch isConsuming=fact.isConsuming ownerFnIdx=fact.ownerFnIdx matchSource=fact.matchSource scrutineeTerm=fact.scrutineeTerm kind=fact.kind arms=selectedArms />)
         }
         return <Result.Ok value=() />
     }

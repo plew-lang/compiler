@@ -571,6 +571,7 @@ pub impl Comp {
                 if !((try self.matchExhaustive(scrut: scrut, arms: arms))) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: scrut), msg: "match must be exhaustive: cover all variants or add a wildcard") />
                 }
+                mut val branchMoves: Array[U64] = []
                 mut val ai: U64 = 0
                 while ai < arms.len {
                     val arm: MatchArm = self.matchArmAt(arms: arms, index: ai)
@@ -582,10 +583,20 @@ pub impl Comp {
                     try self.checkDestructureComplete(a: self.patternInfo(arm: arm), scrut: scrut)
                     try self.verifyAddArmBinds(a: self.patternInfo(arm: arm), scrut: scrut)
                     try self.checkBranchYieldsValue(blkId: arm.body, offset: self.exprOffset(id: id))
-                    try self.verifyBlock(blockId: arm.body)
+                    val outgoing = try self.verifyOwnershipBranch(blockId: arm.body)
+                    if !self.unreachableMatchArms.contains(arms.start + ai) {
+                        for val moved in outgoing {
+                            if moved < armMark {
+                                mut val found = false
+                                for val previous in branchMoves { if previous == moved { found = true } }
+                                if !found { branchMoves.append(moved) }
+                            }
+                        }
+                    }
                     self.popLocals(mark: armMark)
                     ai += 1
                 }
+                self.cur.verifyMovedIdx = branchMoves
             }
             Expr.Sequence(val body) => {
                 try self.checkBranchYieldsValue(blkId: body, offset: self.exprOffset(id: id))
@@ -593,7 +604,7 @@ pub impl Comp {
             }
             Expr.Block(val body, val offset) => {
                 if self.blockCompletesNormally(blkId: body) && self.blockGiveExpr(blkId: body) >= self.arena.exprs.count() {
-                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a block expression must end with `give` to yield a value (spec/11)") />
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a normally completing block expression requires `give` to yield its value (spec/11)") />
                 }
                 try self.verifyBlock(blockId: body)
             }
@@ -603,17 +614,20 @@ pub impl Comp {
                 try self.verifyConditionClauses(conditions: conditions)
                 try self.checkBranchYieldsValue(blkId: thenBlk, offset: self.exprOffset(id: id))
                 try self.checkBranchYieldsValue(blkId: elseBlk, offset: self.exprOffset(id: id))
-                try self.verifyBlock(blockId: thenBlk)
+                val thenMoves = try self.verifyOwnershipBranch(blockId: thenBlk)
                 self.popLocals(mark: mark)
-                try self.verifyBlock(blockId: elseBlk)
+                val elseMoves = try self.verifyOwnershipBranch(blockId: elseBlk)
+                self.verifyMergeMoved(first: thenMoves, second: elseMoves)
+                self.verifyDropMovedAbove(mark: self.scopeMark())
                 self.cur.branchBase = savedBB
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.verifyBoolCondition(cond: cond)
                 try self.checkBranchYieldsValue(blkId: thenBlk, offset: self.exprOffset(id: id))
                 try self.checkBranchYieldsValue(blkId: elseBlk, offset: self.exprOffset(id: id))
-                try self.verifyBlock(blockId: thenBlk)
-                try self.verifyBlock(blockId: elseBlk)
+                val thenMoves = try self.verifyOwnershipBranch(blockId: thenBlk)
+                val elseMoves = try self.verifyOwnershipBranch(blockId: elseBlk)
+                self.verifyMergeMoved(first: thenMoves, second: elseMoves)
             }
             Expr.Ident(val start, val len) => {
                 // an identifier in read position must resolve to a value in scope: `self`, a
@@ -929,16 +943,15 @@ pub impl Comp {
     }
 
     // A value-position `if`/`match` branch must yield a value. A block yields via `give`
-    // (the bare-expr arm `=> e` desugars to one); a block with no `give` yields `()`, so
-    // consuming it where a value is expected silently produced 0 / a confusing "literal
-    // has no type from context". Reject it with a clear message. A branch that always
-    // diverges (return/panic/…) needs no give.
+    // (the bare-expr arm `=> e` desugars to one). A normal path without
+    // `give` has no result; a path that cannot continue requires no result.
+    // Statements after give remain subject to static checking, not execution.
     inout fn checkBranchYieldsValue(blkId: U64, offset: U64) -> Result[(), CompileDiagnostic] {
         if !self.blockCompletesNormally(blkId: blkId) {
             return <Result.Ok value=() />
         }
         if self.blockGiveExpr(blkId: blkId) >= self.arena.exprs.count() {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a value-position `if`/`match` branch must end with `give` to yield a value (a block with no `give` yields `()` — spec/11)") />
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a normally completing value-position `if`/`match` branch requires `give` to yield its value (spec/11)") />
         }
         return <Result.Ok value=() />
     }

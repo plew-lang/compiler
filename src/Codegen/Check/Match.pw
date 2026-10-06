@@ -46,7 +46,7 @@ pub impl Comp {
 
     // Coverage is structural: arbitrary Eq calls (including repeated reads of
     // the same existing value) neither cover variants nor erase later effects.
-    inout fn recordMatchWarnings(scrut: U64, arms: MatchArmRange) -> Result[(), CompileDiagnostic] {
+    inout fn recordMatchCoverage(scrut: U64, arms: MatchArmRange) -> Result[(), CompileDiagnostic] {
         val term = self.semanticExprTerm(exprId: scrut)
         val enumIndex = self.enumIndexForType(ref: self.lexicalLayoutReceiver(receiverTerm: term))
         val boolName = self.kwSpan(kw: "Bool", kwLen: 4U64)
@@ -98,7 +98,10 @@ pub impl Comp {
                     variants.insert(variant)
                 }
             }
-            if unreachable { self.warnUnreachableArm(arm: arm) }
+            if unreachable {
+                self.unreachableMatchArms.insert(arms.start + index)
+                if self.cur.recordCallTemplates { self.warnUnreachableArm(arm: arm) }
+            }
             index += 1U64
         }
         return <Result.Ok value=() />

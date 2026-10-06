@@ -119,6 +119,9 @@ pub struct Comp {
     // Nonfatal diagnostics remain owned by the compilation/session. Only the
     // driver decides how to display them; requesting a body emits no process IO.
     pub mut val pendingDiagnostics: Array[CompileDiagnostic] = []
+    // Structural coverage facts keyed by the immutable match-arm pool index.
+    // Diagnostics and completion consume the same proof of unreachability.
+    pub mut val unreachableMatchArms: Set[U64] = Set.new()
     pub mut val reportedUnreachableArms: Set[U64] = Set.new()
     pub mut val reportedUnreachableStatements: Set[U64] = Set.new()
 

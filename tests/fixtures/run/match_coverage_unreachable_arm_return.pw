@@ -1,0 +1,2 @@
+use @Std/Io only { print }
+fn f()->I64 { match true { _=>{return 1I64} true=>{print(2I64)} } } fn main(){print(f())}

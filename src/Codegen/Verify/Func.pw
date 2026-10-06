@@ -163,12 +163,38 @@ pub impl Comp {
     inout fn verifyBlock(blockId: U64) -> Result[(), CompileDiagnostic] {
         val mark: U64 = self.scopeMark()
         mut val i: U64 = 0
+        mut val reachable = true
+        mut val exitMoves: Array[U64] = []
         while i < self.blockStmtCount(blkId: blockId) {
-            try self.verifyStmt(stmtId: self.blockStmtAt(blkId: blockId, index: i))
+            val statement = self.blockStmtAt(blkId: blockId, index: i)
+            try self.verifyStmt(stmtId: statement)
+            if reachable && !self.stmtCompletion(stmtId: statement).normal {
+                exitMoves = self.cur.verifyMovedIdx
+                reachable = false
+            }
             i += 1
         }
+        // Unreachable statements are still checked in their own sequential
+        // state, but cannot change ownership on this block's actual exit.
+        if !reachable { self.cur.verifyMovedIdx = exitMoves }
         self.popLocals(mark: mark)
         return <Result.Ok value=() />
+    }
+
+    // A branch starts from the caller's ownership state. Only normal block
+    // exits (including give) contribute to the enclosing continuation.
+    inout fn verifyOwnershipBranch(blockId: U64) -> Result[Array[U64], CompileDiagnostic] {
+        val incoming = self.cur.verifyMovedIdx
+        try self.verifyBlock(blockId: blockId)
+        mut val outgoing: Array[U64] = []
+        if self.blockCompletesNormally(blkId: blockId) { outgoing = self.cur.verifyMovedIdx }
+        self.cur.verifyMovedIdx = incoming
+        return <Result.Ok value=outgoing />
+    }
+
+    inout fn verifyMergeMoved(first: Array[U64], second: Array[U64]) {
+        self.cur.verifyMovedIdx = first
+        for val index in second { self.verifyMarkMoved(idx: index) }
     }
 
     // Every value used as a branch condition crosses this boundary, whether
