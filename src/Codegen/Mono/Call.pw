@@ -1164,9 +1164,12 @@ pub impl Comp {
     // `E -> I64`. Recover it only from the exact selected edge and pair the
     // values by ParamId, never by spelling or receiver position.
     inout fn providedProofArgsForFinalCallee(callee: U64, proof: StaticConformanceProof) -> Array[U64] {
+        if callee >= self.arena.functionCount() { return [] }
+        return self.providedProofArguments(f: self.arena.functionAt(index: callee), proof: proof)
+    }
+
+    inout fn providedProofArguments(f: Func, proof: StaticConformanceProof) -> Array[U64] {
         mut val out: Array[U64] = []
-        if callee >= self.arena.functionCount() { return out }
-        val f: Func = self.arena.functionAt(index: callee)
         if !(f.isProvided) || f.sourceConformIdx == 0U64 { return out }
         mut val witness: WitnessMatch = <WitnessMatch />
         match proof {

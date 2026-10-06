@@ -652,7 +652,7 @@ pub impl Comp {
         // as PriorCallResult and create a nonexistent descriptor dependency.
         mut val finalReceiverSource: CallTemplateReceiver = receiverSource
         if f.isAssoc { finalReceiverSource = <CallTemplateReceiver.Term term=receiverTerm /> }
-        mut val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
+        mut val proof: StaticConformanceProof = finalEnvironment.proof
         if f.isProvided {
             val resolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
             match resolution {
@@ -1821,6 +1821,17 @@ pub impl Comp {
                 }
                 try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, useOffset: self.exprOffset(id: exprId))
                 try self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: receiverSource, receiverTerm: receiverTerm, args: args)
+                if self.traceCodegen {
+                    eprint(text: "[trace-codegen] viewed-call expr=")
+                    eprintU64(n: exprId)
+                    eprint(text: " callee=")
+                    eprintU64(n: methodCallee)
+                    eprint(text: " receiver=")
+                    self.traceMonoTypeHead(ref: receiverTerm)
+                    eprint(text: " result=")
+                    self.traceMonoTypeHead(ref: self.parametricExprTerm(exprId: exprId))
+                    eprint(text: "\n")
+                }
                 if methodCallee >= self.arena.functionCount() {
                     try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
                 }

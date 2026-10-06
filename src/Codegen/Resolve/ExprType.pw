@@ -178,8 +178,18 @@ pub impl Comp {
         // retains the complete WitnessMatch here, including legacy binder
         // indexes while the ParamId migration is still in flight.
         val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: receiverRef))
-        if f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 { return <Result.Ok value=<InstanceEnvironment /> />}
+        mut val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
+        if f.isProvided { proof = try self.providedBodyProof(f: f, receiverRef: receiverRef) }
+        // A provided copy placed through a trait-subject edge is justified
+        // by its conformance path, not nominal equality with that trait.
+        if f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 && self.proofIsMissing(proof: proof) { return <Result.Ok value=<InstanceEnvironment /> />}
         mut val fullArgs: Array[U64] = (try self.receiverCallableArguments(f: f, receiverRef: receiverRef, receiverMatch: receiverMatch))
+        val proofArgs = self.providedProofArguments(f: f, proof: proof)
+        mut val proofIndex = 0U64
+        while proofIndex < proofArgs.count() && proofIndex < fullArgs.count() {
+            if fullArgs[proofIndex] == 0U64 { fullArgs[proofIndex] = proofArgs[proofIndex] }
+            proofIndex += 1U64
+        }
         // Fill only binders the receiver pattern did not determine. Those are
         // method-owned generic parameters and may be inferred from arguments.
         val inferred: Array[U64] = (try self.inferFnArgs(f: f, args: args))
@@ -203,7 +213,7 @@ pub impl Comp {
         // path can use spelling fallback while translating a method binder;
         // an immutable map cannot, so the returned outer `T` remains the
         // caller's lexical term for later BodyInstance grounding.
-        return <Result.Ok value=(try self.withLexicalSelfBinding(f: f, environment: <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=receiverRef />)) />
+        return <Result.Ok value=(try self.withLexicalSelfBinding(f: f, environment: <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=receiverRef proof=proof />)) />
     }
 
     inout fn signatureTypeArguments(f: Func, environment: InstanceEnvironment) -> Array[U64] {
