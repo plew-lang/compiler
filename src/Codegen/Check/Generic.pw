@@ -956,7 +956,7 @@ pub impl Comp {
                 if hasValue {
                     try self.checkBoundsExpr(exprId: value)
                     if self.cur.checkFn < self.arena.functionCount() {
-                        try self.checkGenericTypeMatch(expectedRef: self.arena.functionAt(index: self.cur.checkFn).retTy, valueExpr: value)
+                        try self.checkGenericTypeMatch(expectedRef: self.semanticBodyReturnContext(fnIdx: self.cur.checkFn), valueExpr: value)
                     }
                 }
             }

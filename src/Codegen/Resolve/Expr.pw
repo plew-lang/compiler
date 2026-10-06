@@ -1192,7 +1192,11 @@ pub impl Comp {
                 if current.count() == function.typeParams.count() && self.fnArgsAllResolved(args: current) { return <Result.Ok value=kind /> }
                 mut val completed: Array[U64] = current
                 while completed.count() < function.typeParams.count() { completed.append(0U64) }
-                if !self.matchCallResultArguments(pattern: function.retTy, expected: expectedTerm, params: function.typeParams, values: inout completed) { return <Result.Ok value=kind /> }
+                // Self in a callable result is a receiver recipe. Expose its
+                // lexical pattern before matching the callee's binders; it
+                // must not remain an unrelated nominal name in inference.
+                val resultPattern = self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: function), params: [], values: [], selfRef: self.parametricSelfRef(f: function))
+                if !self.matchCallResultArguments(pattern: resultPattern, expected: expectedTerm, params: function.typeParams, values: inout completed) { return <Result.Ok value=kind /> }
                 // The expected term constrains only this callee's binders.
                 // Publish the substituted declaration result, never the expected
                 // term itself. The same completed substitution is retained for Mono.
@@ -1293,6 +1297,14 @@ pub impl Comp {
         }
         if selectedReceiver == 0U64 && function.isAssoc && function.recvTy != 0U64 {
             selectedReceiver = self.groundTermInEnvironment(ref: function.recvTy, params: params, values: typeArgs)
+        }
+        if function.isAssoc && selectedReceiver != 0U64 && selectedReceiver < self.arena.typeCount() && function.recvTy != 0U64 && function.recvTy < self.arena.typeCount() {
+            // A qualifier with omitted arguments is completed from the same
+            // recorded substitution as parameters and result. Do not replace
+            // an explicit receiver or a distinct inherited newtype surface.
+            if self.arena.typeTerms[selectedReceiver].args.len == 0U64 && self.arena.typeTerms[function.recvTy].args.len != 0U64 && self.typeTermRefSameHead(a: selectedReceiver, b: function.recvTy) {
+                selectedReceiver = self.groundTermInEnvironment(ref: function.recvTy, params: params, values: typeArgs)
+            }
         }
         return self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment params=params args=typeArgs receiverRef=selectedReceiver proof=proof />)
     }

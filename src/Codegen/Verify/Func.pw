@@ -27,7 +27,9 @@ pub impl Comp {
             self.cur.retVoid = false
             mut val rStart: U64 = f.retStart
             mut val rLen: U64 = f.retLen
-            mut val rTy: U64 = f.retTy
+            // The body's Self denotes its lexical receiver, not the caller's
+            // receiver or an unbound name left on the public signature.
+            mut val rTy: U64 = self.groundTermInEnvironment(ref: f.retTy, params: [], values: [], selfRef: self.parametricSelfRef(f: f))
             mut val rArr: Bool = f.retIsArray
             // an async fn's body returns the Promise's INNER type (`return n` yields I64
             // even for `-> Promise[I64]`; the implicit `-> I64` form is already the inner
