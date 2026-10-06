@@ -21,6 +21,9 @@
 #include <llvm-c/Transforms/PassBuilder.h>
 #include <cstdio>
 #include <cstring>
+#ifdef __APPLE__
+#include <strings.h>
+#endif
 #include <memory>
 #include <cstdlib>
 #include <string>
@@ -44,6 +47,7 @@ struct PlewLlvmJit {
   std::unique_ptr<llvm::orc::IndirectStubsManager> stubs;
   std::unique_ptr<llvm::orc::LLJIT> engine;
   llvm::orc::JITDylib *bodies = nullptr;
+  llvm::orc::JITDylib *compilerRuntime = nullptr;
   llvm::orc::DefinitionGenerator *sourceBodies = nullptr;
   bool failed = false;
   bool preparing = false;
@@ -127,6 +131,34 @@ extern "C" PlewLlvmJit *plew_llvm_jit_create(void) {
   }
   auto jit = std::make_unique<PlewLlvmJit>();
   jit->engine = std::move(*engine);
+  // Memory intrinsics can become libc calls during machine-code lowering,
+  // after the frontend's explicit host-import scan. Supply their shared host
+  // implementations in a separate fallback library, without exposing the
+  // process symbol table to source modules or shadowing explicit definitions.
+  auto runtime = jit->engine->createJITDylib("plew.compiler.runtime");
+  if (!runtime) {
+    jitError(jit.get(), runtime.takeError());
+    return nullptr;
+  }
+  jit->compilerRuntime = &*runtime;
+  llvm::orc::SymbolMap symbols;
+  const auto flags = llvm::JITSymbolFlags::Exported | llvm::JITSymbolFlags::Callable;
+  auto add = [&](const char *name, auto *function) {
+    symbols[jit->engine->mangleAndIntern(name)] =
+        llvm::orc::ExecutorSymbolDef(llvm::orc::ExecutorAddr::fromPtr(function), flags);
+  };
+  add("memcpy", &std::memcpy);
+  add("memmove", &std::memmove);
+  add("memset", &std::memset);
+#ifdef __APPLE__
+  // Darwin lowers zero-filled memset to bzero.
+  add("bzero", &::bzero);
+#endif
+  if (auto error = runtime->define(llvm::orc::absoluteSymbols(std::move(symbols)))) {
+    jitError(jit.get(), std::move(error));
+    return nullptr;
+  }
+  jit->engine->getMainJITDylib().addToLinkOrder(*jit->compilerRuntime);
   return jit.release();
 }
 
@@ -386,6 +418,7 @@ extern "C" int plew_llvm_jit_defer(PlewLlvmJit *jit, const char *name,
       return jitError(jit, bodies.takeError());
     jit->bodies = &*bodies;
     jit->bodies->addToLinkOrder(jit->engine->getMainJITDylib());
+    jit->bodies->addToLinkOrder(*jit->compilerRuntime);
     auto generator = std::make_unique<SourceBodyGenerator>(*jit);
     jit->sourceBodies = generator.get();
     jit->bodies->addGenerator(std::move(generator));

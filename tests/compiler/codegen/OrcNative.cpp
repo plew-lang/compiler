@@ -1,6 +1,7 @@
 #include "../../../native/llvm_backend.h"
 #include <cassert>
 #include <cstdint>
+#include <cstring>
 
 static int hostCalls;
 extern "C" int64_t hostBump() { return ++hostCalls; }
@@ -47,7 +48,47 @@ static void addEntry(PlewLlvmJit *jit) {
   assert(plew_llvm_jit_add(jit, module, context) == 0);
 }
 
+static void checkMemoryIntrinsics() {
+  auto jit = plew_llvm_jit_create();
+  assert(jit);
+  auto context = LLVMContextCreate();
+  auto module = LLVMModuleCreateWithNameInContext("memory", context);
+  auto pointer = LLVMPointerTypeInContext(context, 0);
+  LLVMTypeRef parameters[] = {pointer, pointer, LLVMInt64TypeInContext(context)};
+  auto signature = LLVMFunctionType(LLVMVoidTypeInContext(context), parameters, 3, 0);
+  auto function = LLVMAddFunction(module, "copyMoveClear", signature);
+  auto builder = LLVMCreateBuilderInContext(context);
+  LLVMPositionBuilderAtEnd(builder, LLVMAppendBasicBlockInContext(context, function, "entry"));
+  auto destination = LLVMGetParam(function, 0);
+  auto source = LLVMGetParam(function, 1);
+  auto size = LLVMGetParam(function, 2);
+  LLVMBuildMemCpy(builder, destination, 1, source, 1, size);
+  LLVMBuildMemSet(builder, source, LLVMConstInt(LLVMInt8TypeInContext(context), 0, 0), size, 1);
+  LLVMBuildMemMove(builder, source, 1, destination, 1, size);
+  LLVMBuildRetVoid(builder);
+  LLVMDisposeBuilder(builder);
+  // The input IR contains intrinsics, not explicit libc imports.
+  assert(!LLVMGetNamedFunction(module, "memcpy"));
+  assert(!LLVMGetNamedFunction(module, "memmove"));
+  assert(!LLVMGetNamedFunction(module, "memset"));
+  assert(plew_llvm_jit_add(jit, module, context) == 0);
+  auto address = plew_llvm_jit_lookup(jit, "copyMoveClear");
+  assert(address);
+  auto execute = reinterpret_cast<void (*)(void *, void *, uint64_t)>(static_cast<uintptr_t>(address));
+  unsigned char sourceBytes[513], destinationBytes[513];
+  for (unsigned i = 0; i < sizeof(sourceBytes); ++i) sourceBytes[i] = i % 251;
+  execute(destinationBytes, sourceBytes, sizeof(sourceBytes));
+  for (unsigned i = 0; i < sizeof(sourceBytes); ++i) {
+    assert(sourceBytes[i] == i % 251);
+    assert(destinationBytes[i] == i % 251);
+  }
+  // Runtime support does not make unrelated process symbols available.
+  assert(plew_llvm_jit_lookup(jit, "hostBump") == 0);
+  plew_llvm_jit_destroy(jit);
+}
+
 int main() {
+  checkMemoryIntrinsics();
   auto jit = plew_llvm_jit_create();
   assert(jit);
   assert(plew_llvm_jit_define(jit, "hostBump", reinterpret_cast<uintptr_t>(&hostBump), 1) == 0);
