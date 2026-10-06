@@ -128,27 +128,17 @@ pub impl Comp {
     // no Eq/Ord here and keeps its own lowering (the dispatch handles those first).
     inout fn hasCompareWitness(op: I64, lhs: U64, rhs: U64) -> Result[Bool, CompileDiagnostic] {
         val lt: TypeInfo = (try self.cmpOperandType(lhs: lhs, rhs: rhs))
-        // An array operand (kind 3) carries only `Eq` (`impl[T] Array[T] as Eq where T: Eq`),
-        // no `Ord`. The `where T: Eq` bound requires the ELEMENT type to carry Eq too. An array
-        // is represented as kind 3 with its element carried by NAME (its whole-array ref is not
-        // tracked), so the element's structured ref is recovered from that name via arrayElemRef
-        // and `conformsInstance` answers the bound exactly — recursing for a nested
-        // `Array[Array[NoEq]]` (the element ref is itself `Array[NoEq]`) so it is rejected HERE
-        // at the operator, not deferred to a deeper monomorphization with a mislocated
-        // diagnostic. `Array.eq` then rides the element's witness (via `Buffer.eq`). Falls back
-        // to the name-only element check for a bare element with no registered ref.
-        // `< <= > >=` on arrays stays unwitnessed.
+        // Array equality requires the complete element type's Eq proof.
+        // Nested generic arguments must survive the legacy TypeInfo projection.
         if lt.kind == 3 {
             if op == opEq() || op == opNe() {
                 mut val elemOk: Bool = false
-                // Resolve the element's structured ref from its (possibly mangled)
-                // name — an array is carried as kind 3 with the element by name, so
-                // its full ref is recovered here, not from lt.ref. conformsInstance
-                // answers the `where T: Eq` bound exactly, recursing for a nested
-                // `Array[Array[E]]` (the element ref is `Array[E]`, whose own element
-                // is re-checked) — so a nested `Array[Array[NoEq]]` is rejected HERE
-                // at the operator, not deferred to a mislocated deep diagnostic.
-                val er: U64 = self.arrayElemRef(start: lt.nameStart, len: lt.nameLen)
+                mut val er: U64 = 0U64
+                if lt.ref != 0U64 && lt.ref < self.arena.typeCount() {
+                    val arrayType = self.arena.typeAt(index: lt.ref)
+                    if arrayType.args.count() == 1U64 { er = arrayType.args[0U64] }
+                }
+                if er == 0U64 { er = self.arrayElemRef(start: lt.nameStart, len: lt.nameLen) }
                 if er != 0U64 {
                     val eqOwner: U64 = self.coreTraitOwner(name: "Eq")
                     elemOk = eqOwner != 0U64 && (try self.conformsInstance(ref: er, traitStart: eqOwner, traitLen: self.traitNameLenByOwner(owner: eqOwner)))
