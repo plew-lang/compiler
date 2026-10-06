@@ -57,7 +57,8 @@ pub impl Comp {
                 if element != 0U64 { return <Result.Ok value=element />}
             }
         }
-        return <Result.Ok value=0U64 />
+        val iteratorType = self.arena.typeAt(index: iterTerm)
+        return self.assocItemRef(recvStart: iteratorType.nameStart, recvLen: iteratorType.nameLen, recvInstRef: iterTerm)
     }
 
     inout fn iterableItemInfo(et: TypeInfo) -> Result[TypeInfo, CompileDiagnostic] {
@@ -65,40 +66,13 @@ pub impl Comp {
         if symbolicItem != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: symbolicItem) /> }
         val protocolItem: U64 = (try self.iterableProtocolItemTerm(iterTerm: et.ref))
         if protocolItem != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: protocolItem) />}
-        val noArgs: Array[Arg] = []
         if et.ref != 0U64 && et.ref < self.arena.typeCount() && self.arena.typeTerms[et.ref].isAny {
             val item = self.existentialIterationItemTerm(receiver: et.ref)
             if item != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: item) /> }
             return <Result.Err error=self.diagnosticAt(offset: et.nameStart, msg: "for-loop requires an Iterable or Iterator") />
         }
-        // Iterable: iterator() returns the iterator; bare Iterator: the iterand is the
-        // iterator (so `for v in xs.filter(p)` recovers the right element type).
-        val itName: Bind = self.kwSpan(kw: "iterator", kwLen: 8)
-        val imi: U64 = (try self.findMethod(recvStart: et.nameStart, recvLen: et.nameLen, nameStart: itName.nameStart, nameLen: itName.nameLen, args: self.pushArgs(args: noArgs)))
-        mut val itRef: U64 = et.ref
-        mut val nrStart: U64 = et.nameStart
-        mut val nrLen: U64 = et.nameLen
-        if imi != self.arena.functionCount() {
-            val imf: Func = self.arena.functionAt(index: imi)
-            itRef = (try self.groundUnderInst(instRef: et.ref, tyRef: imf.retTy))
-            nrStart = imf.retStart
-            nrLen = imf.retLen
-        }
-        val nxName: Bind = self.kwSpan(kw: "next", kwLen: 4)
-        val nmi: U64 = (try self.findMethod(recvStart: nrStart, recvLen: nrLen, nameStart: nxName.nameStart, nameLen: nxName.nameLen, args: self.pushArgs(args: noArgs)))
-        if nmi == self.arena.functionCount() {
-            return <Result.Ok value=scalarInfo() />
-        }
-        val nmf: Func = self.arena.functionAt(index: nmi)
-        // resolve Optional[Item] through the iterand's instantiation (Box[I64] ->
-        // BoxIter[I64] -> Optional[I64]) so a generic iterand yields the concrete Item.
-        val optRef: U64 = (try self.groundUnderInst(instRef: itRef, tyRef: nmf.retTy))
-        if optRef < self.arena.typeCount() {
-            val ot: TypeRef = self.arena.typeAt(index: optRef)
-            if ot.args.count() > 0 {
-                return <Result.Ok value=self.typeInfoOfRef(ref: ot.args[0]) />
-            }
-        }
+        // Item is a protocol contract, not a guess from a same-named next
+        // method. A missing proof remains unresolved for the caller to reject.
         return <Result.Ok value=scalarInfo() />
     }
 
