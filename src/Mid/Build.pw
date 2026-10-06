@@ -2196,6 +2196,12 @@ fn buildMidCallInto(c: inout Comp, state: inout MidBuildState, exprId: U64, dest
     // ownership after the call (and access writeback), before its consumer.
     val evaluation = midOpenScope(state: inout state)
     val built: MidBuildError = buildMidCallEvaluation(c: inout c, state: inout state, exprId: exprId, destination: destination)
+    // The callee contract was selected by frontend typing. A nonreturning
+    // invocation has no writeback, temporary cleanup, or enclosing join edge.
+    // Keep the ordinary Call target block but terminate that continuation.
+    if c.invocationDiverges(exprId: exprId) && midCurrentBlockIsOpen(state: state) {
+        midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />)
+    }
     midFinishEvaluationScope(state: inout state, scope: evaluation)
     state.callValues = parentCalls
     state.aggregateValues = parentAggregates

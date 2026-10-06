@@ -1,0 +1,4 @@
+fn main() {
+    val callback: diverge fn() = diverge fn() { panic "stop" }
+    val value = callback()
+}

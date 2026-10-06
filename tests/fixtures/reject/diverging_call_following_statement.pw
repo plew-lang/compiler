@@ -1,0 +1,5 @@
+diverge fn stop() { panic "stop" }
+fn main() {
+    stop()
+    val value = 1I64
+}

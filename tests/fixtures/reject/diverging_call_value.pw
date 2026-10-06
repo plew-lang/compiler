@@ -1,0 +1,2 @@
+diverge fn stop() { panic "stop" }
+fn main() { val value = stop() }

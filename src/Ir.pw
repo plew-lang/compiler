@@ -393,7 +393,14 @@ pub enum SemanticValueBlockTyping {
 // Shapes: 0 unknown scalar, 1 scalar, 2 String, 3 nominal, 4 Array,
 // 5 function, 6 existential. Source locations stay on Expr/TypeRef and are
 // deliberately absent from semantic identity.
+pub enum InvocationCompletion {
+    Pending
+    Returns
+    Diverges
+}
+
 pub struct SemanticExprType {
+    pub val invocation: InvocationCompletion = <InvocationCompletion.Pending />
     pub val term: U64 = 0
     pub val shape: U64 = 0
     pub val legacyKind: I64 = 0

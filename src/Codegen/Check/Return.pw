@@ -69,7 +69,26 @@ pub impl Comp {
         return flow
     }
 
+    // Selection facts are published by typing, before executable call
+    // templates. Pending is not rewritten to Returns by this construction-
+    // time walker; finalized readers must require a completed selection.
+    fn invocationDiverges(exprId: U64) -> Bool {
+        if exprId >= self.arena.semanticExprTypes.count() { return false }
+        match self.arena.semanticExprTypes[exprId].invocation {
+            InvocationCompletion.Diverges => { return true }
+            _ => { return false }
+        }
+    }
+
     inout fn exprCompletion(exprId: U64) -> SourceCompletion {
+        val operands = self.exprOperandCompletion(exprId: exprId)
+        if self.invocationDiverges(exprId: exprId) {
+            return completionThen(prefix: operands, next: completionTransfer(transfer: <CompletionTransfer.Diverge />))
+        }
+        return operands
+    }
+
+    inout fn exprOperandCompletion(exprId: U64) -> SourceCompletion {
         if exprId >= self.arena.exprs.count() { return <SourceCompletion /> }
         match self.arena.exprs[exprId] {
             Expr.Block(val body, offset: _) | Expr.Sequence(val body) => { return self.blockCompletion(blkId: body) }

@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+trait Halt { diverge fn halt() }
+struct Stopper {}
+impl Stopper as Halt { diverge fn halt() { panic "halt" } }
+struct Holder { val callback: diverge fn() }
+diverge fn stop() { panic "stop" }
+diverge fn wrapper() { stop() }
+diverge fn method(value: Stopper) { value.halt() }
+diverge fn generic[T](value: T) where T: Halt { value.halt() }
+diverge fn existential(value: any Halt) { value.halt() }
+diverge fn callback(value: diverge fn()) { value() }
+diverge fn field(value: Holder) { value.callback() }
+fn choose(flag: Bool) -> I64 {
+    val value: I64 = if flag { give 42I64 } else { stop() }
+    return value
+}
+fn main() {
+    val later: diverge fn() = diverge fn() { stop() }
+    print(choose(flag: true))
+}

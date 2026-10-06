@@ -1,0 +1,2 @@
+diverge fn stop() { panic "diverging call reached" }
+fn main() { stop() }
