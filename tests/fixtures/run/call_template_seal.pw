@@ -1,0 +1,43 @@
+// Internal contract: closing selection must fail atomically for incomplete
+// descriptors, while a caller-owned symbolic type is a complete argument.
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Bind, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, Func, TypeRef }
+
+fn rejected(c: inout Comp, message: String) {
+    val result = c.closeCallTemplatesForBody(fnIdx: 0U64)
+    match result {
+        Result.Err(error: _) => {
+            if !c.callTemplatesClosedForBody(fnIdx: 0U64).unwrap() { print(message) }
+        }
+        Result.Ok(value: _) => {}
+    }
+}
+
+fn main() {
+    mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val name = c.internTmpName(prefix: "T", n: 0U64)
+    val caller = c.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=91U64 args=[] />)
+    val callee = c.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=71U64 args=[] />)
+    val ownerParams = c.pushFuncBinds(binds: [<Bind nameStart=name.nameStart nameLen=name.nameLen paramId=91U64 fieldStart=0U64 fieldLen=0U64 />])
+    val targetParams = c.pushFuncBinds(binds: [<Bind nameStart=name.nameStart nameLen=name.nameLen paramId=71U64 fieldStart=0U64 fieldLen=0U64 />])
+    val values = c.pushFuncParams(params: [])
+    c.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=ownerParams params=values
+        hasRet=true retStart=name.nameStart retLen=name.nameLen retIsArray=false retTy=caller body=0U64
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    c.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=targetParams params=values
+        hasRet=true retStart=name.nameStart retLen=name.nameLen retIsArray=false retTy=callee body=0U64
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    val site = <CallSiteKey ownerFnIdx=0U64 originSerial=1U64 />
+    c.appendCallTemplate(template: <CallTemplate siteKey=site kind=<CallTemplateKind.Pending /> />)
+    rejected(c: inout c, message: "pending-not-closed")
+    val args = c.publishCallTemplateArguments(args: [])
+    c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Direct callee=1U64 receiver=<CallTemplateReceiver.None /> args=args calleeTypeArgs=c.publishCallTemplateTypeArgs(args: []) proofId=0U64 /> />)
+    rejected(c: inout c, message: "missing-arguments-not-closed")
+    c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Direct callee=1U64 receiver=<CallTemplateReceiver.None /> args=args calleeTypeArgs=c.publishCallTemplateTypeArgs(args: [0U64]) proofId=0U64 /> />)
+    rejected(c: inout c, message: "unresolved-argument-not-closed")
+    c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Direct callee=1U64 receiver=<CallTemplateReceiver.None /> args=args calleeTypeArgs=c.publishCallTemplateTypeArgs(args: [caller]) proofId=0U64 /> />)
+    c.closeCallTemplatesForBody(fnIdx: 0U64).unwrap()
+    if c.callTemplatesClosedForBody(fnIdx: 0U64).unwrap() { print("caller-symbolic-closed") }
+}

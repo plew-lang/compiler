@@ -431,12 +431,75 @@ pub impl Comp {
         return <Result.Ok value=owner < self.closedCallTemplateBodies.count() && self.closedCallTemplateBodies[owner] />
     }
 
+    // A selection can be published before its substitution is complete.
+    // Closing the owner proves the descriptor is ready; it never turns a
+    // missing substitution into a successful semantic check.
+    inout fn checkCallTemplateSelection(templateIndex: U64) -> Result[(), CompileDiagnostic] {
+        val template = self.decls.callTemplates[templateIndex]
+        val offset = template.siteKey.originStart
+        match template.kind {
+            CallTemplateKind.Pending => {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot resolve this call from the available context") />
+            }
+            CallTemplateKind.Direct(val callee, receiver: _, val args, val calleeTypeArgs, proofId: _) => {
+                if callee >= self.arena.functionCount() {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected call has no declaration") />
+                }
+                val function = self.arena.functionAt(index: callee)
+                if self.traceCodegen {
+                    eprint(text: "[trace-codegen] seal-direct owner=")
+                    eprintU64(n: template.siteKey.ownerFnIdx)
+                    eprint(text: " callee=")
+                    eprintU64(n: callee)
+                    eprint(text: " expected-args=")
+                    eprintU64(n: function.typeParams.count())
+                    eprint(text: " saved-args=")
+                    eprintU64(n: calleeTypeArgs.len)
+                    eprint(text: " receiver=")
+                    self.traceMonoTypeHead(ref: template.receiverTypeTerm)
+                    eprint(text: "\n")
+                }
+                if calleeTypeArgs.len != function.typeParams.count() || calleeTypeArgs.start + calleeTypeArgs.len > self.decls.callTemplateTypeArgumentPool.count() {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot infer all type arguments for this call") />
+                }
+                mut val index = 0U64
+                while index < calleeTypeArgs.len {
+                    val term = self.decls.callTemplateTypeArgumentPool[calleeTypeArgs.start + index]
+                    if term == 0U64 || term >= self.arena.typeCount() {
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot infer all type arguments for this call") />
+                    }
+                    index += 1U64
+                }
+                if (function.hasRecv || function.isAssoc) && template.receiverTypeTerm == 0U64 {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot establish the selected call's receiver type") />
+                }
+                if args.len != function.params.count() || args.start + args.len > self.decls.callTemplateArgumentPool.count() {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected call has an incomplete argument plan") />
+                }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkBodyCallTemplateSelections(owner: U64) -> Result[(), CompileDiagnostic] {
+        mut val row = self.firstLexicalCallTemplate(owner: owner)
+        while row != 0U64 {
+            val index = row - 1U64
+            try self.checkCallTemplateSelection(templateIndex: index)
+            row = self.decls.callTemplateBodyNext[index]
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn closeCallTemplatesForBody(fnIdx: U64) -> Result[(), CompileDiagnostic] {
         if fnIdx >= self.arena.functionCount() {
             self.globalCallTemplatesClosed = true
             return <Result.Ok value=() />
         }
         val owner = (try self.semanticBodyOwner(fnIdx: fnIdx))
+        if owner < self.closedCallTemplateBodies.count() && self.closedCallTemplateBodies[owner] { return <Result.Ok value=() /> }
+        try self.checkBodyCallTemplateSelections(owner: owner)
         while self.closedCallTemplateBodies.count() <= owner {
             self.closedCallTemplateBodies.append(false)
         }
@@ -452,6 +515,7 @@ pub impl Comp {
             try self.closeCallTemplatesForBody(fnIdx: index)
             index += 1U64
         }
+        try self.checkBodyCallTemplateSelections(owner: 18446744073709551615U64)
         // Selection and expected-result completion are now stable. Compute
         // access demand once, rather than rebuilding it at every Record update.
         mut val required: Dictionary[U64, Bool] = [:]
@@ -893,10 +957,13 @@ pub impl Comp {
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
             val kind = (try self.completeCallTemplateResult(exprId: exprId, kind: <CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=templateTypeArgs proofId=proofId />, expectedTerm: prior.expectedResultTerm))
+            receiverTerm = self.completeCallTemplateReceiver(kind: kind, receiverTerm: receiverTerm)
             self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=siteKey kind=kind expectedResultTerm=prior.expectedResultTerm receiverTypeTerm=receiverTerm />)
             return <Result.Ok value=() />
         }
-        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=templateTypeArgs proofId=proofId /> receiverTypeTerm=receiverTerm />)
+        val kind = <CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=templateTypeArgs proofId=proofId />
+        receiverTerm = self.completeCallTemplateReceiver(kind: kind, receiverTerm: receiverTerm)
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=kind receiverTypeTerm=receiverTerm />)
         return <Result.Ok value=() />
     }
 
@@ -1195,7 +1262,8 @@ pub impl Comp {
         }
         val prior: CallTemplate = self.decls.callTemplates[index]
         val kind = (try self.completeCallTemplateResult(exprId: exprId, kind: prior.kind, expectedTerm: expectedTerm))
-        self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=kind expectedResultTerm=expectedTerm receiverTypeTerm=prior.receiverTypeTerm />)
+        val receiverTerm = self.completeCallTemplateReceiver(kind: kind, receiverTerm: prior.receiverTypeTerm)
+        self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=kind expectedResultTerm=expectedTerm receiverTypeTerm=receiverTerm />)
         return <Result.Ok value=() />
     }
 
@@ -1309,8 +1377,7 @@ pub impl Comp {
 
     // One declaration-time substitution for both parameter checking and the
     // expression result. A caller's symbolic terms remain rigid values here.
-    inout fn recordedDirectCallEnvironment(function: Func, receiver: CallTemplateReceiver, receiverTerm: U64, typeArgs: Array[U64], proof: StaticConformanceProof) -> Result[InstanceEnvironment, CompileDiagnostic] {
-        val params = self.copyFuncBinds(binds: function.typeParams)
+    inout fn selectedCallableReceiver(function: Func, receiver: CallTemplateReceiver, receiverTerm: U64, params: Array[Bind], typeArgs: Array[U64]) -> U64 {
         mut val selectedReceiver = receiverTerm
         if selectedReceiver == 0U64 {
             match receiver {
@@ -1329,6 +1396,30 @@ pub impl Comp {
                 selectedReceiver = self.groundTermInEnvironment(ref: function.recvTy, params: params, values: typeArgs)
             }
         }
+        return selectedReceiver
+    }
+
+    inout fn completeCallTemplateReceiver(kind: CallTemplateKind, receiverTerm: U64) -> U64 {
+        match kind {
+            CallTemplateKind.Direct(val callee, val receiver, args: _, val calleeTypeArgs, proofId: _) => {
+                if callee < self.arena.functionCount() {
+                    val function = self.arena.functionAt(index: callee)
+                    if function.isAssoc && calleeTypeArgs.len == function.typeParams.count() {
+                        val args = self.callTemplateTypeArgs(range: calleeTypeArgs)
+                        if args.count() == 0U64 || self.fnArgsAllResolved(args: args) {
+                            return self.selectedCallableReceiver(function: function, receiver: receiver, receiverTerm: receiverTerm, params: self.copyFuncBinds(binds: function.typeParams), typeArgs: args)
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        return receiverTerm
+    }
+
+    inout fn recordedDirectCallEnvironment(function: Func, receiver: CallTemplateReceiver, receiverTerm: U64, typeArgs: Array[U64], proof: StaticConformanceProof) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        val params = self.copyFuncBinds(binds: function.typeParams)
+        val selectedReceiver = self.selectedCallableReceiver(function: function, receiver: receiver, receiverTerm: receiverTerm, params: params, typeArgs: typeArgs)
         return self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment params=params args=typeArgs receiverRef=selectedReceiver proof=proof />)
     }
 
