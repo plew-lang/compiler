@@ -2425,11 +2425,14 @@ pub impl Comp {
         }
         mut val i: U64 = 0
         mut val hasGive = false
-        mut val reachable = true
+        mut val flow = <SourceCompletion />
         mut val warned = false
         while i < self.blockStmtCount(blkId: blkId) {
             val statement = self.blockStmtAt(blkId: blkId, index: i)
-            if !reachable && !warned {
+            if !flow.source.normal {
+                return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: statement), msg: "code after a source control transfer is not allowed (spec/11)") />
+            }
+            if !flow.execution.normal && !warned {
                 self.warnUnreachableStatement(stmtId: statement)
                 warned = true
             }
@@ -2442,7 +2445,7 @@ pub impl Comp {
                 _ => {}
             }
             try self.recordStmt(stmtId: statement, expectedTerm: expectedTerm)
-            if reachable { reachable = self.stmtCompletion(stmtId: statement).execution.normal }
+            flow = completionThen(prefix: flow, next: self.stmtCompletion(stmtId: statement))
             if checkResult {
                 match self.arena.stmts[statement] {
                     Stmt.Give(val value) => {

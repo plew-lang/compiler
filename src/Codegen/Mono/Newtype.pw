@@ -30,7 +30,6 @@ pub impl Comp {
         val signature = self.arena.bodySignature(bodyId: instance.adapterTargetBodyId)
         if !signature.ready {
             return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: instance.fnIdx).defOffset, msg: "internal error: adapter target signature is not finalized") />
-            return <Result.Ok value=() />
         }
         mut val conversions: Array[ValueConversionProof] = []
         mut val index = 0U64

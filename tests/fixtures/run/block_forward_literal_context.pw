@@ -10,10 +10,8 @@ fn main() {
         Choice.Second => { give 5 }
     }
     val tail = match <Choice.Second /> {
-        Choice.First => { give 42I64
-            print(99I64) }
-        Choice.Second => { give 6
-            print(99I64) }
+        Choice.First => { give 42I64 }
+        Choice.Second => { give 6 }
     }
     print(branch)
     print(nested)

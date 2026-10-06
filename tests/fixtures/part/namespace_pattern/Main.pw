@@ -1,4 +1,4 @@
 use ./Models
 use @Std/Io only { print }
-fn read(value: Models.Choice) -> I64 { match value { Models.Choice.Some(value: val item) => { return item } } return 0I64 }
+fn read(value: Models.Choice) -> I64 { match value { Models.Choice.Some(value: val item) => { return item } } }
 fn main() { print(read(value: <Models.Choice.Some value=41I64 />)) }

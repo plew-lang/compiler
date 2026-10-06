@@ -31,7 +31,7 @@ fn check(source: String) {
     }
     if generator == demanded.arena.functionCount() { panic "default generator missing" }
     val diagnostic = match demanded.prepareLexicalBody(fnIdx: generator) {
-        Result.Ok(value: _) => { panic "invalid default accepted" give "" }
+        Result.Ok(value: _) => { panic "invalid default accepted" }
         Result.Err(error: val error) => { give error.message }
     }
     match demanded.prepareLexicalBody(fnIdx: generator) {

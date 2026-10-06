@@ -1,7 +1,5 @@
 fn main() {
     while true {
-        while { continue
-give true } {}
-        break
+        while { continue } {}
     }
 }

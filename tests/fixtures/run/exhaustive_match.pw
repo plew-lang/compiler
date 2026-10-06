@@ -8,7 +8,6 @@ fn rank(c: Color) -> I64 {
         Color.Green => { return 2 }
         Color.Blue => { return 3 }
     }
-    return 0
 }
 
 fn main() {

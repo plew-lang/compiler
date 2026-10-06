@@ -13,7 +13,6 @@ fn area(s: Shape) -> I64 {
             return w * h
         }
     }
-    return 0
 }
 fn main() {
     print(area(s: <Shape.Circle r=5 />))

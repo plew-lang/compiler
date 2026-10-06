@@ -1464,6 +1464,5 @@ pub impl Comp {
                 return <Result.Ok value=scalarInfo() />
             }
         }
-        return <Result.Ok value=scalarInfo() />
     }
 }

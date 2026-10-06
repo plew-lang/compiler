@@ -196,12 +196,10 @@ pub impl Comp {
     inout fn recordDefaultArgumentCall(generator: U64, receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64], resultTerm: U64, existingExpr: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         if generator >= self.arena.functionCount() {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: default argument call requires a selected generator during Record") />
-            return <Result.Ok value=self.arena.exprs.count() />
         }
         val function: Func = self.arena.functionAt(index: generator)
         if function.params.count() != 0U64 || function.hasRecv {
             return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "internal error: default argument generator captures value parameters") />
-            return <Result.Ok value=self.arena.exprs.count() />
         }
         mut val call: U64 = existingExpr
         val noArgs: ArgRange = self.pushArgs(args: [])
@@ -218,7 +216,6 @@ pub impl Comp {
             }
             if !matches {
                 return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "internal error: default argument evaluation identity changed") />
-                return <Result.Ok value=self.arena.exprs.count() />
             }
         } else {
             call = self.pushExpr(e: <Expr.Call nameStart=function.nameStart nameLen=function.nameLen args=noArgs />)
@@ -350,13 +347,11 @@ pub impl Comp {
     inout fn recordFieldDefaultCall(field: MakeField, instance: U64, resultTerm: U64) -> Result[U64, CompileDiagnostic] {
         if instance == 0U64 || instance >= self.arena.typeCount() {
             return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "internal error: field default has no selected construction instance") />
-            return <Result.Ok value=self.arena.exprs.count() />
         }
         val structIndex: U64 = self.structIndexForType(ref: instance)
         val fieldIndex: U64 = self.fieldIndexOfReceiver(receiverRef: instance, fieldStart: field.nameStart, fieldLen: field.nameLen)
         if structIndex >= self.decls.fieldDefaultGeneratorRanges.count() {
             return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "internal error: field default has no declaration owner") />
-            return <Result.Ok value=self.arena.exprs.count() />
         }
         val range: DefaultGeneratorRange = self.decls.fieldDefaultGeneratorRanges[structIndex]
         if fieldIndex >= range.len {
@@ -370,18 +365,15 @@ pub impl Comp {
                 eprint(text: "\n")
             }
             return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "internal error: field default has no declaration slot") />
-            return <Result.Ok value=self.arena.exprs.count() />
         }
         val functionId: U64 = self.decls.fieldDefaultGeneratorFunctions[range.start + fieldIndex]
         if functionId == 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "internal error: field default has no selected generator") />
-            return <Result.Ok value=self.arena.exprs.count() />
         }
         val generator: U64 = functionId - 1U64
         val arguments: Array[U64] = self.copyTypeTermArgs(ref: instance)
         if arguments.count() != self.arena.functionAt(index: generator).typeParams.count() {
             return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "internal error: field default instance has incomplete type arguments") />
-            return <Result.Ok value=self.arena.exprs.count() />
         }
         // The authored expression belongs only to the generator. A previously
         // completed occurrence retains its own synthetic call identity.

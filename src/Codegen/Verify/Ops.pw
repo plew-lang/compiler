@@ -369,7 +369,6 @@ pub impl Comp {
                     } else {
                         return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a type name has no fields; use `Type.fn(...)` to call an associated function, or construct a value before reading fields (spec/07)") />
                     }
-                    return <Result.Ok value=() />
                 }
             }
             _ => {}
@@ -383,7 +382,6 @@ pub impl Comp {
             val fei = self.enumIndexForType(ref: self.typedIrRefOfInfo(ti: bt))
             if fei < self.arena.enumCount() {
                 return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "an enum value has no fields; `match` on its variants to reach a payload (for an `Optional` use `?.` / `unwrapOr` / `match`) (spec/07)") />
-                return <Result.Ok value=() />
             }
             if self.fieldVis(structIndex: self.structIndexForType(ref: self.typedIrRefOfInfo(ti: bt)), fieldStart: nameStart, fieldLen: nameLen) == 3U64 {
                 if self.typeHasMethodNamed(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen) {
@@ -504,7 +502,6 @@ pub impl Comp {
         }
         if (try self.compareNeedsTrait(op: op, lhs: lhs, rhs: rhs)) {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison") />
-            return <Result.Ok value=() />
         }
         if (try self.hasBinTraitWitness(op: op, lhs: lhs, rhs: rhs)) {
             return <Result.Ok value=() />
@@ -538,12 +535,10 @@ pub impl Comp {
         if (try self.castOperandIsBool(operand: operand)) {
             if targetNum {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`as` cannot cast a Bool to a numeric type (Bool is not numeric; spec/12)") />
-                return <Result.Ok value=() />
             }
         } else {
             if targetBool {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`as` cannot cast to Bool (Bool is not numeric; spec/12)") />
-                return <Result.Ok value=() />
             }
         }
         if self.isIntType(start: tyStart, len: tyLen) {
@@ -551,7 +546,6 @@ pub impl Comp {
             // valid `as` conversion (spec/12: `as` is lossless/total only). Use TryFrom.
             if (try self.exprIsFloat(id: operand)) {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`as` cannot convert a float to an integer (it would truncate the fractional part); use a fallible TryFrom conversion (spec/12)") />
-                return <Result.Ok value=() />
             }
             match self.arena.exprs[operand] {
                 Expr.Int(val value, val offset, isBool: _, tyStart: _, tyLen: _, val isNeg) => {

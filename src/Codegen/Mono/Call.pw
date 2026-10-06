@@ -627,7 +627,6 @@ pub impl Comp {
             }
             _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate has the wrong site kind") /> }
         }
-        return <Result.Ok value=0U64 />
     }
 
     // Direct and protocol calls use the same receiver source algebra. Keeping

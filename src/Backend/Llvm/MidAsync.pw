@@ -122,7 +122,7 @@ pub impl LlvmCtx {
         match (try self.midVerifiedLlvmPreflight(c: inout c, canonical: canonical, abiParameterCount: parameters, asyncBody: true)) {
             MidLlvmPreflight.Ready => {}
             _ => { return <Result.Err error=c.diagnosticAt(offset: c.fnAnchor(f: c.arena.functionAt(index: body.sourceFunction)), msg: "async Mid LLVM preflight failed") />
-                return <Result.Ok value=() /> }
+                }
         }
         self.curFn = self.asyncResumeFn[slot]
         self.curResumeFn = self.curFn
@@ -141,7 +141,7 @@ pub impl LlvmCtx {
             local += 1U64
         }
         if !(try self.midPrepareCanonicalLocals(c: inout c, body: body, storage: storage, initializeParameters: false)) { return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "async Mid local binding failed") />
-            return <Result.Ok value=() /> }
+            }
         val startCString = <CString.copied text="mid.async.start" />
         val start = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, startCString.ptr)
         val state = llvmLoad(self.b, self.i32ty, LLVMBuildStructGEP2(self.b, self.curFrameTy, self.curFrameBase, 0U64, anon()), anon())
