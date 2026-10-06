@@ -81,3 +81,8 @@ tests/fixtures/run/closure_contextual_generic.pw
 # Give exit cleanup and mutable destructured capture-cell initialization.
 tests/fixtures/run/give_exits_block.pw
 tests/fixtures/run/pattern_mutable_capture.pw
+tests/fixtures/run/block_ownership_dead_move_block.pw
+tests/fixtures/run/block_ownership_dead_move_if.pw
+tests/fixtures/run/block_ownership_dead_move_match.pw
+tests/fixtures/run/block_ownership_exclusive_moves.pw
+tests/fixtures/run/block_ownership_exclusive_moves_match.pw
