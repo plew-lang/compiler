@@ -9,12 +9,18 @@ import subprocess
 FALLBACK = re.compile(r'mid-coverage body=[0-9]+ fn=[0-9]+ name=[A-Za-z][A-Za-z0-9]* category=[a-z-]+(?::[a-z-]+){0,2}')
 EMISSION = re.compile(r'mid-body symbol=([A-Za-z0-9_.$-]+) canonical=([1-9][0-9]*)')
 
+WARNING = re.compile(r'plewc: warning: .+:[1-9][0-9]*: .+')
+
+
+def observation_lines(diagnostics):
+    return [line for line in diagnostics.splitlines() if not WARNING.fullmatch(line)]
+
 
 def observe(llvm, diagnostics):
     definitions = Counter(re.findall(r'^define\b[^\n]*@([A-Za-z0-9_.$-]+)\(', llvm, re.M))
     emitted = set()
     fallbacks = []
-    for line in diagnostics.splitlines():
+    for line in observation_lines(diagnostics):
         if FALLBACK.fullmatch(line):
             if line.endswith('category=preflight:call'):
                 raise ValueError('call fallback lacks its closed reason')
@@ -31,7 +37,7 @@ def observe(llvm, diagnostics):
 
 
 def check_requirement(fallbacks, status, diagnostics):
-    if status != (1 if fallbacks else 0) or diagnostics.splitlines() != fallbacks:
+    if status != (1 if fallbacks else 0) or observation_lines(diagnostics) != fallbacks:
         raise ValueError('required Mid result disagrees with observed fallbacks')
 
 
@@ -40,9 +46,13 @@ def check_reader():
     body = 'mid-body symbol=main canonical=1\n'
     fallback = 'mid-coverage body=1 fn=0 name=main category=eligibility:async\n'
     assert observe(llvm, body + fallback) == [fallback.strip()]
+    warning = 'plewc: warning: /source.pw:3: unreachable code\n'
+    assert observe(llvm, warning + body + fallback) == [fallback.strip()]
+    check_requirement([fallback.strip()], 1, warning + fallback)
+    check_requirement([], 0, warning)
     check_requirement([], 0, '')
     check_requirement([fallback.strip()], 1, fallback)
-    for invalid in ['unexpected\n', body + body, body.replace('main', 'missing'), body.replace('=1', '=0'), fallback.replace('eligibility:async', 'preflight:call')]:
+    for invalid in ['unexpected\n', 'plewc: warning: malformed\n', 'plewc: error: /source.pw:3: broken\n', body + body, body.replace('main', 'missing'), body.replace('=1', '=0'), fallback.replace('eligibility:async', 'preflight:call')]:
         try:
             observe(llvm, invalid)
         except ValueError:

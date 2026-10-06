@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+unique struct File { pub val fd: I64 }
+pub impl File { factory }
+fn main() {
+    val file = <File fd=1I64 />
+    val owned = move file
+    return
+    print(file.fd)
+}

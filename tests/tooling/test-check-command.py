@@ -2,6 +2,7 @@
 """Whole-target checking must not execute, discover concrete bodies, or emit code."""
 import argparse
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -44,7 +45,8 @@ def main():
         for name in ('closure_generic_capture_enum', 'polymorphic_recursion'):
             source = ROOT / 'tests/fixtures' / ('run' if name == 'closure_generic_capture_enum' else 'reject') / (name + '.pw')
             result = subprocess.run([*wrapper, str(compiler), '--check', str(source)], capture_output=True, text=True)
-            assert result.returncode == 0 and result.stdout == '' and result.stderr == '', (name, result)
+            assert result.returncode == 0 and result.stdout == '', (name, result)
+            assert all(re.fullmatch(r'plewc: warning: .+:[1-9][0-9]*: .+', line) for line in result.stderr.splitlines()), (name, result.stderr)
     print('check-command: passed')
 
 

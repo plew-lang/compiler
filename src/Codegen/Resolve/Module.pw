@@ -32,7 +32,6 @@ pub impl Comp {
             Stmt.Match(val scrut, arms: _) => { return self.exprOffset(id: scrut) }
             Stmt.Panic(msg: _, val offset) => { return offset }
             Stmt.Give(val value) => { return self.exprOffset(id: value) }
-            _ => { return 0U64 }
         }
     }
 

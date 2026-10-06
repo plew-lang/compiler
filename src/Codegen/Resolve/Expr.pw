@@ -1582,11 +1582,9 @@ pub impl Comp {
                 mut val selected: Bool = false
                 while index < arms.len {
                     val arm = self.matchArmAt(arms: arms, index: index)
-                    if self.blockCompletesNormally(blkId: arm.body) {
-                        try self.recordBlockExpectedResult(blkId: arm.body, expectedTerm: expectedTerm)
-                        if !selected {
-                            selected = self.recordValueBlockResult(exprId: exprId, blockId: arm.body)
-                        }
+                    try self.recordBlockExpectedResult(blkId: arm.body, expectedTerm: expectedTerm)
+                    if !selected {
+                        selected = self.recordValueBlockResult(exprId: exprId, blockId: arm.body)
                     }
                     index += 1U64
                 }
