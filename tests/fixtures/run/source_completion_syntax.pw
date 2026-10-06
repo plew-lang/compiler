@@ -38,5 +38,18 @@ fn main() {
     assert(!deadReturn.source.normal() && deadReturn.source.returns() && !deadReturn.execution.returns(), message: "deadReturn")
     val closure = completion(source: "fn body() {{ val callback = fn() {{ return }} }}")
     assert(closure.source.normal() && closure.execution.normal() && !closure.source.returns() && !closure.execution.returns(), message: "closure")
+    // try preserves Ok continuation and adds only an enclosing-function return.
+    val propagated = completion(source: "fn body() {{ val value = try result }}")
+    assert(propagated.source.normal() && propagated.source.returns(), message: "try source return")
+    assert(propagated.execution.normal() && propagated.execution.returns(), message: "try execution return")
+    val nestedTry = completion(source: "fn body() {{ val value = {{ give try result }} }}")
+    assert(nestedTry.source.normal() && nestedTry.source.returns() && !nestedTry.source.gives(), message: "nested try source")
+    assert(nestedTry.execution.normal() && nestedTry.execution.returns(), message: "nested try execution")
+    // An operand that cannot execute must not invent an executable error edge.
+    val deadTry = completion(source: "fn body() {{ val value = try {{ while true {{}}\n give result }} }}")
+    assert(deadTry.source.normal() && deadTry.source.returns(), message: "dead try source")
+    assert(!deadTry.execution.normal() && !deadTry.execution.returns(), message: "dead try execution")
+    val closureTry = completion(source: "fn body() {{ val callback = fn() {{ val value = try result }} }}")
+    assert(!closureTry.source.returns() && !closureTry.execution.returns(), message: "closure try boundary")
     print("ok")
 }

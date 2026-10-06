@@ -94,7 +94,13 @@ pub impl Comp {
                 return completionThen(prefix: left, next: right)
             }
             Expr.Unary(op: _, val operand) | Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) | Expr.Move(val operand, isBorrow: _) | Expr.Await(val operand) => { return self.exprCompletion(exprId: operand) }
-            Expr.Try(val expr) => { return self.exprCompletion(exprId: expr) }
+            Expr.Try(val expr) => {
+                // Only an evaluated Result branches into Ok continuation or
+                // Err propagation. The return escapes blocks and loops but
+                // belongs to this invocation, never a surrounding closure.
+                val outcome = completionChoice(first: <SourceCompletion />, second: completionTransfer(transfer: <CompletionTransfer.Return />))
+                return completionThen(prefix: self.exprCompletion(exprId: expr), next: outcome)
+            }
             Expr.Field(val base, nameStart: _, nameLen: _) | Expr.Arrow(val base, nameStart: _, nameLen: _) | Expr.Deref(val base) => { return self.exprCompletion(exprId: base) }
             Expr.ExtView(val recv, source: _, strip: _) => { return self.exprCompletion(exprId: recv) }
             Expr.Index(val base, val index) => { return completionThen(prefix: self.exprCompletion(exprId: base), next: self.exprCompletion(exprId: index)) }
