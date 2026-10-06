@@ -1,0 +1,4 @@
+use @Std/Io only { print }
+fn main() { val x = match true { true => { give 1I64
+val bad = "bad" + 1I64 } false => 2I64 }
+print(x) }

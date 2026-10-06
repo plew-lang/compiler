@@ -1,0 +1,4 @@
+use @Std/Io only { print }
+fn f()->I64 { return 1I64
+val bad = "bad" + 1I64 }
+fn main() { print(f()) }

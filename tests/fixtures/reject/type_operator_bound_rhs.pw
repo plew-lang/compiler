@@ -1,0 +1,5 @@
+use @Std/Core only { Add }
+fn bad[T](lhs: T, rhs: T) -> T where T: Add[I64, Output = T] {
+    return lhs + rhs
+}
+fn main() { val value = bad(lhs: 1I64, rhs: 2I64) }

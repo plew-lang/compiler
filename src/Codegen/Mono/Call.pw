@@ -1693,14 +1693,8 @@ pub impl Comp {
             if operands.count() == 1U64 {
                 callee = self.unaryOperatorCallee(receiverRef: selectedReceiverRef, op: op)
             } else if operands.count() == 2U64 {
-                mut val method: String = ""
-                if op == opEq() || op == opNe() { method = "eq" }
-                else if op == opLt() || op == opLe() || op == opGt() || op == opGe() { method = "compare" }
-                else if isBinTraitOp(op: op) { method = binTraitMethodName(op: op) }
-                if method.bytes().count() > 0U64 {
-                    val rhsUntyped: Bool = operandRefs[1] == 0U64
-                    callee = (try self.findBinTraitWitnessForRef(receiverRef: selectedReceiverRef, name: method, rhsRef: operandRefs[1], rhsUntyped: rhsUntyped))
-                }
+                val rhsUntyped: Bool = operandRefs[1] == 0U64
+                callee = (try self.findBinTraitWitnessForRef(receiverRef: selectedReceiverRef, op: op, rhsRef: operandRefs[1], rhsUntyped: rhsUntyped))
             }
         }
         mut val selectedResultRef: U64 = 0U64

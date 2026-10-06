@@ -1,0 +1,7 @@
+use @Std/Core only { Add }
+struct Value { val item: I64 }
+impl Value as Add[I64] {
+    type Output = I64
+    assoc fn add(lhs~: Value, rhs~: I64) -> I64 { return lhs.item + rhs }
+}
+fn main() { val x = <Value item=1I64 /> + <Value item=2I64 /> }

@@ -177,13 +177,29 @@ pub impl Comp {
         if !(handled) {
             return <Result.Ok value=() />
         }
-        val l: U64 = (try self.inferType(id: lhs))
-        val r: U64 = (try self.inferType(id: rhs))
+        mut val l = try self.inferType(id: lhs)
+        mut val r = try self.inferType(id: rhs)
+        // Resolve lexical Self/associated bindings before selecting a
+        // signature, just as value compatibility normalizes its two terms.
+        if l != 0U64 { l = try self.groundTypeRef(ref: l) }
+        if r != 0U64 { r = try self.groundTypeRef(ref: r) }
         // An unsuffixed left operand takes the typed right operand's context,
         // using the same direction rule as semantic expression recording.
         if self.acceptsFloatingOperandContext(exprId: lhs, siblingExprId: rhs, siblingTerm: r) {
             try self.tcCheckValue(expectedRef: r, valueExpr: lhs, pos: "binop")
             return <Result.Ok value=() />
+        }
+        val resolution = try self.staticOperatorTemplateResolution(op: op, receiverTerm: l, isUnary: false)
+        match resolution {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
+                val parameter = self.staticRequirementParamTypeAt(resolution: resolution, paramIdx: 1U64)
+                if parameter == 0U64 {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: rhs), msg: "operator requirement has no resolved right operand type") />
+                }
+                try self.tcCheckValue(expectedRef: parameter, valueExpr: rhs, pos: "operator argument")
+                return <Result.Ok value=() />
+            }
+            _ => {}
         }
         if l == 0U64 || r == 0U64 {
             return <Result.Ok value=() />
@@ -191,24 +207,11 @@ pub impl Comp {
         if l >= self.arena.typeCount() || r >= self.arena.typeCount() {
             return <Result.Ok value=() />
         }
-        // A receiver view selects an implementation; it is not necessarily
-        // the selected witness's RHS type. Share the concrete selector with
-        // call finalization instead of equating those two types.
-        val lNum = self.isIntType(start: self.arena.typeTerms[l].nameStart, len: self.arena.typeTerms[l].nameLen) || self.isFloatType(start: self.arena.typeTerms[l].nameStart, len: self.arena.typeTerms[l].nameLen)
-        if isCompare || lNum {
-            // Matching types already satisfy this compatibility check; the
-            // ordinary witness check remains responsible for availability.
-            if (try self.typesCompatible(expected: l, inferred: r)) { return <Result.Ok value=() /> }
-            val method = if op == opEq() || op == opNe() { give "eq" }
-                else if isCompare { give "compare" }
-                else { give binTraitMethodName(op: op) }
-            val selected = try self.findBinTraitWitnessForRef(receiverRef: l, name: method, rhsRef: r, rhsUntyped: false)
-            if selected < self.arena.functionCount() { return <Result.Ok value=() /> }
-            // Abstract or otherwise unselected operands retain their strict
-            // compatibility obligation; an absent witness is not acceptance.
-            try self.tcCheckValue(expectedRef: l, valueExpr: rhs, pos: if isCompare { give "compare" } else { give "binop" })
-        }
-        return <Result.Ok value=() />
+        // Availability is checked separately; operand compatibility must use
+        // the complete selected signature for every receiver, not just numbers.
+        val selected = try self.findBinTraitWitnessForRef(receiverRef: l, op: op, rhsRef: r, rhsUntyped: false)
+        if selected < self.arena.functionCount() { return <Result.Ok value=() /> }
+        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: rhs), msg: "type mismatch: no operator implementation accepts this right operand type (spec/12)") />
     }
 
     inout fn tcIsUnsignedInt(ref: U64) -> Bool {

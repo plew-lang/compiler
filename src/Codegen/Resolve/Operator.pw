@@ -3,18 +3,24 @@
 // transition so still-free-function callers (Resolve/ExprType) can reach them.
 
 pub impl Comp {
-    inout fn findBinTraitWitnessForRef(receiverRef: U64, name: String, rhsRef: U64, rhsUntyped: Bool) -> Result[U64, CompileDiagnostic] {
+    inout fn findBinTraitWitnessForRef(receiverRef: U64, op: I64, rhsRef: U64, rhsUntyped: Bool) -> Result[U64, CompileDiagnostic] {
+        val comparison = op == opLt() || op == opLe() || op == opGt() || op == opGe()
+        val equality = op == opEq() || op == opNe()
+        val traitName = if equality { give "Eq" } else if comparison { give "Ord" } else { give self.binOpTraitName(op: op) }
+        val name = if equality { give "eq" } else if comparison { give "compare" } else { give binTraitMethodName(op: op) }
+        val traitId = self.internBytes(s: traitName).nameId
         mut val firstMatch = self.arena.functionCount()
         mut val intMatch = self.arena.functionCount()
         val spelling = self.kwSpan(kw: name, kwLen: name.bytes().count())
         if spelling.nameLen == 0U64 { return <Result.Ok value=self.arena.functionCount() /> }
         val nameId = intern(c: inout self, start: spelling.nameStart, len: spelling.nameLen)
-        // The declaration index retains registration order and hidden witness
-        // forms. It excludes only functions with a different spelling.
+        // Method spelling narrows the index; declaration provenance proves
+        // that the candidate belongs to the operator trait. An unrelated
+        // trait's same-named method is never an operator implementation.
         mut val index = self.arena.firstFunctionNamed(nameId: nameId)
         while index < self.arena.functionCount() {
             val function = self.arena.functionAt(index: index)
-            if function.isAssoc && function.params.count() >= 2U64 {
+            if function.isAssoc && function.params.count() == 2U64 && function.originTraitId == traitId {
                 // Candidate parameters use the same lexical receiver as the
                 // callable body. A caller's extra view selects visible members;
                 // it must not become Self inside an unrelated implementation.

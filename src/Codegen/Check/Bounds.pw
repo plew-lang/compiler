@@ -726,6 +726,22 @@ pub impl Comp {
     // migration remains deliberately separate from this requirement slice.
     inout fn staticRequirementParamType(resolution: StaticMemberResolution, args: ArgRange, argIdx: U64) -> U64 {
         match resolution {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
+                if traitIdx >= self.decls.traitCount() { return 0U64 }
+                val trait = self.decls.traitAt(index: traitIdx)
+                if reqIdx >= trait.reqs.count() { return 0U64 }
+                val requirement = self.traitReqAt(reqs: trait.reqs, index: reqIdx)
+                val parameter = self.paramIndexForArg(params: requirement.params, args: args, argIdx: argIdx)
+                return self.staticRequirementParamTypeAt(resolution: resolution, paramIdx: parameter)
+            }
+            _ => { return 0U64 }
+        }
+    }
+
+    // Authored calls map labels to parameter indices; operator syntax already
+    // fixes that mapping. Both consume this same bound-substituted signature.
+    inout fn staticRequirementParamTypeAt(resolution: StaticMemberResolution, paramIdx: U64) -> U64 {
+        match resolution {
             StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
                 match proof {
                     StaticConformanceProof.AssumedBound(source: val boundRef) => {
@@ -733,7 +749,6 @@ pub impl Comp {
                         val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
                         val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
-                        val paramIdx: U64 = self.paramIndexForArg(params: req.params, args: args, argIdx: argIdx)
                         if paramIdx >= req.params.count() { return 0U64 }
                         val bound: TraitBound = self.declarationBound(source: boundRef)
                         val param: Param = self.funcParamAt(params: req.params, index: paramIdx)
@@ -744,7 +759,6 @@ pub impl Comp {
                         val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
                         val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
-                        val paramIdx: U64 = self.paramIndexForArg(params: req.params, args: args, argIdx: argIdx)
                         if paramIdx >= req.params.count() { return 0U64 }
                         val bound = self.assumedSupertraitBound(source: boundRef, steps: steps)
                         if bound.subject == 0U64 || bound.constraint.key.owner != traitDef.nameStart { return 0U64 }
@@ -755,7 +769,6 @@ pub impl Comp {
                         if traitIdx >= self.decls.traitCount() || proofTraitIdx != traitIdx || reqIdx >= self.decls.traitAt(index: traitIdx).reqs.count() { return 0U64 }
                         val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
-                        val paramIdx: U64 = self.paramIndexForArg(params: req.params, args: args, argIdx: argIdx)
                         if paramIdx >= req.params.count() { return 0U64 }
                         val param: Param = self.funcParamAt(params: req.params, index: paramIdx)
                         return self.staticRequirementType(ref: param.ty, traitDef: traitDef, receiverRef: proofReceiver, traitArgs: traitArgs)

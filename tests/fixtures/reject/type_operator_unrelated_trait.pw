@@ -1,0 +1,11 @@
+use @Std/Core only { Add }
+struct Value { val item: I64 }
+trait Other { assoc fn add(lhs~: Value, rhs~: I64) -> I64 }
+impl Value as Add[Value] {
+ type Output = I64
+ assoc fn add(lhs~: Value, rhs~: Value) -> I64 { return lhs.item + rhs.item }
+}
+impl Value as Other {
+ assoc fn add(lhs~: Value, rhs~: I64) -> I64 { return lhs.item + rhs }
+}
+fn main() { val x = <Value item=1I64 /> + 2I64 }

@@ -1,0 +1,4 @@
+use @Std/Io only { print }
+fn main() { val x = if true { give 1I64
+val bad = "bad" + 1I64 } else { give 2I64 }
+print(x) }
