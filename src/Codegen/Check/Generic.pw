@@ -878,13 +878,11 @@ pub impl Comp {
         // without collapsing its receiver head.  Preserve the semantic term at
         // this generic-check boundary instead.
         mut val inferred: U64 = (try self.groundedTypeOf(id: valueExpr))
-        mut val inferredFromStaticOperator: Bool = false
         match self.arena.exprs[valueExpr] {
             Expr.Binary(val op, lhs: val lhs, rhs: _) => {
                 val operatorResult: U64 = (try self.staticBinaryOperatorResultRef(lhs: lhs, op: op))
                 if operatorResult != 0U64 {
                     inferred = operatorResult
-                    inferredFromStaticOperator = true
                 }
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
@@ -897,21 +895,8 @@ pub impl Comp {
             }
             _ => {}
         }
-        // An associated-type projection is a closed semantic TypeTerm, not an
-        // unknown nominal spelling.  The legacy compatibility adapter below
-        // deliberately admits `T` against an unknown term for calls whose
-        // instantiation supplies that term later; applying that rule here
-        // would silently prove `T#Add[T].Output == T`.  Generic bodies instead
-        // compare a projection structurally, after ordinary grounding.  Thus
-        // `Output = T` succeeds through the bound predicate, while an
-        // unbound Output remains distinct from T.
-        if inferredFromStaticOperator && (self.typeTermContainsAssociatedProjection(ref: expectedRef) || self.typeTermContainsAssociatedProjection(ref: inferred)) {
-            val expectedTerm: U64 = (try self.groundTypeRef(ref: expectedRef))
-            if !(self.typeRefEq(a: expectedTerm, b: inferred)) {
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "type mismatch in a generic body: a type parameter is a distinct opaque type, not the type required here (spec/06)") />
-            }
-            return <Result.Ok value=() />
-        }
+        // Operators and other values share the same proof-directed projection
+        // normalization and rigid type comparison.
         if !((try self.typesCompatible(expected: expectedRef, inferred: inferred))) {
             if self.traceCodegen {
                 eprint(text: "[trace-codegen] generic-type-mismatch expected=")

@@ -93,8 +93,17 @@ pub impl Comp {
         }
         // Normalize both sides in the same lexical environment. Inferred
         // locals can retain associated projections from their written annotation.
-        val exp: U64 = (try self.groundTypeRef(ref: expected))
-        val actual: U64 = (try self.groundTypeRef(ref: inferred))
+        mut val exp: U64 = (try self.groundTypeRef(ref: expected))
+        mut val actual: U64 = (try self.groundTypeRef(ref: inferred))
+        // A rigid receiver can still have a proved associated output. Use
+        // this declaration's assumptions on both sides, including trait paths;
+        // absence of an output keeps the projection rigid rather than accepting it.
+        if self.typeTermContainsAssociatedProjection(ref: exp) || self.typeTermContainsAssociatedProjection(ref: actual) {
+            val assumptions = self.functionBoundAssumptions(fnIdx: self.cur.checkFn)
+            val environment: InstanceEnvironment = <InstanceEnvironment />
+            exp = try self.closeBodyProjectionTerms(ref: exp, environment: environment, selfRef: 0U64, itemRef: 0U64, assumptions: assumptions)
+            actual = try self.closeBodyProjectionTerms(ref: actual, environment: environment, selfRef: 0U64, itemRef: 0U64, assumptions: assumptions)
+        }
         if exp == 0U64 || actual == 0U64 || exp >= self.arena.typeCount() || actual >= self.arena.typeCount() {
             return <Result.Ok value=<TypeCompatibility.Unresolved /> />
         }
