@@ -147,7 +147,7 @@ pub impl Comp {
                 associated = tail.name
                 associatedSpan = tail.nameSpan
             }
-            return self.normalizeProjectionType(t: <TypeAst name=head.name nameSpan=head.nameSpan args=head.args span=t.span extView=t.extView extViewSpan=t.extViewSpan viewNames=t.viewNames viewNameSpans=t.viewNameSpans projectionTrait=t.projectionTrait projectionTraitSpan=t.projectionTraitSpan projectionTraitArgs=t.projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionTraitArgLabelSpans=t.projectionTraitArgLabelSpans projectionAssoc=associated projectionAssocSpan=associatedSpan isAny=t.isAny argLabels=head.argLabels argLabelSpans=head.argLabelSpans isSendable=t.isSendable isRecord=t.isRecord />, whereTypes: whereTypes, whereTraits: whereTraits)
+            return self.normalizeProjectionType(t: <TypeAst name=head.name nameSpan=head.nameSpan args=head.args span=t.span extView=t.extView extViewSpan=t.extViewSpan viewNames=t.viewNames viewNameSpans=t.viewNameSpans projectionTrait=t.projectionTrait projectionTraitSpan=t.projectionTraitSpan projectionTraitArgs=t.projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionTraitArgLabelSpans=t.projectionTraitArgLabelSpans projectionAssoc=associated projectionAssocSpan=associatedSpan isAny=t.isAny argLabels=head.argLabels argLabelSpans=head.argLabelSpans isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord />, whereTypes: whereTypes, whereTraits: whereTraits)
         }
         mut val args: Array[TypeAst] = []
         mut val i: U64 = 0
@@ -159,7 +159,7 @@ pub impl Comp {
             val moduleId = self.typeNamespaceModule(name: t.nameSpan)
             if moduleId != 4000000000U64 {
                 self.recordNamespaceUse(name: t.projectionAssocSpan, moduleId: moduleId)
-                return <Result.Ok value=<TypeAst name=t.projectionAssoc nameSpan=t.projectionAssocSpan args=args span=t.span extView=t.extView viewNames=t.viewNames isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isRecord=t.isRecord /> />
+                return <Result.Ok value=<TypeAst name=t.projectionAssoc nameSpan=t.projectionAssocSpan args=args span=t.span extView=t.extView viewNames=t.viewNames isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord /> />
             }
         }
         mut val projectionTrait: String = t.projectionTrait
@@ -190,7 +190,7 @@ pub impl Comp {
             projectionTraitArgs.append((try self.normalizeProjectionType(t: t.projectionTraitArgs[i], whereTypes: whereTypes, whereTraits: whereTraits)))
             i += 1U64
         }
-        return <Result.Ok value=<TypeAst name=t.name nameSpan=t.nameSpan args=args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=projectionTrait projectionTraitArgs=projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=t.projectionAssoc isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isRecord=t.isRecord /> />
+        return <Result.Ok value=<TypeAst name=t.name nameSpan=t.nameSpan args=args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=projectionTrait projectionTraitArgs=projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=t.projectionAssoc isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord /> />
     }
 
     inout fn normalizeProjectionTypeActive(t: TypeAst) -> Result[TypeAst, CompileDiagnostic] {
@@ -408,7 +408,7 @@ pub impl Comp {
         self.cur.lowerRetTy = retRef
         val body: U64 = (try self.lowerSyntaxBlock(id: d.body))
         self.cur.lowerRetTy = savedRet
-        val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExposed=d.isExposed isExtern=false defOffset=d.name.start />))
+        val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isDiverging=d.isDiverging isExposed=d.isExposed isExtern=false defOffset=d.name.start />))
         try self.appendSyntaxFuncBounds(fnIdx: fnIdx, decl: d)
         self.cur.typeParams = savedTP
         self.lowerWhereSyntaxTypes = savedWT
@@ -502,7 +502,7 @@ pub impl Comp {
         self.cur.lowerRetTy = retRef
         val body: U64 = (try self.lowerBlock(b: d.body))
         self.cur.lowerRetTy = savedRet
-        val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExposed=d.isExposed isExtern=false defOffset=nameStart />))
+        val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isDiverging=d.isDiverging isExposed=d.isExposed isExtern=false defOffset=nameStart />))
         // A `where T: P` is part of this function's declaration, not a later
         // name lookup.  Lower it while the same lexical binder scope that
         // lowered the parameters, return type, and body remains installed.

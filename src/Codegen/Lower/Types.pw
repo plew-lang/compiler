@@ -44,7 +44,7 @@ pub impl Comp {
             }
             associated = tail.name
         }
-        return <Result.Ok value=<SyntaxType name=head.name args=head.args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=t.projectionTrait projectionTraitArgs=t.projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=associated isAny=t.isAny argLabels=head.argLabels isSendable=t.isSendable isRecord=t.isRecord /> />
+        return <Result.Ok value=<SyntaxType name=head.name args=head.args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=t.projectionTrait projectionTraitArgs=t.projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=associated isAny=t.isAny argLabels=head.argLabels isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord /> />
     }
 
     // Authored names keep their source identity. Synthesized value ASTs
@@ -575,9 +575,9 @@ pub impl Comp {
         }
         mut val projectionReceiver: U64 = 0
         if assocNameId != 0U64 {
-            projectionReceiver = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable siteOffset=site />)
+            projectionReceiver = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
         }
-        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId projectionReceiver=projectionReceiver isSendable=t.isSendable siteOffset=site />)
+        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId projectionReceiver=projectionReceiver isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
         mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
         if t.args.count() > 0 {
             if rangeEquals(bytes: self.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {
@@ -757,9 +757,9 @@ pub impl Comp {
         }
         mut val projectionReceiver: U64 = 0
         if assocNameId != 0U64 {
-            projectionReceiver = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable siteOffset=site />)
+            projectionReceiver = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
         }
-        val ref: U64 = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId projectionReceiver=projectionReceiver isSendable=t.isSendable siteOffset=site />)
+        val ref: U64 = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId projectionReceiver=projectionReceiver isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
         mut val result: PType = <PType start=name.nameStart len=name.nameLen isArray=false ref=ref />
         if syntaxTypeArgCount(file: self.syntax, ty: t) > 0U64 {
             if rangeEquals(bytes: self.arena.bytes, start: name.nameStart, len: name.nameLen, kw: "Array") {

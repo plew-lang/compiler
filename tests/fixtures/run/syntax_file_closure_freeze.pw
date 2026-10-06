@@ -12,7 +12,7 @@ fn main() {
             match d.body.stmts[0U64] {
                 StmtAst.Let(mutable: _, name: _, nameSpan: _, hasTy: _, ty: _, init: val init, span: _) => {
                     match init {
-                        ExprAst.Closure(params: _, hasRet: _, ret: _, body: _, span: _) => { print(1U64) }
+                        ExprAst.Closure(params: _, hasRet: _, ret: _, body: _, span: _, isDiverging: _) => { print(1U64) }
                         _ => { print(0U64) }
                     }
                 }

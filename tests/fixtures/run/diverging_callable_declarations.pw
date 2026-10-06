@@ -1,0 +1,18 @@
+use @Std/Io only { print }
+
+trait Halt {
+    diverge fn halt()
+    assoc diverge fn stop()
+}
+struct Stopper {}
+impl Stopper as Halt {
+    diverge fn halt() { panic "halt" }
+    assoc diverge fn stop() { panic "stop" }
+}
+diverge fn stop() { panic "stop" }
+diverge fn forever() { while true {} }
+fn keep(callback: diverge fn()) { print("kept") }
+fn main() {
+    val callback: diverge fn() = diverge fn() { panic "closure" }
+    keep(callback: callback)
+}

@@ -2232,6 +2232,7 @@ pub impl Comp {
                     pi += 1
                 }
                 try self.recordBlock(blkId: body)
+                if diverging { try self.checkDivergingBody(blkId: body, offset: self.exprOffset(id: exprId)) }
                 self.cur.checkFn = savedCheckFn
                 self.cur.recordClosureIndex = savedClosureIndex
                 self.cur.recordCaptureMark = savedCaptureMark
