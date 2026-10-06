@@ -1482,7 +1482,6 @@ pub impl Comp {
                         val parameterType: TypeInfo = self.typeInfoOfRef(ref: mctx)
                         try self.checkLitSpanCtx(id: argumentExpr, tyStart: parameterType.nameStart, tyLen: parameterType.nameLen, isArray: parameterType.kind == 3, ctxRef: mctx)
                         try self.recordSemanticExprExpectedResult(exprId: argumentExpr, expectedTerm: mctx)
-                        try self.recordArrayLitCtx(exprId: argumentExpr, ctxRef: mctx)
                         try self.tcCheckValue(expectedRef: mctx, valueExpr: argumentExpr, pos: "arg")
                     }
                 }
@@ -1680,7 +1679,6 @@ pub impl Comp {
                             }
                             if cctx != 0U64 && (canSubstitute || (try self.tyRefIsGround(ref: cctx))) {
                                 try self.recordSemanticExprExpectedResult(exprId: self.argAt(args: args, index: k).expr, expectedTerm: cctx)
-                                try self.recordArrayLitCtx(exprId: self.argAt(args: args, index: k).expr, ctxRef: cctx)
                             }
                         }
                         k += 1
@@ -1941,14 +1939,6 @@ pub impl Comp {
                     // ground loses the only result-side substitution for an
                     // argument-less generic associated call.
                     try self.recordSemanticExprExpectedResult(exprId: value, expectedTerm: ctxRef)
-                    // Empty array literals are different: their AST-owned
-                    // literal type must itself be concrete, so retain the old
-                    // ground-only gate for this literal-specific adapter.
-                    mut val arrayCtx: U64 = ctxRef
-                    if arrayCtx != 0U64 && !((try self.tyRefIsGround(ref: arrayCtx))) {
-                        arrayCtx = 0U64
-                    }
-                    try self.recordArrayLitCtx(exprId: value, ctxRef: arrayCtx)
                     i += 1
                 }
                 if completedFields.count() != 0U64 {
@@ -2252,7 +2242,6 @@ pub impl Comp {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                 try self.collectRecordedType(ref: ty)
                 try self.recordExpr(exprId: init, expectedTerm: ty)
-                try self.recordArrayLitCtx(exprId: init, ctxRef: ty)
                 val previous = self.localIndexByName(start: nameStart, len: nameLen)
                 if previous < self.cur.locals.count() {
                     val prior = self.cur.locals[previous]
@@ -2267,14 +2256,12 @@ pub impl Comp {
                 try self.recordExpr(exprId: target)
                 val expected: U64 = self.parametricExprTerm(exprId: target)
                 try self.recordExpr(exprId: value, expectedTerm: expected)
-                try self.recordArrayLitCtx(exprId: value, ctxRef: expected)
             }
             Stmt.ExprStmt(val expr) => { try self.recordExpr(exprId: expr) }
             Stmt.Return(val value, val hasValue, offset: _) => {
                 if hasValue {
                     val expected: U64 = self.semanticBodyReturnContext(fnIdx: self.cur.checkFn)
                     try self.recordExpr(exprId: value, expectedTerm: expected)
-                    try self.recordArrayLitCtx(exprId: value, ctxRef: expected)
                 }
             }
             Stmt.IfChain(val conditions, val thenBlk, val elseBlk) => {

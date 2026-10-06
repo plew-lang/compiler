@@ -895,7 +895,6 @@ pub impl Comp {
                     val parameter: TypeInfo = self.typeInfoOfRef(ref: expected)
                     try self.checkLitSpanCtx(id: argument, tyStart: parameter.nameStart, tyLen: parameter.nameLen, isArray: parameter.kind == 3, ctxRef: expected)
                     try self.recordSemanticExprExpectedResult(exprId: argument, expectedTerm: expected)
-                    try self.recordArrayLitCtx(exprId: argument, ctxRef: expected)
                 }
                 index += 1U64
             }
@@ -1604,9 +1603,6 @@ pub impl Comp {
                                 fieldTerm = (try self.fieldTypeRefOfReceiver(receiverRef: expectedTerm, fieldStart: field.nameStart, fieldLen: field.nameLen))
                             }
                             try self.recordSemanticExprExpectedResult(exprId: field.value, expectedTerm: fieldTerm)
-                            if fieldTerm != 0U64 && (try self.tyRefIsGround(ref: fieldTerm)) {
-                                try self.recordArrayLitCtx(exprId: field.value, ctxRef: fieldTerm)
-                            }
                             fieldIndex += 1U64
                         }
                         try self.recordSemanticAggregate(exprId: exprId)
