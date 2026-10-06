@@ -8,7 +8,8 @@ struct Apply[F] {
 }
 pub impl Apply { factory }
 
-pub impl[F] Apply[F] {
+// Calling the stored field requires a function type in the declaration.
+pub impl Apply[fn(n: I64) -> I64] {
     fn run(x: I64) -> I64 {
         return self.f(n: x)
     }
