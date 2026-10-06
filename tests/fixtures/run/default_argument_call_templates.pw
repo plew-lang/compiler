@@ -3,7 +3,7 @@
 // is covered by default_eval_order.pw and default_eval_order_generic_method.pw.
 use @Std/Io only { write }
 use /Frontend only { Comp }
-use /Ir only { CallArgumentSource, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, Func, Param, CallTemplate, CallSiteKey, SemanticClosure }
+use /Ir only { Bind, CallArgumentSource, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, Func, Param, CallTemplate, CallSiteKey, SemanticClosure }
 
 fn main() {
     mut val c: Comp = <Comp />
@@ -16,7 +16,9 @@ fn main() {
     val parameters = c.pushFuncParams(params: [<Param nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
         tyStart=integer.nameStart tyLen=integer.nameLen tyIsArray=false ty=term
         isInout=false isMove=false isBorrow=false noLabel=false hasDefault=true defaultExpr=expression />])
-    c.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen params=parameters
+    val binder = c.internTmpName(prefix: "T", n: 0U64)
+    val typeParameters = c.pushFuncBinds(binds: [<Bind nameStart=binder.nameStart nameLen=binder.nameLen paramId=71U64 fieldStart=0U64 fieldLen=0U64 />])
+    c.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=typeParameters params=parameters
         hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=unitTerm body=0U64
         hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false
         isAssoc=false isAsync=false isExtern=false />)
@@ -58,14 +60,14 @@ fn main() {
     if c.decls.callableCount() == 0U64 { write(s: "no-source-lookup\n") }
     val empty: Array[CallTemplateArgument] = []
     match c.recordBoundCallArguments(callee: 0U64, args: empty, receiver: <CallTemplateReceiver.None />,
-        calleeTypeArgs: [], parameterTerms: [term]).unwrap() {
+        calleeTypeArgs: [term], parameterTerms: [term]).unwrap() {
         Optional.Some(v: val completed) => {
             if completed.count() == 1U64 && completed[0U64].hasLabel && completed[0U64].labelStart == name.nameStart {
                 val defaultExpr = c.callArgumentExprId(source: completed[0U64].source)
                 if defaultExpr != expression && c.semanticExprTerm(exprId: defaultExpr) == term { write(s: "bound-default-result\n") }
                 val expressionCount = c.arena.exprs.count()
                 match c.recordBoundCallArguments(callee: 0U64, args: empty, receiver: <CallTemplateReceiver.None />,
-                    calleeTypeArgs: [], parameterTerms: [term], previous: completed).unwrap() {
+                    calleeTypeArgs: [term], parameterTerms: [term], previous: completed).unwrap() {
                     Optional.Some(v: val repeatedArguments) => {
                         if c.callArgumentExprId(source: repeatedArguments[0U64].source) == defaultExpr && c.arena.exprs.count() == expressionCount { write(s: "completed-record-idempotent\n") }
                     }
@@ -83,7 +85,7 @@ fn main() {
     c.cur.locals = []
     val expressionCount = c.arena.exprs.count()
     match c.recordBoundCallArguments(callee: 0U64, args: explicitArgs, receiver: <CallTemplateReceiver.None />,
-        calleeTypeArgs: [], parameterTerms: [term]).unwrap() {
+        calleeTypeArgs: [term], parameterTerms: [term]).unwrap() {
         Optional.Some(v: val completed) => {
             if completed.count() == 1U64 && c.callArgumentExprId(source: completed[0U64].source) == expression && c.arena.exprs.count() == expressionCount { write(s: "bound-explicit-preserved\n") }
             match completed[0U64].source {
@@ -100,17 +102,19 @@ fn main() {
     val closureKey = c.closureBodyKey(closureId: expression)
     c.putSemanticClosure(closure: <SemanticClosure ownerFnIdx=0U64 exprId=expression bodyKey=closureKey />).unwrap()
     val emptyArguments = c.publishCallTemplateArguments(args: [])
-    val emptyTypes = c.publishCallTemplateTypeArgs(args: [])
+    val selectedTypes = c.publishCallTemplateTypeArgs(args: [term])
     val missingIndex = c.decls.callTemplates.count()
     c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=0U64 originKind=2U64 originSerial=900U64 />
-        kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=emptyArguments calleeTypeArgs=emptyTypes proofId=0U64 /> />)
+        kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=emptyArguments calleeTypeArgs=selectedTypes proofId=0U64 /> />)
     // Two explicit arguments cannot complete a one-parameter call. These
     // deliberately incomplete internal rows do not claim source acceptance.
     val excess = c.publishCallTemplateArguments(args: [explicitArgs[0U64], explicitArgs[0U64]])
+    val unrelatedIndex = c.decls.callTemplates.count()
     c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=generator originKind=2U64 originSerial=901U64 />
-        kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=excess calleeTypeArgs=emptyTypes proofId=0U64 /> />)
+        kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=excess calleeTypeArgs=selectedTypes proofId=0U64 /> />)
+    val closureIndex = c.decls.callTemplates.count()
     c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=closureKey originKind=2U64 originSerial=902U64 />
-        kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=excess calleeTypeArgs=emptyTypes proofId=0U64 /> />)
+        kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=excess calleeTypeArgs=selectedTypes proofId=0U64 /> />)
     if c.completeRecordedBodyDefaultCalls(owner: 0U64).unwrap() != 1U64 { panic("lexical completion lost closure or included another owner") }
     match c.decls.callTemplates[missingIndex].kind {
         CallTemplateKind.Direct(callee: _, receiver: _, args: val arguments, calleeTypeArgs: _, proofId: _) => {
@@ -124,6 +128,18 @@ fn main() {
     c.rebuildCallTemplateIndex(capacity: 128U64)
     if c.completeRecordedBodyDefaultCalls(owner: 0U64).unwrap() != 1U64 { panic("rebuilt request index changed membership") }
 
+    // Incomplete rows are rejected, not silently ignored by bounds checks.
+    match c.checkRecordedBodyCallConstraints(owner: 0U64) {
+        Result.Ok(value: _) => { panic("incomplete closure call was accepted") }
+        Result.Err(error: _) => {}
+    }
+    // Restore complete selections before independently probing iteration
+    // membership. A preceding malformed call must not mask that diagnostic.
+    val completeKind = c.decls.callTemplates[missingIndex].kind
+    val unrelatedSite = c.decls.callTemplates[unrelatedIndex].siteKey
+    val closureSite = c.decls.callTemplates[closureIndex].siteKey
+    c.decls.callTemplates.set(i: unrelatedIndex, value: <CallTemplate siteKey=unrelatedSite kind=completeKind />)
+    c.decls.callTemplates.set(i: closureIndex, value: <CallTemplate siteKey=closureSite kind=completeKind />)
     c.checkRecordedBodyCallConstraints(owner: 0U64).unwrap()
     c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=generator originKind=3U64 originSerial=1U64 slot=1U64 />
         kind=<CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=term /> /> />)

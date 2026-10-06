@@ -132,6 +132,7 @@ fn main() {
     // The consumer sees a closed snapshot; later producer checks keep their
     // independent, still-open compiler state. Never reopen a published body.
     mut val consumer = c
+    if consumer.completeRecordedBodyDefaultCalls(owner: 0U64).unwrap() != 0U64 { panic("consumer snapshot has incomplete calls") }
     consumer.closeCallTemplatesForBody(fnIdx: 0U64).unwrap()
     val navigation = consumer.callArgumentRangeForCurrentBody(exprId: expression, authored: args).unwrap()
     if navigation.len == 1U64 && consumer.callTemplatesClosedForBody(fnIdx: 0U64).unwrap() && !consumer.callTemplatesClosedForBody(fnIdx: 1U64).unwrap() && !c.callTemplatesClosedForBody(fnIdx: 0U64).unwrap() {
