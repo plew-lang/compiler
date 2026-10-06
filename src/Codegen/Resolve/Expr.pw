@@ -1493,7 +1493,7 @@ pub impl Comp {
         if pattern == 0U64 || expected == 0U64 || pattern >= self.arena.typeTerms.count() || expected >= self.arena.typeTerms.count() { return false }
         val term = self.arena.typeTerms[pattern]
         if term.assocNameId != 0U64 { return self.typeRefEq(a: pattern, b: expected) }
-        if term.paramId != 0U64 && !term.isAny && !term.isSendable && term.args.len == 0U64 && term.assocTraitId == 0U64 && term.viewExtId == 0U64 && term.viewIds.len == 0U64 && term.viewSources.len == 0U64 {
+        if term.paramId != 0U64 && !term.isAny && !term.isSendable && !term.isDiverging && term.args.len == 0U64 && term.assocTraitId == 0U64 && term.viewExtId == 0U64 && term.viewIds.len == 0U64 && term.viewSources.len == 0U64 {
             mut val index: U64 = 0U64
             while index < params.count() && index < values.count() {
                 if self.funcBindAt(binds: params, index: index).paramId == term.paramId {

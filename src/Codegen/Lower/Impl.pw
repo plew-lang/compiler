@@ -613,7 +613,7 @@ pub impl Comp {
             typeParams=source.typeParams params=parameters hasRet=result.hasRet retStart=result.retStart retLen=result.retLen
             retIsArray=result.retIsArray retTy=result.retTy body=body hasRecv=source.hasRecv recvStart=source.recvStart recvLen=source.recvLen
             selfInout=source.selfInout selfMove=source.selfMove isAssoc=source.isAssoc isFactory=source.isFactory
-            isAnonymousFactory=source.isAnonymousFactory isAsync=source.isAsync isExtern=false isPub=source.isPub extId=source.extId
+            isAnonymousFactory=source.isAnonymousFactory isAsync=source.isAsync isDiverging=source.isDiverging isExtern=false isPub=source.isPub extId=source.extId
             originTraitId=source.originTraitId originTraitOwner=source.originTraitOwner originTraitArity=source.originTraitArity
             provTraitArity=source.provTraitArity provTraitOwner=source.provTraitOwner sourceWitnessFuncId=index + 1U64
             defOffset=source.defOffset />, registerSurface: false)

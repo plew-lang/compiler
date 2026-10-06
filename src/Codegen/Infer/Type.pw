@@ -185,6 +185,7 @@ pub impl Comp {
         }
         if self.isFnType(ref: exp) || self.isFnType(ref: actual) {
             if !(self.isFnType(ref: exp)) || !(self.isFnType(ref: actual)) { return <Result.Ok value=<TypeCompatibility.Incompatible /> /> }
+            if te.isDiverging != tin.isDiverging { return <Result.Ok value=<TypeCompatibility.Incompatible /> /> }
             if te.args.len != tin.args.len { return <Result.Ok value=<TypeCompatibility.Incompatible /> /> }
             mut val index: U64 = 0U64
             while index < te.args.len {

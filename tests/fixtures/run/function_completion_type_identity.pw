@@ -1,0 +1,68 @@
+// Semantic contract test. Surface diverge syntax is covered separately when
+// connected; a function value remains a value regardless of its call contract.
+use /Frontend only { Comp }
+use /Ir only { TypeRef, Func, Bind, InstanceEnvironment, PatternBindInput, UnifyBind }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn signature(compiler: inout Comp, result: U64, argument: U64, diverging: Bool, sendableFlag: Bool = false) -> U64 {
+    val name = compiler.internBytes(s: "fn")
+    return compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[result, argument] argLabels=[0U64, 0U64] isDiverging=diverging isSendable=sendableFlag />)
+}
+fn declaration(diverging: Bool) -> Func {
+    return <Func nameStart=0U64 nameLen=0U64 hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false isDiverging=diverging />
+}
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val unitName = compiler.internBytes(s: "()")
+    val unit = compiler.pushType(t: <TypeRef nameStart=unitName.nameStart nameLen=unitName.nameLen args=[] />)
+    val intName = compiler.internBytes(s: "I64")
+    val integer = compiler.pushType(t: <TypeRef nameStart=intName.nameStart nameLen=intName.nameLen args=[] />)
+    val normal = signature(compiler: inout compiler, result: unit, argument: integer, diverging: false)
+    val stopping = signature(compiler: inout compiler, result: unit, argument: integer, diverging: true)
+    val same = signature(compiler: inout compiler, result: unit, argument: integer, diverging: true)
+    assert(compiler.arena.typeTerms[stopping].isDiverging, message: "canonical contract")
+    assert(compiler.arena.typeAt(index: stopping).isDiverging, message: "row contract")
+    assert(!compiler.typeRefEq(a: normal, b: stopping), message: "completion identity")
+    assert(compiler.typeRefEq(a: stopping, b: same), message: "same completion identity")
+    assert(!compiler.typesCompatible(expected: normal, inferred: stopping).unwrap(), message: "no implicit erasure")
+    assert(!compiler.typesCompatible(expected: stopping, inferred: normal).unwrap(), message: "no implicit strengthening")
+    assert(!compiler.typeRefsAlphaEq(a: normal, b: stopping, aParams: [], bParams: []), message: "alpha identity")
+    mut val bindings: Array[UnifyBind] = []
+    assert(!compiler.unifyPatterns(a: normal, aSide: 0U64, b: stopping, bSide: 1U64, aParams: <PatternBindInput.Values values=[] />, bParams: <PatternBindInput.Values values=[] />, binds: inout bindings), message: "unification identity")
+
+    val transferable = signature(compiler: inout compiler, result: unit, argument: integer, diverging: true, sendableFlag: true)
+    assert(compiler.typesCompatible(expected: stopping, inferred: transferable).unwrap(), message: "sendable erasure retains completion")
+    assert(!compiler.typesCompatible(expected: normal, inferred: transferable).unwrap(), message: "sendable cannot erase completion")
+    assert(!compiler.typesCompatible(expected: transferable, inferred: stopping).unwrap(), message: "no implicit sendable")
+
+    val paramName = compiler.internBytes(s: "T")
+    val parameter = <Bind nameStart=paramName.nameStart nameLen=paramName.nameLen nameId=paramName.nameId paramId=17U64 fieldStart=0U64 fieldLen=0U64 />
+    val variable = compiler.pushType(t: <TypeRef nameStart=paramName.nameStart nameLen=paramName.nameLen paramId=17U64 args=[] />)
+    val generic = signature(compiler: inout compiler, result: unit, argument: variable, diverging: true)
+    val grounded = compiler.groundTermForBody(ref: generic, environment: <InstanceEnvironment params=[parameter] args=[integer] />, selfRef: 0U64, itemRef: 0U64).unwrap()
+    assert(compiler.typeRefEq(a: stopping, b: grounded), message: "grounding preserves completion")
+    assert(compiler.arena.typeTerms[grounded].isDiverging, message: "grounded contract")
+
+    // A normal callable can return a diverging callable value. The two levels
+    // must not be collapsed into the same invocation contract.
+    val returningCallable = signature(compiler: inout compiler, result: stopping, argument: integer, diverging: false)
+    assert(!compiler.arena.typeTerms[returningCallable].isDiverging, message: "outer invocation")
+    val result = compiler.arena.typeAt(index: returningCallable).args[0U64]
+    assert(compiler.arena.typeTerms[result].isDiverging, message: "returned callable")
+    val normalKey = compiler.recordTypeKeyFromRef(ref: normal)
+    val stoppingKey = compiler.recordTypeKeyFromRef(ref: stopping)
+    assert(normalKey.count() != stoppingKey.count(), message: "structural key")
+    val arrayName = compiler.internBytes(s: "Array")
+    val normalArray = compiler.pushType(t: <TypeRef nameStart=arrayName.nameStart nameLen=arrayName.nameLen args=[normal] />)
+    val stoppingArray = compiler.pushType(t: <TypeRef nameStart=arrayName.nameStart nameLen=arrayName.nameLen args=[stopping] />)
+    assert(!compiler.typeRefEq(a: normalArray, b: stoppingArray), message: "nested completion identity")
+    val normalDeclaration = declaration(diverging: false)
+    val stoppingDeclaration = declaration(diverging: true)
+    assert(compiler.sameFuncSelector(a: normalDeclaration, b: stoppingDeclaration), message: "completion is not an overload selector")
+    assert(!compiler.viaSignatureMatches(witness: normalDeclaration, target: stoppingDeclaration), message: "via retains completion")
+    assert(!compiler.viaSignatureMatches(witness: stoppingDeclaration, target: normalDeclaration), message: "via cannot infer completion")
+    assert(compiler.viaSignatureMatches(witness: stoppingDeclaration, target: stoppingDeclaration), message: "same via contract")
+    print("ok")
+}

@@ -194,7 +194,7 @@ pub impl Comp {
         val tb: TypeRef = self.arena.typeAt(index: b.ref)
         if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
             if ta.assocNameId == 0U64 || tb.assocNameId == 0U64 || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId { return 0U64 }
-        } else if ta.nameId != tb.nameId || ta.hasDecl != tb.hasDecl || ta.declOffset != tb.declOffset || ta.isRecord != tb.isRecord || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId { return 0U64 }
+        } else if ta.nameId != tb.nameId || ta.hasDecl != tb.hasDecl || ta.declOffset != tb.declOffset || ta.isRecord != tb.isRecord || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId { return 0U64 }
         if self.typeTermChildCount(t: ta) != self.typeTermChildCount(t: tb) { return 0U64 }
         mut val i: U64 = 0U64
         mut val grows: Bool = false
@@ -290,7 +290,7 @@ pub impl Comp {
         val tb: TypeRef = self.arena.typeAt(index: b.ref)
         if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
             if ta.assocNameId == 0U64 || tb.assocNameId == 0U64 || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId { return false }
-        } else if ta.nameId != tb.nameId || ta.hasDecl != tb.hasDecl || ta.declOffset != tb.declOffset || ta.isRecord != tb.isRecord || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId { return false }
+        } else if ta.nameId != tb.nameId || ta.hasDecl != tb.hasDecl || ta.declOffset != tb.declOffset || ta.isRecord != tb.isRecord || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId { return false }
         if self.typeTermChildCount(t: ta) != self.typeTermChildCount(t: tb) { return false }
         mut val i: U64 = 0U64
         while i < self.typeTermChildCount(t: ta) {

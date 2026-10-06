@@ -313,14 +313,14 @@ pub impl Comp {
     // This is the only construction path used by term substitution: projection
     // trait arguments are children just like nominal arguments.
     inout fn rebuildTypeTerm(t: TypeRef, args: Array[U64], assocTraitArgs: Array[U64]) -> U64 {
-        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable isDiverging=t.isDiverging hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
     }
 
     // Rebuild a Record TypeTerm after a closed traversal transformed its field
     // children.  The retained layout name is opaque ABI metadata; labels and
     // fields are the semantic identity and must travel together.
     inout fn rebuildRecordTypeTerm(t: TypeRef, fieldTerms: Array[U64]) -> U64 {
-        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args isRecord=true recordFieldLabels=t.recordFieldLabels recordFieldTerms=fieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args isRecord=true recordFieldLabels=t.recordFieldLabels recordFieldTerms=fieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable isDiverging=t.isDiverging hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
     }
 
     // The legacy arena represents a projection receiver through the same head
@@ -328,7 +328,7 @@ pub impl Comp {
     // all structural operations can recurse into it.
     inout fn typeTermProjectionReceiver(t: TypeRef) -> U64 {
         if t.projectionReceiver != 0U64 { return t.projectionReceiver }
-        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset siteOffset=t.siteOffset />)
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isDiverging=t.isDiverging hasDecl=t.hasDecl declOffset=t.declOffset siteOffset=t.siteOffset />)
     }
 
     // The closed semantic child view of a TypeTerm.  Record fields, a
@@ -393,7 +393,7 @@ pub impl Comp {
     // equality, matching and canonicalization cannot disagree about a record
     // field, existential output binding or projection receiver.
     inout fn typeTermSameHead(a: TypeRef, b: TypeRef) -> Bool {
-        if a.isRecord || b.isRecord { return a.isRecord && b.isRecord && a.isSendable == b.isSendable }
+        if a.isRecord || b.isRecord { return a.isRecord && b.isRecord && a.isSendable == b.isSendable && a.isDiverging == b.isDiverging }
         if a.hasDecl && b.hasDecl {
             if a.declOffset != b.declOffset { return false }
         } else if a.nameId != 0U64 && b.nameId != 0U64 {
@@ -401,7 +401,7 @@ pub impl Comp {
         } else if !(spansEqual(c: inout self, aStart: a.nameStart, aLen: a.nameLen, bStart: b.nameStart, bLen: b.nameLen)) {
             return false
         }
-        if a.isAny != b.isAny || a.isSendable != b.isSendable { return false }
+        if a.isAny != b.isAny || a.isSendable != b.isSendable || a.isDiverging != b.isDiverging { return false }
         if a.paramId != 0U64 || b.paramId != 0U64 {
             if a.paramId != b.paramId { return false }
         }
@@ -489,7 +489,7 @@ pub impl Comp {
         if a == b { return true }
         val ta = self.arena.typeTerms[a]
         val tb = self.arena.typeTerms[b]
-        if ta.isRecord || tb.isRecord { return ta.isRecord && tb.isRecord && ta.isSendable == tb.isSendable }
+        if ta.isRecord || tb.isRecord { return ta.isRecord && tb.isRecord && ta.isSendable == tb.isSendable && ta.isDiverging == tb.isDiverging }
         if ta.hasDecl && tb.hasDecl {
             if ta.declOffset != tb.declOffset { return false }
         } else if ta.nameId != 0U64 && tb.nameId != 0U64 {
@@ -497,7 +497,7 @@ pub impl Comp {
         } else if !(spansEqual(c: inout self, aStart: ta.nameStart, aLen: ta.nameLen, bStart: tb.nameStart, bLen: tb.nameLen)) {
             return false
         }
-        if ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.paramId != tb.paramId { return false }
+        if ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.paramId != tb.paramId { return false }
         if ta.viewExtId != tb.viewExtId || !(self.sameTypeTermViewIds(a: a, b: b)) { return false }
         if (ta.hasDecl && tb.hasDecl && ta.declOffset != tb.declOffset) || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId { return false }
         return true
@@ -510,7 +510,7 @@ pub impl Comp {
     inout fn rebuildProjectionTerm(t: TypeRef, receiver: U64, traitArgs: Array[U64]) -> U64 {
         if receiver >= self.arena.typeCount() { return 0U64 }
         val base: TypeRef = self.arena.typeAt(index: receiver)
-        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms viewExtId=base.viewExtId viewIds=base.viewIds viewSources=base.viewSources isAny=base.isAny argLabels=base.argLabels projectionReceiver=receiver assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=traitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms viewExtId=base.viewExtId viewIds=base.viewIds viewSources=base.viewSources isAny=base.isAny argLabels=base.argLabels projectionReceiver=receiver assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=traitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=base.isSendable isDiverging=base.isDiverging hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
     }
 
     // Apply exactly one concrete witness's impl-binder substitution. Query
@@ -690,6 +690,9 @@ pub impl Comp {
         val tr: TypeRef = self.arena.typeAt(index: ref)
         if tr.isSendable {
             appendBytes(into: inout out, from: "sendable ".bytes())
+        }
+        if tr.isDiverging {
+            appendBytes(into: inout out, from: "diverge ".bytes())
         }
         if tr.isRecord {
             if tr.recordFieldLabels.count() != tr.recordFieldTerms.count() { return out }

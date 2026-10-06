@@ -180,6 +180,10 @@ pub struct TypeTerm {
     // separately interned semantic term for `S`. Zero for non-projections.
     pub val projectionReceiver: U64 = 0U64
     pub val isSendable: Bool = false
+    // Function call completion is part of semantic identity. This marks the
+    // callable value's invocation, never the value's construction or storage.
+    pub val isDiverging: Bool = false
+
     pub val hasDecl: Bool = false
     pub val declOffset: U64 = 0U64
     pub val hasAssocTraitDecl: Bool = false
@@ -262,6 +266,10 @@ pub struct TypeRef {
     // written at the surface. It is recorded as part of the type spelling now; the
     // full capture/effect/spawn checks land with the ownership IR.
     pub val isSendable: Bool = false
+    // Function call completion is part of semantic identity. This marks the
+    // callable value's invocation, never the value's construction or storage.
+    pub val isDiverging: Bool = false
+
     // Resolved declaration identity for this type head. The real declaration
     // offset is unique across loaded packages even when their spellings collide.
     pub val hasDecl: Bool = false
@@ -2281,6 +2289,8 @@ pub struct Func {
     // `Promise[T]`. Lowered to a stackless state machine (frame + resume + entry)
     // rather than a plain C function. Default false = an ordinary synchronous fn.
     pub val isAsync: Bool
+    // Declared invocation contract; do not infer it from a body or return type.
+    pub val isDiverging: Bool = false
     // `extern(plewIntrinsic)` declaration (spec/15 core-library boundary): a
     // body-less signature bound to the runtime symbol `plew_<name>`. The compiler
     // emits no prototype/body; a call lowers to `plew_<name>(args)`. Default false.

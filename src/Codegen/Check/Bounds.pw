@@ -804,7 +804,7 @@ pub impl Comp {
                     if receiverRef >= self.arena.typeCount() { return ref }
                     val receiver: TypeRef = self.arena.typeAt(index: receiverRef)
                     val noLabels: Array[U64] = []
-                    return self.pushType(t: <TypeRef nameStart=receiver.nameStart nameLen=receiver.nameLen paramId=receiver.paramId args=receiver.args isRecord=receiver.isRecord recordFieldLabels=receiver.recordFieldLabels recordFieldTerms=receiver.recordFieldTerms viewExtId=receiver.viewExtId viewIds=receiver.viewIds viewSources=receiver.viewSources isAny=receiver.isAny argLabels=receiver.argLabels projectionReceiver=receiverRef assocTraitStart=traitOwner assocTraitLen=self.traitNameLenByOwner(owner: traitOwner) assocTraitId=intern(c: inout self, start: traitOwner, len: self.traitNameLenByOwner(owner: traitOwner)) assocTraitArgs=traitArgs assocTraitArgLabels=noLabels assocNameStart=assoc.nameStart assocNameLen=assoc.nameLen assocNameId=assoc.nameId isSendable=receiver.isSendable hasDecl=receiver.hasDecl declOffset=receiver.declOffset hasAssocTraitDecl=true assocTraitDeclOffset=traitOwner siteOffset=0U64 />)
+                    return self.pushType(t: <TypeRef nameStart=receiver.nameStart nameLen=receiver.nameLen paramId=receiver.paramId args=receiver.args isRecord=receiver.isRecord recordFieldLabels=receiver.recordFieldLabels recordFieldTerms=receiver.recordFieldTerms viewExtId=receiver.viewExtId viewIds=receiver.viewIds viewSources=receiver.viewSources isAny=receiver.isAny argLabels=receiver.argLabels projectionReceiver=receiverRef assocTraitStart=traitOwner assocTraitLen=self.traitNameLenByOwner(owner: traitOwner) assocTraitId=intern(c: inout self, start: traitOwner, len: self.traitNameLenByOwner(owner: traitOwner)) assocTraitArgs=traitArgs assocTraitArgLabels=noLabels assocNameStart=assoc.nameStart assocNameLen=assoc.nameLen assocNameId=assoc.nameId isSendable=receiver.isSendable isDiverging=receiver.isDiverging hasDecl=receiver.hasDecl declOffset=receiver.declOffset hasAssocTraitDecl=true assocTraitDeclOffset=traitOwner siteOffset=0U64 />)
                 }
                 ai += 1U64
             }
@@ -1037,6 +1037,7 @@ pub impl Comp {
     }
 
     inout fn reqReturnMismatch(cf: Conform, w: Func, r: Func, recvStart: U64, recvLen: U64) -> Bool {
+        if w.isDiverging != r.isDiverging { return true }
         if !(r.hasRet) {
             return false
         }
@@ -1268,7 +1269,7 @@ pub impl Comp {
                         parameterIndex += 1U64
                     }
                     val parameters = self.copyFuncBinds(binds: requirement.typeParams)
-                    if function.isAssoc != requirement.isAssoc || function.selfInout != requirement.selfInout || function.selfMove != requirement.selfMove || function.isAsync != requirement.isAsync {
+                    if function.isAssoc != requirement.isAssoc || function.selfInout != requirement.selfInout || function.selfMove != requirement.selfMove || function.isAsync != requirement.isAsync || function.isDiverging != requirement.isDiverging {
                         return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation calling convention does not match the trait requirement") />
                     }
                     parameterIndex = 0U64
@@ -1369,7 +1370,7 @@ pub impl Comp {
     // Match the implementation directionally: requirement
     // binders remain rigid while the target's binders acquire one substitution.
     inout fn viaSignatureMatches(witness: Func, target: Func) -> Bool {
-        if witness.hasRecv != target.hasRecv || witness.isAssoc != target.isAssoc || witness.selfInout != target.selfInout || witness.selfMove != target.selfMove || witness.isAsync != target.isAsync {
+        if witness.hasRecv != target.hasRecv || witness.isAssoc != target.isAssoc || witness.selfInout != target.selfInout || witness.selfMove != target.selfMove || witness.isAsync != target.isAsync || witness.isDiverging != target.isDiverging {
             return false
         }
         val input = <CallableArgumentInput.Parameters range=witness.params />
