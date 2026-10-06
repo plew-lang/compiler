@@ -1,0 +1,19 @@
+use @Std/Io only { print }
+
+struct Token[T] {}
+impl[T] Token[T] {
+    factory
+    assoc fn empty() -> Token[T] { return <Token[T] /> }
+}
+fn token[T]() -> Token[T] { return <Token[T] /> }
+fn identity[T](value: T) -> T { return value }
+fn exercise[U](value: U) -> U {
+    val direct: Token[U] = token()
+    val associated: Token[U] = Token.empty()
+    val block: Token[U] = { give token() }
+    return identity(value: value)
+}
+fn main() {
+    print(exercise(value: 7I64))
+    print(exercise(value: "caller binder"))
+}

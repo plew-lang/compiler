@@ -180,7 +180,7 @@ pub impl Comp {
                 // visibility and ownership checks.
                 try self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args)
                 self.recordResolvedMethodCallee(id: id, callee: mf)
-                try self.checkResolvedMethodArgs(mf: mf, args: args)
+                try self.checkResolvedMethodArgs(exprId: id, mf: mf, receiverRef: receiverTerm, args: args)
             }
             Expr.ExtMethod(val recv, source: val sourceSelector, val nameStart, val nameLen, val args) => {
                 val sourceSpan: InternedSpan = self.interner.entries[sourceSelector.surfaceId - 1U64]
@@ -195,7 +195,7 @@ pub impl Comp {
                     }
                     val mf: U64 = (try self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, sourceOwner: sourceSelector.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args))
                     self.recordResolvedMethodCallee(id: id, callee: mf)
-                    try self.checkResolvedMethodArgs(mf: mf, args: args)
+                    try self.checkResolvedMethodArgs(exprId: id, mf: mf, receiverRef: assocRef, args: args)
                     try self.verifyArgs(args: args)
                     return <Result.Ok value=() />
                 }
@@ -220,7 +220,7 @@ pub impl Comp {
                 self.recordResolvedMethodCallee(id: id, callee: mf)
                 if rt.nameLen != 0U64 {
                     try self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args)
-                    try self.checkResolvedMethodArgs(mf: mf, args: args)
+                    try self.checkResolvedMethodArgs(exprId: id, mf: mf, receiverRef: rt.ref, args: args)
                 }
                 try self.verifyExpr(id: recv)
                 try self.verifyArgs(args: args)

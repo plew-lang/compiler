@@ -378,7 +378,8 @@ pub impl Comp {
     // selection.  The result is a plain TypeTerm; callee/receiver/substitution
     // remain provenance so canonical type identity cannot depend on a call.
     // Record and declaration verification share the selected signature's
-    // substitution. Final CallTemplates are published only after verification.
+    // substitution. Templates are mutable construction records until the lexical
+    // body is verified and sealed; consumers cannot treat an early row as proof.
     inout fn freeCallParameterEnvironment(f: Func, args: ArgRange) -> Result[InstanceEnvironment, CompileDiagnostic] {
         if f.typeParams.count() == 0U64 { return <Result.Ok value=<InstanceEnvironment /> /> }
         val inferred = try self.inferFnArgs(f: f, args: args)
@@ -392,7 +393,7 @@ pub impl Comp {
         try self.checkCallDeclarationKind(exprId: exprId, declaration: f)
         mut val calleeArgs: Array[U64] = []
         if f.typeParams.count() > 0U64 {
-            calleeArgs = self.inferParametricFnArgs(f: f, args: args)
+            calleeArgs = self.completeRecordedFreeCallArgs(f: f, args: args, inferred: self.inferParametricFnArgs(f: f, args: args))
         }
         mut val result: U64 = f.retTy
         // A source body may call `id[T](value: T) -> T` while its own T is
@@ -410,13 +411,6 @@ pub impl Comp {
             result = (try self.groundTermForBody(ref: f.retTy, environment: environment, selfRef: 0U64, itemRef: 0U64))
         }
         try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: calleeArgs, resultTerm: result)
-        // The existing SemanticExprType is still consumed by the abstract
-        // checker, so it retains its established abstract substitution. The
-        // final-call template is independent provenance and may carry the
-        // receiver-pattern completion needed solely for body-instance
-        // grounding.
-        val templateArgs: Array[U64] = self.completeRecordedFreeCallArgs(f: f, args: args, inferred: calleeArgs)
-        try self.recordCallTemplate(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: templateArgs)
         return <Result.Ok value=() />
     }
 
@@ -593,7 +587,6 @@ pub impl Comp {
                     return <Result.Ok value=() />
                 }
                 try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [], resultTerm: f.retTy)
-                try self.recordCallTemplate(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [])
                 return <Result.Ok value=() />
             }
             // A compiler-internal receiver such as `Comp` has no language
@@ -603,7 +596,6 @@ pub impl Comp {
             // their proof necessarily needs a real receiver term.
             if !(f.isProvided) {
                 try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.Opaque />, args: args, calleeTypeArgs: [], resultTerm: f.retTy)
-                try self.recordCallTemplate(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.Opaque />, args: args, calleeTypeArgs: [])
             }
             return <Result.Ok value=() />
         }

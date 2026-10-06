@@ -43,27 +43,27 @@ pub impl Comp {
     // Final argument-type validation operates on the already source-selected
     // callable.  Bare and `#` method calls must not rediscover candidates by
     // different rules after resolution.
-    inout fn checkResolvedMethodArgCategories(mf: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
+    inout fn checkResolvedMethodArgCategories(exprId: U64, mf: U64, receiverRef: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         if mf >= self.arena.functionCount() { return <Result.Ok value=() /> }
         val cf: Func = self.arena.functionAt(index: mf)
-        // Generic and provided methods need their resolved substitution before
-        // this conservative non-generic category checker can compare values.
-        // Preserve the ordinary-method boundary; this helper only removes the
-        // source-selection split, it does not invent a second generic checker.
-        if cf.typeParams.count() > 0U64 { return <Result.Ok value=() /> }
         if !(self.paramsLabelsOk(params: cf.params, args: args)) { return <Result.Ok value=() /> }
+        val environment = match (try self.recordedDirectCallEnvironmentAt(exprId: exprId, callee: mf)) {
+            Optional.Some(v: val recorded) => { give recorded }
+            Optional.None => { give (try self.finalMethodEnvironment(f: cf, receiverRef: receiverRef, args: args)) }
+        }
         mut val ai: U64 = 0U64
         while ai < args.len {
             val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)
             if pIdx < cf.params.count() {
-                try self.tcCheckValue(expectedRef: self.funcParamAt(params: cf.params, index: pIdx).ty, valueExpr: self.argAt(args: args, index: ai).expr, pos: "arg")
+                val parameter = try self.groundTermForBody(ref: self.funcParamAt(params: cf.params, index: pIdx).ty, environment: environment, selfRef: environment.receiverRef, itemRef: (try self.finalMethodItemRef(f: cf, receiverRef: environment.receiverRef)))
+                try self.tcCheckValue(expectedRef: parameter, valueExpr: self.argAt(args: args, index: ai).expr, pos: "arg")
             }
             ai += 1U64
         }
         return <Result.Ok value=() />
     }
 
-    inout fn checkResolvedMethodArgs(mf: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
+    inout fn checkResolvedMethodArgs(exprId: U64, mf: U64, receiverRef: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         if mf >= self.arena.functionCount() { return <Result.Ok value=() /> }
         val cf: Func = self.arena.functionAt(index: mf)
         if !(self.paramsLabelsOk(params: cf.params, args: args)) { return <Result.Ok value=() /> }
@@ -75,7 +75,7 @@ pub impl Comp {
             }
             ai += 1U64
         }
-        try self.checkResolvedMethodArgCategories(mf: mf, args: args)
+        try self.checkResolvedMethodArgCategories(exprId: exprId, mf: mf, receiverRef: receiverRef, args: args)
         return <Result.Ok value=() />
     }
 

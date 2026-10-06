@@ -1,0 +1,11 @@
+use @Std/Core only { Iterator, MapIter }
+struct Source {}
+impl Source { factory }
+impl Source as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] { return <Optional.None /> }
+}
+fn main() {
+    mut val invalid: MapIter[Source, I64, I64] = <MapIter inner=<Source /> f=1I64 />
+    invalid.next()
+}

@@ -1,0 +1,4 @@
+struct Box[T] { val value: T }
+impl[T] Box[T] { factory }
+fn boxed[T](value: T) -> Box[T] { return <Box[T] value=value /> }
+fn main() { val wrong: Box[String] = boxed(value: 1I64) }

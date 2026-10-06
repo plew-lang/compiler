@@ -265,6 +265,9 @@ pub impl Comp {
     // Consumers that retain the selected environment must use that same
     // substitution for signature grounding instead of inferring it again.
     inout fn groundFinalMethodSignatureInEnvironment(f: Func, environment: InstanceEnvironment, signatureTerm: U64) -> Result[U64, CompileDiagnostic] {
+        // Record may still be constructing the receiver. This query reports
+        // an unavailable substitution; final argument checking must instead
+        // consume the selected environment without treating zero as success.
         if signatureTerm == 0U64 || environment.receiverRef == 0U64 { return <Result.Ok value=0U64 />}
         return <Result.Ok value=(try self.groundTermForBody(ref: signatureTerm, environment: environment, selfRef: environment.receiverRef, itemRef: (try self.finalMethodItemRef(f: f, receiverRef: environment.receiverRef)))) />
     }

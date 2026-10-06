@@ -236,7 +236,7 @@ pub struct MapIter[I, F, B] {
     pub val f: F
 }
 pub impl[I, F, B] MapIter[I, F, B] { factory }
-pub impl[I, F, B] MapIter[I, F, B] as Iterator where I: Iterator {
+pub impl[I, E, B] MapIter[I, fn(x: E) -> B, B] as Iterator where I: Iterator[Item = E] {
     type Item = B
     inout fn next() -> Optional[B] {
         match self.inner.next() {
@@ -253,7 +253,7 @@ pub struct FilterIter[I, P, E] {
     pub val p: P
 }
 pub impl[I, P, E] FilterIter[I, P, E] { factory }
-pub impl[I, P, E] FilterIter[I, P, E] as Iterator where I: Iterator[Item = E] {
+pub impl[I, E] FilterIter[I, fn(x: E) -> Bool, E] as Iterator where I: Iterator[Item = E] {
     type Item = E
     inout fn next() -> Optional[E] {
         mut val go: Bool = true

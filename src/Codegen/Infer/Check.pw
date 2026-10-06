@@ -88,7 +88,18 @@ pub impl Comp {
             }
         }
         val inferred = try self.groundedTypeOf(id: valueExpr)
-        match (try self.typeCompatibility(expected: expectedRef, inferred: inferred)) {
+        val compatibility = try self.typeCompatibility(expected: expectedRef, inferred: inferred)
+        if self.traceCodegen && !compatibility.isCompatible() {
+            eprint(text: "[trace-codegen] value-type-mismatch expected=")
+            self.traceMonoTypeHead(ref: expectedRef)
+            eprint(text: " inferred=")
+            self.traceMonoTypeHead(ref: inferred)
+            eprint(text: " expr=")
+            eprintU64(n: valueExpr)
+            eprint(text: " unresolved=")
+            if compatibility.isUnresolved() { eprint(text: "true\n") } else { eprint(text: "false\n") }
+        }
+        match compatibility {
             TypeCompatibility.Compatible => { return <Result.Ok value=() /> }
             TypeCompatibility.Unresolved => {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "cannot establish this value's type from the available context") />

@@ -238,18 +238,40 @@ pub impl Comp {
         return <Result.Ok value=<TypeCompatibility.Compatible /> />
     }
 
+    // Compiler-owned type constructors have no source declaration owner.
+    // Their spelling identifies the constructor; their children still undergo
+    // ordinary compatibility below. Unknown names are never builtin identities.
+    inout fn isCompatibilityBuiltin(type: TypeTerm) -> Bool {
+        if self.isPrimType(start: type.nameStart, len: type.nameLen) { return true }
+        return rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "String") || rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "CPtr") || rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "CMutPtr") || rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "COpaque")
+    }
+
     inout fn namedTypeCompatibility(expectedRef: U64, inferredRef: U64, te: TypeTerm, tin: TypeTerm) -> Result[TypeCompatibility, CompileDiagnostic] {
-        if te.hasDecl && tin.hasDecl {
+        val expectedBuiltin = self.isCompatibilityBuiltin(type: te)
+        val inferredBuiltin = self.isCompatibilityBuiltin(type: tin)
+        if expectedBuiltin || inferredBuiltin {
+            if !(expectedBuiltin && inferredBuiltin) || !self.typeTermRefSameHead(a: expectedRef, b: inferredRef) {
+                return <Result.Ok value=<TypeCompatibility.Incompatible /> />
+            }
+        } else if te.hasDecl && tin.hasDecl {
             if te.declOffset != tin.declOffset { return <Result.Ok value=<TypeCompatibility.Incompatible /> /> }
         } else {
-            // Legacy terms without declaration identity still resolve in their
-            // lexical module. Fully resolved terms never repeat that lookup.
-            mut val expectedId = self.knownNamedTypeIdForTerm(type: te)
-            mut val inferredId = self.knownNamedTypeIdForTerm(type: tin)
-            if expectedId == 0U64 { expectedId = self.genericStructHeadId(start: te.nameStart, len: te.nameLen) }
-            if inferredId == 0U64 { inferredId = self.genericStructHeadId(start: tin.nameStart, len: tin.nameLen) }
-            if expectedId == 0U64 || inferredId == 0U64 { return <Result.Ok value=<TypeCompatibility.Unresolved /> /> }
-            if expectedId != inferredId { return <Result.Ok value=<TypeCompatibility.Incompatible /> /> }
+            // Resolve only legacy terms lacking an owner. The conservative
+            // candidate head-name filter intentionally excludes C handles and
+            // generic declarations, so it cannot prove final compatibility.
+            val expectedDeclaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: te.nameStart), start: te.nameStart, len: te.nameLen)
+            val inferredDeclaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: tin.nameStart), start: tin.nameStart, len: tin.nameLen)
+            mut val expectedOwner = te.declOffset
+            mut val inferredOwner = tin.declOffset
+            if !te.hasDecl {
+                if expectedDeclaration.nameLen == 0U64 { return <Result.Ok value=<TypeCompatibility.Unresolved /> /> }
+                expectedOwner = expectedDeclaration.nameStart
+            }
+            if !tin.hasDecl {
+                if inferredDeclaration.nameLen == 0U64 { return <Result.Ok value=<TypeCompatibility.Unresolved /> /> }
+                inferredOwner = inferredDeclaration.nameStart
+            }
+            if expectedOwner != inferredOwner { return <Result.Ok value=<TypeCompatibility.Incompatible /> /> }
         }
         // Once the nominal heads are known, a view is part of semantic type
         // identity even when the payload layout is unchanged. Unresolved

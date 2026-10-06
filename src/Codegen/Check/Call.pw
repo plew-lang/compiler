@@ -353,25 +353,16 @@ pub impl Comp {
                 val mf: Func = self.arena.functionAt(index: mi)
                 try self.tcCheckGenericArgConsistency(f: mf, args: args)
                 val ps: Array[Param] = self.copyFuncParams(params: mf.params)
-                val genericRecv: Bool = self.isGenericInst(ref: rt.ref)
-                mut val environment = <InstanceEnvironment />
-                if genericRecv || mf.typeParams.count() != 0U64 { environment = (try self.finalMethodEnvironment(f: mf, receiverRef: rt.ref, args: args)) }
+                val environment = try self.finalMethodEnvironment(f: mf, receiverRef: rt.ref, args: args)
                 mut val i: U64 = 0
                 while i < args.len {
                     val pi: U64 = self.paramIndexForArg(params: mf.params, args: args, argIdx: i)
                     if pi < ps.count() {
                         val p: Param = ps[pi]
                         try self.checkArgInoutMode(p: p, arg: self.argAt(args: args, index: i))
-                        if genericRecv || mf.typeParams.count() != 0U64 {
-                            // Parameter checking uses the same lexical receiver and
-                            // method substitutions as return typing and finalization.
-                            val parameterType = (try self.groundFinalMethodSignatureInEnvironment(f: mf, environment: environment, signatureTerm: p.ty))
-                            try self.checkLitTi(id: self.argAt(args: args, index: i).expr, ti: self.typeInfoOfRef(ref: parameterType))
-                            try self.tcCheckValue(expectedRef: parameterType, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
-                        } else {
-                            try self.checkLitTi(id: self.argAt(args: args, index: i).expr, ti: self.typeInfoOfRef(ref: p.ty))
-                            try self.tcCheckValue(expectedRef: p.ty, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
-                        }
+                        val parameterType = try self.groundTermForBody(ref: p.ty, environment: environment, selfRef: environment.receiverRef, itemRef: (try self.finalMethodItemRef(f: mf, receiverRef: environment.receiverRef)))
+                        try self.checkLitTi(id: self.argAt(args: args, index: i).expr, ti: self.typeInfoOfRef(ref: parameterType))
+                        try self.tcCheckValue(expectedRef: parameterType, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
                     } else {
                         try self.checkLitCtx(id: self.argAt(args: args, index: i).expr, eKind: 0, eBits: 0, eSgn: false)
                     }
@@ -434,45 +425,17 @@ pub impl Comp {
                     val aps: Array[Param] = self.copyFuncParams(params: af.params)
                     mut val qualifier = (try self.concreteTypeQualifierTerm(exprId: recv))
                     if qualifier == 0U64 { qualifier = (try self.associatedReceiverFromArguments(f: af, args: args)) }
-                    mut val ginf: Array[U64] = []
-                    if af.typeParams.count() > 0U64 {
-                        ginf = (try self.inferFnArgs(f: af, args: args))
-                    }
+                    mut val environment = try self.freeCallParameterEnvironment(f: af, args: args)
+                    if qualifier != 0U64 { environment = try self.finalMethodEnvironment(f: af, receiverRef: qualifier, args: args) }
                     mut val k: U64 = 0
                     while k < args.len {
                         val pi: U64 = self.paramIndexForArg(params: af.params, args: args, argIdx: k)
                         if pi < aps.count() {
                             val ap: Param = aps[pi]
                             try self.checkArgInoutMode(p: ap, arg: self.argAt(args: args, index: k))
-                            mut val checkedGround: Bool = false
-                            if qualifier != 0U64 && ap.ty != 0U64 {
-                                val parameter = (try self.groundFinalMethodSignatureTerm(f: af, receiverRef: qualifier, args: args, signatureTerm: ap.ty))
-                                if parameter != 0U64 && (try self.tyRefIsGround(ref: parameter)) {
-                                    try self.checkLitTi(id: self.argAt(args: args, index: k).expr, ti: self.typeInfoOfRef(ref: parameter))
-                                    try self.tcCheckValue(expectedRef: parameter, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
-                                    checkedGround = true
-                                }
-                            }
-                            if !checkedGround && ap.ty != 0U64 {
-                                if ginf.count() == af.typeParams.count() {
-                                    val savedP: Array[Bind] = self.cur.typeParams
-                                    val savedA: Array[U64] = self.cur.typeArgs
-                                    self.cur.typeParams = self.copyFuncBinds(binds: af.typeParams)
-                                    self.cur.typeArgs = ginf
-                                    val gty: U64 = (try self.groundTypeRef(ref: ap.ty))
-                                    self.cur.typeParams = savedP
-                                    self.cur.typeArgs = savedA
-                                    if gty != 0U64 && (try self.tyRefIsGround(ref: gty)) {
-                                        try self.checkLitTi(id: self.argAt(args: args, index: k).expr, ti: self.typeInfoOfRef(ref: gty))
-                                        try self.tcCheckValue(expectedRef: gty, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
-                                        checkedGround = true
-                                    }
-                                }
-                            }
-                            if !(checkedGround) {
-                                try self.checkLitTi(id: self.argAt(args: args, index: k).expr, ti: self.typeInfoOfRef(ref: ap.ty))
-                                try self.tcCheckValue(expectedRef: ap.ty, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
-                            }
+                            val parameter = try self.groundTermForBody(ref: ap.ty, environment: environment, selfRef: environment.receiverRef, itemRef: (try self.finalMethodItemRef(f: af, receiverRef: environment.receiverRef)))
+                            try self.checkLitTi(id: self.argAt(args: args, index: k).expr, ti: self.typeInfoOfRef(ref: parameter))
+                            try self.tcCheckValue(expectedRef: parameter, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
                         }
                         k += 1
                     }
