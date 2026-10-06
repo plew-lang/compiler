@@ -473,13 +473,75 @@ pub impl Comp {
                 if (function.hasRecv || function.isAssoc) && template.receiverTypeTerm == 0U64 {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot establish the selected call's receiver type") />
                 }
-                if args.len != function.params.count() || args.start + args.len > self.decls.callTemplateArgumentPool.count() {
-                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected call has an incomplete argument plan") />
+                try self.checkCallTemplateArguments(args: args, parameterCount: function.params.count(), offset: offset)
+            }
+            CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: val resolution, resultTerm: _) => {
+                val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: offset)
+                try self.checkCallTemplateArguments(args: args, parameterCount: function.params.count(), offset: offset)
+            }
+            CallTemplateKind.Dynamic(receiver: _, args: val args, target: val target) => {
+                mut val parameterCount = 0U64
+                mut val signature = 0U64
+                match target {
+                    DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: _, fnTypeTerm: val term) => { signature = term }
+                    DynamicCallTemplateTarget.ClosureField(fieldIndex: _, fnTypeTerm: val term) => { signature = term }
+                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => {
+                        if traitIndex >= self.decls.traitCount() || slot == 0U64 {
+                            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected dynamic call has no requirement") />
+                        }
+                        val requirements = self.decls.traitAt(index: traitIndex).reqs
+                        if slot > requirements.count() {
+                            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected dynamic call has no requirement") />
+                        }
+                        parameterCount = self.traitReqAt(reqs: requirements, index: slot - 1U64).params.count()
+                    }
                 }
+                match target {
+                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: _, slot: _) => {}
+                    _ => {
+                        if signature == 0U64 || signature >= self.arena.typeCount() || !self.isFnType(ref: signature) {
+                            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected closure call has no function signature") />
+                        }
+                        val signatureArguments = self.arena.typeAt(index: signature).args
+                        if signatureArguments.count() == 0U64 {
+                            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected closure call has an incomplete signature") />
+                        }
+                        parameterCount = signatureArguments.count() - 1U64
+                    }
+                }
+                try self.checkCallTemplateArguments(args: args, parameterCount: parameterCount, offset: offset)
             }
             _ => {}
         }
         return <Result.Ok value=() />
+    }
+
+    // Every selected call family uses the same frozen parameter-order plan.
+    inout fn checkCallTemplateArguments(args: CallTemplateArgumentRange, parameterCount: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        if args.len != parameterCount || args.start > self.decls.callTemplateArgumentPool.count() || args.len > self.decls.callTemplateArgumentPool.count() - args.start {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected call has an incomplete argument plan") />
+        }
+        return <Result.Ok value=() />
+    }
+
+    // Consume a declaration and proof already selected by Record. Do not
+    // retry member lookup if the recorded selection is missing or malformed.
+    inout fn selectedStaticCallDeclaration(resolution: StaticMemberResolution, offset: U64) -> Result[Func, CompileDiagnostic] {
+        match resolution {
+            StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIndex, reqIdx: val requirement) => {
+                if !self.proofIsMissing(proof: proof) && traitIndex < self.decls.traitCount() {
+                    val requirements = self.decls.traitAt(index: traitIndex).reqs
+                    if requirement < requirements.count() { return <Result.Ok value=self.traitReqAt(reqs: requirements, index: requirement) /> }
+                }
+            }
+            StaticMemberResolution.Provided(proof: val proof, traitIdx: val traitIndex, callee: val callee) => {
+                if !self.proofIsMissing(proof: proof) && traitIndex < self.decls.traitCount() && callee < self.arena.functionCount() {
+                    return <Result.Ok value=self.arena.functionAt(index: callee) />
+                }
+            }
+            StaticMemberResolution.Missing => {}
+        }
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: static call has no selected declaration and proof") />
     }
 
     inout fn checkBodyCallTemplateSelections(owner: U64) -> Result[(), CompileDiagnostic] {

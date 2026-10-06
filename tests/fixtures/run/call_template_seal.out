@@ -1,4 +1,7 @@
 pending-not-closed
 missing-arguments-not-closed
 unresolved-argument-not-closed
+missing-static-selection-not-closed
+non-function-dynamic-call-not-closed
+missing-dynamic-requirement-not-closed
 caller-symbolic-closed

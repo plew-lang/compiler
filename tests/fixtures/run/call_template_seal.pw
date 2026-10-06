@@ -2,7 +2,7 @@
 // descriptors, while a caller-owned symbolic type is a complete argument.
 use @Std/Io only { print }
 use /Frontend only { Comp }
-use /Ir only { Bind, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, Func, TypeRef }
+use /Ir only { Bind, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, DynamicCallTemplateTarget, Func, StaticMemberResolution, TypeRef }
 
 fn rejected(c: inout Comp, message: String) {
     val result = c.closeCallTemplatesForBody(fnIdx: 0U64)
@@ -42,6 +42,12 @@ fn main() {
     rejected(c: inout c, message: "missing-arguments-not-closed")
     c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Direct callee=1U64 receiver=<CallTemplateReceiver.None /> args=args calleeTypeArgs=c.publishCallTemplateTypeArgs(args: [0U64]) proofId=0U64 /> />)
     rejected(c: inout c, message: "unresolved-argument-not-closed")
+    c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.StaticMethod receiver=<CallTemplateReceiver.Term term=caller /> args=args resolution=<StaticMemberResolution.Missing /> resultTerm=caller /> />)
+    rejected(c: inout c, message: "missing-static-selection-not-closed")
+    c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Dynamic receiver=<CallTemplateReceiver.None /> args=args target=<DynamicCallTemplateTarget.ClosureLocal bindingDeclStart=0U64 fnTypeTerm=caller /> /> />)
+    rejected(c: inout c, message: "non-function-dynamic-call-not-closed")
+    c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Dynamic receiver=<CallTemplateReceiver.Term term=caller /> args=args target=<DynamicCallTemplateTarget.ExistentialRequirement traitIdx=0U64 slot=0U64 /> /> />)
+    rejected(c: inout c, message: "missing-dynamic-requirement-not-closed")
     c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Direct callee=1U64 receiver=<CallTemplateReceiver.None /> args=args calleeTypeArgs=c.publishCallTemplateTypeArgs(args: [caller]) proofId=0U64 /> />)
     c.checkRecordedCallTemplateBound(templateIndex: 0U64).unwrap()
     c.closeCallTemplatesForBody(fnIdx: 0U64).unwrap()
