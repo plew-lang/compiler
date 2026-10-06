@@ -112,7 +112,17 @@ pub impl Comp {
                 Optional.None => {}
             }
         }
-        return <Result.Ok value=(try self.resolveMethodFinalForType(recv: recv, receiverType: (try self.typeOf(id: recv)), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))) />
+        val requiredTraitOwner = self.syntheticRequiredTraitOwner(exprId: exprId)
+        val method = try self.resolveMethodFinalForType(recv: recv, receiverType: (try self.typeOf(id: recv)), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner)
+        if method < self.arena.functionCount() || requiredTraitOwner != 0U64 { return <Result.Ok value=method /> }
+        // Type-qualified associated calls share this source-selection entry
+        // with value methods. Consumers must not repeat a bare-name lookup.
+        val qualifier = self.assocRecvName(recv: recv)
+        if qualifier.nameLen != 0U64 {
+            val receiver = self.syntheticCallReceiverTerm(exprId: exprId, fallback: (try self.methodReceiverTerm(exprId: recv)))
+            return self.findAssoc(recvStart: qualifier.nameStart, recvLen: qualifier.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: receiver)
+        }
+        return <Result.Ok value=method />
     }
 
     // Pre-resolved final callable for Call / Method / ExtMethod expression `id`.
