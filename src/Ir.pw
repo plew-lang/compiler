@@ -3066,6 +3066,15 @@ pub enum DynamicCallTemplateTarget {
 // The template is a site-kind sum.  These alternatives deliberately cannot
 // mix an ordinary call's declared callee with an operator's symbolic proof or
 // a protocol receiver.  Finalization consumes exactly the selected variant.
+// Operator selection is complete before body materialization. Primitive is
+// an explicit lowering choice, never the absence of a callable.
+pub enum OperatorSelection {
+    Pending
+    Primitive
+    Direct(callee: U64)
+    Static(resolution: StaticMemberResolution)
+}
+
 pub enum CallTemplateKind {
     // Bidirectional context for a value expression, with no call selection.
     ExpectedValue
@@ -3079,7 +3088,7 @@ pub enum CallTemplateKind {
     StaticMethod(receiver: CallTemplateReceiver, args: CallTemplateArgumentRange, resolution: StaticMemberResolution, resultTerm: U64)
     Dynamic(receiver: CallTemplateReceiver, args: CallTemplateArgumentRange, target: DynamicCallTemplateTarget)
     Protocol(receiver: CallTemplateReceiver)
-    Operator(op: I64, operands: CallTemplateOperandRange, resolution: StaticMemberResolution, resultTerm: U64)
+    Operator(op: I64, operands: CallTemplateOperandRange, resolution: OperatorSelection, resultTerm: U64)
 }
 
 // Parametric call semantics are owned by a declaration body and CallSiteKey,

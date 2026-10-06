@@ -1650,7 +1650,7 @@ pub impl Comp {
         mut val op: I64 = 0
         mut val operands: Array[CallArgumentSource] = []
         mut val resultTerm: U64 = 0U64
-        mut val resolution: StaticMemberResolution = <StaticMemberResolution.Missing />
+        mut val resolution: OperatorSelection = <OperatorSelection.Pending />
         match template.kind {
             CallTemplateKind.Operator(op: val storedOp, operands: val storedOperands, resolution: val storedResolution, resultTerm: val storedResult) => {
                 op = storedOp
@@ -1700,19 +1700,13 @@ pub impl Comp {
         mut val callee: U64 = self.arena.functionCount()
         mut val selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />
         match resolution {
-            StaticMemberResolution.Missing => {
-                // Concrete/primitive selection still belongs to the Record
-                // migration. Symbolic requirements never enter this path.
-                if !(op == opAnd() || op == opOr()) && selectedReceiverRef != 0U64 && selectedReceiverRef < self.arena.typeCount() {
-                    if operands.count() == 1U64 {
-                        callee = self.unaryOperatorCallee(receiverRef: selectedReceiverRef, op: op)
-                    } else if operands.count() == 2U64 {
-                        callee = (try self.findBinTraitWitnessForRef(receiverRef: selectedReceiverRef, op: op, rhsRef: operandRefs[1], rhsUntyped: operandRefs[1] == 0U64))
-                    }
-                }
+            OperatorSelection.Direct(callee: val selected) => { callee = selected }
+            OperatorSelection.Primitive => {}
+            OperatorSelection.Pending => {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: operator selection was not completed before materialization") />
             }
-            _ => {
-                val selected = try self.selectStaticMethodTemplateCall(exprId: exprId, receiver: <CallTemplateReceiver.Term term=selectedReceiverRef />, arguments: argumentSources, resolution: resolution, resultTerm: resultTerm)
+            OperatorSelection.Static(resolution: val selectedResolution) => {
+                val selected = try self.selectStaticMethodTemplateCall(exprId: exprId, receiver: <CallTemplateReceiver.Term term=selectedReceiverRef />, arguments: argumentSources, resolution: selectedResolution, resultTerm: resultTerm)
                 callee = selected.callee
                 selectedProof = selected.proof
             }

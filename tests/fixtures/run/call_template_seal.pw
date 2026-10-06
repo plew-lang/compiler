@@ -2,7 +2,7 @@
 // descriptors, while a caller-owned symbolic type is a complete argument.
 use @Std/Io only { print }
 use /Frontend only { Comp }
-use /Ir only { Bind, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, DynamicCallTemplateTarget, Func, StaticMemberResolution, TypeRef }
+use /Ir only { Expr, OperatorSelection, Bind, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, DynamicCallTemplateTarget, Func, StaticMemberResolution, TypeRef }
 
 fn rejected(c: inout Comp, message: String) {
     val result = c.closeCallTemplatesForBody(fnIdx: 0U64)
@@ -48,6 +48,13 @@ fn main() {
     rejected(c: inout c, message: "non-function-dynamic-call-not-closed")
     c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Dynamic receiver=<CallTemplateReceiver.Term term=caller /> args=args target=<DynamicCallTemplateTarget.ExistentialRequirement traitIdx=0U64 slot=0U64 /> /> />)
     rejected(c: inout c, message: "missing-dynamic-requirement-not-closed")
+    val operands = c.publishCallTemplateOperands(operands: [c.callArgumentSource(exprId: c.pushExpr(e: <Expr.Int value=1 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)).unwrap()])
+    c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Operator op=0 operands=operands resolution=<OperatorSelection.Pending /> resultTerm=caller /> />)
+    rejected(c: inout c, message: "pending-operator-not-closed")
+    c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Operator op=0 operands=operands resolution=<OperatorSelection.Direct callee=c.arena.functionCount() /> resultTerm=caller /> />)
+    rejected(c: inout c, message: "missing-operator-declaration-not-closed")
+    c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Operator op=0 operands=operands resolution=<OperatorSelection.Direct callee=1U64 /> resultTerm=caller /> />)
+    rejected(c: inout c, message: "operator-arity-not-closed")
     c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Direct callee=1U64 receiver=<CallTemplateReceiver.None /> args=args calleeTypeArgs=c.publishCallTemplateTypeArgs(args: [caller]) proofId=0U64 /> />)
     c.checkRecordedCallTemplateBound(templateIndex: 0U64).unwrap()
     c.closeCallTemplatesForBody(fnIdx: 0U64).unwrap()

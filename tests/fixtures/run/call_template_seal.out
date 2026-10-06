@@ -4,4 +4,7 @@ unresolved-argument-not-closed
 missing-static-selection-not-closed
 non-function-dynamic-call-not-closed
 missing-dynamic-requirement-not-closed
+pending-operator-not-closed
+missing-operator-declaration-not-closed
+operator-arity-not-closed
 caller-symbolic-closed

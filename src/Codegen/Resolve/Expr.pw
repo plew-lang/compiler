@@ -479,6 +479,30 @@ pub impl Comp {
                 val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: offset)
                 try self.checkCallTemplateArguments(args: args, parameterCount: function.params.count(), offset: offset)
             }
+            CallTemplateKind.Operator(op: _, operands: val operands, resolution: val selection, resultTerm: _) => {
+                if operands.len == 0U64 || operands.len > 2U64 || operands.start > self.decls.callTemplateOperandPool.count() || operands.len > self.decls.callTemplateOperandPool.count() - operands.start {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected operator has an incomplete operand plan") />
+                }
+                mut val parameterCount = operands.len
+                match selection {
+                    OperatorSelection.Pending => {
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot resolve this operator from the available context") />
+                    }
+                    OperatorSelection.Direct(callee: val callee) => {
+                        if callee >= self.arena.functionCount() {
+                            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected operator has no declaration") />
+                        }
+                        parameterCount = self.arena.functionAt(index: callee).params.count()
+                    }
+                    OperatorSelection.Static(resolution: val resolution) => {
+                        parameterCount = (try self.selectedStaticCallDeclaration(resolution: resolution, offset: offset)).params.count()
+                    }
+                    OperatorSelection.Primitive => {}
+                }
+                if parameterCount != operands.len {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected operator operands do not match its signature") />
+                }
+            }
             CallTemplateKind.Dynamic(receiver: _, args: val args, target: val target) => {
                 mut val parameterCount = 0U64
                 mut val signature = 0U64
@@ -1290,6 +1314,31 @@ pub impl Comp {
         return <Result.Ok value=(try self.staticRequirementResultType(resolution: resolution)) />
     }
 
+    inout fn recordedOperatorSelection(op: I64, receiverTerm: U64, operandExprs: Array[U64], resolution: StaticMemberResolution) -> Result[OperatorSelection, CompileDiagnostic] {
+        match resolution {
+            StaticMemberResolution.Missing => {}
+            _ => { return <Result.Ok value=<OperatorSelection.Static resolution=resolution /> /> }
+        }
+        if receiverTerm == 0U64 || receiverTerm >= self.arena.typeCount() { return <Result.Ok value=<OperatorSelection.Pending /> /> }
+        val receiver = try self.groundTypeRef(ref: receiverTerm)
+        mut val callee = self.arena.functionCount()
+        if operandExprs.count() == 1U64 {
+            callee = self.unaryOperatorCallee(receiverRef: receiver, op: op)
+        } else if operandExprs.count() == 2U64 {
+            val rhs = self.parametricExprTerm(exprId: operandExprs[1])
+            val groundedRhs = if rhs == 0U64 { give 0U64 } else { give try self.groundTypeRef(ref: rhs) }
+            callee = try self.findBinTraitWitnessForRef(receiverRef: receiver, op: op, rhsRef: groundedRhs, rhsUntyped: groundedRhs == 0U64)
+        }
+        if callee < self.arena.functionCount() { return <Result.Ok value=<OperatorSelection.Direct callee=callee /> /> }
+        // Primitive lowering is explicit and still subject to the normal
+        // operator legality checks. An unresolved aggregate is never primitive.
+        val receiverType = self.arena.typeAt(index: receiver)
+        if self.isIntType(start: receiverType.nameStart, len: receiverType.nameLen) || self.isFloatType(start: receiverType.nameStart, len: receiverType.nameLen) || rangeEquals(bytes: self.arena.bytes, start: receiverType.nameStart, len: receiverType.nameLen, kw: "Bool") {
+            return <Result.Ok value=<OperatorSelection.Primitive /> />
+        }
+        return <Result.Ok value=<OperatorSelection.Pending /> />
+    }
+
     inout fn recordOperatorTemplate(exprId: U64, op: I64, operandExprs: Array[U64], isUnary: Bool) -> Result[(), CompileDiagnostic] {
         if !isUnary && (op == opAnd() || op == opOr()) { return <Result.Ok value=() /> }
         mut val receiverTerm: U64 = 0U64
@@ -1308,7 +1357,13 @@ pub impl Comp {
             operands.append((try self.callArgumentSource(exprId: operand)))
             i += 1U64
         }
-        self.recordStaticInvocationCompletion(exprId: exprId, resolution: resolution)
+        val selection = try self.recordedOperatorSelection(op: op, receiverTerm: receiverTerm, operandExprs: operandExprs, resolution: resolution)
+        match selection {
+            OperatorSelection.Direct(callee: val callee) => { self.recordInvocationCompletion(exprId: exprId, diverging: self.arena.functionAt(index: callee).isDiverging) }
+            OperatorSelection.Static(resolution: val selected) => { self.recordStaticInvocationCompletion(exprId: exprId, resolution: selected) }
+            OperatorSelection.Primitive => { self.recordInvocationCompletion(exprId: exprId, diverging: false) }
+            OperatorSelection.Pending => {}
+        }
         val staticResult: U64 = (try self.staticOperatorTemplateResultTerm(op: op, resolution: resolution))
         if staticResult != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: staticResult) }
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
@@ -1317,10 +1372,10 @@ pub impl Comp {
         val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=resolution resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />)
+            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=selection resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />)
             return <Result.Ok value=() />
         }
-        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=resolution resultTerm=resultTerm /> />)
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=selection resultTerm=resultTerm /> />)
         return <Result.Ok value=() />
     }
 
@@ -1599,8 +1654,12 @@ pub impl Comp {
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, resultTerm: _) => {
                 return self.staticMemberReturnsUnit(resolution: resolution)
             }
-            CallTemplateKind.Operator(op: _, operands: _, resolution: val resolution, resultTerm: _) => {
-                return self.staticMemberReturnsUnit(resolution: resolution)
+            CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
+                match selection {
+                    OperatorSelection.Direct(callee: val callee) => { return self.functionDeclarationReturnsUnit(f: self.arena.functionAt(index: callee)) }
+                    OperatorSelection.Static(resolution: val resolution) => { return self.staticMemberReturnsUnit(resolution: resolution) }
+                    _ => { return false }
+                }
             }
             CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
                 match target {
