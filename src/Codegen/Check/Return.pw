@@ -80,15 +80,14 @@ pub impl Comp {
         }
     }
 
-    inout fn exprCompletion(exprId: U64) -> SourceCompletion {
-        val operands = self.exprOperandCompletion(exprId: exprId)
+    fn completeInvocation(exprId: U64, operands: SourceCompletion) -> SourceCompletion {
         if self.invocationDiverges(exprId: exprId) {
             return completionThen(prefix: operands, next: completionTransfer(transfer: <CompletionTransfer.Diverge />))
         }
         return operands
     }
 
-    inout fn exprOperandCompletion(exprId: U64) -> SourceCompletion {
+    inout fn exprCompletion(exprId: U64) -> SourceCompletion {
         if exprId >= self.arena.exprs.count() { return <SourceCompletion /> }
         match self.arena.exprs[exprId] {
             Expr.Block(val body, offset: _) | Expr.Sequence(val body) => { return self.blockCompletion(blkId: body) }
@@ -110,9 +109,10 @@ pub impl Comp {
                 if !left.source.normal() && !left.execution.normal() { return left }
                 mut val right = self.exprCompletion(exprId: rhs)
                 if op == opAnd() || op == opOr() { right = completionChoice(first: right, second: <SourceCompletion />) }
-                return completionThen(prefix: left, next: right)
+                return self.completeInvocation(exprId: exprId, operands: completionThen(prefix: left, next: right))
             }
-            Expr.Unary(op: _, val operand) | Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) | Expr.Move(val operand, isBorrow: _) | Expr.Await(val operand) => { return self.exprCompletion(exprId: operand) }
+            Expr.Unary(op: _, val operand) => { return self.completeInvocation(exprId: exprId, operands: self.exprCompletion(exprId: operand)) }
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) | Expr.Move(val operand, isBorrow: _) | Expr.Await(val operand) => { return self.exprCompletion(exprId: operand) }
             Expr.Try(val expr) => {
                 // Only an evaluated Result branches into Ok continuation or
                 // Err propagation. The return escapes blocks and loops but
@@ -126,9 +126,9 @@ pub impl Comp {
             Expr.OptChain(val base, val cont) => {
                 return completionThen(prefix: self.exprCompletion(exprId: base), next: completionChoice(first: self.exprCompletion(exprId: cont), second: <SourceCompletion />))
             }
-            Expr.Call(nameStart: _, nameLen: _, val args) => { return self.argumentsCompletion(args: args) }
+            Expr.Call(nameStart: _, nameLen: _, val args) => { return self.completeInvocation(exprId: exprId, operands: self.argumentsCompletion(args: args)) }
             Expr.Method(val recv, nameStart: _, nameLen: _, val args) | Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
-                return completionThen(prefix: self.exprCompletion(exprId: recv), next: self.argumentsCompletion(args: args))
+                return self.completeInvocation(exprId: exprId, operands: completionThen(prefix: self.exprCompletion(exprId: recv), next: self.argumentsCompletion(args: args)))
             }
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
                 mut val flow = <SourceCompletion />
