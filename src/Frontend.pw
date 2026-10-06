@@ -1,4 +1,4 @@
-use ./Ir only { ConditionClause, ConditionClauseRange }
+use ./Ir only { TypeCompatibility, ConditionClause, ConditionClauseRange }
 use @Plew/Syntax only { CondClause, syntaxConditionClause }
 use ./SourceCompletion only { SourceCompletion, BlockResultContext, completionThen, completionChoice }
 use ./PublicSurfaceIndex only { PublicSurfaceIndex }

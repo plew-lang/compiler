@@ -87,9 +87,13 @@ pub impl Comp {
                 }
             }
         }
-        val inferred: U64 = (try self.inferType(id: valueExpr))
-        if (try self.typesCompatible(expected: expectedRef, inferred: inferred)) {
-            return <Result.Ok value=() />
+        val inferred = try self.groundedTypeOf(id: valueExpr)
+        match (try self.typeCompatibility(expected: expectedRef, inferred: inferred)) {
+            TypeCompatibility.Compatible => { return <Result.Ok value=() /> }
+            TypeCompatibility.Unresolved => {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "cannot establish this value's type from the available context") />
+            }
+            TypeCompatibility.Incompatible => {}
         }
         if !self.tcLog && self.isFnType(ref: expectedRef) && self.isFnType(ref: inferred) {
             val expectedGround = try self.groundTypeRef(ref: expectedRef)

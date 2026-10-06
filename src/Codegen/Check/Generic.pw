@@ -876,7 +876,7 @@ pub impl Comp {
         // expressions, but it cannot represent an unbound associated Output
         // without collapsing its receiver head.  Preserve the semantic term at
         // this generic-check boundary instead.
-        mut val inferred: U64 = (try self.inferType(id: valueExpr))
+        mut val inferred: U64 = (try self.groundedTypeOf(id: valueExpr))
         mut val inferredFromStaticOperator: Bool = false
         match self.arena.exprs[valueExpr] {
             Expr.Binary(val op, lhs: val lhs, rhs: _) => {

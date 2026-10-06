@@ -339,6 +339,17 @@ pub struct Local {
 // The recovered type of an expression. kind: 0 scalar (long long), 1 String,
 // 2 named struct/enum, 3 array. For named: (nameStart,len) is the type name;
 // for array: the element type name (always backed by a real declaration span).
+// An incomplete type query is not a successful compatibility proof.
+pub enum TypeCompatibility { Compatible Incompatible Unresolved }
+pub impl TypeCompatibility {
+    fn isCompatible() -> Bool {
+        match self { TypeCompatibility.Compatible => { return true } _ => { return false } }
+    }
+    fn isUnresolved() -> Bool {
+        match self { TypeCompatibility.Unresolved => { return true } _ => { return false } }
+    }
+}
+
 pub struct TypeInfo {
     pub val kind: I64
     pub val nameStart: U64
