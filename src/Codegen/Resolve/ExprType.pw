@@ -1452,11 +1452,11 @@ pub impl Comp {
                 }
                 return <Result.Ok value=scalarInfo() />
             }
-            Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
+            Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body, isDiverging: val diverging) => {
                 // a closure literal's type is `fn(params) -> ret`; recover it so a
                 // generic call can structurally infer a type parameter from it
                 // (`map(f: fn(x:I64)->I64)` -> B = I64).
-                return <Result.Ok value=self.typeInfoOfRef(ref: self.closureFnTypeRef(params: params, retTy: retTy)) />
+                return <Result.Ok value=self.typeInfoOfRef(ref: self.closureFnTypeRef(params: params, retTy: retTy, isDiverging: diverging)) />
             }
             Expr.Move(val operand, val isBorrow) => {
                 // `move`/`borrow` have the operand's type (the value just flows).

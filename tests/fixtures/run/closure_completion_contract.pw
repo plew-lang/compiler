@@ -1,0 +1,38 @@
+use /Frontend only { Comp }
+use /Ir only { TypeRef, Expr }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn literal(compiler: inout Comp, diverging: Bool) -> U64 {
+    return compiler.pushExpr(e: <Expr.Closure params=[] hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 isDiverging=diverging />)
+}
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "fn")
+    val normal = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[0U64] argLabels=[0U64] />)
+    val diverging = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[0U64] argLabels=[0U64] isDiverging=true />)
+    val stoppingLiteral = literal(compiler: inout compiler, diverging: true)
+    val normalLiteral = literal(compiler: inout compiler, diverging: false)
+    assert(!compiler.expressionNeedsTypeContext(exprId: stoppingLiteral), message: "divergence needs no return context")
+    assert(compiler.expressionNeedsTypeContext(exprId: normalLiteral), message: "normal closure still accepts result context")
+    val stoppingType = compiler.resolveClosureFunctionType(exprId: stoppingLiteral, parameters: [], hasReturn: false, returnType: 0U64, expectedTerm: diverging, isDiverging: true).unwrap()
+    assert(compiler.arena.typeAt(index: stoppingType).isDiverging)
+    assert(compiler.typeRefEq(a: stoppingType, b: diverging))
+    match compiler.resolveClosureFunctionType(exprId: stoppingLiteral, parameters: [], hasReturn: false, returnType: 0U64, expectedTerm: normal, isDiverging: true) {
+        Result.Err(error: _) => {}
+        _ => { panic "divergence must not be erased" }
+    }
+    match compiler.resolveClosureFunctionType(exprId: normalLiteral, parameters: [], hasReturn: false, returnType: 0U64, expectedTerm: diverging) {
+        Result.Err(error: _) => {}
+        _ => { panic "divergence must not be inferred from context" }
+    }
+    match compiler.resolveClosureFunctionType(exprId: stoppingLiteral, parameters: [], hasReturn: true, returnType: normal, expectedTerm: 0U64, isDiverging: true) {
+        Result.Err(error: _) => {}
+        _ => { panic "diverging closure must not declare a result" }
+    }
+    val fallback = compiler.closureFnTypeRef(params: [], retTy: 0U64, isDiverging: true)
+    assert(compiler.typeRefEq(a: stoppingType, b: fallback))
+    assert(compiler.exprCompletion(exprId: stoppingLiteral).source.normal(), message: "creating a diverging callable is a value")
+    print("ok")
+}

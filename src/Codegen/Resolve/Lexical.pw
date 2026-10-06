@@ -147,7 +147,7 @@ pub impl Comp {
                 self.resolveLexicalModuleExpr(id: scrut, names: inout names)
                 self.resolveLexicalModuleArms(arms: arms, names: inout names)
             }
-            Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, val body) => {
+            Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, val body, isDiverging: _) => {
                 val mark = names.count()
                 mut val index = 0U64
                 while index < params.count() {

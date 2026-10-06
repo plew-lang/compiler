@@ -88,7 +88,7 @@ pub impl Comp {
     inout fn verifyExpr(id: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.exprs[id] {
             Expr.Str(start: val start, len: val len) => { try self.prepareStringLiteral(start: start, len: len) }
-            Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
+            Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => {
                 val closureIndex = try self.semanticClosureIndex(ownerFnIdx: self.cur.checkFn, exprId: id)
                 if closureIndex >= self.decls.semanticClosures.count() {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "internal error: missing semantic closure signature") />

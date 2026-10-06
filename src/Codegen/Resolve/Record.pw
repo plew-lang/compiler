@@ -1420,9 +1420,9 @@ pub impl Comp {
         if self.pendingConstructionContexts.contains(exprId) { return true }
         match self.arena.exprs[exprId] {
             Expr.Dictionary(entries: _) => { return true }
-            Expr.Closure(val params, val hasRet, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
+            Expr.Closure(val params, val hasRet, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: val diverging) => {
                 if allowPartialFunction || self.semanticExprTerm(exprId: exprId) != 0U64 { return false }
-                if !hasRet { return true }
+                if !hasRet && !diverging { return true }
                 for parameter in params { if parameter.ty == 0U64 { return true } }
             }
             _ => {}
@@ -2190,7 +2190,7 @@ pub impl Comp {
             // locals (captures resolve to the enclosing bindings) — the hole the check
             // passes leave open (neither checkGenericBodies nor this pass's caller
             // descends into closures for scope reasons; here scoping is all we need).
-            Expr.Closure(val params, val hasRet, retStart: _, retLen: _, retIsArray: _, val retTy, val body) => {
+            Expr.Closure(val params, val hasRet, retStart: _, retLen: _, retIsArray: _, val retTy, val body, isDiverging: val diverging) => {
                 // The enclosing lexical owner is already published before
                 // entering its body. Unsupported nesting is a declaration
                 // diagnostic, not a side effect of executable discovery.
@@ -2207,7 +2207,7 @@ pub impl Comp {
                 // Recording it here lets a concrete generic-call inference
                 // consume the same parametric producer as every other
                 // expression instead of reconstructing it through exprType.
-                val signature = try self.resolveClosureFunctionType(exprId: exprId, parameters: params, hasReturn: hasRet, returnType: retTy, expectedTerm: expectedTerm)
+                val signature = try self.resolveClosureFunctionType(exprId: exprId, parameters: params, hasReturn: hasRet, returnType: retTy, expectedTerm: expectedTerm, isDiverging: diverging)
                 self.recordSemanticExprTerm(exprId: exprId, term: signature)
                 val result = self.arena.typeAt(index: signature).args[0U64]
                 try self.publishSemanticClosure(ownerFnIdx: self.cur.checkFn, closureId: exprId, parameters: params, hasReturn: !self.callableResultIsUnit(ref: result), returnTypeTerm: result, bodyBlock: body)

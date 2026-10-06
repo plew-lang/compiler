@@ -328,7 +328,7 @@ pub impl Comp {
             Expr.Try(val expr) => { return self.exprContainsAwait(exprId: expr) }
             Expr.Arrow(val base, nameStart: _, nameLen: _) => { return self.exprContainsAwait(exprId: base) }
             Expr.Deref(val base) => { return self.exprContainsAwait(exprId: base) }
-            Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
+            Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => {
                 return false
             }
             Expr.Move(val operand, isBorrow: _) => { return self.exprContainsAwait(exprId: operand) }

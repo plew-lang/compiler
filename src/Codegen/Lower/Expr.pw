@@ -270,7 +270,7 @@ pub impl Comp {
                 self.cur.lowerRetTy = rTy
                 val bd: U64 = (try self.lowerBlock(b: body))
                 self.cur.lowerRetTy = savedRet
-                result = self.pushExpr(e: <Expr.Closure params=ps hasRet=hasRet retStart=rStart retLen=rLen retIsArray=rIsArray retTy=rTy body=bd />)
+                result = self.pushExpr(e: <Expr.Closure isDiverging=false params=ps hasRet=hasRet retStart=rStart retLen=rLen retIsArray=rIsArray retTy=rTy body=bd />)
             }
             ExprAst.Move(val operand, val isBorrow, val span) => {
                 val o: U64 = (try self.lowerExpr(e: operand))
@@ -506,7 +506,7 @@ pub impl Comp {
                 self.cur.lowerRetTy = retTy
                 val body: U64 = (try self.lowerSyntaxBlock(id: e.block0))
                 self.cur.lowerRetTy = savedRet
-                result = self.pushExpr(e: <Expr.Closure params=params hasRet=e.flag0 retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retTy body=body />)
+                result = self.pushExpr(e: <Expr.Closure isDiverging=false params=params hasRet=e.flag0 retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retTy body=body />)
             }
             _ => {
                 panic "compiler bug: incomplete SyntaxFile expression lowering was used before loader migration completed"

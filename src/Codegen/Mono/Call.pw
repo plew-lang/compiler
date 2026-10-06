@@ -5301,17 +5301,23 @@ pub impl Comp {
 
     // Complete only omitted annotations from the consumer's function type.
     // Authored labels and explicit types remain evidence for normal matching.
-    inout fn resolveClosureFunctionType(exprId: U64, parameters: Array[Param], hasReturn: Bool, returnType: U64, expectedTerm: U64) -> Result[U64, CompileDiagnostic] {
+    inout fn resolveClosureFunctionType(exprId: U64, parameters: Array[Param], hasReturn: Bool, returnType: U64, expectedTerm: U64, isDiverging: Bool = false) -> Result[U64, CompileDiagnostic] {
         val recorded = self.semanticExprTerm(exprId: exprId)
         if recorded != 0U64 { return <Result.Ok value=recorded /> }
+        if isDiverging && hasReturn {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a diverging closure cannot declare a return type (spec/04)") />
+        }
         val contextual = self.isFnType(ref: expectedTerm)
+        if contextual && self.arena.typeAt(index: expectedTerm).isDiverging != isDiverging {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "closure completion contract does not match the expected function type (spec/04)") />
+        }
         mut val expected: Array[U64] = []
         if contextual { expected = self.arena.typeAt(index: expectedTerm).args }
         if contextual && expected.count() != parameters.count() + 1U64 {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "closure parameter count does not match the expected function type") />
         }
         mut val result = returnType
-        if !hasReturn && contextual { result = expected[0U64] }
+        if !hasReturn && !isDiverging && contextual { result = expected[0U64] }
         mut val types: Array[U64] = [result]
         mut val labels: Array[U64] = [0U64]
         mut val index = 0U64
@@ -5327,7 +5333,7 @@ pub impl Comp {
             index += 1U64
         }
         val name = self.kwSpan(kw: "fn", kwLen: 2U64)
-        return <Result.Ok value=self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=types argLabels=labels />) />
+        return <Result.Ok value=self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=types argLabels=labels isDiverging=isDiverging />) />
     }
 
     inout fn publishSemanticClosure(ownerFnIdx: U64, closureId: U64, parameters: Array[Param], hasReturn: Bool, returnTypeTerm: U64, bodyBlock: U64) -> Result[(), CompileDiagnostic] {
@@ -5800,7 +5806,7 @@ pub impl Comp {
             Expr.Str(start: _, len: _) => { try self.collectRecordedValueLayout(exprId: exprId) }
             Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { try self.collectRecordedValueLayout(exprId: exprId) }
             Expr.Ident(val start, val len) => { try self.scanBindingInsts(exprId: exprId, start: start, len: len) }
-            Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
+            Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body, isDiverging: _) => {
                 if self.cur.inClosure {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "v1 rejects nested closure literals; use a named helper or a single closure boundary") />
                 }
