@@ -186,14 +186,4 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // The independent generation pipeline retains its existing whole-input
-    // structural checks. Ordinary body checking uses the individual entry.
-    inout fn checkReturns() -> Result[(), CompileDiagnostic] {
-        mut val index = 0U64
-        while index < self.arena.functionCount() {
-            try self.checkFunctionReturns(f: self.arena.functionAt(index: index))
-            index += 1U64
-        }
-        return <Result.Ok value=() />
-    }
 }

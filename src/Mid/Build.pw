@@ -2938,15 +2938,8 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                 // Source arms are ordered. A variant is covered by its first
                 // arm, and the first wildcard covers every remaining variant.
                 // Unreachable source arms have no CFG block or ownership edge.
-                mut val reachable: Bool = arm.isReachable && otherwise == mismatchTarget
+                val reachable = arm.isReachable && otherwise == mismatchTarget
                 val tag: I64 = midEnumTagForVariantSlot(slot: arm.variantIndex)
-                if reachable && arm.hasVariant {
-                    mut val previous: U64 = 0U64
-                    while previous < values.count() {
-                        if values[previous] == tag { reachable = false }
-                        previous += 1U64
-                    }
-                }
                 mut val armTarget: U64 = mismatchTarget
                 if reachable {
                     armTarget = midNewBlock(state: inout state)

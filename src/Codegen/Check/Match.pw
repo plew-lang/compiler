@@ -197,30 +197,6 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkMatchBinds() -> Result[(), CompileDiagnostic] {
-        mut val si: U64 = 0
-        while si < self.arena.stmts.count() {
-            match self.arena.stmts[si] {
-                Stmt.Match(val scrut, val arms) => {
-                    try self.checkMatchArmBinds(arms: arms)
-                }
-                _ => {}
-            }
-            si += 1
-        }
-        mut val xi: U64 = 0
-        while xi < self.arena.exprs.count() {
-            match self.arena.exprs[xi] {
-                Expr.MatchExpr(val scrut, val arms) => {
-                    try self.checkMatchArmBinds(arms: arms)
-                }
-                _ => {}
-            }
-            xi += 1
-        }
-        return <Result.Ok value=() />
-    }
-
     // Literal identity is byte equality, independent of user-defined Eq witnesses.
     fn matchLiteralBytesEqual(first: Array[U8], second: Array[U8]) -> Bool {
         if first.count() != second.count() { return false }
