@@ -439,9 +439,8 @@ pub impl Comp {
                 // (typeOf, not exprType: cached; only `.ref` is read here and an int context's
                 // ref is 0 like a scalar's, so the isRefInst branches are unaffected.)
                 val abt: TypeInfo = (try self.typeOf(id: base))
-                if self.isWeakRefLikeInst(ref: abt.ref) {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)") />
-                } else if self.isStrongRefInst(ref: abt.ref) {
+                try self.checkReferenceDereference(ref: abt.ref, offset: self.exprOffset(id: base))
+                if self.isStrongRefInst(ref: abt.ref) {
                     // `->` touches the POINTEE's field, so it obeys the pointee type's field
                     // visibility exactly like `.` does (spec/05) — `->` must not be a privacy
                     // escape hatch.
@@ -461,11 +460,7 @@ pub impl Comp {
                 // opaque backend "not a registered struct" error.
                 // (typeOf: cached; only `.ref` read — int context ref is 0, branches unaffected.)
                 val bt: TypeInfo = (try self.typeOf(id: base))
-                if self.isWeakRefLikeInst(ref: bt.ref) {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)") />
-                } else if !(self.isStrongRefInst(ref: bt.ref)) {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "`->` requires a `Ref[T]` or `MutableRef[T]` on the left (it dereferences a reference cell's pointee)") />
-                }
+                try self.checkReferenceDereference(ref: bt.ref, offset: self.exprOffset(id: base))
             }
             Expr.OptChain(val base, cont: _) => {
                 try self.verifyExpr(id: base)
@@ -642,13 +637,7 @@ pub impl Comp {
                 // recordIdent stores the binding (value/fn/type-qual/undef) the backend reads;
                 // a non-generic body has no type params, so pass the funcs.count() sentinel.
                 val bindCode: I64 = self.recordIdent(id: id, start: start, len: len, tpFn: self.cur.checkFn)
-                if !(self.bindIsValue(code: bindCode)) {
-                    if bindCode == identFnCode() {
-                        return <Result.Err error=self.diagnosticAt(offset: start, msg: "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) {{ return name(...) }}`) (spec/04)") />
-                    } else {
-                        return <Result.Err error=self.diagnosticAt(offset: start, msg: "undefined identifier: this name is not a local, parameter, or global in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)") />
-                    }
-                }
+                try self.checkIdentifierValueBinding(binding: bindCode, offset: start)
                 // use-after-move (spec/03): reading a local whose value was `move`d away.
                 if self.cur.verifyMovedIdx.count() > 0U64 {
                     if self.verifyIsMoved(idx: self.localIndexByName(start: start, len: len)) {

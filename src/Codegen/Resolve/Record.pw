@@ -430,14 +430,14 @@ pub impl Comp {
     // Resolve the lexical closure target while Record owns the source scope.
     // `bindingDeclStart` is the lowered declaration identity, so the final
     // descriptor cannot accidentally select a same-spelled shadow later.
-    inout fn recordDynamicLocalCall(exprId: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
+    inout fn recordDynamicLocalCall(exprId: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
         val localIndex: U64 = self.localIndexByName(start: nameStart, len: nameLen)
-        if localIndex >= self.cur.locals.count() { return <Result.Ok value=() /> }
+        if localIndex >= self.cur.locals.count() { return <Result.Ok value=false /> }
         try self.recordDeclarationCapture(localIndex: localIndex)
         val local: Local = self.cur.locals[localIndex]
-        if !(self.isFnType(ref: local.ty)) { return <Result.Ok value=() /> }
+        if !(self.isFnType(ref: local.ty)) { return <Result.Ok value=false /> }
         try self.recordDynamicCallTemplate(exprId: exprId, receiver: <CallTemplateReceiver.None />, args: args, target: <DynamicCallTemplateTarget.ClosureLocal bindingDeclStart=local.nameStart fnTypeTerm=local.ty />)
-        return <Result.Ok value=() />
+        return <Result.Ok value=true />
     }
 
     // An `any` type has an already-resolved declaration identity in TypeRef.
@@ -478,7 +478,7 @@ pub impl Comp {
     // existential has no static Func callee.  Record its selected target while
     // the parametric receiver and source selector are both available; the
     // function TypeTerm is grounded only when the shared body is instantiated.
-    inout fn recordDynamicMethodCall(exprId: U64, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
+    inout fn recordDynamicMethodCall(exprId: U64, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
         if self.traceCodegen {
             eprint(text: "[trace-codegen] record dynamic-method body=")
             eprintU64(n: self.cur.checkFn)
@@ -497,7 +497,7 @@ pub impl Comp {
             }
             eprint(text: "\n")
         }
-        if receiverTerm == 0U64 || receiverTerm >= self.arena.typeCount() { return <Result.Ok value=() /> }
+        if receiverTerm == 0U64 || receiverTerm >= self.arena.typeCount() { return <Result.Ok value=false /> }
         val receiver: CallTemplateReceiver = (try self.directReceiverTemplateForExpr(exprId: receiverExpr))
         val recvTy: TypeRef = self.arena.typeAt(index: receiverTerm)
         if recvTy.isAny {
@@ -507,11 +507,12 @@ pub impl Comp {
                 val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
                 try self.checkExistentialRequirementCall(req: requirement, offset: self.exprOffset(id: exprId))
                 try self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ExistentialRequirement traitIdx=traitIndex slot=slot />)
+                return <Result.Ok value=true />
             }
-            return <Result.Ok value=() />
+            return <Result.Ok value=false />
         }
         val structIndex: U64 = self.structIndexForType(ref: receiverTerm)
-        if structIndex >= self.arena.structCount() { return <Result.Ok value=() /> }
+        if structIndex >= self.arena.structCount() { return <Result.Ok value=false /> }
         val fieldName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val fields: Array[FieldDef] = self.arena.structAt(index: structIndex).fields
         mut val fieldIndex: U64 = 0U64
@@ -519,16 +520,15 @@ pub impl Comp {
             if fields[fieldIndex].nameId == fieldName { break }
             fieldIndex += 1U64
         }
-        if fieldIndex >= fields.count() { return <Result.Ok value=() /> }
+        if fieldIndex >= fields.count() { return <Result.Ok value=false /> }
         val fieldTerm: U64 = (try self.fieldTypeRefOfReceiver(receiverRef: receiverTerm, fieldStart: nameStart, fieldLen: nameLen))
-        // A generic field such as `p: P` can be called only after P grounds
-        // to a function type in its BodyInstance.  Call syntax has already
-        // been validated by the frontend; preserve the symbolic field term
-        // here and let the dynamic finalizer enforce the concrete fn shape.
-        if fieldTerm != 0U64 {
+        // A closure field must have a function type in its declaration.
+        // Instantiation cannot retroactively make an unbounded type callable.
+        if self.isFnType(ref: fieldTerm) {
             try self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ClosureField fieldIndex=fieldIndex fnTypeTerm=fieldTerm />)
+            return <Result.Ok value=true />
         }
-        return <Result.Ok value=() />
+        return <Result.Ok value=false />
     }
 
     // A method whose concrete declaration is unavailable during the
@@ -553,17 +553,17 @@ pub impl Comp {
                 try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiver, args: args, resolution: staticResolution, resultTerm: self.parametricExprTerm(exprId: exprId))
             }
             _ => {
-                try self.recordDynamicMethodCall(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
-                // All declaration-time candidate families have been queried.
-                // Do not defer an invalid written call to Mono's invariant check.
-                if self.cur.recordCallTemplates && !self.cur.recordingAccessWriteFacet && self.syntheticRequiredTraitOwner(exprId: exprId) == 0U64 {
-                    if !(try self.recordedCallIsSelected(exprId: exprId)) {
-                        if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.arena.typeTerms[receiverTerm].isAny {
-                            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "method is not part of the existential trait interface") />
-                        } else {
-                            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching method for this argument list") />
-                        }
+                val selected = try self.recordDynamicMethodCall(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+                // Selection failure is a result of this lexical query, not
+                // inferred from whether a later publication pass wrote a row.
+                if !selected && !self.cur.recordingAccessWriteFacet {
+                    if self.syntheticRequiredTraitOwner(exprId: exprId) != 0U64 {
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: self.missingSyntheticRequirement(exprId: exprId)) />
                     }
+                    if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.arena.typeTerms[receiverTerm].isAny {
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "method is not part of the existential trait interface") />
+                    }
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching method for this argument list") />
                 }
             }
         }
@@ -1591,6 +1591,7 @@ pub impl Comp {
                 // Record owns the complete lexical walk, including generic
                 // closure bodies that the declaration checker does not enter.
                 val binding: I64 = self.recordIdent(id: exprId, start: start, len: len, tpFn: self.cur.checkFn)
+                if binding == identUndefCode() { try self.checkIdentifierValueBinding(binding: binding, offset: start) }
                 // `self` is the receiver's declaration-time TypeTerm, not an
                 // ordinary local. Recording that lexical source is what lets
                 // a structural projection such as `self.items` retain
@@ -1701,8 +1702,8 @@ pub impl Comp {
                     // in SemanticAggregate).
                     try self.recordParametricFreeCall(exprId: exprId, callee: cfi, args: args)
                 } else {
-                    try self.recordDynamicLocalCall(exprId: exprId, nameStart: callStart, nameLen: callLen, args: args)
-                    if self.cur.recordCallTemplates && !(try self.recordedCallIsSelected(exprId: exprId)) {
+                    val selected = try self.recordDynamicLocalCall(exprId: exprId, nameStart: callStart, nameLen: callLen, args: args)
+                    if !selected {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching function for this argument list") />
                     }
                 }
@@ -1896,6 +1897,7 @@ pub impl Comp {
                 // receiver argument (Box[T]) for later body grounding.
                 val baseTerm: U64 = self.parametricExprTerm(exprId: base)
                 try self.recordFieldSelection(exprId: exprId, receiverTerm: baseTerm, nameStart: nameStart, nameLen: nameLen)
+                try self.verifySelectedFieldExists(exprId: exprId, receiverTerm: baseTerm, nameStart: nameStart, nameLen: nameLen, message: "no such field on this value's type (check the field name)")
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 // A declared slot is an input to construction, not a fact
@@ -2146,6 +2148,7 @@ pub impl Comp {
             Expr.Arrow(val base, val nameStart, val nameLen) => {
                 try self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
                 val refTerm: U64 = self.parametricExprTerm(exprId: base)
+                if refTerm != 0U64 { try self.checkReferenceDereference(ref: refTerm, offset: self.exprOffset(id: base)) }
                 if self.isStrongRefInst(ref: refTerm) {
                     val reference: TypeRef = self.arena.typeAt(index: refTerm)
                     if reference.args.count() > 0U64 {
@@ -2156,6 +2159,7 @@ pub impl Comp {
             Expr.Deref(val base) => {
                 try self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
                 val refTerm: U64 = self.parametricExprTerm(exprId: base)
+                if refTerm != 0U64 { try self.checkReferenceDereference(ref: refTerm, offset: self.exprOffset(id: base)) }
                 if self.isStrongRefInst(ref: refTerm) {
                     val reference: TypeRef = self.arena.typeAt(index: refTerm)
                     if reference.args.count() > 0U64 {

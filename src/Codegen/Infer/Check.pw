@@ -228,7 +228,7 @@ pub impl Comp {
         // the complete selected signature for every receiver, not just numbers.
         val selected = try self.findBinTraitWitnessForRef(receiverRef: l, op: op, rhsRef: r, rhsUntyped: false)
         if selected < self.arena.functionCount() { return <Result.Ok value=() /> }
-        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: rhs), msg: "type mismatch: no operator implementation accepts this right operand type (spec/12)") />
+        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: rhs), msg: "type mismatch: this value's type does not match the type required here; no operator implementation accepts this right operand type (spec/12)") />
     }
 
     inout fn tcIsUnsignedInt(ref: U64) -> Bool {

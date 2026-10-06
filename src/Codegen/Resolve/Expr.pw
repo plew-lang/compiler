@@ -74,6 +74,29 @@ pub impl Comp {
         }
     }
 
+    // Local source validity is checked before a parent asks for a value type.
+    // The legacy verifier shares these rules while its walk is being retired.
+    inout fn checkIdentifierValueBinding(binding: I64, offset: U64) -> Result[(), CompileDiagnostic] {
+        if !(self.bindIsValue(code: binding)) {
+            if binding == identFnCode() {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) {{ return name(...) }}`) (spec/04)") />
+            } else {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "undefined identifier: this name is not a local, parameter, or global in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)") />
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkReferenceDereference(ref: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        if self.isWeakRefLikeInst(ref: ref) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)") />
+        }
+        if !self.isStrongRefInst(ref: ref) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`->` requires a `Ref[T]` or `MutableRef[T]` on the left (it dereferences a reference cell's pointee)") />
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn checkCallDeclarationKind(exprId: U64, declaration: Func) -> Result[(), CompileDiagnostic] {
         val construction = self.isFactoryCall(exprId: exprId)
         if construction != declaration.isFactory {
