@@ -1,0 +1,27 @@
+use @Std/Io only { print }
+enum Choice { A B }
+fn main() {
+    val item: I64 = 100
+    val block = { val item: I8 = 7
+        give item + 1 }
+    val branch = if true { val item: I8 = 7
+        give item + 1 } else { give 0I8 }
+    val scalar = match true {
+        true => { val item: I8 = 7
+            give item + 1 }
+        false => 0I8
+    }
+    val variant = match <Choice.A /> {
+        Choice.A => { val item: I8 = 7
+            give item + 1 }
+        Choice.B => 0I8
+    }
+    print(block)
+    print(branch)
+    print(scalar)
+    print(variant)
+    val outer: I8 = 1
+    val wide = { val outer: I64 = 100
+        give outer + 200 }
+    print(wide)
+}
