@@ -54,12 +54,12 @@ use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv,
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
 // numeric context. A named value or explicit suffix owns its own type.
-fn contextualNumericExpression(expressions ~: Array[Expr], exprId: U64) -> Bool {
+fn contextualNumericExpression(expressions ~: Array[Expr], exprId: U64, floatingLiterals: Bool = true) -> Bool {
     match expressions[exprId] {
         Expr.Int(value: _, offset: _, isBool: val isBool, tyStart: _, tyLen: val suffixLen, isNeg: _) => { return !isBool && suffixLen == 0U64 }
-        Expr.Float(start: _, len: _, tyStart: _, tyLen: val suffixLen) => { return suffixLen == 0U64 }
-        Expr.Unary(op: val op, operand: val operand) => { return op == opSub() && contextualNumericExpression(expressions, exprId: operand) }
-        Expr.Binary(op: val op, lhs: val lhs, rhs: val rhs) => { return (op == opAdd() || op == opSub() || op == opMul() || op == opDiv() || op == opRem()) && contextualNumericExpression(expressions, exprId: lhs) && contextualNumericExpression(expressions, exprId: rhs) }
+        Expr.Float(start: _, len: _, tyStart: _, tyLen: val suffixLen) => { return floatingLiterals && suffixLen == 0U64 }
+        Expr.Unary(op: val op, operand: val operand) => { return op == opSub() && contextualNumericExpression(expressions, exprId: operand, floatingLiterals: floatingLiterals) }
+        Expr.Binary(op: val op, lhs: val lhs, rhs: val rhs) => { return (op == opAdd() || op == opSub() || op == opMul() || op == opDiv() || op == opRem()) && contextualNumericExpression(expressions, exprId: lhs, floatingLiterals: floatingLiterals) && contextualNumericExpression(expressions, exprId: rhs, floatingLiterals: floatingLiterals) }
         _ => { return false }
     }
 }

@@ -890,7 +890,7 @@ pub impl Comp {
                 if expected != 0U64 && self.expressionNeedsTypeContext(exprId: argument) {
                     try self.recordExpr(exprId: argument, expectedTerm: expected)
                 }
-                if self.cur.recordCallTemplates && expected != 0U64 && (try self.tyRefIsGround(ref: expected)) {
+                if expected != 0U64 {
                     val parameter: TypeInfo = self.typeInfoOfRef(ref: expected)
                     try self.checkLitSpanCtx(id: argument, tyStart: parameter.nameStart, tyLen: parameter.nameLen, isArray: parameter.kind == 3, ctxRef: expected)
                     try self.recordSemanticExprExpectedResult(exprId: argument, expectedTerm: expected)
@@ -1685,21 +1685,26 @@ pub impl Comp {
         // neither admits this equality propagation.
         val expectedNumeric = self.arena.typeTerms[expectedTerm]
         val floatingContext = self.isFloatType(start: expectedNumeric.nameStart, len: expectedNumeric.nameLen)
+        val integerContext = self.isIntType(start: expectedNumeric.nameStart, len: expectedNumeric.nameLen)
+        val numericContext = (floatingContext || integerContext) && contextualNumericExpression(self.arena.exprs, exprId: exprId, floatingLiterals: floatingContext)
         match self.arena.exprs[exprId] {
             Expr.Unary(val op, val operand) => {
-                if floatingContext && contextualNumericExpression(self.arena.exprs, exprId: exprId) {
+                if numericContext {
                     try self.recordSemanticExprExpectedResult(exprId: operand, expectedTerm: expectedTerm)
-                    self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
+                    val operandType = self.typeInfoOfRef(ref: self.parametricExprTerm(exprId: operand))
+                    self.recordSemanticExprInfo(exprId: exprId, ti: (try self.unaryOperatorResultType(operand: operandType, op: op)))
                     try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [operand], isUnary: true)
                 } else if (op == opSub() || op == opBitNot()) && self.parametricExprTerm(exprId: operand) == 0U64 {
                     try self.recordSemanticExprExpectedResult(exprId: operand, expectedTerm: expectedTerm)
                 }
             }
             Expr.Binary(val op, val lhs, val rhs) => {
-                if floatingContext && contextualNumericExpression(self.arena.exprs, exprId: exprId) {
+                if numericContext {
                     try self.recordSemanticExprExpectedResult(exprId: lhs, expectedTerm: expectedTerm)
                     try self.recordSemanticExprExpectedResult(exprId: rhs, expectedTerm: expectedTerm)
-                    self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
+                    val left = self.typeInfoOfRef(ref: self.parametricExprTerm(exprId: lhs))
+                    val right = self.typeInfoOfRef(ref: self.parametricExprTerm(exprId: rhs))
+                    self.recordSemanticExprInfo(exprId: exprId, ti: (try self.operatorOutputType(lt: left, rt: right, op: op)))
                     try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [lhs, rhs], isUnary: false)
                 } else if isBinTraitOp(op: op) && self.parametricExprTerm(exprId: lhs) == 0U64 && self.parametricExprTerm(exprId: rhs) == 0U64 {
                     try self.recordSemanticExprExpectedResult(exprId: lhs, expectedTerm: expectedTerm)
