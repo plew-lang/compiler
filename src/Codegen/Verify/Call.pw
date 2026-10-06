@@ -47,10 +47,7 @@ pub impl Comp {
         if mf >= self.arena.functionCount() { return <Result.Ok value=() /> }
         val cf: Func = self.arena.functionAt(index: mf)
         if !(self.paramsLabelsOk(params: cf.params, args: args)) { return <Result.Ok value=() /> }
-        val environment = match (try self.recordedDirectCallEnvironmentAt(exprId: exprId, callee: mf)) {
-            Optional.Some(v: val recorded) => { give recorded }
-            Optional.None => { give (try self.finalMethodEnvironment(f: cf, receiverRef: receiverRef, args: args)) }
-        }
+        val environment = try self.callParameterEnvironment(exprId: exprId, callee: mf, receiverRef: receiverRef, args: args)
         mut val ai: U64 = 0U64
         while ai < args.len {
             val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)

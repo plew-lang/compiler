@@ -1195,6 +1195,19 @@ pub impl Comp {
         }
     }
 
+    // During body construction some call families still publish late. Every
+    // migrated caller consumes its recorded substitution; the temporary
+    // construction fallback is centralized here until all families seal.
+    inout fn callParameterEnvironment(exprId: U64, callee: U64, receiverRef: U64, args: ArgRange) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        match (try self.recordedDirectCallEnvironmentAt(exprId: exprId, callee: callee)) {
+            Optional.Some(v: val environment) => { return <Result.Ok value=environment /> }
+            Optional.None => {}
+        }
+        val function = self.arena.functionAt(index: callee)
+        if receiverRef != 0U64 { return self.finalMethodEnvironment(f: function, receiverRef: receiverRef, args: args) }
+        return self.freeCallParameterEnvironment(f: function, args: args)
+    }
+
     inout fn recordedDirectCallEnvironmentAt(exprId: U64, callee: U64) -> Result[Optional[InstanceEnvironment], CompileDiagnostic] {
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
         val index = self.decls.callTemplateIndex(siteKey: site)
@@ -1203,6 +1216,14 @@ pub impl Comp {
         match template.kind {
             CallTemplateKind.Direct(callee: val selected, receiver: val receiver, args: _, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
                 if selected != callee || selected >= self.arena.functionCount() { return <Result.Ok value=<Optional.None /> /> }
+                val function = self.arena.functionAt(index: selected)
+                val arguments = self.callTemplateTypeArgs(range: typeArgs)
+                // This construction-time query returns an environment only
+                // when every selected binder has a value. A published partial
+                // call row is not a proof-complete signature.
+                if arguments.count() != function.typeParams.count() || !self.fnArgsAllResolved(args: arguments) {
+                    return <Result.Ok value=<Optional.None /> />
+                }
                 val environment = try self.recordedDirectCallEnvironment(function: self.arena.functionAt(index: selected), receiver: receiver, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: self.thawStaticConformanceProof(id: proofId))
                 return <Result.Ok value=<Optional.Some v=environment /> />
             }

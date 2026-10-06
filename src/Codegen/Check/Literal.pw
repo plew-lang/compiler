@@ -224,7 +224,7 @@ pub impl Comp {
                 try self.checkCallArgs(id: id, nameStart: nameStart, nameLen: nameLen, args: args)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                try self.checkMethodArgs(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                try self.checkMethodArgs(exprId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             }
             Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
                 // The operand has its own type; a direct-literal operand is range-

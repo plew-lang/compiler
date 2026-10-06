@@ -266,14 +266,14 @@ pub impl Comp {
         val f: Func = self.arena.functionAt(index: fi)
         try self.tcCheckGenericArgConsistency(f: f, args: args)
         val ps: Array[Param] = self.copyFuncParams(params: f.params)
-        val environment = try self.freeCallParameterEnvironment(f: f, args: args)
+        val environment = try self.callParameterEnvironment(exprId: id, callee: fi, receiverRef: 0U64, args: args)
         mut val i: U64 = 0
         while i < args.len {
             val pi: U64 = self.paramIndexForArg(params: f.params, args: args, argIdx: i)
             if pi < ps.count() {
                 val p: Param = ps[pi]
                 try self.checkArgInoutMode(p: p, arg: self.argAt(args: args, index: i))
-                val parameterType = try self.groundTermForBody(ref: p.ty, environment: environment, selfRef: 0U64, itemRef: 0U64)
+                val parameterType = try self.groundTermForBody(ref: p.ty, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                 try self.checkLitTi(id: self.argAt(args: args, index: i).expr, ti: self.typeInfoOfRef(ref: parameterType))
                 try self.tcCheckValue(expectedRef: parameterType, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
             } else {
@@ -297,7 +297,7 @@ pub impl Comp {
         return 0U64
     }
 
-    inout fn checkMethodArgs(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
+    inout fn checkMethodArgs(exprId: U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         try self.checkUniqueArgModes(args: args)
         try self.checkLitCtx(id: recv, eKind: 0, eBits: 0, eSgn: false)
         mut val receiverTerm = self.parametricExprTerm(exprId: recv)
@@ -353,7 +353,7 @@ pub impl Comp {
                 val mf: Func = self.arena.functionAt(index: mi)
                 try self.tcCheckGenericArgConsistency(f: mf, args: args)
                 val ps: Array[Param] = self.copyFuncParams(params: mf.params)
-                val environment = try self.finalMethodEnvironment(f: mf, receiverRef: rt.ref, args: args)
+                val environment = try self.callParameterEnvironment(exprId: exprId, callee: mi, receiverRef: rt.ref, args: args)
                 mut val i: U64 = 0
                 while i < args.len {
                     val pi: U64 = self.paramIndexForArg(params: mf.params, args: args, argIdx: i)
@@ -425,8 +425,7 @@ pub impl Comp {
                     val aps: Array[Param] = self.copyFuncParams(params: af.params)
                     mut val qualifier = (try self.concreteTypeQualifierTerm(exprId: recv))
                     if qualifier == 0U64 { qualifier = (try self.associatedReceiverFromArguments(f: af, args: args)) }
-                    mut val environment = try self.freeCallParameterEnvironment(f: af, args: args)
-                    if qualifier != 0U64 { environment = try self.finalMethodEnvironment(f: af, receiverRef: qualifier, args: args) }
+                    val environment = try self.callParameterEnvironment(exprId: exprId, callee: ai, receiverRef: qualifier, args: args)
                     mut val k: U64 = 0
                     while k < args.len {
                         val pi: U64 = self.paramIndexForArg(params: af.params, args: args, argIdx: k)
