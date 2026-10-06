@@ -1,0 +1,4 @@
+fn main() {
+ val value = match true { true => { give 1I64
+ val item = "later" } false => 2I64 }
+}

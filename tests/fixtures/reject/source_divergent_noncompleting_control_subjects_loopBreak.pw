@@ -1,0 +1,10 @@
+use @Std/Io only { print }
+fn loopBreak() -> I64 {
+    while true {
+        for val n in { break
+ } { print(n) }
+    }
+    return 13I64
+}
+
+fn main() { loopBreak() }

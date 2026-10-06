@@ -4,10 +4,9 @@ unique struct Resource { val id: I64
  deinit { print(self.id) } }
 fn tick(value: I64) -> I64 { print(value)
  return value }
-fn early() -> String {
+fn early(flag: Bool) -> String {
  return "prefix{ { val held = <Ref[Resource] value=<Resource id=4I64 /> />
- return "returned"
- give 0I64 } }{tick(value: 99I64)}"
+ give if flag { return "returned" } else { give 0I64 } } }{tick(value: 99I64)}"
 }
 fn failed() -> Result[I64, Bool] { return <.Err error=true /> }
 fn propagate() -> Result[String, Bool] {
@@ -27,6 +26,6 @@ fn main() {
  give </> }}{tick(value: 3I64)}")
  print("{ { val held = <Ref[Resource] value=<Resource id=6I64 /> />
  give 48I64 } }")
- print(early())
+ print(early(flag: true))
  print(propagate().isErr())
 }

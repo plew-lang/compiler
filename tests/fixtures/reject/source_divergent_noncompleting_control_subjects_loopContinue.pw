@@ -1,0 +1,13 @@
+use @Std/Io only { print }
+fn loopContinue() -> I64 {
+    mut val count = 0I64
+    while count < 2I64 {
+        count += 1I64
+        for val n in { continue
+ } { print(n) }
+        print(99I64)
+    }
+    return count
+}
+
+fn main() { loopContinue() }

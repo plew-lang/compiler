@@ -1,0 +1,6 @@
+use @Std/Io only { print }
+fn loopCondition() -> I64 {
+    while val value = { return 10I64 } { print(0I64) }
+}
+
+fn main() { loopCondition() }

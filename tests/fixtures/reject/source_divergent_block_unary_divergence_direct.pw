@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+
+fn direct() -> I64 {
+    val unused = !({ return 7I64 })
+    return 0I64
+}
+
+fn main() { direct() }

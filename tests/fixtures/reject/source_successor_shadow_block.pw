@@ -1,0 +1,4 @@
+fn main() {
+ val value = { give 1I64
+ val item = "later" }
+}

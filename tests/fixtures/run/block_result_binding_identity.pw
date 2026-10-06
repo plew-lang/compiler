@@ -1,27 +1,31 @@
 use @Std/Io only { print }
 fn pick[T](value: T) -> T {
     return {
-        val item = value
-        give item
+        val result = { val item = value
+            give item }
         val item = "later"
+        give result
     }
 }
 fn main() {
     val block: I64 = {
-        val item = 1I64
-        give item
+        val result = { val item = 1I64
+            give item }
         val item = "later"
+        give result
     }
     val branch: I64 = if true {
-        val item = 2I64
-        give item
+        val result = { val item = 2I64
+            give item }
         val item = "later"
+        give result
     } else { give 0I64 }
     val arm: I64 = match true {
         true => {
-            val item = 3I64
-            give item
+            val result = { val item = 3I64
+                give item }
             val item = "later"
+            give result
         }
         false => 0I64
     }

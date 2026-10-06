@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+fn make(value: I64) -> Array[I64] { return [value] }
+fn nestedRecordArray() -> I64 {
+    val value = [(values: [{ return 14I64 }])]
+    return 99I64
+}
+
+fn main() { nestedRecordArray() }

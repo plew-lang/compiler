@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+fn make(value: I64) -> Array[I64] { return [value] }
+fn record() -> I64 {
+    val value = (value: { return 13I64 })
+    return 99I64
+}
+
+fn main() { record() }

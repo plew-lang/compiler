@@ -1921,6 +1921,9 @@ pub impl Comp {
                             fieldTerm = (try self.fieldTypeRefOfReceiver(receiverRef: instance, fieldStart: field.nameStart, fieldLen: field.nameLen))
                         }
                     }
+                    // An omitted declaration argument is an inference variable,
+                    // not a rigid lexical T that a child must already satisfy.
+                    fieldTerm = self.constructionFieldContext(instance: instance, fieldTerm: fieldTerm)
                     if !self.recordsFieldDefault(field: field) {
                         try self.recordExpr(exprId: field.value, chainHoleRef: chainHoleRef, expectedTerm: fieldTerm)
                     }

@@ -1,2 +1,2 @@
-fn f() -> I64 { while true { val x: I64 = { break } } }
+fn f() -> I64 { while true { { break } } }
 fn main() { }

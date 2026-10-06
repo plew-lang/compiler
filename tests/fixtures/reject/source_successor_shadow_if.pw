@@ -1,0 +1,4 @@
+fn main() {
+ val value = if true { give 1I64
+ val item = "later" } else { give 2I64 }
+}

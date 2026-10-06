@@ -1,31 +1,31 @@
 use @Std/Io only { print }
 
-fn conjunction(flag: Bool) -> Bool { return flag && { return true } }
-fn disjunction(flag: Bool) -> Bool { return flag || { return false } }
+fn conjunction(flag: Bool, active: Bool) -> Bool { return flag && { give if active { return true } else { give false } } }
+fn disjunction(flag: Bool, active: Bool) -> Bool { return flag || { give if active { return false } else { give true } } }
 fn identity(value: I64) -> I64 { return value }
-fn argumentExit() -> I64 { return identity(value: { return 3I64 }) }
-fn aggregateExit() -> I64 {
-    val values: Array[I64] = [1I64, { return 4I64 }]
+fn argumentExit(active: Bool) -> I64 { return identity(value: { give if active { return 3I64 } else { give 0I64 } }) }
+fn aggregateExit(active: Bool) -> I64 {
+    val values: Array[I64] = [1I64, { give if active { return 4I64 } else { give 0I64 } }]
     return 0I64
 }
 fn change(value: inout I64) { value = 9I64 }
-fn inoutIndexExit() -> I64 {
+fn inoutIndexExit(active: Bool) -> I64 {
     mut val values = [1I64]
-    change(value: inout values[{ return 5I64 }])
+    change(value: inout values[{ give if active { return 5I64 } else { give 0U64 } }])
     return 0I64
 }
-fn assignmentIndexExit() -> I64 {
+fn assignmentIndexExit(active: Bool) -> I64 {
     mut val values = [1I64]
-    values[{ return 6I64 }] = 9I64
+    values[{ give if active { return 6I64 } else { give 0U64 } }] = 9I64
     return 0I64
 }
 fn main() {
-    print(conjunction(flag: false))
-    print(conjunction(flag: true))
-    print(disjunction(flag: false))
-    print(disjunction(flag: true))
-    print(argumentExit())
-    print(aggregateExit())
-    print(inoutIndexExit())
-    print(assignmentIndexExit())
+    print(conjunction(flag: false, active: true))
+    print(conjunction(flag: true, active: true))
+    print(disjunction(flag: false, active: true))
+    print(disjunction(flag: true, active: true))
+    print(argumentExit(active: true))
+    print(aggregateExit(active: true))
+    print(inoutIndexExit(active: true))
+    print(assignmentIndexExit(active: true))
 }

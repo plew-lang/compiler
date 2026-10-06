@@ -17,8 +17,7 @@ fn main() {
  print(checked(fail: false).unwrapOr(fallback: 0I64))
  print(checked(fail: true).unwrapOr(fallback: 0I64))
  mut val n = 0I64
- while true { val ignored: () = { n += 1I64
- break
- give () } }
+ while true { { n += 1I64
+ break } }
  print(n)
 }

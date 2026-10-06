@@ -1,0 +1,6 @@
+use @Std/Io only { print }
+fn conditional() -> I64 {
+    if val value = { return 9I64 } { print(0I64) }
+}
+
+fn main() { conditional() }

@@ -2168,6 +2168,50 @@ pub impl Comp {
     // The grounded TypeRef inferred for a generic-struct construction, or 0 when it can't
     // be inferred: not a generic struct, a parameter no bare field pins, or a field value
     // that is untyped / an array element / conflicts with another field's binding.
+    // Only declaration-owned parameters missing from this construction are
+    // inference variables. Enclosing lexical parameters remain valid context.
+    inout fn typeTermUsesOpenParameters(ref: U64, parameters: Array[Bind], boundCount: U64) -> Bool {
+        if ref == 0U64 || ref >= self.arena.typeCount() { return false }
+        val term = self.arena.typeAt(index: ref)
+        mut val index = boundCount
+        while index < parameters.count() {
+            if term.paramId != 0U64 && term.paramId == parameters[index].paramId { return true }
+            index += 1U64
+        }
+        index = 0U64
+        while index < term.args.count() {
+            if self.typeTermUsesOpenParameters(ref: term.args[index], parameters: parameters, boundCount: boundCount) { return true }
+            index += 1U64
+        }
+        index = 0U64
+        while index < term.recordFieldTerms.count() {
+            if self.typeTermUsesOpenParameters(ref: term.recordFieldTerms[index], parameters: parameters, boundCount: boundCount) { return true }
+            index += 1U64
+        }
+        if term.projectionReceiver != 0U64 && self.typeTermUsesOpenParameters(ref: term.projectionReceiver, parameters: parameters, boundCount: boundCount) { return true }
+        index = 0U64
+        while index < term.assocTraitArgs.count() {
+            if self.typeTermUsesOpenParameters(ref: term.assocTraitArgs[index], parameters: parameters, boundCount: boundCount) { return true }
+            index += 1U64
+        }
+        return false
+    }
+
+    inout fn constructionFieldContext(instance: U64, fieldTerm: U64) -> U64 {
+        if instance == 0U64 || instance >= self.arena.typeCount() { return fieldTerm }
+        val term = self.arena.typeAt(index: instance)
+        mut val parameters: Array[Bind] = []
+        val structure = self.structIndexForType(ref: instance)
+        if structure < self.arena.structCount() {
+            parameters = self.arena.structAt(index: structure).typeParams
+        } else {
+            val enumeration = self.enumIndexForType(ref: instance)
+            if enumeration < self.arena.enumCount() { parameters = self.arena.enumAt(index: enumeration).typeParams }
+        }
+        if term.args.count() < parameters.count() && self.typeTermUsesOpenParameters(ref: fieldTerm, parameters: parameters, boundCount: term.args.count()) { return 0U64 }
+        return fieldTerm
+    }
+
     inout fn inferMakeInstance(typeStart: U64, typeLen: U64, typeRef: U64, fields: MakeFieldRange) -> Result[U64, CompileDiagnostic] {
         // Argument inference refines the selected declaration; it cannot
         // replace it with a same-spelled generic from another module.

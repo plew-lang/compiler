@@ -1,5 +1,4 @@
 fn missing() -> I64 {
- while true { val ignored: () = { break
- give () } }
+ while true { { break } }
 }
 fn main() { missing() }

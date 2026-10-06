@@ -1,0 +1,4 @@
+use @Std/Io only { print }
+fn argumentReturn() -> I64 { print({ return 4I64 }) }
+
+fn main() { argumentReturn() }

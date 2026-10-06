@@ -1,0 +1,7 @@
+use @Std/Io only { print }
+
+fn identity(value: I64) -> I64 { return value }
+fn change(value: inout I64) { value = 9I64 }
+fn conjunction(flag: Bool) -> Bool { return flag && { return true } }
+
+fn main() { conjunction(flag: true) }

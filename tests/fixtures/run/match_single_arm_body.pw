@@ -1,7 +1,6 @@
 use @Std/Io only { print }
 fn early() -> I64 {
-    val result = match 1I64 { _ => { return 17I64 } }
-    return 0I64
+    match 1I64 { _ => { return 17I64 } }
 }
 fn main() {
     val first = match 3I64 {

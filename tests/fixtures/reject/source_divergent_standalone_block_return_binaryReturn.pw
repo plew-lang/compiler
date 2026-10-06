@@ -1,0 +1,4 @@
+use @Std/Io only { print }
+fn binaryReturn() -> I64 { val unused: I64 = 1I64 + { return 5I64 } }
+
+fn main() { binaryReturn() }

@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+struct Pair[T] { val first: T
+ val second: T }
+struct Tagged[T] { val tag: I64
+ val value: T }
+fn preserve[T](value: T) -> Pair[T] {
+ return <Pair[T] first=value second={ give value } />
+}
+fn main() {
+ val pair = <Pair first=1I64 second={ give 2I64 } />
+ print(pair.second)
+ val tagged = <Tagged tag={ give 3 } value="value" />
+ print(tagged.tag)
+ print(preserve(value: 4I64).second)
+ for val index in 0I64..<{ give 2I64 } { print(index) }
+}

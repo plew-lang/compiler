@@ -1,0 +1,10 @@
+use @Std/Io only { print }
+
+fn identity(value: I64) -> I64 { return value }
+fn change(value: inout I64) { value = 9I64 }
+fn aggregateExit() -> I64 {
+    val values: Array[I64] = [1I64, { return 4I64 }]
+    return 0I64
+}
+
+fn main() { aggregateExit() }

@@ -1,0 +1,4 @@
+use @Std/Io only { print }
+fn localReturn() -> I64 { val unused: I64 = { return 1I64 } }
+
+fn main() { localReturn() }

@@ -1,0 +1,4 @@
+use @Std/Io only { print }
+fn block() -> String { return "prefix{1I64: { return "block" }}" }
+
+fn main() { block() }

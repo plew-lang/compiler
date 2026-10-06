@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+
+fn conditional(flag: Bool) -> I64 {
+    val unused = -(if flag { return 11I64 } else { return 13I64 })
+    return 0I64
+}
+
+fn main() { conditional(flag: true) }

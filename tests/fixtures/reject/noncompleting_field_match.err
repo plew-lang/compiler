@@ -1,1 +1,1 @@
-field access requires a receiver that can produce a value
+a source-diverging expression cannot be used as a value (spec/11)

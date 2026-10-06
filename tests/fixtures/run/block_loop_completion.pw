@@ -7,21 +7,21 @@ unique struct Resource {
 fn block() -> I64 {
     while true {
         val held = <Ref[Resource] value=<Resource id=10I64 /> />
-        val unused: I64 = { break }
+        { break }
     }
     return 1I64
 }
 fn branch(flag: Bool) -> I64 {
     while true {
         val held = <Ref[Resource] value=<Resource id=20I64 /> />
-        val unused: I64 = if flag { break } else { break }
+        if flag { break } else { break }
     }
     return 2I64
 }
 fn arm(flag: Bool) -> I64 {
     while true {
         val held = <Ref[Resource] value=<Resource id=30I64 /> />
-        val unused: I64 = match flag { true => { break } false => { break } }
+        match flag { true => { break } false => { break } }
     }
     return 3I64
 }
@@ -32,14 +32,14 @@ fn main() {
     mut val index = 0I64
     while index < 2I64 {
         index += 1I64
-        val unused: I64 = { continue }
+        { continue }
     }
     print(index)
     val nested: I64 = { while true { break }
         give 7I64 }
     print(nested)
     while true {
-        val text = "{ { break } }"
+        val text = "{if true { break } else { give 0I64 }}"
     }
     mut val step = 0I64
     while true {

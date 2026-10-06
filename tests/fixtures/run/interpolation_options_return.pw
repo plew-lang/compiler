@@ -1,11 +1,11 @@
 use @Std/Io only { print }
-fn block() -> String { return "prefix{1I64: { return "block" }}" }
-fn branch(flag: Bool) -> String { return "prefix{1I64: if flag { return "then" } else { return "else" }}" }
-fn arm(flag: Bool) -> String { return "prefix{1I64: match flag { true => { return "true" } false => { return "false" } }}" }
+fn block(active: Bool) -> String { return "prefix{1I64: if active { return "block" } else { give </> }}" }
+fn branch(flag: Bool, active: Bool) -> String { return "prefix{1I64: if active { if flag { return "then" } else { return "else" } } else { give </> }}" }
+fn arm(flag: Bool, active: Bool) -> String { return "prefix{1I64: if active { match flag { true => { return "true" } false => { return "false" } } } else { give </> }}" }
 fn main() {
-    print(block())
-    print(branch(flag: true))
-    print(branch(flag: false))
-    print(arm(flag: true))
-    print(arm(flag: false))
+    print(block(active: true))
+    print(branch(flag: true, active: true))
+    print(branch(flag: false, active: true))
+    print(arm(flag: true, active: true))
+    print(arm(flag: false, active: true))
 }

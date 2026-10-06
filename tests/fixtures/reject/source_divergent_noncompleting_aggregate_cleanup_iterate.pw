@@ -1,0 +1,19 @@
+use @Std/Io only { print }
+use @Std/Core only { Ref }
+unique struct Resource {
+    val id: I64
+    deinit { print(self.id) }
+}
+fn iterate() -> I64 {
+    mut val count = 0I64
+    while count < 2I64 {
+        count += 1I64
+        for val item in [<Ref[Resource] value=<Resource id=count + 2I64 /> />, { continue }] {
+            print(99I64)
+        }
+        print(99I64)
+    }
+    return count
+}
+
+fn main() { iterate() }

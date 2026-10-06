@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+fn make(value: I64) -> Array[I64] { return [value] }
+fn iterable() -> I64 {
+    for val n in [1I64, { return 11I64 }] { print(n) }
+    return 99I64
+}
+
+fn main() { iterable() }

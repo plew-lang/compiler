@@ -1,2 +1,2 @@
-fn f() -> String { return "{ { return 42I64 } }" }
+fn f() -> String { return "{ { give if true { return 42I64 } else { give 0I64 } } }" }
 fn main() { f() }

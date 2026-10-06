@@ -5,8 +5,9 @@ fn consume(x: move Resource) { print(90I64) }
 fn main() {
  mut val r = <Resource id=1I64 />
  consume(x: move r)
- val value = { give 7I64
+ val value = { if false { while true {}
  r = <Resource id=2I64 /> }
+ give 7I64 }
  print(value)
  consume(x: move r)
 }

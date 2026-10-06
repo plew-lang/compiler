@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+
+fn matched(flag: Bool) -> I64 {
+    val unused = !(match flag {
+        true => { return 17I64 }
+        false => { return 19I64 }
+    })
+    return 0I64
+}
+
+fn main() { matched(flag: true) }

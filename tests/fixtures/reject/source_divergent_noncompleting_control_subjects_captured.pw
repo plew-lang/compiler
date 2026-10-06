@@ -1,0 +1,6 @@
+use @Std/Io only { print }
+fn captured() -> I64 {
+    return match { return 8I64 } { val value => 0I64 }
+}
+
+fn main() { captured() }

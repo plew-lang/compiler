@@ -1,0 +1,7 @@
+use @Std/Io only { print }
+fn casted() -> I64 {
+    val unused = { return 8I64 } as I64
+    return unused
+}
+
+fn main() { casted() }

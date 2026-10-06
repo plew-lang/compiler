@@ -1,0 +1,5 @@
+use @Std/Io only { print }
+fn nestedReturn() -> I64 { val unused = { val inner: I64 = { return 3I64 }
+ give inner } }
+
+fn main() { nestedReturn() }

@@ -1,5 +1,5 @@
 fn main() {
     while true {
-        while val flag = true && { break } {}
+        while val flag = true && { give if true { break } else { give false } } {}
     }
 }

@@ -1,0 +1,4 @@
+use @Std/Io only { print }
+fn branch(flag: Bool) -> String { return "prefix{1I64: if flag { return "then" } else { return "else" }}" }
+
+fn main() { branch(flag: true) }

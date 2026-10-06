@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+fn make(value: I64) -> Array[I64] { return [value] }
+fn range() -> I64 {
+    for val n in 0I64..<{ return 7I64 } { print(n) }
+    return 99I64
+}
+
+fn main() { range() }

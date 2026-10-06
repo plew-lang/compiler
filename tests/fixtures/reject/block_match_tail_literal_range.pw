@@ -1,4 +1,2 @@
 enum Choice { First Second }
-fn main() { val value = match <Choice.Second /> { Choice.First => { give 1U8
-val tail = 0I64 } Choice.Second => { give 256
-val tail = 0I64 } } }
+fn main() { val value = match <Choice.Second /> { Choice.First => { give 1U8 } Choice.Second => { give 256 } } }

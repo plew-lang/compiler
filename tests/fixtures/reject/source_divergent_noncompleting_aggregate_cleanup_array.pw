@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+use @Std/Core only { Ref }
+unique struct Resource {
+    val id: I64
+    deinit { print(self.id) }
+}
+fn array() -> I64 {
+    val value = [<Ref[Resource] value=<Resource id=2I64 /> />, { return 8I64 }]
+    return 99I64
+}
+
+fn main() { array() }

@@ -1,0 +1,7 @@
+use @Std/Io only { print }
+
+fn identity(value: I64) -> I64 { return value }
+fn change(value: inout I64) { value = 9I64 }
+fn argumentExit() -> I64 { return identity(value: { return 3I64 }) }
+
+fn main() { argumentExit() }

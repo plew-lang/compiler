@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+
+fn identity(value: I64) -> I64 { return value }
+fn change(value: inout I64) { value = 9I64 }
+fn assignmentIndexExit() -> I64 {
+    mut val values = [1I64]
+    values[{ return 6I64 }] = 9I64
+    return 0I64
+}
+
+fn main() { assignmentIndexExit() }

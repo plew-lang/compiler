@@ -21,15 +21,14 @@ fn throughAggregate(flag: Bool) -> I64 {
     return <Box value=if flag { give 17I64 } else { give 19I64 } />.value
 }
 
-// A typed value if can still have no normal successor. Its retained join must
-// be Unreachable; neither the binding nor a later return may read `doomed`.
+// A statement if with two returning arms has no normal successor.
+// The corresponding value-position form is covered by source_value_if_all.
 fn allDiverge(flag: Bool) -> I64 {
-    val doomed: I64 = if flag {
+    if flag {
         return 23I64
     } else {
         return 29I64
     }
-    return doomed
 }
 
 fn main() {

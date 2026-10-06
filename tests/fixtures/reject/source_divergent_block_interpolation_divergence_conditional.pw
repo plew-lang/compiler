@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+use @Std/Core only { Ref }
+unique struct Resource {
+    val id: I64
+    deinit { print(self.id) }
+}
+fn tick() -> I64 { print("unexpected")
+    return 0I64
+}
+fn conditional(flag: Bool) -> String {
+    return "prefix{if flag { return "then" } else { return "else" }}{tick()}"
+}
+
+fn main() { conditional(flag: true) }

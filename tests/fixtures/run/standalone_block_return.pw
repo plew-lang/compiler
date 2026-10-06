@@ -1,14 +1,22 @@
 use @Std/Io only { print }
-fn localReturn() -> I64 { val unused: I64 = { return 1I64 } }
+fn localReturn(active: Bool) -> I64 { val unused: I64 = { give if active { return 1I64 } else { give 0I64 } }
+ return 0I64
+}
 fn statementReturn() -> I64 { { return 2I64 } }
-fn nestedReturn() -> I64 { val unused = { val inner: I64 = { return 3I64 }
- give inner } }
-fn argumentReturn() -> I64 { print({ return 4I64 }) }
-fn binaryReturn() -> I64 { val unused: I64 = 1I64 + { return 5I64 } }
+fn nestedReturn(active: Bool) -> I64 { val unused = { val inner: I64 = { give if active { return 3I64 } else { give 0I64 } }
+ give inner }
+ return 0I64
+}
+fn argumentReturn(active: Bool) -> I64 { print({ give if active { return 4I64 } else { give 0I64 } })
+ return 0I64
+}
+fn binaryReturn(active: Bool) -> I64 { val unused: I64 = 1I64 + { give if active { return 5I64 } else { give 0I64 } }
+ return 0I64
+}
 fn main() {
- print(localReturn())
+ print(localReturn(active: true))
  print(statementReturn())
- print(nestedReturn())
- print(argumentReturn())
- print(binaryReturn())
+ print(nestedReturn(active: true))
+ print(argumentReturn(active: true))
+ print(binaryReturn(active: true))
 }

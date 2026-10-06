@@ -1,0 +1,7 @@
+use @Std/Io only { print }
+fn iterable() -> I64 {
+    for val n in { return 7I64
+ } { print(n) }
+}
+
+fn main() { iterable() }

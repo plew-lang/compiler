@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+use @Std/Core only { Ref }
+unique struct Resource {
+    val id: I64
+    deinit { print(self.id) }
+}
+fn tick() -> I64 { print("unexpected")
+    return 0I64
+}
+fn block() -> String {
+    return "prefix{ { val held = <Ref[Resource] value=<Resource id=1I64 /> />
+        return "block"
+    } }{tick()}"
+}
+
+fn main() { block() }

@@ -8,43 +8,42 @@ pub impl Box { factory }
 
 fn passthrough(value: I64) -> I64 { return value }
 
-// A value-position match still has a result type when every arm leaves the
-// enclosing function. Mid must leave its join unreachable rather than create
-// an uninitialized result path.
-fn choose(input: Choice) -> I64 {
-    val unreachable: I64 = match input {
+// The active branch exits through a match statement; the alternate branch
+// supplies a static value. No uninitialized result may be read on exit.
+fn choose(input: Choice, active: Bool) -> I64 {
+    val unreachable: I64 = if active { match input {
         Choice.First => { return 7I64 }
         Choice.Second => { return 9I64 }
-    }
+    } } else { give 0I64 }
     return unreachable
 }
 
-// A diverging value match can be nested in a call argument. The Call
-// terminator must not be emitted after its argument has closed the path.
-fn throughCall(input: Choice) -> I64 {
-    return passthrough(value: match input {
+// The active match branch can exit while evaluating a call argument. The
+// Call terminator must not be emitted after that path has closed.
+fn throughCall(input: Choice, active: Bool) -> I64 {
+    return passthrough(value: if active { match input {
         Choice.First => { return 7I64 }
         Choice.Second => { return 9I64 }
-    })
+    } } else { give 0I64 })
 }
 
 // The same rule applies to a frozen aggregate element: the aggregate is not
-// constructed if its value-match element never reaches its write point.
-fn throughAggregate(input: Choice) -> I64 {
-    val unreachable: Box = <Box value=match input {
+// constructed if the active branch never reaches its write point.
+fn throughAggregate(input: Choice, active: Bool) -> I64 {
+    val unreachable: Box = <Box value=if active { match input {
         Choice.First => { return 7I64 }
         Choice.Second => { return 9I64 }
-    } />
+    } } else { give 0I64 } />
     return unreachable.value
 }
 
 fn main() {
-    print(choose(input: <Choice.First />))
-    print(choose(input: <Choice.Second />))
-    print(throughCall(input: <Choice.First />))
-    print(throughCall(input: <Choice.Second />))
-    print(throughAggregate(input: <Choice.First />))
-    print(throughAggregate(input: <Choice.Second />))
+    print(choose(input: <Choice.First />, active: true))
+    print(choose(input: <Choice.Second />, active: true))
+    print(throughCall(input: <Choice.First />, active: true))
+    print(throughCall(input: <Choice.Second />, active: true))
+    print(throughAggregate(input: <Choice.First />, active: true))
+    print(throughAggregate(input: <Choice.Second />, active: true))
 }
 
 // expected: 7

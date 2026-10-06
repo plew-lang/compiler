@@ -7,21 +7,21 @@ unique struct Resource {
 fn tick() -> I64 { print("unexpected")
     return 0I64
 }
-fn block() -> String {
-    return "prefix{ { val held = <Ref[Resource] value=<Resource id=1I64 /> />
+fn block(active: Bool) -> String {
+    return "prefix{ if active { val held = <Ref[Resource] value=<Resource id=1I64 /> />
         return "block"
-    } }{tick()}"
+    } else { give 0I64 } }{tick()}"
 }
-fn conditional(flag: Bool) -> String {
-    return "prefix{if flag { return "then" } else { return "else" }}{tick()}"
+fn conditional(flag: Bool, active: Bool) -> String {
+    return "prefix{if active { if flag { return "then" } else { return "else" } } else { give 0I64 }}{tick()}"
 }
-fn matched(flag: Bool) -> String {
-    return "prefix{match flag { true => { return "true" } false => { return "false" } }}{tick()}"
+fn matched(flag: Bool, active: Bool) -> String {
+    return "prefix{if active { match flag { true => { return "true" } false => { return "false" } } } else { give 0I64 }}{tick()}"
 }
 fn main() {
-    print(block())
-    print(conditional(flag: true))
-    print(conditional(flag: false))
-    print(matched(flag: true))
-    print(matched(flag: false))
+    print(block(active: true))
+    print(conditional(flag: true, active: true))
+    print(conditional(flag: false, active: true))
+    print(matched(flag: true, active: true))
+    print(matched(flag: false, active: true))
 }

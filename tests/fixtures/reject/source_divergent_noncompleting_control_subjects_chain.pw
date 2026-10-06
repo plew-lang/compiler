@@ -1,0 +1,7 @@
+use @Std/Io only { print }
+fn chain(flag: Bool) -> I64 {
+    if flag && val value = { return 11I64 } { print(0I64) }
+    else { return 12I64 }
+}
+
+fn main() { chain(flag: true) }

@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+fn make(value: I64) -> Array[I64] { return [value] }
+fn selected() -> I64 {
+    val values = [match true { true => { return 10I64 } false => { return 99I64 } }]
+    return 99I64
+}
+
+fn main() { selected() }

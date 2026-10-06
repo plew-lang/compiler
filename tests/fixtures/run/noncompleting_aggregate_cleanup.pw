@@ -4,19 +4,19 @@ unique struct Resource {
     val id: I64
     deinit { print(self.id) }
 }
-fn record() -> I64 {
-    val value = (first: <Ref[Resource] value=<Resource id=1I64 /> />, last: { return 7I64 })
+fn record(active: Bool) -> I64 {
+    val value = (first: <Ref[Resource] value=<Resource id=1I64 /> />, last: { give if active { return 7I64 } else { give <Ref[Resource] value=<Resource id=99I64 /> /> } })
     return 99I64
 }
-fn array() -> I64 {
-    val value = [<Ref[Resource] value=<Resource id=2I64 /> />, { return 8I64 }]
+fn array(active: Bool) -> I64 {
+    val value = [<Ref[Resource] value=<Resource id=2I64 /> />, { give if active { return 8I64 } else { give <Ref[Resource] value=<Resource id=99I64 /> /> } }]
     return 99I64
 }
-fn iterate() -> I64 {
+fn iterate(active: Bool) -> I64 {
     mut val count = 0I64
     while count < 2I64 {
         count += 1I64
-        for val item in [<Ref[Resource] value=<Resource id=count + 2I64 /> />, { continue }] {
+        for val item in [<Ref[Resource] value=<Resource id=count + 2I64 /> />, { give if active { continue } else { give <Ref[Resource] value=<Resource id=99I64 /> /> } }] {
             print(99I64)
         }
         print(99I64)
@@ -24,7 +24,7 @@ fn iterate() -> I64 {
     return count
 }
 fn main() {
-    print(record())
-    print(array())
-    print(iterate())
+    print(record(active: true))
+    print(array(active: true))
+    print(iterate(active: true))
 }

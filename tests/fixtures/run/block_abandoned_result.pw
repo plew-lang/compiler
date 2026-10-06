@@ -8,8 +8,6 @@ fn returned() -> I64 {
     val unused = {
         val inner = <Ref[Resource] value=<Resource id=10I64 /> />
         give <Ref[Resource] value=<Resource id=1I64 /> />
-        print("after give")
-        return 7I64
     }
     return 0I64
 }
@@ -19,7 +17,6 @@ fn main() {
         val unused = {
             val inner = <Ref[Resource] value=<Resource id=20I64 /> />
             give <Ref[Resource] value=<Resource id=2I64 /> />
-            print("unreachable")
         }
         break
     }
@@ -29,7 +26,6 @@ fn main() {
         val unused = {
             val inner = <Ref[Resource] value=<Resource id=30I64 /> />
             give <Ref[Resource] value=<Resource id=3I64 /> />
-            continue
         }
     }
     print("end")

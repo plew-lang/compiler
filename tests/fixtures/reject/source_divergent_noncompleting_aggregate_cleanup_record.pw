@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+use @Std/Core only { Ref }
+unique struct Resource {
+    val id: I64
+    deinit { print(self.id) }
+}
+fn record() -> I64 {
+    val value = (first: <Ref[Resource] value=<Resource id=1I64 /> />, last: { return 7I64 })
+    return 99I64
+}
+
+fn main() { record() }
