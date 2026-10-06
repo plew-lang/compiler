@@ -956,7 +956,7 @@ pub impl Comp {
         val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            val kind = (try self.completeCallTemplateResult(exprId: exprId, kind: <CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=templateTypeArgs proofId=proofId />, expectedTerm: prior.expectedResultTerm))
+            val kind = (try self.completeCallTemplateResult(exprId: exprId, kind: <CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=templateTypeArgs proofId=proofId />, expectedTerm: prior.expectedResultTerm, receiverTerm: receiverTerm))
             receiverTerm = self.completeCallTemplateReceiver(kind: kind, receiverTerm: receiverTerm)
             self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=siteKey kind=kind expectedResultTerm=prior.expectedResultTerm receiverTypeTerm=receiverTerm />)
             return <Result.Ok value=() />
@@ -1261,7 +1261,7 @@ pub impl Comp {
             return <Result.Ok value=() />
         }
         val prior: CallTemplate = self.decls.callTemplates[index]
-        val kind = (try self.completeCallTemplateResult(exprId: exprId, kind: prior.kind, expectedTerm: expectedTerm))
+        val kind = (try self.completeCallTemplateResult(exprId: exprId, kind: prior.kind, expectedTerm: expectedTerm, receiverTerm: prior.receiverTypeTerm))
         val receiverTerm = self.completeCallTemplateReceiver(kind: kind, receiverTerm: prior.receiverTypeTerm)
         self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=kind expectedResultTerm=expectedTerm receiverTypeTerm=receiverTerm />)
         return <Result.Ok value=() />
@@ -1271,7 +1271,7 @@ pub impl Comp {
     // sites are formed. The same join is used whichever fact arrives first.
     // A contextual conversion may prevent exact matching; then retain the
     // selected evidence, never overwrite it or publish partial substitutions.
-    inout fn completeCallTemplateResult(exprId: U64, kind: CallTemplateKind, expectedTerm: U64) -> Result[CallTemplateKind, CompileDiagnostic] {
+    inout fn completeCallTemplateResult(exprId: U64, kind: CallTemplateKind, expectedTerm: U64, receiverTerm: U64 = 0U64) -> Result[CallTemplateKind, CompileDiagnostic] {
         if expectedTerm == 0U64 { return <Result.Ok value=kind /> }
         match kind {
             CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val args, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
@@ -1291,7 +1291,8 @@ pub impl Comp {
                 // The expected term constrains only this callee's binders.
                 // Publish the substituted declaration result, never the expected
                 // term itself. The same completed substitution is retained for Mono.
-                val environment = try self.recordedDirectCallEnvironment(function: function, receiver: receiver, receiverTerm: 0U64, typeArgs: completed, proof: self.thawStaticConformanceProof(id: proofId))
+                val selectedReceiver = self.selectedCallableReceiver(function: function, receiver: receiver, receiverTerm: receiverTerm, params: self.copyFuncBinds(binds: function.typeParams), typeArgs: completed)
+                val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: selectedReceiver, typeArgs: completed, proof: self.thawStaticConformanceProof(id: proofId))
                 val result = (try self.groundTermForBody(ref: function.retTy, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64))
                 self.recordSemanticExprTerm(exprId: exprId, term: result)
                 return <Result.Ok value=<CallTemplateKind.Direct callee=callee receiver=receiver args=args calleeTypeArgs=self.publishCallTemplateTypeArgs(args: completed) proofId=proofId /> />
@@ -1351,7 +1352,7 @@ pub impl Comp {
                 if arguments.count() != function.typeParams.count() || (arguments.count() != 0U64 && !self.fnArgsAllResolved(args: arguments)) {
                     return <Result.Ok value=<Optional.None /> />
                 }
-                val environment = try self.recordedDirectCallEnvironment(function: self.arena.functionAt(index: selected), receiver: receiver, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: self.thawStaticConformanceProof(id: proofId))
+                val environment = try self.recordedDirectCallEnvironment(function: self.arena.functionAt(index: selected), receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: self.thawStaticConformanceProof(id: proofId))
                 if self.traceCodegen {
                     eprint(text: "[trace-codegen] recorded-call-environment expr=")
                     eprintU64(n: exprId)
@@ -1417,10 +1418,9 @@ pub impl Comp {
         return receiverTerm
     }
 
-    inout fn recordedDirectCallEnvironment(function: Func, receiver: CallTemplateReceiver, receiverTerm: U64, typeArgs: Array[U64], proof: StaticConformanceProof) -> Result[InstanceEnvironment, CompileDiagnostic] {
+    inout fn recordedDirectCallEnvironment(function: Func, receiverTerm: U64, typeArgs: Array[U64], proof: StaticConformanceProof) -> Result[InstanceEnvironment, CompileDiagnostic] {
         val params = self.copyFuncBinds(binds: function.typeParams)
-        val selectedReceiver = self.selectedCallableReceiver(function: function, receiver: receiver, receiverTerm: receiverTerm, params: params, typeArgs: typeArgs)
-        return self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment params=params args=typeArgs receiverRef=selectedReceiver proof=proof />)
+        return self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment params=params args=typeArgs receiverRef=receiverTerm proof=proof />)
     }
 
     // Only the selected callee's bare ParamIds are inference variables.

@@ -803,7 +803,7 @@ pub impl Comp {
             CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: _, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
                 if callee >= self.arena.functionCount() { return <Result.Ok value=() /> }
                 val function = self.arena.functionAt(index: callee)
-                val environment = try self.recordedDirectCallEnvironment(function: function, receiver: receiver, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: self.thawStaticConformanceProof(id: proofId))
+                val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: self.thawStaticConformanceProof(id: proofId))
                 mut val argumentIndex = 0U64
                 while argumentIndex < args.len {
                     val parameterIndex = self.paramIndexForArg(params: function.params, args: args, argIdx: argumentIndex)

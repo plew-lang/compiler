@@ -8,7 +8,12 @@ fn rejected(c: inout Comp, message: String) {
     val result = c.closeCallTemplatesForBody(fnIdx: 0U64)
     match result {
         Result.Err(error: _) => {
-            if !c.callTemplatesClosedForBody(fnIdx: 0U64).unwrap() { print(message) }
+            if !c.callTemplatesClosedForBody(fnIdx: 0U64).unwrap() {
+                match c.checkRecordedCallTemplateBound(templateIndex: 0U64) {
+                    Result.Err(error: _) => { print(message) }
+                    Result.Ok(value: _) => {}
+                }
+            }
         }
         Result.Ok(value: _) => {}
     }
@@ -38,6 +43,7 @@ fn main() {
     c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Direct callee=1U64 receiver=<CallTemplateReceiver.None /> args=args calleeTypeArgs=c.publishCallTemplateTypeArgs(args: [0U64]) proofId=0U64 /> />)
     rejected(c: inout c, message: "unresolved-argument-not-closed")
     c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Direct callee=1U64 receiver=<CallTemplateReceiver.None /> args=args calleeTypeArgs=c.publishCallTemplateTypeArgs(args: [caller]) proofId=0U64 /> />)
+    c.checkRecordedCallTemplateBound(templateIndex: 0U64).unwrap()
     c.closeCallTemplatesForBody(fnIdx: 0U64).unwrap()
     if c.callTemplatesClosedForBody(fnIdx: 0U64).unwrap() { print("caller-symbolic-closed") }
 }

@@ -1701,23 +1701,14 @@ pub impl Comp {
     // Check one selected source call without scanning other bodies or
     // discovering executable instances. The caller owns demand/iteration.
     inout fn checkRecordedCallTemplateBound(templateIndex: U64) -> Result[(), CompileDiagnostic] {
+        try self.checkCallTemplateSelection(templateIndex: templateIndex)
         val template = self.decls.callTemplates[templateIndex]
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: val proofId) => {
                 val function = self.arena.functionAt(index: callee)
-                val args = self.callTemplateTypeArgs(range: arguments)
-                mut val resolved = args.count() == function.typeParams.count()
-                mut val argument = 0U64
-                while argument < args.count() {
-                    if args[argument] == 0U64 { resolved = false }
-                    argument += 1U64
-                }
-                val receiver = template.receiverTypeTerm
-                if function.hasRecv && (receiver == 0U64) { resolved = false }
-                if resolved {
-                    val environment = try self.bodyInstanceEnvironment(fnIdx: callee, args: args, recvInstRef: receiver, selectedProof: self.thawStaticConformanceProof(id: proofId))
-                    try self.checkSelectedCallableBounds(fnIdx: callee, environment: environment, assumptions: self.functionBoundAssumptions(fnIdx: template.siteKey.ownerFnIdx))
-                }
+                val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: arguments), proof: self.thawStaticConformanceProof(id: proofId))
+                val owner = self.decls.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
+                try self.checkSelectedCallableBounds(fnIdx: callee, environment: environment, assumptions: self.functionBoundAssumptions(fnIdx: owner))
             }
             _ => {}
         }
