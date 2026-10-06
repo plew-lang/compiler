@@ -554,7 +554,7 @@ pub impl Comp {
             Expr.Sequence(val body) | Expr.Block(val body, offset: _) => {
                 if body < self.arena.semanticValueBlocks.count() {
                     match self.arena.semanticValueBlocks[body] {
-                        SemanticValueBlockTyping.NonCompleting(val diagnosticTerm) => {
+                        SemanticValueBlockTyping.Checked(completion: _, resultTerm: val diagnosticTerm) => {
                             if diagnosticTerm != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: diagnosticTerm) /> }
                         }
                         _ => {}
@@ -574,7 +574,7 @@ pub impl Comp {
     // Before Record, every value block still follows the same normal-result
     // rule; a diverging arm never supplies the result of another arm.
     inout fn valueBlockTypeInfo(blockId: U64, chainHoleRef: U64) -> Result[Optional[TypeInfo], CompileDiagnostic] {
-        if !self.blockCompletesNormally(blkId: blockId) { return <Result.Ok value=<Optional.None /> /> }
+        if !self.blockCompletion(blkId: blockId).source.normal { return <Result.Ok value=<Optional.None /> /> }
         val value = self.blockGiveExpr(blkId: blockId)
         if value >= self.arena.exprs.count() { return <Result.Ok value=<Optional.None /> /> }
         val term = self.semanticExprTerm(exprId: value)

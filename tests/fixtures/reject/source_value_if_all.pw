@@ -1,0 +1,2 @@
+fn body(flag: Bool) -> I64 { val result: I64 = if flag { return 1I64 } else { return 2I64 } }
+fn main() { body(flag: true) }

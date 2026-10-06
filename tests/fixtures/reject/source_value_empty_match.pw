@@ -1,0 +1,3 @@
+enum Empty {}
+fn body(value: Empty) -> I64 { val result: I64 = match value {} }
+fn main() {}

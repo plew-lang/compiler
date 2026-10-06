@@ -1,0 +1,37 @@
+use @Std/Io only { print }
+fn staticResult(flag: Bool) -> I64 {
+    val result: I64 = if flag {
+        while true {}
+        give 1
+    } else { give 2 }
+    return result
+}
+fn inferredDeadResult() -> I64 {
+    val result = { while true {}
+        give 3I64 }
+    return result
+}
+fn mixed(flag: Bool) -> I64 {
+    val result = if flag { return 4I64 } else { give 5I64 }
+    return result
+}
+fn bareArm(flag: Bool, other: Bool) -> I64 {
+    val result = match flag {
+        true => if other { return 6I64 } else { return 7I64 }
+        false => 8I64
+    }
+    return result
+}
+fn elseIf(flag: Bool, other: Bool) -> I64 {
+    val result = if flag { give 9I64 } else if other { return 10I64 } else { return 11I64 }
+    return result
+}
+fn main() {
+    print(staticResult(flag: false))
+    print(mixed(flag: true))
+    print(mixed(flag: false))
+    print(bareArm(flag: true, other: false))
+    print(bareArm(flag: false, other: false))
+    print(elseIf(flag: false, other: true))
+    print(elseIf(flag: true, other: false))
+}

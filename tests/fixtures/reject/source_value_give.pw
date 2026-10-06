@@ -1,0 +1,2 @@
+fn body() -> I64 { val value = { give { return 1I64 } } }
+fn main() { body() }

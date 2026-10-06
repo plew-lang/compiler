@@ -427,7 +427,7 @@ pub impl Comp {
             }
             i += 1U64
         }
-        return <Result.Ok value=self.pushBlock(stmts: stmts) />
+        return <Result.Ok value=self.pushBlock(stmts: stmts, implicitResult: block.implicitResult) />
     }
 
     inout fn lowerStmt(s: StmtAst) -> Result[U64, CompileDiagnostic] {
@@ -778,7 +778,7 @@ pub impl Comp {
             }
             i += 1
         }
-        return <Result.Ok value=self.pushBlock(stmts: stmts) />
+        return <Result.Ok value=self.pushBlock(stmts: stmts, implicitResult: b.implicitResult) />
     }
 }
 

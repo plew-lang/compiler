@@ -6,7 +6,7 @@ pub impl Comp {
         if expectedRef == 0U64 {
             return <Result.Ok value=() />
         }
-        if !self.exprCompletesNormally(exprId: valueExpr) { return <Result.Ok value=() /> }
+        try self.requireExpressionValue(exprId: valueExpr)
         // a void function's result is `()` — using it where a typed value is expected
         // (`val x: I64 = doNothing()`) is a type error (spec/04).
         if (try self.exprIsVoidCall(id: valueExpr)) {

@@ -1,0 +1,3 @@
+fn accept(value: I64) {}
+fn body() -> I64 { accept(value: { return 1I64 }) }
+fn main() { body() }

@@ -1,6 +1,13 @@
 // Source continuation and execution exits share one compositional analysis.
 
 pub impl Comp {
+    inout fn requireExpressionValue(exprId: U64) -> Result[(), CompileDiagnostic] {
+        if !self.exprCompletion(exprId: exprId).source.normal {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a source-diverging expression cannot be used as a value (spec/11)") />
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn warnUnreachableStatement(stmtId: U64) {
         val offset = self.stmtPrincipalOffset(sid: stmtId)
         if offset == 0U64 || self.reportedUnreachableStatements.contains(offset) { return }

@@ -1,0 +1,2 @@
+fn body(flag: Bool) -> Bool { val value = flag && { return false } }
+fn main() { body(flag: true) }

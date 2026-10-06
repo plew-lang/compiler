@@ -1,5 +1,6 @@
 part ./Ir/FinalResolutions
 use ./SourceFiles only { SourceFiles, SourceFileRange }
+use ./SourceCompletion only { SourceCompletion }
 use @Std/Set only { Set }
 part ./Ir/Modules
 part ./Ir/AccessCandidates
@@ -366,12 +367,11 @@ pub struct TypeInfo {
     pub val viewExtId: U64 = 0
 }
 
-// Normal completion and the type used to check unreachable source are
-// separate facts. A diagnostic term never supplies a live branch result.
+// Static result typing and executable continuation are independent. A loop
+// can prevent execution without preventing a later give from determining type.
 pub enum SemanticValueBlockTyping {
     Pending
-    Completing
-    NonCompleting(diagnosticTerm: U64)
+    Checked(completion: SourceCompletion, resultTerm: U64)
 }
 
 // The semantic type recorded for one expression node. `term` is the complete
@@ -932,6 +932,7 @@ pub enum Stmt {
 // embedding Array[U64] here made every such read retain/drop the child buffer even
 // though arena children never have an independent lifetime.
 pub struct Block {
+    pub val implicitResult: Bool = false
     pub val stmtStart: U64
     pub val stmtLen: U64
 }

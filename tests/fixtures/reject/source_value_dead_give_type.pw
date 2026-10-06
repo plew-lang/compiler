@@ -1,0 +1,3 @@
+fn body() { val result: I64 = { while true {}
+ give true } }
+fn main() { body() }

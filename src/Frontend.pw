@@ -671,7 +671,7 @@ pub impl Comp {
     // Store a block's child statements in Arena's single immutable pool. A block is
     // a slice, not an owning Array, so copying the block during every frontend walk
     // cannot create ARC traffic for its children.
-    inout fn pushBlock(stmts: Array[U64]) -> U64 {
+    inout fn pushBlock(stmts: Array[U64], implicitResult: Bool = false) -> U64 {
         val start: U64 = self.arena.blockStmtPool.count()
         mut val i: U64 = 0U64
         while i < stmts.count() {
@@ -679,7 +679,7 @@ pub impl Comp {
             i += 1U64
         }
         val id: U64 = self.arena.blocks.count()
-        self.arena.blocks.append(<Block stmtStart=start stmtLen=stmts.count() />)
+        self.arena.blocks.append(<Block stmtStart=start stmtLen=stmts.count() implicitResult=implicitResult />)
         return id
     }
 

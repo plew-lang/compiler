@@ -1231,7 +1231,7 @@ pub impl Comp {
 
     // Expected-result refinement reads only previously recorded child facts.
     inout fn recordValueBlockResult(exprId: U64, blockId: U64) -> Bool {
-        if !self.blockCompletesNormally(blkId: blockId) { return false }
+        if !self.blockCompletion(blkId: blockId).source.normal { return false }
         val value = self.blockGiveExpr(blkId: blockId)
         if value >= self.arena.exprs.count() { return false }
         val term = self.semanticExprTerm(exprId: value)
@@ -1246,10 +1246,8 @@ pub impl Comp {
         val mark = self.scopeMark()
         mut val resultTerm = expectedTerm
         if resultTerm == 0U64 { resultTerm = self.semanticExprTerm(exprId: exprId) }
-        val completes = self.blockCompletesNormally(blkId: blockId)
-        if !completes { resultTerm = 0U64 }
-        try self.recordBlockContents(blkId: blockId, resultContext: <BlockResultContext.Value expectedTerm=resultTerm completes=completes />)
-        if completes {
+        val completion = try self.recordBlockContents(blkId: blockId, resultContext: <BlockResultContext.Value expectedTerm=resultTerm />)
+        if completion.source.normal {
             val value = self.blockGiveExpr(blkId: blockId)
             if value < self.arena.exprs.count() {
                 if resultTerm == 0U64 {
@@ -1259,14 +1257,8 @@ pub impl Comp {
             }
         }
         while self.arena.semanticValueBlocks.count() <= blockId { self.arena.semanticValueBlocks.append(<SemanticValueBlockTyping.Pending />) }
-        mut val typing: SemanticValueBlockTyping = <SemanticValueBlockTyping.Completing />
-        if !completes {
-            val value = self.blockGiveExpr(blkId: blockId)
-            mut val diagnosticTerm = 0U64
-            if value < self.arena.exprs.count() { diagnosticTerm = self.semanticExprTerm(exprId: value) }
-            typing = <SemanticValueBlockTyping.NonCompleting diagnosticTerm=diagnosticTerm />
-        }
-        self.arena.semanticValueBlocks.set(i: blockId, value: typing)
+        if !completion.source.normal { resultTerm = 0U64 }
+        self.arena.semanticValueBlocks.set(i: blockId, value: <SemanticValueBlockTyping.Checked completion=completion resultTerm=resultTerm />)
         self.popLocals(mark: mark)
         return <Result.Ok value=() />
     }
@@ -1497,10 +1489,11 @@ pub impl Comp {
     // unique enclosing chain stage. The payload is a structural child input,
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
-    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false) -> Result[(), CompileDiagnostic] {
+    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false, needsValue: Bool = true) -> Result[(), CompileDiagnostic] {
         // A deferred value block must be recorded again in its lexical scope
         // once the selected parameter supplies its result context.
         if expectedTerm == 0U64 && deferContext && self.expressionNeedsTypeContext(exprId: exprId) {
+            if needsValue { try self.requireExpressionValue(exprId: exprId) }
             return <Result.Ok value=() />
         }
         match self.arena.exprs[exprId] {
@@ -2132,7 +2125,7 @@ pub impl Comp {
                         // Generated match nodes must satisfy the same typed
                         // contract before declaration verification as written
                         // matches. Revisit the replacement, not the old chain.
-                        try self.recordExpr(exprId: exprId, chainHoleRef: chainHoleRef, expectedTerm: expectedTerm)
+                        try self.recordExpr(exprId: exprId, chainHoleRef: chainHoleRef, expectedTerm: expectedTerm, needsValue: needsValue)
                     }
                 }
             }
@@ -2240,6 +2233,7 @@ pub impl Comp {
             }
             _ => {}
         }
+        if needsValue { try self.requireExpressionValue(exprId: exprId) }
         if exprId < self.arena.semanticExprTypes.count() {
             if self.semanticExprTerm(exprId: exprId) == 0U64 {
                 self.recordSemanticExprInfo(exprId: exprId, ti: (try self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef)))
@@ -2268,7 +2262,7 @@ pub impl Comp {
     // Mirror checkBoundsStmt's SCOPE maintenance (Let/For/Match binds) without any of
     // its checks — the local env drives typeOf, so it must match what the backend's
     // own local table will hold at emission.
-    inout fn recordStmt(stmtId: U64, expectedTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+    inout fn recordStmt(stmtId: U64, expectedTerm: U64 = 0U64, explicitResult: Bool = true) -> Result[(), CompileDiagnostic] {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                 try self.collectRecordedType(ref: ty)
@@ -2288,7 +2282,7 @@ pub impl Comp {
                 val expected: U64 = self.parametricExprTerm(exprId: target)
                 try self.recordExpr(exprId: value, expectedTerm: expected)
             }
-            Stmt.ExprStmt(val expr) => { try self.recordExpr(exprId: expr) }
+            Stmt.ExprStmt(val expr) => { try self.recordExpr(exprId: expr, needsValue: false) }
             Stmt.Return(val value, val hasValue, offset: _) => {
                 if hasValue {
                     val expected: U64 = self.semanticBodyReturnContext(fnIdx: self.cur.checkFn)
@@ -2390,7 +2384,7 @@ pub impl Comp {
             }
             Stmt.Panic(val msg, offset: _) => { try self.recordExpr(exprId: msg) }
             Stmt.Give(val value) => {
-                try self.recordExpr(exprId: value, expectedTerm: expectedTerm)
+                try self.recordExpr(exprId: value, expectedTerm: expectedTerm, needsValue: explicitResult)
             }
             Stmt.Break(offset: _) => {}
             Stmt.Continue(offset: _) => {}
@@ -2405,15 +2399,13 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordBlockContents(blkId: U64, resultContext: BlockResultContext) -> Result[(), CompileDiagnostic] {
+    inout fn recordBlockContents(blkId: U64, resultContext: BlockResultContext) -> Result[SourceCompletion, CompileDiagnostic] {
         mut val expectedTerm = 0U64
-        mut val checkResult = false
         mut val permitsGive = false
         match resultContext {
             BlockResultContext.Statement => {}
-            BlockResultContext.Value(expectedTerm: val expected, val completes) => {
+            BlockResultContext.Value(expectedTerm: val expected) => {
                 expectedTerm = expected
-                checkResult = completes
                 permitsGive = true
             }
         }
@@ -2424,7 +2416,6 @@ pub impl Comp {
             }
         }
         mut val i: U64 = 0
-        mut val hasGive = false
         mut val flow = <SourceCompletion />
         mut val warned = false
         while i < self.blockStmtCount(blkId: blkId) {
@@ -2439,18 +2430,17 @@ pub impl Comp {
             match self.arena.stmts[statement] {
                 Stmt.Give(val value) => {
                     if !permitsGive { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: value), msg: "`give` is only allowed in a value block (spec/11)") /> }
-                    if hasGive { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: value), msg: "a block may contain only one `give` (spec/11)") /> }
-                    hasGive = true
                 }
                 _ => {}
             }
-            try self.recordStmt(stmtId: statement, expectedTerm: expectedTerm)
-            flow = completionThen(prefix: flow, next: self.stmtCompletion(stmtId: statement))
-            if checkResult {
+            try self.recordStmt(stmtId: statement, expectedTerm: expectedTerm, explicitResult: !self.arena.blocks[blkId].implicitResult)
+            val statementFlow = self.stmtCompletion(stmtId: statement)
+            flow = completionThen(prefix: flow, next: statementFlow)
+            if permitsGive && statementFlow.source.gives {
                 match self.arena.stmts[statement] {
                     Stmt.Give(val value) => {
-                        // Keep source-position binding identity. A block that
-                        // never completes has no outward result to constrain.
+                        // Keep source-position binding identity, including gives
+                        // in analyzed-unreachable but source-valid regions.
                         try self.tcCheckValue(expectedRef: expectedTerm, valueExpr: value, pos: "block-result")
                         try self.checkGenericTypeMatch(expectedRef: expectedTerm, valueExpr: value)
                     }
@@ -2467,7 +2457,7 @@ pub impl Comp {
             }
             Optional.None => {}
         }
-        return <Result.Ok value=() />
+        return <Result.Ok value=completionBlock(flow: flow) />
     }
 
     inout fn recordBodyReceiverTerm(fnIdx: U64, term: U64) {
