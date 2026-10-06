@@ -557,6 +557,9 @@ pub impl Comp {
                 // Selection failure is a result of this lexical query, not
                 // inferred from whether a later publication pass wrote a row.
                 if !selected && !self.cur.recordingAccessWriteFacet {
+                    // No selected signature can provide further context here.
+                    // Diagnose an untyped receiver before missing conformance.
+                    if receiverTerm == 0U64 { try self.checkLitCtx(id: receiverExpr, eKind: 0U64, eBits: 0U64, eSgn: false) }
                     if self.syntheticRequiredTraitOwner(exprId: exprId) != 0U64 {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: self.missingSyntheticRequirement(exprId: exprId)) />
                     }
@@ -1810,6 +1813,9 @@ pub impl Comp {
             }
             Expr.ExtMethod(recv: val recv, source: val source, nameStart: val nameStart, nameLen: val nameLen, args: val args) => {
                 try self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
+                if self.assocRecvName(recv: recv).nameLen == 0U64 {
+                    try self.checkResolvedViewValid(recv: recv, source: source, strip: false)
+                }
                 mut val i: U64 = 0
                 while i < args.len {
                     try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true)
