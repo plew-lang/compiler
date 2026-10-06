@@ -134,6 +134,12 @@ pub impl Arena {
             factories.append(self.funcs.count())
             self.anonymousFactoriesByReceiver[declaration.recvId] = factories
         }
+        mut val previousCopy = 0U64
+        if declaration.isProvided && declaration.lexicalOwnerFnId != 0U64 {
+            previousCopy = self.providedCopyHeads.getOr(key: declaration.lexicalOwnerFnId, fallback: 0U64)
+            self.providedCopyHeads[declaration.lexicalOwnerFnId] = entry
+        }
+        self.providedCopyNext.append(previousCopy)
         self.funcs.append(declaration)
         self.functionSourceCallable.append(registerSurface)
     }
@@ -155,6 +161,19 @@ pub impl Arena {
 
     fn nextFunctionNamed(index: U64) -> U64 {
         val entry = self.functionNameNext[index]
+        if entry != 0U64 { return entry - 1U64 }
+        return self.funcs.count()
+    }
+
+    // Lookup by declaration identity, never by a surface member spelling.
+    fn firstProvidedCopy(owner: U64) -> U64 {
+        val entry = self.providedCopyHeads.getOr(key: owner + 1U64, fallback: 0U64)
+        if entry != 0U64 { return entry - 1U64 }
+        return self.funcs.count()
+    }
+
+    fn nextProvidedCopy(index: U64) -> U64 {
+        val entry = self.providedCopyNext[index]
         if entry != 0U64 { return entry - 1U64 }
         return self.funcs.count()
     }

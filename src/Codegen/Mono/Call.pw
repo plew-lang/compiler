@@ -4013,6 +4013,41 @@ pub impl Comp {
         return <Result.Ok value=self.arena.functionCount() />
     }
 
+    inout fn providedCopyForDeclaration(declaration: U64, receiverRef: U64, proof: StaticConformanceProof, traitIdx: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
+        // Use the exact edge that supplies the selected trait. A trait-
+        // subject copy is a shared body template, not a nominal receiver.
+        // Re-copying the body onto every concrete surface is unnecessary.
+        val placement = self.proofWitnessForTrait(proof: proof, traitIdx: traitIdx)
+        if placement.conformIdx == 0U64 || placement.conformIdx > self.decls.conformCount() {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: provided declaration has no selected placement proof") />
+        }
+        val traitSubject = self.decls.conformAt(index: placement.conformIdx - 1U64).subjectTraitOwner != 0U64
+        val owner = try self.semanticBodyOwner(fnIdx: declaration)
+        mut val selected = self.arena.functionCount()
+        mut val candidate = self.arena.firstProvidedCopy(owner: owner)
+        while candidate < self.arena.functionCount() {
+            val function = self.arena.functionAt(index: candidate)
+            if function.originConformIdx == placement.conformIdx {
+                mut val receiverMatches = traitSubject
+                if !receiverMatches {
+                    val receiver = try self.methodReceiverEnvironment(f: function, instRef: receiverRef)
+                    receiverMatches = receiver.conformIdx != 0U64
+                }
+                if receiverMatches {
+                    if selected < self.arena.functionCount() {
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: provided declaration has multiple copies for its selected proof") />
+                    }
+                    selected = candidate
+                }
+            }
+            candidate = self.arena.nextProvidedCopy(index: candidate)
+        }
+        if selected == self.arena.functionCount() {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: provided declaration has no copy for its selected proof") />
+        }
+        return <Result.Ok value=selected />
+    }
+
     inout fn selectStaticMethodTemplateCall(exprId: U64, receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], resolution: StaticMemberResolution, resultTerm: U64) -> Result[CallSiteSelection, CompileDiagnostic] {
         val noCallee: U64 = self.arena.functionCount()
         val receiverRef: U64 = (try self.groundCallTemplateReceiver(receiver: receiver))
@@ -4056,15 +4091,8 @@ pub impl Comp {
                 if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || traitIdx >= self.decls.traitCount() || declaration >= self.arena.functionCount() {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: static provided-method template has invalid proof or receiver") />
                 }
-                val declared: Func = self.arena.functionAt(index: declaration)
-                val callee: U64 = if declared.isAssoc {
-                    give (try self.resolveAssocForResolvedReceiver(surfaceRef: receiverRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: declared.nameStart, nameLen: declared.nameLen, args: args, useOffset: self.exprOffset(id: exprId)))
-                } else {
-                    give (try self.resolveMethodForResolvedReceiver(recv: 0U64, surfaceRef: receiverRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: declared.nameStart, nameLen: declared.nameLen, args: args, useOffset: self.exprOffset(id: exprId), readReceiverSyntax: false))
-                }
-                if callee >= self.arena.functionCount() {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: static provided-method proof has no concrete implementation") />
-                }
+                val concreteProof = try self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef)
+                val callee = try self.providedCopyForDeclaration(declaration: declaration, receiverRef: receiverRef, proof: concreteProof, traitIdx: traitIdx, offset: self.exprOffset(id: exprId))
                 val f: Func = self.arena.functionAt(index: callee)
                 // Availability is proved through the receiver trait, while a
                 // provided body may itself witness another trait (B as A).

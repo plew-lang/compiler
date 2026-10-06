@@ -1,0 +1,25 @@
+use @Std/Io only { print }
+
+trait Value { fn value() -> I64 }
+pub impl Value {
+    fn doubled() -> I64 { return self.value() + self.value() }
+}
+
+struct Number { pub val n: I64 }
+pub impl Number {
+    factory
+    fn doubled() -> I64 { return 99I64 }
+}
+pub impl Number as Value {
+    fn value() -> I64 { return self.n }
+}
+
+fn genericDouble[T](value: T) -> I64 where T: Value {
+    return value.doubled()
+}
+
+fn main() {
+    val number = <Number n=21I64 />
+    print(number.doubled())
+    print(genericDouble(value: number))
+}
