@@ -740,27 +740,29 @@ pub impl Comp {
         return self.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=vid />)
     }
 
-    // An array literal is bidirectionally typed by its selected Array[E]
-    // context. This applies to a nonempty literal too: `[1, 2]` passed where
-    // Array[I32] is required must retain Array[I32], rather than freezing the
-    // temporary default I64 shape inferred from its unsuffixed elements.
+    // Context supplies only an Array element type. It cannot change the
+    // constructor of the expression's semantic type. All expected-result
+    // consumers use this boundary, including delayed argument refinement.
     inout fn recordArrayLitCtx(exprId: U64, ctxRef: U64) -> Result[(), CompileDiagnostic] {
-        if ctxRef == 0U64 || exprId >= self.arena.semanticExprTypes.count() {
-            return <Result.Ok value=() />
-        }
+        if ctxRef == 0U64 || ctxRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
         match self.arena.exprs[exprId] {
             Expr.Array(elems: val elems) => {
-                self.recordSemanticExprTerm(exprId: exprId, term: ctxRef)
-                if ctxRef < self.arena.typeCount() {
-                    val array: TypeRef = self.arena.typeAt(index: ctxRef)
-                    if array.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: array.nameStart, len: array.nameLen, kw: "Array") {
-                        mut val i: U64 = 0U64
-                        while i < elems.len {
-                            try self.recordSemanticExprExpectedResult(exprId: self.exprAt(exprs: elems, index: i), expectedTerm: array.args[0U64])
-                            i += 1U64
-                        }
+                val context = self.arena.typeAt(index: ctxRef)
+                if context.args.count() != 1U64 || self.typeInfoOfRef(ref: ctxRef).kind != 3I64 {
+                    if elems.len == 0U64 && self.semanticExprTerm(exprId: exprId) == 0U64 {
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "cannot infer an empty array's element type from a non-array context (spec/02)") />
                     }
+                    return <Result.Ok value=() />
                 }
+                val element = context.args[0U64]
+                mut val index = 0U64
+                while index < elems.len {
+                    val expression = self.exprAt(exprs: elems, index: index)
+                    try self.recordSemanticExprExpectedResult(exprId: expression, expectedTerm: element)
+                    try self.tcCheckValue(expectedRef: element, valueExpr: expression, pos: "element")
+                    index += 1U64
+                }
+                self.recordSemanticExprTerm(exprId: exprId, term: self.arrayRefOfElem(elemRef: element))
                 try self.recordSemanticAggregate(exprId: exprId)
             }
             _ => {}

@@ -1641,8 +1641,7 @@ pub impl Comp {
                 }
             }
             Expr.Array(elems: _) => {
-                self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
-                try self.recordSemanticAggregate(exprId: exprId)
+                try self.recordArrayLitCtx(exprId: exprId, ctxRef: expectedTerm)
             }
             _ => {}
         }

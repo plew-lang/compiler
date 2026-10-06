@@ -1,0 +1,4 @@
+use @Std/Io only { print }
+struct Box { val item: I64 }
+fn main() { val box = <Box item=[1I64] />
+print(box.item) }

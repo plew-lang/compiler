@@ -1,0 +1,3 @@
+use @Std/Io only { print }
+fn main() { val value: Bool = []
+print(value) }

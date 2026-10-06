@@ -1,0 +1,3 @@
+use @Std/Io only { print }
+fn broken[T](value: T)->I64 { return { give [1I64] } }
+fn main() {}

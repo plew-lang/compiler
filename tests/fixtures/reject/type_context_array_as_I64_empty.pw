@@ -1,0 +1,3 @@
+use @Std/Io only { print }
+fn main() { val value: I64 = []
+print(value) }
