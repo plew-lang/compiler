@@ -1603,7 +1603,14 @@ pub impl Comp {
                 }
             }
             Expr.MatchSubject(val scrut) => { self.recordSemanticExprTerm(exprId: exprId, term: self.parametricExprTerm(exprId: scrut)) }
-            Expr.Unary(op: _, val operand) => { try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef) }
+            Expr.Unary(val op, val operand) => {
+                try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef)
+                val operandTerm = self.parametricExprTerm(exprId: operand)
+                if operandTerm != 0U64 {
+                    val result = try self.unaryOperatorResultType(operand: self.typeInfoOfRef(ref: operandTerm), op: op)
+                    self.recordSemanticExprInfo(exprId: exprId, ti: result)
+                }
+            }
             Expr.Binary(val op, val lhs, val rhs) => {
                 try self.recordExpr(exprId: lhs, chainHoleRef: chainHoleRef)
                 try self.recordExpr(exprId: rhs, chainHoleRef: chainHoleRef)
