@@ -543,6 +543,25 @@ pub impl Comp {
         return <Result.Ok value=(try self.exprTypeWithChainHole(id: id, chainHoleRef: 0U64)) />
     }
 
+    // Bind unreachable source from its recorded diagnostic type without
+    // publishing that type as a normal value or including it in branch joins.
+    inout fn sourceSubjectTypeInfo(exprId: U64) -> Result[TypeInfo, CompileDiagnostic] {
+        match self.arena.exprs[exprId] {
+            Expr.Sequence(val body) | Expr.Block(val body, offset: _) => {
+                if body < self.arena.semanticValueBlocks.count() {
+                    match self.arena.semanticValueBlocks[body] {
+                        SemanticValueBlockTyping.NonCompleting(val diagnosticTerm) => {
+                            if diagnosticTerm != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: diagnosticTerm) /> }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+        return self.typeOf(id: exprId)
+    }
+
     // Type `id` with the one structural input an OptChain continuation owns.
     // A continuation AST has exactly one parent stage, so this is not a general
     // context cache: the parent supplies its parametric Value term and recursive

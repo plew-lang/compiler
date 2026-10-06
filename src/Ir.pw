@@ -366,6 +366,14 @@ pub struct TypeInfo {
     pub val viewExtId: U64 = 0
 }
 
+// Normal completion and the type used to check unreachable source are
+// separate facts. A diagnostic term never supplies a live branch result.
+pub enum SemanticValueBlockTyping {
+    Pending
+    Completing
+    NonCompleting(diagnosticTerm: U64)
+}
+
 // The semantic type recorded for one expression node. `term` is the complete
 // parametric TypeRef (and is grounded only by an explicit instance environment);
 // `shape` retains the value-level classification that a TypeRef alone cannot
@@ -2532,8 +2540,8 @@ pub struct Arena {
     // arena rather than Comp so every public user of Comp depends only on Arena,
     // and so the entry has the same lifetime/identity as its Expr.
     pub mut val semanticExprTypes: Array[SemanticExprType] = []
-    // Record-time value-block completion: 0 absent, 1 normal, 2 no normal exit.
-    pub mut val semanticValueBlockCompletion: Array[U8] = []
+    // Record-time completion with a separate unreachable-source type.
+    pub mut val semanticValueBlocks: Array[SemanticValueBlockTyping] = []
     // Deferred semantic type-source recipes are a separate dependency graph;
     // TypeRef remains the canonical structural type arena. IDs are one-based.
     pub mut val semanticTypeRecipes: Array[SemanticTypeRecipe] = []

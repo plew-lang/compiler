@@ -979,7 +979,7 @@ pub impl Comp {
                     try self.checkBoundsExpr(exprId: rangeHi)
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
-                    val et: TypeInfo = (try self.typeOf(id: iter))
+                    val et: TypeInfo = (try self.sourceSubjectTypeInfo(exprId: iter))
                     try self.checkAbstractIterationReceiver(receiver: et.ref, offset: self.exprOffset(id: iter))
                     if isStruct {
                         try self.addForStructBinds(et: et, binds: binds)

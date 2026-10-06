@@ -244,7 +244,7 @@ pub impl Comp {
                     }
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: ltS, tyLen: ltL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
-                    val et: TypeInfo = (try self.typeOf(id: iter))
+                    val et: TypeInfo = (try self.sourceSubjectTypeInfo(exprId: iter))
                     if et.kind == 3 {
                         if isStruct {
                             // the destructure pattern type must name the element struct.

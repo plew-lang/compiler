@@ -1244,8 +1244,6 @@ pub impl Comp {
         mut val resultTerm = expectedTerm
         if resultTerm == 0U64 { resultTerm = self.semanticExprTerm(exprId: exprId) }
         val completes = self.blockCompletesNormally(blkId: blockId)
-        while self.arena.semanticValueBlockCompletion.count() <= blockId { self.arena.semanticValueBlockCompletion.append(0U8) }
-        self.arena.semanticValueBlockCompletion.set(i: blockId, value: if completes { give 1U8 } else { give 2U8 })
         if !completes { resultTerm = 0U64 }
         try self.recordBlockContents(blkId: blockId, resultContext: <BlockResultContext.Value expectedTerm=resultTerm completes=completes />)
         if completes {
@@ -1257,6 +1255,15 @@ pub impl Comp {
                 self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
             }
         }
+        while self.arena.semanticValueBlocks.count() <= blockId { self.arena.semanticValueBlocks.append(<SemanticValueBlockTyping.Pending />) }
+        mut val typing: SemanticValueBlockTyping = <SemanticValueBlockTyping.Completing />
+        if !completes {
+            val value = self.blockGiveExpr(blkId: blockId)
+            mut val diagnosticTerm = 0U64
+            if value < self.arena.exprs.count() { diagnosticTerm = self.semanticExprTerm(exprId: value) }
+            typing = <SemanticValueBlockTyping.NonCompleting diagnosticTerm=diagnosticTerm />
+        }
+        self.arena.semanticValueBlocks.set(i: blockId, value: typing)
         self.popLocals(mark: mark)
         return <Result.Ok value=() />
     }
@@ -2315,8 +2322,9 @@ pub impl Comp {
                     // range var stays untyped here, same as the check pass.
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: varTyStart, tyLen: varTyLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
-                    val et: TypeInfo = (try self.typeOf(id: iter))
-                    val iterTerm: U64 = self.parametricExprTerm(exprId: iter)
+                    val et: TypeInfo = (try self.sourceSubjectTypeInfo(exprId: iter))
+                    mut val iterTerm: U64 = self.parametricExprTerm(exprId: iter)
+                    if iterTerm == 0U64 { iterTerm = et.ref }
                     val iteratorReceiver: CallTemplateReceiver = (try self.protocolReceiverTemplateForExpr(exprId: iter))
                     val nextReceiver: CallTemplateReceiver = <CallTemplateReceiver.PriorProtocolResult slot=1U64 />
                     try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 1U64, receiver: iteratorReceiver)

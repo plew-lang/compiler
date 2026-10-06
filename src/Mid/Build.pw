@@ -4,7 +4,7 @@ use ../Diag only { CompileDiagnostic }
 // recovering a place by spelling from the AST.
 
 use ../Frontend only { Comp }
-use ../Ir only { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, ConditionClauseRange, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+use ../Ir only { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticValueBlockTyping, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, ConditionClauseRange, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
 use ../Diag only { eprintU64 }
 use @Std/Io only { eprint }
 use ../Ops only { opAnd, opOr }
@@ -2604,9 +2604,16 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
     }
     match blockResult {
         MidBlockResult.Value(destination: _) => {
-            if blockId >= c.arena.semanticValueBlockCompletion.count() { result = <MidBuildError.MissingSemanticType /> }
-            else if c.arena.semanticValueBlockCompletion[blockId] == 0U8 { result = <MidBuildError.MissingSemanticType /> }
-            else if c.arena.semanticValueBlockCompletion[blockId] == 2U8 && midCurrentBlockIsOpen(state: state) { result = <MidBuildError.MissingSemanticType /> }
+            if blockId >= c.arena.semanticValueBlocks.count() { result = <MidBuildError.MissingSemanticType /> }
+            else {
+                match c.arena.semanticValueBlocks[blockId] {
+                    SemanticValueBlockTyping.Pending => { result = <MidBuildError.MissingSemanticType /> }
+                    SemanticValueBlockTyping.Completing => {}
+                    SemanticValueBlockTyping.NonCompleting(diagnosticTerm: _) => {
+                        if midCurrentBlockIsOpen(state: state) { result = <MidBuildError.MissingSemanticType /> }
+                    }
+                }
+            }
         }
         _ => {}
     }
