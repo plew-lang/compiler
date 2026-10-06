@@ -577,7 +577,7 @@ pub impl Comp {
         if blockId < self.arena.semanticValueBlocks.count() {
             match self.arena.semanticValueBlocks[blockId] {
                 SemanticValueBlockTyping.Checked(val completion, val resultTerm) => {
-                    if !completion.source.normal || resultTerm == 0U64 { return <Result.Ok value=<Optional.None /> /> }
+                    if !completion.source.normal() || resultTerm == 0U64 { return <Result.Ok value=<Optional.None /> /> }
                     return <Result.Ok value=<Optional.Some v=self.typeInfoOfRef(ref: resultTerm) /> />
                 }
                 SemanticValueBlockTyping.Pending => {}
@@ -585,7 +585,7 @@ pub impl Comp {
         }
         // Only pre-Record construction queries may infer from syntax. A
         // recorded zero result is not permission to repeat that inference.
-        if !self.blockCompletion(blkId: blockId).source.normal { return <Result.Ok value=<Optional.None /> /> }
+        if !self.blockCompletion(blkId: blockId).source.normal() { return <Result.Ok value=<Optional.None /> /> }
         val value = self.blockGiveExpr(blkId: blockId)
         if value >= self.arena.exprs.count() { return <Result.Ok value=<Optional.None /> /> }
         val term = self.semanticExprTerm(exprId: value)

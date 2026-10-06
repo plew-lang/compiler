@@ -1844,10 +1844,10 @@ pub impl Comp {
         if blkId < self.arena.semanticValueBlocks.count() { typing = self.arena.semanticValueBlocks[blkId] }
         match typing {
             SemanticValueBlockTyping.Checked(val completion, resultTerm: _) => {
-                if !completion.source.normal { return <Result.Ok value=() /> }
+                if !completion.source.normal() { return <Result.Ok value=() /> }
             }
             SemanticValueBlockTyping.Pending => {
-                if !self.blockCompletion(blkId: blkId).source.normal { return <Result.Ok value=() /> }
+                if !self.blockCompletion(blkId: blkId).source.normal() { return <Result.Ok value=() /> }
             }
         }
         val value = self.blockGiveExpr(blkId: blkId)

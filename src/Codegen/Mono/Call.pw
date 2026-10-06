@@ -6471,7 +6471,7 @@ pub impl Comp {
         while i < self.blockStmtCount(blkId: blkId) {
             val statement = self.blockStmtAt(blkId: blkId, index: i)
             try self.scanStmtInsts(stmtId: statement)
-            if !self.stmtCompletion(stmtId: statement).execution.normal { break }
+            if !self.stmtCompletion(stmtId: statement).execution.normal() { break }
             i += 1
         }
         self.popLocals(mark: mark)

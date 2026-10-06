@@ -2609,7 +2609,7 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
                 match c.arena.semanticValueBlocks[blockId] {
                     SemanticValueBlockTyping.Pending => { result = <MidBuildError.MissingSemanticType /> }
                     SemanticValueBlockTyping.Checked(val completion, resultTerm: _) => {
-                        if !completion.execution.normal && midCurrentBlockIsOpen(state: state) { result = <MidBuildError.MissingSemanticType /> }
+                        if !completion.execution.normal() && midCurrentBlockIsOpen(state: state) { result = <MidBuildError.MissingSemanticType /> }
                     }
                 }
             }

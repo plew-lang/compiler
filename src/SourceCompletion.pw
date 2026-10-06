@@ -1,15 +1,20 @@
 // Exits are relative to the lexical region being summarized. Blocks consume
 // give; loops consume break/continue; a function boundary consumes return.
 // Closure bodies are separate invocations and never contribute construction exits.
+// The finite exit set has six independent members. Keep its representation
+// private so consumers ask semantic questions rather than inspect bit positions.
 pub struct CompletionEdges {
-    pub val normal: Bool = true
-    pub val gives: Bool = false
-    pub val breaks: Bool = false
-    pub val continues: Bool = false
-    pub val returns: Bool = false
-    pub val diverges: Bool = false
+    val bits: U64 = 1U64
 }
-pub impl CompletionEdges { factory }
+pub impl CompletionEdges {
+    factory empty { return <CompletionEdges bits=0U64 /> }
+    fn normal() -> Bool { return (self.bits & 1U64) != 0U64 }
+    fn gives() -> Bool { return (self.bits & 2U64) != 0U64 }
+    fn breaks() -> Bool { return (self.bits & 4U64) != 0U64 }
+    fn continues() -> Bool { return (self.bits & 8U64) != 0U64 }
+    fn returns() -> Bool { return (self.bits & 16U64) != 0U64 }
+    fn diverges() -> Bool { return (self.bits & 32U64) != 0U64 }
+}
 
 // Source typing deliberately continues after a loop, even when execution
 // cannot. Keep the two channels through composition, not in consumer heuristics.
@@ -28,16 +33,20 @@ pub enum CompletionTransfer {
 }
 
 fn edgesThen(prefix: CompletionEdges, next: CompletionEdges) -> CompletionEdges {
-    if !prefix.normal { return prefix }
-    return <CompletionEdges normal=next.normal gives=prefix.gives || next.gives breaks=prefix.breaks || next.breaks continues=prefix.continues || next.continues returns=prefix.returns || next.returns diverges=prefix.diverges || next.diverges />
+    if !prefix.normal() { return prefix }
+    // Keep existing abrupt exits and replace the normal edge with next.
+    return <CompletionEdges bits=(prefix.bits & 62U64) | next.bits />
 }
 
 fn edgesChoice(first: CompletionEdges, second: CompletionEdges) -> CompletionEdges {
-    return <CompletionEdges normal=first.normal || second.normal gives=first.gives || second.gives breaks=first.breaks || second.breaks continues=first.continues || second.continues returns=first.returns || second.returns diverges=first.diverges || second.diverges />
+    return <CompletionEdges bits=first.bits | second.bits />
 }
 
 fn blockEdges(flow: CompletionEdges) -> CompletionEdges {
-    return <CompletionEdges normal=flow.normal || flow.gives breaks=flow.breaks continues=flow.continues returns=flow.returns diverges=flow.diverges />
+    // Consume only give, converting it to normal continuation at this boundary.
+    mut val bits = flow.bits & 61U64
+    if flow.gives() { bits |= 1U64 }
+    return <CompletionEdges bits=bits />
 }
 
 pub fn completionThen(prefix: SourceCompletion, next: SourceCompletion) -> SourceCompletion {
@@ -49,14 +58,14 @@ pub fn completionChoice(first: SourceCompletion, second: SourceCompletion) -> So
 }
 
 pub fn completionTransfer(transfer: CompletionTransfer) -> SourceCompletion {
-    mut val edges = <CompletionEdges normal=false />
-    match transfer {
-        CompletionTransfer.Give => { edges = <CompletionEdges normal=false gives=true /> }
-        CompletionTransfer.Return => { edges = <CompletionEdges normal=false returns=true /> }
-        CompletionTransfer.Break => { edges = <CompletionEdges normal=false breaks=true /> }
-        CompletionTransfer.Continue => { edges = <CompletionEdges normal=false continues=true /> }
-        CompletionTransfer.Diverge => { edges = <CompletionEdges normal=false diverges=true /> }
+    val bits: U64 = match transfer {
+        CompletionTransfer.Give => 2U64
+        CompletionTransfer.Return => 16U64
+        CompletionTransfer.Break => 4U64
+        CompletionTransfer.Continue => 8U64
+        CompletionTransfer.Diverge => 32U64
     }
+    val edges = <CompletionEdges bits=bits />
     return <SourceCompletion source=edges execution=edges />
 }
 
@@ -65,9 +74,11 @@ pub fn completionBlock(flow: SourceCompletion) -> SourceCompletion {
 }
 
 pub fn completionLoop(body: SourceCompletion, maySkip: Bool) -> SourceCompletion {
-    // A body's return is an execution exit, not a source-level divergence of
-    // the loop statement. Only the condition/iterator is composed outside here.
-    return <SourceCompletion execution=<CompletionEdges normal=maySkip || body.execution.breaks returns=body.execution.returns diverges=body.execution.diverges /> />
+    // Only return/diverge escape the loop's execution boundary. Source typing
+    // continues after a loop regardless of its analyzed execution behavior.
+    mut val bits = body.execution.bits & 48U64
+    if maySkip || body.execution.breaks() { bits |= 1U64 }
+    return <SourceCompletion execution=<CompletionEdges bits=bits /> />
 }
 
 // Source block result context distinguishes statements from value regions.

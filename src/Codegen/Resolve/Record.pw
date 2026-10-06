@@ -1236,7 +1236,7 @@ pub impl Comp {
         match self.arena.semanticValueBlocks[blockId] {
             SemanticValueBlockTyping.Pending => { return false }
             SemanticValueBlockTyping.Checked(val completion, val resultTerm) => {
-                if !completion.source.normal || resultTerm == 0U64 { return false }
+                if !completion.source.normal() || resultTerm == 0U64 { return false }
                 self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
                 return true
             }
@@ -1250,7 +1250,7 @@ pub impl Comp {
         mut val resultTerm = expectedTerm
         if resultTerm == 0U64 { resultTerm = self.semanticExprTerm(exprId: exprId) }
         val completion = try self.recordBlockContents(blkId: blockId, resultContext: <BlockResultContext.Value expectedTerm=resultTerm />)
-        if completion.source.normal {
+        if completion.source.normal() {
             val value = self.blockGiveExpr(blkId: blockId)
             if value < self.arena.exprs.count() {
                 if resultTerm == 0U64 {
@@ -1260,7 +1260,7 @@ pub impl Comp {
             }
         }
         while self.arena.semanticValueBlocks.count() <= blockId { self.arena.semanticValueBlocks.append(<SemanticValueBlockTyping.Pending />) }
-        if !completion.source.normal { resultTerm = 0U64 }
+        if !completion.source.normal() { resultTerm = 0U64 }
         self.arena.semanticValueBlocks.set(i: blockId, value: <SemanticValueBlockTyping.Checked completion=completion resultTerm=resultTerm />)
         self.popLocals(mark: mark)
         return <Result.Ok value=() />
@@ -2426,10 +2426,10 @@ pub impl Comp {
         mut val warned = false
         while i < self.blockStmtCount(blkId: blkId) {
             val statement = self.blockStmtAt(blkId: blkId, index: i)
-            if !flow.source.normal {
+            if !flow.source.normal() {
                 return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: statement), msg: "code after a source control transfer is not allowed (spec/11)") />
             }
-            if !flow.execution.normal && !warned {
+            if !flow.execution.normal() && !warned {
                 self.warnUnreachableStatement(stmtId: statement)
                 warned = true
             }
@@ -2442,7 +2442,7 @@ pub impl Comp {
             try self.recordStmt(stmtId: statement, expectedTerm: expectedTerm, explicitResult: !self.arena.blocks[blkId].implicitResult)
             val statementFlow = self.stmtCompletion(stmtId: statement)
             flow = completionThen(prefix: flow, next: statementFlow)
-            if permitsGive && statementFlow.source.gives {
+            if permitsGive && statementFlow.source.gives() {
                 match self.arena.stmts[statement] {
                     Stmt.Give(val value) => {
                         // Keep source-position binding identity, including gives
