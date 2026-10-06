@@ -2391,8 +2391,14 @@ pub impl Comp {
         }
         mut val i: U64 = 0
         mut val hasGive = false
+        mut val reachable = true
+        mut val warned = false
         while i < self.blockStmtCount(blkId: blkId) {
             val statement = self.blockStmtAt(blkId: blkId, index: i)
+            if !reachable && !warned {
+                self.warnUnreachableStatement(stmtId: statement)
+                warned = true
+            }
             match self.arena.stmts[statement] {
                 Stmt.Give(val value) => {
                     if !permitsGive { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: value), msg: "`give` is only allowed in a value block (spec/11)") /> }
@@ -2402,6 +2408,7 @@ pub impl Comp {
                 _ => {}
             }
             try self.recordStmt(stmtId: statement, expectedTerm: expectedTerm)
+            if reachable { reachable = self.stmtCompletion(stmtId: statement).normal }
             if checkResult {
                 match self.arena.stmts[statement] {
                     Stmt.Give(val value) => {

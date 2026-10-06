@@ -2,8 +2,8 @@
 // from structural patterns. Record selects meaning; Mid selects the CFG.
 
 // Lower match arms. Each arm's `body` is a Block index (both statement and
-// expression position). A value-match arm's block ends in `give`; a diverging arm
-// (`=> panic`/`=> return`) is flagged so the backend excludes it from the PHI.
+// expression position). Semantic completion analysis determines which arms
+// produce a result; syntax lowering does not predict their control flow.
 
 pub impl Comp {
     // A value pattern is an ordinary Eq test. It creates no binding scope;
@@ -48,18 +48,14 @@ pub impl Comp {
         return <Result.Ok value=self.pushConditionClauses(conditions: lowered) />
     }
 
-    inout fn lowerMatchArms(arms: Array[MatchArmAst], isExpr: Bool) -> Result[MatchArmRange, CompileDiagnostic] {
+    inout fn lowerMatchArms(arms: Array[MatchArmAst]) -> Result[MatchArmRange, CompileDiagnostic] {
         mut val out: Array[MatchArm] = []
         mut val i: U64 = 0
         while i < arms.count() {
             val arm: MatchArmAst = arms[i]
             val pi: PatInfo = (try self.lowerPatternInfo(p: arm.pattern))
             val body: U64 = (try self.lowerBlock(b: arm.body))
-            mut val diverge: Bool = false
-            if isExpr {
-                diverge = armBlockDiverges(b: arm.body)
-            }
-            out.append(<MatchArm offset=arm.pattern.span.start captureStart=pi.captureStart captureLen=pi.captureLen captureMutable=pi.captureMutable orGroup=arm.orGroup isValuePattern=pi.isValuePattern valueExpr=pi.valueExpr isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body isStruct=pi.isStruct isDiverge=diverge />)
+            out.append(<MatchArm offset=arm.pattern.span.start captureStart=pi.captureStart captureLen=pi.captureLen captureMutable=pi.captureMutable orGroup=arm.orGroup isValuePattern=pi.isValuePattern valueExpr=pi.valueExpr isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body isStruct=pi.isStruct />)
             i += 1
         }
         return <Result.Ok value=self.pushMatchArms(arms: out) />
@@ -99,42 +95,29 @@ pub impl Comp {
         return <Result.Ok value=<PatInfo isWildcard=false enumStart=typeName.start enumLen=typeName.end - typeName.start variantStart=variant.start variantLen=variant.end - variant.start binds=self.pushBinds(binds: binds) isStruct=pattern.isStruct /> />
     }
 
-    inout fn syntaxArmBlockDiverges(arm: SyntaxMatchArm) -> Bool {
-        val block: SyntaxBlock = syntaxBlock(file: self.syntax, id: arm.body)
-        val count: U64 = syntaxBlockStmtCount(file: self.syntax, block: block)
-        if count == 0U64 { return false }
-        // This is a closed parser-tag dispatch, not a user-visible equality
-        // operation.  Requiring an Eq witness for SyntaxStmtKind couples the
-        // compiler's own control decision to a derive in @Plew/Syntax.
-        match syntaxStmt(file: self.syntax, id: syntaxBlockStmt(file: self.syntax, block: block, index: count - 1U64)).kind {
-            SyntaxStmtKind.Give => { return false }
-            _ => { return true }
-        }
-    }
-
     // Statement match arms from SyntaxFile share the same semantic MatchArm
     // pool as the value-AST path. Scalar/capture desugaring chooses whether it
     // may call this after preserving its own single-evaluation transformation.
-    inout fn lowerSyntaxMatchArms(arms: SyntaxSlice, isExpr: Bool) -> Result[MatchArmRange, CompileDiagnostic] {
+    inout fn lowerSyntaxMatchArms(arms: SyntaxSlice) -> Result[MatchArmRange, CompileDiagnostic] {
         mut val out: Array[MatchArm] = []
         mut val i: U64 = 0U64
         while i < syntaxMatchArmCount(file: self.syntax, arms: arms) {
             val arm: SyntaxMatchArm = syntaxMatchArm(file: self.syntax, id: syntaxMatchArmAt(file: self.syntax, arms: arms, index: i))
             val pattern: SyntaxPattern = syntaxPattern(file: self.syntax, id: arm.pat)
             val info: PatInfo = (try self.lowerSyntaxPatternInfo(pattern: pattern))
-            out.append(<MatchArm offset=pattern.span.start orGroup=arm.orGroup captureMutable=pattern.captureMutable captureStart=pattern.captureName.start captureLen=pattern.captureName.end - pattern.captureName.start isValuePattern=info.isValuePattern valueExpr=info.valueExpr isWildcard=info.isWildcard enumStart=info.enumStart enumLen=info.enumLen variantStart=info.variantStart variantLen=info.variantLen binds=info.binds body=(try self.lowerSyntaxBlock(id: arm.body)) isStruct=info.isStruct isDiverge=isExpr && self.syntaxArmBlockDiverges(arm: arm) />)
+            out.append(<MatchArm offset=pattern.span.start orGroup=arm.orGroup captureMutable=pattern.captureMutable captureStart=pattern.captureName.start captureLen=pattern.captureName.end - pattern.captureName.start isValuePattern=info.isValuePattern valueExpr=info.valueExpr isWildcard=info.isWildcard enumStart=info.enumStart enumLen=info.enumLen variantStart=info.variantStart variantLen=info.variantLen binds=info.binds body=(try self.lowerSyntaxBlock(id: arm.body)) isStruct=info.isStruct />)
             i += 1U64
         }
         return <Result.Ok value=self.pushMatchArms(arms: out) />
     }
 
     inout fn lowerSyntaxMatchStmtInto(stmt: SyntaxStmt, stmts: inout Array[U64]) -> Result[(), CompileDiagnostic] {
-        stmts.append(self.pushStmt(s: <Stmt.Match scrut=(try self.lowerSyntaxExpr(id: stmt.child0)) arms=(try self.lowerSyntaxMatchArms(arms: stmt.arms, isExpr: false)) />))
+        stmts.append(self.pushStmt(s: <Stmt.Match scrut=(try self.lowerSyntaxExpr(id: stmt.child0)) arms=(try self.lowerSyntaxMatchArms(arms: stmt.arms)) />))
         return <Result.Ok value=() />
     }
 
     inout fn lowerSyntaxMatchExprInto(expr: SyntaxExpr) -> Result[U64, CompileDiagnostic] {
-        return <Result.Ok value=self.pushExpr(e: <Expr.MatchExpr scrut=(try self.lowerSyntaxExpr(id: expr.child0)) arms=(try self.lowerSyntaxMatchArms(arms: expr.arms, isExpr: true)) />) />
+        return <Result.Ok value=self.pushExpr(e: <Expr.MatchExpr scrut=(try self.lowerSyntaxExpr(id: expr.child0)) arms=(try self.lowerSyntaxMatchArms(arms: expr.arms)) />) />
     }
 
     // Compound assign `place OP= v` desugars to `place = place OP v` (spec/12), evaluating
@@ -559,7 +542,7 @@ pub impl Comp {
             }
             StmtAst.Match(val scrut, val arms, val span) => {
                 val sc: U64 = (try self.lowerExpr(e: scrut))
-                val ma: MatchArmRange = (try self.lowerMatchArms(arms: arms, isExpr: false))
+                val ma: MatchArmRange = (try self.lowerMatchArms(arms: arms))
                 result = self.pushStmt(s: <Stmt.Match scrut=sc arms=ma />)
             }
             StmtAst.Panic(val msg, val span) => {

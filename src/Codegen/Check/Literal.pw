@@ -112,6 +112,14 @@ pub impl Comp {
 pub impl Comp {
 
     inout fn checkLitCtx(id: U64, eKind: U64, eBits: U64, eSgn: Bool) -> Result[(), CompileDiagnostic] {
+        // Verification without a new expected type must retain the concrete
+        // literal context established by ordered semantic recording.
+        if eKind == 0 && id < self.arena.semanticExprTypes.count() && self.arena.semanticExprTypes[id].literalContext != 0U64 {
+            val recorded: TypeInfo = self.exprIntCtxTypeInfo(id: id)
+            if self.tiIsInt(ti: recorded) || self.tiIsFloat(ti: recorded) {
+                return self.checkLitTi(id: id, ti: recorded)
+            }
+        }
         // record the int context in the complete semantic expression entry so `typeOf`
         // can recover an otherwise width-less form (`0-1` / `match{...}+1` typed only
         // by its binding). eKind 1
@@ -293,7 +301,7 @@ pub impl Comp {
                 while i < arms.len {
                     val arm: MatchArm = self.matchArmAt(arms: arms, index: i)
                     // context flows to each value arm's `give` value; diverging arms have none.
-                    if !(arm.isDiverge) {
+                    if self.blockCompletesNormally(blkId: arm.body) {
                         val g: U64 = self.blockGiveExpr(blkId: arm.body)
                         if g < self.arena.exprs.count() {
                             // bring the arm's payload binds into scope so a give-value that

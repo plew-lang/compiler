@@ -1,0 +1,2 @@
+fn main() { return
+val value: I64 = "invalid" }

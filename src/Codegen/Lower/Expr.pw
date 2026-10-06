@@ -219,7 +219,7 @@ pub impl Comp {
                 result = self.pushExpr(e: <Expr.Cast operand=o tyStart=pt.start tyLen=pt.len ty=pt.ref />)
             }
             ExprAst.MatchExpr(val scrut, val arms, span: _) => {
-                result = self.pushExpr(e: <Expr.MatchExpr scrut=(try self.lowerExpr(e: scrut)) arms=(try self.lowerMatchArms(arms: arms, isExpr: true)) />)
+                result = self.pushExpr(e: <Expr.MatchExpr scrut=(try self.lowerExpr(e: scrut)) arms=(try self.lowerMatchArms(arms: arms)) />)
             }
             ExprAst.BlockExpr(val body, val span) => { result = self.pushExpr(e: <Expr.Block body=(try self.lowerBlock(b: body)) offset=span.start />) }
             ExprAst.IfChain(val conditions, val thenBlk, val elseBlk, span: _) => {

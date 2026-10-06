@@ -1,0 +1,24 @@
+use @Std/Io only { print }
+enum Choice { First Second }
+fn main() {
+    val branch = if false { give 42I64 } else { give 1 }
+    val nested = if false { give 42I64 } else { give { give -2 } }
+    val arithmetic = if false { give 42I64 } else { give 1 + 2 }
+    val scalar = match true { false => 42I64 true => 4 }
+    val arm = match <Choice.Second /> {
+        Choice.First => { give 42I64 }
+        Choice.Second => { give 5 }
+    }
+    val tail = match <Choice.Second /> {
+        Choice.First => { give 42I64
+            print(99I64) }
+        Choice.Second => { give 6
+            print(99I64) }
+    }
+    print(branch)
+    print(nested)
+    print(arithmetic)
+    print(scalar)
+    print(arm)
+    print(tail)
+}

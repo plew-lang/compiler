@@ -120,6 +120,7 @@ pub struct Comp {
     // driver decides how to display them; requesting a body emits no process IO.
     pub mut val pendingDiagnostics: Array[CompileDiagnostic] = []
     pub mut val reportedUnreachableArms: Set[U64] = Set.new()
+    pub mut val reportedUnreachableStatements: Set[U64] = Set.new()
 
     // Source bytes are append-only within a session. Only successfully decoded
     // literals are published; Mid and LLVM share this immutable value by offset.
@@ -2000,18 +2001,6 @@ fn litFitsBits(value: U64, neg: Bool, bits: U64, sgn: Bool) -> Bool {
     if bits == 16 { return value <= 65535 }
     if bits == 32 { return value <= 4294967295 }
     return true
-}
-
-// True if a value-match arm block diverges (`=> panic …` / `=> return …`) rather
-// than giving a value — its terminal statement is not a `give`.
-fn armBlockDiverges(b: BlockAst) -> Bool {
-    if b.stmts.count() == 0 {
-        return false
-    }
-    match b.stmts[b.stmts.count() - 1] {
-        StmtAst.Give(value: _, span: _) => { return false }
-        _ => { return true }
-    }
 }
 
 // Byte length of a span.

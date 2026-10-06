@@ -183,6 +183,12 @@ else
     fail=$((fail + 1)); failed="$failed match-diagnostics"
 fi
 
+if python3 -B ./tests/tooling/test-unreachable-diagnostics.py --compiler "$PLEWC"; then
+    echo "PASS unreachable-diagnostics"
+else
+    fail=$((fail + 1)); failed="$failed unreachable-diagnostics"
+fi
+
 if sh ./tests/tooling/test-cli-options.sh; then
     :
 else

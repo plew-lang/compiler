@@ -1,7 +1,7 @@
 // Part of name/type resolution (root: _.pw): match-pattern binding to
 // locals.
 
-// The value expression of the last `give` in a block (the block's result), or
+// The value expression of the block's directly belonging `give`, or
 // `c.arena.exprs.count()` (one past the end) if the block has no `give`. A U64 sentinel
 // keeps callers off signed indices. Used to infer a value-position `if`'s type.
 

@@ -754,18 +754,15 @@ pub enum Expr {
     ExtView(recv: U64, source: ResolvedViewSource, strip: Bool)
     Cast(operand: U64, tyStart: U64, tyLen: U64, ty: U64)
     // value-position `match scrut { Pat => expr, ... }`: like Stmt.Match but each
-    // arm yields an expression (MatchArm.body is an Expr index, not a Block).
-    // Lowers to a C statement-expression.
+    // arm owns a Block index. Normal completion determines result production.
     MatchExpr(scrut: U64, arms: MatchArmRange)
     // Read the already evaluated match subject; never evaluate scrut again.
     MatchSubject(scrut: U64)
-    // value-position `if cond { ... give a } else { ... give b }`: each branch is
-    // a block ending in `give`. Lowers to a C statement-expression (like
-    // MatchExpr). `else` is mandatory in value position (it must always yield).
     // Compiler-generated expression steps; no new full-expression lifetime.
     Sequence(body: U64)
     // Source block expression: lexical ownership scope, unlike generated steps.
     Block(body: U64, offset: U64)
+    // Value-position if branches share block result and completion semantics.
     IfExpr(cond: U64, thenBlk: U64, elseBlk: U64)
     IfChain(conditions: ConditionClauseRange, thenBlk: U64, elseBlk: U64)
     // `base?.<cont>` (optional chaining, spec/12): if `base` (a Chain type) yields a
@@ -837,16 +834,12 @@ pub struct MatchArm {
     pub val variantLen: U64
     pub val binds: BindRange
     // body is always a Block index (for both Stmt.Match and Expr.MatchExpr). A
-    // value-match arm's block ends in `give <expr>` (the arm value); a diverging
-    // arm's block ends in `panic`/`return` and is excluded from the result PHI.
+    // value-match arm transfers its result through give; semantic completion
+    // determines whether it can produce a value.
     pub val body: U64
     // a struct destructuring pattern `S { val x }` (irrefutable, no tag): bind
     // fields directly from the scrutinee. enumStart names the struct type.
     pub val isStruct: Bool
-    // (value-match only) the arm diverges (`=> panic …` / `=> return …`) and so
-    // yields no value. Backend excludes it from the result PHI. Always false for
-    // statement-match arms (their value is unused).
-    pub val isDiverge: Bool = false
 }
 
 // The pattern part of a match arm (everything before `=>`), shared by statement
@@ -3481,8 +3474,8 @@ pub impl ParseScratch { factory }
 
 // The per-body cursor: transient state for the function/closure body currently
 // being lowered / checked / emitted, saved & restored around each body (NOT live
-// across bodies). `locals` are the variables in scope; `tmp`/`giveTmp` are
-// fresh-name counters; `ret*` is the declared return type; `hasRecv`/`recv*`/
+// across bodies). `locals` are the variables in scope; `tmp` is
+// a fresh-name counter; `ret*` is the declared return type; `hasRecv`/`recv*`/
 // `self*`/`item*` are the method receiver + resolved Self/Item; `typeParams`/
 // `typeArgs` are the generic substitution env; `closureId`/`inClosure`/
 // `captureMark` track closure-body emission; `verifyLoopDepth`/`verifyMovedIdx`/
@@ -3493,7 +3486,6 @@ pub impl ParseScratch { factory }
 pub struct Cursor {
     pub mut val locals: Array[Local] = []
     pub mut val tmp: U64 = 0
-    pub mut val giveTmp: U64 = 0
     pub mut val loopMark: U64 = 0
     pub mut val isMain: Bool = false
     pub mut val retVoid: Bool = false

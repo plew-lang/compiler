@@ -5558,7 +5558,7 @@ pub impl Comp {
         val someBlk: U64 = self.pushBlock(stmts: someStmts)
         mut val someBinds: Array[Bind] = []
         someBinds.append(<Bind nameStart=cvN.nameStart nameLen=cvN.nameLen nameId=cvN.nameId fieldStart=vFieldN.nameStart fieldLen=vFieldN.nameLen offset=memberStart />)
-        val someArm: MatchArm = <MatchArm isWildcard=false enumStart=optN.nameStart enumLen=optN.nameLen variantStart=someN.nameStart variantLen=someN.nameLen binds=self.pushBinds(binds: someBinds) body=someBlk isStruct=false isDiverge=false />
+        val someArm: MatchArm = <MatchArm isWildcard=false enumStart=optN.nameStart enumLen=optN.nameLen variantStart=someN.nameStart variantLen=someN.nameLen binds=self.pushBinds(binds: someBinds) body=someBlk isStruct=false />
         // None => <Head.empty />
         val emptyRecv: U64 = self.pushExpr(e: <Expr.Ident start=headStart len=headLen />)
         self.recordSyntheticExprType(exprId: emptyRecv, ref: stageRef)
@@ -5572,7 +5572,7 @@ pub impl Comp {
         mut val noneStmts: Array[U64] = []
         noneStmts.append(self.pushStmt(s: <Stmt.Give value=emptyCall />))
         val noneBlk: U64 = self.pushBlock(stmts: noneStmts)
-        val noneArm: MatchArm = <MatchArm isWildcard=false enumStart=optN.nameStart enumLen=optN.nameLen variantStart=noneN.nameStart variantLen=noneN.nameLen binds=<BindRange start=0U64 len=0U64 /> body=noneBlk isStruct=false isDiverge=false />
+        val noneArm: MatchArm = <MatchArm isWildcard=false enumStart=optN.nameStart enumLen=optN.nameLen variantStart=noneN.nameStart variantLen=noneN.nameLen binds=<BindRange start=0U64 len=0U64 /> body=noneBlk isStruct=false />
         mut val arms: Array[MatchArm] = []
         arms.append(someArm)
         arms.append(noneArm)

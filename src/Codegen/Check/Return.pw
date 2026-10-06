@@ -1,6 +1,14 @@
 // Normal continuation and loop escape are shared source-flow facts.
 
 pub impl Comp {
+    inout fn warnUnreachableStatement(stmtId: U64) {
+        val offset = self.stmtPrincipalOffset(sid: stmtId)
+        if offset == 0U64 || self.reportedUnreachableStatements.contains(offset) { return }
+        self.reportedUnreachableStatements.insert(offset)
+        val location = self.diagnosticAt(offset: offset, msg: "unreachable code: preceding control flow cannot continue here (spec/11)")
+        self.pendingDiagnostics.append(<CompileDiagnostic severity=<DiagnosticSeverity.Warning /> location=location.location message=location.message />)
+    }
+
     inout fn conditionChainCompletion(conditions: ConditionClauseRange, thenBlk: U64, elseBlk: U64) -> SourceCompletion {
         mut val flow = self.blockCompletion(blkId: thenBlk)
         val failure = self.blockCompletion(blkId: elseBlk)
