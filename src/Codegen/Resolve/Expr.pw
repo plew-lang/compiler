@@ -1204,8 +1204,30 @@ pub impl Comp {
             Optional.None => {}
         }
         val function = self.arena.functionAt(index: callee)
-        if receiverRef != 0U64 { return self.finalMethodEnvironment(f: function, receiverRef: receiverRef, args: args) }
-        return self.freeCallParameterEnvironment(f: function, args: args)
+        val selectedReceiver = self.syntheticCallReceiverTerm(exprId: exprId, fallback: receiverRef)
+        val environment = if selectedReceiver != 0U64 {
+            give (try self.finalMethodEnvironment(f: function, receiverRef: selectedReceiver, args: args))
+        } else {
+            give (try self.freeCallParameterEnvironment(f: function, args: args))
+        }
+        if self.traceCodegen {
+            eprint(text: "[trace-codegen] constructing-call-environment expr=")
+            eprintU64(n: exprId)
+            eprint(text: " callee=")
+            eprintU64(n: callee)
+            eprint(text: " receiver=")
+            self.traceMonoTypeHead(ref: receiverRef)
+            mut val binding = 0U64
+            while binding < environment.params.count() && binding < environment.args.count() {
+                eprint(text: " binding=")
+                eprintU64(n: environment.params[binding].paramId)
+                eprint(text: "->")
+                self.traceMonoTypeHead(ref: environment.args[binding])
+                binding += 1U64
+            }
+            eprint(text: "\n")
+        }
+        return <Result.Ok value=environment />
     }
 
     inout fn recordedDirectCallEnvironmentAt(exprId: U64, callee: U64) -> Result[Optional[InstanceEnvironment], CompileDiagnostic] {
@@ -1221,10 +1243,27 @@ pub impl Comp {
                 // This construction-time query returns an environment only
                 // when every selected binder has a value. A published partial
                 // call row is not a proof-complete signature.
-                if arguments.count() != function.typeParams.count() || !self.fnArgsAllResolved(args: arguments) {
+                if arguments.count() != function.typeParams.count() || (arguments.count() != 0U64 && !self.fnArgsAllResolved(args: arguments)) {
                     return <Result.Ok value=<Optional.None /> />
                 }
                 val environment = try self.recordedDirectCallEnvironment(function: self.arena.functionAt(index: selected), receiver: receiver, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: self.thawStaticConformanceProof(id: proofId))
+                if self.traceCodegen {
+                    eprint(text: "[trace-codegen] recorded-call-environment expr=")
+                    eprintU64(n: exprId)
+                    eprint(text: " callee=")
+                    eprintU64(n: selected)
+                    eprint(text: " receiver=")
+                    self.traceMonoTypeHead(ref: environment.receiverRef)
+                    mut val binding = 0U64
+                    while binding < environment.params.count() && binding < environment.args.count() {
+                        eprint(text: " binding=")
+                        eprintU64(n: environment.params[binding].paramId)
+                        eprint(text: "->")
+                        self.traceMonoTypeHead(ref: environment.args[binding])
+                        binding += 1U64
+                    }
+                    eprint(text: "\n")
+                }
                 return <Result.Ok value=<Optional.Some v=environment /> />
             }
             _ => { return <Result.Ok value=<Optional.None /> /> }

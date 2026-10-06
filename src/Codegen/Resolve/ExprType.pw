@@ -163,6 +163,15 @@ pub impl Comp {
         if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() {
             return <Result.Ok value=<InstanceEnvironment /> />
         }
+        // A generic type qualifier without written arguments is an inference
+        // request, not an instantiated receiver with zero parameters. Complete
+        // it from this call before matching the declaration's receiver pattern.
+        if f.isAssoc && f.recvTy != 0U64 && f.recvTy < self.arena.typeCount() && self.arena.typeTerms[receiverRef].args.len == 0U64 && self.arena.typeTerms[f.recvTy].args.len != 0U64 {
+            val inferredReceiver = try self.associatedReceiverFromArguments(f: f, args: args)
+            if inferredReceiver != 0U64 && inferredReceiver != receiverRef && self.typeTermRefSameHead(a: receiverRef, b: inferredReceiver) {
+                return self.finalMethodEnvironment(f: f, receiverRef: inferredReceiver, args: args)
+            }
+        }
         // A method's generic binder list can contain the nominal declaration
         // binder, an impl receiver-pattern binder, and method-owned binders.
         // They are lexical identities, not positional aliases. Finalization
