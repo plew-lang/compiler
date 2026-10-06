@@ -96,6 +96,8 @@ pub impl Comp {
             self.traceMonoTypeHead(ref: inferred)
             eprint(text: " expr=")
             eprintU64(n: valueExpr)
+            eprint(text: " position=")
+            eprint(text: pos)
             eprint(text: " unresolved=")
             if compatibility.isUnresolved() { eprint(text: "true\n") } else { eprint(text: "false\n") }
         }
@@ -427,13 +429,7 @@ pub impl Comp {
             while di < defFields.count() {
                 if spansEqual(c: inout self, aStart: defFields[di].nameStart, aLen: defFields[di].nameLen, bStart: makeField.nameStart, bLen: makeField.nameLen) {
                     if defFields[di].ty != 0U64 {
-                        val savedP: Array[Bind] = self.cur.typeParams
-                        val savedA: Array[U64] = self.cur.typeArgs
-                        self.cur.typeParams = params
-                        self.cur.typeArgs = targs
-                        val grounded: U64 = (try self.groundTypeRef(ref: defFields[di].ty))
-                        self.cur.typeParams = savedP
-                        self.cur.typeArgs = savedA
+                        val grounded = try self.groundTermForBody(ref: defFields[di].ty, environment: <InstanceEnvironment params=params args=targs />, selfRef: 0U64, itemRef: 0U64)
                         try self.tcCheckValue(expectedRef: grounded, valueExpr: makeField.value, pos: "ginst-field")
                     }
                     di = defFields.count()

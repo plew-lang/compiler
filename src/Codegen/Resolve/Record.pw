@@ -1887,8 +1887,12 @@ pub impl Comp {
                 // A declared slot is an input to construction, not a fact
                 // recovered after recording its children. Select only context
                 // compatible with the written declaration/type arguments.
-                mut val instance: U64 = ty
-                if (try self.makeAcceptsExpectedTerm(exprId: exprId, writtenTerm: ty, isEnum: isEnum, fields: fields, expectedTerm: expectedTerm)) {
+                // Repeated lexical walks consume the selected construction
+                // type. The lowered syntax may still contain an omitted type
+                // argument list; it cannot undo a prior contextual solution.
+                mut val instance = self.semanticExprTerm(exprId: exprId)
+                if instance == 0U64 { instance = ty }
+                if (try self.makeAcceptsExpectedTerm(exprId: exprId, writtenTerm: instance, isEnum: isEnum, fields: fields, expectedTerm: expectedTerm)) {
                     instance = expectedTerm
                 }
                 mut val i: U64 = 0U64
