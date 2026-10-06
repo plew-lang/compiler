@@ -1292,15 +1292,22 @@ pub impl Comp {
 
     inout fn recordOperatorTemplate(exprId: U64, op: I64, operandExprs: Array[U64], isUnary: Bool) -> Result[(), CompileDiagnostic] {
         if !isUnary && (op == opAnd() || op == opOr()) { return <Result.Ok value=() /> }
-        mut val operands: Array[CallArgumentSource] = []
-        mut val i: U64 = 0U64
-        while i < operandExprs.count() {
-            operands.append((try self.callArgumentSource(exprId: operandExprs[i])))
-            i += 1U64
-        }
         mut val receiverTerm: U64 = 0U64
         if operandExprs.count() > 0U64 { receiverTerm = self.parametricExprTerm(exprId: operandExprs[0]) }
         val resolution: StaticMemberResolution = (try self.staticOperatorTemplateResolution(op: op, receiverTerm: receiverTerm, isUnary: isUnary))
+        mut val operands: Array[CallArgumentSource] = []
+        mut val i: U64 = 0U64
+        while i < operandExprs.count() {
+            val operand = operandExprs[i]
+            val expected = self.staticRequirementParamTypeAt(resolution: resolution, paramIdx: i)
+            if expected != 0U64 {
+                if self.expressionNeedsTypeContext(exprId: operand) { try self.recordExpr(exprId: operand, expectedTerm: expected) }
+                try self.recordSemanticExprExpectedResult(exprId: operand, expectedTerm: expected)
+                try self.tcCheckValue(expectedRef: expected, valueExpr: operand, pos: "operator operand")
+            }
+            operands.append((try self.callArgumentSource(exprId: operand)))
+            i += 1U64
+        }
         self.recordStaticInvocationCompletion(exprId: exprId, resolution: resolution)
         val staticResult: U64 = (try self.staticOperatorTemplateResultTerm(op: op, resolution: resolution))
         if staticResult != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: staticResult) }

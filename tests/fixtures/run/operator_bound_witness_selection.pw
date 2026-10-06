@@ -1,0 +1,34 @@
+use @Std/Io only { print }
+use @Std/Core only { Add, Neg }
+
+struct Counter { pub val value: I64 }
+pub impl Counter { factory }
+
+impl Counter as Add[U8] {
+    type Output = I64
+    assoc fn add(lhs~: Counter, rhs~: U8) -> I64 { return lhs.value + 100I64 + (rhs as I64) }
+}
+impl Counter as Add[I64] {
+    type Output = I64
+    assoc fn add(lhs~: Counter, rhs~: I64) -> I64 { return lhs.value + rhs }
+}
+impl Counter as Neg {
+    type Output = I64
+    assoc fn neg(value~: Counter) -> I64 { return 0I64 - value.value }
+}
+
+// The declared bound chooses Add[I64], including the literal's context.
+// Instantiation must not reconsider the earlier Add[U8] declaration.
+fn increment[T](value: T) -> I64 where T: Add[I64, Output = I64] {
+    return value + 1
+}
+fn negate[T](value: T) -> I64 where T: Neg[Output = I64] {
+    return -value
+}
+
+fn main() {
+    val value = <Counter value=41I64 />
+    print(increment(value: value))
+    print(negate(value: value))
+    print(value + 1U8)
+}

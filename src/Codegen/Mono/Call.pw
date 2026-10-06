@@ -1650,9 +1650,11 @@ pub impl Comp {
         mut val op: I64 = 0
         mut val operands: Array[CallArgumentSource] = []
         mut val resultTerm: U64 = 0U64
+        mut val resolution: StaticMemberResolution = <StaticMemberResolution.Missing />
         match template.kind {
-            CallTemplateKind.Operator(op: val storedOp, operands: val storedOperands, resolution: _, resultTerm: val storedResult) => {
+            CallTemplateKind.Operator(op: val storedOp, operands: val storedOperands, resolution: val storedResolution, resultTerm: val storedResult) => {
                 op = storedOp
+                resolution = storedResolution
                 mut val operandIndex: U64 = 0U64
                 while operandIndex < storedOperands.len {
                     if storedOperands.start + operandIndex >= self.decls.callTemplateOperandPool.count() { return <Result.Ok value=() /> }
@@ -1689,14 +1691,30 @@ pub impl Comp {
         mut val selectedReceiverRef: U64 = 0U64
         if operandRefs.count() > 0U64 { selectedReceiverRef = operandRefs[0] }
         if selectedReceiverRef == 0U64 { selectedReceiverRef = expectedResultRef }
+        mut val argumentSources: Array[CallTemplateArgument] = []
+        mut val sourceIndex = 0U64
+        while sourceIndex < operands.count() {
+            argumentSources.append(<CallTemplateArgument source=operands[sourceIndex] isDispatchReceiver=sourceIndex == 0U64 isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />)
+            sourceIndex += 1U64
+        }
         mut val callee: U64 = self.arena.functionCount()
-        if !(op == opAnd() || op == opOr()) && selectedReceiverRef != 0U64 && selectedReceiverRef < self.arena.typeCount() {
-            val receiver: TypeRef = self.arena.typeAt(index: selectedReceiverRef)
-            if operands.count() == 1U64 {
-                callee = self.unaryOperatorCallee(receiverRef: selectedReceiverRef, op: op)
-            } else if operands.count() == 2U64 {
-                val rhsUntyped: Bool = operandRefs[1] == 0U64
-                callee = (try self.findBinTraitWitnessForRef(receiverRef: selectedReceiverRef, op: op, rhsRef: operandRefs[1], rhsUntyped: rhsUntyped))
+        mut val selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />
+        match resolution {
+            StaticMemberResolution.Missing => {
+                // Concrete/primitive selection still belongs to the Record
+                // migration. Symbolic requirements never enter this path.
+                if !(op == opAnd() || op == opOr()) && selectedReceiverRef != 0U64 && selectedReceiverRef < self.arena.typeCount() {
+                    if operands.count() == 1U64 {
+                        callee = self.unaryOperatorCallee(receiverRef: selectedReceiverRef, op: op)
+                    } else if operands.count() == 2U64 {
+                        callee = (try self.findBinTraitWitnessForRef(receiverRef: selectedReceiverRef, op: op, rhsRef: operandRefs[1], rhsUntyped: operandRefs[1] == 0U64))
+                    }
+                }
+            }
+            _ => {
+                val selected = try self.selectStaticMethodTemplateCall(exprId: exprId, receiver: <CallTemplateReceiver.Term term=selectedReceiverRef />, arguments: argumentSources, resolution: resolution, resultTerm: resultTerm)
+                callee = selected.callee
+                selectedProof = selected.proof
             }
         }
         mut val selectedResultRef: U64 = 0U64
@@ -1723,13 +1741,7 @@ pub impl Comp {
         if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
             resultProjection = <CallResultProjection.OrderingTest op=op />
         }
-        mut val argumentSources: Array[CallTemplateArgument] = []
-        mut val sourceIndex = 0U64
-        while sourceIndex < operands.count() {
-            argumentSources.append(<CallTemplateArgument source=operands[sourceIndex] isDispatchReceiver=sourceIndex == 0U64 isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />)
-            sourceIndex += 1U64
-        }
-        val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef args=self.operatorTemplateArgs(operands: operands) argumentSources=argumentSources resultHintRef=(try self.selectedResultHint(callee: callee)) resultRef=selectedResultRef resultProjection=resultProjection target=target />
+        val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef args=self.operatorTemplateArgs(operands: operands) argumentSources=argumentSources proof=selectedProof resultHintRef=(try self.selectedResultHint(callee: callee)) resultRef=selectedResultRef resultProjection=resultProjection target=target />
         try self.recordSelectedBodyCallee(selection: selection)
         if callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: selection) }
         return <Result.Ok value=() />
@@ -4017,29 +4029,19 @@ pub impl Comp {
                 // Preserve the requirement selected in the declaration. A
                 // grounded proof chooses its witness before surface lookup can
                 // re-rank overloads using partially inferred argument types.
-                val concreteProof = (try self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef))
+                mut val concreteProof = (try self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef))
                 mut val callee: U64 = (try self.proofConcreteWitness(proof: concreteProof, receiverRef: receiverRef, traitIdx: traitIdx, reqIdx: reqIdx))
-                if callee >= self.arena.functionCount() { match proof {
-                    StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => {
-                        callee = (try self.proofConcreteWitness(proof: self.cur.bodyEnvironment.proof, receiverRef: receiverRef, traitIdx: traitIdx, reqIdx: reqIdx))
-                        if callee >= self.arena.functionCount() {
-                            val proofReceiver: U64 = self.traitSelfBodyReceiver(ref: receiverRef, requestedTraitOwner: self.decls.traitAt(index: traitIdx).nameStart)
-                            val proofSource: U64 = if proofReceiver != receiverRef && proofReceiver < self.arena.typeCount() { give self.arena.typeTerms[proofReceiver].viewExtId } else { give 0U64 }
-                            if req.isAssoc {
-                                callee = (try self.resolveAssocForResolvedReceiver(surfaceRef: proofReceiver, sourceId: proofSource, sourceOwner: proofSource, nameStart: req.nameStart, nameLen: req.nameLen, args: args, useOffset: self.exprOffset(id: exprId)))
-                            } else {
-                                callee = (try self.resolveMethodForResolvedReceiver(recv: 0U64, surfaceRef: proofReceiver, sourceId: proofSource, sourceOwner: proofSource, nameStart: req.nameStart, nameLen: req.nameLen, args: args, useOffset: self.exprOffset(id: exprId), readReceiverSyntax: false))
-                            }
+                if callee >= self.arena.functionCount() {
+                    match proof {
+                        StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => {
+                            // The enclosing provided body may carry the Self
+                            // conformance. It is still a proof for this exact
+                            // requirement, not permission to reopen overloads.
+                            concreteProof = self.cur.bodyEnvironment.proof
+                            callee = (try self.proofConcreteWitness(proof: concreteProof, receiverRef: receiverRef, traitIdx: traitIdx, reqIdx: reqIdx))
                         }
+                        _ => {}
                     }
-                    _ => {
-                        if req.isAssoc {
-                            callee = (try self.resolveAssocForResolvedReceiver(surfaceRef: receiverRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: req.nameStart, nameLen: req.nameLen, args: args, useOffset: self.exprOffset(id: exprId)))
-                        } else {
-                            callee = (try self.resolveMethodForResolvedReceiver(recv: 0U64, surfaceRef: receiverRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: req.nameStart, nameLen: req.nameLen, args: args, useOffset: self.exprOffset(id: exprId), readReceiverSyntax: false))
-                        }
-                    }
-                }
                 }
                 if callee >= self.arena.functionCount() {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: static method proof has no concrete implementation") />
