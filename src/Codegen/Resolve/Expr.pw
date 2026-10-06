@@ -933,9 +933,22 @@ pub impl Comp {
             }
             argumentIndex += 1U64
         }
+        // A provided member has a selected declaration and proof just like
+        // a requirement. Compute its result from that signature rather than
+        // reading the still-untyped call expression back into its own record.
+        mut val selectedResult = resultTerm
+        match resolution {
+            StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
+                val function = self.arena.functionAt(index: callee)
+                val inferred = try self.finalMethodEnvironment(f: function, receiverRef: receiverTerm, args: args)
+                val environment = try self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment params=inferred.params args=inferred.args receiverRef=receiverTerm proof=proof />)
+                selectedResult = try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: function), environment: environment, selfRef: receiverTerm, itemRef: 0U64)
+            }
+            _ => {}
+        }
         // Parent chains and match payloads read the expression term during
         // both Record walks, before call-template publication is enabled.
-        self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
+        self.recordSemanticExprTerm(exprId: exprId, term: selectedResult)
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
         mut val templateArgs: CallTemplateArgumentRange = (try self.directCallTemplateArgs(args: args))
@@ -975,10 +988,10 @@ pub impl Comp {
         }
         if hasPriorTemplate {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />)
+            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=selectedResult /> expectedResultTerm=prior.expectedResultTerm />)
             return <Result.Ok value=() />
         }
-        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=resultTerm /> />)
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=selectedResult /> />)
         return <Result.Ok value=() />
     }
 
