@@ -161,7 +161,7 @@ impl DeclarationAccessState {
         return <Result.Ok value=() />
     }
 
-    inout fn destruction(c: Comp, caller: U64, term: U64, recipe: U64 = 0U64) {
+    inout fn destruction(c: Comp, caller: U64, term: U64, recipe: U64) {
         if recipe != 0U64 || (term != 0U64 && !c.arena.typeIsClosed(ref: term)) {
             self.obligations.append(<DeclarationAccessObligation.Destruction body=caller typeTerm=term typeRecipe=recipe />)
             return
@@ -182,7 +182,11 @@ impl DeclarationAccessState {
         }
         mut val child = 0U64
         while child < dependencies.children.count() {
-            self.destruction(c: c, caller: node, term: dependencies.children[child])
+            // Resolve the independent child ID before passing the compiler
+            // view. Indexing is a call, so placing it after c would require a
+            // snapshot of the whole compiler across that argument evaluation.
+            val childType = dependencies.children[child]
+            self.destruction(c: c, caller: node, term: childType, recipe: 0U64)
             child += 1U64
         }
         return <Result.Ok value=() />
