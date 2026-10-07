@@ -2237,6 +2237,18 @@ pub struct DeclarationConversion {
 }
 pub impl DeclarationConversion { factory }
 
+// Declaration templates retain symbolic obligations. A concrete request may
+// complete only when none of its dependencies still need substitution.
+pub enum DeclarationObligationState { Complete Deferred }
+pub impl DeclarationObligationState {
+    fn isDeferred() -> Bool {
+        return match self {
+            DeclarationObligationState.Complete => false,
+            DeclarationObligationState.Deferred => true,
+        }
+    }
+}
+
 // A source-call constraint request, not an executable BodyInstance.
 // The linked index deduplicates environments per selected declaration.
 pub struct CallConstraintInstance {

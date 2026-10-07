@@ -31,22 +31,23 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkConversionObligations(conversion: ValueConversionProof, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[(), CompileDiagnostic] {
+    inout fn checkConversionObligations(conversion: ValueConversionProof, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[DeclarationObligationState, CompileDiagnostic] {
+        mut val completion = <DeclarationObligationState.Complete />
         match conversion {
             ValueConversionProof.ExistentialBox(sourceRef: val source, targetRef: _, traitIdx: val traitIndex, proof: val proof) => {
                 val receiver = try self.groundTermForBody(ref: source, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
-                if !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=() /> }
+                if !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
                 val instantiated = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                 match instantiated {
                     StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no concrete conformance evidence") /> }
-                    StaticProofInstantiation.Deferred => {}
+                    StaticProofInstantiation.Deferred => { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
                     StaticProofInstantiation.Ready(proof: val evidence) => {
                         val trait = self.decls.traitAt(index: traitIndex)
                         mut val index = 0U64
                         while index < trait.reqs.count() {
                             match (try self.existentialImplementation(receiver: receiver, traitIndex: traitIndex, requirement: index, proof: evidence)) {
                                 Optional.Some(v: val selected) => {
-                                    try self.appendCallConstraintInstance(function: selected.function, arguments: selected.arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                                    if (try self.appendCallConstraintInstance(function: selected.function, arguments: selected.arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() { completion = <DeclarationObligationState.Deferred /> }
                                 }
                                 Optional.None => {}
                             }
@@ -56,31 +57,42 @@ pub impl Comp {
                 }
             }
             ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => {
-                try self.checkConversionObligations(conversion: element, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                if (try self.checkConversionObligations(conversion: element, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() { completion = <DeclarationObligationState.Deferred /> }
             }
             ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, payloads: val payloads) => {
-                for payload in payloads { try self.checkConversionObligations(conversion: payload.conversion, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant) }
+                for payload in payloads { if (try self.checkConversionObligations(conversion: payload.conversion, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() { completion = <DeclarationObligationState.Deferred /> } }
             }
-            ValueConversionProof.Identity | ValueConversionProof.Missing => {}
+            ValueConversionProof.Identity => {}
+            ValueConversionProof.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "source value does not satisfy the required conversion") /> }
         }
-        return <Result.Ok value=() />
+        return <Result.Ok value=completion />
     }
 
-    inout fn appendCallConstraintInstance(function: U64, arguments: Array[U64], receiver: U64, proof: StaticConformanceProof, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[(), CompileDiagnostic] {
-        if function >= self.arena.functionCount() || function >= relevant.count() || !relevant[function] { return <Result.Ok value=() /> }
-        val declaration = self.arena.functionAt(index: function)
-        if declaration.isExtern || declaration.body == 0U64 { return <Result.Ok value=() /> }
-        if arguments.count() != declaration.typeParams.count() { return <Result.Ok value=() /> }
-        for argument in arguments {
-            if argument == 0U64 || !self.arena.typeIsClosed(ref: argument) { return <Result.Ok value=() /> }
-        }
-        if (declaration.hasRecv || declaration.isAssoc) && (receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver)) { return <Result.Ok value=() /> }
-        val environment = try self.bodyInstanceEnvironment(fnIdx: function, args: arguments, recvInstRef: receiver, selectedProof: proof)
+    inout fn callConstraintIsRelevant(function: U64, relevant: Array[Bool]) -> Result[Bool, CompileDiagnostic] {
+        if function >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no selected function") /> }
         val owner = try self.semanticBodyOwner(fnIdx: function)
+        return <Result.Ok value=owner < relevant.count() && relevant[owner] />
+    }
+
+    inout fn appendCallConstraintInstance(function: U64, arguments: Array[U64], receiver: U64, proof: StaticConformanceProof, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[DeclarationObligationState, CompileDiagnostic] {
+        if function >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no selected function") /> }
+        // Provided copies can be registered after the relevance snapshot.
+        // Their lexical owner, not the new row number, owns body obligations.
+        val owner = try self.semanticBodyOwner(fnIdx: function)
+        if owner >= relevant.count() || !relevant[owner] { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
+        val declaration = self.arena.functionAt(index: function)
+        if declaration.isExtern || declaration.body == 0U64 { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
+        if arguments.count() != declaration.typeParams.count() { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "declaration obligation has incomplete type arguments") /> }
+        for argument in arguments {
+            if argument == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "declaration obligation has an unresolved type argument") /> }
+            if !self.arena.typeIsClosed(ref: argument) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
+        }
+        if (declaration.hasRecv || declaration.isAssoc) && (receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver)) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
+        val environment = try self.bodyInstanceEnvironment(fnIdx: function, args: arguments, recvInstRef: receiver, selectedProof: proof)
         mut val previous = heads.getOr(key: owner, fallback: 0U64)
         while previous != 0U64 {
             val prior = requests[previous - 1U64]
-            if self.sameInstanceEnvironment(a: prior.environment, b: environment) { return <Result.Ok value=() /> }
+            if self.sameInstanceEnvironment(a: prior.environment, b: environment) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
             previous = prior.next
         }
         // Reject unbounded semantic request expansion rather than silently
@@ -91,7 +103,7 @@ pub impl Comp {
         }
         requests.append(<CallConstraintInstance function=owner environment=environment depth=depth next=heads.getOr(key: owner, fallback: 0U64) />)
         heads[owner] = requests.count()
-        return <Result.Ok value=() />
+        return <Result.Ok value=<DeclarationObligationState.Complete /> />
     }
 
     // A selected method's receiver binders are shared by ordinary static
@@ -142,8 +154,8 @@ pub impl Comp {
         return <Result.Ok value=arguments />
     }
 
-    inout fn checkStaticMemberObligation(resolution: StaticMemberResolution, methodArguments: Array[U64] = [], receiver: U64, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[(), CompileDiagnostic] {
-        if receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=() /> }
+    inout fn checkStaticMemberObligation(resolution: StaticMemberResolution, methodArguments: Array[U64] = [], receiver: U64, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[DeclarationObligationState, CompileDiagnostic] {
+        if receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
         mut val selected = self.arena.functionCount()
         mut val evidence = <StaticConformanceProof.Missing />
         match resolution {
@@ -151,7 +163,7 @@ pub impl Comp {
                 val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                 match instantiation {
                     StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no concrete conformance evidence") /> }
-                    StaticProofInstantiation.Deferred => { return <Result.Ok value=() /> }
+                    StaticProofInstantiation.Deferred => { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
                     StaticProofInstantiation.Ready(proof: val concrete) => { evidence = concrete }
                 }
                 selected = try self.proofConcreteWitness(proof: evidence, receiverRef: receiver, traitIdx: owner, reqIdx: requirement)
@@ -160,46 +172,45 @@ pub impl Comp {
                 val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                 match instantiation {
                     StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no concrete conformance evidence") /> }
-                    StaticProofInstantiation.Deferred => { return <Result.Ok value=() /> }
+                    StaticProofInstantiation.Deferred => { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
                     StaticProofInstantiation.Ready(proof: val concrete) => { evidence = concrete }
                 }
                 selected = try self.providedCopyForDeclaration(declaration: declaration, receiverRef: receiver, proof: evidence, traitIdx: owner, offset: self.arena.functionAt(index: declaration).defOffset)
             }
-            StaticMemberResolution.Missing => { return <Result.Ok value=() /> }
+            StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no selected member") /> }
         }
         if selected >= self.arena.functionCount() {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected trait member has no concrete conformance") />
         }
         val arguments = try self.staticMemberInstanceArguments(resolution: resolution, function: selected, receiver: receiver, proof: evidence, methodArguments: methodArguments, environment: environment)
-        try self.appendCallConstraintInstance(function: selected, arguments: arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
-        return <Result.Ok value=() />
+        return self.appendCallConstraintInstance(function: selected, arguments: arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
     }
 
-    inout fn checkCallConstraintTemplate(template: CallTemplate, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[(), CompileDiagnostic] {
+    inout fn checkCallConstraintTemplate(template: CallTemplate, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[DeclarationObligationState, CompileDiagnostic] {
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                if callee >= relevant.count() || !relevant[callee] { return <Result.Ok value=() /> }
+                if !(try self.callConstraintIsRelevant(function: callee, relevant: relevant)) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => {}
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 match selection {
                     ProtocolSelection.Direct(callee: val callee, proof: _) => {
-                        if callee >= relevant.count() || !relevant[callee] { return <Result.Ok value=() /> }
+                        if !(try self.callConstraintIsRelevant(function: callee, relevant: relevant)) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
                     }
                     ProtocolSelection.Static(resolution: _) => {}
-                    _ => { return <Result.Ok value=() /> }
+                    _ => { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
                 }
             }
             CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
                 match selection {
-                    OperatorSelection.Primitive => { return <Result.Ok value=() /> }
+                    OperatorSelection.Primitive => { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
                     OperatorSelection.Direct(callee: val callee) => {
-                        if callee >= relevant.count() || !relevant[callee] { return <Result.Ok value=() /> }
+                        if !(try self.callConstraintIsRelevant(function: callee, relevant: relevant)) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
                     }
                     _ => {}
                 }
             }
-            _ => { return <Result.Ok value=() /> }
+            _ => { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
         }
         val receiver = try self.groundTermForBody(ref: template.receiverTypeTerm, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
         match template.kind {
@@ -213,34 +224,33 @@ pub impl Comp {
                     val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                     match instantiation {
                         StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no concrete conformance evidence") /> }
-                        StaticProofInstantiation.Deferred => { return <Result.Ok value=() /> }
+                        StaticProofInstantiation.Deferred => { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
                         StaticProofInstantiation.Ready(proof: val concrete) => { proof = concrete }
                     }
                 }
-                try self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: proof, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                return self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: proof, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
-                try self.checkStaticMemberObligation(resolution: resolution, methodArguments: self.callTemplateTypeArgs(range: typeArgs), receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                return self.checkStaticMemberObligation(resolution: resolution, methodArguments: self.callTemplateTypeArgs(range: typeArgs), receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
             }
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 match selection {
                     ProtocolSelection.Static(resolution: val resolution) => {
-                        try self.checkStaticMemberObligation(resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                        return self.checkStaticMemberObligation(resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
                     }
                     ProtocolSelection.Direct(callee: val callee, proof: val selectedProof) => {
-                        if receiver != 0U64 && self.arena.typeIsClosed(ref: receiver) {
-                            mut val proof = selectedProof
-                            if !self.proofIsMissing(proof: proof) {
-                                val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
-                                match instantiation {
-                                    StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no concrete conformance evidence") /> }
-                                    StaticProofInstantiation.Deferred => { return <Result.Ok value=() /> }
-                                    StaticProofInstantiation.Ready(proof: val concrete) => { proof = concrete }
-                                }
+                        if receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
+                        mut val proof = selectedProof
+                        if !self.proofIsMissing(proof: proof) {
+                            val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                            match instantiation {
+                                StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no concrete conformance evidence") /> }
+                                StaticProofInstantiation.Deferred => { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
+                                StaticProofInstantiation.Ready(proof: val concrete) => { proof = concrete }
                             }
-                            val arguments = try self.callConstraintTypeArguments(function: self.arena.functionAt(index: callee), receiver: receiver, proof: proof)
-                            try self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: proof, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
                         }
+                        val arguments = try self.callConstraintTypeArguments(function: self.arena.functionAt(index: callee), receiver: receiver, proof: proof)
+                        return self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: proof, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
                     }
                     _ => {}
                 }
@@ -248,14 +258,13 @@ pub impl Comp {
             CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
                 match selection {
                     OperatorSelection.Static(resolution: val resolution) => {
-                        try self.checkStaticMemberObligation(resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                        return self.checkStaticMemberObligation(resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
                     }
                     OperatorSelection.Direct(callee: val callee) => {
-                        if receiver != 0U64 && self.arena.typeIsClosed(ref: receiver) && callee < relevant.count() && relevant[callee] {
-                            val declaration = self.arena.functionAt(index: callee)
-                            val arguments = try self.callConstraintTypeArguments(function: declaration, receiver: receiver, proof: <StaticConformanceProof.Missing />)
-                            try self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: <StaticConformanceProof.Missing />, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
-                        }
+                        if receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
+                        val declaration = self.arena.functionAt(index: callee)
+                        val arguments = try self.callConstraintTypeArguments(function: declaration, receiver: receiver, proof: <StaticConformanceProof.Missing />)
+                        return self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: <StaticConformanceProof.Missing />, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
                     }
                     OperatorSelection.Primitive => {}
                     OperatorSelection.Pending => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "operator constraint has no completed selection") /> }
@@ -263,7 +272,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        return <Result.Ok value=() />
+        return <Result.Ok value=<DeclarationObligationState.Complete /> />
     }
 
     // Compute the backward slice of source calls which can reach a static
@@ -347,26 +356,33 @@ pub impl Comp {
         mut val heads: Dictionary[U64, U64] = [:]
         val limit = self.decls.callTemplates.count()
         mut val index = 0U64
+        mut val deferred = 0U64
         // Every source call is a root, including unused functions. Generic
         // calls become closed when reached through a caller's substitution.
         while index < limit {
-            try self.checkCallConstraintTemplate(template: self.decls.callTemplates[index], environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant)
+            if (try self.checkCallConstraintTemplate(template: self.decls.callTemplates[index], environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() { deferred += 1U64 }
             index += 1U64
         }
         for conversion in self.decls.declarationConversions {
-            try self.checkConversionObligations(conversion: self.thawValueConversionProof(id: conversion.proof), environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant)
+            if (try self.checkConversionObligations(conversion: self.thawValueConversionProof(id: conversion.proof), environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() { deferred += 1U64 }
         }
+        tracePhaseCount(c: inout self, label: "member-obligations:roots:deferred", count: deferred)
         tracePhase(c: inout self, label: "member-obligations:instances:start")
         index = 0U64
         while index < requests.count() {
             val request = requests[index]
             for conversionIndex in self.decls.declarationConversionOwners.getOr(key: request.function, fallback: []) {
                 val conversion = self.decls.declarationConversions[conversionIndex]
-                try self.checkConversionObligations(conversion: self.thawValueConversionProof(id: conversion.proof), environment: request.environment, depth: request.depth + 1U64, requests: inout requests, heads: inout heads, relevant: relevant)
+                if (try self.checkConversionObligations(conversion: self.thawValueConversionProof(id: conversion.proof), environment: request.environment, depth: request.depth + 1U64, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() {
+                    return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "concrete declaration conversion retains an unresolved obligation") />
+                }
             }
             mut val row = self.firstLexicalCallTemplate(owner: request.function)
             while row != 0U64 {
-                try self.checkCallConstraintTemplate(template: self.decls.callTemplates[row - 1U64], environment: request.environment, depth: request.depth + 1U64, requests: inout requests, heads: inout heads, relevant: relevant)
+                val template = self.decls.callTemplates[row - 1U64]
+                if (try self.checkCallConstraintTemplate(template: template, environment: request.environment, depth: request.depth + 1U64, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() {
+                    return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "concrete declaration call retains an unresolved obligation") />
+                }
                 row = self.decls.callTemplateBodyNext[row - 1U64]
             }
             index += 1U64

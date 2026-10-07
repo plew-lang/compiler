@@ -1,4 +1,4 @@
-use ./Ir only { CallConstraintInstance, DeclarationConversion, ExistentialImplementation }
+use ./Ir only { DeclarationObligationState, CallConstraintInstance, DeclarationConversion, ExistentialImplementation }
 use ./Ir only { ProtocolSelection, OperatorSelection, InvocationCompletion, TypeCompatibility, ConditionClause, ConditionClauseRange }
 use @Plew/Syntax only { CondClause, syntaxConditionClause }
 use ./SourceCompletion only { SourceCompletion, CompletionEdges, CompletionTransfer, BlockResultContext, completionThen, completionChoice, completionTransfer, completionBlock, completionLoop }

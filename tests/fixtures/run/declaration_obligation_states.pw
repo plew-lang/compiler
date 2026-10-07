@@ -1,0 +1,50 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallConstraintInstance, InstanceEnvironment, StaticConformanceProof, ValueConversionProof, Func }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="fn target[T](value: T) {{}}\nfn anchor(value: I64) {{}}\n" path="obligation.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val target = compiler.arena.functionAt(index: 0U64)
+    val anchor = compiler.arena.functionAt(index: 1U64)
+    val symbolic = compiler.funcParamAt(params: target.params, index: 0U64).ty
+    val concrete = compiler.funcParamAt(params: anchor.params, index: 0U64).ty
+    val relevant = [true, false]
+    mut val requests: Array[CallConstraintInstance] = []
+    mut val heads: Dictionary[U64, U64] = [:]
+    val deferred = compiler.appendCallConstraintInstance(function: 0U64, arguments: [symbolic], receiver: 0U64, proof: <StaticConformanceProof.Missing />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant).unwrap()
+    assert(deferred.isDeferred())
+    assert(requests.count() == 0U64)
+    match compiler.appendCallConstraintInstance(function: 0U64, arguments: [], receiver: 0U64, proof: <StaticConformanceProof.Missing />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant) {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation has incomplete type arguments") }
+        Result.Ok(value: _) => { panic "missing arguments were treated as completed" }
+    }
+    match compiler.appendCallConstraintInstance(function: 0U64, arguments: [0U64], receiver: 0U64, proof: <StaticConformanceProof.Missing />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant) {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation has an unresolved type argument") }
+        Result.Ok(value: _) => { panic "unknown type was treated as symbolic" }
+    }
+    val complete = compiler.appendCallConstraintInstance(function: 0U64, arguments: [concrete], receiver: 0U64, proof: <StaticConformanceProof.Missing />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant).unwrap()
+    assert(!complete.isDeferred())
+    assert(requests.count() == 1U64)
+    compiler.appendCallConstraintInstance(function: 0U64, arguments: [concrete], receiver: 0U64, proof: <StaticConformanceProof.Missing />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant).unwrap()
+    assert(requests.count() == 1U64)
+    // A new provided copy is absent from the old relevance vector, but its
+    // source body is still relevant. Selection must follow that owner.
+    val copy = compiler.arena.functionCount()
+    compiler.arena.registerFunction(<Func nameStart=target.nameStart nameLen=target.nameLen typeParams=target.typeParams params=target.params
+        hasRet=target.hasRet retStart=target.retStart retLen=target.retLen retIsArray=target.retIsArray retTy=target.retTy body=target.body
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false
+        isProvided=true lexicalOwnerFnId=1U64 />)
+    assert(compiler.callConstraintIsRelevant(function: copy, relevant: relevant).unwrap())
+    val deferredCopy = compiler.appendCallConstraintInstance(function: copy, arguments: [symbolic], receiver: 0U64, proof: <StaticConformanceProof.Missing />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant).unwrap()
+    assert(deferredCopy.isDeferred())
+    // A nested missing proof cannot be hidden by a successful outer repack.
+    val conversion = <ValueConversionProof.ArrayRepack sourceRef=concrete targetRef=concrete element=<ValueConversionProof.Missing /> />
+    match compiler.checkConversionObligations(conversion: conversion, environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant) {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "source value does not satisfy the required conversion") }
+        Result.Ok(value: _) => { panic "nested missing proof was treated as completed" }
+    }
+    print("ok")
+}
