@@ -33,7 +33,7 @@ fn checkFailure(known: Bool) {
         val proof = compiler.freezeValueConversionProof(proof: conversion)
         compiler.decls.declarationConversions[0U64] = <DeclarationConversion site=site source=source target=target proof=proof />
         match compiler.checkRecordedMemberObligations() {
-            Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation has no concrete conformance evidence") }
+            Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation has no conformance evidence") }
             Result.Ok(value: _) => { panic "empty trait hid missing conformance evidence" }
         }
         match compiler.instantiateValueConversion(conversion: conversion, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64) {
