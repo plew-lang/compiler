@@ -1,6 +1,6 @@
 // Declaration-only Mid preparation. No executable discovery or LLVM work.
 // Remaining obligations are explicit; success is not a whole-target check token.
-use ./Frontend only { Comp }
+use ./Frontend only { Comp, tracePhase }
 use ./Diag only { CompileDiagnostic }
 use ./Mid/Build only { MidBuildError, MidBodyBuild, MidFunctionTemplates, ensureParametricMidClosureBody }
 use ./Mid/DeclarationAccess only { analyzeDeclarationGlobalAccessWithRequests, analyzeDeclarationGlobalAccessRoots, checkDeclarationBodyAccess, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
@@ -101,14 +101,17 @@ pub fn prepareDeclarationProgram(c: inout Comp, templates: inout MidFunctionTemp
 
 pub fn prepareDeclarationProgramWithRequests(c: inout Comp, templates: inout MidFunctionTemplates,
                                             requests: inout DeclarationBodyRequests) -> Result[DeclarationAccessAnalysis, DeclarationProgramError] {
+    tracePhase(c: inout c, label: "declaration-program:bodies:start")
     match checkDeclarationBodies(c: inout c, templates: inout templates, requests: inout requests) {
         Result.Ok(value: _) => {}
         Result.Err(error: val error) => { return <Result.Err error=<DeclarationProgramError.Analysis error=error /> /> }
     }
+    tracePhase(c: inout c, label: "declaration-program:global-access:start")
     val analysis = match analyzeDeclarationGlobalAccessWithRequests(c: inout c, templates: inout templates, requests: inout requests.ownership) {
         Result.Ok(value: val analysis) => { give analysis }
         Result.Err(error: val error) => { return <Result.Err error=<DeclarationProgramError.Analysis error=error /> /> }
     }
+    tracePhase(c: inout c, label: "declaration-program:done")
     if analysis.conflictingNode != 0U64 {
         return <Result.Err error=<DeclarationProgramError.GlobalAccess offset=declarationAccessOffset(c: inout c, owner: analysis.nodes[analysis.conflictingNode - 1U64]) /> />
     }

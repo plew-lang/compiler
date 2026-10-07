@@ -1,7 +1,7 @@
 // Declaration-time global effects. This is an analysis result, not a checked
 // program token: unresolved calls, conversions, and ownership dependencies
 // remain explicit obligations for instance analysis or dynamic enforcement.
-use ../Frontend only { Comp }
+use ../Frontend only { Comp, tracePhase }
 use ../Diag only { CompileDiagnostic }
 use ../Ir only { CallSiteKey, CallTemplateKind }
 use ./Build only { MidFunctionTemplates, MidBuildError, MidBodyBuild, ensureParametricMidClosureBody }
@@ -281,8 +281,12 @@ pub fn analyzeDeclarationGlobalAccessRoots(c: inout Comp, templates: inout MidFu
     mut val index = 0U64
     while index < roots.count() { state.demand(owner: roots[index])
         index += 1U64 }
+    tracePhase(c: inout c, label: "declaration-global-access:collect:start")
     try state.close(c: inout c, templates: inout templates, requests: inout requests)
-    return <Result.Ok value=<DeclarationAccessAnalysis nodes=state.owners conflictingNode=state.graph.solve(arena: c.mid) obligations=state.obligations /> />
+    tracePhase(c: inout c, label: "declaration-global-access:solve:start")
+    val conflictingNode = state.graph.solve(arena: c.mid)
+    tracePhase(c: inout c, label: "declaration-global-access:done")
+    return <Result.Ok value=<DeclarationAccessAnalysis nodes=state.owners conflictingNode=conflictingNode obligations=state.obligations /> />
 }
 
 // Local place conflicts do not require a mutable global or executable instance.

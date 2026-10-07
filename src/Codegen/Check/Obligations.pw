@@ -291,7 +291,9 @@ pub impl Comp {
     }
 
     inout fn checkRecordedMemberObligations() -> Result[(), CompileDiagnostic] {
+        tracePhase(c: inout self, label: "member-obligations:relevance:start")
         val relevant = try self.memberObligationRelevance()
+        tracePhase(c: inout self, label: "member-obligations:roots:start")
         mut val requests: Array[CallConstraintInstance] = []
         mut val heads: Dictionary[U64, U64] = [:]
         val limit = self.decls.callTemplates.count()
@@ -305,6 +307,7 @@ pub impl Comp {
         for conversion in self.decls.declarationConversions {
             try self.checkConversionObligations(conversion: self.thawValueConversionProof(id: conversion.proof), environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant)
         }
+        tracePhase(c: inout self, label: "member-obligations:instances:start")
         index = 0U64
         while index < requests.count() {
             val request = requests[index]
@@ -319,6 +322,7 @@ pub impl Comp {
             }
             index += 1U64
         }
+        tracePhaseCount(c: inout self, label: "member-obligations:instances:done", count: requests.count())
         return <Result.Ok value=() />
     }
 }

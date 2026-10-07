@@ -1937,9 +1937,13 @@ pub fn completeFrontendDeclarations(c: inout Comp) -> Result[(), CompileDiagnost
         try c.prepareLexicalBody(fnIdx: index)
         index += 1U64
     }
+    tracePhase(c: inout c, label: "declaration-completion:unique-args:start")
     try c.checkGenericUniqueArgs()
+    tracePhase(c: inout c, label: "declaration-completion:close-calls:start")
     try c.closeProgramCallTemplates()
+    tracePhase(c: inout c, label: "declaration-completion:member-obligations:start")
     try c.checkRecordedMemberObligations()
+    tracePhase(c: inout c, label: "declaration-completion:done")
     return <Result.Ok value=() />
 }
 
