@@ -1,0 +1,6 @@
+use @Std/Io only { print }
+struct Number { val value: I64 }
+impl Number {
+    assoc fn neg(value~: Number) -> I64 { return value.value }
+}
+fn main() { print(-<Number value=42I64 />) }

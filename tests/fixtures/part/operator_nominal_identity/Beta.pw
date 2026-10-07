@@ -1,0 +1,7 @@
+use @Std/Core only { Neg }
+pub struct Number {}
+pub impl Number { factory }
+pub impl Number as Neg {
+    type Output = I64
+    assoc fn neg(value~: Number) -> I64 { return 22I64 }
+}

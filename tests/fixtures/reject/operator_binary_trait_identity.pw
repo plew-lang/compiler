@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+trait Add[Rhs] { type Output assoc fn add(lhs~: Self, rhs~: Rhs) -> Output }
+struct Number { val value: I64 }
+impl Number as Add[I64] {
+    type Output = I64
+    assoc fn add(lhs~: Number, rhs~: I64) -> I64 { return lhs.value + rhs }
+}
+fn main() { print(<Number value=41I64 /> + 1I64) }

@@ -1,0 +1,7 @@
+use @Std/Io only { print }
+trait Neg { assoc fn neg(value~: Self) -> I64 }
+struct Number { val value: I64 }
+impl Number as Neg {
+    assoc fn neg(value~: Number) -> I64 { return value.value }
+}
+fn main() { print(-<Number value=42I64 />) }

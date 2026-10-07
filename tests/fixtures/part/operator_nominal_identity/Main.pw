@@ -1,0 +1,7 @@
+use ./Alpha
+use ./Beta
+use @Std/Io only { print }
+fn main() {
+    print(-<Alpha.Number />)
+    print(-<Beta.Number />)
+}
