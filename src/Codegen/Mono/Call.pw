@@ -2694,27 +2694,24 @@ pub impl Comp {
         val source: TypeRef = self.arena.typeAt(index: sourceRef)
         val target: TypeRef = self.arena.typeAt(index: targetRef)
         if source.args.count() != target.args.count() { return <Result.Ok value=payloads />}
-        val savedParams: Array[Bind] = self.cur.typeParams
-        val savedArgs: Array[U64] = self.cur.typeArgs
+        // Payload types belong to the enum declaration, not the function
+        // currently being checked or materialized. Keep both substitutions
+        // explicit so recursive conversions cannot inherit caller binders.
+        val parameters = self.arena.enumAt(index: enumIdx).typeParams
+        val sourceEnvironment = <InstanceEnvironment params=parameters args=source.args receiverRef=sourceRef />
+        val targetEnvironment = <InstanceEnvironment params=parameters args=target.args receiverRef=targetRef />
         mut val variant: U64 = 0U64
         while variant < self.arena.enumAt(index: enumIdx).variants.count() {
             val fields: Array[FieldDef] = self.arena.enumVariantAt(enumIndex: enumIdx, variantIndex: variant).fields
             mut val field: U64 = 0U64
             while field < fields.count() {
-                self.cur.typeParams = self.arena.enumAt(index: enumIdx).typeParams
-                self.cur.typeArgs = source.args
-                val sourceFieldRef: U64 = (try self.groundTypeRef(ref: fields[field].ty))
-                self.cur.typeArgs = target.args
-                val targetFieldRef: U64 = (try self.groundTypeRef(ref: fields[field].ty))
-                self.cur.typeParams = savedParams
-                self.cur.typeArgs = savedArgs
+                val sourceFieldRef = try self.groundTermForBody(ref: fields[field].ty, environment: sourceEnvironment, selfRef: sourceRef, itemRef: 0U64)
+                val targetFieldRef = try self.groundTermForBody(ref: fields[field].ty, environment: targetEnvironment, selfRef: targetRef, itemRef: 0U64)
                 payloads.append(<EnumPayloadConversion sourceRef=sourceFieldRef targetRef=targetFieldRef conversion=(try self.callArgumentConversion(sourceRef: sourceFieldRef, targetRef: targetFieldRef, knownExistential: knownExistential)) />)
                 field += 1U64
             }
             variant += 1U64
         }
-        self.cur.typeParams = savedParams
-        self.cur.typeArgs = savedArgs
         return <Result.Ok value=payloads />
     }
 
