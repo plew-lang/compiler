@@ -7,13 +7,14 @@ use /Ir only { DeclarationConversion, Expr, ValueConversionProof }
 // Internal contract: finalization consumes source evidence for this exact site
 // and reports disagreement instead of silently selecting another conversion.
 fn main() {
-    val source = "trait P {{}}\nstruct First {{}}\nstruct Second {{}}\nimpl First as P {{}}\nimpl Second as P {{}}\nfn probe(value: First, target: any P, other: Second) {{}}\n"
+    val source = "trait P {{}}\ntrait Q {{}}\nstruct First {{}}\nstruct Second {{}}\nimpl First as P {{}}\nimpl First as Q {{}}\nimpl Second as P {{}}\nfn probe(value: First, target: any P, other: Second, otherTarget: any Q) {{}}\n"
     mut val compiler = <Comp />
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="conversion.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val function = compiler.arena.functionAt(index: 0U64)
     val value = compiler.funcParamAt(params: function.params, index: 0U64).ty
     val target = compiler.funcParamAt(params: function.params, index: 1U64).ty
     val other = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    val otherTarget = compiler.funcParamAt(params: function.params, index: 3U64).ty
     // Synthetic expression identity; its syntax is never used to recover a type.
     val expression = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
     val site = compiler.templateCallSiteKey(fnIdx: 0U64, exprId: expression).unwrap()
@@ -36,6 +37,12 @@ fn main() {
     match compiler.finalValueConversion(sourceRef: target, targetRef: target, exprId: expression) {
         Result.Err(error: val diagnostic) => { assert(diagnostic.message == "source conversion evidence disagrees with the instantiated value type") }
         Result.Ok(value: _) => { panic "identity bypassed recorded conversion evidence" }
+    }
+    // First also conforms to Q, but this source boundary selected P. A
+    // changed target must not silently request a different conformance.
+    match compiler.finalValueConversion(sourceRef: value, targetRef: otherTarget, exprId: expression) {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "source value conversion lacks recorded evidence") }
+        Result.Ok(value: _) => { panic "reselected a conversion to an unrecorded target" }
     }
     print("ok")
 }

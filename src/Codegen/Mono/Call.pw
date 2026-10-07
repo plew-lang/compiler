@@ -2970,6 +2970,7 @@ pub impl Comp {
     }
 
     inout fn finalValueConversion(sourceRef: U64, targetRef: U64, exprId: U64) -> Result[ValueConversionProof, CompileDiagnostic] {
+        val sameType = sourceRef != 0U64 && self.typeRefEq(a: sourceRef, b: targetRef)
         // Recorded evidence is authoritative even if the supplied concrete
         // types now compare equal. An identity shortcut must not conceal a
         // disagreement with the source boundary that selected the conversion.
@@ -2983,6 +2984,7 @@ pub impl Comp {
                     if self.typeRefEq(a: target, b: targetRef) {
                         val source = try self.groundTermForBody(ref: recorded.source, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
                         if !self.typeRefEq(a: source, b: sourceRef) { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "source conversion evidence disagrees with the instantiated value type") /> }
+                        if sameType { return <Result.Ok value=<ValueConversionProof.Identity /> /> }
                         val conversion = try self.instantiateValueConversion(conversion: self.thawValueConversionProof(id: recorded.proof), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
                         try self.finalizeConversionDependencies(conversion: conversion)
                         return <Result.Ok value=conversion />
@@ -2990,13 +2992,11 @@ pub impl Comp {
                 }
             }
         }
-        if sourceRef != 0U64 && self.typeRefEq(a: sourceRef, b: targetRef) { return <Result.Ok value=<ValueConversionProof.Identity /> /> }
-        // Migration boundary: synthesized conversions and source positions not
-        // yet represented by DeclarationConversion still use the common planner.
-
-        val conversion: ValueConversionProof = (try self.callArgumentConversion(sourceRef: sourceRef, targetRef: targetRef))
-        try self.finalizeConversionDependencies(conversion: conversion)
-        return <Result.Ok value=conversion />
+        if sameType { return <Result.Ok value=<ValueConversionProof.Identity /> /> }
+        // Ordinary source boundaries may only instantiate their selected
+        // conversion. Synthetic witness adapters plan their own conversions
+        // separately from this consumer; they cannot authorize a fallback here.
+        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "source value conversion lacks recorded evidence") />
     }
 
     inout fn finalizeStorageConversion(stmtId: U64, exprId: U64, targetTerm: U64) -> Result[(), CompileDiagnostic] {
@@ -3045,9 +3045,10 @@ pub impl Comp {
                 // An operator's lhs selects a witness like a method receiver.
                 // Adapt only that dispatch boundary; ordinary arguments retain
                 // their exact view identity, including nested type arguments.
-                mut val conversion = (try self.finalValueConversion(sourceRef: source, targetRef: parameterTypeRefs[i], exprId: self.callArgumentExprId(source: sources[i].source)))
-                if sources[i].isDispatchReceiver && source != 0U64 && parameterTypeRefs[i] != 0U64 && self.typeRefEq(a: self.runtimeTypeRef(ref: source), b: self.runtimeTypeRef(ref: parameterTypeRefs[i])) {
-                    conversion = <ValueConversionProof.Identity />
+                val conversion = if sources[i].isDispatchReceiver && source != 0U64 && parameterTypeRefs[i] != 0U64 && self.typeRefEq(a: self.runtimeTypeRef(ref: source), b: self.runtimeTypeRef(ref: parameterTypeRefs[i])) {
+                    give <ValueConversionProof.Identity />
+                } else {
+                    give try self.finalValueConversion(sourceRef: source, targetRef: parameterTypeRefs[i], exprId: self.callArgumentExprId(source: sources[i].source))
                 }
                 match conversion {
                     ValueConversionProof.Missing => {
