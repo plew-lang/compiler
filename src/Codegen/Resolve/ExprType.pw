@@ -159,7 +159,7 @@ pub impl Comp {
     // environment is the explicit "not a receiver-instantiated callable"
     // outcome; a valid non-generic method has a nonzero receiverRef and no
     // parameter entries.
-    inout fn finalMethodEnvironment(f: Func, receiverRef: U64, args: ArgRange) -> Result[InstanceEnvironment, CompileDiagnostic] {
+    inout fn finalMethodEnvironment(f: Func, receiverRef: U64, args: ArgRange, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
         // A declared Self is rigid but has the lexical receiver equation of
         // this body. Apply that equation before matching another method's
         // receiver pattern, rather than leaving its impl binders unresolved.
@@ -173,7 +173,7 @@ pub impl Comp {
         if f.isAssoc && f.recvTy != 0U64 && f.recvTy < self.arena.typeCount() && self.arena.typeTerms[semanticReceiver].args.len == 0U64 && self.arena.typeTerms[f.recvTy].args.len != 0U64 {
             val inferredReceiver = try self.associatedReceiverFromArguments(f: f, args: args)
             if inferredReceiver != 0U64 && inferredReceiver != semanticReceiver && self.typeTermRefSameHead(a: semanticReceiver, b: inferredReceiver) {
-                return self.finalMethodEnvironment(f: f, receiverRef: inferredReceiver, args: args)
+                return self.finalMethodEnvironment(f: f, receiverRef: inferredReceiver, args: args, selectedProof: selectedProof)
             }
         }
         // A method's generic binder list can contain the nominal declaration
@@ -182,12 +182,25 @@ pub impl Comp {
         // retains the complete WitnessMatch here, including legacy binder
         // indexes while the ParamId migration is still in flight.
         val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: semanticReceiver))
-        mut val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
-        if f.isProvided { proof = try self.providedBodyProof(f: f, receiverRef: semanticReceiver) }
+        mut val proof = selectedProof
+        if self.proofIsMissing(proof: proof) && f.isProvided { proof = try self.providedBodyProof(f: f, receiverRef: semanticReceiver) }
         // A provided copy placed through a trait-subject edge is justified
         // by its conformance path, not nominal equality with that trait.
         if f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 && self.proofIsMissing(proof: proof) { return <Result.Ok value=<InstanceEnvironment /> />}
         mut val fullArgs: Array[U64] = (try self.receiverCallableArguments(f: f, receiverRef: semanticReceiver, receiverMatch: receiverMatch))
+        if self.methodRecvIsTrait(f: f) && !self.proofIsMissing(proof: proof) {
+            val traitIndex = self.decls.traitIndexByOffset(offset: f.recvStart)
+            val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+            if bound.subject == 0U64 || bound.constraint.key.positionalArgs.count() != f.recvTraitArgs.count() { return <Result.Ok value=<InstanceEnvironment /> /> }
+            mut val argument = 0U64
+            while argument < f.recvTraitArgs.count() {
+                val pattern = self.funcTypeAt(types: f.recvTraitArgs, index: argument)
+                if !self.matchCallResultArguments(pattern: pattern, expected: bound.constraint.key.positionalArgs[argument], params: f.typeParams, values: inout fullArgs) {
+                    return <Result.Ok value=<InstanceEnvironment /> />
+                }
+                argument += 1U64
+            }
+        }
         val proofArgs = self.providedProofArguments(f: f, proof: proof)
         mut val proofIndex = 0U64
         while proofIndex < proofArgs.count() && proofIndex < fullArgs.count() {

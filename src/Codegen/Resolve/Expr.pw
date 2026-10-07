@@ -1161,7 +1161,7 @@ pub impl Comp {
         match resolution {
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
                 val function = self.arena.functionAt(index: callee)
-                val inferred = try self.finalMethodEnvironment(f: function, receiverRef: receiverTerm, args: args)
+                val inferred = try self.finalMethodEnvironment(f: function, receiverRef: receiverTerm, args: args, selectedProof: proof)
                 val environment = try self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment params=inferred.params args=inferred.args receiverRef=receiverTerm proof=proof />)
                 selectedResult = try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: function), environment: environment, selfRef: receiverTerm, itemRef: 0U64)
             }
@@ -1182,7 +1182,7 @@ pub impl Comp {
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
                 val function = self.arena.functionAt(index: callee)
                 if args.len != function.params.count() {
-                    val inferred = (try self.finalMethodEnvironment(f: function, receiverRef: receiverTerm, args: args))
+                    val inferred = (try self.finalMethodEnvironment(f: function, receiverRef: receiverTerm, args: args, selectedProof: proof))
                     val environment = <InstanceEnvironment params=inferred.params args=inferred.args receiverRef=inferred.receiverRef proof=proof />
                     mut val terms: Array[U64] = []
                     mut val parameter = 0U64

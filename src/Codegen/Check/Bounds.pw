@@ -724,6 +724,47 @@ pub impl Comp {
     // `0` means that the selected member is a provided method or otherwise has
     // no direct requirement parameter at `argIdx`; its fuller CallResolution
     // migration remains deliberately separate from this requirement slice.
+    // A selected proof owns the complete trait instance. Signature consumers
+    // read this projection instead of reconstructing arguments from names or
+    // assuming a path's target has zero parameters.
+    inout fn staticProofBound(proof: StaticConformanceProof, traitIdx: U64) -> Result[TraitBound, CompileDiagnostic] {
+        if traitIdx >= self.decls.traitCount() { return <Result.Ok value=self.missingTraitBound() /> }
+        val traitDef = self.decls.traitAt(index: traitIdx)
+        mut val bound = self.missingTraitBound()
+        match proof {
+            StaticConformanceProof.AssumedBound(source: val source) => {
+                if self.declarationBoundIsValid(source: source) { bound = self.declarationBound(source: source) }
+            }
+            StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => {
+                bound = self.assumedSupertraitBound(source: source, steps: steps)
+            }
+            StaticConformanceProof.TraitSelf(traitIdx: val owner, receiverRef: val receiver, traitArgs: val arguments) => {
+                if owner == traitIdx {
+                    bound = <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=traitDef.nameStart positionalArgs=arguments /> positionalArgsOpen=false assocPredicates=[] /> offset=traitDef.nameStart />
+                }
+            }
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => {
+                if witness.conformIdx != 0U64 && witness.conformIdx <= self.decls.conformCount() {
+                    val conform = self.decls.conformAt(index: witness.conformIdx - 1U64)
+                    mut val receiver = witness.selfRef
+                    if receiver == 0U64 { receiver = try self.groundWitnessTypeTerm(ref: conform.subjectTy, params: <PatternBindInput.Conformance range=conform.typeParams />, matchResult: witness) }
+                    bound = <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=conform.traitStart positionalArgs=(try self.groundedWitnessTraitArgs(cf: conform, witness: witness)) /> positionalArgsOpen=false assocPredicates=[] /> offset=conform.defOffset />
+                }
+            }
+            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
+                if edges.count() > 0U64 { return self.staticProofBound(proof: <StaticConformanceProof.ConcreteWitness witness=edges[edges.count() - 1U64] />, traitIdx: traitIdx) }
+            }
+            StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: val edges) => {
+                if edges.count() > 0U64 { return self.staticProofBound(proof: <StaticConformanceProof.ConcreteWitness witness=edges[edges.count() - 1U64] />, traitIdx: traitIdx) }
+            }
+            StaticConformanceProof.Missing => {}
+        }
+        if bound.constraint.key.owner != traitDef.nameStart || bound.constraint.key.positionalArgs.count() != traitDef.typeParams.count() {
+            return <Result.Ok value=self.missingTraitBound() />
+        }
+        return <Result.Ok value=bound />
+    }
+
     inout fn staticRequirementParamType(resolution: StaticMemberResolution, args: ArgRange, argIdx: U64) -> U64 {
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {

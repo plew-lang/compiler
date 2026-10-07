@@ -1,0 +1,18 @@
+use @Std/Io only { print }
+trait B[Element] { fn base() -> Element }
+trait A[Element] { fn value() -> Element }
+pub impl[Element] A[Element] {
+    fn pass() -> Element { return self.value() }
+}
+extension E {
+    pub impl[Element] B[Element] as A[Element] {
+        fn value() -> Element { return self.base() }
+    }
+}
+struct S {}
+pub impl S { factory }
+pub impl S as B[I64] { fn base() -> I64 { return 8I64 } }
+fn pass[T](value: T) -> I64 where T: B[I64] {
+    return value#E.pass()
+}
+fn main() { print(pass(value: <S />)) }
