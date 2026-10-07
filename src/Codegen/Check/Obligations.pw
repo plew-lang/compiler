@@ -36,11 +36,19 @@ pub impl Comp {
         mut val evidence = <StaticConformanceProof.Missing />
         match resolution {
             StaticMemberResolution.Requirement(proof: val proof, traitIdx: val owner, reqIdx: val requirement) => {
-                evidence = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                match instantiation {
+                    StaticProofInstantiation.Deferred => { return <Result.Ok value=() /> }
+                    StaticProofInstantiation.Ready(proof: val concrete) => { evidence = concrete }
+                }
                 selected = try self.proofConcreteWitness(proof: evidence, receiverRef: receiver, traitIdx: owner, reqIdx: requirement)
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: val owner, callee: val declaration) => {
-                evidence = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                match instantiation {
+                    StaticProofInstantiation.Deferred => { return <Result.Ok value=() /> }
+                    StaticProofInstantiation.Ready(proof: val concrete) => { evidence = concrete }
+                }
                 selected = try self.providedCopyForDeclaration(declaration: declaration, receiverRef: receiver, proof: evidence, traitIdx: owner, offset: self.arena.functionAt(index: declaration).defOffset)
             }
             StaticMemberResolution.Missing => { return <Result.Ok value=() /> }
@@ -71,7 +79,11 @@ pub impl Comp {
                 }
                 mut val proof = self.thawStaticConformanceProof(id: proofId)
                 if receiver != 0U64 && self.arena.typeIsClosed(ref: receiver) && !self.proofIsMissing(proof: proof) {
-                    proof = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                    val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                    match instantiation {
+                        StaticProofInstantiation.Deferred => { return <Result.Ok value=() /> }
+                        StaticProofInstantiation.Ready(proof: val concrete) => { proof = concrete }
+                    }
                 }
                 try self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: proof, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
             }

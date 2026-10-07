@@ -1510,6 +1510,13 @@ pub enum StaticConformanceProof {
     TraitPath(edges: Array[WitnessMatch], terminalConformIdx: U64)
 }
 
+// A declaration may retain a valid symbolic proof whose instance inputs are
+// not closed yet. This is distinct from Ready(Missing), a failed conformance.
+pub enum StaticProofInstantiation {
+    Deferred
+    Ready(proof: StaticConformanceProof)
+}
+
 // A selected value conversion is semantic evidence, not an LLVM coercion
 // request.  In particular `S -> any P` carries the exact static proof that
 // selected P's witness, while container conversions retain their recursive
