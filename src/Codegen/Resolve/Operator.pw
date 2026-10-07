@@ -23,7 +23,7 @@ pub impl Comp {
                     mut val rank = if function.extId == 0U64 { give 1U64 } else { give 3U64 }
                     if arity == 2U64 {
                         val parameter = self.funcParamAt(params: function.params, index: 1U64)
-                        val rhs = try self.groundWitnessTypeTerm(ref: parameter.ty, params: <PatternBindInput.Function range=function.typeParams />, matchResult: witness)
+                        val rhs = if self.arena.typeIsClosed(ref: parameter.ty) { give parameter.ty } else { give try self.groundWitnessTypeTerm(ref: parameter.ty, params: <PatternBindInput.Function range=function.typeParams />, matchResult: witness) }
                         matches = rhsRef != 0U64 && self.typeRefEq(a: rhs, b: rhsRef)
                         if rhsUntyped {
                             matches = true
@@ -77,6 +77,9 @@ pub impl Comp {
     // Parameter and result types use the environment of the selected
     // declaration. Associated bindings are not independently searched by name.
     inout fn operatorCalleeType(callee: U64, receiverRef: U64, term: U64) -> Result[U64, CompileDiagnostic] {
+        // Selection has already validated the receiver. A closed term cannot
+        // contain Self, impl binders or projections for this environment.
+        if self.arena.typeIsClosed(ref: term) { return <Result.Ok value=term /> }
         val function = self.arena.functionAt(index: callee)
         val implementationReceiver = self.canonicalBodyReceiverRef(fnIdx: callee, recvInstRef: receiverRef)
         val witness = try self.methodReceiverEnvironment(f: function, instRef: implementationReceiver)
