@@ -752,10 +752,11 @@ pub impl Comp {
                 }
             }
             StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
-                if edges.count() > 0U64 { return self.staticProofBound(proof: <StaticConformanceProof.ConcreteWitness witness=edges[edges.count() - 1U64] />, traitIdx: traitIdx) }
+                return self.staticPathBound(edges: edges, traitIdx: traitIdx)
             }
-            StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: val edges) => {
-                if edges.count() > 0U64 { return self.staticProofBound(proof: <StaticConformanceProof.ConcreteWitness witness=edges[edges.count() - 1U64] />, traitIdx: traitIdx) }
+            StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
+                bound = try self.staticPathBound(edges: edges, traitIdx: traitIdx)
+                if bound.subject == 0U64 { bound = self.assumedSupertraitBound(source: source, steps: steps) }
             }
             StaticConformanceProof.Missing => {}
         }
@@ -763,6 +764,17 @@ pub impl Comp {
             return <Result.Ok value=self.missingTraitBound() />
         }
         return <Result.Ok value=bound />
+    }
+
+    // A provided copy can have a source-trait receiver while its body belongs
+    // to the path's target. Project the requested declaration from the retained
+    // path; the terminal edge alone is not the receiver's complete evidence.
+    inout fn staticPathBound(edges: Array[WitnessMatch], traitIdx: U64) -> Result[TraitBound, CompileDiagnostic] {
+        for edge in edges {
+            val bound = try self.staticProofBound(proof: <StaticConformanceProof.ConcreteWitness witness=edge />, traitIdx: traitIdx)
+            if bound.subject != 0U64 { return <Result.Ok value=bound /> }
+        }
+        return <Result.Ok value=self.missingTraitBound() />
     }
 
     inout fn staticRequirementParamType(resolution: StaticMemberResolution, args: ArgRange, argIdx: U64) -> U64 {
