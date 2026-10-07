@@ -1507,6 +1507,28 @@ pub impl Comp {
         if f.isProvided && self.proofIsMissing(proof: calleeProof) {
             calleeProof = (try self.providedBodyProof(f: f, receiverRef: recvInst))
         }
+        // A closed recorded substitution is authoritative. Receiver/proof
+        // evidence may validate it, but must not replace it or recover its
+        // method parameters by re-reading source arguments.
+        if f.typeParams.count() > 0U64 && selection.calleeTypeArgs.count() == f.typeParams.count() {
+            mut val closed = true
+            for argument in selection.calleeTypeArgs {
+                if argument == 0U64 || !self.arena.typeIsClosed(ref: argument) { closed = false }
+            }
+            if closed {
+                if f.hasRecv || f.isAssoc {
+                    val constraints = try self.callConstraintTypeArguments(function: f, receiver: recvInst, proof: calleeProof)
+                    mut val index = 0U64
+                    while index < constraints.count() {
+                        if constraints[index] != 0U64 && self.arena.typeIsClosed(ref: constraints[index]) && !self.typeRefEq(a: constraints[index], b: selection.calleeTypeArgs[index]) {
+                            return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "recorded callable type arguments disagree with receiver or conformance evidence") />
+                        }
+                        index += 1U64
+                    }
+                }
+                return <Result.Ok value=<Optional.Some v=<SelectedCallableSubstitution receiverRef=recvInst args=selection.calleeTypeArgs proof=calleeProof /> /> />
+            }
+        }
         if f.typeParams.count() > 0U64 {
             // A recorded call template owns the parametric substitution.  Its
             // grounded values are the primary final-builder input; legacy
