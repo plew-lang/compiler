@@ -1,0 +1,73 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+trait Marker {}
+impl I64 as Marker {}
+
+trait Maker {
+    fn empty[T]() -> Optional[T] where T: Marker
+    fn identity[T](value: T) -> T
+}
+pub impl Maker {
+    fn supplied[T](flag: Bool = false) -> Optional[T] where T: Marker { return <.None /> }
+}
+struct Source {}
+impl Source as Maker {
+    fn empty[Value]() -> Optional[Value] where Value: Marker { return <.None /> }
+    fn identity[Value](value: Value) -> Value { return value }
+}
+fn absent(value: Optional[I64]) -> Bool {
+    return match value {
+        Optional.None => true,
+        Optional.Some(v: _) => false,
+    }
+}
+fn required[M](source: M) -> Optional[I64] where M: Maker {
+    return source.empty()
+}
+fn bounded[M, Value](source: M) -> Optional[Value] where M: Maker, Value: Marker {
+    return source.empty()
+}
+fn supplied[M](source: M) -> Optional[I64] where M: Maker {
+    return source.supplied()
+}
+fn contexts[M](source: M) where M: Maker {
+    val local: Optional[I64] = source.empty()
+    assert(absent(value: local))
+    assert(absent(value: source.empty()))
+    val wrapped: Optional[I64] = { give source.empty() }
+    assert(absent(value: wrapped))
+    val selected: Optional[I64] = if true { give source.empty() } else { give source.supplied() }
+    assert(absent(value: selected))
+    assert(source.identity(value: 42I64) == 42I64)
+}
+trait TypedMaker[Element] {
+    fn sample() -> Element
+}
+pub impl[Element] TypedMaker[Element] {
+    fn typedEmpty[Value]() -> Optional[Value] { return <.None /> }
+    fn typedPair[Value]() -> (owner: Self, value: Optional[Value]) {
+        return (owner: self, value: <Optional[Value].None />)
+    }
+}
+impl Source as TypedMaker[I32] {
+    fn sample() -> I32 { return 7I32 }
+}
+fn typed[M](source: M) -> Optional[I64] where M: TypedMaker[I32] {
+    return source.typedEmpty()
+}
+fn paired[M](source: M) -> (owner: M, value: Optional[I64]) where M: TypedMaker[I32] {
+    return source.typedPair()
+}
+fn main() {
+    val source = <Source />
+    assert(absent(value: required(source: source)))
+    assert(absent(value: bounded(source: source)))
+    assert(absent(value: supplied(source: source)))
+    assert(absent(value: typed(source: source)))
+    val pair = paired(source: source)
+    assert(pair.owner.sample() == 7I32)
+    assert(absent(value: pair.value))
+    contexts(source: source)
+    print("ok")
+}

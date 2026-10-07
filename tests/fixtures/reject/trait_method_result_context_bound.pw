@@ -1,0 +1,12 @@
+trait Marker {}
+trait Maker {
+    fn empty[T]() -> Optional[T] where T: Marker
+}
+struct Source {}
+impl Source as Maker {
+    fn empty[Value]() -> Optional[Value] where Value: Marker { return <.None /> }
+}
+fn invalid[M](source: M) -> Optional[I64] where M: Maker {
+    return source.empty()
+}
+fn main() {}

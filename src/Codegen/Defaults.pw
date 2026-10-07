@@ -14,15 +14,9 @@ pub impl Comp {
         while index < limit {
             tracePhaseProgress(c: inout self, label: "default-call-completion:template", count: index, stride: 64U64)
             val template = self.decls.callTemplates[index]
-            match template.kind {
-                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                    if !(try self.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm)) {
-                        incomplete += 1U64
-                        tracePhaseCount(c: inout self, label: "default-call-completion:incomplete-callee", count: callee)
-                        tracePhaseCount(c: inout self, label: "default-call-completion:incomplete-owner", count: template.siteKey.ownerFnIdx)
-                    }
-                }
-                _ => {}
+            if !(try self.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm)) {
+                incomplete += 1U64
+                tracePhaseCount(c: inout self, label: "default-call-completion:incomplete-owner", count: template.siteKey.ownerFnIdx)
             }
             index += 1U64
         }
@@ -38,12 +32,7 @@ pub impl Comp {
         while row != 0U64 && row <= limit {
             val index = row - 1U64
             val template = self.decls.callTemplates[index]
-            match template.kind {
-                CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                    if !(try self.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm)) { incomplete += 1U64 }
-                }
-                _ => {}
-            }
+            if !(try self.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm)) { incomplete += 1U64 }
             row = self.decls.callTemplateBodyNext[index]
         }
         return <Result.Ok value=incomplete />
@@ -53,53 +42,76 @@ pub impl Comp {
     // and expected-result evidence. `receiverTerm` is the recorded receiver
     // recipe's result in the caller environment, never a fresh name lookup.
     // The parent row is published only once every parameter has an operand.
-    inout fn completeRecordedDirectDefaults(templateIndex: U64, receiverTerm: U64) -> Result[Bool, CompileDiagnostic] {
+    inout fn completeRecordedCallableDefaults(templateIndex: U64, receiverTerm: U64) -> Result[Bool, CompileDiagnostic] {
         if templateIndex >= self.decls.callTemplates.count() { return <Result.Ok value=false />}
         val template = self.decls.callTemplates[templateIndex]
-        match template.kind {
+        val selected = match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val arguments, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
-                if callee >= self.arena.functionCount() { return <Result.Ok value=false />}
-                val function = self.arena.functionAt(index: callee)
-                val argumentValues: Array[CallTemplateArgument] = self.callTemplateArguments(range: arguments)
-                val typeArgValues: Array[U64] = self.callTemplateTypeArgs(range: typeArgs)
-                if argumentValues.count() != arguments.len || typeArgValues.count() != typeArgs.len { return <Result.Ok value=false />}
-                // This also makes completion idempotent: the saved ordinary
-                // default calls are not reclassified as omitted arguments.
-                if argumentValues.count() == function.params.count() { return <Result.Ok value=true />}
-                if argumentValues.count() > function.params.count() || self.decls.defaultGeneratorRanges.count() == 0U64 { return <Result.Ok value=false />}
-                if typeArgValues.count() != function.typeParams.count() { return <Result.Ok value=false />}
-                // Empty substitutions are complete for a zero-binder callable.
-                // The inference helper also uses empty to mean no inference.
-                if typeArgValues.count() > 0U64 && !self.fnArgsAllResolved(args: typeArgValues) { return <Result.Ok value=false />}
-                if (function.hasRecv || function.isAssoc) && receiverTerm == 0U64 { return <Result.Ok value=false />}
-                val proof: StaticConformanceProof = self.thawStaticConformanceProof(id: proofId)
-                val environment = (try self.bodyInstanceEnvironment(fnIdx: callee, args: typeArgValues, recvInstRef: receiverTerm, selectedProof: proof))
-                val item = (try self.bodyProvidedItemTerm(f: function, environment: environment))
-                mut val parameterTerms: Array[U64] = []
-                mut val index: U64 = 0U64
-                while index < function.params.count() {
-                    val parameter = self.funcParamAt(params: function.params, index: index)
-                    parameterTerms.append((try self.groundTermForBody(ref: parameter.ty, environment: environment, selfRef: environment.receiverRef, itemRef: item)))
-                    index += 1U64
-                }
-                // Source local resolution has ended. Install only the owner
-                // used to key synthetic calls; never rebuild lexical locals.
-                val previousOwner = self.cur.checkFn
-                val previousRecording = self.cur.recordCallTemplates
-                self.cur.checkFn = template.siteKey.ownerFnIdx
-                self.cur.recordCallTemplates = true
-                val completed = (try self.recordBoundCallArguments(callee: callee, args: argumentValues, receiver: receiver, calleeTypeArgs: typeArgValues, parameterTerms: parameterTerms, proof: environment.proof, receiverTypeTerm: receiverTerm))
-                self.cur.checkFn = previousOwner
-                self.cur.recordCallTemplates = previousRecording
-                match completed {
-                    Optional.Some(v: val args) => {
-                        self.decls.callTemplates.set(i: templateIndex, value: <CallTemplate resultTypeRecipe=template.resultTypeRecipe siteKey=template.siteKey expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=self.publishCallTemplateArguments(args: args) calleeTypeArgs=self.publishCallTemplateTypeArgs(args: typeArgValues) proofId=proofId /> />)
-                        return <Result.Ok value=true />
+                give (callee: callee, receiver: receiver, arguments: arguments, typeArgs: typeArgs, proof: self.thawStaticConformanceProof(id: proofId))
+            }
+            CallTemplateKind.StaticMethod(receiver: val receiver, args: val arguments, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
+                give match resolution {
+                    StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
+                        give (callee: callee, receiver: receiver, arguments: arguments, typeArgs: typeArgs, proof: proof)
                     }
-                    Optional.None => { return <Result.Ok value=false />}
+                    _ => { return <Result.Ok value=true /> }
                 }
             }
-            _ => { return <Result.Ok value=false />}
+            _ => { return <Result.Ok value=true /> }
+        }
+        val callee = selected.callee
+        val receiver = selected.receiver
+        val arguments = selected.arguments
+        val typeArgs = selected.typeArgs
+        if callee >= self.arena.functionCount() { return <Result.Ok value=false />}
+        val function = self.arena.functionAt(index: callee)
+        val argumentValues: Array[CallTemplateArgument] = self.callTemplateArguments(range: arguments)
+        val typeArgValues: Array[U64] = self.callTemplateTypeArgs(range: typeArgs)
+        if argumentValues.count() != arguments.len || typeArgValues.count() != typeArgs.len { return <Result.Ok value=false />}
+        // This also makes completion idempotent: the saved ordinary
+        // default calls are not reclassified as omitted arguments.
+        if argumentValues.count() == function.params.count() { return <Result.Ok value=true />}
+        if argumentValues.count() > function.params.count() || self.decls.defaultGeneratorRanges.count() == 0U64 { return <Result.Ok value=false />}
+        if typeArgValues.count() != function.typeParams.count() { return <Result.Ok value=false />}
+        // Empty substitutions are complete for a zero-binder callable.
+        // The inference helper also uses empty to mean no inference.
+        if typeArgValues.count() > 0U64 && !self.fnArgsAllResolved(args: typeArgValues) { return <Result.Ok value=false />}
+        if (function.hasRecv || function.isAssoc) && receiverTerm == 0U64 { return <Result.Ok value=false />}
+        val proof = selected.proof
+        val environment = (try self.bodyInstanceEnvironment(fnIdx: callee, args: typeArgValues, recvInstRef: receiverTerm, selectedProof: proof))
+        val item = (try self.bodyProvidedItemTerm(f: function, environment: environment))
+        mut val parameterTerms: Array[U64] = []
+        mut val index: U64 = 0U64
+        while index < function.params.count() {
+            val parameter = self.funcParamAt(params: function.params, index: index)
+            parameterTerms.append((try self.groundTermForBody(ref: parameter.ty, environment: environment, selfRef: environment.receiverRef, itemRef: item)))
+            index += 1U64
+        }
+        // Source local resolution has ended. Install only the owner
+        // used to key synthetic calls; never rebuild lexical locals.
+        val previousOwner = self.cur.checkFn
+        val previousRecording = self.cur.recordCallTemplates
+        self.cur.checkFn = template.siteKey.ownerFnIdx
+        self.cur.recordCallTemplates = true
+        val completed = (try self.recordBoundCallArguments(callee: callee, args: argumentValues, receiver: receiver, calleeTypeArgs: typeArgValues, parameterTerms: parameterTerms, proof: environment.proof, receiverTypeTerm: receiverTerm))
+        self.cur.checkFn = previousOwner
+        self.cur.recordCallTemplates = previousRecording
+        match completed {
+            Optional.Some(v: val args) => {
+                val completedArguments = self.publishCallTemplateArguments(args: args)
+                val kind = match template.kind {
+                    CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: val proofId) => {
+                        give <CallTemplateKind.Direct callee=callee receiver=receiver args=completedArguments calleeTypeArgs=typeArgs proofId=proofId />
+                    }
+                    CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: _, resultTerm: val result) => {
+                        give <CallTemplateKind.StaticMethod receiver=receiver args=completedArguments resolution=resolution methodTypeArgs=typeArgs resultTerm=result />
+                    }
+                    _ => { return <Result.Ok value=false /> }
+                }
+                self.decls.callTemplates.set(i: templateIndex, value: <CallTemplate resultTypeRecipe=template.resultTypeRecipe siteKey=template.siteKey expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm kind=kind />)
+                return <Result.Ok value=true />
+            }
+            Optional.None => { return <Result.Ok value=false />}
         }
     }
 

@@ -1,0 +1,7 @@
+trait Echo {
+    fn identity[T](value: T) -> T
+}
+fn invalid[M](source: M) -> I64 where M: Echo {
+    return source.identity(value: 1I32)
+}
+fn main() {}

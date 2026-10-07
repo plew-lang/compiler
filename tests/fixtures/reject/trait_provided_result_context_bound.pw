@@ -1,0 +1,10 @@
+trait Marker {}
+trait Maker {}
+pub impl Maker {
+    fn empty[T](flag: Bool = false) -> Optional[T] { return <.None /> }
+    fn bounded[T]() -> Optional[T] where T: Marker { return <.None /> }
+}
+struct Source {}
+impl Source as Maker {}
+fn obtain[M](source: M) -> Optional[I64] where M: Maker { return source.bounded() }
+fn main() {}

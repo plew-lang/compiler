@@ -152,14 +152,14 @@ pub impl Comp {
         return <Result.Ok value=fullArgs />
     }
 
-    // Build the selected method's complete lexical substitution once.  Return
+    // Infer the selected method's lexical substitution, retaining open slots.  Return
     // typing and parameter typing are two views of the same final callable:
     // letting either reconstruct a weaker receiver-only substitution loses a
     // method/impl binder such as Array[T].append(value: T).  An empty
     // environment is the explicit "not a receiver-instantiated callable"
     // outcome; a valid non-generic method has a nonzero receiverRef and no
     // parameter entries.
-    inout fn finalMethodEnvironment(f: Func, receiverRef: U64, args: ArgRange, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
+    inout fn inferMethodEnvironment(f: Func, receiverRef: U64, args: ArgRange, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
         // A declared Self is rigid but has the lexical receiver equation of
         // this body. Apply that equation before matching another method's
         // receiver pattern, rather than leaving its impl binders unresolved.
@@ -173,7 +173,7 @@ pub impl Comp {
         if f.isAssoc && f.recvTy != 0U64 && f.recvTy < self.arena.typeCount() && self.arena.typeTerms[semanticReceiver].args.len == 0U64 && self.arena.typeTerms[f.recvTy].args.len != 0U64 {
             val inferredReceiver = try self.associatedReceiverFromArguments(f: f, args: args)
             if inferredReceiver != 0U64 && inferredReceiver != semanticReceiver && self.typeTermRefSameHead(a: semanticReceiver, b: inferredReceiver) {
-                return self.finalMethodEnvironment(f: f, receiverRef: inferredReceiver, args: args, selectedProof: selectedProof)
+                return self.inferMethodEnvironment(f: f, receiverRef: inferredReceiver, args: args, selectedProof: selectedProof)
             }
         }
         // A method's generic binder list can contain the nominal declaration
@@ -223,14 +223,23 @@ pub impl Comp {
         if fullArgs.count() != f.typeParams.count() {
             return <Result.Ok value=<InstanceEnvironment /> />
         }
-        if f.typeParams.count() > 0U64 && !(self.fnArgsAllResolved(args: fullArgs)) {
-            return <Result.Ok value=<InstanceEnvironment /> />
-        }
         // Preserve ParamId identity in the result. The legacy Cursor grounding
         // path can use spelling fallback while translating a method binder;
         // an immutable map cannot, so the returned outer `T` remains the
         // caller's lexical term for later BodyInstance grounding.
         return <Result.Ok value=(try self.withLexicalSelfBinding(f: f, environment: <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=semanticReceiver proof=proof />)) />
+    }
+
+    // Consumers that need a complete signature retain the strict boundary.
+    // Source inference instead keeps known receiver/proof bindings while a
+    // method-owned parameter waits for its expected result context.
+    inout fn finalMethodEnvironment(f: Func, receiverRef: U64, args: ArgRange, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        val environment = try self.inferMethodEnvironment(f: f, receiverRef: receiverRef, args: args, selectedProof: selectedProof)
+        // The inference environment contains every declaration binder and
+        // may also contain lexical Self. All supplied bindings must resolve;
+        // their order is deliberately not part of this consumer's contract.
+        if f.typeParams.count() > 0U64 && (environment.args.count() < f.typeParams.count() || !self.fnArgsAllResolved(args: environment.args)) { return <Result.Ok value=<InstanceEnvironment /> /> }
+        return <Result.Ok value=environment />
     }
 
     inout fn signatureTypeArguments(f: Func, environment: InstanceEnvironment) -> Array[U64] {

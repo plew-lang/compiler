@@ -477,7 +477,7 @@ pub impl Comp {
                             if !self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx).isAssoc {
                                 return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a type qualifier can only call an associated function") />
                             }
-                            try self.checkSymbolicMethodArgs(fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args)
+                            try self.checkSymbolicMethodArgs(exprId: exprId, fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args)
                         }
                         StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val declaration) => {
                             if !self.arena.functionAt(index: declaration).isAssoc {
@@ -493,7 +493,7 @@ pub impl Comp {
                 // A value whose type is T.Options must be checked against
                 // that projection's evidence, not the spelling of its T head.
                 val semanticReceiver = self.parametricExprTerm(exprId: recv)
-                if (try self.checkSymbolicMethodArgs(fnIdx: self.cur.checkFn, receiverRef: semanticReceiver, nameStart: nameStart, nameLen: nameLen, args: args)) {
+                if (try self.checkSymbolicMethodArgs(exprId: exprId, fnIdx: self.cur.checkFn, receiverRef: semanticReceiver, nameStart: nameStart, nameLen: nameLen, args: args)) {
                     return <Result.Ok value=() />
                 }
                 val rt: TypeInfo = (try self.typeOf(id: recv))
@@ -871,29 +871,10 @@ pub impl Comp {
                 }
             }
         }
-        // An abstract operator's result is selected by its static trait proof.
-        // `inferType` remains the compatibility adapter for ordinary legacy
-        // expressions, but it cannot represent an unbound associated Output
-        // without collapsing its receiver head.  Preserve the semantic term at
-        // this generic-check boundary instead.
-        mut val inferred: U64 = (try self.groundedTypeOf(id: valueExpr))
-        match self.arena.exprs[valueExpr] {
-            Expr.Binary(val op, lhs: val lhs, rhs: _) => {
-                val operatorResult: U64 = (try self.staticBinaryOperatorResultRef(lhs: lhs, op: op))
-                if operatorResult != 0U64 {
-                    inferred = operatorResult
-                }
-            }
-            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                val qualifier: U64 = self.symbolicCallQualifierTerm(exprId: valueExpr, receiverExpr: recv)
-                if qualifier != 0U64 {
-                    val selected: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args))
-                    val result: U64 = (try self.staticRequirementCallResultType(resolution: selected, args: args))
-                    if result != 0U64 { inferred = result }
-                }
-            }
-            _ => {}
-        }
+        // Source recording owns call/operator selection and the completed
+        // result substitution. Generic checking must not select a weaker
+        // signature again from the expression's syntax.
+        val inferred: U64 = (try self.groundedTypeOf(id: valueExpr))
         // Operators and other values share the same proof-directed projection
         // normalization and rigid type comparison.
         if !((try self.typesCompatible(expected: expectedRef, inferred: inferred))) {

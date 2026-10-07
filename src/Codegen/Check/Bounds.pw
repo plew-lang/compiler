@@ -1700,6 +1700,17 @@ pub impl Comp {
                 val owner = self.decls.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
                 try self.checkSelectedCallableBounds(fnIdx: callee, environment: environment, assumptions: self.functionBoundAssumptions(fnIdx: owner))
             }
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val arguments, resultTerm: _) => {
+                match resolution {
+                    StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
+                        val function = self.arena.functionAt(index: callee)
+                        val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: arguments), proof: proof)
+                        val owner = self.decls.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
+                        try self.checkSelectedCallableBounds(fnIdx: callee, environment: environment, assumptions: self.functionBoundAssumptions(fnIdx: owner))
+                    }
+                    _ => {}
+                }
+            }
             _ => {}
         }
         return <Result.Ok value=() />
@@ -1734,6 +1745,14 @@ pub impl Comp {
                 CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                     if callee < constrained.count() && constrained[callee] {
                         try self.checkRecordedCallTemplateBound(templateIndex: index)
+                    }
+                }
+                CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: _, resultTerm: _) => {
+                    match resolution {
+                        StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => {
+                            if callee < constrained.count() && constrained[callee] { try self.checkRecordedCallTemplateBound(templateIndex: index) }
+                        }
+                        _ => {}
                     }
                 }
                 _ => {}
