@@ -489,77 +489,13 @@ pub impl Comp {
     }
 
     inout fn anyMemberRetInfo(anyRef: U64, req: Func) -> Result[TypeInfo, CompileDiagnostic] {
-        if req.isAsync && !req.hasRet { return self.declaredRetInfo(f: req) }
-        if !(req.hasRet) || req.retTy == 0U64 {
-            return <Result.Ok value=scalarInfo() />
+        val traitIndex = self.recordAnyTraitIndex(anyRef: anyRef)
+        if traitIndex >= self.decls.traitCount() {
+            return <Result.Err error=self.diagnosticAt(offset: req.nameStart, msg: "existential result has no selected trait") />
         }
-        val t = self.arena.typeTerms[anyRef]
-        val tri: U64 = self.recordAnyTraitIndex(anyRef: anyRef)
-        if tri >= self.decls.traitCount() {
-            return <Result.Ok value=scalarInfo() />
-        }
-        val tr: TraitDef = self.decls.traitAt(index: tri)
-        mut val tp: Array[Bind] = []
-        mut val ta: Array[U64] = []
-        mut val pos: U64 = 0
-        mut val ai: U64 = 0
-        while ai < t.args.len {
-            mut val lbl: U64 = 0
-            if ai < t.argLabels.len {
-                lbl = self.arena.typeArgumentLabelPool[t.argLabels.start + ai]
-            }
-            if lbl == 0U64 {
-                if pos < tr.typeParams.count() {
-                    tp.append(self.traitBindAt(binds: tr.typeParams, index: pos))
-                    ta.append(self.arena.typeArgumentPool[t.args.start + ai])
-                    pos += 1
-                }
-            } else {
-                mut val k: U64 = 0
-                while k < tr.typeParams.count() {
-                    if self.traitBindAt(binds: tr.typeParams, index: k).nameId == lbl {
-                        tp.append(self.traitBindAt(binds: tr.typeParams, index: k))
-                        ta.append(self.arena.typeArgumentPool[t.args.start + ai])
-                    }
-                    k += 1
-                }
-                k = 0
-                while k < tr.assocTypes.count() {
-                    if self.traitBindAt(binds: tr.assocTypes, index: k).nameId == lbl {
-                        tp.append(self.traitBindAt(binds: tr.assocTypes, index: k))
-                        ta.append(self.arena.typeArgumentPool[t.args.start + ai])
-                    }
-                    k += 1
-                }
-            }
-            ai += 1
-        }
-        val savedP: Array[Bind] = self.cur.typeParams
-        val savedA: Array[U64] = self.cur.typeArgs
-        val savedS: U64 = self.cur.selfRef
-        self.cur.typeParams = tp
-        self.cur.typeArgs = ta
-        self.cur.selfRef = anyRef
-        val substituted: U64 = self.groundTraitRequirementType(ref: req.retTy, traitIdx: tri, receiverRef: anyRef, params: tp, args: ta)
-        val g: U64 = (try self.groundTypeRef(ref: substituted))
-        self.cur.typeParams = savedP
-        self.cur.typeArgs = savedA
-        self.cur.selfRef = savedS
-        if self.traceCodegen {
-            eprint(text: "[trace-codegen] existential result declared=")
-            self.traceMonoTypeHead(ref: req.retTy)
-            eprint(text: " grounded=")
-            self.traceMonoTypeHead(ref: g)
-            eprint(text: " ground=")
-            if g != 0U64 && (try self.tyRefIsGround(ref: g)) { eprint(text: "true") }
-            else { eprint(text: "false") }
-            eprint(text: "\n")
-        }
-        // A declaration result may still contain the caller's rigid type
-        // parameters. It is nevertheless a known semantic type; erasing it
-        // to scalarInfo loses both its identity and the applicable bounds.
-        if g != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: g) /> }
-        return <Result.Ok value=scalarInfo() />
+        val signature = try self.existentialRequirementSignature(target: anyRef, traitIndex: traitIndex, requirement: req)
+        if signature.resultType == 0U64 { return <Result.Ok value=scalarInfo() /> }
+        return <Result.Ok value=self.typeInfoOfRef(ref: signature.resultType) />
     }
 
     // The context-free expression query. An optional-chain continuation uses

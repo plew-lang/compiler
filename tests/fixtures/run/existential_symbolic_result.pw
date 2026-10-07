@@ -2,6 +2,7 @@ use @Std/Io only { print }
 use @Std/Core only { assert }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
 use /SourceAccess only { SourceAccess }
+use /Ir only { TypeRef }
 fn main() {
     mut val c = <Comp />
     val source = "struct Value {{}}\ntrait Cursor {{ type Item }}\ntrait Source {{ type Iter fn iterator() -> Iter }}\nfn test[T](values: any Source[Iter=T]) where T: Cursor[Item=Value] {{}}\n"
@@ -11,7 +12,34 @@ fn main() {
     val receiver = c.funcParamAt(params: function.params, index: 0U64).ty
     val traitIndex = c.recordAnyTraitIndex(anyRef: receiver)
     val req = c.traitReqAt(reqs: c.decls.traitAt(index: traitIndex).reqs, index: 0U64)
+    // The reader owns an explicit requirement environment. An unrelated
+    // ambient substitution must neither change its result nor be overwritten.
+    val parameter = c.funcBindAt(binds: function.typeParams, index: 0U64)
+    val savedParameters = c.cur.typeParams
+    val savedArguments = c.cur.typeArgs
+    val savedReceiver = c.cur.selfRef
+    c.cur.typeParams = [parameter]
+    c.cur.typeArgs = [receiver]
+    c.cur.selfRef = receiver
     val cursor = c.anyMemberRetInfo(anyRef: receiver, req: req).unwrap().ref
+    val signature = c.existentialRequirementSignature(target: receiver, traitIndex: traitIndex, requirement: req).unwrap()
+    assert(c.typeRefEq(a: cursor, b: signature.resultType))
+    assert(c.cur.typeParams.count() == 1U64)
+    assert(c.cur.typeParams[0U64].paramId == parameter.paramId)
+    assert(c.cur.typeArgs[0U64] == receiver)
+    assert(c.cur.selfRef == receiver)
+    val original = c.arena.typeAt(index: receiver)
+    val incomplete = c.pushType(t: <TypeRef nameStart=original.nameStart nameLen=original.nameLen nameId=original.nameId args=[] isAny=true hasDecl=original.hasDecl declOffset=original.declOffset />)
+    match c.anyMemberRetInfo(anyRef: incomplete, req: req) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic "accepted incomplete existential result bindings" }
+    }
+    assert(c.cur.typeParams[0U64].paramId == parameter.paramId)
+    assert(c.cur.typeArgs[0U64] == receiver)
+    assert(c.cur.selfRef == receiver)
+    c.cur.typeParams = savedParameters
+    c.cur.typeArgs = savedArguments
+    c.cur.selfRef = savedReceiver
     assert(cursor != 0U64)
     assert(c.arena.typeAt(index: cursor).paramId == c.arena.typeAt(index: bound.paramTy).paramId)
     assert(c.typeRefEq(a: cursor, b: bound.paramTy))
