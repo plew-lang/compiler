@@ -2805,6 +2805,28 @@ pub impl Comp {
         return self.arena.finalExistentials.count()
     }
 
+    // Consume the selected conformance evidence without reconstructing the
+    // implementation environment from a receiver's nominal shape.
+    inout fn existentialImplementation(receiver: U64, traitIndex: U64, requirement: U64, proof: StaticConformanceProof) -> Result[Optional[ExistentialImplementation], CompileDiagnostic] {
+        val trait = self.decls.traitAt(index: traitIndex)
+        val requested = self.traitReqAt(reqs: trait.reqs, index: requirement)
+        if requested.isAssoc || self.reqUsesSelfInInput(req: requested) || !self.reqRetSelfErasable(req: requested) { return <Result.Ok value=<Optional.None /> /> }
+        val functionIndex = try self.proofConcreteWitness(proof: proof, receiverRef: receiver, traitIdx: traitIndex, reqIdx: requirement)
+        if functionIndex >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: requested.nameStart, msg: "existential proof has no selected requirement implementation") /> }
+        val function = self.arena.functionAt(index: functionIndex)
+        val witness = self.proofWitnessForTrait(proof: proof, traitIdx: traitIndex)
+        mut val arguments: Array[U64] = []
+        mut val parameter = 0U64
+        while parameter < function.typeParams.count() {
+            val binding = self.funcBindAt(binds: function.typeParams, index: parameter)
+            val bindIndex = self.witnessBindParamIndex(binds: witness.binds, paramId: binding.paramId)
+            if bindIndex >= witness.binds.count() { return <Result.Err error=self.diagnosticAt(offset: function.nameStart, msg: "existential witness has an unbound implementation parameter") /> }
+            arguments.append(witness.binds[bindIndex].term)
+            parameter += 1U64
+        }
+        return <Result.Ok value=<Optional.Some v=<ExistentialImplementation function=functionIndex arguments=arguments /> /> />
+    }
+
     inout fn finalizeConversionDependencies(conversion: ValueConversionProof) -> Result[(), CompileDiagnostic] {
         match conversion {
             ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val traitIdx, proof: val proof) => {
@@ -2812,31 +2834,17 @@ pub impl Comp {
                 val index: U64 = self.arena.finalExistentials.count()
                 self.arena.finalExistentials.append(<FinalExistentialResolution sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof />)
                 val trait: TraitDef = self.decls.traitAt(index: traitIdx)
-                val witness: WitnessMatch = self.proofWitnessForTrait(proof: proof, traitIdx: traitIdx)
                 mut val members: Array[FinalExistentialMember] = []
                 mut val requirement: U64 = 0U64
                 while requirement < trait.reqs.count() {
                     val req: Func = self.traitReqAt(reqs: trait.reqs, index: requirement)
                     mut val bodyId: U64 = 0U64
-                    if !req.isAssoc && !self.reqUsesSelfInInput(req: req) && self.reqRetSelfErasable(req: req) {
-                        val functionIndex: U64 = (try self.proofConcreteWitness(proof: proof, receiverRef: sourceRef, traitIdx: traitIdx, reqIdx: requirement))
-                        if functionIndex >= self.arena.functionCount() {
-                            return <Result.Err error=self.diagnosticAt(offset: req.nameStart, msg: "internal error: existential proof has no selected requirement implementation") />
+                    match (try self.existentialImplementation(receiver: sourceRef, traitIndex: traitIdx, requirement: requirement, proof: proof)) {
+                        Optional.Some(v: val selected) => {
+                            bodyId = try self.enqueueFinalBody(fnIdx: selected.function, args: selected.arguments, recvInstRef: sourceRef, selectedProof: proof)
+                            if bodyId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: req.nameStart, msg: "internal error: existential implementation has no executable body") /> }
                         }
-                        val function: Func = self.arena.functionAt(index: functionIndex)
-                        mut val args: Array[U64] = []
-                        mut val parameter: U64 = 0U64
-                        while parameter < function.typeParams.count() {
-                            val binding: Bind = self.funcBindAt(binds: function.typeParams, index: parameter)
-                            val bindIndex: U64 = self.witnessBindParamIndex(binds: witness.binds, paramId: binding.paramId)
-                            if bindIndex >= witness.binds.count() {
-                                return <Result.Err error=self.diagnosticAt(offset: function.nameStart, msg: "internal error: existential witness has an unbound implementation parameter") />
-                            }
-                            args.append(witness.binds[bindIndex].term)
-                            parameter += 1U64
-                        }
-                        bodyId = (try self.enqueueFinalBody(fnIdx: functionIndex, args: args, recvInstRef: sourceRef, selectedProof: proof))
-                        if bodyId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: req.nameStart, msg: "internal error: existential implementation has no executable body") /> }
+                        Optional.None => {}
                     }
                     mut val member = <FinalExistentialMember />
                     if bodyId != 0U64 {

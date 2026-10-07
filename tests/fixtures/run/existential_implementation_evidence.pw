@@ -1,0 +1,30 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { StaticConformanceProof, ValueConversionProof }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "trait Q {{}}\ntrait P {{ fn read() -> I64 }}\nstruct Leaf {{}}\nimpl Leaf as Q {{}}\nstruct Box[T] {{ val value: T }}\nimpl[T] Box[T] as P where T: Q {{ fn read() -> I64 {{ return 7I64 }} }}\nfn probe(value: Box[Leaf], target: any P, leaf: Leaf) {{}}\n"
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="witness.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    // The impl method precedes the free function in this source.
+    val function = compiler.arena.functionAt(index: 1U64)
+    val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val target = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val leaf = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    match compiler.callArgumentConversion(sourceRef: receiver, targetRef: target).unwrap() {
+        ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: val traitIndex, proof: val proof) => {
+            val selected = compiler.existentialImplementation(receiver: receiver, traitIndex: traitIndex, requirement: 0U64, proof: proof).unwrap().unwrap()
+            assert(selected.arguments.count() == 1U64)
+            assert(compiler.typeRefEq(a: selected.arguments[0U64], b: leaf))
+            // A matching receiver cannot replace a missing selected proof.
+            match compiler.existentialImplementation(receiver: receiver, traitIndex: traitIndex, requirement: 0U64, proof: <StaticConformanceProof.Missing />) {
+                Result.Err(error: _) => {}
+                Result.Ok(value: _) => { panic "reselected an implementation without evidence" }
+            }
+        }
+        _ => { panic "expected an existential conversion" }
+    }
+    print("ok")
+}

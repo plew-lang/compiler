@@ -2023,6 +2023,15 @@ pub struct FinalMatchResolution {
 }
 pub impl FinalMatchResolution { factory }
 
+// A dispatchable requirement's selected implementation. Shared by
+// declaration dependency checking and executable descriptor construction.
+// Absence is represented by Optional, not by an invalid function index.
+pub struct ExistentialImplementation {
+    pub val function: U64
+    pub val arguments: Array[U64]
+}
+pub impl ExistentialImplementation { factory }
+
 // One concrete value-conversion decision for a `return expression` in a
 // canonical BodyInstance.  A return has one ABI target but may be reached by
 // many source branches, so its key is the returned expression rather than a

@@ -43,12 +43,11 @@ pub impl Comp {
                         val trait = self.decls.traitAt(index: traitIndex)
                         mut val index = 0U64
                         while index < trait.reqs.count() {
-                            val requirement = self.traitReqAt(reqs: trait.reqs, index: index)
-                            if !requirement.isAssoc && !self.reqUsesSelfInInput(req: requirement) && self.reqRetSelfErasable(req: requirement) {
-                                val selected = try self.proofConcreteWitness(proof: evidence, receiverRef: receiver, traitIdx: traitIndex, reqIdx: index)
-                                if selected >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: requirement.nameStart, msg: "existential proof has no selected requirement implementation") /> }
-                                val arguments = try self.callConstraintTypeArguments(function: self.arena.functionAt(index: selected), receiver: receiver, proof: evidence)
-                                try self.appendCallConstraintInstance(function: selected, arguments: arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                            match (try self.existentialImplementation(receiver: receiver, traitIndex: traitIndex, requirement: index, proof: evidence)) {
+                                Optional.Some(v: val selected) => {
+                                    try self.appendCallConstraintInstance(function: selected.function, arguments: selected.arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                                }
+                                Optional.None => {}
                             }
                             index += 1U64
                         }
