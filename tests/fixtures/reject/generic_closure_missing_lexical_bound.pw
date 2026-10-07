@@ -1,0 +1,10 @@
+trait Read { fn read() -> I64 }
+struct Value {}
+pub impl Value { factory }
+pub impl Value as Read { fn read() -> I64 { return 7I64 } }
+// A different declaration with the same binder spelling must not lend bounds.
+fn unrelated[T](value: T) -> I64 where T: Read { return value.read() }
+fn make[T](value: T) -> fn() -> I64 {
+    return fn() -> I64 { return value.read() }
+}
+fn main() { val invoke = make(value: <Value />) }

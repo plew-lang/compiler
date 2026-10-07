@@ -9,13 +9,17 @@ use ../../Ir only { DynamicCallTemplateTarget }
 
 pub impl Comp {
     fn functionBoundAssumptions(fnIdx: U64) -> Array[DeclarationBoundRef] {
+        // A closure owns its call/body identity, but its generic assumptions
+        // are declared by its lexical function. This mapping is published
+        // before recording the closure body and preserves ParamId identity.
+        val owner = self.decls.callTemplateLexicalRoots.getOr(key: fnIdx, fallback: fnIdx)
         mut val result: Array[DeclarationBoundRef] = []
         mut val index = 0U64
         while index < self.decls.funcBounds.count() {
-            if self.decls.funcBounds[index].fnIdx == fnIdx { result.append(<DeclarationBoundRef.Function index=index />) }
+            if self.decls.funcBounds[index].fnIdx == owner { result.append(<DeclarationBoundRef.Function index=index />) }
             index += 1U64
         }
-        if functionHasTraitReceiver(self.arena, self.decls, fnIdx: fnIdx) { result.append(<DeclarationBoundRef.MethodReceiver index=fnIdx />) }
+        if functionHasTraitReceiver(self.arena, self.decls, fnIdx: owner) { result.append(<DeclarationBoundRef.MethodReceiver index=owner />) }
         return result
     }
 

@@ -1,0 +1,17 @@
+use @Std/Io only { print }
+trait Read { fn read() -> I64 }
+struct First {}
+struct Second {}
+pub impl First { factory }
+pub impl Second { factory }
+pub impl First as Read { fn read() -> I64 { return 7I64 } }
+pub impl Second as Read { fn read() -> I64 { return 19I64 } }
+fn make[T](value: T) -> fn() -> I64 where T: Read {
+    return fn() -> I64 { return value.read() }
+}
+fn main() {
+    val first = make(value: <First />)
+    val second = make(value: <Second />)
+    print(first())
+    print(second())
+}
