@@ -41,6 +41,12 @@ fn main() {
                                 Result.Err(error: val diagnostic) => { assert(diagnostic.message == "recorded callable type arguments disagree with receiver or conformance evidence") }
                                 Result.Ok(value: _) => { panic "conflicting recorded substitution was replaced" }
                             }
+                            // Missing substitutions are not a request to
+                            // infer again from receiver or argument expressions.
+                            match compiler.selectedCallableSubstitution(selection: <CallSiteSelection exprId=0U64 callee=function receiverRef=receiver proof=proof />) {
+                                Result.Err(error: val diagnostic) => { assert(diagnostic.message == "selected callable requires closed recorded type arguments") }
+                                Result.Ok(value: _) => { panic "missing substitution was inferred or deferred" }
+                            }
                             // Corrupting the saved substitution must fail
                             // selection closure, not defer to runtime inference.
                             compiler.decls.callTemplateTypeArgumentPool[typeArgs.start] = 0U64

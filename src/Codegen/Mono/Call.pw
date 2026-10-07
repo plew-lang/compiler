@@ -597,6 +597,7 @@ pub impl Comp {
                 mut val proof = <StaticConformanceProof.Missing />
                 mut val target = <CallTarget.Direct />
                 mut val result = 0U64
+                mut val typeArguments: Array[U64] = []
                 match selection {
                     ProtocolSelection.Identity => { target = <CallTarget.NoCallable />
                         result = receiverRef }
@@ -606,11 +607,13 @@ pub impl Comp {
                         if !self.proofIsMissing(proof: proof) {
                             proof = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
                         }
+                        typeArguments = try self.callConstraintTypeArguments(function: self.arena.functionAt(index: callee), receiver: receiverRef, proof: proof)
                     }
                     ProtocolSelection.Static(resolution: val resolution) => {
                         val selected = try self.selectStaticMethodTemplateCall(exprId: stmtId, methodArguments: [], receiver: <CallTemplateReceiver.Term term=receiverRef />, arguments: [], resolution: resolution, resultTerm: resultTerm)
                         callee = selected.callee
                         proof = selected.proof
+                        typeArguments = selected.calleeTypeArgs
                     }
                     ProtocolSelection.Existential(traitIdx: val owner, slot: val requirement) => {
                         target = <CallTarget.ExistentialRequirement traitIdx=owner slot=requirement />
@@ -618,7 +621,7 @@ pub impl Comp {
                     }
                     ProtocolSelection.Pending => { return <Result.Err error=self.diagnosticAt(offset: key.originStart, msg: "for-loop requires an Iterable or Iterator") /> }
                 }
-                return <Result.Ok value=<CallSiteSelection exprId=stmtId siteIsStmt=true slot=slot callee=callee receiverRef=receiverRef proof=proof resultRef=result resultHintRef=receiverRef target=target /> />
+                return <Result.Ok value=<CallSiteSelection exprId=stmtId siteIsStmt=true slot=slot callee=callee receiverRef=receiverRef calleeTypeArgs=typeArguments proof=proof resultRef=result resultHintRef=receiverRef target=target /> />
             }
             _ => { return <Result.Err error=self.diagnosticAt(offset: key.originStart, msg: "implicit protocol selection has the wrong call kind") /> }
         }
@@ -1251,75 +1254,8 @@ pub impl Comp {
         return <Result.Ok value=bodyId />
     }
 
-    // A copied trait-provided callable inherits the conformance subject's
-    // parameters followed by the trait requirement's parameters.  InferFnArgs
-    // can recover the latter from ordinary arguments, but a contextless literal
-    // (and `Self`-only requirement) must still receive the concrete trait
-    // arguments recorded by the conformance.  Resolve that substitution once
-    // here, at final-callee construction time.
-    inout fn providedTraitArgsForFinalCallee(callee: U64, recvRef: U64) -> Result[Array[U64], CompileDiagnostic] {
-        mut val out: Array[U64] = []
-        if callee >= self.arena.functionCount() || recvRef == 0U64 { return <Result.Ok value=out />}
-        val f: Func = self.arena.functionAt(index: callee)
-        mut val traitId: U64 = f.originTraitId
-        mut val traitOwner: U64 = f.originTraitOwner
-        mut val traitArity: U64 = f.originTraitArity
-        if traitId == 0U64 {
-            traitId = f.srcTraitId
-            traitOwner = f.srcTraitOwner
-            traitArity = f.provTraitArity
-        }
-        if traitId == 0U64 || traitArity == 0U64 { return <Result.Ok value=out />}
-        mut val ci: U64 = 0U64
-        while ci < self.decls.conformCount() {
-            val cf: Conform = self.decls.conformAt(index: ci)
-            if cf.traitId == traitId && cf.traitStart == traitOwner && cf.traitArgs.count() == traitArity {
-                if self.conformanceSubjectMatches(cf: cf, typeRef: recvRef) {
-                    mut val binds: Array[UnifyBind] = []
-                    // Some primitive/lang-item conformances still use the
-                    // legacy zero subject sentinel.  It is an already concrete
-                    // subject (conformanceSubjectMatches accepted it), so no
-                    // structural binder map is needed to ground its trait args.
-                    if cf.subjectTy == 0U64 || self.unifyPatterns(a: cf.subjectTy, aSide: 0U64, b: recvRef, bSide: 1U64, aParams: <PatternBindInput.Conformance range=cf.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true) {
-                        mut val subst: Array[U64] = []
-                        mut val pi: U64 = 0U64
-                        while pi < cf.typeParams.count() {
-                            val bi: U64 = self.unificationBindingIndex(binds: binds, side: 0U64, binderId: self.binderIdentity(b: self.conformBindAt(binds: cf.typeParams, index: pi)))
-                            if bi < binds.count() { subst.append(binds[bi].ref) }
-                            else { subst.append(0U64) }
-                            pi += 1U64
-                        }
-                        val savedP: Array[Bind] = self.cur.typeParams
-                        val savedA: Array[U64] = self.cur.typeArgs
-                        self.cur.typeParams = self.copyConformBinds(binds: cf.typeParams)
-                        self.cur.typeArgs = subst
-                        mut val ai: U64 = 0U64
-                        while ai < cf.traitArgs.count() {
-                            out.append((try self.groundTypeRef(ref: self.conformTypeAt(types: cf.traitArgs, index: ai))))
-                            ai += 1U64
-                        }
-                        self.cur.typeParams = savedP
-                        self.cur.typeArgs = savedA
-                        return <Result.Ok value=out />
-                    }
-                }
-            }
-            ci += 1U64
-        }
-        return <Result.Ok value=out />
-    }
-
-    // A conferred provided copy retains the declaration-local impl binders of
-    // the conformance that created it. Those binders are not inferred from a
-    // result projection: in `impl[E] B[E] as A { type Output = E }`, Output
-    // is a result while the callable body needs the proof substitution
-    // `E -> I64`. Recover it only from the exact selected edge and pair the
-    // values by ParamId, never by spelling or receiver position.
-    inout fn providedProofArgsForFinalCallee(callee: U64, proof: StaticConformanceProof) -> Array[U64] {
-        if callee >= self.arena.functionCount() { return [] }
-        return self.providedProofArguments(f: self.arena.functionAt(index: callee), proof: proof)
-    }
-
+    // The selected conformance edge owns provided-body binders. Match its
+    // substitutions by ParamId; do not recover them from result projections.
     inout fn providedProofArguments(f: Func, proof: StaticConformanceProof) -> Array[U64] {
         mut val out: Array[U64] = []
         if !(f.isProvided) || f.sourceConformIdx == 0U64 { return out }
@@ -1392,40 +1328,6 @@ pub impl Comp {
         }
     }
 
-    inout fn traceIncompleteFinalCallee(exprId: U64, f: Func, args: Array[U64], recvRef: U64, expectedRef: U64) {
-        if !(self.traceCodegen) { return }
-        mut val name: Array[U8] = []
-        mut val i: U64 = 0U64
-        while i < f.nameLen {
-            name.append(self.arena.bytes[f.nameStart + i])
-            i += 1U64
-        }
-        eprint(text: "[trace-codegen] Mono incomplete callee name=")
-        eprint(text: stringFromBytesUnchecked(name))
-        eprint(text: " expected=")
-        eprintU64(n: f.typeParams.count())
-        eprint(text: " actual=")
-        eprintU64(n: args.count())
-        eprint(text: " receiverRef=")
-        eprintU64(n: recvRef)
-        eprint(text: " expr=")
-        eprintU64(n: exprId)
-        eprint(text: " offset=")
-        eprintU64(n: self.exprOffset(id: exprId))
-        eprint(text: " args=[")
-        i = 0U64
-        while i < args.count() {
-            if i > 0U64 { eprint(text: ",") }
-            self.traceMonoTypeHead(ref: args[i])
-            i += 1U64
-        }
-        eprint(text: "] expectedResult=")
-        self.traceMonoTypeHead(ref: expectedRef)
-        eprint(text: " returnTemplate=")
-        self.traceMonoTypeHead(ref: f.retTy)
-        eprint(text: "\n")
-    }
-
     inout fn traceProvidedFinalCallee(f: Func, args: Array[U64], recvRef: U64, resultRef: U64) {
         if !(self.traceCodegen) || !(f.isProvided) { return }
         mut val name: Array[U8] = []
@@ -1446,11 +1348,8 @@ pub impl Comp {
     inout fn selectedCallableSubstitution(selection: CallSiteSelection) -> Result[Optional[SelectedCallableSubstitution], CompileDiagnostic] {
         val exprId: U64 = selection.exprId
         val callee: U64 = selection.callee
-        val siteIsStmt: Bool = selection.siteIsStmt
-        val slot: U64 = selection.slot
         if callee >= self.arena.functionCount() { return <Result.Ok value=<Optional.None /> /> }
         val f: Func = self.arena.functionAt(index: callee)
-        mut val finalArgs: Array[U64] = []
         mut val recvInst: U64 = selection.receiverRef
         // A semantic call-resolution template can provide the selected
         // receiver directly.  In that case it outranks an AST type entry: a
@@ -1466,7 +1365,6 @@ pub impl Comp {
                 hasSelectedReceiver = true
             }
         }
-        val callArgs: ArgRange = selection.args
         if f.hasRecv && recvInst == 0U64 {
             recvInst = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
         }
@@ -1530,96 +1428,9 @@ pub impl Comp {
             }
         }
         if f.typeParams.count() > 0U64 {
-            // A recorded call template owns the parametric substitution.  Its
-            // grounded values are the primary final-builder input; legacy
-            // method producers that have not recorded substitutions yet keep
-            // the existing inference adapter until their CallTemplate slice.
-            mut val inferred: Array[U64] = selection.calleeTypeArgs
-            // A CallTemplate is declared once for the shared source body. It
-            // can therefore contain a symbolic associated output (`Item`) for
-            // a `for` binding even though this concrete BodyInstance has
-            // already proved that binding is `I64`.  The final callable must
-            // use the latter: the body-local semantic term is the concrete
-            // fact, while the template is provenance plus a fallback for
-            // parameters that remain abstract in this instance.  Refine each
-            // template slot independently; replacing the whole vector would
-            // discard receiver-pattern substitutions that no value argument
-            // mentions.
-            // A Direct template carries semantic argument sources. Dynamic
-            // closure/existential fallbacks have no declaration-time Direct
-            // selection yet and retain the legacy reader until their own
-            // template variants are introduced.
-            mut val inferredFromBody: Array[U64] = []
-            if selection.argumentSources.count() > 0U64 {
-                inferredFromBody = (try self.inferFnArgsFromTemplate(f: f, args: callArgs, sources: selection.argumentSources))
-            } else {
-                inferredFromBody = (try self.inferFnArgs(f: f, args: callArgs))
-            }
-            if inferred.count() == 0U64 {
-                inferred = inferredFromBody
-            } else {
-                mut val ii: U64 = 0U64
-                while ii < inferredFromBody.count() {
-                    if ii < inferred.count() {
-                        if inferredFromBody[ii] != 0U64 && (try self.tyRefIsGround(ref: inferredFromBody[ii])) {
-                            inferred.set(i: ii, value: inferredFromBody[ii])
-                        }
-                    }
-                    ii += 1U64
-                }
-            }
-            // Receiver patterns bind lexical parameters, not nominal argument
-            // positions. Share this projection with declaration-time method typing.
-            if (f.hasRecv || f.isAssoc) && recvInst != 0U64 && recvInst < self.arena.typeCount() {
-                val receiverMatch = (try self.methodReceiverEnvironment(f: f, instRef: recvInst))
-                finalArgs = (try self.receiverCallableArguments(f: f, receiverRef: recvInst, receiverMatch: receiverMatch))
-            } else {
-                while finalArgs.count() < f.typeParams.count() { finalArgs.append(0U64) }
-            }
-            mut val ai = 0U64
-            while ai < inferred.count() && ai < finalArgs.count() {
-                if finalArgs[ai] == 0U64 { finalArgs.set(i: ai, value: inferred[ai]) }
-                ai += 1U64
-            }
-            // Generic return-position inference consumes the call template's
-            // expected-result context, never the call result itself: before
-            // substitution that result is merely `f.retTy` and cannot bind
-            // the callee's own T.  `resultRef` remains the selected result of
-            // dynamic/no-callable sites and is not inference evidence here.
-            finalArgs = (try self.fillCalleeArgsFromResult(f: f, args: finalArgs, resultRef: selection.resultHintRef))
-            // Conformance-declared trait arguments are semantic call inputs,
-            // not a backend inference fallback.  They complete a provided
-            // requirement whose type variable appears only as `Self` or under
-            // a contextless literal.
-            val traitArgs: Array[U64] = (try self.providedTraitArgsForFinalCallee(callee: callee, recvRef: recvInst))
-            mut val tai: U64 = 0U64
-            while tai < traitArgs.count() {
-                // Generated provided signatures place trait parameters after
-                // the nominal receiver binders; this is their declared layout.
-                val target: U64 = self.recvParamCount(ref: recvInst) + tai
-                if target < finalArgs.count() {
-                    if finalArgs[target] == 0U64 || !((try self.tyRefIsGround(ref: finalArgs[target]))) { finalArgs[target] = traitArgs[tai] }
-                }
-                tai += 1U64
-            }
-            // The selected proof is more precise than return-position
-            // inference. In particular a trait-path witness may bind a
-            // conformance-local `Element` while the call result is the
-            // unrelated projection `A.Output`; preserve the former in the
-            // final callable key.
-            val proofArgs: Array[U64] = self.providedProofArgsForFinalCallee(callee: callee, proof: calleeProof)
-            mut val pai: U64 = 0U64
-            while pai < proofArgs.count() && pai < finalArgs.count() {
-                if proofArgs[pai] != 0U64 { finalArgs[pai] = proofArgs[pai] }
-                pai += 1U64
-            }
-            if finalArgs.count() != f.typeParams.count() || !((try self.fnArgsAllGround(args: finalArgs))) {
-                // An incomplete generic call has no emittable final instance.
-                self.traceIncompleteFinalCallee(exprId: exprId, f: f, args: finalArgs, recvRef: recvInst, expectedRef: selection.resultHintRef)
-                return <Result.Ok value=<Optional.None /> />
-            }
+            return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "selected callable requires closed recorded type arguments") />
         }
-        return <Result.Ok value=<Optional.Some v=<SelectedCallableSubstitution receiverRef=recvInst args=finalArgs proof=calleeProof /> /> />
+        return <Result.Ok value=<Optional.Some v=<SelectedCallableSubstitution receiverRef=recvInst args=[] proof=calleeProof /> /> />
     }
 
     inout fn enqueueSelectedCallee(selection: CallSiteSelection) -> Result[(), CompileDiagnostic] {
@@ -1676,7 +1487,8 @@ pub impl Comp {
             // arity-zero, forcing later Mid/LLVM consumers to recover the
             // missing argument from AST/type names.
             val conversionArgument: CallTemplateArgument = <CallTemplateArgument source=<CallArgumentSource.Term exprId=exprId term=operandErr /> isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />
-            val selection: CallSiteSelection = <CallSiteSelection exprId=exprId slot=1U64 callee=factory receiverRef=returnErr argumentSources=[conversionArgument] resultHintRef=returnErr resultRef=returnErr />
+            val typeArguments = try self.callConstraintTypeArguments(function: self.arena.functionAt(index: factory), receiver: returnErr, proof: <StaticConformanceProof.Missing />)
+            val selection: CallSiteSelection = <CallSiteSelection exprId=exprId slot=1U64 callee=factory receiverRef=returnErr argumentSources=[conversionArgument] calleeTypeArgs=typeArguments resultHintRef=returnErr resultRef=returnErr />
             try self.recordSelectedBodyCallee(selection: selection)
             try self.enqueueSelectedCallee(selection: selection)
             conversionResolution = (try self.bodyCalleeIndex(exprId: exprId, slot: 1U64))
@@ -1874,8 +1686,12 @@ pub impl Comp {
         }
         mut val callee: U64 = self.arena.functionCount()
         mut val selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />
+        mut val typeArguments: Array[U64] = []
         match resolution {
-            OperatorSelection.Direct(callee: val selected) => { callee = selected }
+            OperatorSelection.Direct(callee: val selected) => {
+                callee = selected
+                typeArguments = try self.callConstraintTypeArguments(function: self.arena.functionAt(index: callee), receiver: selectedReceiverRef, proof: selectedProof)
+            }
             OperatorSelection.Primitive => {}
             OperatorSelection.Pending => {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: operator selection was not completed before materialization") />
@@ -1884,6 +1700,7 @@ pub impl Comp {
                 val selected = try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: [], receiver: <CallTemplateReceiver.Term term=selectedReceiverRef />, arguments: argumentSources, resolution: selectedResolution, resultTerm: resultTerm)
                 callee = selected.callee
                 selectedProof = selected.proof
+                typeArguments = selected.calleeTypeArgs
             }
         }
         mut val selectedResultRef: U64 = 0U64
@@ -1910,7 +1727,7 @@ pub impl Comp {
         if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
             resultProjection = <CallResultProjection.OrderingTest op=op />
         }
-        val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef args=self.operatorTemplateArgs(operands: operands) argumentSources=argumentSources proof=selectedProof resultHintRef=(try self.selectedResultHint(callee: callee)) resultRef=selectedResultRef resultProjection=resultProjection target=target />
+        val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef args=self.operatorTemplateArgs(operands: operands) argumentSources=argumentSources calleeTypeArgs=typeArguments proof=selectedProof resultHintRef=(try self.selectedResultHint(callee: callee)) resultRef=selectedResultRef resultProjection=resultProjection target=target />
         try self.recordSelectedBodyCallee(selection: selection)
         if callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: selection) }
         return <Result.Ok value=() />
