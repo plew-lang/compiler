@@ -1,0 +1,8 @@
+use @Std/Core only { Neg }
+
+struct Number { val value: I64 }
+impl Number as Neg {
+    type Output = I64
+    assoc diverge fn neg(value~: Number) { panic "stop" }
+}
+fn main() {}

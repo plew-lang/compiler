@@ -1359,16 +1359,15 @@ pub impl Comp {
             operands.append((try self.callArgumentSource(exprId: operand)))
             i += 1U64
         }
-        val selection = try self.recordedOperatorSelection(op: op, receiverTerm: receiverTerm, operandExprs: operandExprs, resolution: resolution)
-        match selection {
-            OperatorSelection.Direct(callee: val callee) => { self.recordInvocationCompletion(exprId: exprId, diverging: self.arena.functionAt(index: callee).isDiverging) }
-            OperatorSelection.Static(resolution: val selected) => { self.recordStaticInvocationCompletion(exprId: exprId, resolution: selected) }
-            OperatorSelection.Primitive => { self.recordInvocationCompletion(exprId: exprId, diverging: false) }
-            OperatorSelection.Pending => {}
-        }
+        // Core operator requirements have an ordinary return contract;
+        // conformance checking rejects diverging witnesses. The initial
+        // expression pass needs that contract, not the concrete implementation.
+        // Select and retain the implementation once when publishing templates.
+        self.recordInvocationCompletion(exprId: exprId, diverging: false)
         val staticResult: U64 = (try self.staticOperatorTemplateResultTerm(op: op, resolution: resolution))
         if staticResult != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: staticResult) }
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
+        val selection = try self.recordedOperatorSelection(op: op, receiverTerm: receiverTerm, operandExprs: operandExprs, resolution: resolution)
         val resultTerm: U64 = self.parametricExprTerm(exprId: exprId)
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
         val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)
