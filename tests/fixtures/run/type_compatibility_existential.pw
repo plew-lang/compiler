@@ -1,0 +1,23 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "trait P {{}}\ntrait Q {{}}\ntrait Bound {{ type Item }}\nfn probe(a: any P, b: any Q, c: any sendable P, d: any Bound[Item=I64], e: any Bound[Item=Bool]) {{}}\n"
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="compatibility.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val plain = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val unrelated = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val transferable = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    val integer = compiler.funcParamAt(params: function.params, index: 3U64).ty
+    val boolean = compiler.funcParamAt(params: function.params, index: 4U64).ty
+    assert(!compiler.typesCompatible(expected: plain, inferred: unrelated).unwrap())
+    assert(compiler.typesCompatible(expected: plain, inferred: plain).unwrap())
+    assert(compiler.typesCompatible(expected: plain, inferred: transferable).unwrap())
+    assert(!compiler.typesCompatible(expected: transferable, inferred: plain).unwrap())
+    assert(!compiler.typesCompatible(expected: integer, inferred: boolean).unwrap())
+    assert(compiler.typesCompatible(expected: integer, inferred: integer).unwrap())
+    print("ok")
+}

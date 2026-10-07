@@ -52,6 +52,27 @@ inout fn checkExistentialRequirementCall(req: Func, target: U64, traitIndex: U64
     return <Result.Ok value=() />
 }
 
+// A dynamic interface can forget sendability, but cannot acquire a different
+// trait or change any of its bindings. This consumes resolved declaration
+// identity; it never searches names or invents static conformance evidence.
+inout fn existentialTypesCompatible(sourceRef: U64, targetRef: U64) -> Bool {
+    if sourceRef == 0U64 || targetRef == 0U64 || sourceRef >= self.arena.typeCount() || targetRef >= self.arena.typeCount() { return false }
+    val source = self.arena.typeTerms[sourceRef]
+    val target = self.arena.typeTerms[targetRef]
+    if !source.isAny || !target.isAny || !source.hasDecl || !target.hasDecl || source.declOffset != target.declOffset { return false }
+    if target.isSendable && !source.isSendable { return false }
+    if source.paramId != target.paramId || source.assocNameId != 0U64 || target.assocNameId != 0U64 || source.isDiverging != target.isDiverging { return false }
+    if source.viewExtId != target.viewExtId || !self.sameTypeTermViewIds(a: sourceRef, b: targetRef) { return false }
+    val traitIndex = self.decls.traitIndexByOffset(offset: source.declOffset)
+    if traitIndex >= self.decls.traitCount() { return false }
+    mut val sourceParameters: Array[Bind] = []
+    mut val sourceArguments: Array[U64] = []
+    mut val targetParameters: Array[Bind] = []
+    mut val targetArguments: Array[U64] = []
+    if !self.anyBindingEnv(anyRef: sourceRef, traitIdx: traitIndex, outParams: inout sourceParameters, outArgs: inout sourceArguments) || !self.anyBindingEnv(anyRef: targetRef, traitIdx: traitIndex, outParams: inout targetParameters, outArgs: inout targetArguments) { return false }
+    return self.sameResolvedTypeRefs(a: sourceArguments, b: targetArguments)
+}
+
 inout fn anyBindingEnv(anyRef: U64, traitIdx: U64, outParams: inout Array[Bind], outArgs: inout Array[U64]) -> Bool {
     val t: TraitDef = self.decls.traitAt(index: traitIdx)
     val ar: TypeRef = self.arena.typeAt(index: anyRef)

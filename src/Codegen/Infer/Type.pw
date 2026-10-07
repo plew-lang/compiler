@@ -112,6 +112,9 @@ pub impl Comp {
         }
         if te.isAny || tin.isAny {
             if !te.isAny { return <Result.Ok value=<TypeCompatibility.Incompatible /> /> }
+            if tin.isAny {
+                return <Result.Ok value=self.typeCompatibilityResult(matches: self.existentialTypesCompatible(sourceRef: actual, targetRef: exp)) />
+            }
             // a CONCRETE value coercing INTO `any P` must conform to P (spec/08) — else its
             // existential box has no vtable entry and a member call null-dereferences at
             // runtime. Symbolic parameters use their lexical assumptions; nominal
