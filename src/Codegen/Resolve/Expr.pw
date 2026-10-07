@@ -2140,6 +2140,7 @@ pub impl Comp {
             }
             _ => {}
         }
+        try self.recordDeclarationConversion(exprId: exprId, target: expectedTerm)
         return <Result.Ok value=() />
     }
 

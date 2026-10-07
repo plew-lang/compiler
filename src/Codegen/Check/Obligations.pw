@@ -2,6 +2,64 @@
 // substitutions remain declaration obligations; concrete calls propagate them
 // through their selected declarations and the same proof-instantiation API.
 pub impl Comp {
+    inout fn recordDeclarationConversion(exprId: U64, target: U64) -> Result[(), CompileDiagnostic] {
+        if !self.cur.recordCallTemplates || target == 0U64 { return <Result.Ok value=() /> }
+        val source = self.parametricExprTerm(exprId: exprId)
+        if source == 0U64 || self.typeRefEq(a: source, b: target) { return <Result.Ok value=() /> }
+        val conversion = try self.callArgumentConversion(sourceRef: source, targetRef: target, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))
+        match conversion {
+            ValueConversionProof.Identity | ValueConversionProof.Missing => { return <Result.Ok value=() /> }
+            _ => {}
+        }
+        val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+        val owner = self.decls.callTemplateLexicalRoots.getOr(key: site.ownerFnIdx, fallback: site.ownerFnIdx)
+        mut val indices = self.decls.declarationConversionOwners.getOr(key: owner, fallback: [])
+        for index in indices {
+            val prior = self.decls.declarationConversions[index]
+            if self.sameCallSiteKey(a: prior.site, b: site) && self.typeRefEq(a: prior.source, b: source) && self.typeRefEq(a: prior.target, b: target) { return <Result.Ok value=() /> }
+        }
+        val proof = self.freezeValueConversionProof(proof: conversion)
+        indices.append(self.decls.declarationConversions.count())
+        self.decls.declarationConversions.append(<DeclarationConversion site=site source=source target=target proof=proof />)
+        self.decls.declarationConversionOwners[owner] = indices
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkConversionObligations(conversion: ValueConversionProof, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[(), CompileDiagnostic] {
+        match conversion {
+            ValueConversionProof.ExistentialBox(sourceRef: val source, targetRef: _, traitIdx: val traitIndex, proof: val proof) => {
+                val receiver = try self.groundTermForBody(ref: source, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                if !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=() /> }
+                val instantiated = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                match instantiated {
+                    StaticProofInstantiation.Deferred => {}
+                    StaticProofInstantiation.Ready(proof: val evidence) => {
+                        val trait = self.decls.traitAt(index: traitIndex)
+                        mut val index = 0U64
+                        while index < trait.reqs.count() {
+                            val requirement = self.traitReqAt(reqs: trait.reqs, index: index)
+                            if !requirement.isAssoc && !self.reqUsesSelfInInput(req: requirement) && self.reqRetSelfErasable(req: requirement) {
+                                val selected = try self.proofConcreteWitness(proof: evidence, receiverRef: receiver, traitIdx: traitIndex, reqIdx: index)
+                                if selected >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: requirement.nameStart, msg: "existential proof has no selected requirement implementation") /> }
+                                val arguments = try self.callConstraintTypeArguments(function: self.arena.functionAt(index: selected), receiver: receiver, proof: evidence)
+                                try self.appendCallConstraintInstance(function: selected, arguments: arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                            }
+                            index += 1U64
+                        }
+                    }
+                }
+            }
+            ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => {
+                try self.checkConversionObligations(conversion: element, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+            }
+            ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, payloads: val payloads) => {
+                for payload in payloads { try self.checkConversionObligations(conversion: payload.conversion, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant) }
+            }
+            ValueConversionProof.Identity | ValueConversionProof.Missing => {}
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn appendCallConstraintInstance(function: U64, arguments: Array[U64], receiver: U64, proof: StaticConformanceProof, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[(), CompileDiagnostic] {
         if function >= self.arena.functionCount() || function >= relevant.count() || !relevant[function] { return <Result.Ok value=() /> }
         val declaration = self.arena.functionAt(index: function)
@@ -183,6 +241,10 @@ pub impl Comp {
             relevant.append(false)
             function += 1U64
         }
+        for conversion in self.decls.declarationConversions {
+            val owner = self.decls.callTemplateLexicalRoots.getOr(key: conversion.site.ownerFnIdx, fallback: conversion.site.ownerFnIdx)
+            if owner < relevant.count() { relevant[owner] = true }
+        }
         mut val changed = true
         while changed {
             changed = false
@@ -240,9 +302,16 @@ pub impl Comp {
             try self.checkCallConstraintTemplate(template: self.decls.callTemplates[index], environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant)
             index += 1U64
         }
+        for conversion in self.decls.declarationConversions {
+            try self.checkConversionObligations(conversion: self.thawValueConversionProof(id: conversion.proof), environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant)
+        }
         index = 0U64
         while index < requests.count() {
             val request = requests[index]
+            for conversionIndex in self.decls.declarationConversionOwners.getOr(key: request.function, fallback: []) {
+                val conversion = self.decls.declarationConversions[conversionIndex]
+                try self.checkConversionObligations(conversion: self.thawValueConversionProof(id: conversion.proof), environment: request.environment, depth: request.depth + 1U64, requests: inout requests, heads: inout heads, relevant: relevant)
+            }
             mut val row = self.firstLexicalCallTemplate(owner: request.function)
             while row != 0U64 {
                 try self.checkCallConstraintTemplate(template: self.decls.callTemplates[row - 1U64], environment: request.environment, depth: request.depth + 1U64, requests: inout requests, heads: inout heads, relevant: relevant)

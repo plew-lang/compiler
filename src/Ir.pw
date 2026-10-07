@@ -2217,6 +2217,16 @@ pub impl BodyTypeResult { factory }
 
 pub enum BodyOrigin { Callable ExistentialWitness(resolution: U64, member: U64) ClosureEnvironmentDrop(closureBodyId: U64) }
 
+// A selected source value conversion, independent of executable reachability.
+// The expression site is not a call; the shared key only supplies provenance.
+pub struct DeclarationConversion {
+    pub val site: CallSiteKey
+    pub val source: U64
+    pub val target: U64
+    pub val proof: U64
+}
+pub impl DeclarationConversion { factory }
+
 // A source-call constraint request, not an executable BodyInstance.
 // The linked index deduplicates environments per selected declaration.
 pub struct CallConstraintInstance {
@@ -3261,6 +3271,8 @@ pub struct Decls {
     pub mut val semanticLetTerms: Dictionary[U64, U64] = [:]
     pub mut val semanticMatches: Array[SemanticMatch] = []
     pub mut val semanticMatchIndexSlots: Array[U64] = []
+    pub mut val declarationConversions: Array[DeclarationConversion] = []
+    pub mut val declarationConversionOwners: Dictionary[U64, Array[U64]] = [:]
     pub mut val callTemplates: Array[CallTemplate] = []
     pub mut val callTemplateArgumentPool: Array[CallTemplateArgument] = []
     pub mut val callTemplateTypeArgumentPool: Array[U64] = []
