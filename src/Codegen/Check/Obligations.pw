@@ -4,9 +4,12 @@
 pub impl Comp {
     inout fn recordDeclarationConversion(exprId: U64, target: U64) -> Result[(), CompileDiagnostic] {
         if !self.cur.recordCallTemplates || target == 0U64 { return <Result.Ok value=() /> }
-        val source = self.parametricExprTerm(exprId: exprId)
-        if source == 0U64 || self.typeRefEq(a: source, b: target) { return <Result.Ok value=() /> }
-        val conversion = try self.callArgumentConversion(sourceRef: source, targetRef: target, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))
+        val rawSource = self.parametricExprTerm(exprId: exprId)
+        if rawSource == 0U64 || self.typeRefEq(a: rawSource, b: target) { return <Result.Ok value=() /> }
+        val source = try self.normalizedValueType(ref: rawSource)
+        val normalizedTarget = try self.normalizedValueType(ref: target)
+        if self.typeRefEq(a: source, b: normalizedTarget) { return <Result.Ok value=() /> }
+        val conversion = try self.callArgumentConversion(sourceRef: source, targetRef: normalizedTarget, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))
         match conversion {
             ValueConversionProof.Identity | ValueConversionProof.Missing => { return <Result.Ok value=() /> }
             _ => {}
@@ -16,11 +19,11 @@ pub impl Comp {
         mut val indices = self.decls.declarationConversionOwners.getOr(key: owner, fallback: [])
         for index in indices {
             val prior = self.decls.declarationConversions[index]
-            if self.sameCallSiteKey(a: prior.site, b: site) && self.typeRefEq(a: prior.source, b: source) && self.typeRefEq(a: prior.target, b: target) { return <Result.Ok value=() /> }
+            if self.sameCallSiteKey(a: prior.site, b: site) && self.typeRefEq(a: prior.source, b: source) && self.typeRefEq(a: prior.target, b: normalizedTarget) { return <Result.Ok value=() /> }
         }
         val proof = self.freezeValueConversionProof(proof: conversion)
         indices.append(self.decls.declarationConversions.count())
-        self.decls.declarationConversions.append(<DeclarationConversion site=site source=source target=target proof=proof />)
+        self.decls.declarationConversions.append(<DeclarationConversion site=site source=source target=normalizedTarget proof=proof />)
         self.decls.declarationConversionOwners[owner] = indices
         return <Result.Ok value=() />
     }

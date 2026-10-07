@@ -84,6 +84,15 @@ pub impl Comp {
         return <Result.Ok value=(try self.typeCompatibility(expected: expected, inferred: inferred)).isCompatible() />
     }
 
+    // Shared by value compatibility and declaration conversion evidence.
+    // The declaration cursor supplies Self/substitutions; lexical bounds
+    // normalize associated outputs without binding an opaque parameter.
+    inout fn normalizedValueType(ref: U64) -> Result[U64, CompileDiagnostic] {
+        val grounded = try self.groundTypeRef(ref: ref)
+        if !self.typeTermContainsAssociatedProjection(ref: grounded) { return <Result.Ok value=grounded /> }
+        return self.closeBodyProjectionTerms(ref: grounded, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))
+    }
+
     inout fn typeCompatibility(expected: U64, inferred: U64) -> Result[TypeCompatibility, CompileDiagnostic] {
         if expected == 0U64 || inferred == 0U64 {
             return <Result.Ok value=<TypeCompatibility.Unresolved /> />
@@ -91,19 +100,8 @@ pub impl Comp {
         if expected >= self.arena.typeCount() || inferred >= self.arena.typeCount() {
             return <Result.Ok value=<TypeCompatibility.Unresolved /> />
         }
-        // Normalize both sides in the same lexical environment. Inferred
-        // locals can retain associated projections from their written annotation.
-        mut val exp: U64 = (try self.groundTypeRef(ref: expected))
-        mut val actual: U64 = (try self.groundTypeRef(ref: inferred))
-        // A rigid receiver can still have a proved associated output. Use
-        // this declaration's assumptions on both sides, including trait paths;
-        // absence of an output keeps the projection rigid rather than accepting it.
-        if self.typeTermContainsAssociatedProjection(ref: exp) || self.typeTermContainsAssociatedProjection(ref: actual) {
-            val assumptions = self.functionBoundAssumptions(fnIdx: self.cur.checkFn)
-            val environment: InstanceEnvironment = <InstanceEnvironment />
-            exp = try self.closeBodyProjectionTerms(ref: exp, environment: environment, selfRef: 0U64, itemRef: 0U64, assumptions: assumptions)
-            actual = try self.closeBodyProjectionTerms(ref: actual, environment: environment, selfRef: 0U64, itemRef: 0U64, assumptions: assumptions)
-        }
+        val exp = try self.normalizedValueType(ref: expected)
+        val actual = try self.normalizedValueType(ref: inferred)
         if exp == 0U64 || actual == 0U64 || exp >= self.arena.typeCount() || actual >= self.arena.typeCount() {
             return <Result.Ok value=<TypeCompatibility.Unresolved /> />
         }
