@@ -1547,7 +1547,7 @@ pub impl Comp {
                 if result == 0U64 || !self.arena.typeIsClosed(ref: result) { return <Result.Ok value=0U64 /> }
                 return <Result.Ok value=result />
             }
-            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, resultTerm: val result) => {
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: _, resultTerm: val result) => {
                 mut val hasResult = false
                 match resolution {
                     StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIndex, reqIdx: val requirement) => {

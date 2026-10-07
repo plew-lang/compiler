@@ -1958,7 +1958,7 @@ fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argumen
 fn midTemplateArguments(c: Comp, template: CallTemplate) -> Array[CallTemplateArgument] {
     match template.kind {
         CallTemplateKind.Direct(callee: _, receiver: _, args: val args, calleeTypeArgs: _, proofId: _) => { return c.callTemplateArguments(range: args) }
-        CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: _, resultTerm: _) => { return c.callTemplateArguments(range: args) }
+        CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: _, methodTypeArgs: _, resultTerm: _) => { return c.callTemplateArguments(range: args) }
         CallTemplateKind.Dynamic(receiver: _, args: val args, target: _) => { return c.callTemplateArguments(range: args) }
         CallTemplateKind.Operator(op: _, operands: val operands, resolution: _, resultTerm: _) => {
             mut val args: Array[CallTemplateArgument] = []
@@ -1977,7 +1977,7 @@ fn midTemplateArguments(c: Comp, template: CallTemplate) -> Array[CallTemplateAr
 fn midTemplateIsCallable(template: CallTemplate) -> Bool {
     match template.kind {
         CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => { return true }
-        CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => { return true }
+        CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => { return true }
         CallTemplateKind.Dynamic(receiver: _, args: _, target: _) => { return true }
         CallTemplateKind.Operator(op: _, operands: _, resolution: _, resultTerm: _) => { return true }
         _ => { return false }
@@ -2015,7 +2015,7 @@ fn midDirectCallee(functionCount: U64, template: CallTemplate) -> U64 {
 fn midTemplateReceiver(template: CallTemplate) -> CallTemplateReceiver {
     match template.kind {
         CallTemplateKind.Direct(callee: _, receiver: val receiver, args: _, calleeTypeArgs: _, proofId: _) => { return receiver }
-        CallTemplateKind.StaticMethod(receiver: val receiver, args: _, resolution: _, resultTerm: _) => { return receiver }
+        CallTemplateKind.StaticMethod(receiver: val receiver, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => { return receiver }
         CallTemplateKind.Dynamic(receiver: val receiver, args: _, target: _) => { return receiver }
         _ => { return <CallTemplateReceiver.None /> }
     }
@@ -2110,7 +2110,7 @@ fn midSourceCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64,
     // A proof-selected associated requirement has a type receiver for
     // instantiation, but no runtime receiver to evaluate or borrow.
     match template.kind {
-        CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, resultTerm: _) => {
+        CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: _, resultTerm: _) => {
             match resolution {
                 StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
                     if traitIdx < c.decls.traitCount() {
@@ -2129,7 +2129,7 @@ fn midSourceCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64,
     val directInout: Bool = callee < c.arena.functionCount() && c.arena.functionAt(index: callee).hasRecv && c.arena.functionAt(index: callee).selfInout
     if callee >= c.arena.functionCount() {
         match template.kind {
-            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => {}
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => {}
             CallTemplateKind.Dynamic(receiver: _, args: _, target: _) => {}
             _ => { return <MidReceiverBuild.Value receiver=<MidCallReceiver.None /> /> }
         }

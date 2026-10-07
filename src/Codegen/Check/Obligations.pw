@@ -113,7 +113,36 @@ pub impl Comp {
         return <Result.Ok value=arguments />
     }
 
-    inout fn checkStaticMemberObligation(resolution: StaticMemberResolution, receiver: U64, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[(), CompileDiagnostic] {
+    // Requirement method binders are alpha-renamed by conformance checking:
+    // implementation binders are [conformance..., method...]. Provided copies
+    // instead preserve their source ParamIds. Both consume recorded call args.
+    inout fn staticMemberInstanceArguments(resolution: StaticMemberResolution, function: U64, receiver: U64, proof: StaticConformanceProof, methodArguments: Array[U64], environment: InstanceEnvironment) -> Result[Array[U64], CompileDiagnostic] {
+        val declaration = self.arena.functionAt(index: function)
+        mut val arguments = try self.callConstraintTypeArguments(function: declaration, receiver: receiver, proof: proof)
+        mut val values: Array[U64] = []
+        for argument in methodArguments { values.append(try self.groundTermForBody(ref: argument, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)) }
+        match resolution {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: val owner, reqIdx: val index) => {
+                val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: index)
+                if values.count() != requirement.typeParams.count() || arguments.count() < values.count() { return <Result.Err error=self.diagnosticAt(offset: requirement.nameStart, msg: "static method has incomplete recorded type arguments") /> }
+                val start = arguments.count() - values.count()
+                mut val index = 0U64
+                while index < values.count() { arguments[start + index] = values[index] index += 1U64 }
+            }
+            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val source) => {
+                val original = self.arena.functionAt(index: source)
+                if values.count() != original.typeParams.count() { return <Result.Err error=self.diagnosticAt(offset: original.nameStart, msg: "static provided method has incomplete recorded type arguments") /> }
+                val recorded = <InstanceEnvironment params=self.copyFuncBinds(binds: original.typeParams) args=values />
+                val mapped = self.signatureTypeArguments(f: declaration, environment: recorded)
+                mut val index = 0U64
+                while index < mapped.count() { if mapped[index] != 0U64 { arguments[index] = mapped[index] } index += 1U64 }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=arguments />
+    }
+
+    inout fn checkStaticMemberObligation(resolution: StaticMemberResolution, methodArguments: Array[U64] = [], receiver: U64, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[(), CompileDiagnostic] {
         if receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=() /> }
         mut val selected = self.arena.functionCount()
         mut val evidence = <StaticConformanceProof.Missing />
@@ -141,8 +170,7 @@ pub impl Comp {
         if selected >= self.arena.functionCount() {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected trait member has no concrete conformance") />
         }
-        val declaration = self.arena.functionAt(index: selected)
-        val arguments = try self.callConstraintTypeArguments(function: declaration, receiver: receiver, proof: evidence)
+        val arguments = try self.staticMemberInstanceArguments(resolution: resolution, function: selected, receiver: receiver, proof: evidence, methodArguments: methodArguments, environment: environment)
         try self.appendCallConstraintInstance(function: selected, arguments: arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
         return <Result.Ok value=() />
     }
@@ -152,7 +180,7 @@ pub impl Comp {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                 if callee >= relevant.count() || !relevant[callee] { return <Result.Ok value=() /> }
             }
-            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => {}
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => {}
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 match selection {
                     ProtocolSelection.Direct(callee: val callee, proof: _) => {
@@ -191,8 +219,8 @@ pub impl Comp {
                 }
                 try self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: proof, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
             }
-            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, resultTerm: _) => {
-                try self.checkStaticMemberObligation(resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
+                try self.checkStaticMemberObligation(resolution: resolution, methodArguments: self.callTemplateTypeArgs(range: typeArgs), receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
             }
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 match selection {
@@ -263,7 +291,7 @@ pub impl Comp {
                 if owner < relevant.count() && !relevant[owner] {
                     mut val needed = false
                     match template.kind {
-                        CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => { needed = true }
+                        CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => { needed = true }
                         CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                             if callee < owners.count() && owners[callee] < relevant.count() { needed = relevant[owners[callee]] }
                         }

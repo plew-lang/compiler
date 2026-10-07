@@ -42,7 +42,7 @@ fn main() {
     rejected(c: inout c, message: "missing-arguments-not-closed")
     c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Direct callee=1U64 receiver=<CallTemplateReceiver.None /> args=args calleeTypeArgs=c.publishCallTemplateTypeArgs(args: [0U64]) proofId=0U64 /> />)
     rejected(c: inout c, message: "unresolved-argument-not-closed")
-    c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.StaticMethod receiver=<CallTemplateReceiver.Term term=caller /> args=args resolution=<StaticMemberResolution.Missing /> resultTerm=caller /> />)
+    c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.StaticMethod receiver=<CallTemplateReceiver.Term term=caller /> args=args resolution=<StaticMemberResolution.Missing /> methodTypeArgs=c.publishCallTemplateTypeArgs(args: []) resultTerm=caller /> />)
     rejected(c: inout c, message: "missing-static-selection-not-closed")
     c.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Dynamic receiver=<CallTemplateReceiver.None /> args=args target=<DynamicCallTemplateTarget.ClosureLocal bindingDeclStart=0U64 fnTypeTerm=caller /> /> />)
     rejected(c: inout c, message: "non-function-dynamic-call-not-closed")

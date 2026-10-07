@@ -1,0 +1,52 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, completeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplateKind, StaticMemberResolution, InstanceEnvironment }
+
+fn main() {
+    val source = "fn probe[T](receiver: T) -> I64 where T: P {{ return receiver.echo(value: 7I64) }}\ntrait P {{ fn echo[U](value: U) -> U }}\nstruct Box[Element] {{ val value: Element }}\nimpl[Element] Box[Element] as P {{ fn echo[Value](value: Value) -> Value {{ return value }} }}\nfn anchor(receiver: Box[I32], element: I32) {{}}\n"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="method-arguments.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    completeFrontendDeclarations(c: inout compiler).unwrap()
+    val probe = compiler.arena.functionAt(index: 0U64)
+    val anchor = compiler.arena.functionAt(index: 2U64)
+    val receiver = compiler.funcParamAt(params: anchor.params, index: 0U64).ty
+    val element = compiler.funcParamAt(params: anchor.params, index: 1U64).ty
+    val environment = <InstanceEnvironment params=compiler.copyFuncBinds(binds: probe.typeParams) args=[receiver] />
+    mut val found = false
+    for template in compiler.decls.callTemplates {
+        if template.siteKey.ownerFnIdx == 0U64 {
+            match template.kind {
+                CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
+                    val recorded = compiler.callTemplateTypeArgs(range: typeArgs)
+                    assert(recorded.count() == 1U64)
+                    assert(compiler.typeRefEq(a: recorded[0U64], b: probe.retTy))
+                    match resolution {
+                        StaticMemberResolution.Requirement(proof: val abstract, traitIdx: val owner, reqIdx: val requirement) => {
+                            val proof = compiler.concreteStaticMemberProof(proof: abstract, receiverRef: receiver, environment: environment, selfRef: 0U64, itemRef: 0U64).unwrap()
+                            val function = compiler.proofConcreteWitness(proof: proof, receiverRef: receiver, traitIdx: owner, reqIdx: requirement).unwrap()
+                            val arguments = compiler.staticMemberInstanceArguments(resolution: resolution, function: function, receiver: receiver, proof: proof, methodArguments: recorded, environment: environment).unwrap()
+                            assert(arguments.count() == 2U64)
+                            assert(compiler.typeRefEq(a: arguments[0U64], b: element))
+                            assert(compiler.typeRefEq(a: arguments[1U64], b: probe.retTy))
+                            // Corrupting the saved substitution must fail
+                            // selection closure, not defer to runtime inference.
+                            compiler.decls.callTemplateTypeArgumentPool[typeArgs.start] = 0U64
+                            val templateIndex = compiler.decls.callTemplateIndex(siteKey: template.siteKey)
+                            match compiler.checkCallTemplateSelection(templateIndex: templateIndex) {
+                                Result.Err(error: val diagnostic) => { assert(diagnostic.message == "cannot infer all type arguments for this call") }
+                                Result.Ok(value: _) => { panic "incomplete method substitution was sealed" }
+                            }
+                            found = true
+                        }
+                        _ => { panic "expected a requirement" }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    assert(found)
+    print("ok")
+}

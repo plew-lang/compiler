@@ -363,6 +363,19 @@ pub impl Comp {
         return 0U64
     }
 
+    inout fn checkCallTemplateTypeArguments(arguments: CallTemplateTypeArgumentRange, parameterCount: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        if arguments.len != parameterCount || arguments.start > self.decls.callTemplateTypeArgumentPool.count() || arguments.len > self.decls.callTemplateTypeArgumentPool.count() - arguments.start {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot infer all type arguments for this call") />
+        }
+        mut val index = 0U64
+        while index < arguments.len {
+            val term = self.decls.callTemplateTypeArgumentPool[arguments.start + index]
+            if term == 0U64 || term >= self.arena.typeCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot infer all type arguments for this call") /> }
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn ensureSemanticExprType(exprId: U64) {
         while self.arena.semanticExprTypes.count() <= exprId {
             self.arena.semanticExprTypes.append(<SemanticExprType />)
@@ -459,24 +472,15 @@ pub impl Comp {
                     self.traceMonoTypeHead(ref: template.receiverTypeTerm)
                     eprint(text: "\n")
                 }
-                if calleeTypeArgs.len != function.typeParams.count() || calleeTypeArgs.start + calleeTypeArgs.len > self.decls.callTemplateTypeArgumentPool.count() {
-                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot infer all type arguments for this call") />
-                }
-                mut val index = 0U64
-                while index < calleeTypeArgs.len {
-                    val term = self.decls.callTemplateTypeArgumentPool[calleeTypeArgs.start + index]
-                    if term == 0U64 || term >= self.arena.typeCount() {
-                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot infer all type arguments for this call") />
-                    }
-                    index += 1U64
-                }
+                try self.checkCallTemplateTypeArguments(arguments: calleeTypeArgs, parameterCount: function.typeParams.count(), offset: offset)
                 if (function.hasRecv || function.isAssoc) && template.receiverTypeTerm == 0U64 {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot establish the selected call's receiver type") />
                 }
                 try self.checkCallTemplateArguments(args: args, parameterCount: function.params.count(), offset: offset)
             }
-            CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: val resolution, resultTerm: _) => {
+            CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
                 val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: offset)
+                try self.checkCallTemplateTypeArguments(arguments: typeArgs, parameterCount: function.typeParams.count(), offset: offset)
                 try self.checkCallTemplateArguments(args: args, parameterCount: function.params.count(), offset: offset)
             }
             CallTemplateKind.Operator(op: _, operands: val operands, resolution: val selection, resultTerm: _) => {
@@ -877,7 +881,7 @@ pub impl Comp {
                 if callee >= self.arena.functionCount() || self.signatureHasStorageParameters(function: self.arena.functionAt(index: callee)) { return true }
                 arguments = args
             }
-            CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: val resolution, resultTerm: _) => {
+            CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: val resolution, methodTypeArgs: _, resultTerm: _) => {
                 if self.staticSelectionHasStorageParameters(resolution: resolution) { return true }
                 arguments = args
             }
@@ -1157,12 +1161,14 @@ pub impl Comp {
         // A provided member has a selected declaration and proof just like
         // a requirement. Compute its result from that signature rather than
         // reading the still-untyped call expression back into its own record.
+        mut val methodArguments: Array[U64] = []
         mut val selectedResult = resultTerm
         match resolution {
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
                 val function = self.arena.functionAt(index: callee)
                 val inferred = try self.finalMethodEnvironment(f: function, receiverRef: receiverTerm, args: args, selectedProof: proof)
                 val environment = try self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment params=inferred.params args=inferred.args receiverRef=receiverTerm proof=proof />)
+                methodArguments = self.signatureTypeArguments(f: function, environment: environment)
                 selectedResult = try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: function), environment: environment, selfRef: receiverTerm, itemRef: 0U64)
             }
             _ => {}
@@ -1171,6 +1177,13 @@ pub impl Comp {
         // both Record walks, before call-template publication is enabled.
         self.recordSemanticExprTerm(exprId: exprId, term: selectedResult)
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
+        match resolution {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: val owner, reqIdx: val index) => {
+                methodArguments = try self.inferFnArgs(f: self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: index), args: args)
+            }
+            _ => {}
+        }
+        val methodTypeArgs = self.publishCallTemplateTypeArgs(args: methodArguments)
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
         mut val templateArgs: CallTemplateArgumentRange = (try self.directCallTemplateArgs(args: args))
         val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)
@@ -1193,7 +1206,7 @@ pub impl Comp {
                     mut val previous: Array[CallTemplateArgument] = []
                     if hasPriorTemplate {
                         match self.decls.callTemplates[index].kind {
-                            CallTemplateKind.StaticMethod(receiver: _, args: val priorArgs, resolution: _, resultTerm: _) => { previous = self.callTemplateArguments(range: priorArgs) }
+                            CallTemplateKind.StaticMethod(receiver: _, args: val priorArgs, resolution: _, methodTypeArgs: _, resultTerm: _) => { previous = self.callTemplateArguments(range: priorArgs) }
                             _ => {}
                         }
                     }
@@ -1209,10 +1222,10 @@ pub impl Comp {
         }
         if hasPriorTemplate {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=selectedResult /> receiverTypeTerm=receiverTerm expectedResultTerm=prior.expectedResultTerm />)
+            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution methodTypeArgs=methodTypeArgs resultTerm=selectedResult /> receiverTypeTerm=receiverTerm expectedResultTerm=prior.expectedResultTerm />)
             return <Result.Ok value=() />
         }
-        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey receiverTypeTerm=receiverTerm kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=selectedResult /> />)
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey receiverTypeTerm=receiverTerm kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution methodTypeArgs=methodTypeArgs resultTerm=selectedResult /> />)
         return <Result.Ok value=() />
     }
 
@@ -1683,7 +1696,7 @@ pub impl Comp {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                 return callee < self.arena.functionCount() && self.functionDeclarationReturnsUnit(f: self.arena.functionAt(index: callee))
             }
-            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, resultTerm: _) => {
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: _, resultTerm: _) => {
                 return self.staticMemberReturnsUnit(resolution: resolution)
             }
             CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {

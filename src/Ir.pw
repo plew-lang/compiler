@@ -3132,7 +3132,7 @@ pub enum CallTemplateKind {
     // evidence that selected its conformance path; it is grounded only when
     // the enclosing BodyInstance grounds `receiver`.
     Direct(callee: U64, receiver: CallTemplateReceiver, args: CallTemplateArgumentRange, calleeTypeArgs: CallTemplateTypeArgumentRange, proofId: U64)
-    StaticMethod(receiver: CallTemplateReceiver, args: CallTemplateArgumentRange, resolution: StaticMemberResolution, resultTerm: U64)
+    StaticMethod(receiver: CallTemplateReceiver, args: CallTemplateArgumentRange, resolution: StaticMemberResolution, methodTypeArgs: CallTemplateTypeArgumentRange, resultTerm: U64)
     Dynamic(receiver: CallTemplateReceiver, args: CallTemplateArgumentRange, target: DynamicCallTemplateTarget)
     Protocol(receiver: CallTemplateReceiver, selection: ProtocolSelection, resultTerm: U64)
     Operator(op: I64, operands: CallTemplateOperandRange, resolution: OperatorSelection, resultTerm: U64)

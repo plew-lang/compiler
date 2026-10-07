@@ -608,7 +608,7 @@ pub impl Comp {
                         }
                     }
                     ProtocolSelection.Static(resolution: val resolution) => {
-                        val selected = try self.selectStaticMethodTemplateCall(exprId: stmtId, receiver: <CallTemplateReceiver.Term term=receiverRef />, arguments: [], resolution: resolution, resultTerm: resultTerm)
+                        val selected = try self.selectStaticMethodTemplateCall(exprId: stmtId, methodArguments: [], receiver: <CallTemplateReceiver.Term term=receiverRef />, arguments: [], resolution: resolution, resultTerm: resultTerm)
                         callee = selected.callee
                         proof = selected.proof
                     }
@@ -1750,7 +1750,7 @@ pub impl Comp {
         if (try self.callTemplatesClosedForBody(fnIdx: self.cur.bodyFnIdx)) {
             match (try self.callTemplateForCurrentBody(exprId: exprId)).kind {
                 CallTemplateKind.Direct(callee: _, receiver: _, args: val args, calleeTypeArgs: _, proofId: _) => { return <Result.Ok value=self.templateArgumentRange(arguments: args) />}
-                CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: _, resultTerm: _) => { return <Result.Ok value=self.templateArgumentRange(arguments: args) />}
+                CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: _, methodTypeArgs: _, resultTerm: _) => { return <Result.Ok value=self.templateArgumentRange(arguments: args) />}
                 CallTemplateKind.Dynamic(receiver: _, args: val args, target: _) => { return <Result.Ok value=self.templateArgumentRange(arguments: args) />}
                 _ => {}
             }
@@ -1859,7 +1859,7 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: operator selection was not completed before materialization") />
             }
             OperatorSelection.Static(resolution: val selectedResolution) => {
-                val selected = try self.selectStaticMethodTemplateCall(exprId: exprId, receiver: <CallTemplateReceiver.Term term=selectedReceiverRef />, arguments: argumentSources, resolution: selectedResolution, resultTerm: resultTerm)
+                val selected = try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: [], receiver: <CallTemplateReceiver.Term term=selectedReceiverRef />, arguments: argumentSources, resolution: selectedResolution, resultTerm: resultTerm)
                 callee = selected.callee
                 selectedProof = selected.proof
             }
@@ -4256,7 +4256,7 @@ pub impl Comp {
         return <Result.Ok value=selected />
     }
 
-    inout fn selectStaticMethodTemplateCall(exprId: U64, receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], resolution: StaticMemberResolution, resultTerm: U64) -> Result[CallSiteSelection, CompileDiagnostic] {
+    inout fn selectStaticMethodTemplateCall(exprId: U64, methodArguments: Array[U64], receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], resolution: StaticMemberResolution, resultTerm: U64) -> Result[CallSiteSelection, CompileDiagnostic] {
         val noCallee: U64 = self.arena.functionCount()
         val receiverRef: U64 = (try self.groundCallTemplateReceiver(receiver: receiver))
         val args: ArgRange = self.templateArgumentRangeFromValues(arguments: arguments)
@@ -4293,7 +4293,8 @@ pub impl Comp {
                 if f.originTraitId != self.decls.traitAt(index: traitIdx).nameId || f.originTraitOwner != self.decls.traitAt(index: traitIdx).nameStart {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: static method selected a callable outside its proved trait") />
                 }
-                return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=args argumentSources=arguments proof=concreteProof resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> /> />
+                val typeArgs = try self.staticMemberInstanceArguments(resolution: resolution, function: callee, receiver: receiverRef, proof: concreteProof, methodArguments: methodArguments, environment: self.cur.bodyEnvironment)
+                return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=args argumentSources=arguments calleeTypeArgs=typeArgs proof=concreteProof resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> /> />
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: val traitIdx, callee: val declaration) => {
                 if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || traitIdx >= self.decls.traitCount() || declaration >= self.arena.functionCount() {
@@ -4313,7 +4314,8 @@ pub impl Comp {
                 }
                 // Complete the result after enqueueSelectedCallee has inferred
                 // method arguments and selected the concrete body environment.
-                return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=args argumentSources=arguments proof=concreteProof resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> /> />
+                val typeArgs = try self.staticMemberInstanceArguments(resolution: resolution, function: callee, receiver: receiverRef, proof: concreteProof, methodArguments: methodArguments, environment: self.cur.bodyEnvironment)
+                return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=args argumentSources=arguments calleeTypeArgs=typeArgs proof=concreteProof resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> /> />
             }
             _ => {}
         }
@@ -4343,8 +4345,8 @@ pub impl Comp {
                 try self.recordSelectedBodyCallee(selection: selection)
                 return <Result.Ok value=selection.callee />
             }
-            CallTemplateKind.StaticMethod(receiver: val receiver, args: val arguments, resolution: val resolution, resultTerm: val resultTerm) => {
-                val selection: CallSiteSelection = (try self.selectStaticMethodTemplateCall(exprId: exprId, receiver: receiver, arguments: self.callTemplateArguments(range: arguments), resolution: resolution, resultTerm: resultTerm))
+            CallTemplateKind.StaticMethod(receiver: val receiver, args: val arguments, resolution: val resolution, methodTypeArgs: val methodTypeArgs, resultTerm: val resultTerm) => {
+                val selection: CallSiteSelection = (try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: self.callTemplateTypeArgs(range: methodTypeArgs), receiver: receiver, arguments: self.callTemplateArguments(range: arguments), resolution: resolution, resultTerm: resultTerm))
                 try self.recordSelectedBodyCallee(selection: selection)
                 try self.enqueueSelectedCallee(selection: selection)
                 return <Result.Ok value=selection.callee />
@@ -6138,7 +6140,7 @@ pub impl Comp {
                     // target rather than a declaration callee. The authored
                     // Index surface is still fixed by Record, so use its
                     // canonical execution spelling without reopening lookup.
-                    CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => { hasSelectedCall = true }
+                    CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => { hasSelectedCall = true }
                     CallTemplateKind.Dynamic(receiver: _, args: _, target: _) => { hasSelectedCall = true }
                     _ => {}
                 }
