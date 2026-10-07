@@ -1,0 +1,41 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, FinalBodyRequests, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { DeclarationConversion }
+
+// The return-layout adaptation must consume the same field conversion as
+// aggregate preparation, rather than reselecting it without a source site.
+fn main() {
+    val source = "fn probe(value: First, other: Second) -> (item: any P) {{ return (item: value) }} trait P {{}} struct First {{}} struct Second {{}} impl First as P {{}} impl Second as P {{}}"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="record-return.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    compiler.initializeFinalCallables().unwrap()
+    val body = compiler.enqueueFinalBody(fnIdx: 0U64, args: [], recvInstRef: 0U64).unwrap()
+    mut val requests = <FinalBodyRequests />
+    compiler.requestFinalBody(bodyId: body, requests: inout requests).unwrap()
+    assert(compiler.decls.semanticAggregates.count() == 1U64)
+    val aggregate = compiler.decls.semanticAggregates[0U64]
+    val element = aggregate.elements[0U64]
+    val function = compiler.arena.functionAt(index: 0U64)
+    val other = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val site = compiler.templateCallSiteKey(fnIdx: 0U64, exprId: element.exprId).unwrap()
+    mut val corrupted = false
+    mut val index = 0U64
+    while index < compiler.decls.declarationConversions.count() {
+        val conversion = compiler.decls.declarationConversions[index]
+        if compiler.sameCallSiteKey(a: conversion.site, b: site) {
+            compiler.decls.declarationConversions[index] = <DeclarationConversion site=conversion.site source=other target=conversion.target proof=conversion.proof />
+            corrupted = true
+        }
+        index += 1U64
+    }
+    assert(corrupted)
+    compiler.cur.bodyFnIdx = 0U64
+    compiler.cur.bodyId = body
+    match compiler.finalizeCurrentBodyReturn(exprId: aggregate.exprId) {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "source conversion evidence disagrees with the instantiated value type") }
+        Result.Ok(value: _) => { panic "record return reselected its field conversion" }
+    }
+    print("ok")
+}
