@@ -1,0 +1,36 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { DeclarationConversion, Expr, ValueConversionProof }
+
+// Internal contract: finalization consumes source evidence for this exact site
+// and reports disagreement instead of silently selecting another conversion.
+fn main() {
+    val source = "trait P {{}}\nstruct First {{}}\nstruct Second {{}}\nimpl First as P {{}}\nimpl Second as P {{}}\nfn probe(value: First, target: any P, other: Second) {{}}\n"
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="conversion.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val value = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val target = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val other = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    // Synthetic expression identity; its syntax is never used to recover a type.
+    val expression = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    val site = compiler.templateCallSiteKey(fnIdx: 0U64, exprId: expression).unwrap()
+    val conversion = compiler.callArgumentConversion(sourceRef: value, targetRef: target).unwrap()
+    val proof = compiler.freezeValueConversionProof(proof: conversion)
+    compiler.decls.declarationConversions.append(<DeclarationConversion site=site source=value target=target proof=proof />)
+    compiler.decls.declarationConversionOwners[site.ownerFnIdx] = [0U64]
+    compiler.cur.bodyFnIdx = 0U64
+    match compiler.finalValueConversion(sourceRef: value, targetRef: target, exprId: expression).unwrap() {
+        ValueConversionProof.ExistentialBox(sourceRef: val actual, targetRef: _, traitIdx: _, proof: _) => { assert(compiler.typeRefEq(a: actual, b: value)) }
+        _ => { panic "lost recorded conversion" }
+    }
+    // Both concrete types conform. Re-solving would incorrectly accept this
+    // corrupted source boundary, which must instead report the disagreement.
+    match compiler.finalValueConversion(sourceRef: other, targetRef: target, exprId: expression) {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "source conversion evidence disagrees with the instantiated value type") }
+        Result.Ok(value: _) => { panic "reselected instead of consuming evidence" }
+    }
+    print("ok")
+}

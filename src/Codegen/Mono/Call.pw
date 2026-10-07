@@ -2934,7 +2934,63 @@ pub impl Comp {
         }
     }
 
-    inout fn finalValueConversion(sourceRef: U64, targetRef: U64) -> Result[ValueConversionProof, CompileDiagnostic] {
+    // Instantiate a selected structural conversion. The conformance edges
+    // come from Record; substitution must not select a new target proof.
+    inout fn instantiateValueConversion(conversion: ValueConversionProof, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[ValueConversionProof, CompileDiagnostic] {
+        match conversion {
+            ValueConversionProof.Identity | ValueConversionProof.Missing => { return <Result.Ok value=conversion /> }
+            ValueConversionProof.ExistentialBox(sourceRef: val source, targetRef: val target, traitIdx: val traitIndex, proof: val proof) => {
+                val receiver = try self.groundTermForBody(ref: source, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                val destination = try self.groundTermForBody(ref: target, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                val instantiated = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                match instantiated {
+                    StaticProofInstantiation.Ready(proof: val evidence) => { return <Result.Ok value=<ValueConversionProof.ExistentialBox sourceRef=receiver targetRef=destination traitIdx=traitIndex proof=evidence /> /> }
+                    StaticProofInstantiation.Deferred => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "executable conversion retains an unresolved conformance obligation") /> }
+                }
+            }
+            ValueConversionProof.ArrayRepack(sourceRef: val source, targetRef: val target, element: val element) => {
+                val sourceRef = try self.groundTermForBody(ref: source, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                val targetRef = try self.groundTermForBody(ref: target, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                val child = try self.instantiateValueConversion(conversion: element, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                return <Result.Ok value=<ValueConversionProof.ArrayRepack sourceRef=sourceRef targetRef=targetRef element=child /> />
+            }
+            ValueConversionProof.EnumRepack(sourceRef: val source, targetRef: val target, enumIdx: val enumIndex, payloads: val payloads) => {
+                val sourceRef = try self.groundTermForBody(ref: source, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                val targetRef = try self.groundTermForBody(ref: target, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                mut val children: Array[EnumPayloadConversion] = []
+                for payload in payloads {
+                    val childSource = try self.groundTermForBody(ref: payload.sourceRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                    val childTarget = try self.groundTermForBody(ref: payload.targetRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                    val child = try self.instantiateValueConversion(conversion: payload.conversion, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                    children.append(<EnumPayloadConversion sourceRef=childSource targetRef=childTarget conversion=child />)
+                }
+                return <Result.Ok value=<ValueConversionProof.EnumRepack sourceRef=sourceRef targetRef=targetRef enumIdx=enumIndex payloads=children /> />
+            }
+        }
+    }
+
+    inout fn finalValueConversion(sourceRef: U64, targetRef: U64, exprId: U64 = 18446744073709551615U64) -> Result[ValueConversionProof, CompileDiagnostic] {
+        if sourceRef != 0U64 && self.typeRefEq(a: sourceRef, b: targetRef) { return <Result.Ok value=<ValueConversionProof.Identity /> /> }
+        if exprId < self.arena.exprs.count() {
+            val site = try self.templateCallSiteKey(fnIdx: self.cur.bodyFnIdx, exprId: exprId)
+            val owner = self.decls.callTemplateLexicalRoots.getOr(key: site.ownerFnIdx, fallback: site.ownerFnIdx)
+            for index in self.decls.declarationConversionOwners.getOr(key: owner, fallback: []) {
+                val recorded = self.decls.declarationConversions[index]
+                if self.sameCallSiteKey(a: recorded.site, b: site) {
+                    val target = try self.groundTermForBody(ref: recorded.target, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                    if self.typeRefEq(a: target, b: targetRef) {
+                        val source = try self.groundTermForBody(ref: recorded.source, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                        if !self.typeRefEq(a: source, b: sourceRef) { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "source conversion evidence disagrees with the instantiated value type") /> }
+                        val conversion = try self.instantiateValueConversion(conversion: self.thawValueConversionProof(id: recorded.proof), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                        try self.finalizeConversionDependencies(conversion: conversion)
+                        return <Result.Ok value=conversion />
+                    }
+                }
+            }
+        }
+        // Migration boundary: synthesized conversions and source positions not
+        // yet represented by DeclarationConversion still use the common planner.
+
         val conversion: ValueConversionProof = (try self.callArgumentConversion(sourceRef: sourceRef, targetRef: targetRef))
         try self.finalizeConversionDependencies(conversion: conversion)
         return <Result.Ok value=conversion />
@@ -2944,7 +3000,7 @@ pub impl Comp {
         if self.currentBodyInstanceId() == 0U64 { return <Result.Ok value=() /> }
         val sourceRef: U64 = (try self.groundRecordedValueTypeForBody(bodyId: self.currentBodyInstanceId(), exprId: exprId, term: self.semanticExprTerm(exprId: exprId), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         val targetRef: U64 = (try self.groundAndRecordBodyType(ref: targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
-        val conversion: ValueConversionProof = (try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef))
+        val conversion: ValueConversionProof = (try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef, exprId: exprId))
         self.putFinalStorage(fact: <FinalStorageResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId sourceTypeRef=sourceRef targetTypeRef=targetRef conversion=self.freezeValueConversionProof(proof: conversion) />)
         return <Result.Ok value=() />
     }
@@ -2986,7 +3042,7 @@ pub impl Comp {
                 // An operator's lhs selects a witness like a method receiver.
                 // Adapt only that dispatch boundary; ordinary arguments retain
                 // their exact view identity, including nested type arguments.
-                mut val conversion = (try self.finalValueConversion(sourceRef: source, targetRef: parameterTypeRefs[i]))
+                mut val conversion = (try self.finalValueConversion(sourceRef: source, targetRef: parameterTypeRefs[i], exprId: self.callArgumentExprId(source: sources[i].source)))
                 if sources[i].isDispatchReceiver && source != 0U64 && parameterTypeRefs[i] != 0U64 && self.typeRefEq(a: self.runtimeTypeRef(ref: source), b: self.runtimeTypeRef(ref: parameterTypeRefs[i])) {
                     conversion = <ValueConversionProof.Identity />
                 }
@@ -3390,7 +3446,7 @@ pub impl Comp {
             val sourceRef: U64 = (try self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: element.exprId, term: element.term, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
             val targetRef: U64 = (try self.groundAndRecordBodyType(ref: element.targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
             targets.append(targetRef)
-            conversions.append((try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef)))
+            conversions.append((try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef, exprId: element.exprId)))
             i += 1U64
         }
         self.putFinalAggregate(fact: <FinalAggregateResolution bodyId=bodyId exprId=exprId resultTypeRef=(try self.groundAndRecordBodyType(ref: aggregate.resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)) elementTargetRefs=targets elementConversions=conversions />)
@@ -3547,7 +3603,7 @@ pub impl Comp {
                 }
             }
         }
-        val conversion = (try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef))
+        val conversion = (try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef, exprId: exprId))
         if self.traceCodegen {
             match conversion {
                 ValueConversionProof.Missing => {
