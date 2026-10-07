@@ -1209,10 +1209,10 @@ pub impl Comp {
         }
         if hasPriorTemplate {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=selectedResult /> expectedResultTerm=prior.expectedResultTerm />)
+            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=selectedResult /> receiverTypeTerm=receiverTerm expectedResultTerm=prior.expectedResultTerm />)
             return <Result.Ok value=() />
         }
-        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=selectedResult /> />)
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey receiverTypeTerm=receiverTerm kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=selectedResult /> />)
         return <Result.Ok value=() />
     }
 

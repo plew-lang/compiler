@@ -1,3 +1,4 @@
+use ./Ir only { CallConstraintInstance }
 use ./Ir only { OperatorSelection, InvocationCompletion, TypeCompatibility, ConditionClause, ConditionClauseRange }
 use @Plew/Syntax only { CondClause, syntaxConditionClause }
 use ./SourceCompletion only { SourceCompletion, CompletionEdges, CompletionTransfer, BlockResultContext, completionThen, completionChoice, completionTransfer, completionBlock, completionLoop }
@@ -1895,6 +1896,7 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
         try c.closeProgramCallTemplates()
         try c.checkRecordedCallTemplateBounds()
         try c.checkClosedIterationProtocols()
+        try c.checkRecordedMemberObligations()
     }
     try c.prepareDiscriminantType()
     return <Result.Ok value=() />
@@ -1937,6 +1939,7 @@ pub fn completeFrontendDeclarations(c: inout Comp) -> Result[(), CompileDiagnost
     }
     try c.checkGenericUniqueArgs()
     try c.closeProgramCallTemplates()
+    try c.checkRecordedMemberObligations()
     return <Result.Ok value=() />
 }
 

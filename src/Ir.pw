@@ -2210,6 +2210,16 @@ pub impl BodyTypeResult { factory }
 
 pub enum BodyOrigin { Callable ExistentialWitness(resolution: U64, member: U64) ClosureEnvironmentDrop(closureBodyId: U64) }
 
+// A source-call constraint request, not an executable BodyInstance.
+// The linked index deduplicates environments per selected declaration.
+pub struct CallConstraintInstance {
+    pub val function: U64
+    pub val environment: InstanceEnvironment
+    pub val depth: U64
+    pub val next: U64
+}
+pub impl CallConstraintInstance { factory }
+
 pub struct BodyInstance {
     pub val fnIdx: U64
     pub val environment: InstanceEnvironment

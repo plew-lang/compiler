@@ -1,0 +1,102 @@
+// Check source-call constraints without registering executable bodies. Open
+// substitutions remain declaration obligations; concrete calls propagate them
+// through their selected declarations and the same proof-instantiation API.
+pub impl Comp {
+    inout fn appendCallConstraintInstance(function: U64, arguments: Array[U64], receiver: U64, proof: StaticConformanceProof, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64]) -> Result[(), CompileDiagnostic] {
+        if function >= self.arena.functionCount() { return <Result.Ok value=() /> }
+        val declaration = self.arena.functionAt(index: function)
+        if declaration.isExtern || declaration.body == 0U64 { return <Result.Ok value=() /> }
+        if arguments.count() != declaration.typeParams.count() { return <Result.Ok value=() /> }
+        for argument in arguments {
+            if argument == 0U64 || !self.arena.typeIsClosed(ref: argument) { return <Result.Ok value=() /> }
+        }
+        if (declaration.hasRecv || declaration.isAssoc) && (receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver)) { return <Result.Ok value=() /> }
+        val environment = try self.bodyInstanceEnvironment(fnIdx: function, args: arguments, recvInstRef: receiver, selectedProof: proof)
+        val owner = try self.semanticBodyOwner(fnIdx: function)
+        mut val previous = heads.getOr(key: owner, fallback: 0U64)
+        while previous != 0U64 {
+            val prior = requests[previous - 1U64]
+            if self.sameInstanceEnvironment(a: prior.environment, b: environment) { return <Result.Ok value=() /> }
+            previous = prior.next
+        }
+        // Reject unbounded semantic request expansion rather than silently
+        // accepting an unchecked recursive substitution. This is an execution
+        // resource limit, not a restriction on recursion in the language.
+        if depth > 64U64 {
+            return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "static call constraint expansion limit exceeded") />
+        }
+        requests.append(<CallConstraintInstance function=owner environment=environment depth=depth next=heads.getOr(key: owner, fallback: 0U64) />)
+        heads[owner] = requests.count()
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkStaticMemberObligation(resolution: StaticMemberResolution, receiver: U64, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64]) -> Result[(), CompileDiagnostic] {
+        if receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=() /> }
+        mut val selected = self.arena.functionCount()
+        mut val evidence = <StaticConformanceProof.Missing />
+        match resolution {
+            StaticMemberResolution.Requirement(proof: val proof, traitIdx: val owner, reqIdx: val requirement) => {
+                evidence = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                selected = try self.proofConcreteWitness(proof: evidence, receiverRef: receiver, traitIdx: owner, reqIdx: requirement)
+            }
+            StaticMemberResolution.Provided(proof: val proof, traitIdx: val owner, callee: val declaration) => {
+                evidence = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                selected = try self.providedCopyForDeclaration(declaration: declaration, receiverRef: receiver, proof: evidence, traitIdx: owner, offset: self.arena.functionAt(index: declaration).defOffset)
+            }
+            StaticMemberResolution.Missing => { return <Result.Ok value=() /> }
+        }
+        if selected >= self.arena.functionCount() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected trait member has no concrete conformance") />
+        }
+        val declaration = self.arena.functionAt(index: selected)
+        val arguments = self.providedProofArguments(f: declaration, proof: evidence)
+        try self.appendCallConstraintInstance(function: selected, arguments: arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads)
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkCallConstraintTemplate(template: CallTemplate, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64]) -> Result[(), CompileDiagnostic] {
+        val receiver = try self.groundTermForBody(ref: template.receiverTypeTerm, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+        match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val typeArguments, proofId: val proofId) => {
+                mut val arguments: Array[U64] = []
+                for argument in self.callTemplateTypeArgs(range: typeArguments) {
+                    arguments.append(try self.groundTermForBody(ref: argument, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64))
+                }
+                mut val proof = self.thawStaticConformanceProof(id: proofId)
+                if receiver != 0U64 && self.arena.typeIsClosed(ref: receiver) && !self.proofIsMissing(proof: proof) {
+                    proof = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                }
+                try self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: proof, depth: depth, requests: inout requests, heads: inout heads)
+            }
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, resultTerm: _) => {
+                try self.checkStaticMemberObligation(resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads)
+            }
+            _ => {}
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkRecordedMemberObligations() -> Result[(), CompileDiagnostic] {
+        mut val requests: Array[CallConstraintInstance] = []
+        mut val heads: Dictionary[U64, U64] = [:]
+        val limit = self.decls.callTemplates.count()
+        mut val index = 0U64
+        // Every source call is a root, including unused functions. Generic
+        // calls become closed when reached through a caller's substitution.
+        while index < limit {
+            try self.checkCallConstraintTemplate(template: self.decls.callTemplates[index], environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads)
+            index += 1U64
+        }
+        index = 0U64
+        while index < requests.count() {
+            val request = requests[index]
+            mut val row = self.firstLexicalCallTemplate(owner: request.function)
+            while row != 0U64 {
+                try self.checkCallConstraintTemplate(template: self.decls.callTemplates[row - 1U64], environment: request.environment, depth: request.depth + 1U64, requests: inout requests, heads: inout heads)
+                row = self.decls.callTemplateBodyNext[row - 1U64]
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+}

@@ -19,3 +19,5 @@ part ./Check/Duplicate
 part ./Check/Conformance
 part ./Check/Visibility
 part ./Check/Return
+
+part ./Check/Obligations
