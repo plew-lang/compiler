@@ -1,0 +1,9 @@
+// The operator consumer need not import Add. Nominal identity selects both
+// the literal parameter context and the result, even with equal type names.
+use ./Alpha
+use ./Beta
+use @Std/Io only { print }
+fn main() {
+    print(<Alpha.Number /> + 2)
+    print(<Beta.Number /> + 2)
+}

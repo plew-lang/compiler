@@ -337,77 +337,27 @@ pub impl Comp {
         return <IntTy known=false bits=0 sgn=false />
     }
 
-    // For a trait-dispatched binary operator (`a + b` with `impl T as Add[...]`), check
-    // the rhs literal against the witness's rhs PARAMETER type, so `a + 10` types `10`
-    // from the conformance's rhs (e.g. `Add[I64]`) instead of failing "no type from
-    // context". Returns false when lhs has no operator-trait witness (caller falls back
-    // to the ordinary same-type arithmetic rule).
-    // Count the DISTINCT integer right-operand types among `name` witnesses on a type
-    // (`impl T as Add[I32]` + `Add[I64]` -> 2). Lets the checker reject a bare-literal
-    // rhs that could fit more than one (ambiguous), instead of silently picking the
-    // first-declared overload.
-    inout fn intRhsWitnessCount(typeStart: U64, typeLen: U64, name: String) -> Result[U64, CompileDiagnostic] {
-        val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
-        mut val seen: Array[U64] = []
-        mut val i: U64 = 0
-        while i < self.arena.functionCount() {
-            val f: Func = self.arena.functionAt(index: i)
-            if f.isAssoc {
-                if f.recvId == qType {
-                    if rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
-                        if f.params.count() >= 2 {
-                            val rhs: Param = self.funcParamAt(params: f.params, index: 1U64)
-                            val witness = (try self.methodReceiverEnvironment(f: f, instRef: f.recvTy))
-                            val parameter = (try self.groundWitnessTypeTerm(ref: rhs.ty, params: <PatternBindInput.Function range=f.typeParams />, matchResult: witness))
-                            val parameterType = self.arena.typeAt(index: parameter)
-                            if self.isIntType(start: parameterType.nameStart, len: parameterType.nameLen) {
-                                val parameterId = intern(c: inout self, start: parameterType.nameStart, len: parameterType.nameLen)
-                                if !(u64ArrayHas(a: seen, v: parameterId)) {
-                                    seen.append(parameterId)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            i += 1
-        }
-        return <Result.Ok value=seen.count() />
-    }
-
+    // Literal context comes from the same declaration selected for dispatch.
+    // Equal method/type spellings elsewhere do not contribute candidates.
     inout fn checkBinTraitRhs(op: I64, lhs: U64, rhs: U64) -> Result[Bool, CompileDiagnostic] {
-        if (try self.hasBinTraitWitness(op: op, lhs: lhs, rhs: rhs)) {
-            val lt: TypeInfo = (try self.binWitnessType(lhs: lhs, rhs: rhs))
-            // a bare-literal rhs that could fit MULTIPLE integer right-operand overloads
-            // (`impl T as Add[I32]` and `Add[I64]`) is ambiguous — no silent pick by
-            // declaration order (spec: 曖昧はエラー). Demand a suffix (`a + 10I64`).
-            val rt: TypeInfo = (try self.typeOf(id: rhs))
-            if rt.kind == 0 {
-                if rt.nameLen == 0 {
-                    if (try self.intRhsWitnessCount(typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op))) >= 2U64 {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: rhs), msg: "ambiguous operator: the right operand matches more than one integer overload — add a suffix to the literal (e.g. `10I64`)") />
-                    }
-                }
-            }
-            val fi: U64 = (try self.findBinTraitWitness(typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op), rhs: rhs))
-            if fi < self.arena.functionCount() {
-                val f: Func = self.arena.functionAt(index: fi)
-                if f.params.count() >= 2 {
-                    val rhsParam: Param = self.funcParamAt(params: f.params, index: 1U64)
-                    val witness = (try self.methodReceiverEnvironment(f: f, instRef: self.operatorTypeRef(t: lt)))
-                    val parameter = (try self.groundWitnessTypeTerm(ref: rhsParam.ty, params: <PatternBindInput.Function range=f.typeParams />, matchResult: witness))
-                    val parameterInfo = self.typeInfoOfRef(ref: parameter)
-                    val pit: IntTy = self.spanIntTy(start: parameterInfo.nameStart, len: parameterInfo.nameLen)
-                    if pit.known {
-                        try self.checkLitCtx(id: rhs, eKind: 1, eBits: pit.bits, eSgn: pit.sgn)
-                    } else {
-                        try self.checkLitCtx(id: rhs, eKind: 0, eBits: 0, eSgn: false)
-                    }
-                    return <Result.Ok value=true />
-                }
-            }
+        if !isBinTraitOp(op: op) { return <Result.Ok value=false /> }
+        val left = try self.binWitnessType(lhs: lhs, rhs: rhs)
+        val right = try self.typeOf(id: rhs)
+        val receiver = self.operatorTypeRef(t: left)
+        val rightRef = self.operatorTypeRef(t: right)
+        val callee = try self.findBinTraitWitnessForRef(receiverRef: receiver, op: op, rhsRef: rightRef, rhsUntyped: rightRef == 0U64)
+        if callee >= self.arena.functionCount() { return <Result.Ok value=false /> }
+        val function = self.arena.functionAt(index: callee)
+        val parameter = self.funcParamAt(params: function.params, index: 1U64)
+        val parameterRef = try self.operatorCalleeType(callee: callee, receiverRef: receiver, term: parameter.ty)
+        val parameterInfo = self.typeInfoOfRef(ref: parameterRef)
+        val integer = self.spanIntTy(start: parameterInfo.nameStart, len: parameterInfo.nameLen)
+        if integer.known {
+            try self.checkLitCtx(id: rhs, eKind: 1, eBits: integer.bits, eSgn: integer.sgn)
+        } else {
+            try self.checkLitCtx(id: rhs, eKind: 0, eBits: 0, eSgn: false)
         }
-        return <Result.Ok value=false />
+        return <Result.Ok value=true />
     }
 
     // Recover an expression's integer type as (bits, sgn). Covers what exprType

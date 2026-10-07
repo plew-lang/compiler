@@ -1,0 +1,29 @@
+use @Std/Core only { Add, Neg }
+use @Std/Io only { print }
+struct Number {}
+pub impl Number { factory }
+impl Number as Add[I64] {
+    type Output = I64
+    assoc fn add(lhs~: Number, rhs~: I64) -> I64 { return rhs }
+}
+impl Number as Neg {
+    type Output = I64
+    assoc fn neg(value~: Number) -> I64 { return 1I64 }
+}
+extension Decorated {
+    pub impl Number as Add[I64] {
+        type Output = I64
+        assoc fn add(lhs~: Number, rhs~: I64) -> I64 { return rhs + 40I64 }
+    }
+    pub impl Number as Neg {
+        type Output = I64
+        assoc fn neg(value~: Number) -> I64 { return 42I64 }
+    }
+}
+fn main() {
+    val number = <Number />
+    print(number + 2)
+    print(number#Decorated + 2)
+    print(-number)
+    print(-(number#Decorated))
+}

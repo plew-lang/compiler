@@ -1,0 +1,7 @@
+use @Std/Core only { Add }
+pub struct Number {}
+pub impl Number { factory }
+pub impl Number as Add[I8] {
+    type Output = I64
+    assoc fn add(lhs~: Number, rhs~: I8) -> I64 { return 40I64 + (rhs as I64) }
+}

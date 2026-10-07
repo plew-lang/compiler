@@ -43,6 +43,9 @@ pub impl Comp {
             index = self.arena.nextFunctionNamed(index: index)
         }
         if ambiguous {
+            if rhsUntyped && (selectedRank == 2U64 || selectedRank == 4U64) {
+                return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTerms[receiverRef].nameStart, msg: "ambiguous operator: the right operand matches more than one integer overload — add a suffix to the literal (e.g. `10I64`)") />
+            }
             return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTerms[receiverRef].nameStart, msg: "ambiguous operator: more than one implementation matches the operands; select a view or add a literal suffix (spec/12)") />
         }
         return <Result.Ok value=selected />
@@ -68,12 +71,23 @@ pub impl Comp {
         val requiredResult: U64 = (try self.staticRequirementResultType(resolution: resolution))
         if requiredResult != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: requiredResult) />}
         val callee: U64 = try self.unaryOperatorCallee(receiverRef: receiver, op: op)
+        return self.operatorCalleeResultType(callee: callee, receiverRef: receiver)
+    }
+
+    // Parameter and result types use the environment of the selected
+    // declaration. Associated bindings are not independently searched by name.
+    inout fn operatorCalleeType(callee: U64, receiverRef: U64, term: U64) -> Result[U64, CompileDiagnostic] {
+        val function = self.arena.functionAt(index: callee)
+        val implementationReceiver = self.canonicalBodyReceiverRef(fnIdx: callee, recvInstRef: receiverRef)
+        val witness = try self.methodReceiverEnvironment(f: function, instRef: implementationReceiver)
+        return self.groundWitnessTypeTerm(ref: term, params: <PatternBindInput.Function range=function.typeParams />, matchResult: witness)
+    }
+
+    inout fn operatorCalleeResultType(callee: U64, receiverRef: U64) -> Result[TypeInfo, CompileDiagnostic] {
         if callee < self.arena.functionCount() {
-            val function = self.arena.functionAt(index: callee)
-            val result = function.retTy
+            val result = self.arena.functionAt(index: callee).retTy
             if result != 0U64 {
-                val witness = (try self.methodReceiverEnvironment(f: function, instRef: receiver))
-                return <Result.Ok value=self.typeInfoOfRef(ref: (try self.groundWitnessTypeTerm(ref: result, params: <PatternBindInput.Function range=function.typeParams />, matchResult: witness))) />
+                return <Result.Ok value=self.typeInfoOfRef(ref: (try self.operatorCalleeType(callee: callee, receiverRef: receiverRef, term: result))) />
             }
         }
         return <Result.Ok value=<TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 /> />
@@ -107,7 +121,7 @@ pub impl Comp {
     }
 
     inout fn operatorTypeRef(t: TypeInfo) -> U64 {
-        if t.ref != 0U64 { return self.runtimeTypeRef(ref: t.ref) }
+        if t.ref != 0U64 { return t.ref }
         if t.nameLen == 0U64 { return 0U64 }
         return self.simpleTypeRef(nameStart: t.nameStart, nameLen: t.nameLen)
     }
@@ -119,32 +133,11 @@ pub impl Comp {
         if lt.nameLen == 0U64 {
             return <Result.Ok value=self.bareOperatorResult(t: lt) />
         }
-        val trN: Bind = self.internBytes(s: binTraitName(op: op))
-        val leftRef: U64 = self.operatorTypeRef(t: lt)
-        val rightRef: U64 = self.operatorTypeRef(t: rt)
-        if leftRef == 0U64 || rightRef == 0U64 {
-            return <Result.Ok value=self.bareOperatorResult(t: lt) />
-        }
-        mut val requestedArgs: Array[U64] = []
-        requestedArgs.append(rightRef)
-        mut val i: U64 = 0
-        while i < self.decls.assocBindings.count() {
-            val ab: AssocBinding = self.decls.assocBindings[i]
-            if ab.traitId == trN.nameId {
-                if ab.nameId != 0U64 && rangeEquals(bytes: self.arena.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Output") {
-                    val witness = (try self.conformancePatternWitnessMatch(conformIdx: 0U64, subjectId: ab.recvId, subjectTy: ab.subjectTy, subjectArgs: <PatternTypeInput.Conformance range=ab.subjectArgs />, typeParams: <PatternBindInput.Conformance range=ab.typeParams />, declaredTraitArgs: <PatternTypeInput.Conformance range=ab.traitArgs />, typeRef: leftRef, traitArgs: <PatternTypeInput.Values values=requestedArgs />))
-                    if witness.conformIdx != 0U64 {
-                        if ab.ty != 0U64 && ab.ty < self.arena.typeCount() {
-                            val output = (try self.groundWitnessTypeTerm(ref: ab.ty, params: <PatternBindInput.Conformance range=ab.typeParams />, matchResult: witness))
-                            return <Result.Ok value=self.typeInfoOfRef(ref: self.runtimeTypeRef(ref: output)) />
-                        }
-                        return <Result.Ok value=self.bareOperatorResult(t: self.typeInfoOfName(start: ab.tyStart, len: ab.tyLen, isArray: ab.tyIsArray)) />
-                    }
-                }
-            }
-            i += 1
-        }
-        return <Result.Ok value=self.bareOperatorResult(t: lt) />
+        val leftRef = self.operatorTypeRef(t: lt)
+        val rightRef = self.operatorTypeRef(t: rt)
+        if leftRef == 0U64 { return <Result.Ok value=self.bareOperatorResult(t: lt) /> }
+        val callee = try self.findBinTraitWitnessForRef(receiverRef: leftRef, op: op, rhsRef: rightRef, rhsUntyped: rightRef == 0U64)
+        return self.operatorCalleeResultType(callee: callee, receiverRef: leftRef)
     }
 
     // The result type of a binary: the operands share a type, so use whichever side

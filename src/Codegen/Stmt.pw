@@ -188,52 +188,6 @@ pub impl Comp {
 
 pub impl Comp {
 
-    // Resolve the arithmetic witness assoc fn named `name` on type (typeStart,typeLen),
-    // disambiguating right-operand overloads (`Mul[Vector]` vs `Mul[F64]`) by the rhs
-    // type: the assoc whose 2nd param type's head id matches typeOf(rhs). Falls back to
-    // the first assoc of that name (e.g. an untyped-literal rhs). c.arena.functionCount() = none.
-    inout fn findBinTraitWitness(typeStart: U64, typeLen: U64, name: String, rhs: U64) -> Result[U64, CompileDiagnostic] {
-        val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
-        val rt: TypeInfo = (try self.typeOf(id: rhs))
-        val rhsId: U64 = intern(c: inout self, start: rt.nameStart, len: rt.nameLen)
-        // an unsuffixed integer literal has no recovered type (kind 0, no name); it can
-        // adapt to any integer rhs, so prefer an overload whose rhs param is an int type.
-        val rhsUntyped: Bool = rt.kind == 0 && rt.nameLen == 0
-        mut val firstMatch: U64 = self.arena.functionCount()
-        mut val intMatch: U64 = self.arena.functionCount()
-        mut val i: U64 = 0
-        while i < self.arena.functionCount() {
-            val f: Func = self.arena.functionAt(index: i)
-            if f.isAssoc {
-                if f.recvId == qType {
-                    if rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
-                        if firstMatch == self.arena.functionCount() {
-                            firstMatch = i
-                        }
-                        if f.params.count() >= 2 {
-                            val rhs: Param = self.funcParamAt(params: f.params, index: 1U64)
-                            if rhs.tyNameId == rhsId {
-                                return <Result.Ok value=i />
-                            }
-                            if intMatch == self.arena.functionCount() {
-                                if self.isIntType(start: rhs.tyStart, len: rhs.tyLen) {
-                                    intMatch = i
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            i += 1
-        }
-        if rhsUntyped {
-            if intMatch < self.arena.functionCount() {
-                return <Result.Ok value=intMatch />
-            }
-        }
-        return <Result.Ok value=firstMatch />
-    }
-
     // The type to use for an operator's witness lookup. A named struct (kind 2) or a
     // typed scalar (kind 0 with a name) uses its own type; a width-less scalar (a
     // `typeOf` that recovers no name — e.g. some method-return / chain forms) recovers
@@ -242,28 +196,8 @@ pub impl Comp {
     inout fn binWitnessType(lhs: U64, rhs: U64) -> Result[TypeInfo, CompileDiagnostic] {
         val lt: TypeInfo = (try self.typeOf(id: lhs))
         if lt.kind == 2 {
-            // a `newtype` operand (spec/10) inherits its underlying's operators with Self
-            // substituted: `Meter` has `Add[Meter]` (from the underlying's `Add[Self]`), so
-            // `Meter + Meter` resolves the witness to the underlying (`I64`'s `Add`). But
-            // `Meter + I64` is NOT valid (no `Add[I64]` on `Meter`), so only resolve when
-            // BOTH operands are the SAME newtype — otherwise leave `lt` as the newtype so the
-            // witness lookup fails and the mix is rejected (sound).
-            val under: Bind = self.newtypeUnderName(start: lt.nameStart, len: lt.nameLen)
-            if under.nameStart != lt.nameStart || under.nameLen != lt.nameLen {
-                val rt: TypeInfo = (try self.typeOf(id: rhs))
-                if rt.kind == 2 {
-                    if spansEqual(c: inout self, aStart: lt.nameStart, aLen: lt.nameLen, bStart: rt.nameStart, bLen: rt.nameLen) {
-                        return <Result.Ok value=self.typeInfoOfName(start: under.nameStart, len: under.nameLen, isArray: false) />
-                    }
-                }
-            }
             return <Result.Ok value=lt />
         }
-        // a String operand: `String as Add[String]` makes `"a" + "b"` desugar to
-        // `String.add(lhs:, rhs:)` (spec/02,12). String is a named struct (kind 2) carrying
-        // its own name, so it flows through the kind==2 branch above (not a newtype, so that
-        // branch returns `lt` = String). Other arithmetic ops have no String witness, so
-        // `"a" - "b"` still errors (sound).
         if lt.kind == 0 {
             if lt.nameLen > 0 {
                 return <Result.Ok value=lt />
@@ -272,25 +206,17 @@ pub impl Comp {
         return <Result.Ok value=(try self.arithIntType(lhs: lhs, rhs: rhs)) />
     }
 
-    // Whether an arithmetic op's operands carry the operator-trait witness (spec/12:
-    // `a + b` desugars to `T.add(lhs: a, rhs: b)` iff `impl T as Add[…]`). A named
-    // struct OR a primitive scalar (incl. width-less ones recovered from the sibling)
-    // whose type conforms desugars to the witness — primitives are not special-cased
-    // (O6). A genuinely typeless operand (untyped literal / String / array) keeps the
-    // built-in arithmetic (the fallback in the dispatch).
+    // Verify uses the same Core declaration, full receiver identity, extension
+    // visibility and right-operand compatibility as literal typing and dispatch.
     inout fn hasBinTraitWitness(op: I64, lhs: U64, rhs: U64) -> Result[Bool, CompileDiagnostic] {
         if !(isBinTraitOp(op: op)) {
             return <Result.Ok value=false />
         }
-        val lt: TypeInfo = (try self.binWitnessType(lhs: lhs, rhs: rhs))
-        if lt.kind == 2 || lt.kind == 0 {
-            if lt.nameLen > 0 {
-                if self.typeConformsToName(typeStart: lt.nameStart, typeLen: lt.nameLen, traitName: binTraitName(op: op)) {
-                    return <Result.Ok value=self.findAssocByName(typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op)) < self.arena.functionCount() />
-                }
-            }
-        }
-        return <Result.Ok value=false />
+        val left = try self.binWitnessType(lhs: lhs, rhs: rhs)
+        val right = try self.typeOf(id: rhs)
+        val rightRef = self.operatorTypeRef(t: right)
+        val callee = try self.findBinTraitWitnessForRef(receiverRef: self.operatorTypeRef(t: left), op: op, rhsRef: rightRef, rhsUntyped: rightRef == 0U64)
+        return <Result.Ok value=callee < self.arena.functionCount() />
     }
 
     // A typed operand under an arithmetic op with no operator-trait witness: the C
