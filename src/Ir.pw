@@ -1539,6 +1539,16 @@ pub enum ValueConversionProof {
     EnumRepack(sourceRef: U64, targetRef: U64, enumIdx: U64, payloads: Array[EnumPayloadConversion])
 }
 
+// Selected receiver evidence for covariant Self results. It is available
+// before any executable existential descriptor or adapter has been registered.
+pub struct ExistentialBoxEvidence {
+    pub val sourceRef: U64
+    pub val targetRef: U64
+    pub val traitIdx: U64
+    pub val proof: StaticConformanceProof
+}
+pub impl ExistentialBoxEvidence { factory }
+
 pub struct EnumPayloadConversion {
     pub val sourceRef: U64
     pub val targetRef: U64

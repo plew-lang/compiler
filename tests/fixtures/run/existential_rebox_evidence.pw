@@ -1,0 +1,54 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { ExistentialBoxEvidence, ValueConversionProof, StaticConformanceProof }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "fn probe[T](value: T, target: any P, values: Array[T], targets: Array[any P], wrapped: Wrap[T], erased: Wrap[any P], nested: Array[Wrap[T]], nestedErased: Array[Wrap[any P]], other: any Q) where T: P {{}}\ntrait P {{}}\ntrait Q {{}}\nenum Wrap[T] {{ Some(value: T) None }}\n"
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="rebox.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val sourceType = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val targetType = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val assumptions = compiler.functionBoundAssumptions(fnIdx: 0U64)
+    val selected = compiler.callArgumentConversion(sourceRef: sourceType, targetRef: targetType, assumptions: assumptions).unwrap()
+    match selected {
+        ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val traitIndex, proof: val proof) => {
+            val evidence = <ExistentialBoxEvidence sourceRef=sourceRef targetRef=targetRef traitIdx=traitIndex proof=proof />
+            mut val index = 0U64
+            while index < 8U64 {
+                val source = compiler.funcParamAt(params: function.params, index: index).ty
+                val target = compiler.funcParamAt(params: function.params, index: index + 1U64).ty
+                // No ambient assumptions or executable descriptor can supply
+                // this proof. The selected receiver evidence must carry it.
+                match compiler.callArgumentConversion(sourceRef: source, targetRef: target).unwrap() {
+                    ValueConversionProof.Missing => {}
+                    _ => { panic "invented a conversion without selected evidence" }
+                }
+                val expected = compiler.callArgumentConversion(sourceRef: source, targetRef: target, assumptions: assumptions).unwrap()
+                match expected {
+                    ValueConversionProof.Missing => { panic "declaration conversion was not established" }
+                    _ => {}
+                }
+                val reused = compiler.callArgumentConversion(sourceRef: source, targetRef: target, knownBox: <Optional.Some v=evidence />).unwrap()
+                assert(compiler.sameValueConversionProof(a: expected, b: reused))
+                index += 2U64
+            }
+            val other = compiler.funcParamAt(params: function.params, index: 8U64).ty
+            match compiler.callArgumentConversion(sourceRef: sourceType, targetRef: other, knownBox: <Optional.Some v=evidence />).unwrap() {
+                ValueConversionProof.Missing => {}
+                _ => { panic "receiver evidence was reused for another target" }
+            }
+            val missing = <ExistentialBoxEvidence sourceRef=sourceRef targetRef=targetRef traitIdx=traitIndex proof=<StaticConformanceProof.Missing /> />
+            match compiler.callArgumentConversion(sourceRef: sourceType, targetRef: targetType, knownBox: <Optional.Some v=missing />).unwrap() {
+                ValueConversionProof.Missing => {}
+                _ => { panic "missing receiver proof became a valid conversion" }
+            }
+        }
+        _ => { panic "no selected receiver evidence" }
+    }
+    assert(compiler.arena.finalExistentials.count() == 0U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
+    print("ok")
+}
