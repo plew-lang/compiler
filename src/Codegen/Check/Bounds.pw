@@ -329,7 +329,7 @@ pub impl Comp {
             val parameterIndex: U64 = self.paramIndexForArg(params: requirement.params, args: args, argIdx: argument)
             if parameterIndex >= requirement.params.count() { return <Result.Ok value=1U64 />}
             val original: Param = self.funcParamAt(params: requirement.params, index: parameterIndex)
-            mut val ref: U64 = self.staticRequirementParamType(resolution: resolution, args: args, argIdx: argument)
+            mut val ref: U64 = try self.staticRequirementParamType(resolution: resolution, args: args, argIdx: argument)
             if ref == 0U64 { ref = original.ty }
             if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=1U64 />}
             val term: TypeRef = self.arena.typeAt(index: ref)
@@ -777,61 +777,37 @@ pub impl Comp {
         return <Result.Ok value=self.missingTraitBound() />
     }
 
-    inout fn staticRequirementParamType(resolution: StaticMemberResolution, args: ArgRange, argIdx: U64) -> U64 {
+    inout fn staticRequirementParamType(resolution: StaticMemberResolution, args: ArgRange, argIdx: U64) -> Result[U64, CompileDiagnostic] {
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
-                if traitIdx >= self.decls.traitCount() { return 0U64 }
+                if traitIdx >= self.decls.traitCount() { return <Result.Ok value=0U64 /> }
                 val trait = self.decls.traitAt(index: traitIdx)
-                if reqIdx >= trait.reqs.count() { return 0U64 }
+                if reqIdx >= trait.reqs.count() { return <Result.Ok value=0U64 /> }
                 val requirement = self.traitReqAt(reqs: trait.reqs, index: reqIdx)
                 val parameter = self.paramIndexForArg(params: requirement.params, args: args, argIdx: argIdx)
                 return self.staticRequirementParamTypeAt(resolution: resolution, paramIdx: parameter)
             }
-            _ => { return 0U64 }
+            _ => { return <Result.Ok value=0U64 /> }
         }
     }
 
-    // Authored calls map labels to parameter indices; operator syntax already
-    // fixes that mapping. Both consume this same bound-substituted signature.
-    inout fn staticRequirementParamTypeAt(resolution: StaticMemberResolution, paramIdx: U64) -> U64 {
+    // Authored calls and operators consume the same proof-substituted
+    // signature. Proof variants are interpreted only by staticProofBound.
+    inout fn staticRequirementParamTypeAt(resolution: StaticMemberResolution, paramIdx: U64) -> Result[U64, CompileDiagnostic] {
         match resolution {
             StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
-                match proof {
-                    StaticConformanceProof.AssumedBound(source: val boundRef) => {
-                        if !self.declarationBoundIsValid(source: boundRef) || traitIdx >= self.decls.traitCount() { return 0U64 }
-                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
-                        if reqIdx >= traitDef.reqs.count() { return 0U64 }
-                        val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
-                        if paramIdx >= req.params.count() { return 0U64 }
-                        val bound: TraitBound = self.declarationBound(source: boundRef)
-                        val param: Param = self.funcParamAt(params: req.params, index: paramIdx)
-                        return self.traitBoundTypeTerm(ref: param.ty, bound: bound, traitIndex: traitIdx)
-                    }
-                    StaticConformanceProof.AssumedSupertraitPath(source: val boundRef, steps: val steps) => {
-                        if !self.declarationBoundIsValid(source: boundRef) || traitIdx >= self.decls.traitCount() { return 0U64 }
-                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
-                        if reqIdx >= traitDef.reqs.count() { return 0U64 }
-                        val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
-                        if paramIdx >= req.params.count() { return 0U64 }
-                        val bound = self.assumedSupertraitBound(source: boundRef, steps: steps)
-                        if bound.subject == 0U64 || bound.constraint.key.owner != traitDef.nameStart { return 0U64 }
-                        val term = self.reifyBoundAssociatedTerms(ref: self.funcParamAt(params: req.params, index: paramIdx).ty, traitDef: traitDef, receiverRef: bound.subject, traitOwner: traitDef.nameStart, traitArgs: bound.constraint.key.positionalArgs, predicates: bound.constraint.assocPredicates)
-                        return self.staticRequirementType(ref: term, traitDef: traitDef, receiverRef: bound.subject, traitArgs: bound.constraint.key.positionalArgs)
-                    }
-                    StaticConformanceProof.TraitSelf(traitIdx: val proofTraitIdx, receiverRef: val proofReceiver, traitArgs: val traitArgs) => {
-                        if traitIdx >= self.decls.traitCount() || proofTraitIdx != traitIdx || reqIdx >= self.decls.traitAt(index: traitIdx).reqs.count() { return 0U64 }
-                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
-                        val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
-                        if paramIdx >= req.params.count() { return 0U64 }
-                        val param: Param = self.funcParamAt(params: req.params, index: paramIdx)
-                        return self.staticRequirementType(ref: param.ty, traitDef: traitDef, receiverRef: proofReceiver, traitArgs: traitArgs)
-                    }
-                    _ => { return 0U64 }
-                }
+                if traitIdx >= self.decls.traitCount() { return <Result.Ok value=0U64 /> }
+                val traitDef = self.decls.traitAt(index: traitIdx)
+                if reqIdx >= traitDef.reqs.count() { return <Result.Ok value=0U64 /> }
+                val requirement = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
+                if paramIdx >= requirement.params.count() { return <Result.Ok value=0U64 /> }
+                val bound = try self.staticProofBound(proof: proof, traitIdx: traitIdx)
+                if bound.subject == 0U64 { return <Result.Ok value=0U64 /> }
+                return <Result.Ok value=self.traitBoundTypeTerm(ref: self.funcParamAt(params: requirement.params, index: paramIdx).ty, bound: bound, traitIndex: traitIdx) />
             }
             _ => {}
         }
-        return 0U64
+        return <Result.Ok value=0U64 />
     }
 
     // Reify every occurrence of the selected trait's associated-output binder
@@ -924,69 +900,12 @@ pub impl Comp {
     inout fn staticRequirementResultType(resolution: StaticMemberResolution) -> Result[U64, CompileDiagnostic] {
         match resolution {
             StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
-                match proof {
-                    // A concrete requirement call is no less proof-directed
-                    // than a declaration-time bound.  Its witness fixes both
-                    // the receiver pattern and the positional trait instance
-                    // arguments (`Array[I64] : Index[U64]`, for example).
-                    // Rebuild the requirement result from those facts here;
-                    // dropping them made `Index.Output` appear as the bare
-                    // `Index[]` projection and forced later phases to guess.
-                    StaticConformanceProof.ConcreteWitness(witness: val witness) => {
-                        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() || traitIdx >= self.decls.traitCount() { return <Result.Ok value=0U64 />}
-                        val conform: Conform = self.decls.conformAt(index: witness.conformIdx - 1U64)
-                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
-                        if reqIdx >= traitDef.reqs.count() { return <Result.Ok value=0U64 />}
-                        val receiver: U64 = (try self.groundWitnessTypeTerm(ref: conform.subjectTy, params: <PatternBindInput.Conformance range=conform.typeParams />, matchResult: witness))
-                        if receiver == 0U64 { return <Result.Ok value=0U64 />}
-                        return <Result.Ok value=self.staticRequirementResultTypeForProof(traitDef: traitDef, req: self.traitReqAt(reqs: traitDef.reqs, index: reqIdx), receiverRef: receiver, traitArgs: (try self.groundedWitnessTraitArgs(cf: conform, witness: witness)), predicates: []) />
-                    }
-                    // A trait-to-trait path owns its associated outputs at the
-                    // terminal edge.  The terminal witness supplies the same
-                    // complete instance facts as a direct conformance; using
-                    // the path's first edge would incorrectly retain source
-                    // trait arguments after a rewriting conformance.
-                    StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: val terminalConformIdx) => {
-                        if terminalConformIdx == 0U64 || terminalConformIdx > self.decls.conformCount() || traitIdx >= self.decls.traitCount() { return <Result.Ok value=0U64 />}
-                        mut val terminal: WitnessMatch = <WitnessMatch />
-                        mut val edgeIdx: U64 = 0U64
-                        while edgeIdx < edges.count() {
-                            if edges[edgeIdx].conformIdx == terminalConformIdx { terminal = edges[edgeIdx] }
-                            edgeIdx += 1U64
-                        }
-                        if terminal.conformIdx == 0U64 { return <Result.Ok value=0U64 />}
-                        val conform: Conform = self.decls.conformAt(index: terminalConformIdx - 1U64)
-                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
-                        if reqIdx >= traitDef.reqs.count() { return <Result.Ok value=0U64 />}
-                        val receiver: U64 = (try self.groundWitnessTypeTerm(ref: conform.subjectTy, params: <PatternBindInput.Conformance range=conform.typeParams />, matchResult: terminal))
-                        if receiver == 0U64 { return <Result.Ok value=0U64 />}
-                        return <Result.Ok value=self.staticRequirementResultTypeForProof(traitDef: traitDef, req: self.traitReqAt(reqs: traitDef.reqs, index: reqIdx), receiverRef: receiver, traitArgs: (try self.groundedWitnessTraitArgs(cf: conform, witness: terminal)), predicates: []) />
-                    }
-                    StaticConformanceProof.AssumedBound(source: val boundRef) => {
-                        if !self.declarationBoundIsValid(source: boundRef) || traitIdx >= self.decls.traitCount() { return <Result.Ok value=0U64 />}
-                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
-                        if reqIdx >= traitDef.reqs.count() { return <Result.Ok value=0U64 />}
-                        val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
-                        val bound: TraitBound = self.declarationBound(source: boundRef)
-                        return <Result.Ok value=self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: bound.subject, traitArgs: bound.constraint.key.positionalArgs, predicates: bound.constraint.assocPredicates) />
-                    }
-                    StaticConformanceProof.AssumedSupertraitPath(source: val boundRef, steps: val steps) => {
-                        if !self.declarationBoundIsValid(source: boundRef) || traitIdx >= self.decls.traitCount() { return <Result.Ok value=0U64 />}
-                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
-                        if reqIdx >= traitDef.reqs.count() { return <Result.Ok value=0U64 />}
-                        val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
-                        val bound = self.assumedSupertraitBound(source: boundRef, steps: steps)
-                        if bound.subject == 0U64 || bound.constraint.key.owner != traitDef.nameStart { return <Result.Ok value=0U64 /> }
-                        return <Result.Ok value=self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: bound.subject, traitArgs: bound.constraint.key.positionalArgs, predicates: bound.constraint.assocPredicates) />
-                    }
-                    StaticConformanceProof.TraitSelf(traitIdx: val proofTraitIdx, receiverRef: val proofReceiver, traitArgs: val traitArgs) => {
-                        if traitIdx >= self.decls.traitCount() || proofTraitIdx != traitIdx || reqIdx >= self.decls.traitAt(index: traitIdx).reqs.count() { return <Result.Ok value=0U64 />}
-                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
-                        val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
-                        return <Result.Ok value=self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: proofReceiver, traitArgs: traitArgs, predicates: []) />
-                    }
-                    _ => { return <Result.Ok value=0U64 />}
-                }
+                if traitIdx >= self.decls.traitCount() { return <Result.Ok value=0U64 /> }
+                val traitDef = self.decls.traitAt(index: traitIdx)
+                if reqIdx >= traitDef.reqs.count() { return <Result.Ok value=0U64 /> }
+                val bound = try self.staticProofBound(proof: proof, traitIdx: traitIdx)
+                if bound.subject == 0U64 { return <Result.Ok value=0U64 /> }
+                return <Result.Ok value=self.staticRequirementResultTypeForProof(traitDef: traitDef, req: self.traitReqAt(reqs: traitDef.reqs, index: reqIdx), receiverRef: bound.subject, traitArgs: bound.constraint.key.positionalArgs, predicates: bound.constraint.assocPredicates) />
             }
             _ => {}
         }

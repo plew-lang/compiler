@@ -1,0 +1,21 @@
+use @Std/Io only { print }
+trait Source[Element] { fn seed() -> Element }
+trait Target[Element] {
+    fn value() -> Element
+    fn echo(value: Element) -> Element
+}
+extension Adapt {
+    pub impl[Element] Source[Element] as Target[Element] {
+        fn value() -> Element { return self.seed() }
+        fn echo(value: Element) -> Element { return value }
+    }
+}
+struct Sample {}
+pub impl Sample { factory }
+pub impl Sample as Source[I64] { fn seed() -> I64 { return 8I64 } }
+fn value[T](item: T) -> I64 where T: Source[I64] { return item#Adapt.value() }
+fn echo[T](item: T) -> I64 where T: Source[I64] { return item#Adapt.echo(value: 42) }
+fn main() {
+    print(value(item: <Sample />))
+    print(echo(item: <Sample />))
+}

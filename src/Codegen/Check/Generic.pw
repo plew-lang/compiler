@@ -529,7 +529,7 @@ pub impl Comp {
                                 staticBoundMember = true
                                 mut val bk: U64 = 0U64
                                 while bk < args.len {
-                                    val expected: U64 = self.staticRequirementParamType(resolution: staticResolution, args: args, argIdx: bk)
+                                    val expected: U64 = try self.staticRequirementParamType(resolution: staticResolution, args: args, argIdx: bk)
                                     if expected != 0U64 {
                                         try self.checkGenericTypeMatch(expectedRef: expected, valueExpr: self.argAt(args: args, index: bk).expr)
                                     }

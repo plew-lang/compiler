@@ -209,7 +209,7 @@ pub impl Comp {
         val resolution = try self.staticOperatorTemplateResolution(op: op, receiverTerm: l, isUnary: false)
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
-                val parameter = self.staticRequirementParamTypeAt(resolution: resolution, paramIdx: 1U64)
+                val parameter = try self.staticRequirementParamTypeAt(resolution: resolution, paramIdx: 1U64)
                 if parameter == 0U64 {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: rhs), msg: "operator requirement has no resolved right operand type") />
                 }

@@ -25,6 +25,7 @@ pub impl Comp {
                     StaticConformanceProof.AssumedBound(source: _) => { symbolic = true }
                     StaticConformanceProof.AssumedSupertraitPath(source: _, steps: _) => { symbolic = true }
                     StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => { symbolic = true }
+                    StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: _) => { symbolic = true }
                     _ => {}
                 }
                 if !symbolic { return <Result.Ok value=false /> }
@@ -35,14 +36,9 @@ pub impl Comp {
                 val methodParameters = self.copyFuncBinds(binds: requirement.typeParams)
                 val methodArguments = (try self.inferFnArgs(f: requirement, args: args))
                 if requirement.signatureBounds.len != 0U64 {
-                    mut val traitBound = <TraitBound subject=receiverRef constraint=<TraitConstraint key=<TraitInstanceKey owner=self.decls.traitAt(index: traitIdx).nameStart positionalArgs=[] /> positionalArgsOpen=false assocPredicates=[] /> offset=nameStart />
-                    match proof {
-                        StaticConformanceProof.AssumedBound(val source) => { traitBound = self.declarationBound(source: source) }
-                        StaticConformanceProof.AssumedSupertraitPath(val source, val steps) => { traitBound = self.assumedSupertraitBound(source: source, steps: steps) }
-                        StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: val proofReceiver, val traitArgs) => {
-                            traitBound = <TraitBound subject=proofReceiver constraint=<TraitConstraint key=<TraitInstanceKey owner=self.decls.traitAt(index: traitIdx).nameStart positionalArgs=traitArgs /> positionalArgsOpen=false assocPredicates=[] /> offset=nameStart />
-                        }
-                        _ => {}
+                    val traitBound = try self.staticProofBound(proof: proof, traitIdx: traitIdx)
+                    if traitBound.subject == 0U64 {
+                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "internal error: selected requirement has no trait instance") />
                     }
                     mut val boundIndex = 0U64
                     while boundIndex < requirement.signatureBounds.len {
@@ -62,7 +58,7 @@ pub impl Comp {
                         val parameter = self.funcParamAt(params: requirement.params, index: parameterIndex)
                         val argument = self.argAt(args: args, index: index)
                         try self.checkArgInoutMode(p: parameter, arg: argument)
-                        val traitExpected = self.staticRequirementParamType(resolution: resolution, args: args, argIdx: index)
+                        val traitExpected = try self.staticRequirementParamType(resolution: resolution, args: args, argIdx: index)
                         val expected = self.groundTermInEnvironment(ref: traitExpected, params: methodParameters, values: methodArguments, selfRef: receiverRef)
                         if expected != 0U64 {
                             val type = self.typeInfoOfRef(ref: expected)

@@ -1149,7 +1149,7 @@ pub impl Comp {
         while argumentIndex < args.len {
             val argument = self.argAt(args: args, index: argumentIndex).expr
             if self.expressionNeedsTypeContext(exprId: argument) {
-                val expected = self.staticRequirementParamType(resolution: resolution, args: args, argIdx: argumentIndex)
+                val expected = try self.staticRequirementParamType(resolution: resolution, args: args, argIdx: argumentIndex)
                 if expected != 0U64 { try self.recordExpr(exprId: argument, expectedTerm: expected) }
             }
             argumentIndex += 1U64
@@ -1350,7 +1350,7 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < operandExprs.count() {
             val operand = operandExprs[i]
-            val expected = self.staticRequirementParamTypeAt(resolution: resolution, paramIdx: i)
+            val expected = try self.staticRequirementParamTypeAt(resolution: resolution, paramIdx: i)
             if expected != 0U64 {
                 if self.expressionNeedsTypeContext(exprId: operand) { try self.recordExpr(exprId: operand, expectedTerm: expected) }
                 try self.recordSemanticExprExpectedResult(exprId: operand, expectedTerm: expected)

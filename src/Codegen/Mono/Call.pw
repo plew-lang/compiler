@@ -922,7 +922,7 @@ pub impl Comp {
         return self.traitPatternProof(baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, sourceOwners: sourceOwners, requireUniqueWitness: true)
     }
 
-    inout fn concreteStaticMemberProof(proof: StaticConformanceProof, traitIdx: U64, receiverRef: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
+    inout fn concreteStaticMemberProof(proof: StaticConformanceProof, receiverRef: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
         match proof {
             StaticConformanceProof.ConcreteWitness(witness: val witness) => {
                 return <Result.Ok value=<StaticConformanceProof.ConcreteWitness witness=(try self.groundSelectedWitness(witness: witness, receiverRef: receiverRef)) /> />
@@ -945,7 +945,16 @@ pub impl Comp {
                 return <Result.Ok value=<StaticConformanceProof.TraitPath edges=grounded terminalConformIdx=grounded[grounded.count() - 1U64].conformIdx /> />
             }
             StaticConformanceProof.Missing => { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
-            _ => { return self.concreteBoundProof(bound: (try self.staticProofBound(proof: proof, traitIdx: traitIdx)), receiverRef: receiverRef) }
+            StaticConformanceProof.AssumedBound(source: val source) => {
+                if !self.declarationBoundIsValid(source: source) { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+                return self.concreteBoundProof(bound: self.declarationBound(source: source), receiverRef: receiverRef)
+            }
+            StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => {
+                return self.concreteBoundProof(bound: self.assumedSupertraitBound(source: source, steps: steps), receiverRef: receiverRef)
+            }
+            StaticConformanceProof.TraitSelf(traitIdx: val owner, receiverRef: _, traitArgs: _) => {
+                return self.concreteBoundProof(bound: (try self.staticProofBound(proof: proof, traitIdx: owner)), receiverRef: receiverRef)
+            }
         }
     }
 
@@ -1105,7 +1114,14 @@ pub impl Comp {
     inout fn enqueueFinalBody(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[U64, CompileDiagnostic] {
         if fnIdx >= self.arena.functionCount() { return <Result.Ok value=0U64 />}
         val f: Func = self.arena.functionAt(index: fnIdx)
-        if f.isExtern || f.body == 0U64 { return <Result.Ok value=0U64 />}
+        if f.isExtern || f.body == 0U64 {
+            if self.traceCodegen && !f.isExtern {
+                eprint(text: "[trace-codegen] no executable body fn=")
+                eprintU64(n: fnIdx)
+                eprint(text: "\n")
+            }
+            return <Result.Ok value=0U64 />
+        }
         // A concrete `where` clause is a property of the grounded body
         // instance, not of the old source-walk discovery queue. In particular,
         // a result-position call such as `val x: Token[Bad] = marker()` learns
@@ -1119,7 +1135,16 @@ pub impl Comp {
         // conformance that selected it.  Never materialize one with Missing
         // evidence; abstract checking records its template, while a concrete
         // call re-enters here with a reified proof.
-        if (declaration.isProvided || self.methodRecvIsTrait(f: declaration)) && self.proofIsMissing(proof: environment.proof) { return <Result.Ok value=0U64 />}
+        if (declaration.isProvided || self.methodRecvIsTrait(f: declaration)) && self.proofIsMissing(proof: environment.proof) {
+            if self.traceCodegen {
+                eprint(text: "[trace-codegen] missing executable proof fn=")
+                eprintU64(n: fnIdx)
+                eprint(text: " receiver=")
+                self.traceMonoTypeHead(ref: recvInstRef)
+                eprint(text: "\n")
+            }
+            return <Result.Ok value=0U64 />
+        }
         mut val adapterTarget: U64 = 0U64
         val underlying: U64 = self.arena.newtypeUnderlying(ref: environment.receiverRef)
         if underlying != 0U64 {
@@ -3846,26 +3871,12 @@ pub impl Comp {
                 concreteProof = (try self.providedBodyProof(f: f, receiverRef: receiverRef))
             }
         }
-        if !(self.proofIsMissing(proof: proof)) && callee < self.arena.functionCount() {
-            val f: Func = self.arena.functionAt(index: callee)
-            mut val traitOwner = f.originTraitOwner
-            mut val traitId = f.originTraitId
-            if traitOwner == 0U64 && f.lexicalOwnerFnId != 0U64 {
-                val declaration = (try self.lexicalFunction(f: f))
-                if self.methodRecvIsTrait(f: declaration) {
-                    traitOwner = declaration.provTraitOwner
-                    traitId = 0U64
-                }
-            }
-            if traitOwner != 0U64 {
-                mut val traitIdx: U64 = 0U64
-                while traitIdx < self.decls.traitCount() {
-                    if self.decls.traitAt(index: traitIdx).nameStart == traitOwner && (traitId == 0U64 || self.decls.traitAt(index: traitIdx).nameId == traitId) {
-                        concreteProof = (try self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef))
-                    }
-                    traitIdx += 1U64
-                }
-            }
+        // A generated default-value function inherits its lexical proof,
+        // which need not name the target trait of the method that uses it.
+        // Instantiate the recorded proof itself; callee metadata cannot
+        // reinterpret its owner or replace its selected conformance path.
+        if !(self.proofIsMissing(proof: proof)) {
+            concreteProof = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiverRef)
         }
         val resultRef: U64 = (try self.groundSemanticExprTypeRef(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=self.templateArgumentRangeFromValues(arguments: arguments) argumentSources=arguments calleeTypeArgs=calleeArgs proof=concreteProof resultHintRef=expected resultRef=resultRef /> />
@@ -4096,7 +4107,7 @@ pub impl Comp {
                 // Preserve the requirement selected in the declaration. A
                 // grounded proof chooses its witness before surface lookup can
                 // re-rank overloads using partially inferred argument types.
-                mut val concreteProof = (try self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef))
+                mut val concreteProof = (try self.concreteStaticMemberProof(proof: proof, receiverRef: receiverRef))
                 mut val callee: U64 = (try self.proofConcreteWitness(proof: concreteProof, receiverRef: receiverRef, traitIdx: traitIdx, reqIdx: reqIdx))
                 if callee >= self.arena.functionCount() {
                     match proof {
@@ -4123,7 +4134,7 @@ pub impl Comp {
                 if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || traitIdx >= self.decls.traitCount() || declaration >= self.arena.functionCount() {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: static provided-method template has invalid proof or receiver") />
                 }
-                val concreteProof = try self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef)
+                val concreteProof = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiverRef)
                 val callee = try self.providedCopyForDeclaration(declaration: declaration, receiverRef: receiverRef, proof: concreteProof, traitIdx: traitIdx, offset: self.exprOffset(id: exprId))
                 // Availability is proved through the receiver trait, while a
                 // provided body may itself witness another trait (B as A).
