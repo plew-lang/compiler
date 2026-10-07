@@ -1,0 +1,13 @@
+use @Std/Io only { print }
+trait Source { type Output }
+struct First {}
+struct Second {}
+impl First as Source { type Output=I64 }
+impl Second as Source { type Output=Bool }
+pub impl Source {
+    fn unrelated(value: Second#Source.Output) -> Second#Source.Output { return value }
+}
+fn main() {
+    val first = <First />
+    print(first.unrelated(value: true))
+}

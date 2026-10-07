@@ -273,7 +273,16 @@ pub impl Comp {
             if p.assocTraitId == 0U64 { return <Result.Ok value=projection />}
             mut val traitOwner: U64 = p.assocTraitDeclOffset
             if traitOwner == 0U64 { traitOwner = p.assocTraitStart }
-            mut val output: U64 = (try self.associatedOutputInProof(proof: environment.proof, traitOwner: traitOwner, assocId: p.assocNameId))
+            // The current body may carry evidence for a different receiver
+            // or a different instance of this same trait. Only reuse it when
+            // it proves the projection's full subject and trait arguments.
+            mut val output: U64 = 0U64
+            if !self.proofIsMissing(proof: environment.proof) {
+                val selected = try self.staticProofBound(proof: environment.proof, traitIdx: self.decls.traitIndexByOffset(offset: traitOwner))
+                if selected.subject != 0U64 && self.typeRefEq(a: selected.subject, b: receiver) && self.sameResolvedTypeRefs(a: selected.constraint.key.positionalArgs, b: traitArgs) {
+                    output = try self.associatedOutputInProof(proof: environment.proof, traitOwner: traitOwner, assocId: p.assocNameId)
+                }
+            }
             if output == 0U64 {
                 val proof: StaticConformanceProof = (try self.traitPatternProof(baseRef: receiver, traitId: p.assocTraitId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions))
                 output = (try self.associatedOutputInProof(proof: proof, traitOwner: traitOwner, assocId: p.assocNameId))
