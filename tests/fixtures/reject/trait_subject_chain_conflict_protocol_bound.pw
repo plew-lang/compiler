@@ -1,0 +1,28 @@
+use @Std/Core only { Iterator }
+// Implicit iterator calls retain the same body obligations as written calls.
+trait C { fn cv() -> I64 }
+trait D { fn dv() -> I64 }
+trait B { fn b() -> I64 }
+trait A { fn a() -> I64 }
+
+struct S { pub val value: I64 }
+pub impl S { factory }
+pub impl S as C { fn cv() -> I64 { return self.value } }
+pub impl S as D { fn dv() -> I64 { return self.value * 100I64 } }
+pub impl C as B { fn b() -> I64 { return self.cv() + 1I64 } }
+pub impl D as B { fn b() -> I64 { return self.dv() + 2I64 } }
+pub impl B as A { fn a() -> I64 { return self.b() + 10I64 } }
+
+struct Wrapped[T] { pub val value: T }
+pub impl[T] Wrapped[T] { factory }
+pub impl[T] Wrapped[T] as Iterator where T: A {
+    type Item = I64
+    inout fn next() -> Optional[I64] { return <Optional.Some v=self.value.a() /> }
+}
+fn consume[T](value: T) where T: Iterator[Item=I64] {
+    for val item in value {}
+}
+fn main() {
+    val value = <S value=5I64 />
+    consume(value: <Wrapped value=value#C />)
+}
