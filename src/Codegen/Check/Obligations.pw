@@ -31,24 +31,53 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Validate abstract member shapes without asking for executable bodies.
+    // Reboxing Self is a reference to the selected input evidence, not a new
+    // dependency request; recursively expanding it would revisit this box.
+    inout fn checkAbstractExistentialPlans(evidence: ExistentialBoxEvidence) -> Result[(), CompileDiagnostic] {
+        if evidence.traitIdx >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential conversion has no selected trait") /> }
+        val trait = self.decls.traitAt(index: evidence.traitIdx)
+        mut val index = 0U64
+        while index < trait.reqs.count() {
+            try self.existentialWitnessPlan(evidence: evidence, requirement: index, sourceReceiver: evidence.sourceRef)
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn checkConversionObligations(conversion: ValueConversionProof, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[DeclarationObligationState, CompileDiagnostic] {
         mut val completion = <DeclarationObligationState.Complete />
         match conversion {
-            ValueConversionProof.ExistentialBox(sourceRef: val source, targetRef: _, traitIdx: val traitIndex, proof: val proof) => {
+            ValueConversionProof.ExistentialBox(sourceRef: val source, targetRef: val target, traitIdx: val traitIndex, proof: val proof) => {
                 if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no conformance evidence") /> }
                 val receiver = try self.groundTermForBody(ref: source, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
-                if !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
+                val targetType = try self.groundTermForBody(ref: target, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                if !self.arena.typeIsClosed(ref: receiver) {
+                    try self.checkAbstractExistentialPlans(evidence: <ExistentialBoxEvidence sourceRef=receiver targetRef=targetType traitIdx=traitIndex proof=proof />)
+                    return <Result.Ok value=<DeclarationObligationState.Deferred /> />
+                }
                 val instantiated = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                 match instantiated {
                     StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no concrete conformance evidence") /> }
-                    StaticProofInstantiation.Deferred => { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
+                    StaticProofInstantiation.Deferred => {
+                        try self.checkAbstractExistentialPlans(evidence: <ExistentialBoxEvidence sourceRef=receiver targetRef=targetType traitIdx=traitIndex proof=proof />)
+                        return <Result.Ok value=<DeclarationObligationState.Deferred /> />
+                    }
                     StaticProofInstantiation.Ready(proof: val evidence) => {
                         val trait = self.decls.traitAt(index: traitIndex)
                         mut val index = 0U64
                         while index < trait.reqs.count() {
                             match (try self.existentialImplementation(receiver: receiver, traitIndex: traitIndex, requirement: index, proof: evidence)) {
                                 Optional.Some(v: val selected) => {
-                                    if (try self.appendCallConstraintInstance(function: selected.function, arguments: selected.arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() { completion = <DeclarationObligationState.Deferred /> }
+                                    val box = <ExistentialBoxEvidence sourceRef=receiver targetRef=targetType traitIdx=traitIndex proof=evidence />
+                                    val sourceReceiver = self.canonicalBodyReceiverRef(fnIdx: selected.function, recvInstRef: receiver)
+                                    match (try self.existentialWitnessPlan(evidence: box, requirement: index, sourceReceiver: sourceReceiver)) {
+                                        Optional.Some(v: val plan) => {
+                                            try self.checkExistentialWitnessSignature(plan: plan, implementation: selected, evidence: box)
+                                            if (try self.appendCallConstraintInstance(function: selected.function, arguments: selected.arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() { completion = <DeclarationObligationState.Deferred /> }
+                                        }
+                                        Optional.None => {}
+                                    }
                                 }
                                 Optional.None => {}
                             }

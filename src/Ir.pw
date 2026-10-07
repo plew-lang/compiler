@@ -2049,6 +2049,22 @@ pub impl ExistentialImplementation { factory }
 // backend return-place local.
 // The frontend selects the erased member ABI and the shape of its result
 // boundary. A zero bodyId is a non-dispatchable requirement, not a lookup miss.
+// Semantic existential signatures are available before executable bodies.
+pub struct ExistentialRequirementSignature {
+    pub val receiverPassing: CallReceiverPassing
+    pub val parameterTypes: Array[U64]
+    pub val argumentPassings: Array[CallArgumentPassing]
+    pub val resultType: U64
+}
+pub impl ExistentialRequirementSignature { factory }
+
+pub struct ExistentialWitnessPlan {
+    pub val signature: ExistentialRequirementSignature
+    pub val sourceResultType: U64
+    pub val resultConversion: ValueConversionProof
+}
+pub impl ExistentialWitnessPlan { factory }
+
 pub struct FinalExistentialMember {
     pub val bodyId: U64 = 0U64
     pub val adapterBodyId: U64 = 0U64

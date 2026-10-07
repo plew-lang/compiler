@@ -2,14 +2,29 @@
 
 pub impl Comp {
 
+inout fn existentialRequirementIsDispatchable(req: Func) -> Bool {
+    return !req.isAssoc && !self.reqUsesSelfInInput(req: req) && self.reqRetSelfErasable(req: req)
+}
+
 // Availability is a property of the selected source signature. It does not
 // depend on instantiating an executable body or choosing a concrete witness.
-inout fn checkExistentialRequirementCall(req: Func, offset: U64) -> Result[(), CompileDiagnostic] {
+inout fn checkExistentialRequirementCall(req: Func, target: U64, traitIndex: U64, requirement: U64, offset: U64) -> Result[(), CompileDiagnostic] {
     if self.reqUsesSelfInInput(req: req) {
         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)") />
     }
     if !self.reqRetSelfErasable(req: req) {
         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "this member is not callable through `any P`: `Self` appears in the result nested in a container that cannot be covariantly erased (spec/08)") />
+    }
+    // Test result erasure with the trait's rigid Self, not the erased target
+    // itself: using the target on both sides would hide unsupported payloads.
+    val trait = self.decls.traitAt(index: traitIndex)
+    val name = self.internBytes(s: "Self")
+    val source = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=trait.selfParamId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+    val proof = <StaticConformanceProof.TraitSelf traitIdx=traitIndex receiverRef=source traitArgs=self.existentialTraitConstraint(ref: target).key.positionalArgs />
+    val evidence = <ExistentialBoxEvidence sourceRef=source targetRef=target traitIdx=traitIndex proof=proof />
+    match (try self.existentialWitnessPlan(evidence: evidence, requirement: requirement, sourceReceiver: source)) {
+        Optional.Some(v: _) => {}
+        Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "this member's existential result conversion is not supported") /> }
     }
     return <Result.Ok value=() />
 }

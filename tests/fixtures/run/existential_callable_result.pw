@@ -2,7 +2,7 @@ use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
 use /SourceAccess only { SourceAccess }
-use /Ir only { ValueConversionProof, Expr, CallTemplateKind }
+use /Ir only { ValueConversionProof, Expr, CallTemplateKind, ExistentialBoxEvidence, ExistentialWitnessPlan, ExistentialRequirementSignature, CallReceiverPassing }
 
 // Frontend signature preparation must preserve the callable's implicit
 // Promise result, independently of backend async-method support.
@@ -19,6 +19,23 @@ fn main() {
     assert(expected != 0U64)
     assert(compiler.typeRefEq(a: compiler.anyMemberRetInfo(anyRef: targetType, req: requirement).unwrap().ref, b: expected))
     val conversion = compiler.callArgumentConversion(sourceRef: sourceType, targetRef: targetType).unwrap()
+    match conversion {
+        ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val owner, proof: val proof) => {
+            val evidence = <ExistentialBoxEvidence sourceRef=sourceRef targetRef=targetRef traitIdx=owner proof=proof />
+            val implementation = compiler.existentialImplementation(receiver: sourceRef, traitIndex: owner, requirement: 0U64, proof: proof).unwrap().unwrap()
+            val plan = compiler.existentialWitnessPlan(evidence: evidence, requirement: 0U64, sourceReceiver: compiler.canonicalBodyReceiverRef(fnIdx: implementation.function, recvInstRef: sourceRef)).unwrap().unwrap()
+            compiler.checkExistentialWitnessSignature(plan: plan, implementation: implementation, evidence: evidence).unwrap()
+            val wrongSignature = <ExistentialRequirementSignature receiverPassing=<CallReceiverPassing.None /> parameterTypes=plan.signature.parameterTypes argumentPassings=plan.signature.argumentPassings resultType=plan.signature.resultType />
+            val wrongPlan = <ExistentialWitnessPlan signature=wrongSignature sourceResultType=plan.sourceResultType resultConversion=plan.resultConversion />
+            match compiler.checkExistentialWitnessSignature(plan: wrongPlan, implementation: implementation, evidence: evidence) {
+                Result.Err(error: val diagnostic) => { assert(diagnostic.message == "existential witness signature does not match its selected requirement") }
+                Result.Ok(value: _) => { panic "accepted mismatched witness receiver ownership" }
+            }
+            assert(compiler.monoWork.bodyCount() == 0U64)
+            assert(compiler.arena.finalExistentials.count() == 0U64)
+        }
+        _ => { panic "missing selected existential evidence" }
+    }
     compiler.finalizeConversionDependencies(conversion: conversion).unwrap()
     val resolution = compiler.arena.finalExistentials[compiler.finalExistentialIndex(sourceRef: sourceType, targetRef: targetType)]
     val member = resolution.members[0U64]

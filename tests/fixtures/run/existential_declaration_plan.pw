@@ -1,0 +1,62 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { ExistentialBoxEvidence, ValueConversionProof, CallArgumentPassing, CallReceiverPassing, InstanceEnvironment, CallConstraintInstance }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "fn probe[T](value: T, target: any P[Item=I64]) where T: P[Item=I64] {{}}\ntrait P {{ type Item inout fn next(value: Item, output: inout I64) -> Wrap[Self] fn compare(other: Self) -> Bool fn boxed() -> (item: Self) assoc fn create() -> Self fn plain() -> Item }}\nenum Wrap[T] {{ Some(value: T) None }}\n"
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="plan.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val sourceType = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val targetType = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val conversion = compiler.callArgumentConversion(sourceRef: sourceType, targetRef: targetType, assumptions: compiler.functionBoundAssumptions(fnIdx: 0U64)).unwrap()
+    match conversion {
+        ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val traitIndex, proof: val proof) => {
+            val evidence = <ExistentialBoxEvidence sourceRef=sourceRef targetRef=targetRef traitIdx=traitIndex proof=proof />
+            val plan = compiler.existentialWitnessPlan(evidence: evidence, requirement: 0U64, sourceReceiver: sourceType).unwrap().unwrap()
+            assert(plan.signature.parameterTypes.count() == 2U64)
+            assert(compiler.typeRefEq(a: plan.signature.parameterTypes[0U64], b: plan.signature.parameterTypes[1U64]))
+            assert(compiler.arena.typeIsClosed(ref: plan.signature.parameterTypes[0U64]))
+            match plan.signature.receiverPassing { CallReceiverPassing.Inout => {} _ => { panic "lost inout receiver" } }
+            match plan.signature.argumentPassings[0U64] { CallArgumentPassing.Borrow => {} _ => { panic "changed value parameter passing" } }
+            match plan.signature.argumentPassings[1U64] { CallArgumentPassing.Inout => {} _ => { panic "lost inout parameter" } }
+            match plan.resultConversion {
+                ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, payloads: val payloads) => {
+                    assert(payloads.count() == 1U64)
+                    match payloads[0U64].conversion {
+                        ValueConversionProof.ExistentialBox(sourceRef: val actualSource, targetRef: val actualTarget, traitIdx: _, proof: val actualProof) => {
+                            assert(compiler.typeRefEq(a: actualSource, b: sourceType))
+                            assert(compiler.typeRefEq(a: actualTarget, b: targetType))
+                            assert(compiler.sameStaticConformanceProof(a: proof, b: actualProof))
+                        }
+                        _ => { panic "lost recursive Self result evidence" }
+                    }
+                }
+                _ => { panic "lost covariant enum result conversion" }
+            }
+            // Uncallable slots do not invalidate the existential type itself.
+            mut val index = 1U64
+            while index < 4U64 {
+                match compiler.existentialWitnessPlan(evidence: evidence, requirement: index, sourceReceiver: sourceType).unwrap() {
+                    Optional.None => {}
+                    Optional.Some(v: _) => { panic "published a non-dispatchable requirement" }
+                }
+                index += 1U64
+            }
+            val plain = compiler.existentialWitnessPlan(evidence: evidence, requirement: 4U64, sourceReceiver: sourceType).unwrap().unwrap()
+            assert(compiler.typeRefEq(a: plain.signature.resultType, b: plan.signature.parameterTypes[0U64]))
+            match plain.resultConversion { ValueConversionProof.Identity => {} _ => { panic "changed an associated result type" } }
+            compiler.checkAbstractExistentialPlans(evidence: evidence).unwrap()
+        }
+        _ => { panic "missing declaration evidence" }
+    }
+    mut val requests: Array[CallConstraintInstance] = []
+    mut val heads: Dictionary[U64, U64] = [:]
+    assert(compiler.checkConversionObligations(conversion: conversion, environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: []).unwrap().isDeferred())
+    assert(requests.count() == 0U64)
+    assert(compiler.arena.finalExistentials.count() == 0U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
+    print("ok")
+}

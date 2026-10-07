@@ -1,0 +1,19 @@
+use @Std/Io only { print }
+
+struct Hold[T] { val value: T }
+enum Wrapped[T] { Item(value: Hold[T]) }
+trait P {
+    fn wrapped() -> Wrapped[Self]
+    fn number() -> I64
+}
+struct Value {}
+impl Value as P {
+    fn wrapped() -> Wrapped[Self] { return <Wrapped[Self].Item value=<Hold[Self] value=self /> /> }
+    fn number() -> I64 { return 7I64 }
+}
+fn box[T](value: T) -> any P where T: P { return value }
+
+fn main() {
+    val value = box(value: <Value />)
+    print(value.number())
+}
