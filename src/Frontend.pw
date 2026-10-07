@@ -1,4 +1,4 @@
-use ./Ir only { DeclarationObligationState, CallConstraintInstance, DeclarationConversion, ExistentialImplementation }
+use ./Ir only { DeclarationTypeScope, DeclarationObligationState, CallConstraintInstance, DeclarationConversion, ExistentialImplementation }
 use ./Ir only { ProtocolSelection, OperatorSelection, InvocationCompletion, TypeCompatibility, ConditionClause, ConditionClauseRange }
 use @Plew/Syntax only { CondClause, syntaxConditionClause }
 use ./SourceCompletion only { SourceCompletion, CompletionEdges, CompletionTransfer, BlockResultContext, completionThen, completionChoice, completionTransfer, completionBlock, completionLoop }
@@ -1877,10 +1877,9 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
         defaultIndex += 1U64
     }
     tracePhase(c: inout c, label: "default-generators:done")
-    // TypeTerm recording deliberately precedes generic checking, but a
-    // CallTemplate is source-selection evidence and needs the verified
-    // callable cache/visibility decisions.  Produce templates in this second
-    // lexical walk only; the early walk never publishes a provisional callee.
+    // Preparation may retain unsealed selections so contextual substitutions
+    // survive generic checking. This publication walk completes their source
+    // evidence; selection closure and obligation checks remain separate gates.
     tracePhase(c: inout c, label: "call-template-record:start")
     c.traceExprInstScans = 0U64
     try c.recordParametricTypes(recordCallTemplates: true, includeBodies: !c.genMode)

@@ -35,6 +35,7 @@ pub impl Comp {
         mut val completion = <DeclarationObligationState.Complete />
         match conversion {
             ValueConversionProof.ExistentialBox(sourceRef: val source, targetRef: _, traitIdx: val traitIndex, proof: val proof) => {
+                if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no conformance evidence") /> }
                 val receiver = try self.groundTermForBody(ref: source, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                 if !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
                 val instantiated = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
@@ -83,10 +84,12 @@ pub impl Comp {
         val declaration = self.arena.functionAt(index: function)
         if declaration.isExtern || declaration.body == 0U64 { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
         if arguments.count() != declaration.typeParams.count() { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "declaration obligation has incomplete type arguments") /> }
+        mut val deferred = false
         for argument in arguments {
             if argument == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "declaration obligation has an unresolved type argument") /> }
-            if !self.arena.typeIsClosed(ref: argument) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
+            if !self.arena.typeIsClosed(ref: argument) { deferred = true }
         }
+        if deferred { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
         if (declaration.hasRecv || declaration.isAssoc) && (receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver)) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
         val environment = try self.bodyInstanceEnvironment(fnIdx: function, args: arguments, recvInstRef: receiver, selectedProof: proof)
         mut val previous = heads.getOr(key: owner, fallback: 0U64)
@@ -337,6 +340,149 @@ pub impl Comp {
         return <Result.Ok value=relevant />
     }
 
+    inout fn declarationTypeScope(owner: U64) -> Result[DeclarationTypeScope, CompileDiagnostic] {
+        val root = self.decls.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
+        val canonical = try self.semanticBodyOwner(fnIdx: root)
+        if canonical >= self.arena.functionCount() {
+            return <Result.Ok value=<DeclarationTypeScope owner=canonical parameters=<FuncBindRange start=0U64 len=0U64 /> /> />
+        }
+        val function = self.arena.functionAt(index: canonical)
+        val lexical = try self.lexicalFunction(f: function)
+        mut val selfParameter = 0U64
+        if lexical.recvTy != 0U64 && lexical.recvTy < self.arena.typeTerms.count() { selfParameter = self.arena.typeTerms[lexical.recvTy].paramId }
+        return <Result.Ok value=<DeclarationTypeScope owner=canonical parameters=function.typeParams selfParameter=selfParameter /> />
+    }
+
+    // Inspect canonical children, including projection receivers and record
+    // fields. A foreign binder is not a legitimate reason to defer a check.
+    inout fn declarationTypeDependency(ref: U64, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
+        if self.arena.typeIsClosed(ref: ref) { return <Result.Ok value=false /> }
+        if ref >= self.arena.typeTerms.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation has an invalid type term") /> }
+        val term = self.arena.typeTerms[ref]
+        mut val dependent = false
+        if term.paramId != 0U64 {
+            dependent = term.paramId == scope.selfParameter
+            mut val index = 0U64
+            while index < scope.parameters.count() {
+                if self.funcBindAt(binds: scope.parameters, index: index).paramId == term.paramId { dependent = true }
+                index += 1U64
+            }
+            if !dependent { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation refers to a type parameter outside its lexical scope") /> }
+        }
+        mut val index = 0U64
+        while index < self.typeTermRefChildCount(ref: ref) {
+            if (try self.declarationTypeDependency(ref: self.typeTermRefChildRef(ref: ref, index: index), scope: scope, offset: offset)) { dependent = true }
+            index += 1U64
+        }
+        if !dependent { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "unresolved declaration type has no lexical parameter dependency") /> }
+        return <Result.Ok value=true />
+    }
+
+    inout fn declarationBoundDependency(bound: TraitBound, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
+        if bound.subject == 0U64 || bound.constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no valid trait bound") /> }
+        mut val dependent = try self.declarationTypeDependency(ref: bound.subject, scope: scope, offset: offset)
+        for argument in bound.constraint.key.positionalArgs {
+            if (try self.declarationTypeDependency(ref: argument, scope: scope, offset: offset)) { dependent = true }
+        }
+        for predicate in bound.constraint.assocPredicates {
+            if (try self.declarationTypeDependency(ref: predicate.value, scope: scope, offset: offset)) { dependent = true }
+        }
+        return <Result.Ok value=dependent />
+    }
+
+    inout fn declarationWitnessDependency(witness: WitnessMatch, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
+        mut val dependent = try self.declarationTypeDependency(ref: witness.selfRef, scope: scope, offset: offset)
+        for binding in witness.binds {
+            if (try self.declarationTypeDependency(ref: binding.term, scope: scope, offset: offset)) { dependent = true }
+        }
+        return <Result.Ok value=dependent />
+    }
+
+    inout fn declarationProofDependency(proof: StaticConformanceProof, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
+        mut val dependent = false
+        match proof {
+            StaticConformanceProof.Missing => {}
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => { return self.declarationWitnessDependency(witness: witness, scope: scope, offset: offset) }
+            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
+                for edge in edges { if (try self.declarationWitnessDependency(witness: edge, scope: scope, offset: offset)) { dependent = true } }
+            }
+            StaticConformanceProof.AssumedBound(source: val source) => {
+                if !self.declarationBoundIsValid(source: source) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no valid trait bound") /> }
+                return self.declarationBoundDependency(bound: self.declarationBound(source: source), scope: scope, offset: offset)
+            }
+            StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => {
+                return self.declarationBoundDependency(bound: self.assumedSupertraitBound(source: source, steps: steps), scope: scope, offset: offset)
+            }
+            StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
+                dependent = try self.declarationBoundDependency(bound: self.assumedSupertraitBound(source: source, steps: steps), scope: scope, offset: offset)
+                for edge in edges { if (try self.declarationWitnessDependency(witness: edge, scope: scope, offset: offset)) { dependent = true } }
+            }
+            StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: val receiver, traitArgs: val arguments) => {
+                dependent = try self.declarationTypeDependency(ref: receiver, scope: scope, offset: offset)
+                for argument in arguments { if (try self.declarationTypeDependency(ref: argument, scope: scope, offset: offset)) { dependent = true } }
+            }
+        }
+        return <Result.Ok value=dependent />
+    }
+
+    inout fn declarationStaticMemberDependency(resolution: StaticMemberResolution, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
+        match resolution {
+            StaticMemberResolution.Requirement(proof: val proof, traitIdx: _, reqIdx: _) => { return self.declarationProofDependency(proof: proof, scope: scope, offset: offset) }
+            StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: _) => { return self.declarationProofDependency(proof: proof, scope: scope, offset: offset) }
+            StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no selected member") /> }
+        }
+    }
+
+    inout fn checkDeferredCallDependency(template: CallTemplate) -> Result[(), CompileDiagnostic] {
+        val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
+        val offset = template.siteKey.originStart
+        mut val dependent = try self.declarationTypeDependency(ref: template.receiverTypeTerm, scope: scope, offset: offset)
+        match template.kind {
+            CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: val proof) => {
+                for argument in self.callTemplateTypeArgs(range: arguments) { if (try self.declarationTypeDependency(ref: argument, scope: scope, offset: offset)) { dependent = true } }
+                if (try self.declarationProofDependency(proof: self.thawStaticConformanceProof(id: proof), scope: scope, offset: offset)) { dependent = true }
+            }
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val arguments, resultTerm: _) => {
+                for argument in self.callTemplateTypeArgs(range: arguments) { if (try self.declarationTypeDependency(ref: argument, scope: scope, offset: offset)) { dependent = true } }
+                if (try self.declarationStaticMemberDependency(resolution: resolution, scope: scope, offset: offset)) { dependent = true }
+            }
+            CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
+                match selection {
+                    ProtocolSelection.Direct(callee: _, proof: val proof) => { if (try self.declarationProofDependency(proof: proof, scope: scope, offset: offset)) { dependent = true } }
+                    ProtocolSelection.Static(resolution: val resolution) => { if (try self.declarationStaticMemberDependency(resolution: resolution, scope: scope, offset: offset)) { dependent = true } }
+                    _ => {}
+                }
+            }
+            CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
+                match selection {
+                    OperatorSelection.Static(resolution: val resolution) => { if (try self.declarationStaticMemberDependency(resolution: resolution, scope: scope, offset: offset)) { dependent = true } }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        if !dependent { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration call has no lexical parameter dependency") /> }
+        return <Result.Ok value=() />
+    }
+
+    inout fn declarationConversionDependency(conversion: ValueConversionProof, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
+        mut val dependent = false
+        match conversion {
+            ValueConversionProof.ExistentialBox(sourceRef: val source, targetRef: val target, traitIdx: _, proof: val proof) => {
+                dependent = try self.declarationTypeDependency(ref: source, scope: scope, offset: offset)
+                if (try self.declarationTypeDependency(ref: target, scope: scope, offset: offset)) { dependent = true }
+                if (try self.declarationProofDependency(proof: proof, scope: scope, offset: offset)) { dependent = true }
+            }
+            ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => { return self.declarationConversionDependency(conversion: element, scope: scope, offset: offset) }
+            ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, payloads: val payloads) => {
+                for payload in payloads { if (try self.declarationConversionDependency(conversion: payload.conversion, scope: scope, offset: offset)) { dependent = true } }
+            }
+            ValueConversionProof.Identity => {}
+            ValueConversionProof.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration conversion has no evidence") /> }
+        }
+        return <Result.Ok value=dependent />
+    }
+
     inout fn checkRecordedMemberObligations() -> Result[(), CompileDiagnostic] {
         // Recording precedes ordinary source diagnostics. Keep failed evidence
         // rather than suppressing it or replacing those diagnostics early.
@@ -360,11 +506,20 @@ pub impl Comp {
         // Every source call is a root, including unused functions. Generic
         // calls become closed when reached through a caller's substitution.
         while index < limit {
-            if (try self.checkCallConstraintTemplate(template: self.decls.callTemplates[index], environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() { deferred += 1U64 }
+            if (try self.checkCallConstraintTemplate(template: self.decls.callTemplates[index], environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() {
+                try self.checkDeferredCallDependency(template: self.decls.callTemplates[index])
+                deferred += 1U64
+            }
             index += 1U64
         }
         for conversion in self.decls.declarationConversions {
-            if (try self.checkConversionObligations(conversion: self.thawValueConversionProof(id: conversion.proof), environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() { deferred += 1U64 }
+            if (try self.checkConversionObligations(conversion: self.thawValueConversionProof(id: conversion.proof), environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() {
+                val scope = try self.declarationTypeScope(owner: conversion.site.ownerFnIdx)
+                if !(try self.declarationConversionDependency(conversion: self.thawValueConversionProof(id: conversion.proof), scope: scope, offset: conversion.site.originStart)) {
+                    return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "deferred declaration conversion has no lexical parameter dependency") />
+                }
+                deferred += 1U64
+            }
         }
         tracePhaseCount(c: inout self, label: "member-obligations:roots:deferred", count: deferred)
         tracePhase(c: inout self, label: "member-obligations:instances:start")

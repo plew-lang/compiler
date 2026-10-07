@@ -1,0 +1,51 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplate, CallTemplateKind, CallTemplateReceiver, CallSiteKey, StaticConformanceProof, DeclarationBoundRef }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "trait P[Value] {{}}\nfn target[T](value: T, nested: (value: T, callback: fn() -> T)) where I64: P[T] {{}}\nfn other[T](value: T) {{}}\nfn concrete(value: I64) {{}}\n"
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="scope.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val target = compiler.arena.functionAt(index: 0U64)
+    val other = compiler.arena.functionAt(index: 1U64)
+    val concrete = compiler.arena.functionAt(index: 2U64)
+    val ownType = compiler.funcParamAt(params: target.params, index: 0U64).ty
+    val foreignType = compiler.funcParamAt(params: other.params, index: 0U64).ty
+    val nested = compiler.funcParamAt(params: target.params, index: 1U64).ty
+    val concreteType = compiler.funcParamAt(params: concrete.params, index: 0U64).ty
+    val scope = compiler.declarationTypeScope(owner: 0U64).unwrap()
+    assert(compiler.declarationTypeDependency(ref: ownType, scope: scope, offset: 0U64).unwrap())
+    assert(compiler.declarationTypeDependency(ref: nested, scope: scope, offset: 0U64).unwrap())
+    assert(!compiler.declarationTypeDependency(ref: concreteType, scope: scope, offset: 0U64).unwrap())
+    // Same spelling does not grant one declaration access to another binder.
+    match compiler.declarationTypeDependency(ref: foreignType, scope: scope, offset: 0U64) {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation refers to a type parameter outside its lexical scope") }
+        Result.Ok(value: _) => { panic "foreign binder was accepted as a local dependency" }
+    }
+    val arguments = compiler.publishCallTemplateArguments(args: [])
+    val typeArguments = compiler.publishCallTemplateTypeArgs(args: [ownType])
+    val kind = <CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=arguments calleeTypeArgs=typeArguments proofId=0U64 />
+    compiler.checkDeferredCallDependency(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=0U64 /> kind=kind />).unwrap()
+    // Closure identities explicitly inherit their lexical binder scope.
+    compiler.decls.callTemplateLexicalRoots[1000000U64] = 0U64
+    compiler.checkDeferredCallDependency(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=1000000U64 /> kind=kind />).unwrap()
+    match compiler.checkDeferredCallDependency(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=1U64 /> kind=kind />) {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation refers to a type parameter outside its lexical scope") }
+        Result.Ok(value: _) => { panic "call-site owner did not control its scope" }
+    }
+    val closedKind = <CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=arguments calleeTypeArgs=compiler.publishCallTemplateTypeArgs(args: [concreteType]) proofId=0U64 />
+    match compiler.checkDeferredCallDependency(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=0U64 /> kind=closedKind />) {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "deferred declaration call has no lexical parameter dependency") }
+        Result.Ok(value: _) => { panic "closed call was accepted as deferred" }
+    }
+    // A closed subject may depend on an open trait argument: I64: P[T].
+    val proof = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=0U64 /> />
+    assert(compiler.declarationProofDependency(proof: proof, scope: scope, offset: 0U64).unwrap())
+    match compiler.declarationProofDependency(proof: proof, scope: compiler.declarationTypeScope(owner: 1U64).unwrap(), offset: 0U64) {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation refers to a type parameter outside its lexical scope") }
+        Result.Ok(value: _) => { panic "foreign proof binder was accepted" }
+    }
+    print("ok")
+}

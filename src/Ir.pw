@@ -2237,6 +2237,15 @@ pub struct DeclarationConversion {
 }
 pub impl DeclarationConversion { factory }
 
+// Lexical binder ownership for symbolic declaration obligations. This is a
+// source scope, not an executable substitution or an ambient name environment.
+pub struct DeclarationTypeScope {
+    pub val owner: U64
+    pub val parameters: FuncBindRange
+    pub val selfParameter: U64 = 0U64
+}
+pub impl DeclarationTypeScope { factory }
+
 // Declaration templates retain symbolic obligations. A concrete request may
 // complete only when none of its dependencies still need substitution.
 pub enum DeclarationObligationState { Complete Deferred }

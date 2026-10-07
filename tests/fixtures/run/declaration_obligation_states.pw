@@ -6,12 +6,12 @@ use /Ir only { CallConstraintInstance, InstanceEnvironment, StaticConformancePro
 
 fn main() {
     mut val compiler = <Comp />
-    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="fn target[T](value: T) {{}}\nfn anchor(value: I64) {{}}\n" path="obligation.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="fn target[T](value: T) {{}}\nfn anchor(value: I64) {{}}\nfn pair[T, U](first: T, second: U) {{}}\n" path="obligation.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val target = compiler.arena.functionAt(index: 0U64)
     val anchor = compiler.arena.functionAt(index: 1U64)
     val symbolic = compiler.funcParamAt(params: target.params, index: 0U64).ty
     val concrete = compiler.funcParamAt(params: anchor.params, index: 0U64).ty
-    val relevant = [true, false]
+    val relevant = [true, false, true]
     mut val requests: Array[CallConstraintInstance] = []
     mut val heads: Dictionary[U64, U64] = [:]
     val deferred = compiler.appendCallConstraintInstance(function: 0U64, arguments: [symbolic], receiver: 0U64, proof: <StaticConformanceProof.Missing />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant).unwrap()
@@ -24,6 +24,11 @@ fn main() {
     match compiler.appendCallConstraintInstance(function: 0U64, arguments: [0U64], receiver: 0U64, proof: <StaticConformanceProof.Missing />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant) {
         Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation has an unresolved type argument") }
         Result.Ok(value: _) => { panic "unknown type was treated as symbolic" }
+    }
+    // A symbolic prefix must not hide a missing later argument.
+    match compiler.appendCallConstraintInstance(function: 2U64, arguments: [symbolic, 0U64], receiver: 0U64, proof: <StaticConformanceProof.Missing />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant) {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation has an unresolved type argument") }
+        Result.Ok(value: _) => { panic "symbolic prefix hid a missing argument" }
     }
     val complete = compiler.appendCallConstraintInstance(function: 0U64, arguments: [concrete], receiver: 0U64, proof: <StaticConformanceProof.Missing />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant).unwrap()
     assert(!complete.isDeferred())
@@ -45,6 +50,12 @@ fn main() {
     match compiler.checkConversionObligations(conversion: conversion, environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant) {
         Result.Err(error: val diagnostic) => { assert(diagnostic.message == "source value does not satisfy the required conversion") }
         Result.Ok(value: _) => { panic "nested missing proof was treated as completed" }
+    }
+    // Even an abstract source requires recorded conformance evidence.
+    val missingBox = <ValueConversionProof.ExistentialBox sourceRef=symbolic targetRef=concrete traitIdx=0U64 proof=<StaticConformanceProof.Missing /> />
+    match compiler.checkConversionObligations(conversion: missingBox, environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant) {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation has no conformance evidence") }
+        Result.Ok(value: _) => { panic "symbolic source hid missing conformance evidence" }
     }
     print("ok")
 }
