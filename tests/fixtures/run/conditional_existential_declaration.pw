@@ -1,0 +1,19 @@
+use @Std/Io only { print }
+trait Readable { fn read() -> I64 }
+struct Number { val value: I64 }
+impl Number as Readable { fn read() -> I64 { return self.value } }
+struct Box[T] { val value: T }
+impl[T] Box[T] as Readable where T: Readable {
+    fn read() -> I64 { return self.value.read() }
+}
+fn erase[T](value: Box[T]) -> any Readable where T: Readable {
+    return value
+}
+// Declaration checking must also accept a body with no executable instance.
+fn unused[T](value: Box[T]) -> any Readable where T: Readable {
+    return value
+}
+fn main() {
+    val value = erase(value: <Box[Number] value=<Number value=42I64 /> />)
+    print(value.read())
+}

@@ -120,17 +120,11 @@ pub impl Comp {
             // instances use the complete conformance query.
             if te.isAny {
                 if !(tin.isAny) {
-                    if self.isActiveTypeParam(t: self.arena.typeAt(index: actual)) {
-                        if !(self.activeTypeParamConformsToTrait(source: self.arena.typeAt(index: actual), trait: self.arena.typeAt(index: exp))) {
-                            return <Result.Ok value=<TypeCompatibility.Incompatible /> />
-                        }
-                        return <Result.Ok value=<TypeCompatibility.Compatible /> />
-                    }
-                    // Formation requires the full trait-instance proof. Candidate
-                    // filters exclude generic declarations and cannot decide
-                    // compatibility of an instantiated nominal type.
+                    // Both rigid parameters and nominal instances prove the
+                    // same constraint under the declaration's assumptions.
+                    // Conditional impls must retain those assumptions too.
                     val constraint: TraitConstraint = self.existentialTraitConstraint(ref: exp)
-                    if !((try self.conformsTraitConstraint(ref: actual, constraint: constraint))) {
+                    if !((try self.viewedTypeConformsTraitConstraint(ref: actual, constraint: constraint, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn)))) {
                         return <Result.Ok value=<TypeCompatibility.Incompatible /> />
                     }
                 }
