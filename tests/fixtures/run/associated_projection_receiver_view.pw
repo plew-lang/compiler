@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+
+trait Source[T] { type Item }
+struct Value {}
+extension Selection {
+    pub impl Value as Source[I64] { type Item = Bool }
+}
+
+// The extension applies to Value, not to the projected Bool output.
+fn identity(value: Value#Selection#Source[I64].Item) -> Value#Selection#Source[I64].Item {
+    return value
+}
+
+fn main() {
+    print(identity(value: true))
+}

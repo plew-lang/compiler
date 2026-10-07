@@ -181,15 +181,20 @@ pub impl Comp {
             // Synthetic TypeRefs and type-parameter heads have no authored
             // annotation site. Every user-written `Type#Name` does.
             if t.siteOffset != 0U64 {
-                val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: i)
+                // A projection's compatibility view fields belong to its
+                // receiver, not to the associated output. Validate the actual
+                // semantic child before resolving that output.
+                val receiver = if t.assocNameId != 0U64 { give self.typeTermProjectionReceiver(t: t) } else { give i }
+                val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: receiver)
                 try self.checkTraitSubjectViewCycles(viewIds: self.viewSourceIds(sources: sources), offset: t.siteOffset)
                 mut val selectedCount: U64 = 0U64
                 mut val vi: U64 = 0U64
                 while vi < sources.count() {
                     val sourceSelector: ResolvedViewSource = sources[vi]
                     if sourceSelector.surfaceId != 0U64 && sourceSelector.surfaceId <= self.interner.entries.count() {
-                        try self.checkResolvedTypeViewSourceValid(typeRef: i, source: sourceSelector, offset: t.siteOffset)
-                        val source: ViewSource = (try self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: i, sourceId: sourceSelector.surfaceId, sourceOwner: sourceSelector.traitOwner))
+                        val receiverTerm = self.arena.typeAt(index: receiver)
+                        try self.checkResolvedTypeViewSourceValid(typeRef: receiver, source: sourceSelector, offset: t.siteOffset)
+                        val source: ViewSource = (try self.resolveViewSourceKey(recvStart: receiverTerm.nameStart, recvLen: receiverTerm.nameLen, recvRef: receiver, sourceId: sourceSelector.surfaceId, sourceOwner: sourceSelector.traitOwner))
                         if source.kind == 2U64 { selectedCount += 1U64 }
                     }
                     vi += 1U64
