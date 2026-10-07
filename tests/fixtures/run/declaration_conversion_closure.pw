@@ -2,7 +2,7 @@ use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
 use /SourceAccess only { SourceAccess }
-use /Ir only { Expr }
+use /Ir only { Expr, DeclarationConversion, ValueConversionProof, StaticConformanceProof, InstanceEnvironment }
 
 // Internal contract: incomplete conversion evidence must survive recording
 // and prevent declaration completion, even without an executable request.
@@ -24,6 +24,22 @@ fn checkFailure(known: Bool) {
             else { assert(diagnostic.message == "source conversion requires a resolved value type") }
         }
         Result.Ok(value: _) => { panic "declaration accepted incomplete conversion evidence" }
+    }
+    if known {
+        // Even an empty trait requires actual conformance evidence. A zero
+        // member count must not turn Ready(Missing) into a successful closure.
+        val site = compiler.decls.declarationConversions[0U64].site
+        val conversion = <ValueConversionProof.ExistentialBox sourceRef=source targetRef=target traitIdx=compiler.recordAnyTraitIndex(anyRef: target) proof=<StaticConformanceProof.Missing /> />
+        val proof = compiler.freezeValueConversionProof(proof: conversion)
+        compiler.decls.declarationConversions[0U64] = <DeclarationConversion site=site source=source target=target proof=proof />
+        match compiler.checkRecordedMemberObligations() {
+            Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation has no concrete conformance evidence") }
+            Result.Ok(value: _) => { panic "empty trait hid missing conformance evidence" }
+        }
+        match compiler.instantiateValueConversion(conversion: conversion, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64) {
+            Result.Err(error: val diagnostic) => { assert(diagnostic.message == "conversion has no concrete conformance evidence") }
+            Result.Ok(value: _) => { panic "executable conversion accepted missing evidence" }
+        }
     }
 }
 fn main() {

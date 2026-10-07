@@ -1511,8 +1511,9 @@ pub enum StaticConformanceProof {
 }
 
 // A declaration may retain a valid symbolic proof whose instance inputs are
-// not closed yet. This is distinct from Ready(Missing), a failed conformance.
+// not closed yet. A failed conformance is separate from completed evidence.
 pub enum StaticProofInstantiation {
+    Missing
     Deferred
     Ready(proof: StaticConformanceProof)
 }

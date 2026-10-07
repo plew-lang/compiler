@@ -38,6 +38,7 @@ pub impl Comp {
                 if !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=() /> }
                 val instantiated = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                 match instantiated {
+                    StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no concrete conformance evidence") /> }
                     StaticProofInstantiation.Deferred => {}
                     StaticProofInstantiation.Ready(proof: val evidence) => {
                         val trait = self.decls.traitAt(index: traitIndex)
@@ -120,6 +121,7 @@ pub impl Comp {
             StaticMemberResolution.Requirement(proof: val proof, traitIdx: val owner, reqIdx: val requirement) => {
                 val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                 match instantiation {
+                    StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no concrete conformance evidence") /> }
                     StaticProofInstantiation.Deferred => { return <Result.Ok value=() /> }
                     StaticProofInstantiation.Ready(proof: val concrete) => { evidence = concrete }
                 }
@@ -128,6 +130,7 @@ pub impl Comp {
             StaticMemberResolution.Provided(proof: val proof, traitIdx: val owner, callee: val declaration) => {
                 val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                 match instantiation {
+                    StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no concrete conformance evidence") /> }
                     StaticProofInstantiation.Deferred => { return <Result.Ok value=() /> }
                     StaticProofInstantiation.Ready(proof: val concrete) => { evidence = concrete }
                 }
@@ -181,6 +184,7 @@ pub impl Comp {
                 if receiver != 0U64 && self.arena.typeIsClosed(ref: receiver) && !self.proofIsMissing(proof: proof) {
                     val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                     match instantiation {
+                        StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no concrete conformance evidence") /> }
                         StaticProofInstantiation.Deferred => { return <Result.Ok value=() /> }
                         StaticProofInstantiation.Ready(proof: val concrete) => { proof = concrete }
                     }
@@ -201,6 +205,7 @@ pub impl Comp {
                             if !self.proofIsMissing(proof: proof) {
                                 val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                                 match instantiation {
+                                    StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no concrete conformance evidence") /> }
                                     StaticProofInstantiation.Deferred => { return <Result.Ok value=() /> }
                                     StaticProofInstantiation.Ready(proof: val concrete) => { proof = concrete }
                                 }

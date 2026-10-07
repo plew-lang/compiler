@@ -961,15 +961,16 @@ pub impl Comp {
     inout fn concreteStaticMemberProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
         val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
         match instantiation {
+            StaticProofInstantiation.Missing => { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
             StaticProofInstantiation.Ready(proof: val concrete) => { return <Result.Ok value=concrete /> }
             StaticProofInstantiation.Deferred => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "executable call retains an unresolved conformance obligation") /> }
         }
     }
 
     inout fn instantiateBoundProof(bound: TraitBound, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
-        if bound.subject == 0U64 || bound.constraint.key.owner == 0U64 { return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.Missing /> /> /> }
+        if bound.subject == 0U64 || bound.constraint.key.owner == 0U64 { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
         val traitIndex = self.decls.traitIndexByOffset(offset: bound.constraint.key.owner)
-        if traitIndex >= self.decls.traitCount() { return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.Missing /> /> /> }
+        if traitIndex >= self.decls.traitCount() { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
         val traitDef = self.decls.traitAt(index: traitIndex)
         mut val arguments: Array[U64] = []
         for val argument in bound.constraint.key.positionalArgs {
@@ -990,6 +991,7 @@ pub impl Comp {
             if source.traitOwner != 0U64 { sourceOwners.append(source.traitOwner) }
         }
         val proof = try self.traitPatternProof(baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, assocNames: associatedNames, assocValues: associatedValues, sourceOwners: sourceOwners, requireUniqueWitness: true)
+        if self.proofIsMissing(proof: proof) { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
         return <Result.Ok value=<StaticProofInstantiation.Ready proof=proof /> />
     }
 
@@ -1014,6 +1016,7 @@ pub impl Comp {
                 val rootState = try self.instantiateBoundProof(bound: self.assumedSupertraitBound(source: source, steps: steps), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
                 mut val root = <StaticConformanceProof.Missing />
                 match rootState {
+                    StaticProofInstantiation.Missing => { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
                     StaticProofInstantiation.Deferred => { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
                     StaticProofInstantiation.Ready(proof: val proof) => { root = proof }
                 }
@@ -1021,19 +1024,19 @@ pub impl Comp {
                 match root {
                     StaticConformanceProof.ConcreteWitness(witness: val witness) => { grounded.append(witness) }
                     StaticConformanceProof.TraitPath(edges: val prefix, terminalConformIdx: _) => { grounded = prefix }
-                    _ => { return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.Missing /> /> /> }
+                    _ => { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
                 }
                 for val edge in edges {
                     val witness = try self.groundSelectedWitness(witness: edge, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
                     if !self.selectedWitnessIsClosed(witness: witness) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
                     grounded.append(witness)
                 }
-                if grounded.count() == 0U64 { return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.Missing /> /> /> }
+                if grounded.count() == 0U64 { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
                 return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.TraitPath edges=grounded terminalConformIdx=grounded[grounded.count() - 1U64].conformIdx /> /> />
             }
-            StaticConformanceProof.Missing => { return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.Missing /> /> /> }
+            StaticConformanceProof.Missing => { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
             StaticConformanceProof.AssumedBound(source: val source) => {
-                if !self.declarationBoundIsValid(source: source) { return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.Missing /> /> /> }
+                if !self.declarationBoundIsValid(source: source) { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
                 return self.instantiateBoundProof(bound: self.declarationBound(source: source), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
             }
             StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => {
@@ -2952,6 +2955,7 @@ pub impl Comp {
                 val destination = try self.groundTermForBody(ref: target, environment: environment, selfRef: selfRef, itemRef: itemRef)
                 val instantiated = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: selfRef, itemRef: itemRef)
                 match instantiated {
+                    StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "conversion has no concrete conformance evidence") /> }
                     StaticProofInstantiation.Ready(proof: val evidence) => { return <Result.Ok value=<ValueConversionProof.ExistentialBox sourceRef=receiver targetRef=destination traitIdx=traitIndex proof=evidence /> /> }
                     StaticProofInstantiation.Deferred => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "executable conversion retains an unresolved conformance obligation") /> }
                 }

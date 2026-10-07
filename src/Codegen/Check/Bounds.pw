@@ -1644,6 +1644,7 @@ pub impl Comp {
                         }
                         val instantiation = try self.instantiateStaticMemberProof(proof: symbolic, receiverRef: receiver, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64)
                         match instantiation {
+                            StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "implicit protocol has no concrete witness") /> }
                             StaticProofInstantiation.Deferred => { return <Result.Ok value=() /> }
                             StaticProofInstantiation.Ready(proof: val concrete) => { proof = concrete }
                         }
