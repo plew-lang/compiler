@@ -2336,10 +2336,15 @@ pub impl Comp {
                     val et: TypeInfo = (try self.sourceSubjectTypeInfo(exprId: iter))
                     mut val iterTerm: U64 = self.parametricExprTerm(exprId: iter)
                     if iterTerm == 0U64 { iterTerm = et.ref }
-                    val iteratorReceiver: CallTemplateReceiver = (try self.protocolReceiverTemplateForExpr(exprId: iter))
-                    val nextReceiver: CallTemplateReceiver = <CallTemplateReceiver.PriorProtocolResult slot=1U64 />
-                    val iteratorResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 1U64, receiver: iteratorReceiver, receiverTerm: iterTerm)
-                    val nextResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 2U64, receiver: nextReceiver, receiverTerm: iteratorResult)
+                    // The preparation pass establishes lexical item bindings;
+                    // only the publication pass selects and stores protocol calls.
+                    // Neither protocol result is an input to the item binding below.
+                    if self.cur.recordCallTemplates {
+                        val iteratorReceiver: CallTemplateReceiver = (try self.protocolReceiverTemplateForExpr(exprId: iter))
+                        val nextReceiver: CallTemplateReceiver = <CallTemplateReceiver.PriorProtocolResult slot=1U64 />
+                        val iteratorResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 1U64, receiver: iteratorReceiver, receiverTerm: iterTerm)
+                        val nextResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 2U64, receiver: nextReceiver, receiverTerm: iteratorResult)
+                    }
                     try self.recordForItemTypeRecipe(stmtId: stmtId)
                     val semanticItem: U64 = (try self.iterableItemTerm(iterExpr: iter, iterTerm: iterTerm))
                     if isStruct {
