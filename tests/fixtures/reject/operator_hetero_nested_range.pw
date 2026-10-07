@@ -3,11 +3,11 @@
 // I8, which overflows — rejected (the operand is typed by the witness's Rhs, not by the
 // result type, so the constant fold catches it rather than truncating to i8).
 use @Std/Io only { print }
-trait Add[Rhs] { type Output  assoc fn add(lhs: Self, rhs: Rhs) -> Output }
+use @Std/Core only { Add }
 struct Vec2 { pub val x: I64  pub val y: I64 }
 impl Vec2 as Add[I8] {
     type Output = Vec2
-    assoc fn add(lhs: Vec2, rhs: I8) -> Vec2 { return <Vec2 x=lhs.x y=lhs.y /> }
+    assoc fn add(lhs~: Vec2, rhs~: I8) -> Vec2 { return <Vec2 x=lhs.x y=lhs.y /> }
 }
 pub impl Vec2 { factory }
 

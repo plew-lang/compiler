@@ -3,10 +3,10 @@
 // Plew rejects rather than silently choosing by declaration order (曖昧はエラー) — the
 // literal must carry a suffix (`a + 10I64`) to disambiguate.
 use @Std/Io only { print }
-trait Add[Rhs] { type Output  assoc fn add(lhs: Self, rhs: Rhs) -> Output }
+use @Std/Core only { Add }
 struct Vec2 { pub val x: I64  pub val y: I64 }
-impl Vec2 as Add[I32] { type Output = Vec2  assoc fn add(lhs: Vec2, rhs: I32) -> Vec2 { return <Vec2 x=lhs.x y=lhs.y /> } }
-impl Vec2 as Add[I64] { type Output = Vec2  assoc fn add(lhs: Vec2, rhs: I64) -> Vec2 { return <Vec2 x=lhs.x y=lhs.y /> } }
+impl Vec2 as Add[I32] { type Output = Vec2  assoc fn add(lhs~: Vec2, rhs~: I32) -> Vec2 { return <Vec2 x=lhs.x y=lhs.y /> } }
+impl Vec2 as Add[I64] { type Output = Vec2  assoc fn add(lhs~: Vec2, rhs~: I64) -> Vec2 { return <Vec2 x=lhs.x y=lhs.y /> } }
 pub impl Vec2 { factory }
 
 fn main() {
