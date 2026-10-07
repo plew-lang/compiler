@@ -32,5 +32,10 @@ fn main() {
         Result.Err(error: val diagnostic) => { assert(diagnostic.message == "source conversion evidence disagrees with the instantiated value type") }
         Result.Ok(value: _) => { panic "reselected instead of consuming evidence" }
     }
+    // Equal final types cannot erase the recorded source boundary either.
+    match compiler.finalValueConversion(sourceRef: target, targetRef: target, exprId: expression) {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "source conversion evidence disagrees with the instantiated value type") }
+        Result.Ok(value: _) => { panic "identity bypassed recorded conversion evidence" }
+    }
     print("ok")
 }
