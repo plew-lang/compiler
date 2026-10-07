@@ -1,45 +1,34 @@
 use @Std/Io only { print }
+use @Std/Core only { Add, Sub, Mul }
 
 // O2: arithmetic operators desugar to operator-trait witnesses for user types
-// (spec/12). `a + b` => Vec2.add(lhs: a, rhs: b); right-operand overloading picks
+// (spec/12). `a + b` => Vec2.add(a, b); right-operand overloading picks
 // the conformance by the rhs type (Add[Vec2] vs Add[I64]).
-trait Add[Rhs] {
-    type Output
-    assoc fn add(lhs: Self, rhs: Rhs) -> Output
-}
-trait Sub[Rhs] {
-    type Output
-    assoc fn sub(lhs: Self, rhs: Rhs) -> Output
-}
-trait Mul[Rhs] {
-    type Output
-    assoc fn mul(lhs: Self, rhs: Rhs) -> Output
-}
 
 struct Vec2 { pub val x: I64  pub val y: I64 }
 pub impl Vec2 { factory }
 
 impl Vec2 as Add[Vec2] {
     type Output = Vec2
-    assoc fn add(lhs: Vec2, rhs: Vec2) -> Vec2 {
+    assoc fn add(lhs~: Vec2, rhs~: Vec2) -> Vec2 {
         return <Vec2 x=(lhs.x + rhs.x) y=(lhs.y + rhs.y) />
     }
 }
 impl Vec2 as Add[I64] {
     type Output = Vec2
-    assoc fn add(lhs: Vec2, rhs: I64) -> Vec2 {
+    assoc fn add(lhs~: Vec2, rhs~: I64) -> Vec2 {
         return <Vec2 x=(lhs.x + rhs) y=(lhs.y + rhs) />
     }
 }
 impl Vec2 as Sub[Vec2] {
     type Output = Vec2
-    assoc fn sub(lhs: Vec2, rhs: Vec2) -> Vec2 {
+    assoc fn sub(lhs~: Vec2, rhs~: Vec2) -> Vec2 {
         return <Vec2 x=(lhs.x - rhs.x) y=(lhs.y - rhs.y) />
     }
 }
 impl Vec2 as Mul[I64] {
     type Output = Vec2
-    assoc fn mul(lhs: Vec2, rhs: I64) -> Vec2 {
+    assoc fn mul(lhs~: Vec2, rhs~: I64) -> Vec2 {
         return <Vec2 x=(lhs.x * rhs) y=(lhs.y * rhs) />
     }
 }

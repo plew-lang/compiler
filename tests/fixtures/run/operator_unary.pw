@@ -1,8 +1,7 @@
 use @Std/Io only { print }
+use @Std/Core only { Neg, Not }
 
 // O4: prefix unary operators desugar to operator-trait witnesses (spec/12).
-trait Neg { type Output  assoc fn neg(value: Self) -> Output }
-trait Not { type Output  assoc fn not(value: Self) -> Output }
 
 struct Money { pub val cents: I64 }
 pub impl Money { factory }
@@ -11,11 +10,11 @@ pub impl Switch { factory }
 
 impl Money as Neg {
     type Output = Money
-    assoc fn neg(value: Money) -> Money { return <Money cents=(0I64 - value.cents) /> }
+    assoc fn neg(value~: Money) -> Money { return <Money cents=(0I64 - value.cents) /> }
 }
 impl Switch as Not {
     type Output = Switch
-    assoc fn not(value: Switch) -> Switch {
+    assoc fn not(value~: Switch) -> Switch {
         if value.on == 0 { return <Switch on=1 /> }
         return <Switch on=0 />
     }

@@ -1,24 +1,22 @@
 use @Std/Io only { print }
+use @Std/Core only { BitAnd, BitOr, Shl }
 
 // O3: bitwise/shift operators desugar to operator-trait witnesses (spec/12).
-trait BitAnd[Rhs] { type Output  assoc fn bitand(lhs: Self, rhs: Rhs) -> Output }
-trait BitOr[Rhs]  { type Output  assoc fn bitor(lhs: Self, rhs: Rhs) -> Output }
-trait Shl[Rhs]    { type Output  assoc fn shl(lhs: Self, rhs: Rhs) -> Output }
 
 struct Flags { pub val bits: U64 }
 pub impl Flags { factory }
 
 impl Flags as BitAnd[Flags] {
     type Output = Flags
-    assoc fn bitand(lhs: Flags, rhs: Flags) -> Flags { return <Flags bits=(lhs.bits & rhs.bits) /> }
+    assoc fn bitand(lhs~: Flags, rhs~: Flags) -> Flags { return <Flags bits=(lhs.bits & rhs.bits) /> }
 }
 impl Flags as BitOr[Flags] {
     type Output = Flags
-    assoc fn bitor(lhs: Flags, rhs: Flags) -> Flags { return <Flags bits=(lhs.bits | rhs.bits) /> }
+    assoc fn bitor(lhs~: Flags, rhs~: Flags) -> Flags { return <Flags bits=(lhs.bits | rhs.bits) /> }
 }
 impl Flags as Shl[U64] {
     type Output = Flags
-    assoc fn shl(lhs: Flags, rhs: U64) -> Flags { return <Flags bits=(lhs.bits << rhs) /> }
+    assoc fn shl(lhs~: Flags, rhs~: U64) -> Flags { return <Flags bits=(lhs.bits << rhs) /> }
 }
 
 fn main() {
