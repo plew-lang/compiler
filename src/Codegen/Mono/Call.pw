@@ -890,70 +890,79 @@ pub impl Comp {
     // resulting evidence is part of a provided body's semantic environment,
     // not an implementation detail that may be reconstructed from its ABI
     // receiver after view normalization.
+    // Proof instantiation takes its complete lexical environment explicitly.
+    // Declaration obligations and executable calls must use this same operation;
+    // neither may borrow an unrelated active body from Cursor.
     // Instantiate a selected edge without changing its conformance identity.
     // Its impl binders already belong to this edge; only caller parameters
     // in their values and semantic Self are substituted here.
-    inout fn groundSelectedWitness(witness: WitnessMatch, receiverRef: U64) -> Result[WitnessMatch, CompileDiagnostic] {
+    inout fn groundSelectedWitness(witness: WitnessMatch, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[WitnessMatch, CompileDiagnostic] {
         mut val bindings: Array[WitnessBind] = []
         for val binding in witness.binds {
-            val value = try self.groundTermForBody(ref: binding.term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+            val value = try self.groundTermForBody(ref: binding.term, environment: environment, selfRef: selfRef, itemRef: itemRef)
             bindings.append(<WitnessBind binder=binding.binder paramId=binding.paramId term=value />)
         }
-        val receiver = if witness.selfRef == 0U64 { give receiverRef } else { give try self.groundTermForBody(ref: witness.selfRef, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef) }
+        val receiver = if witness.selfRef == 0U64 { give receiverRef } else { give try self.groundTermForBody(ref: witness.selfRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
         return <Result.Ok value=<WitnessMatch conformIdx=witness.conformIdx binds=bindings selfRef=receiver /> />
     }
 
     // An assumption needs a concrete witness at instantiation. Query exactly
     // that bound, including its complete trait arguments; path consumers then
     // append the already-selected edges instead of re-solving their target.
-    inout fn concreteBoundProof(bound: TraitBound, receiverRef: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
+    inout fn concreteBoundProof(bound: TraitBound, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
         if bound.subject == 0U64 || bound.constraint.key.owner == 0U64 { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
         val traitIndex = self.decls.traitIndexByOffset(offset: bound.constraint.key.owner)
         if traitIndex >= self.decls.traitCount() { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
         val traitDef = self.decls.traitAt(index: traitIndex)
         mut val arguments: Array[U64] = []
         for val argument in bound.constraint.key.positionalArgs {
-            arguments.append(try self.groundTermForBody(ref: argument, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+            arguments.append(try self.groundTermForBody(ref: argument, environment: environment, selfRef: selfRef, itemRef: itemRef))
+        }
+        mut val associatedNames: Array[U64] = []
+        mut val associatedValues: Array[U64] = []
+        for predicate in bound.constraint.assocPredicates {
+            associatedNames.append(predicate.member)
+            associatedValues.append(try self.groundTermForBody(ref: predicate.value, environment: environment, selfRef: selfRef, itemRef: itemRef))
         }
         mut val sourceOwners: Array[U64] = []
         for val source in self.typeRefViewSources(ref: receiverRef) {
             if source.traitOwner != 0U64 { sourceOwners.append(source.traitOwner) }
         }
-        return self.traitPatternProof(baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, sourceOwners: sourceOwners, requireUniqueWitness: true)
+        return self.traitPatternProof(baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, assocNames: associatedNames, assocValues: associatedValues, sourceOwners: sourceOwners, requireUniqueWitness: true)
     }
 
-    inout fn concreteStaticMemberProof(proof: StaticConformanceProof, receiverRef: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
+    inout fn concreteStaticMemberProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
         match proof {
             StaticConformanceProof.ConcreteWitness(witness: val witness) => {
-                return <Result.Ok value=<StaticConformanceProof.ConcreteWitness witness=(try self.groundSelectedWitness(witness: witness, receiverRef: receiverRef)) /> />
+                return <Result.Ok value=<StaticConformanceProof.ConcreteWitness witness=(try self.groundSelectedWitness(witness: witness, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)) /> />
             }
             StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: val terminal) => {
                 mut val grounded: Array[WitnessMatch] = []
-                for val edge in edges { grounded.append(try self.groundSelectedWitness(witness: edge, receiverRef: receiverRef)) }
+                for val edge in edges { grounded.append(try self.groundSelectedWitness(witness: edge, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)) }
                 return <Result.Ok value=<StaticConformanceProof.TraitPath edges=grounded terminalConformIdx=terminal /> />
             }
             StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
-                val root = try self.concreteBoundProof(bound: self.assumedSupertraitBound(source: source, steps: steps), receiverRef: receiverRef)
+                val root = try self.concreteBoundProof(bound: self.assumedSupertraitBound(source: source, steps: steps), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
                 mut val grounded: Array[WitnessMatch] = []
                 match root {
                     StaticConformanceProof.ConcreteWitness(witness: val witness) => { grounded.append(witness) }
                     StaticConformanceProof.TraitPath(edges: val prefix, terminalConformIdx: _) => { grounded = prefix }
                     _ => { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
                 }
-                for val edge in edges { grounded.append(try self.groundSelectedWitness(witness: edge, receiverRef: receiverRef)) }
+                for val edge in edges { grounded.append(try self.groundSelectedWitness(witness: edge, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)) }
                 if grounded.count() == 0U64 { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
                 return <Result.Ok value=<StaticConformanceProof.TraitPath edges=grounded terminalConformIdx=grounded[grounded.count() - 1U64].conformIdx /> />
             }
             StaticConformanceProof.Missing => { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
             StaticConformanceProof.AssumedBound(source: val source) => {
                 if !self.declarationBoundIsValid(source: source) { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
-                return self.concreteBoundProof(bound: self.declarationBound(source: source), receiverRef: receiverRef)
+                return self.concreteBoundProof(bound: self.declarationBound(source: source), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
             }
             StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => {
-                return self.concreteBoundProof(bound: self.assumedSupertraitBound(source: source, steps: steps), receiverRef: receiverRef)
+                return self.concreteBoundProof(bound: self.assumedSupertraitBound(source: source, steps: steps), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
             }
             StaticConformanceProof.TraitSelf(traitIdx: val owner, receiverRef: _, traitArgs: _) => {
-                return self.concreteBoundProof(bound: (try self.staticProofBound(proof: proof, traitIdx: owner)), receiverRef: receiverRef)
+                return self.concreteBoundProof(bound: (try self.staticProofBound(proof: proof, traitIdx: owner)), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
             }
         }
     }
@@ -3876,7 +3885,7 @@ pub impl Comp {
         // Instantiate the recorded proof itself; callee metadata cannot
         // reinterpret its owner or replace its selected conformance path.
         if !(self.proofIsMissing(proof: proof)) {
-            concreteProof = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiverRef)
+            concreteProof = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         }
         val resultRef: U64 = (try self.groundSemanticExprTypeRef(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=self.templateArgumentRangeFromValues(arguments: arguments) argumentSources=arguments calleeTypeArgs=calleeArgs proof=concreteProof resultHintRef=expected resultRef=resultRef /> />
@@ -4107,7 +4116,7 @@ pub impl Comp {
                 // Preserve the requirement selected in the declaration. A
                 // grounded proof chooses its witness before surface lookup can
                 // re-rank overloads using partially inferred argument types.
-                mut val concreteProof = (try self.concreteStaticMemberProof(proof: proof, receiverRef: receiverRef))
+                mut val concreteProof = (try self.concreteStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
                 mut val callee: U64 = (try self.proofConcreteWitness(proof: concreteProof, receiverRef: receiverRef, traitIdx: traitIdx, reqIdx: reqIdx))
                 if callee >= self.arena.functionCount() {
                     match proof {
@@ -4134,7 +4143,7 @@ pub impl Comp {
                 if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || traitIdx >= self.decls.traitCount() || declaration >= self.arena.functionCount() {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: static provided-method template has invalid proof or receiver") />
                 }
-                val concreteProof = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiverRef)
+                val concreteProof = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
                 val callee = try self.providedCopyForDeclaration(declaration: declaration, receiverRef: receiverRef, proof: concreteProof, traitIdx: traitIdx, offset: self.exprOffset(id: exprId))
                 // Availability is proved through the receiver trait, while a
                 // provided body may itself witness another trait (B as A).
