@@ -1,0 +1,6 @@
+trait Source[T] { type Item }
+struct Value {}
+impl Value as Source[I64] { type Item = I64 }
+extension Selection { pub impl Value as Source[I64] { type Item = Bool } }
+fn constrained[T](value: T) where T: Source[I64, Item=I64] {}
+fn main() { constrained(value: <Value />#Selection) }

@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+trait Root[T] {}
+trait Source[T] { type Item }
+struct Value {}
+impl Value as Root[I64] {}
+impl[T] Root[T] as Source[T] { type Item = I64 }
+extension Selection { impl[T] Root[T] as Source[T] { type Item = Bool } }
+fn identity(value: Value#Selection#Source[I64].Item) -> Value#Selection#Source[I64].Item { return value }
+fn main() { print(identity(value: true)) }

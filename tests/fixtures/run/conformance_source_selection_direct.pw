@@ -1,0 +1,24 @@
+use @Std/Io only { print }
+trait Source[T] { type Item }
+struct First {}
+struct Second {}
+impl First as Source[I64] { type Item = I64 }
+impl First as Source[Bool] { type Item = I64 }
+extension Selection {
+    pub impl First as Source[I64] { type Item = Bool }
+    pub impl Second as Source[I64] { type Item = Bool }
+}
+impl Second as Source[I64] { type Item = I64 }
+fn first(value: First#Selection#Source[I64].Item) -> First#Selection#Source[I64].Item { return value }
+fn second(value: Second#Selection#Source[I64].Item) -> Second#Selection#Source[I64].Item { return value }
+fn constrained[T](value: T) -> Bool where T: Source[I64, Item=Bool] { return true }
+fn different(value: First#Selection#Source[Bool].Item) -> First#Selection#Source[Bool].Item { return value }
+fn boxed(value: any Source[I64, Item=Bool]) -> Bool { return true }
+fn main() {
+    print(different(value: 4I64))
+    print(boxed(value: <First />#Selection))
+    print(first(value: true))
+    print(second(value: false))
+    print(constrained(value: <First />#Selection))
+    print(constrained(value: <Second />#Selection))
+}

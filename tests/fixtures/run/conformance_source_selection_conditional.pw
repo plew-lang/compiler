@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Required {}
+trait Source[T] { type Item }
+struct Yes {}
+struct No {}
+impl Yes as Required {}
+struct Box[T] { val value: T }
+impl[T] Box[T] as Source[I64] { type Item = I64 }
+extension Selection { impl[T] Box[T] as Source[I64] where T: Required { type Item = Bool } }
+fn yes(value: Box[Yes]#Selection#Source[I64].Item) -> Box[Yes]#Selection#Source[I64].Item { return value }
+fn no(value: Box[No]#Selection#Source[I64].Item) -> Box[No]#Selection#Source[I64].Item { return value }
+fn main() { print(yes(value: true)) print(no(value: 3I64)) }

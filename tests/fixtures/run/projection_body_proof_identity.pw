@@ -5,7 +5,7 @@ use /SourceAccess only { SourceAccess }
 use /Ir only { InstanceEnvironment, PatternTypeInput }
 fn main() {
     mut val compiler = <Comp />
-    val source = "trait P[T] {{ type Item }}\nstruct First {{}}\nstruct Second {{}}\nimpl First as P[I64] {{ type Item=I64 }}\nimpl Second as P[I64] {{ type Item=Bool }}\nimpl First as P[Bool] {{ type Item=Bool }}\nfn probe(first: First, second: Second, projection: Second#P[I64].Item, flag: Bool, otherInstance: First#P[Bool].Item, sameInstance: First#P[I64].Item, integer: I64) {{}}\n"
+    val source = "trait P[T] {{ type Item }}\nstruct First {{}}\nstruct Second {{}}\nimpl First as P[I64] {{ type Item=I64 }}\nimpl Second as P[I64] {{ type Item=Bool }}\nimpl First as P[Bool] {{ type Item=Bool }}\nextension E {{ pub impl First as P[I64] {{ type Item=Bool }} }}\nfn probe(first: First, second: Second, projection: Second#P[I64].Item, flag: Bool, otherInstance: First#P[Bool].Item, sameInstance: First#P[I64].Item, integer: I64, view: First#E, viewed: First#E#P[I64].Item) {{}}\n"
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="proof.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val function = compiler.arena.functionAt(index: 0U64)
     val first = compiler.funcParamAt(params: function.params, index: 0U64).ty
@@ -23,5 +23,12 @@ fn main() {
     val integer = compiler.funcParamAt(params: function.params, index: 6U64).ty
     val sameResult = compiler.closeBodyProjectionTerms(ref: sameInstance, environment: <InstanceEnvironment receiverRef=first proof=proof />, selfRef: first, itemRef: 0U64).unwrap()
     assert(compiler.typeRefEq(a: sameResult, b: integer))
+    val view = compiler.funcParamAt(params: function.params, index: 7U64).ty
+    val viewed = compiler.funcParamAt(params: function.params, index: 8U64).ty
+    val viewProof = compiler.concreteConformanceProof(baseRef: view, traitId: trait.nameId, traitOwner: trait.nameStart, traitArgs: <PatternTypeInput.Values values=term.assocTraitArgs />).unwrap()
+    val unviewedResult = compiler.closeBodyProjectionTerms(ref: sameInstance, environment: <InstanceEnvironment receiverRef=view proof=viewProof />, selfRef: view, itemRef: 0U64).unwrap()
+    assert(compiler.typeRefEq(a: unviewedResult, b: integer))
+    val viewedResult = compiler.closeBodyProjectionTerms(ref: viewed, environment: <InstanceEnvironment receiverRef=view proof=viewProof />, selfRef: view, itemRef: 0U64).unwrap()
+    assert(compiler.typeRefEq(a: viewedResult, b: expected))
     print("ok")
 }

@@ -203,6 +203,47 @@ pub impl Comp {
         return <Result.Ok value=true />
     }
 
+    // Source precedence belongs to each conformance edge, not to the
+    // traversal order or to the requested associated output. An active
+    // extension replaces the bare source for the same instantiated subject
+    // and trait arguments. Independent trait paths are not ranked against
+    // each other merely because one path happens to contain an extension.
+    inout fn witnessSourceSelected(witness: WitnessMatch, assumptions: Array[DeclarationBoundRef]) -> Result[Bool, CompileDiagnostic] {
+        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Ok value=false /> }
+        if witness.selfRef == 0U64 || witness.selfRef >= self.arena.typeCount() { return <Result.Ok value=true /> }
+        val receiver = self.arena.typeTerms[witness.selfRef]
+        if receiver.viewSources.len == 0U64 && receiver.viewIds.len == 0U64 && receiver.viewExtId == 0U64 { return <Result.Ok value=true /> }
+        val source = self.decls.conformAt(index: witness.conformIdx - 1U64)
+        val arguments = try self.groundedWitnessTraitArgs(cf: source, witness: witness)
+        mut val subjectArguments: Array[U64] = []
+        if source.subjectTraitOwner != 0U64 {
+            mut val index = 0U64
+            while index < source.subjectArgs.count() {
+                subjectArguments.append((try self.groundWitnessTypeTerm(ref: self.conformTypeAt(types: source.subjectArgs, index: index), params: <PatternBindInput.Conformance range=source.typeParams />, matchResult: witness)))
+                index += 1U64
+            }
+        }
+        mut val index = 0U64
+        while index < self.decls.conformCount() {
+            val candidate = self.decls.conformAt(index: index)
+            if index + 1U64 != witness.conformIdx && !candidate.derived && candidate.extId != 0U64 && candidate.traitStart == source.traitStart && candidate.subjectTraitOwner == source.subjectTraitOwner && self.proofSourceIsActive(baseRef: witness.selfRef, extId: candidate.extId) {
+                mut val replacement = <WitnessMatch />
+                if source.subjectTraitOwner == 0U64 {
+                    replacement = try self.conformanceWitnessMatch(conformIdx: index, typeRef: witness.selfRef, traitArgs: arguments)
+                } else {
+                    replacement = self.traitSubjectWitnessMatch(conformIdx: index, subjectArgs: subjectArguments, selfRef: witness.selfRef)
+                    if replacement.conformIdx != 0U64 && !self.sameProofTraitArgs(a: (try self.groundedWitnessTraitArgs(cf: candidate, witness: replacement)), b: arguments) { replacement = <WitnessMatch /> }
+                }
+                if replacement.conformIdx != 0U64 && (try self.witnessConditionsSatisfied(witness: replacement, assumptions: assumptions)) {
+                    if source.extId == 0U64 { return <Result.Ok value=false /> }
+                    return <Result.Err error=self.diagnosticAt(offset: source.defOffset, msg: "ambiguous conformance: active extensions provide the same trait instance") />
+                }
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=true />
+    }
+
     // Only a complete candidate path is checked. Checking every unrelated root
     // eagerly would recursively solve conditions unrelated to the requested trait.
     inout fn traitProofStateSatisfies(state: TraitProofState, assocNames: Array[U64], assocValues: Array[U64], assumptions: Array[DeclarationBoundRef]) -> Result[Bool, CompileDiagnostic] {
@@ -210,6 +251,11 @@ pub impl Comp {
         mut val index = 0U64
         while index < state.edges.count() {
             if !(try self.witnessConditionsSatisfied(witness: state.edges[index], assumptions: assumptions)) { return <Result.Ok value=false /> }
+            index += 1U64
+        }
+        index = 0U64
+        while index < state.edges.count() {
+            if !(try self.witnessSourceSelected(witness: state.edges[index], assumptions: assumptions)) { return <Result.Ok value=false /> }
             index += 1U64
         }
         if assocNames.count() == 0U64 { return <Result.Ok value=true /> }

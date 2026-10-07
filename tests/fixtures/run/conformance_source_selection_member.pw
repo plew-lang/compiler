@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Source[T] { type Item fn item() -> Item }
+struct Value {}
+impl Value as Source[I64] { type Item = I64 fn item() -> I64 { return 7I64 } }
+extension Selection { pub impl Value as Source[I64] { type Item = Bool fn item() -> Bool { return true } } }
+fn read[T](value: T) -> T#Source[I64].Item where T: Source[I64] { return value.item() }
+fn main() {
+    val value = <Value />
+    print(read(value: value))
+    print(read(value: value#Selection))
+    print(value#Selection.item())
+}
