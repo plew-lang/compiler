@@ -2,8 +2,8 @@
 // substitutions remain declaration obligations; concrete calls propagate them
 // through their selected declarations and the same proof-instantiation API.
 pub impl Comp {
-    inout fn appendCallConstraintInstance(function: U64, arguments: Array[U64], receiver: U64, proof: StaticConformanceProof, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64]) -> Result[(), CompileDiagnostic] {
-        if function >= self.arena.functionCount() { return <Result.Ok value=() /> }
+    inout fn appendCallConstraintInstance(function: U64, arguments: Array[U64], receiver: U64, proof: StaticConformanceProof, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[(), CompileDiagnostic] {
+        if function >= self.arena.functionCount() || function >= relevant.count() || !relevant[function] { return <Result.Ok value=() /> }
         val declaration = self.arena.functionAt(index: function)
         if declaration.isExtern || declaration.body == 0U64 { return <Result.Ok value=() /> }
         if arguments.count() != declaration.typeParams.count() { return <Result.Ok value=() /> }
@@ -30,7 +30,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkStaticMemberObligation(resolution: StaticMemberResolution, receiver: U64, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64]) -> Result[(), CompileDiagnostic] {
+    inout fn checkStaticMemberObligation(resolution: StaticMemberResolution, receiver: U64, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[(), CompileDiagnostic] {
         if receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=() /> }
         mut val selected = self.arena.functionCount()
         mut val evidence = <StaticConformanceProof.Missing />
@@ -50,11 +50,18 @@ pub impl Comp {
         }
         val declaration = self.arena.functionAt(index: selected)
         val arguments = self.providedProofArguments(f: declaration, proof: evidence)
-        try self.appendCallConstraintInstance(function: selected, arguments: arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads)
+        try self.appendCallConstraintInstance(function: selected, arguments: arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
         return <Result.Ok value=() />
     }
 
-    inout fn checkCallConstraintTemplate(template: CallTemplate, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64]) -> Result[(), CompileDiagnostic] {
+    inout fn checkCallConstraintTemplate(template: CallTemplate, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[(), CompileDiagnostic] {
+        match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                if callee >= relevant.count() || !relevant[callee] { return <Result.Ok value=() /> }
+            }
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => {}
+            _ => { return <Result.Ok value=() /> }
+        }
         val receiver = try self.groundTermForBody(ref: template.receiverTypeTerm, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val typeArguments, proofId: val proofId) => {
@@ -66,17 +73,58 @@ pub impl Comp {
                 if receiver != 0U64 && self.arena.typeIsClosed(ref: receiver) && !self.proofIsMissing(proof: proof) {
                     proof = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                 }
-                try self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: proof, depth: depth, requests: inout requests, heads: inout heads)
+                try self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: proof, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, resultTerm: _) => {
-                try self.checkStaticMemberObligation(resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads)
+                try self.checkStaticMemberObligation(resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
             }
             _ => {}
         }
         return <Result.Ok value=() />
     }
 
+    // Compute the backward slice of source calls which can reach a static
+    // member requirement. Ordinary helpers without such obligations need no
+    // type-environment requests. This is a least fixed point on declarations,
+    // independent of concrete substitutions or executable reachability.
+    inout fn memberObligationRelevance() -> Result[Array[Bool], CompileDiagnostic] {
+        mut val owners: Array[U64] = []
+        mut val relevant: Array[Bool] = []
+        mut val function = 0U64
+        while function < self.arena.functionCount() {
+            owners.append(try self.semanticBodyOwner(fnIdx: function))
+            relevant.append(false)
+            function += 1U64
+        }
+        mut val changed = true
+        while changed {
+            changed = false
+            for template in self.decls.callTemplates {
+                val owner = self.decls.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
+                if owner < relevant.count() && !relevant[owner] {
+                    mut val needed = false
+                    match template.kind {
+                        CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => { needed = true }
+                        CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                            if callee < owners.count() && owners[callee] < relevant.count() { needed = relevant[owners[callee]] }
+                        }
+                        _ => {}
+                    }
+                    if needed { relevant[owner] = true
+                        changed = true }
+                }
+            }
+        }
+        function = 0U64
+        while function < owners.count() {
+            if owners[function] < relevant.count() { relevant[function] = relevant[owners[function]] }
+            function += 1U64
+        }
+        return <Result.Ok value=relevant />
+    }
+
     inout fn checkRecordedMemberObligations() -> Result[(), CompileDiagnostic] {
+        val relevant = try self.memberObligationRelevance()
         mut val requests: Array[CallConstraintInstance] = []
         mut val heads: Dictionary[U64, U64] = [:]
         val limit = self.decls.callTemplates.count()
@@ -84,7 +132,7 @@ pub impl Comp {
         // Every source call is a root, including unused functions. Generic
         // calls become closed when reached through a caller's substitution.
         while index < limit {
-            try self.checkCallConstraintTemplate(template: self.decls.callTemplates[index], environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads)
+            try self.checkCallConstraintTemplate(template: self.decls.callTemplates[index], environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant)
             index += 1U64
         }
         index = 0U64
@@ -92,7 +140,7 @@ pub impl Comp {
             val request = requests[index]
             mut val row = self.firstLexicalCallTemplate(owner: request.function)
             while row != 0U64 {
-                try self.checkCallConstraintTemplate(template: self.decls.callTemplates[row - 1U64], environment: request.environment, depth: request.depth + 1U64, requests: inout requests, heads: inout heads)
+                try self.checkCallConstraintTemplate(template: self.decls.callTemplates[row - 1U64], environment: request.environment, depth: request.depth + 1U64, requests: inout requests, heads: inout heads, relevant: relevant)
                 row = self.decls.callTemplateBodyNext[row - 1U64]
             }
             index += 1U64
