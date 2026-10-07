@@ -2712,10 +2712,11 @@ pub impl Comp {
                         mut val result = 0U64
                         mut val sourceResult = 0U64
                         mut val resultConversion = <ValueConversionProof.Identity />
-                        if req.hasRet {
+                        val declaredResult = self.semanticCallableReturnTerm(function: req)
+                        if declaredResult != 0U64 {
                             val receiver = self.arena.bodyInstanceAt(index: bodyId - 1U64).environment.receiverRef
-                            result = self.groundTraitRequirementType(ref: req.retTy, traitIdx: traitIdx, receiverRef: targetRef, params: parameters, args: values)
-                            sourceResult = self.groundTraitRequirementType(ref: req.retTy, traitIdx: traitIdx, receiverRef: receiver, params: parameters, args: values)
+                            result = self.groundTraitRequirementType(ref: declaredResult, traitIdx: traitIdx, receiverRef: targetRef, params: parameters, args: values)
+                            sourceResult = self.groundTraitRequirementType(ref: declaredResult, traitIdx: traitIdx, receiverRef: receiver, params: parameters, args: values)
                             resultConversion = (try self.callArgumentConversion(sourceRef: sourceResult, targetRef: result, knownExistential: index + 1U64))
                             match resultConversion {
                                 ValueConversionProof.Missing => { return <Result.Err error=self.diagnosticAt(offset: req.nameStart, msg: "internal error: existential result has no finalized conversion") /> }
@@ -3926,8 +3927,7 @@ pub impl Comp {
                 if !self.anyBindingEnv(anyRef: receiverRef, traitIdx: traitIdx, outParams: inout parameters, outArgs: inout values) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: incomplete dynamic requirement result environment") />
                 }
-                mut val resultRef: U64 = 0U64
-                if req.hasRet { resultRef = self.groundTraitRequirementType(ref: req.retTy, traitIdx: traitIdx, receiverRef: receiverRef, params: parameters, args: values) }
+                val resultRef = self.groundTraitRequirementType(ref: self.semanticCallableReturnTerm(function: req), traitIdx: traitIdx, receiverRef: receiverRef, params: parameters, args: values)
                 return <Result.Ok value=<CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected resultRef=resultRef target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=slot /> /> />
             }
         }

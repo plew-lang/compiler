@@ -1,0 +1,57 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { ValueConversionProof, Expr, CallTemplateKind }
+
+// Frontend signature preparation must preserve the callable's implicit
+// Promise result, independently of backend async-method support.
+fn main() {
+    mut val compiler = <Comp />
+    val source = "fn probe(value: WorkerValue, target: any Worker) {{ val pending = target.task() }}\ntrait Worker {{ async fn task() }}\nstruct WorkerValue {{}}\nimpl WorkerValue as Worker {{ async fn task() {{}} }}\n"
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="signature.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val probe = compiler.arena.functionAt(index: 0U64)
+    val sourceType = compiler.funcParamAt(params: probe.params, index: 0U64).ty
+    val targetType = compiler.funcParamAt(params: probe.params, index: 1U64).ty
+    val traitIndex = compiler.recordAnyTraitIndex(anyRef: targetType)
+    val requirement = compiler.traitReqAt(reqs: compiler.decls.traitAt(index: traitIndex).reqs, index: 0U64)
+    val expected = compiler.semanticCallableReturnTerm(function: requirement)
+    assert(expected != 0U64)
+    assert(compiler.typeRefEq(a: compiler.anyMemberRetInfo(anyRef: targetType, req: requirement).unwrap().ref, b: expected))
+    val conversion = compiler.callArgumentConversion(sourceRef: sourceType, targetRef: targetType).unwrap()
+    compiler.finalizeConversionDependencies(conversion: conversion).unwrap()
+    val resolution = compiler.arena.finalExistentials[compiler.finalExistentialIndex(sourceRef: sourceType, targetRef: targetType)]
+    val member = resolution.members[0U64]
+    assert(member.bodyId != 0U64 && member.adapterBodyId != 0U64)
+    assert(compiler.typeRefEq(a: member.resultType, b: expected))
+    assert(compiler.typeRefEq(a: member.sourceResultType, b: expected))
+    assert(compiler.typeRefEq(a: compiler.arena.bodySignature(bodyId: member.bodyId).resultType, b: expected))
+    assert(compiler.typeRefEq(a: compiler.arena.bodySignature(bodyId: member.adapterBodyId).resultType, b: expected))
+    match compiler.thawValueConversionProof(id: member.resultConversion) {
+        ValueConversionProof.Identity => {}
+        _ => { panic "implicit Promise result acquired an unrelated conversion" }
+    }
+    // The dynamic caller must agree with the witness adapter's signature.
+    compiler.cur.bodyFnIdx = 0U64
+    mut val calls = 0U64
+    mut val expression = 0U64
+    while expression < compiler.arena.exprs.count() {
+        match compiler.arena.exprs[expression] {
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
+                val template = compiler.callTemplateForCurrentBody(exprId: expression).unwrap()
+                match template.kind {
+                    CallTemplateKind.Dynamic(receiver: val receiver, args: val arguments, target: val target) => {
+                        val selection = compiler.selectDynamicTemplateCall(exprId: expression, receiver: receiver, arguments: compiler.callTemplateArguments(range: arguments), target: target).unwrap()
+                        assert(compiler.typeRefEq(a: selection.resultRef, b: expected))
+                        calls += 1U64
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        expression += 1U64
+    }
+    assert(calls == 1U64)
+    print("ok")
+}
