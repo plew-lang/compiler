@@ -67,7 +67,7 @@ pub impl Comp {
                         val trait = self.decls.traitAt(index: traitIndex)
                         mut val index = 0U64
                         while index < trait.reqs.count() {
-                            match (try self.existentialImplementation(receiver: receiver, traitIndex: traitIndex, requirement: index, proof: evidence)) {
+                            match (try self.existentialImplementation(receiver: receiver, target: targetType, traitIndex: traitIndex, requirement: index, proof: evidence)) {
                                 Optional.Some(v: val selected) => {
                                     val box = <ExistentialBoxEvidence sourceRef=receiver targetRef=targetType traitIdx=traitIndex proof=evidence />
                                     val sourceReceiver = self.canonicalBodyReceiverRef(fnIdx: selected.function, recvInstRef: receiver)

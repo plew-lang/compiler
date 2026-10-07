@@ -22,7 +22,7 @@ fn main() {
     match conversion {
         ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val owner, proof: val proof) => {
             val evidence = <ExistentialBoxEvidence sourceRef=sourceRef targetRef=targetRef traitIdx=owner proof=proof />
-            val implementation = compiler.existentialImplementation(receiver: sourceRef, traitIndex: owner, requirement: 0U64, proof: proof).unwrap().unwrap()
+            val implementation = compiler.existentialImplementation(receiver: sourceRef, target: targetRef, traitIndex: owner, requirement: 0U64, proof: proof).unwrap().unwrap()
             val plan = compiler.existentialWitnessPlan(evidence: evidence, requirement: 0U64, sourceReceiver: compiler.canonicalBodyReceiverRef(fnIdx: implementation.function, recvInstRef: sourceRef)).unwrap().unwrap()
             compiler.checkExistentialWitnessSignature(plan: plan, implementation: implementation, evidence: evidence).unwrap()
             val wrongSignature = <ExistentialRequirementSignature receiverPassing=<CallReceiverPassing.None /> parameterTypes=plan.signature.parameterTypes argumentPassings=plan.signature.argumentPassings resultType=plan.signature.resultType />

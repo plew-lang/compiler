@@ -821,9 +821,31 @@ pub impl Comp {
     inout fn reifyBoundAssociatedTerms(ref: U64, traitDef: TraitDef, receiverRef: U64, traitOwner: U64, traitArgs: Array[U64], predicates: Array[TraitAssocPredicate]) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
         val raw: TypeRef = self.arena.typeAt(index: ref)
+        if raw.assocNameId != 0U64 {
+            // A written projection and the associated binder denote the same
+            // output only for this exact subject and trait instance.
+            val receiver = self.reifyBoundAssociatedTerms(ref: self.typeTermProjectionReceiver(t: raw), traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitOwner, traitArgs: traitArgs, predicates: predicates)
+            mut val arguments: Array[U64] = []
+            for argument in raw.assocTraitArgs {
+                arguments.append(self.reifyBoundAssociatedTerms(ref: argument, traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitOwner, traitArgs: traitArgs, predicates: predicates))
+            }
+            val selectedReceiver = self.staticRequirementType(ref: receiver, traitDef: traitDef, receiverRef: receiverRef, traitArgs: traitArgs)
+            mut val selectedArguments: Array[U64] = []
+            for argument in arguments { selectedArguments.append(self.staticRequirementType(ref: argument, traitDef: traitDef, receiverRef: receiverRef, traitArgs: traitArgs)) }
+            val owner = if raw.hasAssocTraitDecl { give raw.assocTraitDeclOffset } else { give raw.assocTraitStart }
+            if owner == traitOwner && self.typeRefEq(a: selectedReceiver, b: receiverRef) && self.sameResolvedTypeRefs(a: selectedArguments, b: traitArgs) {
+                for predicate in predicates {
+                    if predicate.member == raw.assocNameId { return predicate.value }
+                }
+            }
+            if receiver != self.typeTermProjectionReceiver(t: raw) || !self.sameResolvedTypeRefs(a: arguments, b: raw.assocTraitArgs) {
+                return self.rebuildProjectionTerm(t: raw, receiver: receiver, traitArgs: arguments)
+            }
+            return ref
+        }
         mut val rawName: U64 = raw.nameId
         if rawName == 0U64 { rawName = intern(c: inout self, start: raw.nameStart, len: raw.nameLen) }
-        if raw.args.count() == 0U64 && raw.assocNameId == 0U64 {
+        if raw.args.count() == 0U64 && !raw.hasDecl && raw.paramId == 0U64 {
             mut val ai: U64 = 0U64
             while ai < traitDef.assocTypes.count() {
                 val assoc: Bind = self.traitBindAt(binds: traitDef.assocTypes, index: ai)

@@ -1,6 +1,7 @@
 use /Frontend only { Comp }
 use /Ir only { TypeRef }
 use @Std/Io only { print }
+use @Std/Core only { assert }
 fn main() {
     mut val compiler = <Comp />
     compiler.arena.reserveTypeSentinel()
@@ -8,10 +9,14 @@ fn main() {
     val field = compiler.internBytes(s: "item")
     val selfName = compiler.internBytes(s: "Self")
     val integer = compiler.internBytes(s: "I64")
-    val selfRef = compiler.pushType(t: <TypeRef nameStart=selfName.nameStart nameLen=selfName.nameLen args=[] />)
+    val selfRef = compiler.pushType(t: <TypeRef nameStart=selfName.nameStart nameLen=selfName.nameLen paramId=1U64 args=[] />)
     val integerRef = compiler.pushType(t: <TypeRef nameStart=integer.nameStart nameLen=integer.nameLen args=[] />)
     val withSelf = compiler.pushType(t: <TypeRef nameStart=record.nameStart nameLen=record.nameLen args=[] isRecord=true recordFieldLabels=[field.nameId] recordFieldTerms=[selfRef] />)
     val withoutSelf = compiler.pushType(t: <TypeRef nameStart=record.nameStart nameLen=record.nameLen args=[] isRecord=true recordFieldLabels=[field.nameId] recordFieldTerms=[integerRef] />)
-    print(compiler.typeRefMentionsSelf(ref: withSelf))
-    print(compiler.typeRefMentionsSelf(ref: withoutSelf))
+    val unrelated = compiler.pushType(t: <TypeRef nameStart=selfName.nameStart nameLen=selfName.nameLen paramId=2U64 args=[] />)
+    assert(!compiler.typeTermContainsParameter(ref: unrelated, parameter: 1U64))
+    val renamed = compiler.pushType(t: <TypeRef nameStart=integer.nameStart nameLen=integer.nameLen paramId=1U64 args=[] />)
+    assert(compiler.typeTermContainsParameter(ref: renamed, parameter: 1U64))
+    print(compiler.typeTermContainsParameter(ref: withSelf, parameter: 1U64))
+    print(compiler.typeTermContainsParameter(ref: withoutSelf, parameter: 1U64))
 }

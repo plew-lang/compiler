@@ -2637,20 +2637,44 @@ pub impl Comp {
         return self.arena.finalExistentials.count()
     }
 
-    // Public parameter/result terms and ownership modes belong to the selected
-    // requirement, not to an executable witness body or incidental Cursor.
-    inout fn existentialRequirementSignature(target: U64, traitIndex: U64, requirement: Func) -> Result[ExistentialRequirementSignature, CompileDiagnostic] {
+    // Canonicalize the selected existential bindings into the same explicit
+    // constraint consumed by ordinary generic requirement normalization.
+    inout fn existentialRequirementBound(target: U64, traitIndex: U64, receiver: U64, offset: U64) -> Result[TraitBound, CompileDiagnostic] {
+        if target >= self.arena.typeCount() || traitIndex >= self.decls.traitCount() {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential member has no selected interface") />
+        }
+        if !self.arena.typeTerms[target].isAny || self.recordAnyTraitIndex(anyRef: target) != traitIndex {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential bindings do not match the selected trait") />
+        }
         mut val parameters: Array[Bind] = []
         mut val values: Array[U64] = []
         if !self.anyBindingEnv(anyRef: target, traitIdx: traitIndex, outParams: inout parameters, outArgs: inout values) {
-            return <Result.Err error=self.diagnosticAt(offset: requirement.nameStart, msg: "existential member has incomplete bindings") />
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential member has incomplete bindings") />
         }
+        val trait = self.decls.traitAt(index: traitIndex)
+        mut val arguments: Array[U64] = []
+        mut val predicates: Array[TraitAssocPredicate] = []
+        mut val index = 0U64
+        while index < trait.typeParams.count() { arguments.append(values[index]) index += 1U64 }
+        mut val associated = 0U64
+        while associated < trait.assocTypes.count() {
+            val member = self.traitBindAt(binds: trait.assocTypes, index: associated)
+            predicates.append(<TraitAssocPredicate member=member.nameId value=values[index + associated] span=offset />)
+            associated += 1U64
+        }
+        return <Result.Ok value=<TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=trait.nameStart positionalArgs=arguments /> positionalArgsOpen=false assocPredicates=predicates /> offset=offset /> />
+    }
+
+    // Public parameter/result terms and ownership modes belong to the selected
+    // requirement, not to an executable witness body or incidental Cursor.
+    inout fn existentialRequirementSignature(target: U64, traitIndex: U64, requirement: Func) -> Result[ExistentialRequirementSignature, CompileDiagnostic] {
+        val bound = try self.existentialRequirementBound(target: target, traitIndex: traitIndex, receiver: target, offset: requirement.nameStart)
         mut val parameterTypes: Array[U64] = []
         mut val passings: Array[CallArgumentPassing] = []
         mut val parameter = 0U64
         while parameter < requirement.params.count() {
             val declaration = self.funcParamAt(params: requirement.params, index: parameter)
-            parameterTypes.append(self.groundTraitRequirementType(ref: declaration.ty, traitIdx: traitIndex, receiverRef: target, params: parameters, args: values))
+            parameterTypes.append(self.traitBoundTypeTerm(ref: declaration.ty, bound: bound, traitIndex: traitIndex))
             if declaration.isInout { passings.append(<CallArgumentPassing.Inout />) }
             else if declaration.isMove { passings.append(<CallArgumentPassing.Move />) }
             else { passings.append(<CallArgumentPassing.Borrow />) }
@@ -2659,7 +2683,7 @@ pub impl Comp {
         mut val passing = <CallReceiverPassing.Borrow />
         if requirement.selfInout { passing = <CallReceiverPassing.Inout /> }
         else if requirement.selfMove { passing = <CallReceiverPassing.Move /> }
-        val result = self.groundTraitRequirementType(ref: self.semanticCallableReturnTerm(function: requirement), traitIdx: traitIndex, receiverRef: target, params: parameters, args: values)
+        val result = self.traitBoundTypeTerm(ref: self.semanticCallableReturnTerm(function: requirement), bound: bound, traitIndex: traitIndex)
         return <Result.Ok value=<ExistentialRequirementSignature receiverPassing=passing parameterTypes=parameterTypes argumentPassings=passings resultType=result /> />
     }
 
@@ -2671,14 +2695,10 @@ pub impl Comp {
         val trait = self.decls.traitAt(index: evidence.traitIdx)
         if requirement >= trait.reqs.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential conversion has no selected requirement") /> }
         val requested = self.traitReqAt(reqs: trait.reqs, index: requirement)
-        if !self.existentialRequirementIsDispatchable(req: requested) { return <Result.Ok value=<Optional.None /> /> }
+        if !(try self.existentialRequirementIsDispatchable(req: requested, target: evidence.targetRef, traitIndex: evidence.traitIdx)) { return <Result.Ok value=<Optional.None /> /> }
         val signature = try self.existentialRequirementSignature(target: evidence.targetRef, traitIndex: evidence.traitIdx, requirement: requested)
-        mut val parameters: Array[Bind] = []
-        mut val values: Array[U64] = []
-        if !self.anyBindingEnv(anyRef: evidence.targetRef, traitIdx: evidence.traitIdx, outParams: inout parameters, outArgs: inout values) {
-            return <Result.Err error=self.diagnosticAt(offset: requested.nameStart, msg: "existential member has incomplete bindings") />
-        }
-        val sourceResult = self.groundTraitRequirementType(ref: self.semanticCallableReturnTerm(function: requested), traitIdx: evidence.traitIdx, receiverRef: sourceReceiver, params: parameters, args: values)
+        val bound = try self.existentialRequirementBound(target: evidence.targetRef, traitIndex: evidence.traitIdx, receiver: sourceReceiver, offset: requested.nameStart)
+        val sourceResult = self.traitBoundTypeTerm(ref: self.semanticCallableReturnTerm(function: requested), bound: bound, traitIndex: evidence.traitIdx)
         mut val conversion = <ValueConversionProof.Identity />
         if sourceResult != 0U64 || signature.resultType != 0U64 {
             conversion = try self.callArgumentConversion(sourceRef: sourceResult, targetRef: signature.resultType, knownBox: <Optional.Some v=evidence />)
@@ -2702,10 +2722,10 @@ pub impl Comp {
 
     // Consume the selected conformance evidence without reconstructing the
     // implementation environment from a receiver's nominal shape.
-    inout fn existentialImplementation(receiver: U64, traitIndex: U64, requirement: U64, proof: StaticConformanceProof) -> Result[Optional[ExistentialImplementation], CompileDiagnostic] {
+    inout fn existentialImplementation(receiver: U64, target: U64, traitIndex: U64, requirement: U64, proof: StaticConformanceProof) -> Result[Optional[ExistentialImplementation], CompileDiagnostic] {
         val trait = self.decls.traitAt(index: traitIndex)
         val requested = self.traitReqAt(reqs: trait.reqs, index: requirement)
-        if !self.existentialRequirementIsDispatchable(req: requested) { return <Result.Ok value=<Optional.None /> /> }
+        if !(try self.existentialRequirementIsDispatchable(req: requested, target: target, traitIndex: traitIndex)) { return <Result.Ok value=<Optional.None /> /> }
         val functionIndex = try self.proofConcreteWitness(proof: proof, receiverRef: receiver, traitIdx: traitIndex, reqIdx: requirement)
         if functionIndex >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: requested.nameStart, msg: "existential proof has no selected requirement implementation") /> }
         val function = self.arena.functionAt(index: functionIndex)
@@ -2735,7 +2755,7 @@ pub impl Comp {
                     val req: Func = self.traitReqAt(reqs: trait.reqs, index: requirement)
                     mut val member = <FinalExistentialMember />
                     val evidence = <ExistentialBoxEvidence sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof />
-                    match (try self.existentialImplementation(receiver: sourceRef, traitIndex: traitIdx, requirement: requirement, proof: proof)) {
+                    match (try self.existentialImplementation(receiver: sourceRef, target: targetRef, traitIndex: traitIdx, requirement: requirement, proof: proof)) {
                         Optional.Some(v: val selected) => {
                             val sourceReceiver = self.canonicalBodyReceiverRef(fnIdx: selected.function, recvInstRef: sourceRef)
                             match (try self.existentialWitnessPlan(evidence: evidence, requirement: requirement, sourceReceiver: sourceReceiver)) {

@@ -1,0 +1,21 @@
+use @Std/Io only { print }
+
+trait Source[T] {
+    type Item
+    fn read(flag: T) -> Self#Source[T].Item
+    fn echo(value: Self#Source[T].Item) -> Item
+}
+struct Value {}
+impl Value as Source[Bool] {
+    type Item = I64
+    fn read(flag: Bool) -> I64 { if flag { return 7I64 } return 0I64 }
+    fn echo(value: I64) -> I64 { return value }
+}
+fn read[T](source: any Source[T, Item=I64], flag: T) -> I64 {
+    return source.echo(value: source.read(flag: flag))
+}
+fn main() {
+    val source: any Source[Bool, Item=I64] = <Value />
+    print(read(source: source, flag: true))
+    print(source.echo(value: 9I64))
+}

@@ -1,0 +1,41 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+fn main() {
+    mut val compiler = <Comp />
+    val source = "fn probe[U,V](value: U, other: V, target: any Source[I64, Item=Bool]) {{}}\ntrait Other[T] {{ type Item }}\ntrait Source[T] {{ type Item fn own() -> Self#Source[T].Item fn foreign() -> Self#Other[T].Item fn different() -> Self#Source[Bool].Item }}\n"
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="projection.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val other = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val target = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    val traitIndex = compiler.recordAnyTraitIndex(anyRef: target)
+    val trait = compiler.decls.traitAt(index: traitIndex)
+    val bound = compiler.existentialRequirementBound(target: target, traitIndex: traitIndex, receiver: receiver, offset: 0U64).unwrap()
+    val foreignRequirement = compiler.traitReqAt(reqs: trait.reqs, index: 1U64)
+    val foreignOwner = compiler.arena.typeAt(index: foreignRequirement.retTy).assocTraitDeclOffset
+    val foreignIndex = compiler.decls.traitIndexByOffset(offset: foreignOwner)
+    match compiler.existentialRequirementBound(target: target, traitIndex: foreignIndex, receiver: receiver, offset: 0U64) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic "used bindings from a different existential interface" }
+    }
+    val own = compiler.traitReqAt(reqs: trait.reqs, index: 0U64).retTy
+    val result = compiler.traitBoundTypeTerm(ref: own, bound: bound, traitIndex: traitIndex)
+    assert(compiler.typeRefEq(a: result, b: bound.constraint.assocPredicates[0U64].value))
+    mut val index = 1U64
+    while index < 3U64 {
+        val projection = compiler.traitReqAt(reqs: trait.reqs, index: index).retTy
+        val distinct = compiler.traitBoundTypeTerm(ref: projection, bound: bound, traitIndex: traitIndex)
+        assert(compiler.arena.typeAt(index: distinct).assocNameId != 0U64)
+        assert(!compiler.typeRefEq(a: distinct, b: result))
+        index += 1U64
+    }
+    val original = compiler.arena.typeAt(index: own)
+    val foreignReceiver = compiler.rebuildProjectionTerm(t: original, receiver: other, traitArgs: original.assocTraitArgs)
+    val distinct = compiler.traitBoundTypeTerm(ref: foreignReceiver, bound: bound, traitIndex: traitIndex)
+    assert(compiler.arena.typeAt(index: distinct).assocNameId != 0U64)
+    assert(!compiler.typeRefEq(a: distinct, b: result))
+    assert(compiler.monoWork.bodyCount() == 0U64)
+    print("ok")
+}
