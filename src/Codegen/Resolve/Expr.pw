@@ -1373,10 +1373,10 @@ pub impl Comp {
         val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=selection resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />)
+            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=selection resultTerm=resultTerm /> receiverTypeTerm=receiverTerm expectedResultTerm=prior.expectedResultTerm />)
             return <Result.Ok value=() />
         }
-        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=selection resultTerm=resultTerm /> />)
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=selection resultTerm=resultTerm /> receiverTypeTerm=receiverTerm />)
         return <Result.Ok value=() />
     }
 

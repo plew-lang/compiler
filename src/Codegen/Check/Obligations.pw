@@ -30,6 +30,25 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // A selected method's receiver binders are shared by ordinary static
+    // members and operators. Provided-path binders come from its proof; the
+    // receiver pattern supplies nominal implementation binders by ParamId.
+    inout fn callConstraintTypeArguments(function: Func, receiver: U64, proof: StaticConformanceProof) -> Result[Array[U64], CompileDiagnostic] {
+        mut val arguments = self.providedProofArguments(f: function, proof: proof)
+        while arguments.count() < function.typeParams.count() { arguments.append(0U64) }
+        if function.typeParams.count() == 0U64 { return <Result.Ok value=arguments /> }
+        val bindings = try self.methodReceiverEnvironment(f: function, instRef: receiver)
+        mut val index = 0U64
+        while index < function.typeParams.count() {
+            val parameter = self.funcBindAt(binds: function.typeParams, index: index)
+            for binding in bindings.binds {
+                if (binding.paramId != 0U64 && binding.paramId == parameter.paramId) || (binding.paramId == 0U64 && binding.binder == index) { arguments[index] = binding.term }
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=arguments />
+    }
+
     inout fn checkStaticMemberObligation(resolution: StaticMemberResolution, receiver: U64, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[(), CompileDiagnostic] {
         if receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=() /> }
         mut val selected = self.arena.functionCount()
@@ -57,7 +76,7 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected trait member has no concrete conformance") />
         }
         val declaration = self.arena.functionAt(index: selected)
-        val arguments = self.providedProofArguments(f: declaration, proof: evidence)
+        val arguments = try self.callConstraintTypeArguments(function: declaration, receiver: receiver, proof: evidence)
         try self.appendCallConstraintInstance(function: selected, arguments: arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
         return <Result.Ok value=() />
     }
@@ -68,6 +87,15 @@ pub impl Comp {
                 if callee >= relevant.count() || !relevant[callee] { return <Result.Ok value=() /> }
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => {}
+            CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
+                match selection {
+                    OperatorSelection.Primitive => { return <Result.Ok value=() /> }
+                    OperatorSelection.Direct(callee: val callee) => {
+                        if callee >= relevant.count() || !relevant[callee] { return <Result.Ok value=() /> }
+                    }
+                    _ => {}
+                }
+            }
             _ => { return <Result.Ok value=() /> }
         }
         val receiver = try self.groundTermForBody(ref: template.receiverTypeTerm, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
@@ -89,6 +117,22 @@ pub impl Comp {
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, resultTerm: _) => {
                 try self.checkStaticMemberObligation(resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+            }
+            CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
+                match selection {
+                    OperatorSelection.Static(resolution: val resolution) => {
+                        try self.checkStaticMemberObligation(resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                    }
+                    OperatorSelection.Direct(callee: val callee) => {
+                        if receiver != 0U64 && self.arena.typeIsClosed(ref: receiver) && callee < relevant.count() && relevant[callee] {
+                            val declaration = self.arena.functionAt(index: callee)
+                            val arguments = try self.callConstraintTypeArguments(function: declaration, receiver: receiver, proof: <StaticConformanceProof.Missing />)
+                            try self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: <StaticConformanceProof.Missing />, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                        }
+                    }
+                    OperatorSelection.Primitive => {}
+                    OperatorSelection.Pending => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "operator constraint has no completed selection") /> }
+                }
             }
             _ => {}
         }
@@ -119,6 +163,15 @@ pub impl Comp {
                         CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => { needed = true }
                         CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                             if callee < owners.count() && owners[callee] < relevant.count() { needed = relevant[owners[callee]] }
+                        }
+                        CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
+                            match selection {
+                                OperatorSelection.Static(resolution: _) => { needed = true }
+                                OperatorSelection.Direct(callee: val callee) => {
+                                    if callee < owners.count() && owners[callee] < relevant.count() { needed = relevant[owners[callee]] }
+                                }
+                                _ => {}
+                            }
                         }
                         _ => {}
                     }
