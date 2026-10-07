@@ -90,6 +90,9 @@ pub impl Comp {
         mut val node: ConversionProofNode = <ConversionProofNode tag=1U64 />
         match proof {
             ValueConversionProof.Identity => { node = <ConversionProofNode tag=0U64 /> }
+            ValueConversionProof.ExistentialRetag(sourceRef: val source, targetRef: val target) => {
+                node = <ConversionProofNode tag=5U64 sourceRef=source targetRef=target />
+            }
             ValueConversionProof.Missing => { node = <ConversionProofNode tag=1U64 /> }
             ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val traitIdx, proof: val staticProof) => {
                 node = <ConversionProofNode tag=2U64 sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx staticProof=self.freezeStaticConformanceProof(proof: staticProof) />
@@ -191,6 +194,7 @@ pub impl Comp {
         val node: ConversionProofNode = self.arena.conversionProofs[id - 1U64]
         if node.tag == 0U64 { return <ValueConversionProof.Identity /> }
         if node.tag == 1U64 { return <ValueConversionProof.Missing /> }
+        if node.tag == 5U64 { return <ValueConversionProof.ExistentialRetag sourceRef=node.sourceRef targetRef=node.targetRef /> }
         if node.tag == 2U64 { return <ValueConversionProof.ExistentialBox sourceRef=node.sourceRef targetRef=node.targetRef traitIdx=node.traitIdx proof=self.thawStaticConformanceProof(id: node.staticProof) /> }
         if node.tag == 3U64 { return <ValueConversionProof.ArrayRepack sourceRef=node.sourceRef targetRef=node.targetRef element=self.thawValueConversionProof(id: node.element) /> }
         if node.tag == 4U64 {
@@ -2409,6 +2413,12 @@ pub impl Comp {
     inout fn sameValueConversionProof(a: ValueConversionProof, b: ValueConversionProof) -> Bool {
         match a {
             ValueConversionProof.Identity => { match b { ValueConversionProof.Identity => { return true } _ => {} } }
+            ValueConversionProof.ExistentialRetag(sourceRef: val source, targetRef: val target) => {
+                match b {
+                    ValueConversionProof.ExistentialRetag(sourceRef: val otherSource, targetRef: val otherTarget) => { return self.typeRefEq(a: source, b: otherSource) && self.typeRefEq(a: target, b: otherTarget) }
+                    _ => {}
+                }
+            }
             ValueConversionProof.Missing => { match b { ValueConversionProof.Missing => { return true } _ => {} } }
             ValueConversionProof.ExistentialBox(sourceRef: val leftSource, targetRef: val leftTarget, traitIdx: val leftTrait, proof: val leftProof) => {
                 match b { ValueConversionProof.ExistentialBox(sourceRef: val rightSource, targetRef: val rightTarget, traitIdx: val rightTrait, proof: val rightProof) => { return self.typeRefEq(a: leftSource, b: rightSource) && self.typeRefEq(a: leftTarget, b: rightTarget) && leftTrait == rightTrait && self.sameStaticConformanceProof(a: leftProof, b: rightProof) } _ => {} }
@@ -2555,6 +2565,10 @@ pub impl Comp {
         val target: TypeRef = self.arena.typeAt(index: targetRef)
         val source: TypeRef = self.arena.typeAt(index: sourceRef)
         if target.isAny {
+            if source.isAny {
+                if !self.existentialTypesCompatible(sourceRef: sourceRef, targetRef: targetRef) { return <Result.Ok value=<ValueConversionProof.Missing /> /> }
+                return <Result.Ok value=<ValueConversionProof.ExistentialRetag sourceRef=sourceRef targetRef=targetRef /> />
+            }
             // A covariant witness result re-erases Self through the evidence
             // carried by its receiver, including inside structural payloads.
             // Do not select a different conformance at this boundary.
@@ -2744,6 +2758,10 @@ pub impl Comp {
 
     inout fn finalizeConversionDependencies(conversion: ValueConversionProof) -> Result[(), CompileDiagnostic] {
         match conversion {
+            ValueConversionProof.ExistentialRetag(sourceRef: val source, targetRef: val target) => {
+                try self.enqueueFinalDestruction(typeRef: source)
+                try self.enqueueFinalDestruction(typeRef: target)
+            }
             ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val traitIdx, proof: val proof) => {
                 if self.finalExistentialIndex(sourceRef: sourceRef, targetRef: targetRef) < self.arena.finalExistentials.count() { return <Result.Ok value=() /> }
                 val index: U64 = self.arena.finalExistentials.count()
@@ -2835,6 +2853,12 @@ pub impl Comp {
     inout fn instantiateValueConversion(conversion: ValueConversionProof, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[ValueConversionProof, CompileDiagnostic] {
         match conversion {
             ValueConversionProof.Identity | ValueConversionProof.Missing => { return <Result.Ok value=conversion /> }
+            ValueConversionProof.ExistentialRetag(sourceRef: val source, targetRef: val target) => {
+                val sourceRef = try self.groundTermForBody(ref: source, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                val targetRef = try self.groundTermForBody(ref: target, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                if !self.existentialTypesCompatible(sourceRef: sourceRef, targetRef: targetRef) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential retag changes its dynamic interface or strengthens a guarantee") /> }
+                return <Result.Ok value=<ValueConversionProof.ExistentialRetag sourceRef=sourceRef targetRef=targetRef /> />
+            }
             ValueConversionProof.ExistentialBox(sourceRef: val source, targetRef: val target, traitIdx: val traitIndex, proof: val proof) => {
                 val receiver = try self.groundTermForBody(ref: source, environment: environment, selfRef: selfRef, itemRef: itemRef)
                 val destination = try self.groundTermForBody(ref: target, environment: environment, selfRef: selfRef, itemRef: itemRef)

@@ -48,6 +48,12 @@ pub impl Comp {
     inout fn checkConversionObligations(conversion: ValueConversionProof, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[DeclarationObligationState, CompileDiagnostic] {
         mut val completion = <DeclarationObligationState.Complete />
         match conversion {
+            ValueConversionProof.ExistentialRetag(sourceRef: val source, targetRef: val target) => {
+                val sourceRef = try self.groundTermForBody(ref: source, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                val targetRef = try self.groundTermForBody(ref: target, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                if !self.existentialTypesCompatible(sourceRef: sourceRef, targetRef: targetRef) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential retag changes its dynamic interface or strengthens a guarantee") /> }
+                if !self.arena.typeIsClosed(ref: sourceRef) || !self.arena.typeIsClosed(ref: targetRef) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
+            }
             ValueConversionProof.ExistentialBox(sourceRef: val source, targetRef: val target, traitIdx: val traitIndex, proof: val proof) => {
                 if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no conformance evidence") /> }
                 val receiver = try self.groundTermForBody(ref: source, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
@@ -497,6 +503,10 @@ pub impl Comp {
     inout fn declarationConversionDependency(conversion: ValueConversionProof, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
         mut val dependent = false
         match conversion {
+            ValueConversionProof.ExistentialRetag(sourceRef: val source, targetRef: val target) => {
+                dependent = try self.declarationTypeDependency(ref: source, scope: scope, offset: offset)
+                if (try self.declarationTypeDependency(ref: target, scope: scope, offset: offset)) { dependent = true }
+            }
             ValueConversionProof.ExistentialBox(sourceRef: val source, targetRef: val target, traitIdx: _, proof: val proof) => {
                 dependent = try self.declarationTypeDependency(ref: source, scope: scope, offset: offset)
                 if (try self.declarationTypeDependency(ref: target, scope: scope, offset: offset)) { dependent = true }

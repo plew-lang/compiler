@@ -1,0 +1,3 @@
+trait P[T] { type Item }
+fn invalid(value: any sendable P[Bool, Item=I64]) -> any P[I64, Item=I64] { return value }
+fn main() {}

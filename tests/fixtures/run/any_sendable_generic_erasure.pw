@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+trait Source[T] { type Item fn read() -> Item }
+struct Count { val value: I64 }
+impl Count { factory }
+impl Count as Source[Bool] {
+    type Item = I64
+    fn read() -> I64 { return self.value }
+}
+fn forget[T, Item](value: any sendable Source[T, Item=Item]) -> any Source[T, Item=Item] { return value }
+fn main() {
+    val source: any sendable Source[Bool, Item=I64] = <Count value=42 />
+    val erased = forget(value: source)
+    print(erased.read())
+}

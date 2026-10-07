@@ -1,0 +1,4 @@
+trait P {}
+trait Q {}
+fn invalid(value: any sendable P) -> any Q { return value }
+fn main() {}

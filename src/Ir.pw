@@ -1532,6 +1532,9 @@ pub enum ValueConversionProof {
     Identity
     Missing
     ExistentialBox(sourceRef: U64, targetRef: U64, traitIdx: U64, proof: StaticConformanceProof)
+    // Preserve the dynamic value and vtable while forgetting a static guarantee.
+    // Interface-equivalent binding spellings use the same representation proof.
+    ExistentialRetag(sourceRef: U64, targetRef: U64)
     ArrayRepack(sourceRef: U64, targetRef: U64, element: ValueConversionProof)
     // One entry per physical payload field, in declaration variant order. This
     // is the complete conversion plan; LLVM must not reconstruct a field type

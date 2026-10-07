@@ -1,0 +1,44 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { ValueConversionProof, InstanceEnvironment }
+use /Mid only { MidBody, MidBlock, MidStatement, MidRvalue, MidOperand, MidTerminator, MidPlace, MidLocalDecl, MidVerifyError, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
+
+fn verifyRetag(compiler: inout Comp, source: U64, target: U64, allowed: Bool) {
+    val selected = compiler.callArgumentConversion(sourceRef: source, targetRef: target).unwrap()
+    match selected {
+        ValueConversionProof.ExistentialRetag(sourceRef: val selectedSource, targetRef: val selectedTarget) => {
+            assert(allowed && selectedSource == source && selectedTarget == target)
+        }
+        ValueConversionProof.Missing => { assert(!allowed) }
+        _ => { panic "unexpected conversion" }
+    }
+    // Forge the same row for invalid pairs: downstream validation must not
+    // trust that every proof necessarily came from a correct frontend.
+    val proof = <ValueConversionProof.ExistentialRetag sourceRef=source targetRef=target />
+    val frozen = compiler.freezeValueConversionProof(proof: proof)
+    assert(compiler.sameValueConversionProof(a: proof, b: compiler.thawValueConversionProof(id: frozen)))
+    assert(compiler.instantiateValueConversion(conversion: proof, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64).isOk() == allowed)
+    compiler.enqueueFinalDestruction(typeRef: source).unwrap()
+    compiler.enqueueFinalDestruction(typeRef: target).unwrap()
+    val body = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=source sourceScope=0U64 isUnique=false isParameter=true />, <MidLocalDecl typeTerm=target sourceScope=0U64 isUnique=false isParameter=false />] blocks=[<MidBlock statements=[<MidStatement.Assign destination=<MidPlace local=1U64 typeTerm=target /> value=<MidRvalue.Convert operand=<MidOperand.Copy place=<MidPlace local=0U64 typeTerm=source /> /> conversion=frozen /> />] terminator=<MidTerminator.Abort /> />] />)
+    match verifyCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.None => {} _ => { assert(false) } }
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error {
+        MidVerifyError.None => { assert(allowed) }
+        MidVerifyError.MissingOwnershipContract => { assert(!allowed) }
+        _ => { panic "unexpected verification failure" }
+    }
+}
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="trait P {{}}\ntrait Q {{}}\nfn probe(a: any sendable P, b: any P, c: any Q) {{}}\n" path="retag.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val source = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val target = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val unrelated = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    verifyRetag(compiler: inout compiler, source: source, target: target, allowed: true)
+    verifyRetag(compiler: inout compiler, source: target, target: source, allowed: false)
+    verifyRetag(compiler: inout compiler, source: source, target: unrelated, allowed: false)
+    print("ok")
+}

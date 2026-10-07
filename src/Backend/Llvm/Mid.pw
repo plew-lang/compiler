@@ -459,6 +459,7 @@ pub impl LlvmCtx {
         if proofId == 0U64 || proofId > c.arena.conversionProofs.count() { return <Result.Ok value=false /> }
         val node: ConversionProofNode = c.arena.conversionProofs[proofId - 1U64]
         if node.tag == 0U64 { return <Result.Ok value=true /> }
+        if node.tag == 5U64 { return <Result.Ok value=c.existentialTypesCompatible(sourceRef: node.sourceRef, targetRef: node.targetRef) /> }
         if node.tag == 2U64 {
             if node.sourceRef == 0U64 || node.sourceRef >= c.arena.typeCount() || node.targetRef == 0U64 || node.targetRef >= c.arena.typeCount() || node.traitIdx >= c.decls.traitCount() { return <Result.Ok value=false /> }
             if (try self.structIdxOfRef(c: inout c, ref: node.sourceRef)) >= c.arena.structCount() { return <Result.Ok value=false /> }
@@ -478,7 +479,7 @@ pub impl LlvmCtx {
         if sourceRef == 0U64 || sourceRef >= c.arena.typeCount() || targetRef == 0U64 || targetRef >= c.arena.typeCount() || proofId == 0U64 || proofId > c.arena.conversionProofs.count() { return <Result.Ok value=false /> }
         val node: ConversionProofNode = c.arena.conversionProofs[proofId - 1U64]
         if node.tag == 0U64 { return <Result.Ok value=c.typeRefEq(a: sourceRef, b: targetRef) /> }
-        if node.tag == 2U64 { return <Result.Ok value=c.typeRefEq(a: sourceRef, b: node.sourceRef) && c.typeRefEq(a: targetRef, b: node.targetRef) && (try self.midCanonicalConversionProofSupported(c: inout c, proofId: proofId)) /> }
+        if node.tag == 2U64 || node.tag == 5U64 { return <Result.Ok value=c.typeRefEq(a: sourceRef, b: node.sourceRef) && c.typeRefEq(a: targetRef, b: node.targetRef) && (try self.midCanonicalConversionProofSupported(c: inout c, proofId: proofId)) /> }
         if node.tag == 3U64 {
             if !c.typeRefEq(a: sourceRef, b: node.sourceRef) || !c.typeRefEq(a: targetRef, b: node.targetRef) { return <Result.Ok value=false /> }
             val source: TypeRef = c.arena.typeAt(index: sourceRef)
@@ -518,6 +519,11 @@ pub impl LlvmCtx {
         val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
         val node: ConversionProofNode = c.arena.conversionProofs[proofId - 1U64]
         if node.tag == 0U64 { return self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId) }
+        if node.tag == 5U64 {
+            if operand.tag != 1U64 && operand.tag != 2U64 { return <Result.Ok value=LLVMConstNull(self.anyTy) /> }
+            if !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: operandId), b: node.sourceRef) { return <Result.Ok value=LLVMConstNull(self.anyTy) /> }
+            return self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId)
+        }
         if node.tag == 2U64 {
             if operand.tag != 1U64 && operand.tag != 2U64 { return <Result.Ok value=LLVMConstNull(self.anyTy) /> }
             if !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: operandId), b: node.sourceRef) { return <Result.Ok value=LLVMConstNull(self.anyTy) /> }
@@ -542,7 +548,7 @@ pub impl LlvmCtx {
     inout fn midCanonicalEmitBorrowedConversion(c: inout Comp, value: LLVMValueRef, sourceRef: U64, targetRef: U64, proofId: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         if !(try self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: sourceRef, targetRef: targetRef, proofId: proofId)) { return <Result.Ok value=LLVMConstNull(self.ptrty) /> }
         val node: ConversionProofNode = c.arena.conversionProofs[proofId - 1U64]
-        if node.tag == 0U64 {
+        if node.tag == 0U64 || node.tag == 5U64 {
             try self.valueArc(c: inout c, v: value, typeRef: sourceRef, retain: true)
             return <Result.Ok value=value />
         }
@@ -782,7 +788,7 @@ pub impl LlvmCtx {
                     if !(try self.midCanonicalConversionProofSupported(c: inout c, proofId: element.conversion)) || element.operand == 0U64 || element.operand > c.mid.operands.count() { return <Result.Ok value=false /> }
                     val operand: MidOperandNode = c.mid.operands[element.operand - 1U64]
                     val proof: ConversionProofNode = c.arena.conversionProofs[element.conversion - 1U64]
-                    if proof.tag == 2U64 && operand.tag != 1U64 && operand.tag != 2U64 { return <Result.Ok value=false /> }
+                    if (proof.tag == 2U64 || proof.tag == 5U64) && operand.tag != 1U64 && operand.tag != 2U64 { return <Result.Ok value=false /> }
                     if (proof.tag == 3U64 || proof.tag == 4U64) && operand.tag != 1U64 { return <Result.Ok value=false /> }
                 }
                 elementI = elementI + 1U64

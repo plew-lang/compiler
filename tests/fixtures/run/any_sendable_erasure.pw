@@ -1,0 +1,43 @@
+use @Std/Io only { print }
+
+trait Text {
+    fn text() -> String
+    fn copy() -> Self
+    fn optional() -> Optional[Self]
+}
+struct Message { val value: String }
+impl Message { factory }
+impl Message as Text {
+    fn text() -> String { return self.value }
+    fn copy() -> Self { return self }
+    fn optional() -> Optional[Self] { return <Optional[Self].Some v=self /> }
+}
+struct Holder { val value: any Text }
+impl Holder { factory }
+fn forget(value: any sendable Text) -> any Text { return value }
+fn display(value: any Text) { print(value.text()) }
+fn eraseArray(values: Array[any sendable Text]) -> Array[any Text] { return values }
+fn eraseOptional(value: Optional[any sendable Text]) -> Optional[any Text] { return value }
+fn main() {
+    val source: any sendable Text = <Message value="retained message" />
+    val local: any Text = source
+    display(value: source)
+    display(value: forget(value: source))
+    display(value: local.copy())
+    val holder = <Holder value=source />
+    display(value: holder.value)
+    val sources: Array[any sendable Text] = [source]
+    val values = eraseArray(values: sources)
+    display(value: values[0])
+    val optional: Optional[any sendable Text] = <Optional.Some v=source />
+    match eraseOptional(value: optional) {
+        Optional.Some(v: val value) => { display(value: value) }
+        Optional.None => { panic "lost erased payload" }
+    }
+    match local.optional() {
+        Optional.Some(v: val value) => { display(value: value) }
+        Optional.None => { panic "lost Self payload" }
+    }
+    // Both source and destination remain independently usable after copies.
+    print(source.copy().text())
+}
