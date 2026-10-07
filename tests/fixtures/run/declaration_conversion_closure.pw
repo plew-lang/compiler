@@ -1,0 +1,33 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr }
+
+// Internal contract: incomplete conversion evidence must survive recording
+// and prevent declaration completion, even without an executable request.
+fn checkFailure(known: Bool) {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="trait P {{}}\nstruct Value {{}}\nfn probe(value: Value, target: any P) {{}}\n" path="conversion.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val source = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val target = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val expression = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    if known { compiler.recordSemanticExprTerm(exprId: expression, term: source) }
+    compiler.cur.checkFn = 0U64
+    compiler.cur.recordCallTemplates = true
+    compiler.recordDeclarationConversion(exprId: expression, target: target).unwrap()
+    assert(compiler.decls.declarationConversions.count() == 1U64)
+    match compiler.checkRecordedMemberObligations() {
+        Result.Err(error: val diagnostic) => {
+            if known { assert(diagnostic.message == "source value does not satisfy the required conversion") }
+            else { assert(diagnostic.message == "source conversion requires a resolved value type") }
+        }
+        Result.Ok(value: _) => { panic "declaration accepted incomplete conversion evidence" }
+    }
+}
+fn main() {
+    checkFailure(known: true)
+    checkFailure(known: false)
+    print("ok")
+}

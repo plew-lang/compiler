@@ -5,13 +5,16 @@ pub impl Comp {
     inout fn recordDeclarationConversion(exprId: U64, target: U64) -> Result[(), CompileDiagnostic] {
         if !self.cur.recordCallTemplates || target == 0U64 { return <Result.Ok value=() /> }
         val rawSource = self.parametricExprTerm(exprId: exprId)
-        if rawSource == 0U64 || self.typeRefEq(a: rawSource, b: target) { return <Result.Ok value=() /> }
-        val source = try self.normalizedValueType(ref: rawSource)
+        // Diverging arms produce no value. Every normal source, including an
+        // unresolved one, must retain an obligation until declaration closure.
+        if rawSource == 0U64 && !self.exprCompletion(exprId: exprId).source.normal() { return <Result.Ok value=() /> }
+        if rawSource != 0U64 && self.typeRefEq(a: rawSource, b: target) { return <Result.Ok value=() /> }
+        val source = if rawSource == 0U64 { give 0U64 } else { give try self.normalizedValueType(ref: rawSource) }
         val normalizedTarget = try self.normalizedValueType(ref: target)
         if self.typeRefEq(a: source, b: normalizedTarget) { return <Result.Ok value=() /> }
         val conversion = try self.callArgumentConversion(sourceRef: source, targetRef: normalizedTarget, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))
         match conversion {
-            ValueConversionProof.Identity | ValueConversionProof.Missing => { return <Result.Ok value=() /> }
+            ValueConversionProof.Identity => { return <Result.Ok value=() /> }
             _ => {}
         }
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
@@ -294,6 +297,17 @@ pub impl Comp {
     }
 
     inout fn checkRecordedMemberObligations() -> Result[(), CompileDiagnostic] {
+        // Recording precedes ordinary source diagnostics. Keep failed evidence
+        // rather than suppressing it or replacing those diagnostics early.
+        // No unresolved conversion may survive declaration completion.
+        for conversion in self.decls.declarationConversions {
+            if conversion.source == 0U64 { return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "source conversion requires a resolved value type") /> }
+            match self.thawValueConversionProof(id: conversion.proof) {
+                ValueConversionProof.Missing => { return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "source value does not satisfy the required conversion") /> }
+                _ => {}
+            }
+        }
+
         tracePhase(c: inout self, label: "member-obligations:relevance:start")
         val relevant = try self.memberObligationRelevance()
         tracePhase(c: inout self, label: "member-obligations:roots:start")
