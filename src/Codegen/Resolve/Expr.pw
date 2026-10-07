@@ -1320,19 +1320,21 @@ pub impl Comp {
             _ => { return <Result.Ok value=<OperatorSelection.Static resolution=resolution /> /> }
         }
         if receiverTerm == 0U64 || receiverTerm >= self.arena.typeCount() { return <Result.Ok value=<OperatorSelection.Pending /> /> }
-        val receiver = try self.groundTypeRef(ref: receiverTerm)
+        // A closed semantic term has no substitution to apply. Layout
+        // materialization is not part of selecting its operator declaration.
+        val receiver = if self.arena.typeIsClosed(ref: receiverTerm) { give receiverTerm } else { give try self.groundTypeRef(ref: receiverTerm) }
         mut val callee = self.arena.functionCount()
         if operandExprs.count() == 1U64 {
             callee = self.unaryOperatorCallee(receiverRef: receiver, op: op)
         } else if operandExprs.count() == 2U64 {
             val rhs = self.parametricExprTerm(exprId: operandExprs[1])
-            val groundedRhs = if rhs == 0U64 { give 0U64 } else { give try self.groundTypeRef(ref: rhs) }
+            val groundedRhs = if rhs == 0U64 || self.arena.typeIsClosed(ref: rhs) { give rhs } else { give try self.groundTypeRef(ref: rhs) }
             callee = try self.findBinTraitWitnessForRef(receiverRef: receiver, op: op, rhsRef: groundedRhs, rhsUntyped: groundedRhs == 0U64)
         }
         if callee < self.arena.functionCount() { return <Result.Ok value=<OperatorSelection.Direct callee=callee /> /> }
         // Primitive lowering is explicit and still subject to the normal
         // operator legality checks. An unresolved aggregate is never primitive.
-        val receiverType = self.arena.typeAt(index: receiver)
+        val receiverType = self.arena.typeTerms[receiver]
         if self.isIntType(start: receiverType.nameStart, len: receiverType.nameLen) || self.isFloatType(start: receiverType.nameStart, len: receiverType.nameLen) || rangeEquals(bytes: self.arena.bytes, start: receiverType.nameStart, len: receiverType.nameLen, kw: "Bool") {
             return <Result.Ok value=<OperatorSelection.Primitive /> />
         }
