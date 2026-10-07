@@ -1,0 +1,19 @@
+// Existential formation retains the selected witness body obligations,
+// even if the erased value is never called. Caller views cannot rewrite that body.
+trait C { fn cv() -> I64 }
+trait D { fn dv() -> I64 }
+trait B { fn b() -> I64 }
+trait A { fn a() -> I64 }
+
+struct S { pub val value: I64 }
+pub impl S { factory }
+pub impl S as C { fn cv() -> I64 { return self.value } }
+pub impl S as D { fn dv() -> I64 { return self.value * 100I64 } }
+pub impl C as B { fn b() -> I64 { return self.cv() + 1I64 } }
+pub impl D as B { fn b() -> I64 { return self.dv() + 2I64 } }
+pub impl B as A { fn a() -> I64 { return self.b() + 10I64 } }
+
+fn main() {
+    val value = <S value=5I64 />
+    val boxed: any A = value#C
+}
