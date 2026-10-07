@@ -2688,7 +2688,7 @@ pub impl Comp {
     // proof is in declaration variant order, so LLVM needs only enum layout to
     // extract the matching value; it never grounds a field type to choose a
     // conversion.
-    inout fn enumRepackPayloadConversions(sourceRef: U64, targetRef: U64, enumIdx: U64, knownExistential: U64 = 0U64) -> Result[Array[EnumPayloadConversion], CompileDiagnostic] {
+    inout fn enumRepackPayloadConversions(sourceRef: U64, targetRef: U64, enumIdx: U64, knownExistential: U64 = 0U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[Array[EnumPayloadConversion], CompileDiagnostic] {
         mut val payloads: Array[EnumPayloadConversion] = []
         if sourceRef >= self.arena.typeCount() || targetRef >= self.arena.typeCount() || enumIdx >= self.arena.enumCount() { return <Result.Ok value=payloads />}
         val source: TypeRef = self.arena.typeAt(index: sourceRef)
@@ -2707,7 +2707,7 @@ pub impl Comp {
             while field < fields.count() {
                 val sourceFieldRef = try self.groundTermForBody(ref: fields[field].ty, environment: sourceEnvironment, selfRef: sourceRef, itemRef: 0U64)
                 val targetFieldRef = try self.groundTermForBody(ref: fields[field].ty, environment: targetEnvironment, selfRef: targetRef, itemRef: 0U64)
-                payloads.append(<EnumPayloadConversion sourceRef=sourceFieldRef targetRef=targetFieldRef conversion=(try self.callArgumentConversion(sourceRef: sourceFieldRef, targetRef: targetFieldRef, knownExistential: knownExistential)) />)
+                payloads.append(<EnumPayloadConversion sourceRef=sourceFieldRef targetRef=targetFieldRef conversion=(try self.callArgumentConversion(sourceRef: sourceFieldRef, targetRef: targetFieldRef, knownExistential: knownExistential, assumptions: assumptions)) />)
                 field += 1U64
             }
             variant += 1U64
@@ -2715,10 +2715,12 @@ pub impl Comp {
         return <Result.Ok value=payloads />
     }
 
-    // Select a conversion from already-ground source and ABI terms. This is a
+    // Select a conversion from semantic source and target terms. Declaration
+    // assumptions justify symbolic sources; concrete callers use no assumptions.
+    // The complete target constraint participates in the selected proof. This is a
     // frontend proof boundary: later Mid/LLVM code receives the choice and
     // never uses an argument expression to rediscover it.
-    inout fn callArgumentConversion(sourceRef: U64, targetRef: U64, knownExistential: U64 = 0U64) -> Result[ValueConversionProof, CompileDiagnostic] {
+    inout fn callArgumentConversion(sourceRef: U64, targetRef: U64, knownExistential: U64 = 0U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[ValueConversionProof, CompileDiagnostic] {
         if sourceRef == 0U64 || targetRef == 0U64 || sourceRef >= self.arena.typeCount() || targetRef >= self.arena.typeCount() { return <Result.Ok value=<ValueConversionProof.Missing /> />}
         if self.typeRefEq(a: sourceRef, b: targetRef) { return <Result.Ok value=<ValueConversionProof.Identity /> />}
         val target: TypeRef = self.arena.typeAt(index: targetRef)
@@ -2751,7 +2753,14 @@ pub impl Comp {
                 traitArgs.append(bindingArgs[argument])
                 argument += 1U64
             }
-            val proof: StaticConformanceProof = (try self.concreteConformanceProof(baseRef: sourceRef, traitId: trait.nameId, traitOwner: trait.nameStart, traitArgs: <PatternTypeInput.Values values=traitArgs />))
+            val constraint = self.existentialTraitConstraint(ref: targetRef)
+            mut val associatedNames: Array[U64] = []
+            mut val associatedValues: Array[U64] = []
+            for predicate in constraint.assocPredicates {
+                associatedNames.append(predicate.member)
+                associatedValues.append(predicate.value)
+            }
+            val proof = try self.traitPatternProof(baseRef: sourceRef, traitId: trait.nameId, traitOwner: trait.nameStart, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, assocNames: associatedNames, assocValues: associatedValues, assumptions: assumptions)
             if self.proofIsMissing(proof: proof) { return <Result.Ok value=<ValueConversionProof.Missing /> />}
             return <Result.Ok value=<ValueConversionProof.ExistentialBox sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof /> />
         }
@@ -2764,7 +2773,7 @@ pub impl Comp {
         mut val changed: Bool = false
         mut val i: U64 = 0U64
         while i < source.args.count() {
-            val child: ValueConversionProof = (try self.callArgumentConversion(sourceRef: source.args[i], targetRef: target.args[i], knownExistential: knownExistential))
+            val child: ValueConversionProof = (try self.callArgumentConversion(sourceRef: source.args[i], targetRef: target.args[i], knownExistential: knownExistential, assumptions: assumptions))
             match child { ValueConversionProof.Missing => { return <Result.Ok value=<ValueConversionProof.Missing /> />} ValueConversionProof.Identity => {} _ => { changed = true } }
             arguments.append(child)
             i += 1U64
@@ -2775,7 +2784,7 @@ pub impl Comp {
         }
         val enumIdx: U64 = self.genericEnumIndexForType(ref: targetRef)
         if enumIdx < self.arena.enumCount() {
-            val payloads: Array[EnumPayloadConversion] = (try self.enumRepackPayloadConversions(sourceRef: sourceRef, targetRef: targetRef, enumIdx: enumIdx, knownExistential: knownExistential))
+            val payloads: Array[EnumPayloadConversion] = (try self.enumRepackPayloadConversions(sourceRef: sourceRef, targetRef: targetRef, enumIdx: enumIdx, knownExistential: knownExistential, assumptions: assumptions))
             mut val payload: U64 = 0U64
             while payload < payloads.count() {
                 match payloads[payload].conversion { ValueConversionProof.Missing => { return <Result.Ok value=<ValueConversionProof.Missing /> />} _ => {} }

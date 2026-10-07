@@ -1,0 +1,36 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { ValueConversionProof }
+
+fn main() {
+    val source = "trait P {{ type Item }}\nstruct First {{}}\nstruct Second {{}}\nfn probe[T](value: T, yes: any P[Item=First], no: any P[Item=Second]) where T: P[Item=First] {{}}\n"
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="conversion.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val value = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val target = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val other = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    val assumptions = compiler.functionBoundAssumptions(fnIdx: 0U64)
+    val conversion = compiler.callArgumentConversion(sourceRef: value, targetRef: target, assumptions: assumptions).unwrap()
+    match conversion {
+        ValueConversionProof.ExistentialBox(sourceRef: val actualSource, targetRef: val actualTarget, traitIdx: _, proof: val proof) => {
+            assert(compiler.typeRefEq(a: value, b: actualSource))
+            assert(compiler.typeRefEq(a: target, b: actualTarget))
+            assert(!compiler.proofIsMissing(proof: proof))
+        }
+        _ => { panic "lost declaration conversion evidence" }
+    }
+    match compiler.callArgumentConversion(sourceRef: value, targetRef: target).unwrap() {
+        ValueConversionProof.Missing => {}
+        _ => { panic "invented conversion without a bound" }
+    }
+    match compiler.callArgumentConversion(sourceRef: value, targetRef: other, assumptions: assumptions).unwrap() {
+        ValueConversionProof.Missing => {}
+        _ => { panic "ignored the target associated type" }
+    }
+    assert(compiler.monoWork.bodyCount() == 0U64)
+    assert(compiler.arena.finalExistentials.count() == 0U64)
+    print("ok")
+}
