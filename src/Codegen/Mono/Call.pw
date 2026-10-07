@@ -585,6 +585,45 @@ pub impl Comp {
     // parametric source term or a prior written-call result; slot 2 explicitly
     // depends on slot 1's completed CallResolution. No fallback is permitted:
     // recovering `Stmt.For.iter` here would create a second semantic source.
+    // Finalization consumes the source-selected protocol identity. Only proof
+    // substitution is instance-specific; no member-name lookup is permitted.
+    inout fn selectedProtocolTemplateCall(stmtId: U64, slot: U64, receiverRef: U64) -> Result[CallSiteSelection, CompileDiagnostic] {
+        val key = try self.currentCallSiteKey(exprId: stmtId, siteIsStmt: true, slot: slot)
+        val index = self.decls.callTemplateIndex(siteKey: key)
+        if index >= self.decls.callTemplates.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "implicit protocol selection was not recorded") /> }
+        match self.decls.callTemplates[index].kind {
+            CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: val resultTerm) => {
+                mut val callee = self.arena.functionCount()
+                mut val proof = <StaticConformanceProof.Missing />
+                mut val target = <CallTarget.Direct />
+                mut val result = 0U64
+                match selection {
+                    ProtocolSelection.Identity => { target = <CallTarget.NoCallable />
+                        result = receiverRef }
+                    ProtocolSelection.Direct(callee: val selected, proof: val selectedProof) => {
+                        callee = selected
+                        proof = selectedProof
+                        if !self.proofIsMissing(proof: proof) {
+                            proof = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                        }
+                    }
+                    ProtocolSelection.Static(resolution: val resolution) => {
+                        val selected = try self.selectStaticMethodTemplateCall(exprId: stmtId, receiver: <CallTemplateReceiver.Term term=receiverRef />, arguments: [], resolution: resolution, resultTerm: resultTerm)
+                        callee = selected.callee
+                        proof = selected.proof
+                    }
+                    ProtocolSelection.Existential(traitIdx: val owner, slot: val requirement) => {
+                        target = <CallTarget.ExistentialRequirement traitIdx=owner slot=requirement />
+                        result = try self.groundAndRecordBodyType(ref: resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+                    }
+                    ProtocolSelection.Pending => { return <Result.Err error=self.diagnosticAt(offset: key.originStart, msg: "for-loop requires an Iterable or Iterator") /> }
+                }
+                return <Result.Ok value=<CallSiteSelection exprId=stmtId siteIsStmt=true slot=slot callee=callee receiverRef=receiverRef proof=proof resultRef=result resultHintRef=receiverRef target=target /> />
+            }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: key.originStart, msg: "implicit protocol selection has the wrong call kind") /> }
+        }
+    }
+
     inout fn groundedProtocolTemplateReceiver(stmtId: U64, slot: U64) -> Result[U64, CompileDiagnostic] {
         val key: CallSiteKey = (try self.currentCallSiteKey(exprId: stmtId, siteIsStmt: true, slot: slot))
         val index: U64 = self.decls.callTemplateIndex(siteKey: key)
@@ -592,7 +631,7 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate was not recorded") />
         }
         match self.decls.callTemplates[index].kind {
-            CallTemplateKind.Protocol(val receiver) => {
+            CallTemplateKind.Protocol(receiver: val receiver, selection: _, resultTerm: _) => {
                 match receiver {
                     CallTemplateReceiver.Term(val term) => {
                         return <Result.Ok value=(try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)) />
@@ -6386,92 +6425,94 @@ pub impl Comp {
                         }
                     }
                     mut val iteratorRef: U64 = initialRef
-                    if initialRef != 0U64 && initialRef < self.arena.typeCount() && !(self.arena.typeTerms[initialRef].isAny) {
-                        val noArgs: Array[Arg] = []
-                        val iteratorName: Bind = self.kwSpan(kw: "iterator", kwLen: 8U64)
-                        mut val iteratorFn: U64 = self.arena.functionCount()
-                        if useProtocolTemplate {
-                            iteratorFn = (try self.resolveProtocolMethodForReceiver(recvRef: initialRef, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: self.pushArgs(args: noArgs)))
-                        } else {
-                            iteratorFn = (try self.resolveBodyMethodForRef(recv: iter, recvRef: initialRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: self.pushArgs(args: noArgs), useOffset: 0U64))
-                        }
-                        iteratorRef = initialRef
-                        // Record the iterator slot even when this value is already
-                        // an Iterator.  The sentinel tells LLVM that there is no
-                        // iterator() call; it must not rediscover that fact from
-                        // the receiver spelling.  Only that sentinel case is an
-                        // identity call.  A real `iterator()` has a distinct
-                        // carrier (for example Array[T] -> ArrayIter[T]), so leave
-                        // its source result absent and let completeStaticBodyCallee
-                        // publish the selected callee return as the one result.
-                        mut val iteratorResult: U64 = 0U64
-                        mut val iteratorTarget: CallTarget = <CallTarget.Direct />
-                        if iteratorFn >= self.arena.functionCount() {
-                            iteratorResult = initialRef
-                            iteratorTarget = <CallTarget.NoCallable />
-                        }
-                        val iteratorSelection: CallSiteSelection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=iteratorFn receiverRef=initialRef resultRef=iteratorResult resultHintRef=initialRef target=iteratorTarget />
+                    if useProtocolTemplate {
+                        val iteratorSelection = try self.selectedProtocolTemplateCall(stmtId: stmtId, slot: 1U64, receiverRef: initialRef)
                         try self.recordSelectedBodyCallee(selection: iteratorSelection)
-                        if iteratorFn < self.arena.functionCount() {
-                            try self.enqueueSelectedCallee(selection: iteratorSelection)
-                            // `iterator()` has just been finalized under this
-                            // concrete body instance.  Its descriptor result
-                            // is the sole authority for the next receiver:
-                            // recomputing `Func.retTy` here loses the distinct
-                            // substitutions owned by a generic receiver and a
-                            // provided method, turning Array[I64] into
-                            // ArrayIter[T].
-                            val returned: U64 = (try self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: 1U64))
-                            if returned != 0U64 { iteratorRef = returned }
-                        }
-                        val nextName: Bind = self.kwSpan(kw: "next", kwLen: 4U64)
-                        mut val nextFn: U64 = self.arena.functionCount()
-                        if useProtocolTemplate {
-                            nextFn = (try self.resolveProtocolMethodForReceiver(recvRef: iteratorRef, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: self.pushArgs(args: noArgs)))
-                        } else {
-                            nextFn = (try self.resolveBodyMethodForRef(recv: iter, recvRef: iteratorRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: self.pushArgs(args: noArgs), useOffset: 0U64))
-                        }
-                        // A final protocol lookup can fail for an invalid iterand.
-                        // Diagnose that source error before publishing a missing
-                        // next target or asking its result recipe for an Item.
-                        if useProtocolTemplate && nextFn >= self.arena.functionCount() {
-                            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: iter), msg: "for-loop requires an Iterable or Iterator") />
-                        }
-                        val nextSelection: CallSiteSelection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=nextFn receiverRef=iteratorRef resultHintRef=iteratorRef />
+                        if iteratorSelection.callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: iteratorSelection) }
+                        iteratorRef = try self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: 1U64)
+                        val nextSelection = try self.selectedProtocolTemplateCall(stmtId: stmtId, slot: 2U64, receiverRef: iteratorRef)
                         try self.recordSelectedBodyCallee(selection: nextSelection)
-                        if nextFn < self.arena.functionCount() {
-                            try self.enqueueSelectedCallee(selection: nextSelection)
-                        }
-                    } else if initialRef != 0U64 {
-                        // Each protocol slot owns its actual dispatch. An existential
-                        // Iterable first calls iterator dynamically; its returned cursor
-                        // may then have either a direct or an existential next call.
-                        val none = self.arena.functionCount()
-                        val noArgs = self.pushArgs(args: [])
-                        val iteratorName = self.internBytes(s: "iterator")
-                        val iteratorSlot = self.finalAnyRequirementSlot(anyRef: initialRef, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: noArgs)
-                        if iteratorSlot != 0U64 {
-                            val traitIndex = self.finalAnyTraitIdx(anyRef: initialRef)
-                            val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: iteratorSlot - 1U64)
-                            iteratorRef = (try self.anyMemberRetInfo(anyRef: initialRef, req: requirement)).ref
-                            try self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=none receiverRef=initialRef resultRef=iteratorRef target=<CallTarget.ExistentialRequirement traitIdx=traitIndex slot=iteratorSlot /> />)
-                        } else {
-                            try self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=none receiverRef=initialRef resultRef=initialRef target=<CallTarget.NoCallable /> />)
-                        }
-                        val nextName = self.internBytes(s: "next")
-                        if iteratorRef != 0U64 && self.arena.typeTerms[iteratorRef].isAny {
-                            val traitIndex = self.finalAnyTraitIdx(anyRef: iteratorRef)
-                            val nextSlot = self.finalAnyRequirementSlot(anyRef: iteratorRef, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: noArgs)
-                            if traitIndex >= self.decls.traitCount() || nextSlot == 0U64 {
+                        if nextSelection.callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: nextSelection) }
+                    } else {
+                        if initialRef != 0U64 && initialRef < self.arena.typeCount() && !(self.arena.typeTerms[initialRef].isAny) {
+                            val noArgs: Array[Arg] = []
+                            val iteratorName: Bind = self.kwSpan(kw: "iterator", kwLen: 8U64)
+                            mut val iteratorFn: U64 = self.arena.functionCount()
+                                iteratorFn = (try self.resolveBodyMethodForRef(recv: iter, recvRef: initialRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: self.pushArgs(args: noArgs), useOffset: 0U64))
+                            iteratorRef = initialRef
+                            // Record the iterator slot even when this value is already
+                            // an Iterator.  The sentinel tells LLVM that there is no
+                            // iterator() call; it must not rediscover that fact from
+                            // the receiver spelling.  Only that sentinel case is an
+                            // identity call.  A real `iterator()` has a distinct
+                            // carrier (for example Array[T] -> ArrayIter[T]), so leave
+                            // its source result absent and let completeStaticBodyCallee
+                            // publish the selected callee return as the one result.
+                            mut val iteratorResult: U64 = 0U64
+                            mut val iteratorTarget: CallTarget = <CallTarget.Direct />
+                            if iteratorFn >= self.arena.functionCount() {
+                                iteratorResult = initialRef
+                                iteratorTarget = <CallTarget.NoCallable />
+                            }
+                            val iteratorSelection: CallSiteSelection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=iteratorFn receiverRef=initialRef resultRef=iteratorResult resultHintRef=initialRef target=iteratorTarget />
+                            try self.recordSelectedBodyCallee(selection: iteratorSelection)
+                            if iteratorFn < self.arena.functionCount() {
+                                try self.enqueueSelectedCallee(selection: iteratorSelection)
+                                // `iterator()` has just been finalized under this
+                                // concrete body instance.  Its descriptor result
+                                // is the sole authority for the next receiver:
+                                // recomputing `Func.retTy` here loses the distinct
+                                // substitutions owned by a generic receiver and a
+                                // provided method, turning Array[I64] into
+                                // ArrayIter[T].
+                                val returned: U64 = (try self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: 1U64))
+                                if returned != 0U64 { iteratorRef = returned }
+                            }
+                            val nextName: Bind = self.kwSpan(kw: "next", kwLen: 4U64)
+                            mut val nextFn: U64 = self.arena.functionCount()
+                                nextFn = (try self.resolveBodyMethodForRef(recv: iter, recvRef: iteratorRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: self.pushArgs(args: noArgs), useOffset: 0U64))
+                            // A final protocol lookup can fail for an invalid iterand.
+                            // Diagnose that source error before publishing a missing
+                            // next target or asking its result recipe for an Item.
+                            if nextFn >= self.arena.functionCount() {
                                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: iter), msg: "for-loop requires an Iterable or Iterator") />
                             }
-                            val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: nextSlot - 1U64)
-                            try self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=none receiverRef=iteratorRef resultRef=(try self.anyMemberRetInfo(anyRef: iteratorRef, req: requirement)).ref target=<CallTarget.ExistentialRequirement traitIdx=traitIndex slot=nextSlot /> />)
-                        } else {
-                            val next = try self.resolveProtocolMethodForReceiver(recvRef: iteratorRef, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: noArgs)
-                            val selection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=next receiverRef=iteratorRef resultHintRef=iteratorRef />
-                            try self.recordSelectedBodyCallee(selection: selection)
-                            if next < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: selection) }
+                            val nextSelection: CallSiteSelection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=nextFn receiverRef=iteratorRef resultHintRef=iteratorRef />
+                            try self.recordSelectedBodyCallee(selection: nextSelection)
+                            if nextFn < self.arena.functionCount() {
+                                try self.enqueueSelectedCallee(selection: nextSelection)
+                            }
+                        } else if initialRef != 0U64 {
+                            // Each protocol slot owns its actual dispatch. An existential
+                            // Iterable first calls iterator dynamically; its returned cursor
+                            // may then have either a direct or an existential next call.
+                            val none = self.arena.functionCount()
+                            val noArgs = self.pushArgs(args: [])
+                            val iteratorName = self.internBytes(s: "iterator")
+                            val iteratorSlot = self.finalAnyRequirementSlot(anyRef: initialRef, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: noArgs)
+                            if iteratorSlot != 0U64 {
+                                val traitIndex = self.finalAnyTraitIdx(anyRef: initialRef)
+                                val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: iteratorSlot - 1U64)
+                                iteratorRef = (try self.anyMemberRetInfo(anyRef: initialRef, req: requirement)).ref
+                                try self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=none receiverRef=initialRef resultRef=iteratorRef target=<CallTarget.ExistentialRequirement traitIdx=traitIndex slot=iteratorSlot /> />)
+                            } else {
+                                try self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=none receiverRef=initialRef resultRef=initialRef target=<CallTarget.NoCallable /> />)
+                            }
+                            val nextName = self.internBytes(s: "next")
+                            if iteratorRef != 0U64 && self.arena.typeTerms[iteratorRef].isAny {
+                                val traitIndex = self.finalAnyTraitIdx(anyRef: iteratorRef)
+                                val nextSlot = self.finalAnyRequirementSlot(anyRef: iteratorRef, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: noArgs)
+                                if traitIndex >= self.decls.traitCount() || nextSlot == 0U64 {
+                                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: iter), msg: "for-loop requires an Iterable or Iterator") />
+                                }
+                                val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: nextSlot - 1U64)
+                                try self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=none receiverRef=iteratorRef resultRef=(try self.anyMemberRetInfo(anyRef: iteratorRef, req: requirement)).ref target=<CallTarget.ExistentialRequirement traitIdx=traitIndex slot=nextSlot /> />)
+                            } else {
+                                val next = try self.resolveProtocolMethodForReceiver(recvRef: iteratorRef, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: noArgs)
+                                val selection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=next receiverRef=iteratorRef resultHintRef=iteratorRef />
+                                try self.recordSelectedBodyCallee(selection: selection)
+                                if next < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: selection) }
+                            }
                         }
                     }
                     val et: TypeInfo = (try self.typeOf(id: iter))

@@ -3092,6 +3092,16 @@ pub enum OperatorSelection {
     Static(resolution: StaticMemberResolution)
 }
 
+// Selection of an implicit iteration call is a source semantic fact. The
+// receiver and result can remain symbolic, while member identity is retained.
+pub enum ProtocolSelection {
+    Pending
+    Identity
+    Direct(callee: U64, proof: StaticConformanceProof)
+    Static(resolution: StaticMemberResolution)
+    Existential(traitIdx: U64, slot: U64)
+}
+
 pub enum CallTemplateKind {
     // Bidirectional context for a value expression, with no call selection.
     ExpectedValue
@@ -3104,7 +3114,7 @@ pub enum CallTemplateKind {
     Direct(callee: U64, receiver: CallTemplateReceiver, args: CallTemplateArgumentRange, calleeTypeArgs: CallTemplateTypeArgumentRange, proofId: U64)
     StaticMethod(receiver: CallTemplateReceiver, args: CallTemplateArgumentRange, resolution: StaticMemberResolution, resultTerm: U64)
     Dynamic(receiver: CallTemplateReceiver, args: CallTemplateArgumentRange, target: DynamicCallTemplateTarget)
-    Protocol(receiver: CallTemplateReceiver)
+    Protocol(receiver: CallTemplateReceiver, selection: ProtocolSelection, resultTerm: U64)
     Operator(op: I64, operands: CallTemplateOperandRange, resolution: OperatorSelection, resultTerm: U64)
 }
 

@@ -3,7 +3,7 @@
 // is covered by default_eval_order.pw and default_eval_order_generic_method.pw.
 use @Std/Io only { write }
 use /Frontend only { Comp }
-use /Ir only { Bind, CallArgumentSource, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, Func, Param, CallTemplate, CallSiteKey, SemanticClosure }
+use /Ir only { Bind, CallArgumentSource, CallTemplateArgument, CallTemplateKind, ProtocolSelection, CallTemplateReceiver, Expr, Func, Param, CallTemplate, CallSiteKey, SemanticClosure }
 
 fn main() {
     mut val c: Comp = <Comp />
@@ -142,14 +142,14 @@ fn main() {
     c.decls.callTemplates.set(i: closureIndex, value: <CallTemplate siteKey=closureSite kind=completeKind />)
     c.checkRecordedBodyCallConstraints(owner: 0U64).unwrap()
     c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=generator originKind=3U64 originSerial=1U64 slot=1U64 />
-        kind=<CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=term /> /> />)
+        kind=<CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=term /> selection=<ProtocolSelection.Pending /> resultTerm=0U64 /> />)
     c.checkRecordedBodyCallConstraints(owner: 0U64).unwrap()
     match c.checkRecordedBodyCallConstraints(owner: generator) {
         Result.Ok(value: _) => { panic("requested invalid iteration was not checked") }
         Result.Err(error: _) => {}
     }
     c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=closureKey originKind=3U64 originSerial=1U64 slot=1U64 />
-        kind=<CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=term /> /> />)
+        kind=<CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=term /> selection=<ProtocolSelection.Pending /> resultTerm=0U64 /> />)
     match c.checkRecordedBodyCallConstraints(owner: 0U64) {
         Result.Ok(value: _) => { panic("closure iteration was not checked") }
         Result.Err(error: _) => {}

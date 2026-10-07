@@ -2338,8 +2338,8 @@ pub impl Comp {
                     if iterTerm == 0U64 { iterTerm = et.ref }
                     val iteratorReceiver: CallTemplateReceiver = (try self.protocolReceiverTemplateForExpr(exprId: iter))
                     val nextReceiver: CallTemplateReceiver = <CallTemplateReceiver.PriorProtocolResult slot=1U64 />
-                    try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 1U64, receiver: iteratorReceiver)
-                    try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 2U64, receiver: nextReceiver)
+                    val iteratorResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 1U64, receiver: iteratorReceiver, receiverTerm: iterTerm)
+                    val nextResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 2U64, receiver: nextReceiver, receiverTerm: iteratorResult)
                     try self.recordForItemTypeRecipe(stmtId: stmtId)
                     val semanticItem: U64 = (try self.iterableItemTerm(iterExpr: iter, iterTerm: iterTerm))
                     if isStruct {

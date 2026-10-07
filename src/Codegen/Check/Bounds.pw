@@ -1507,18 +1507,6 @@ pub impl Comp {
 
     // Resolve a no-argument protocol signature without demanding its body.
     // Zero retains an unresolved substitution for the later instance obligation.
-    inout fn checkedProtocolResult(callee: U64, receiver: U64, statement: U64, slot: U64) -> Result[U64, CompileDiagnostic] {
-        val selected = try self.selectedCallableSubstitution(selection: <CallSiteSelection exprId=statement siteIsStmt=true slot=slot callee=callee receiverRef=receiver resultHintRef=receiver />)
-        match selected {
-            Optional.None => { return <Result.Ok value=0U64 /> }
-            Optional.Some(v: val substitution) => {
-                val environment = try self.bodyInstanceEnvironment(fnIdx: callee, args: substitution.args, recvInstRef: substitution.receiverRef, selectedProof: substitution.proof)
-                try self.checkSelectedCallableBounds(fnIdx: callee, environment: environment)
-                return self.groundedSelectedCalleeReturn(callee: callee, environment: environment)
-            }
-        }
-    }
-
     // Async declarations expose a Promise at the call boundary. An omitted
     // signature still needs its implicit result term; never substitute the
     // logical body return for the call result.
@@ -1626,33 +1614,57 @@ pub impl Comp {
 
     inout fn checkClosedIterationProtocol(templateIndex: U64) -> Result[(), CompileDiagnostic] {
         val template = self.decls.callTemplates[templateIndex]
-        if template.siteKey.slot == 1U64 {
-            match template.kind {
-                CallTemplateKind.Protocol(receiver: val receiver) => {
-                    val term = try self.closedProtocolReceiver(receiver: receiver)
-                    if term != 0U64 && self.arena.typeTerms[term].isAny {
-                        try self.checkExistentialIterationReceiver(receiver: term, fnIdx: template.siteKey.ownerFnIdx, offset: template.siteKey.originStart)
-                    }
-                    if term != 0U64 && self.arena.typeIsClosed(ref: term) && !self.arena.typeTerms[term].isAny {
-                        val iteratorName = self.kwSpan(kw: "iterator", kwLen: 8U64)
-                        val nextName = self.kwSpan(kw: "next", kwLen: 4U64)
-                        val arguments = self.pushArgs(args: [])
-                        val iterator = try self.resolveProtocolMethodForReceiver(recvRef: term, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: arguments)
-                        mut val nextReceiver = term
-                        if iterator < self.arena.functionCount() {
-                            nextReceiver = try self.checkedProtocolResult(callee: iterator, receiver: term, statement: template.siteKey.originSerial - 1U64, slot: 1U64)
-                        }
-                        if nextReceiver != 0U64 {
-                            val next = try self.resolveProtocolMethodForReceiver(recvRef: nextReceiver, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: arguments)
-                            if next >= self.arena.functionCount() {
-                                return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "for-loop requires an Iterable or Iterator") />
-                            }
-                            val result = try self.checkedProtocolResult(callee: next, receiver: nextReceiver, statement: template.siteKey.originSerial - 1U64, slot: 2U64)
-                        }
-                    }
+        match template.kind {
+            CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
+                match selection {
+                    ProtocolSelection.Pending => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "for-loop requires an Iterable or Iterator") /> }
+                    _ => {}
                 }
-                _ => {}
+                val receiver = template.receiverTypeTerm
+                if receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=() /> }
+                if self.arena.typeTerms[receiver].isAny {
+                    try self.checkExistentialIterationReceiver(receiver: receiver, fnIdx: template.siteKey.ownerFnIdx, offset: template.siteKey.originStart)
+                    return <Result.Ok value=() />
+                }
+                mut val callee = self.arena.functionCount()
+                mut val proof = <StaticConformanceProof.Missing />
+                match selection {
+                    ProtocolSelection.Direct(callee: val selected, proof: val evidence) => { callee = selected
+                        proof = evidence }
+                    ProtocolSelection.Static(resolution: val resolution) => {
+                        mut val symbolic = <StaticConformanceProof.Missing />
+                        match resolution {
+                            StaticMemberResolution.Requirement(proof: val evidence, traitIdx: _, reqIdx: _) => { symbolic = evidence }
+                            StaticMemberResolution.Provided(proof: val evidence, traitIdx: _, callee: _) => { symbolic = evidence }
+                            _ => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "implicit protocol has no selected requirement") /> }
+                        }
+                        val instantiation = try self.instantiateStaticMemberProof(proof: symbolic, receiverRef: receiver, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64)
+                        match instantiation {
+                            StaticProofInstantiation.Deferred => { return <Result.Ok value=() /> }
+                            StaticProofInstantiation.Ready(proof: val concrete) => { proof = concrete }
+                        }
+                        match resolution {
+                            StaticMemberResolution.Requirement(proof: _, traitIdx: val owner, reqIdx: val requirement) => {
+                                callee = try self.proofConcreteWitness(proof: proof, receiverRef: receiver, traitIdx: owner, reqIdx: requirement)
+                            }
+                            StaticMemberResolution.Provided(proof: _, traitIdx: val owner, callee: val declaration) => {
+                                callee = try self.providedCopyForDeclaration(declaration: declaration, receiverRef: receiver, proof: proof, traitIdx: owner, offset: template.siteKey.originStart)
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => { return <Result.Ok value=() /> }
+                }
+                if callee >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "implicit protocol has no concrete witness") /> }
+                val function = self.arena.functionAt(index: callee)
+                val arguments = try self.callConstraintTypeArguments(function: function, receiver: receiver, proof: proof)
+                for argument in arguments {
+                    if argument == 0U64 || !self.arena.typeIsClosed(ref: argument) { return <Result.Ok value=() /> }
+                }
+                val environment = try self.bodyInstanceEnvironment(fnIdx: callee, args: arguments, recvInstRef: receiver, selectedProof: proof)
+                try self.checkSelectedCallableBounds(fnIdx: callee, environment: environment)
             }
+            _ => {}
         }
         return <Result.Ok value=() />
     }

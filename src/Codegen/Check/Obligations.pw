@@ -87,6 +87,15 @@ pub impl Comp {
                 if callee >= relevant.count() || !relevant[callee] { return <Result.Ok value=() /> }
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => {}
+            CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
+                match selection {
+                    ProtocolSelection.Direct(callee: val callee, proof: _) => {
+                        if callee >= relevant.count() || !relevant[callee] { return <Result.Ok value=() /> }
+                    }
+                    ProtocolSelection.Static(resolution: _) => {}
+                    _ => { return <Result.Ok value=() /> }
+                }
+            }
             CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
                 match selection {
                     OperatorSelection.Primitive => { return <Result.Ok value=() /> }
@@ -117,6 +126,28 @@ pub impl Comp {
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, resultTerm: _) => {
                 try self.checkStaticMemberObligation(resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+            }
+            CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
+                match selection {
+                    ProtocolSelection.Static(resolution: val resolution) => {
+                        try self.checkStaticMemberObligation(resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                    }
+                    ProtocolSelection.Direct(callee: val callee, proof: val selectedProof) => {
+                        if receiver != 0U64 && self.arena.typeIsClosed(ref: receiver) {
+                            mut val proof = selectedProof
+                            if !self.proofIsMissing(proof: proof) {
+                                val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                                match instantiation {
+                                    StaticProofInstantiation.Deferred => { return <Result.Ok value=() /> }
+                                    StaticProofInstantiation.Ready(proof: val concrete) => { proof = concrete }
+                                }
+                            }
+                            val arguments = try self.callConstraintTypeArguments(function: self.arena.functionAt(index: callee), receiver: receiver, proof: proof)
+                            try self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: proof, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                        }
+                    }
+                    _ => {}
+                }
             }
             CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
                 match selection {
@@ -163,6 +194,15 @@ pub impl Comp {
                         CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => { needed = true }
                         CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                             if callee < owners.count() && owners[callee] < relevant.count() { needed = relevant[owners[callee]] }
+                        }
+                        CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
+                            match selection {
+                                ProtocolSelection.Static(resolution: _) => { needed = true }
+                                ProtocolSelection.Direct(callee: val callee, proof: _) => {
+                                    if callee < owners.count() && owners[callee] < relevant.count() { needed = relevant[owners[callee]] }
+                                }
+                                _ => {}
+                            }
                         }
                         CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
                             match selection {

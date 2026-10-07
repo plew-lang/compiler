@@ -1216,22 +1216,53 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordProtocolCallTemplate(stmtId: U64, slot: U64, receiver: CallTemplateReceiver) -> Result[(), CompileDiagnostic] {
-        if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
-        val key: CallSiteKey = (try self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: slot))
-        val index: U64 = self.decls.callTemplateIndex(siteKey: key)
-        if index < self.decls.callTemplates.count() {
-            val prior: CallTemplate = self.decls.callTemplates[index]
-            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Protocol receiver=receiver /> expectedResultTerm=prior.expectedResultTerm />)
-            return <Result.Ok value=() />
+    inout fn recordProtocolCallTemplate(stmtId: U64, slot: U64, receiver: CallTemplateReceiver, receiverTerm: U64) -> Result[U64, CompileDiagnostic] {
+        val name = if slot == 1U64 { give self.kwSpan(kw: "iterator", kwLen: 8U64) } else { give self.kwSpan(kw: "next", kwLen: 4U64) }
+        val arguments = self.pushArgs(args: [])
+        mut val selection = <ProtocolSelection.Pending />
+        mut val resultTerm = 0U64
+        if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
+            if self.arena.typeTerms[receiverTerm].isAny {
+                val owner = self.finalAnyTraitIdx(anyRef: receiverTerm)
+                val requirementSlot = self.finalAnyRequirementSlot(anyRef: receiverTerm, nameStart: name.nameStart, nameLen: name.nameLen, args: arguments)
+                if owner < self.decls.traitCount() && requirementSlot != 0U64 {
+                    val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: requirementSlot - 1U64)
+                    resultTerm = (try self.anyMemberRetInfo(anyRef: receiverTerm, req: requirement)).ref
+                    selection = <ProtocolSelection.Existential traitIdx=owner slot=requirementSlot />
+                } else if slot == 1U64 { selection = <ProtocolSelection.Identity />
+                    resultTerm = receiverTerm }
+            } else {
+                val resolution = try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: name.nameStart, nameLen: name.nameLen, args: arguments)
+                match resolution {
+                    StaticMemberResolution.Missing => {
+                        val callee = try self.resolveProtocolMethodForReceiver(recvRef: receiverTerm, nameStart: name.nameStart, nameLen: name.nameLen, args: arguments)
+                        if callee < self.arena.functionCount() {
+                            val function = self.arena.functionAt(index: callee)
+                            val proof = try self.providedBodyProof(f: function, receiverRef: receiverTerm)
+                            val environment = try self.finalMethodEnvironment(f: function, receiverRef: receiverTerm, args: arguments, selectedProof: proof)
+                            resultTerm = try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: function), environment: environment, selfRef: receiverTerm, itemRef: 0U64)
+                            selection = <ProtocolSelection.Direct callee=callee proof=proof />
+                        } else if slot == 1U64 { selection = <ProtocolSelection.Identity />
+                            resultTerm = receiverTerm }
+                    }
+                    _ => {
+                        resultTerm = try self.staticRequirementResultType(resolution: resolution)
+                        selection = <ProtocolSelection.Static resolution=resolution />
+                    }
+                }
+            }
         }
-        self.appendCallTemplate(template: <CallTemplate siteKey=key kind=<CallTemplateKind.Protocol receiver=receiver /> />)
-        return <Result.Ok value=() />
+        if !self.cur.recordCallTemplates { return <Result.Ok value=resultTerm /> }
+        val key = try self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: slot)
+        val index = self.decls.callTemplateIndex(siteKey: key)
+        val kind = <CallTemplateKind.Protocol receiver=receiver selection=selection resultTerm=resultTerm />
+        if index < self.decls.callTemplates.count() {
+            val prior = self.decls.callTemplates[index]
+            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=kind receiverTypeTerm=receiverTerm expectedResultTerm=prior.expectedResultTerm />)
+        } else { self.appendCallTemplate(template: <CallTemplate siteKey=key kind=kind receiverTypeTerm=receiverTerm />) }
+        return <Result.Ok value=resultTerm />
     }
 
-    // A written call argument is an explicit semantic source. Calls keep a
-    // dependency on their completed descriptor; an untyped literal retains its
-    // Record-time adapter rather than inviting Mono to inspect the Expr.
     inout fn callArgumentSource(exprId: U64) -> Result[CallArgumentSource, CompileDiagnostic] {
         match self.arena.exprs[exprId] {
             Expr.Ident(start: val start, len: val len) => {
