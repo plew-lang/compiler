@@ -78,6 +78,30 @@ fn functionHasTraitReceiver(arena ~: Arena, decls ~: Decls, fnIdx: U64) -> Bool 
 }
 
 
+// A checked owner is usable only within this loaded source snapshot.
+// Preparation results are append-only; another owner is not interchangeable.
+pub struct PreparedSemanticCompletionOwner {
+    val owner: SemanticCompletionOwner
+}
+impl PreparedSemanticCompletionOwner { factory }
+
+fn semanticCompletionOwnersEqual(recorded: SemanticCompletionOwner, prepared: SemanticCompletionOwner) -> Bool {
+    match recorded {
+        SemanticCompletionOwner.Function(index: val index) => {
+            match prepared {
+                SemanticCompletionOwner.Function(index: val expected) => { return index == expected }
+                SemanticCompletionOwner.Global(target: _) => { return false }
+            }
+        }
+        SemanticCompletionOwner.Global(target: val target) => {
+            match prepared {
+                SemanticCompletionOwner.Global(target: val expected) => { return target == expected }
+                SemanticCompletionOwner.Function(index: _) => { return false }
+            }
+        }
+    }
+}
+
 // Source owner IDs are dense arena indices. Retain the complete request
 // result at that index; allocation alone never means preparation succeeded.
 pub struct LexicalBodyPreparations {
@@ -95,7 +119,7 @@ pub impl LexicalBodyPreparations {
         while self.outcomes.count() <= owner { self.outcomes.append(<Optional.None />) }
         match self.outcomes[owner] {
             Optional.None => { self.requests += 1U64 }
-            Optional.Some(v: _) => {}
+            Optional.Some(v: _) => { return }
         }
         self.outcomes.set(i: owner, value: <Optional.Some v=result />)
     }

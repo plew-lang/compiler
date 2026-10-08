@@ -44,6 +44,34 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: statement completion requires a checked lexical owner") />
     }
 
+    inout fn checkedSemanticStmtCompletionOwner(stmtId: U64) -> Result[PreparedSemanticCompletionOwner, CompileDiagnostic] {
+        if stmtId < self.arena.semanticStatementCompletions.count() {
+            match self.arena.semanticStatementCompletions[stmtId] {
+                Optional.Some(v: val fact) => {
+                    if try self.semanticCompletionOwnerPrepared(owner: fact.owner) {
+                        return <Result.Ok value=<PreparedSemanticCompletionOwner owner=fact.owner /> />
+                    }
+                }
+                Optional.None => {}
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: statement completion requires a checked lexical owner") />
+    }
+
+    inout fn semanticStmtCompletionInOwner(stmtId: U64, owner: PreparedSemanticCompletionOwner) -> Result[SourceCompletion, CompileDiagnostic] {
+        if stmtId < self.arena.semanticStatementCompletions.count() {
+            match self.arena.semanticStatementCompletions[stmtId] {
+                Optional.Some(v: val fact) => {
+                    if semanticCompletionOwnersEqual(recorded: fact.owner, prepared: owner.owner) {
+                        return <Result.Ok value=fact.flow />
+                    }
+                }
+                Optional.None => {}
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: statement completion does not belong to this checked lexical owner") />
+    }
+
     inout fn requireExpressionValue(exprId: U64) -> Result[(), CompileDiagnostic] {
         return self.requireExpressionCompletionValue(exprId: exprId, completion: self.exprCompletion(exprId: exprId))
     }

@@ -6078,14 +6078,18 @@ pub impl Comp {
     }
 
     inout fn scanBlockInsts(blkId: U64) -> Result[(), CompileDiagnostic] {
+        val owner: Optional[PreparedSemanticCompletionOwner] = if self.cur.bodyId != 0U64 && self.blockStmtCount(blkId: blkId) != 0U64 {
+            give <Optional.Some v=try self.checkedSemanticStmtCompletionOwner(stmtId: self.blockStmtAt(blkId: blkId, index: 0U64)) />
+        } else {
+            give <Optional.None />
+        }
         val mark: U64 = self.scopeMark()
         mut val i: U64 = 0
         while i < self.blockStmtCount(blkId: blkId) {
             val statement = self.blockStmtAt(blkId: blkId, index: i)
-            val completion = if self.cur.bodyId == 0U64 {
-                give self.stmtCompletion(stmtId: statement)
-            } else {
-                give try self.checkedSemanticStmtCompletion(stmtId: statement)
+            val completion = match owner {
+                Optional.Some(v: val prepared) => { give try self.semanticStmtCompletionInOwner(stmtId: statement, owner: prepared) }
+                Optional.None => { give self.stmtCompletion(stmtId: statement) }
             }
             try self.scanStmtInsts(stmtId: statement)
             if !completion.execution.normal() { break }

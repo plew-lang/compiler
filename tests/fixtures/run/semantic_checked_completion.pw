@@ -37,6 +37,8 @@ fn main() {
         Result.Err(error: _) => {}
     }
     compiler.prepareLexicalBody(fnIdx: source).unwrap()
+    val preparedOwner = compiler.checkedSemanticStmtCompletionOwner(stmtId: statement).unwrap()
+    if !compiler.semanticStmtCompletionInOwner(stmtId: statement, owner: preparedOwner).unwrap().source.normal() { panic "prepared reader lost statement flow" }
     val statementFlow = compiler.checkedSemanticStmtCompletion(stmtId: statement).unwrap()
     if !statementFlow.source.normal() || !statementFlow.source.returns() { panic "statement completion was not retained" }
     val originalStatement = compiler.arena.stmts[statement]
@@ -50,6 +52,13 @@ fn main() {
     if !compiler.checkedSemanticExprCompletion(exprId: expression).unwrap().source.returns() { panic "type update erased completion" }
     val original = compiler.arena.exprs[expression]
     val stopped = owner(compiler: inout compiler, name: "stopped")
+    compiler.prepareLexicalBody(fnIdx: stopped).unwrap()
+    val otherStatement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: stopped).body, index: 0U64)
+    val otherOwner = compiler.checkedSemanticStmtCompletionOwner(stmtId: otherStatement).unwrap()
+    match compiler.semanticStmtCompletionInOwner(stmtId: statement, owner: otherOwner) {
+        Result.Ok(value: _) => { panic "prepared reader accepted another owner" }
+        Result.Err(error: _) => {}
+    }
     compiler.arena.exprs.set(i: expression, value: <Expr.Block body=compiler.arena.functionAt(index: stopped).body offset=0U64 />)
     if compiler.exprCompletion(exprId: expression).source.normal() { panic "fixture did not change source composition" }
     if !compiler.checkedSemanticExprCompletion(exprId: expression).unwrap().source.normal() { panic "checked reader reopened the AST" }
@@ -71,6 +80,21 @@ fn main() {
     match compiler.checkedSemanticExprCompletion(exprId: expression) {
         Result.Ok(value: _) => { panic "recorded flow bypassed owner readiness" }
         Result.Err(error: _) => {}
+    }
+    val failure = compiler.diagnosticAt(offset: compiler.arena.functionAt(index: source).nameStart, msg: "fixture owner failure")
+    compiler.lexicalBodyPreparations.record(owner: source, result: <Result.Err error=failure />)
+    compiler.lexicalBodyPreparations.record(owner: source, result: <Result.Ok value=() />)
+    match compiler.checkedSemanticStmtCompletionOwner(stmtId: statement) {
+        Result.Ok(value: _) => { panic "failed owner authorized a prepared reader" }
+        Result.Err(error: val diagnostic) => { if diagnostic.message != failure.message { panic "completed request was overwritten" } }
+    }
+    match compiler.checkedSemanticStmtCompletion(stmtId: statement) {
+        Result.Ok(value: _) => { panic "failed owner supplied statement flow" }
+        Result.Err(error: val diagnostic) => { if diagnostic.message != failure.message { panic "statement reader lost owner diagnostic" } }
+    }
+    match compiler.checkedSemanticExprCompletion(exprId: expression) {
+        Result.Ok(value: _) => { panic "failed owner supplied expression flow" }
+        Result.Err(error: val diagnostic) => { if diagnostic.message != failure.message { panic "expression reader lost owner diagnostic" } }
     }
     mut val globals = <Comp />
     analyzeFrontendForRequests(c: inout globals,
