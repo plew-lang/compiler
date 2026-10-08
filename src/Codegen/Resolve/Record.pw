@@ -2313,7 +2313,7 @@ pub impl Comp {
     // Mirror checkBoundsStmt's SCOPE maintenance (Let/For/Match binds) without any of
     // its checks — the local env drives typeOf, so it must match what the backend's
     // own local table will hold at emission.
-    inout fn recordStmt(stmtId: U64, expectedTerm: U64 = 0U64, explicitResult: Bool = true) -> Result[(), CompileDiagnostic] {
+    inout fn recordStmt(stmtId: U64, expectedTerm: U64 = 0U64, explicitResult: Bool = true) -> Result[SourceCompletion, CompileDiagnostic] {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                 try self.collectRecordedType(ref: ty)
@@ -2445,8 +2445,9 @@ pub impl Comp {
             Stmt.Break(offset: _) => {}
             Stmt.Continue(offset: _) => {}
         }
+        val completion = self.stmtCompletion(stmtId: stmtId)
         if self.cur.recordCallTemplates {
-            match self.recordedCompletionFact(completion: self.stmtCompletion(stmtId: stmtId)) {
+            match self.recordedCompletionFact(completion: completion) {
                 Optional.Some(v: val fact) => {
                     while self.arena.semanticStatementCompletions.count() <= stmtId {
                         self.arena.semanticStatementCompletions.append(<Optional.None />)
@@ -2456,7 +2457,7 @@ pub impl Comp {
                 Optional.None => {}
             }
         }
-        return <Result.Ok value=() />
+        return <Result.Ok value=completion />
     }
 
     inout fn recordBlock(blkId: U64) -> Result[(), CompileDiagnostic] {
@@ -2500,8 +2501,7 @@ pub impl Comp {
                 }
                 _ => {}
             }
-            try self.recordStmt(stmtId: statement, expectedTerm: expectedTerm, explicitResult: !self.arena.blocks[blkId].implicitResult)
-            val statementFlow = self.stmtCompletion(stmtId: statement)
+            val statementFlow = try self.recordStmt(stmtId: statement, expectedTerm: expectedTerm, explicitResult: !self.arena.blocks[blkId].implicitResult)
             flow = completionThen(prefix: flow, next: statementFlow)
             if permitsGive && statementFlow.source.gives() {
                 match self.arena.stmts[statement] {
