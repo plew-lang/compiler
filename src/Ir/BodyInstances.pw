@@ -72,10 +72,6 @@ pub impl Arena {
         self.setBodyTypeResult(bodyId: bodyId, sourceKind: 1U64, sourceId: recipeId, resultType: resultType)
     }
 
-    fn bodyTypeRecipeResult(bodyId: U64, recipeId: U64) -> U64 {
-        return self.bodyTypeResult(bodyId: bodyId, sourceKind: 1U64, sourceId: recipeId).resultType
-    }
-
     inout fn setBodyTypeTermResult(bodyId: U64, typeTerm: U64, resultType: U64) {
         self.setBodyTypeResult(bodyId: bodyId, sourceKind: 2U64, sourceId: typeTerm, resultType: resultType)
     }

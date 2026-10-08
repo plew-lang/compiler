@@ -20,6 +20,7 @@ fn main() {
         compiler.cur.bodyId = index + 1U64
         compiler.appendFinalCallee(exprId: method, callee: 0U64, siteIsStmt: false, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: results[index]).unwrap()
         if compiler.exprTypeWithChainHole(id: method, chainHoleRef: 0U64).unwrap().ref != results[index] { panic "recorded result was re-inferred" }
+        if compiler.groundedBodyReceiverRef(exprId: method).unwrap() != results[index] { panic "receiver result was re-inferred" }
         index += 1U64
     }
     compiler.cur.bodyId = 1U64
@@ -27,5 +28,6 @@ fn main() {
     compiler.cur.bodyId = 4U64
     compiler.appendFinalCallee(exprId: method, callee: 0U64, siteIsStmt: false, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: compiler.arena.typeCount()).unwrap()
     if !compiler.exprTypeWithChainHole(id: method, chainHoleRef: 0U64).isErr() { panic "corrupt result silently fell back to syntax" }
+    if !compiler.groundedBodyReceiverRef(exprId: method).isErr() { panic "corrupt receiver result silently fell back to syntax" }
     write(s: "recorded-method-result-authority-ok\n")
 }

@@ -28,7 +28,7 @@ fn main() {
         compiler.arena.semanticTypeRecipes.append(<SemanticTypeRecipe kind=1U64 term=secondType />)
     }
     compiler.arena.setBodyTypeRecipeResult(bodyId: firstBody, recipeId: projection, resultType: secondType)
-    assert(compiler.arena.bodyTypeRecipeResult(bodyId: firstBody, recipeId: projection) == secondType)
+    assert(compiler.arena.bodyTypeResult(bodyId: firstBody, sourceKind: 1U64, sourceId: projection).resultType == secondType)
     val source = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=projection sourceScope=0U64 isUnique=false isParameter=true />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
     val bodyIds = [firstBody, secondBody, unitBody]
     val expected = [firstType, secondType, 0U64]

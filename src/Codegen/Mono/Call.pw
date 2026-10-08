@@ -380,24 +380,16 @@ pub impl Comp {
     // this recovery.
     inout fn groundedBodyReceiverRef(exprId: U64) -> Result[U64, CompileDiagnostic] {
         mut val out: U64 = 0U64
-        // A nested call's concrete result is already part of its final
-        // descriptor.  Consult it before the AST-wide type projection: that
-        // projection is deliberately parametric and can lose a cast/view's
-        // concrete surface, whereas the descriptor is the exact receiver for
-        // the enclosing method (`(back as UserId).bytes().count()`).
-        match self.arena.exprs[exprId] {
-            Expr.Call(nameStart: _, nameLen: _, args: _) => {
-                out = (try self.bodyCalleeResultRef(exprId: exprId))
+        // A selected call owns its result, including Unit. CallSiteKey and
+        // BodyInstance identify the record; zero is not evidence of absence.
+        val finalIndex = (try self.bodyCalleeIndex(exprId: exprId))
+        if finalIndex < self.finalCalleeCount() {
+            val result = self.arena.finalCallees[finalIndex].resultTypeRef
+            if result >= self.arena.typeCount() {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: recorded receiver result is outside the type arena") />
             }
-            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
-                out = (try self.bodyCalleeResultRef(exprId: exprId))
-            }
-            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
-                out = (try self.bodyCalleeResultRef(exprId: exprId))
-            }
-            _ => {}
+            return <Result.Ok value=result />
         }
-        if out != 0U64 { return <Result.Ok value=out />}
         // Locals retain their declared structured type even when the generic
         // type-recovery projection exposes an Array through its element view.
         // Prefer that declaration for source selection.

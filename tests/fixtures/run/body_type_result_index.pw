@@ -22,10 +22,14 @@ fn main() {
     while index <= 1000U64 {
         assert(snapshot.bodyTypeTermResult(bodyId: first, typeTerm: index).resultType == index + 1U64)
         assert(arena.bodyTypeTermResult(bodyId: second, typeTerm: index).resultType == index + 2U64)
-        assert(arena.bodyTypeRecipeResult(bodyId: first, recipeId: index) == index + 3U64)
+        assert(arena.bodyTypeResult(bodyId: first, sourceKind: 1U64, sourceId: index).resultType == index + 3U64)
         index += 1U64
     }
     assert(arena.bodyTypeTermResult(bodyId: first, typeTerm: 1001U64).bodyId == 0U64)
+    arena.setBodyTypeRecipeResult(bodyId: first, recipeId: 1001U64, resultType: 0U64)
+    assert(arena.bodyTypeResult(bodyId: first, sourceKind: 1U64, sourceId: 1001U64).bodyId == first)
+    assert(arena.bodyTypeResult(bodyId: first, sourceKind: 1U64, sourceId: 1001U64).resultType == 0U64)
+    assert(arena.bodyTypeResult(bodyId: second, sourceKind: 1U64, sourceId: 1001U64).bodyId == 0U64)
     arena.clearBodyTypeResults()
     assert(arena.bodyTypeTermResult(bodyId: first, typeTerm: 1U64).bodyId == 0U64)
     assert(snapshot.bodyTypeTermResult(bodyId: first, typeTerm: 1U64).bodyId == first)
