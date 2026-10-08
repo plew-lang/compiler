@@ -448,13 +448,13 @@ pub impl Comp {
                         self.cur.selfRef = self.cur.bodySelfRef
                         self.cur.itemRef = self.cur.bodyItemRef
                         self.cur.recvInstRef = self.cur.bodyEnvironment.receiverRef
-                        out = (try self.groundBodyTerm(ref: out))
+                        val grounded = self.groundBodyTerm(ref: out)
                         self.cur.typeParams = savedP
                         self.cur.typeArgs = savedA
                         self.cur.selfRef = savedS
                         self.cur.itemRef = savedI
                         self.cur.recvInstRef = savedR
-                        return <Result.Ok value=out />
+                        return grounded
                     }
                 }
             }
@@ -525,12 +525,12 @@ pub impl Comp {
         self.cur.typeArgs = self.cur.bodyEnvironment.args
         self.cur.selfRef = self.cur.bodySelfRef
         self.cur.itemRef = self.cur.bodyItemRef
-        out = (try self.groundBodyTerm(ref: out))
+        val grounded = self.groundBodyTerm(ref: out)
         self.cur.typeParams = savedP
         self.cur.typeArgs = savedA
         self.cur.selfRef = savedS
         self.cur.itemRef = savedI
-        return <Result.Ok value=out />
+        return grounded
     }
 
 
