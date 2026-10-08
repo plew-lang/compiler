@@ -2693,6 +2693,7 @@ pub struct Arena {
     // arena rather than Comp so every public user of Comp depends only on Arena,
     // and so the entry has the same lifetime/identity as its Expr.
     pub mut val semanticExprTypes: Array[SemanticExprType] = []
+    pub mut val semanticStatementCompletions: Array[Optional[SemanticExpressionCompletion]] = []
     // Record-time completion with a separate unreachable-source type.
     pub mut val semanticValueBlocks: Array[SemanticValueBlockTyping] = []
     // Deferred semantic type-source recipes are a separate dependency graph;
@@ -3377,7 +3378,6 @@ pub struct Decls {
     pub mut val semanticBindingEnds: Dictionary[U64, U64] = [:]
     // Let statement -> type resolved in its lexical Self/associated-type scope.
     pub mut val semanticLetTerms: Dictionary[U64, U64] = [:]
-    pub mut val semanticStatementCompletions: Dictionary[U64, SemanticExpressionCompletion] = [:]
     pub mut val semanticTries: Array[SemanticTry] = []
     pub mut val semanticTryIndexSlots: Array[U64] = []
     pub mut val semanticMatches: Array[SemanticMatch] = []

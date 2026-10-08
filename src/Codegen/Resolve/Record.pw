@@ -2447,7 +2447,12 @@ pub impl Comp {
         }
         if self.cur.recordCallTemplates {
             match self.recordedCompletionFact(completion: self.stmtCompletion(stmtId: stmtId)) {
-                Optional.Some(v: val fact) => { self.decls.semanticStatementCompletions[stmtId] = fact }
+                Optional.Some(v: val fact) => {
+                    while self.arena.semanticStatementCompletions.count() <= stmtId {
+                        self.arena.semanticStatementCompletions.append(<Optional.None />)
+                    }
+                    self.arena.semanticStatementCompletions.set(i: stmtId, value: <Optional.Some v=fact />)
+                }
                 Optional.None => {}
             }
         }

@@ -33,11 +33,13 @@ pub impl Comp {
     }
 
     inout fn checkedSemanticStmtCompletion(stmtId: U64) -> Result[SourceCompletion, CompileDiagnostic] {
-        match self.decls.semanticStatementCompletions.get(key: stmtId) {
-            Optional.Some(v: val fact) => {
-                if try self.semanticCompletionOwnerPrepared(owner: fact.owner) { return <Result.Ok value=fact.flow /> }
+        if stmtId < self.arena.semanticStatementCompletions.count() {
+            match self.arena.semanticStatementCompletions[stmtId] {
+                Optional.Some(v: val fact) => {
+                    if try self.semanticCompletionOwnerPrepared(owner: fact.owner) { return <Result.Ok value=fact.flow /> }
+                }
+                Optional.None => {}
             }
-            Optional.None => {}
         }
         return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: statement completion requires a checked lexical owner") />
     }
