@@ -2004,7 +2004,7 @@ pub impl Comp {
         mut val term: U64 = self.typedIrRefOfInfo(ti: ti)
         // The legacy adapter may still classify a context-typed literal as
         // width-less. It cannot erase the term published by that context.
-        if term == 0U64 && prior.literalContext != 0U64 { term = prior.term }
+        if term == 0U64 && ti.kind == 0I64 && ti.nameLen == 0U64 && prior.literalContext != 0U64 { term = prior.term }
         self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType typeState=self.refinedSemanticTypeState(prior: prior.typeState, term: term) invocation=prior.invocation term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />)
     }
 
@@ -2025,7 +2025,7 @@ pub impl Comp {
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         if prior.literalContext == context && prior.term != 0U64 { return }
         mut val term = prior.term
-        if term == 0U64 {
+        if term == 0U64 && prior.shape == 0U64 {
             match prior.typeState {
                 SemanticExpressionTypeState.Unrecorded | SemanticExpressionTypeState.Pending => {
                     val name = self.internBytes(s: intCtxKw(code: context))
