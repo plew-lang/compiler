@@ -3178,7 +3178,11 @@ pub fn buildMidFor(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> Mi
             // The protocol and its storage exist only after the iterable
             // evaluation has produced a value. A terminating evaluation has
             // no iterator result or Item recipe to instantiate.
-            if !c.exprCompletesNormally(exprId: iter) {
+            val completion = match c.checkedSemanticExprCompletion(exprId: iter) {
+                Result.Ok(value: val flow) => flow
+                Result.Err(error: val diagnostic) => { return <MidBuildError.Frontend diagnostic=diagnostic /> }
+            }
+            if !completion.execution.normal() {
                 val evaluation = midOpenScope(state: inout state)
                 val input = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: iter, typeTerm: c.semanticExprTerm(exprId: iter), allowAccessMarker: false)
                 midFinishEvaluationScope(state: inout state, scope: evaluation)

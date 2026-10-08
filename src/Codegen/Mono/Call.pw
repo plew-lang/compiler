@@ -5911,8 +5911,13 @@ pub impl Comp {
     // Record has already checked source syntax and types. Executable
     // finalization follows only normal continuation after evaluating a value.
     inout fn scanValueContinuation(exprId: U64) -> Result[Bool, CompileDiagnostic] {
+        val completion = if self.cur.bodyId == 0U64 {
+            give self.exprCompletion(exprId: exprId)
+        } else {
+            give try self.checkedSemanticExprCompletion(exprId: exprId)
+        }
         try self.scanExprInsts(exprId: exprId)
-        return <Result.Ok value=self.exprCompletesNormally(exprId: exprId) />
+        return <Result.Ok value=completion.execution.normal() />
     }
 
     inout fn scanConditionChain(conditions: ConditionClauseRange, thenBlk: U64, elseBlk: U64) -> Result[(), CompileDiagnostic] {

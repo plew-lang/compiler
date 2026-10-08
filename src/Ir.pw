@@ -411,8 +411,19 @@ pub enum SemanticExpressionTypeState {
     NoNormalValue
 }
 
+pub enum SemanticCompletionOwner {
+    Function(index: U64)
+    Global(target: U64)
+}
+pub struct SemanticExpressionCompletion {
+    pub val owner: SemanticCompletionOwner
+    pub val flow: SourceCompletion
+}
+pub impl SemanticExpressionCompletion { factory }
+
 pub struct SemanticExprType {
     pub val typeState: SemanticExpressionTypeState = <SemanticExpressionTypeState.Unrecorded />
+    pub val completion: Optional[SemanticExpressionCompletion] = <Optional.None />
     pub val invocation: InvocationCompletion = <InvocationCompletion.Pending />
     pub val term: U64 = 0
     pub val shape: U64 = 0

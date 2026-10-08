@@ -1,0 +1,75 @@
+// Internal handoff: the final reader requires a completed owner and consumes
+// its recorded flow, rather than recomputing from source syntax.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, Stmt, TypeInfo }
+use @Std/Io only { print }
+
+fn owner(compiler: inout Comp, name: String) -> U64 {
+    val span = compiler.internBytes(s: name)
+    mut val index = 0U64
+    while index < compiler.arena.functionCount() {
+        val declaration = compiler.arena.functionAt(index: index)
+        if spansEqual(c: inout compiler, aStart: declaration.nameStart, aLen: declaration.nameLen, bStart: span.nameStart, bLen: span.nameLen) { return index }
+        index += 1U64
+    }
+    panic "missing completion owner"
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="completion.pw" text="fn sample(flag: Bool) -> I64 {{ val value = if flag {{ give 1I64 }} else {{ return 2I64 }} return value }} fn stopped() -> I64 {{ return 9I64 }} fn loopValue() -> I64 {{ val value = {{ while true {{}} give 1I64 }} return value }} fn main() {{}}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val source = owner(compiler: inout compiler, name: "sample")
+    val body = compiler.arena.functionAt(index: source).body
+    val expression = match compiler.arena.stmts[compiler.blockStmtAt(blkId: body, index: 0U64)] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init
+        _ => { panic "missing completion expression" }
+    }
+    match compiler.checkedSemanticExprCompletion(exprId: expression) {
+        Result.Ok(value: _) => { panic "unrequested owner supplied checked flow" }
+        Result.Err(error: _) => {}
+    }
+    compiler.prepareLexicalBody(fnIdx: source).unwrap()
+    val flow = compiler.checkedSemanticExprCompletion(exprId: expression).unwrap()
+    if !flow.source.normal() || !flow.execution.normal() || !flow.source.returns() { panic "mixed completion was not retained" }
+    compiler.recordSemanticExprInfo(exprId: expression, ti: <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />)
+    if !compiler.checkedSemanticExprCompletion(exprId: expression).unwrap().source.returns() { panic "type update erased completion" }
+    val original = compiler.arena.exprs[expression]
+    val stopped = owner(compiler: inout compiler, name: "stopped")
+    compiler.arena.exprs.set(i: expression, value: <Expr.Block body=compiler.arena.functionAt(index: stopped).body offset=0U64 />)
+    if compiler.exprCompletion(exprId: expression).source.normal() { panic "fixture did not change source composition" }
+    if !compiler.checkedSemanticExprCompletion(exprId: expression).unwrap().source.normal() { panic "checked reader reopened the AST" }
+    compiler.arena.exprs.set(i: expression, value: original)
+    val looping = owner(compiler: inout compiler, name: "loopValue")
+    val loopBody = compiler.arena.functionAt(index: looping).body
+    val loopExpression = match compiler.arena.stmts[compiler.blockStmtAt(blkId: loopBody, index: 0U64)] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init
+        _ => { panic "missing loop expression" }
+    }
+    compiler.prepareLexicalBody(fnIdx: looping).unwrap()
+    val loopFlow = compiler.checkedSemanticExprCompletion(exprId: loopExpression).unwrap()
+    if !loopFlow.source.normal() || loopFlow.execution.normal() { panic "source and execution completion were conflated" }
+    compiler.lexicalBodyPreparations = [:]
+    match compiler.checkedSemanticExprCompletion(exprId: expression) {
+        Result.Ok(value: _) => { panic "recorded flow bypassed owner readiness" }
+        Result.Err(error: _) => {}
+    }
+    mut val globals = <Comp />
+    analyzeFrontendForRequests(c: inout globals,
+        input: <FrontendInput.Text path="global-completion.pw" text="val value: I64 = if true {{ give 1I64 }} else {{ give 2I64 }} fn main() {{}}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val global = globals.arena.globals[0U64]
+    val initializer = match globals.arena.stmts[global.letStmt] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init
+        _ => { panic "missing global expression" }
+    }
+    match globals.checkedSemanticExprCompletion(exprId: initializer) {
+        Result.Ok(value: _) => { panic "global flow bypassed preparation" }
+        Result.Err(error: _) => {}
+    }
+    globals.prepareGlobalInitializer(target: global.nameStart).unwrap()
+    if !globals.checkedSemanticExprCompletion(exprId: initializer).unwrap().source.normal() { panic "global completion missing" }
+    print("checked-completion")
+}

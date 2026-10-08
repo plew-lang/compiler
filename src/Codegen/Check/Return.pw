@@ -1,6 +1,35 @@
 // Source continuation and execution exits share one compositional analysis.
 
 pub impl Comp {
+    // A final consumer reads the owner's last Record result. Allocation,
+    // signature readiness, and template closure are not source-check proofs.
+    inout fn checkedSemanticExprCompletion(exprId: U64) -> Result[SourceCompletion, CompileDiagnostic] {
+        if exprId < self.arena.semanticExprTypes.count() {
+            match self.arena.semanticExprTypes[exprId].completion {
+                Optional.Some(v: val fact) => {
+                    match fact.owner {
+                        SemanticCompletionOwner.Function(index: val owner) => {
+                            if owner < self.arena.functionCount() {
+                                match self.lexicalBodyPreparations.get(key: owner) {
+                                    Optional.Some(v: val prepared) => {
+                                        try prepared
+                                        return <Result.Ok value=fact.flow />
+                                    }
+                                    Optional.None => {}
+                                }
+                            }
+                        }
+                        SemanticCompletionOwner.Global(target: val target) => {
+                            if self.globalInitializerPrepared(target: target) { return <Result.Ok value=fact.flow /> }
+                        }
+                    }
+                }
+                Optional.None => {}
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: expression completion requires a checked lexical owner") />
+    }
+
     inout fn requireExpressionValue(exprId: U64) -> Result[(), CompileDiagnostic] {
         return self.requireExpressionCompletionValue(exprId: exprId, completion: self.exprCompletion(exprId: exprId))
     }
