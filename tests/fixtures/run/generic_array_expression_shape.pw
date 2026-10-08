@@ -1,0 +1,13 @@
+use @Std/Io only { print }
+
+fn first[T](items: Array[T]) -> T { return items[0U64] }
+fn identity[T](value: T) -> T { return value }
+fn main() {
+    print(first(items: [1I64, 2I64]))
+    print(first(items: { give [3I64, 4I64] }))
+    print(first(items: if true { give [5I64] } else { give [6I64] }))
+    print(first(items: match true { true => [7I64], false => [8I64] }))
+    print(first(items: [[9I64], [10I64]])[0U64])
+    print(identity(value: [11I64])[0U64])
+    print(first(items: ["text"]))
+}

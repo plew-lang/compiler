@@ -116,32 +116,6 @@ pub impl Comp {
         return self.findOrAddTypeRef(nameStart: ti.nameStart, nameLen: ti.nameLen)
     }
 
-    // The element ref of an `Array[E]`-typed argument, from the expression's type —
-    // an array local's carried ref, a call's declared `Array[E]` return, a field, … —
-    // not just an Ident local (an Ident-only walk left `f(xs: mkArr())` uninferred).
-    // A NON-EMPTY array-literal argument (`f(xs: ["a", "b"])`) derives from its first
-    // element (exprType reports the literal itself as unknown — element-wise typing).
-    inout fn argArrayElemRef(argExpr: U64) -> Result[U64, CompileDiagnostic] {
-        val r: U64 = self.typedIrRefOfInfo(ti: (try self.typeOf(id: argExpr)))
-        if r != 0 && r < self.arena.typeCount() {
-            val t: TypeRef = self.arena.typeAt(index: r)
-            if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-                if t.args.count() == 1 {
-                    return <Result.Ok value=t.args[0] />
-                }
-            }
-        }
-        match self.arena.exprs[argExpr] {
-            Expr.Array(val elems) => {
-                if elems.len > 0 {
-                    return <Result.Ok value=self.typedIrRefOfInfo(ti: (try self.exprType(id: self.exprAt(exprs: elems, index: 0U64)))) />
-                }
-            }
-            _ => {}
-        }
-        return <Result.Ok value=0 />
-    }
-
     inout fn argViewRef(argExpr: U64, baseRef: U64) -> U64 {
         if baseRef == 0 {
             return 0
@@ -183,23 +157,9 @@ pub impl Comp {
                     continue
                 }
                 mut val cand: U64 = 0
-                if p.tyIsArray {
-                    // `Array[T]` param: infer T from the argument array's element.
-                    if p.tyNameId == tp.nameId {
-                        val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
-                        if ai < args.len {
-                            cand = (try self.argArrayElemRef(argExpr: self.argAt(args: args, index: ai).expr))
-                        }
-                    }
-                } else {
-                    // structurally unify the parameter's type against the argument's, so
-                    // `T` is found whether it is the whole parameter type (`x: T`) or
-                    // nested in it (`f: fn(x: Item) -> T`).
-                    val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
-                    if ai < args.len {
-                        val argRef = try self.inferenceArgumentType(exprId: self.argAt(args: args, index: ai).expr)
-                        cand = self.unifyTypeParam(paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
-                    }
+                if supplied < args.len {
+                    val argRef = try self.inferenceArgumentType(exprId: self.argAt(args: args, index: supplied).expr)
+                    cand = self.unifyTypeParam(paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
                 }
                 if cand != 0 {
                     if found == 0 {

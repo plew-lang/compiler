@@ -524,7 +524,7 @@ pub impl Comp {
         val recorded = self.parametricExprTerm(exprId: exprId)
         if recorded != 0U64 { return <Result.Ok value=recorded /> }
         val info = try self.exprType(id: exprId)
-        return <Result.Ok value=self.argViewRef(argExpr: exprId, baseRef: self.tyRefOfInfo(ti: info)) />
+        return <Result.Ok value=self.argViewRef(argExpr: exprId, baseRef: self.typedIrRefOfInfo(ti: info)) />
     }
 
     inout fn exprType(id: U64) -> Result[TypeInfo, CompileDiagnostic] {
@@ -937,7 +937,22 @@ pub impl Comp {
                 }
                 return <Result.Ok value=<TypeInfo kind=2 nameStart=typeStart nameLen=typeLen ref=0 /> />
             }
-            Expr.Array(val elems) | Expr.Dictionary(entries: val elems) | Expr.Range(rangeTy: _, endpoints: val elems) => { return <Result.Ok value=scalarInfo() />}
+            Expr.Array(val elems) => {
+                val recorded = self.parametricExprTerm(exprId: id)
+                if recorded != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: recorded) /> }
+                // Pre-Record inference has the same structural shape as the
+                // final array term. Only an independently known first element
+                // supplies its type; later elements cannot choose it backwards.
+                if elems.len == 0U64 { return <Result.Ok value=scalarInfo() /> }
+                val first = self.exprAt(exprs: elems, index: 0U64)
+                mut val element = self.parametricExprTerm(exprId: first)
+                if element == 0U64 {
+                    element = self.typedIrRefOfInfo(ti: (try self.exprTypeWithChainHole(id: first, chainHoleRef: chainHoleRef)))
+                }
+                if element == 0U64 { return <Result.Ok value=scalarInfo() /> }
+                return <Result.Ok value=self.typeInfoOfRef(ref: self.arrayRefOfElem(elemRef: element)) />
+            }
+            Expr.Dictionary(entries: _) | Expr.Range(rangeTy: _, endpoints: _) => { return <Result.Ok value=scalarInfo() /> }
             Expr.Index(val base, val index) => {
                 val bt: TypeInfo = (try self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef))
                 if bt.kind == 3 {

@@ -351,17 +351,7 @@ pub impl Comp {
                 val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
                 if ai < args.len {
                     val argTerm: U64 = self.parametricCallArgumentTerm(exprId: self.argAt(args: args, index: ai).expr)
-                    mut val candidate: U64 = 0U64
-                    if p.tyIsArray {
-                        if p.tyNameId == tp.nameId && argTerm != 0U64 && argTerm < self.arena.typeCount() {
-                            val at: TypeRef = self.arena.typeAt(index: argTerm)
-                            if at.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
-                                candidate = at.args[0]
-                            }
-                        }
-                    } else if argTerm != 0U64 {
-                        candidate = self.unifyTypeParam(paramRef: p.ty, argRef: argTerm, tpStart: tp.nameStart, tpLen: tp.nameLen)
-                    }
+                    val candidate = self.unifyTypeParam(paramRef: p.ty, argRef: argTerm, tpStart: tp.nameStart, tpLen: tp.nameLen)
                     if candidate != 0U64 { out.set(i: ti, value: candidate) }
                 }
                 pi += 1U64
@@ -2054,10 +2044,9 @@ pub impl Comp {
                     try self.recordExpr(exprId: self.exprAt(exprs: elems, index: i), chainHoleRef: chainHoleRef, expectedTerm: elementContext)
                     i += 1
                 }
-                // an array literal types as `Array[E]` from its first element (exprType
-                // reports a literal as unknown for the CHECK passes — element-wise checking
-                // — so the refinement lives here, not in exprType). An empty literal stays
-                // 0; its Let-context declared type records it (recordStmt).
+                // Publish the same Array[E] shape used by declaration inference,
+                // now that child recording has applied the available context.
+                // Empty/unresolved arrays retain their need for an element context.
                 if elems.len > 0U64 {
                     val eRef: U64 = self.parametricExprTerm(exprId: self.exprAt(exprs: elems, index: 0U64))
                     if eRef != 0U64 {
