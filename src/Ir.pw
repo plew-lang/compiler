@@ -3375,7 +3375,8 @@ pub struct Decls {
     pub mut val callTemplateBodyTails: Dictionary[U64, U64] = [:]
     pub mut val callTemplateBodyNext: Array[U64] = []
     pub mut val destructureSites: Array[DestructureSite] = []
-    pub mut val forTypeRecipes: Array[ForTypeRecipe] = []
+    mut val forTypeRecipes: Array[ForTypeRecipe] = []
+    mut val forTypeRecipeRows: Dictionary[U64, U64] = [:]
     // Semantic lowering requirement, not a source-language restriction.  A
     // body with a conditional unique move must not fall back to the legacy
     // path-insensitive AST emitter while Mid migration is incremental.

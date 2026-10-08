@@ -272,17 +272,15 @@ pub impl Comp {
     // This lookup is deliberately keyed by the statement navigation id, while
     // a nested CallResult recipe retains its own CallSiteKey identity.
     inout fn finalizeForTypeRecipes(stmtId: U64) -> Result[U64, CompileDiagnostic] {
-        mut val i: U64 = 0U64
-        while i < self.decls.forTypeRecipes.count() {
-            val recipe: ForTypeRecipe = self.decls.forTypeRecipes[i]
-            if recipe.stmtId == stmtId {
-                (try self.groundSemanticTypeRecipe(recipeId: recipe.iteratorRecipe))
-                (try self.groundSemanticTypeRecipe(recipeId: recipe.nextRecipe))
-                return <Result.Ok value=(try self.groundSemanticTypeRecipe(recipeId: recipe.itemRecipe)) />
+        val recipe = match self.decls.forTypeRecipe(stmtId: stmtId) {
+            Optional.Some(v: val recorded) => { give recorded }
+            Optional.None => {
+                return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: for type recipe was not recorded") />
             }
-            i += 1U64
         }
-        return <Result.Ok value=0U64 />
+        (try self.groundSemanticTypeRecipe(recipeId: recipe.iteratorRecipe))
+        (try self.groundSemanticTypeRecipe(recipeId: recipe.nextRecipe))
+        return <Result.Ok value=(try self.groundSemanticTypeRecipe(recipeId: recipe.itemRecipe)) />
     }
     // CallResolution keys share one U64 namespace for ordinary Func bodies and
     // closure bodies.  Arena expression ids occupy the low range, so reserve

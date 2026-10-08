@@ -3189,11 +3189,9 @@ pub fn buildMidFor(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> Mi
                 }
             }
             if isRange || isStruct { return <MidBuildError.UnsupportedFor /> }
-            mut val recipe: ForTypeRecipe = <ForTypeRecipe />
-            mut val index: U64 = 0U64
-            while index < c.decls.forTypeRecipes.count() {
-                if c.decls.forTypeRecipes[index].stmtId == stmtId { recipe = c.decls.forTypeRecipes[index]
-                    index = c.decls.forTypeRecipes.count() } else { index += 1U64 }
+            val recipe: ForTypeRecipe = match c.decls.forTypeRecipe(stmtId: stmtId) {
+                Optional.Some(v: val recorded) => { give recorded }
+                Optional.None => { return <MidBuildError.MissingSemanticType /> }
             }
             if recipe.iteratorRecipe == 0U64 || recipe.nextRecipe == 0U64 || recipe.itemRecipe == 0U64 { return <MidBuildError.MissingSemanticType /> }
             val loopScope: U64 = midOpenScope(state: inout state)

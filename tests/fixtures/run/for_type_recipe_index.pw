@@ -1,0 +1,30 @@
+use @Std/Io only { print }
+use /Ir only { Decls, ForTypeRecipe }
+fn main() {
+    mut val declarations = <Decls />
+    match declarations.forTypeRecipe(stmtId: 0U64) {
+        Optional.Some(v: _) => { panic "missing recipe fabricated" }
+        Optional.None => {}
+    }
+    mut val index = 0U64
+    while index < 300U64 {
+        declarations.registerForTypeRecipe(recipe: <ForTypeRecipe stmtId=index iteratorRecipe=index + 1U64 nextRecipe=index + 2U64 itemRecipe=index + 3U64 />)
+        index += 1U64
+    }
+    mut val snapshot = declarations
+    declarations.registerForTypeRecipe(recipe: <ForTypeRecipe stmtId=42U64 itemRecipe=999U64 />)
+    index = 0U64
+    while index < 300U64 {
+        val recipe = declarations.forTypeRecipe(stmtId: index).unwrap()
+        if recipe.iteratorRecipe != index + 1U64 || recipe.nextRecipe != index + 2U64 || recipe.itemRecipe != index + 3U64 { panic "lexical recipe replaced" }
+        index += 1U64
+    }
+    val high = 18446744073709551615U64
+    snapshot.registerForTypeRecipe(recipe: <ForTypeRecipe stmtId=high itemRecipe=7U64 />)
+    if snapshot.forTypeRecipe(stmtId: high).unwrap().itemRecipe != 7U64 { panic "full width statement lost" }
+    match declarations.forTypeRecipe(stmtId: high) {
+        Optional.Some(v: _) => { panic "copy shared insertion" }
+        Optional.None => {}
+    }
+    print("for-type-recipe-index")
+}

@@ -158,10 +158,14 @@ pub impl Comp {
     // the same immutable CallResolution, without a second trait lookup.
     // Recording it on Decls makes it survive fresh local scopes.
     inout fn recordForItemTypeRecipe(stmtId: U64) -> Result[(), CompileDiagnostic] {
+        match self.decls.forTypeRecipe(stmtId: stmtId) {
+            Optional.Some(v: _) => { return <Result.Ok value=() /> }
+            Optional.None => {}
+        }
         val iterator: U64 = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 exprId=stmtId siteIsStmt=true callSite=(try self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: 1U64)) />)
         val next: U64 = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 exprId=stmtId siteIsStmt=true callSite=(try self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: 2U64)) />)
         val item: U64 = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=4U64 input=next />)
-        self.decls.forTypeRecipes.append(<ForTypeRecipe stmtId=stmtId iteratorRecipe=iterator nextRecipe=next itemRecipe=item />)
+        self.decls.registerForTypeRecipe(recipe: <ForTypeRecipe stmtId=stmtId iteratorRecipe=iterator nextRecipe=next itemRecipe=item />)
         return <Result.Ok value=() />
     }
 

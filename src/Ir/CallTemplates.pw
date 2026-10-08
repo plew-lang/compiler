@@ -30,3 +30,19 @@ pub impl Decls {
         return self.callTemplates.count()
     }
 }
+
+// A source statement has one lexical recipe, shared by all body instances.
+// Keep the first publication just as the original first-match readers did.
+pub impl Decls {
+    fn forTypeRecipe(stmtId: U64) -> Optional[ForTypeRecipe] {
+        val row = self.forTypeRecipeRows.getOr(key: stmtId, fallback: 0U64)
+        if row == 0U64 { return <Optional.None /> }
+        return <Optional.Some v=self.forTypeRecipes[row - 1U64] />
+    }
+
+    inout fn registerForTypeRecipe(recipe: ForTypeRecipe) {
+        if self.forTypeRecipeRows.getOr(key: recipe.stmtId, fallback: 0U64) != 0U64 { return }
+        self.forTypeRecipes.append(recipe)
+        self.forTypeRecipeRows[recipe.stmtId] = self.forTypeRecipes.count()
+    }
+}
