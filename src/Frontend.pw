@@ -78,6 +78,29 @@ fn functionHasTraitReceiver(arena ~: Arena, decls ~: Decls, fnIdx: U64) -> Bool 
 }
 
 
+// Source owner IDs are dense arena indices. Retain the complete request
+// result at that index; allocation alone never means preparation succeeded.
+pub struct LexicalBodyPreparations {
+    mut val outcomes: Array[Optional[Result[(), CompileDiagnostic]]] = []
+    mut val requests: U64 = 0U64
+}
+pub impl LexicalBodyPreparations {
+    factory
+    fn count() -> U64 { return self.requests }
+    fn get(key: U64) -> Optional[Result[(), CompileDiagnostic]] {
+        if key >= self.outcomes.count() { return <Optional.None /> }
+        return self.outcomes[key]
+    }
+    inout fn record(owner: U64, result: Result[(), CompileDiagnostic]) {
+        while self.outcomes.count() <= owner { self.outcomes.append(<Optional.None />) }
+        match self.outcomes[owner] {
+            Optional.None => { self.requests += 1U64 }
+            Optional.Some(v: _) => {}
+        }
+        self.outcomes.set(i: owner, value: <Optional.Some v=result />)
+    }
+}
+
 // Append-only publication progress belongs to one finalization session.
 // A diagnostic is terminal for this publisher; partial rows are never retried
 // or presented as a successful publication boundary.
@@ -213,7 +236,7 @@ pub struct Comp {
     pub mut val closedCallTemplateBodies: Array[Bool] = []
     // Session-local outcomes of lexical preparation, not whole-body ownership
     // or effect proofs. Failure must remain failure even after template closure.
-    pub mut val lexicalBodyPreparations: Dictionary[U64, Result[(), CompileDiagnostic]] = [:]
+    pub mut val lexicalBodyPreparations: LexicalBodyPreparations = <LexicalBodyPreparations />
     // Lowering assigns authored type uses to their declaration, expression or
     // block. Record requests local uses; declaration loading checks only the
     // remaining signature/field uses. Synthetic types are not new source uses.

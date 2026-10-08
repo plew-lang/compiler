@@ -2609,7 +2609,7 @@ pub impl Comp {
         val saved = self.cur
         val result = self.prepareLexicalBodyUncached(owner: owner)
         self.cur = saved
-        self.lexicalBodyPreparations[owner] = result
+        self.lexicalBodyPreparations.record(owner: owner, result: result)
         return result
     }
 
