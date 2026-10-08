@@ -120,6 +120,15 @@ pub impl Comp {
         val saved = self.cur
         val priorQueries = self.resolvingGlobalTypes
         self.resolvingGlobalTypes.append(local.nameStart)
+        val inferred = self.inferPendingGlobalLocal(local: local, globalIndex: globalIndex)
+        self.resolvingGlobalTypes = priorQueries
+        self.cur = saved
+        val result = try inferred
+        self.cur.locals.set(i: index, value: result)
+        return <Result.Ok value=result />
+    }
+
+    inout fn inferPendingGlobalLocal(local: Local, globalIndex: U64) -> Result[Local, CompileDiagnostic] {
         try self.enterGlobalInitializer(target: local.nameStart)
         mut val result: Local = local
         match self.arena.stmts[self.arena.globals[globalIndex].letStmt] {
@@ -129,9 +138,6 @@ pub impl Comp {
             }
             _ => {}
         }
-        self.resolvingGlobalTypes = priorQueries
-        self.cur = saved
-        self.cur.locals.set(i: index, value: result)
         return <Result.Ok value=result />
     }
 
@@ -162,6 +168,12 @@ pub impl Comp {
     inout fn prepareGlobalInitializer(target: U64) -> Result[(), CompileDiagnostic] {
         if self.globalInitializerPrepared(target: target) { return <Result.Ok value=() /> }
         val saved = self.cur
+        val result = self.prepareGlobalInitializerUncached(target: target)
+        self.cur = saved
+        return result
+    }
+
+    inout fn prepareGlobalInitializerUncached(target: U64) -> Result[(), CompileDiagnostic] {
         try self.enterGlobalInitializer(target: target)
         val index: U64 = self.globalIndexForDeclarationTarget(target: target)
         val stmt: U64 = self.arena.globals[index].letStmt
@@ -176,7 +188,6 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: target, msg: "internal error: global default argument plans are incomplete") />
         }
         self.preparedGlobalTargets.append(target)
-        self.cur = saved
         return <Result.Ok value=() />
     }
 

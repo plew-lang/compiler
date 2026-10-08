@@ -1,0 +1,61 @@
+// Internal preparation boundary: failure and success restore the caller cursor.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, Stmt, Local }
+use @Std/Io only { print }
+
+fn assertCursor(compiler: inout Comp) {
+    if compiler.cur.checkFn != 70001U64 || compiler.cur.bodyFnIdx != 70002U64 || compiler.cur.bodyId != 70003U64 || !compiler.cur.recordCallTemplates {
+        panic("initializer request leaked its cursor")
+    }
+    match compiler.cur.globalInitializerTarget {
+        Optional.Some(v: val target) => { if target != 70004U64 { panic("initializer target leaked") } }
+        Optional.None => { panic("initializer target disappeared") }
+    }
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="global-requests.pw" text="val broken: I64 = 1I64 val good: I64 = 2I64 fn main() {{}}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val broken = compiler.arena.globals[0U64]
+    val good = compiler.arena.globals[1U64]
+    val initializer = match compiler.arena.stmts[broken.letStmt] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init
+        _ => { panic("missing fixture initializer") }
+    }
+    // Admission has already succeeded. Corrupt only this internal owner's
+    // expression so the request must reject without publishing readiness.
+    val missing = compiler.internBytes(s: "missingInitializer")
+    compiler.arena.exprs.set(i: initializer, value: <Expr.Ident start=missing.nameStart len=missing.nameLen />)
+    compiler.cur.checkFn = 70001U64
+    compiler.cur.bodyFnIdx = 70002U64
+    compiler.cur.bodyId = 70003U64
+    compiler.cur.recordCallTemplates = true
+    compiler.cur.globalInitializerTarget = <Optional.Some v=70004U64 />
+    val diagnostic = match compiler.prepareGlobalInitializer(target: broken.nameStart) {
+        Result.Err(error: val failure) => failure
+        Result.Ok(value: _) => { panic("invalid initializer accepted") }
+    }
+    assertCursor(compiler: inout compiler)
+    if compiler.globalInitializerPrepared(target: broken.nameStart) { panic("failure published readiness") }
+    match compiler.prepareGlobalInitializer(target: broken.nameStart) {
+        Result.Err(error: val failure) => { if failure.message != diagnostic.message { panic("retry changed diagnostic") } }
+        Result.Ok(value: _) => { panic("retry accepted invalid initializer") }
+    }
+    assertCursor(compiler: inout compiler)
+    compiler.prepareGlobalInitializer(target: good.nameStart).unwrap()
+    assertCursor(compiler: inout compiler)
+    compiler.prepareGlobalInitializer(target: good.nameStart).unwrap()
+    assertCursor(compiler: inout compiler)
+    val pending = <Local isGlobal=true globalTypePending=true nameStart=good.nameStart nameLen=good.nameLen tyStart=0U64 tyLen=0U64 isArray=false ty=0U64 isInout=false isMut=false owned=false moved=false cnum=0U64 />
+    compiler.cur.locals = [pending]
+    compiler.resolvingGlobalTypes = [70005U64]
+    val resolved = compiler.typedLocal(index: 0U64).unwrap()
+    assertCursor(compiler: inout compiler)
+    if resolved.globalTypePending || compiler.cur.locals.count() != 1U64 || compiler.cur.locals[0U64].globalTypePending { panic("global type was not published to caller") }
+    if compiler.resolvingGlobalTypes.count() != 1U64 || compiler.resolvingGlobalTypes[0U64] != 70005U64 { panic("type query leaked its stack") }
+    if !compiler.globalInitializerPrepared(target: good.nameStart) || compiler.preparedGlobalTargets.count() != 1U64 { panic("global readiness was not independent") }
+    print("ok")
+}
