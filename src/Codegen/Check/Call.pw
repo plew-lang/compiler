@@ -179,41 +179,6 @@ pub impl Comp {
         return self.diagnosticAt(offset: offset, msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types")
     }
 
-    inout fn tcCheckGenericArgConsistency(f: Func, args: ArgRange) -> Result[(), CompileDiagnostic] {
-        if f.typeParams.count() == 0U64 {
-            return <Result.Ok value=() />
-        }
-        mut val tpi: U64 = 0
-        while tpi < f.typeParams.count() {
-            mut val firstRef: U64 = 0
-            mut val ai: U64 = 0
-            while ai < args.len {
-                val pi: U64 = self.paramIndexForArg(params: f.params, args: args, argIdx: ai)
-                if pi < f.params.count() {
-                    val p: Param = self.funcParamAt(params: f.params, index: pi)
-                    // Only a bare parameter position contributes an inverse
-                    // binding.  A projection such as `T#Parser.Output` has
-                    // the same legacy head spelling but cannot determine T.
-                    if self.plainBinder(ref: p.ty, params: <PatternBindInput.Function range=f.typeParams />) == tpi {
-                        val ar: U64 = (try self.inferType(id: self.argAt(args: args, index: ai).expr))
-                        if ar != 0U64 {
-                            if firstRef == 0U64 {
-                                firstRef = ar
-                            } else {
-                                if !((try self.typesCompatible(expected: firstRef, inferred: ar))) {
-                                    return <Result.Err error=self.typeArgumentConflictDiagnostic(offset: self.exprOffset(id: self.argAt(args: args, index: ai).expr)) />
-                                }
-                            }
-                        }
-                    }
-                }
-                ai += 1U64
-            }
-            tpi += 1U64
-        }
-        return <Result.Ok value=() />
-    }
-
     inout fn checkArgInoutMode(p: Param, arg: Arg) -> Result[(), CompileDiagnostic] {
         if p.isInout {
             if arg.isInout {
@@ -273,7 +238,6 @@ pub impl Comp {
             return <Result.Ok value=() />
         }
         val f: Func = self.arena.functionAt(index: fi)
-        try self.tcCheckGenericArgConsistency(f: f, args: args)
         val ps: Array[Param] = self.copyFuncParams(params: f.params)
         val environment = try self.callParameterEnvironment(exprId: id, callee: fi, receiverRef: 0U64, args: args)
         mut val i: U64 = 0
@@ -360,7 +324,6 @@ pub impl Comp {
             val mi: U64 = (try self.resolvedCallee(id: exprId))
             if mi != self.arena.functionCount() {
                 val mf: Func = self.arena.functionAt(index: mi)
-                try self.tcCheckGenericArgConsistency(f: mf, args: args)
                 val ps: Array[Param] = self.copyFuncParams(params: mf.params)
                 val environment = try self.callParameterEnvironment(exprId: exprId, callee: mi, receiverRef: rt.ref, args: args)
                 mut val i: U64 = 0
