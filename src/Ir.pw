@@ -3377,6 +3377,7 @@ pub struct Decls {
     pub mut val semanticBindingEnds: Dictionary[U64, U64] = [:]
     // Let statement -> type resolved in its lexical Self/associated-type scope.
     pub mut val semanticLetTerms: Dictionary[U64, U64] = [:]
+    pub mut val semanticStatementCompletions: Dictionary[U64, SemanticExpressionCompletion] = [:]
     pub mut val semanticTries: Array[SemanticTry] = []
     pub mut val semanticTryIndexSlots: Array[U64] = []
     pub mut val semanticMatches: Array[SemanticMatch] = []

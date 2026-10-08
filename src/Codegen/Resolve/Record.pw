@@ -2445,6 +2445,12 @@ pub impl Comp {
             Stmt.Break(offset: _) => {}
             Stmt.Continue(offset: _) => {}
         }
+        if self.cur.recordCallTemplates {
+            match self.recordedCompletionFact(completion: self.stmtCompletion(stmtId: stmtId)) {
+                Optional.Some(v: val fact) => { self.decls.semanticStatementCompletions[stmtId] = fact }
+                Optional.None => {}
+            }
+        }
         return <Result.Ok value=() />
     }
 

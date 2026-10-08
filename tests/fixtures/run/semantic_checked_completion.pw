@@ -31,7 +31,19 @@ fn main() {
         Result.Ok(value: _) => { panic "unrequested owner supplied checked flow" }
         Result.Err(error: _) => {}
     }
+    val statement = compiler.blockStmtAt(blkId: body, index: 0U64)
+    match compiler.checkedSemanticStmtCompletion(stmtId: statement) {
+        Result.Ok(value: _) => { panic "unrequested owner supplied statement flow" }
+        Result.Err(error: _) => {}
+    }
     compiler.prepareLexicalBody(fnIdx: source).unwrap()
+    val statementFlow = compiler.checkedSemanticStmtCompletion(stmtId: statement).unwrap()
+    if !statementFlow.source.normal() || !statementFlow.source.returns() { panic "statement completion was not retained" }
+    val originalStatement = compiler.arena.stmts[statement]
+    compiler.arena.stmts.set(i: statement, value: <Stmt.Break offset=0U64 />)
+    if compiler.stmtCompletion(stmtId: statement).source.normal() { panic "fixture did not change statement composition" }
+    if !compiler.checkedSemanticStmtCompletion(stmtId: statement).unwrap().source.normal() { panic "checked statement reader reopened syntax" }
+    compiler.arena.stmts.set(i: statement, value: originalStatement)
     val flow = compiler.checkedSemanticExprCompletion(exprId: expression).unwrap()
     if !flow.source.normal() || !flow.execution.normal() || !flow.source.returns() { panic "mixed completion was not retained" }
     compiler.recordSemanticExprInfo(exprId: expression, ti: <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />)
@@ -52,6 +64,10 @@ fn main() {
     val loopFlow = compiler.checkedSemanticExprCompletion(exprId: loopExpression).unwrap()
     if !loopFlow.source.normal() || loopFlow.execution.normal() { panic "source and execution completion were conflated" }
     compiler.lexicalBodyPreparations = [:]
+    match compiler.checkedSemanticStmtCompletion(stmtId: statement) {
+        Result.Ok(value: _) => { panic "statement fact bypassed owner readiness" }
+        Result.Err(error: _) => {}
+    }
     match compiler.checkedSemanticExprCompletion(exprId: expression) {
         Result.Ok(value: _) => { panic "recorded flow bypassed owner readiness" }
         Result.Err(error: _) => {}

@@ -6078,8 +6078,13 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < self.blockStmtCount(blkId: blkId) {
             val statement = self.blockStmtAt(blkId: blkId, index: i)
+            val completion = if self.cur.bodyId == 0U64 {
+                give self.stmtCompletion(stmtId: statement)
+            } else {
+                give try self.checkedSemanticStmtCompletion(stmtId: statement)
+            }
             try self.scanStmtInsts(stmtId: statement)
-            if !self.stmtCompletion(stmtId: statement).execution.normal() { break }
+            if !completion.execution.normal() { break }
             i += 1
         }
         self.popLocals(mark: mark)

@@ -1089,21 +1089,26 @@ pub impl Comp {
 
     // Publish only after the expression's operands and branches have been
     // checked and composed. A single arm's exit is not its parent's exit.
+    inout fn recordedCompletionFact(completion: SourceCompletion) -> Optional[SemanticExpressionCompletion] {
+        if !self.cur.recordCallTemplates { return <Optional.None /> }
+        val owner = self.decls.callTemplateLexicalRoots.getOr(key: self.cur.checkFn, fallback: self.cur.checkFn)
+        if owner != 18446744073709551615U64 {
+            return <Optional.Some v=<SemanticExpressionCompletion owner=<SemanticCompletionOwner.Function index=owner /> flow=completion /> />
+        }
+        match self.cur.globalInitializerTarget {
+            Optional.Some(v: val target) => { return <Optional.Some v=<SemanticExpressionCompletion owner=<SemanticCompletionOwner.Global target=target /> flow=completion /> /> }
+            Optional.None => { return <Optional.None /> }
+        }
+    }
+
     inout fn recordSemanticExprCompletion(exprId: U64, completion: SourceCompletion) {
         if completion.source.normal() && !self.cur.recordCallTemplates { return }
         self.ensureSemanticExprType(exprId: exprId)
         val prior = self.arena.semanticExprTypes[exprId]
         mut val fact = prior.completion
-        if self.cur.recordCallTemplates {
-            val owner = self.decls.callTemplateLexicalRoots.getOr(key: self.cur.checkFn, fallback: self.cur.checkFn)
-            if owner != 18446744073709551615U64 {
-                fact = <Optional.Some v=<SemanticExpressionCompletion owner=<SemanticCompletionOwner.Function index=owner /> flow=completion /> />
-            } else {
-                match self.cur.globalInitializerTarget {
-                    Optional.Some(v: val target) => { fact = <Optional.Some v=<SemanticExpressionCompletion owner=<SemanticCompletionOwner.Global target=target /> flow=completion /> /> }
-                    Optional.None => {}
-                }
-            }
+        match self.recordedCompletionFact(completion: completion) {
+            Optional.Some(v: val recorded) => { fact = <Optional.Some v=recorded /> }
+            Optional.None => {}
         }
         val state = if completion.source.normal() { give prior.typeState } else { give <SemanticExpressionTypeState.NoNormalValue /> }
         self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType
