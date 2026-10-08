@@ -1913,7 +1913,7 @@ pub impl Comp {
     fn callableResultIsUnit(ref: U64) -> Bool {
         if ref == 0U64 { return true }
         if ref >= self.arena.typeCount() { return false }
-        val term = self.arena.typeAt(index: ref)
+        val term = self.arena.typeTerms[ref]
         return (term.isRecord && term.recordFieldTerms.count() == 0U64) || (term.nameLen == 0U64 && term.args.count() == 0U64 && term.paramId == 0U64 && term.assocNameId == 0U64 && !term.isAny)
     }
 
