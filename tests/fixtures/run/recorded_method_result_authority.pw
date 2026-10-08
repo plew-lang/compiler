@@ -1,0 +1,31 @@
+use @Std/Io only { write }
+use /Frontend only { Comp }
+use /Ir only { Expr }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val first = compiler.internTmpName(prefix: "First", n: 0U64)
+    val second = compiler.internTmpName(prefix: "Second", n: 0U64)
+    val firstTerm = compiler.simpleTypeRef(nameStart: first.nameStart, nameLen: first.nameLen)
+    val secondTerm = compiler.simpleTypeRef(nameStart: second.nameStart, nameLen: second.nameLen)
+    // This syntax cannot resolve a method. Only the selected call record
+    // owns its result; declaration lookup must never replace that evidence.
+    val receiver = compiler.pushExpr(e: <Expr.Ident start=first.nameStart len=first.nameLen />)
+    val args = compiler.pushArgs(args: [])
+    val method = compiler.pushExpr(e: <Expr.Method recv=receiver nameStart=second.nameStart nameLen=second.nameLen args=args />)
+    val results = [firstTerm, 0U64, secondTerm]
+    mut val index = 0U64
+    while index < results.count() {
+        compiler.cur.bodyId = index + 1U64
+        compiler.appendFinalCallee(exprId: method, callee: 0U64, siteIsStmt: false, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: results[index]).unwrap()
+        if compiler.exprTypeWithChainHole(id: method, chainHoleRef: 0U64).unwrap().ref != results[index] { panic "recorded result was re-inferred" }
+        index += 1U64
+    }
+    compiler.cur.bodyId = 1U64
+    if compiler.exprTypeWithChainHole(id: method, chainHoleRef: 0U64).unwrap().ref != firstTerm { panic "body instance result was overwritten" }
+    compiler.cur.bodyId = 4U64
+    compiler.appendFinalCallee(exprId: method, callee: 0U64, siteIsStmt: false, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: compiler.arena.typeCount()).unwrap()
+    if !compiler.exprTypeWithChainHole(id: method, chainHoleRef: 0U64).isErr() { panic "corrupt result silently fell back to syntax" }
+    write(s: "recorded-method-result-authority-ok\n")
+}

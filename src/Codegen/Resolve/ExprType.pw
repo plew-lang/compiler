@@ -1038,23 +1038,19 @@ pub impl Comp {
                 return <Result.Ok value=scalarInfo() />
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                // Mono has already selected this call under the concrete body
-                // instance.  Its final result is the type authority for a
-                // shared generic AST (`T` may carry an S#P view); asking the
-                // syntax resolver again would erase that substitution and turn
-                // the same call into a bare lookup.  The descriptor key includes
-                // the current body instance, so this is safe for every phase.
-                val finalResult: U64 = (try self.bodyCalleeResultRef(exprId: id))
-                val finalRecv: U64 = (try self.groundedBodyReceiverRef(exprId: recv))
-                if finalResult != 0U64 && finalResult < self.arena.typeCount() && finalRecv != 0U64 && finalRecv < self.arena.typeCount() {
-                    val finalRecvTy = self.arena.typeTerms[finalRecv]
-                    // The ordinary generic return-recovery below remains the
-                    // authority for an unviewed receiver. The final descriptor
-                    // is required specifically when the receiver's `#` facet
-                    // would otherwise be erased by shared-AST recovery.
-                    if finalRecvTy.viewExtId != 0U64 || finalRecvTy.viewIds.len != 0U64 {
-                        return <Result.Ok value=self.typeInfoOfRef(ref: finalResult) />
+                // A recorded call result belongs to this exact BodyInstance.
+                // Its type is authoritative for every receiver, not just a
+                // receiver carrying a view. Reopening the source call here
+                // would make the result depend on legacy AST recovery again.
+                // Record presence distinguishes a known Unit result (zero)
+                // from a call not yet selected during declaration checking.
+                val finalIndex = (try self.bodyCalleeIndex(exprId: id))
+                if finalIndex < self.finalCalleeCount() {
+                    val finalResult = self.arena.finalCallees[finalIndex].resultTypeRef
+                    if finalResult >= self.arena.typeCount() {
+                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "internal error: recorded method result is outside the type arena") />
                     }
+                    return <Result.Ok value=self.typeInfoOfRef(ref: finalResult) />
                 }
                 // `Type.name(args)` assoc-fn call: return type from the assoc fn.
                 val arn: Bind = self.assocRecvName(recv: recv)
