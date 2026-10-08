@@ -219,17 +219,21 @@ pub impl Comp {
     // optional index lets every call spelling (`.` and `#`) share demand discovery
     // without a second source-selection query in Mono.
     inout fn registerMethodInst(callId: U64 = 4000000000U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange, finalIdx: U64 = 4000000000U64) -> Result[(), CompileDiagnostic] {
-        val rt0: TypeInfo = (try self.typeOf(id: recv))
+        // Demand discovery consumes the selected receiver result before any
+        // construction-time query. A canonical receiver cannot be invalidated
+        // by reopening its source expression merely to recover its name.
+        val concreteRecvRef: U64 = (try self.groundedBodyReceiverRef(exprId: recv))
+        val rt0: TypeInfo = if concreteRecvRef != 0U64 && concreteRecvRef < self.arena.typeCount() {
+            give self.typeInfoOfRef(ref: concreteRecvRef)
+        } else {
+            give try self.typeOf(id: recv)
+        }
         // recover the receiver type-name span: a struct/enum (kind 2) carries it; a
         // String value (kind 1) recovers "String"; a primitive (kind 0, e.g. `U64`)
         // already carries its name. A generic method on a primitive (`u64.hash[H]`)
         // must register its instance too, so we no longer bail on non-struct kinds —
         // only arrays (kind 3, handled per element type) and nameless values are skipped.
         mut val rt: TypeInfo = rt0
-        val concreteRecvRef: U64 = (try self.groundedBodyReceiverRef(exprId: recv))
-        if concreteRecvRef != 0U64 && concreteRecvRef < self.arena.typeCount() {
-            rt = self.typeInfoOfRef(ref: concreteRecvRef)
-        }
         // A method body can be the first use that exposes a nested generic
         // receiver (`self.data.append` => Buffer[T]).  Register that concrete
         // receiver before resolving its call so the final-callee body walk is
