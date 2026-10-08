@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+trait Parent { type Item fn read() -> Item }
+trait Middle[T]: Parent[Item=T] {}
+trait Child[T]: Middle[T] {}
+struct Value { val number: I64 }
+impl Value { factory }
+impl Value as Parent { type Item=I64 fn read() -> I64 { return self.number } }
+impl Value as Middle[I64] {}
+impl Value as Child[I64] {}
+fn implicit[T](value: T) -> I64 where T: Child[I64] { return value.read() }
+fn explicit[T](value: T) -> T#Parent.Item where T: Child[I64] { return value.read() }
+fn main() {
+    val value = <Value number=42 />
+    print(implicit(value: value))
+    print(explicit(value: value))
+}

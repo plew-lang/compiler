@@ -1476,6 +1476,14 @@ pub struct TraitBound {
 }
 pub impl TraitBound { factory }
 
+// A projection query distinguishes absence from inconsistent authored facts.
+// A known Unit output is Value(0), never the Missing sentinel.
+pub enum TraitProjectionEquality {
+    Missing
+    Value(term: U64)
+    Conflict
+}
+
 // A projected declaration constraint keeps both the exact clause and the
 // receiver evidence that makes its use valid. Rows are interned per arena.
 pub struct AssociatedBoundEvidence {

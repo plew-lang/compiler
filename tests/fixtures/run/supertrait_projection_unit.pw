@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Parent { type Item }
+trait Child: Parent[Item=()] { fn finish() -> Self#Parent.Item }
+struct Value {}
+impl Value { factory }
+impl Value as Parent { type Item=() }
+impl Value as Child { fn finish() {} }
+fn main() {
+    val value: any Child = <Value />
+    value.finish()
+    print("done")
+}

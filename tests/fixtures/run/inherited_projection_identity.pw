@@ -1,0 +1,39 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { TraitProjectionEquality }
+fn main() {
+    mut val compiler = <Comp />
+    val source = "trait Parent[T] {{ type Item }}\ntrait Left: Parent[I64, Item=Bool] {{}}\ntrait Right: Parent[I64, Item=Bool] {{}}\ntrait Other: Parent[Bool, Item=I64] {{}}\ntrait Diamond: Left + Right + Other {{ fn boolean() -> Self#Parent[I64].Item fn integer() -> Self#Parent[Bool].Item fn missing() -> Self#Parent[String].Item }}\nfn probe[U,V](value: U, other: V, target: any Diamond, boolean: Bool, integer: I64) {{}}\n"
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="inherited.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val other = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val target = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    val boolean = compiler.funcParamAt(params: function.params, index: 3U64).ty
+    val integer = compiler.funcParamAt(params: function.params, index: 4U64).ty
+    val traitIndex = compiler.recordAnyTraitIndex(anyRef: target)
+    val trait = compiler.decls.traitAt(index: traitIndex)
+    val bound = compiler.existentialRequirementBound(target: target, traitIndex: traitIndex, receiver: receiver, offset: 0U64).unwrap()
+    val first = compiler.traitReqAt(reqs: trait.reqs, index: 0U64).retTy
+    val second = compiler.traitReqAt(reqs: trait.reqs, index: 1U64).retTy
+    val missing = compiler.traitReqAt(reqs: trait.reqs, index: 2U64).retTy
+    assert(compiler.typeRefEq(a: compiler.traitBoundTypeTerm(ref: first, bound: bound, traitIndex: traitIndex), b: boolean))
+    assert(compiler.typeRefEq(a: compiler.traitBoundTypeTerm(ref: second, bound: bound, traitIndex: traitIndex), b: integer))
+    val unresolved = compiler.traitBoundTypeTerm(ref: missing, bound: bound, traitIndex: traitIndex)
+    assert(compiler.arena.typeAt(index: unresolved).assocNameId != 0U64)
+    val projection = compiler.arena.typeAt(index: first)
+    val foreign = compiler.rebuildProjectionTerm(t: projection, receiver: other, traitArgs: projection.assocTraitArgs)
+    assert(compiler.arena.typeAt(index: compiler.traitBoundTypeTerm(ref: foreign, bound: bound, traitIndex: traitIndex)).assocNameId != 0U64)
+    match compiler.mergeTraitProjectionEquality(selected: <TraitProjectionEquality.Value term=boolean />, candidate: <TraitProjectionEquality.Value term=integer />) {
+        TraitProjectionEquality.Conflict => {}
+        _ => { panic "conflicting facts selected a value" }
+    }
+    match compiler.mergeTraitProjectionEquality(selected: <TraitProjectionEquality.Missing />, candidate: <TraitProjectionEquality.Value term=0U64 />) {
+        TraitProjectionEquality.Value(term: val value) => { assert(value == 0U64) }
+        _ => { panic "known Unit confused with absence" }
+    }
+    assert(compiler.monoWork.bodyCount() == 0U64)
+    print("ok")
+}

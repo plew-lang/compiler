@@ -1,0 +1,23 @@
+use @Std/Io only { print }
+trait Parent[T] { type Item }
+trait Left: Parent[I64, Item=Bool] {}
+trait Right: Parent[I64, Item=Bool] {}
+trait Child: Left + Right + Parent[Bool, Item=I64] {
+    fn boolean() -> Self#Parent[I64].Item
+    fn integer() -> Self#Parent[Bool].Item
+}
+struct Value {}
+impl Value { factory }
+impl Value as Parent[I64] { type Item=Bool }
+impl Value as Parent[Bool] { type Item=I64 }
+impl Value as Left {}
+impl Value as Right {}
+impl Value as Child {
+    fn boolean() -> I64 { return 1 }
+    fn integer() -> I64 { return 42 }
+}
+fn main() {
+    val value: any Child = <Value />
+    print(value.boolean())
+    print(value.integer())
+}

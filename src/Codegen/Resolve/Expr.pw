@@ -1763,6 +1763,21 @@ pub impl Comp {
 
     // Only callable result slots interpret the omitted-type sentinel as ().
     // Explicit () is represented by the same empty record as other annotations.
+    // Completed callable slots use the existing no-payload representation for
+    // Unit. Normalize after substitution, since an associated result may be ().
+    fn callableResultSlot(ref: U64) -> U64 {
+        if self.callableResultIsUnit(ref: ref) { return 0U64 }
+        return ref
+    }
+
+    // Equality at a completed callable result boundary, where an omitted
+    // result and explicit () have the same meaning. Never use for unknown
+    // expression types or parameter slots.
+    inout fn callableResultTypesEqual(a: U64, b: U64) -> Bool {
+        if self.callableResultIsUnit(ref: a) && self.callableResultIsUnit(ref: b) { return true }
+        return self.typeRefEq(a: a, b: b)
+    }
+
     fn callableResultIsUnit(ref: U64) -> Bool {
         if ref == 0U64 { return true }
         if ref >= self.arena.typeCount() { return false }

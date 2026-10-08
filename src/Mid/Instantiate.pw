@@ -94,8 +94,30 @@ fn instantiateMidTerm(c: inout Comp, typeTerm: U64, bodyId: U64, environment: Bo
 // recipe is an instantiation failure, not a Unit type or an ABI inference hint.
 fn instantiateMidType(c: inout Comp, typeTerm: U64, typeRecipe: U64, bodyId: U64, environment: BodyInstance, error: inout MidInstantiateError) -> U64 {
     if typeRecipe != 0U64 {
-        if typeTerm != 0U64 { return 0U64 }
-        return c.arena.bodyTypeRecipeResult(bodyId: bodyId, recipeId: typeRecipe)
+        if typeTerm != 0U64 || typeRecipe > c.arena.semanticTypeRecipes.count() {
+            error = <MidInstantiateError.InvalidLocalResultType />
+            return 0U64
+        }
+        val result = c.arena.bodyTypeResult(bodyId: bodyId, sourceKind: 1U64, sourceId: typeRecipe)
+        if result.bodyId != bodyId || result.sourceId != typeRecipe {
+            error = <MidInstantiateError.InvalidLocalResultType />
+            return 0U64
+        }
+        // A published call result may be Unit (zero in callable slots).
+        // The key proves presence; zero alone must not mean a missing recipe.
+        if result.resultType == 0U64 {
+            val recipe = c.arena.semanticTypeRecipes[typeRecipe - 1U64]
+            if recipe.kind != 2U64 {
+                error = <MidInstantiateError.InvalidLocalResultType />
+                return 0U64
+            }
+            val call = c.arena.finalCalleeIndexForKey(bodyId: bodyId, siteKey: recipe.callSite)
+            if call >= c.arena.finalCallees.count() || c.arena.finalCallees[call].resultTypeRef != 0U64 {
+                error = <MidInstantiateError.InvalidLocalResultType />
+                return 0U64
+            }
+        }
+        return result.resultType
     }
     return instantiateMidTerm(c: inout c, typeTerm: typeTerm, bodyId: bodyId, environment: environment, error: inout error)
 }
@@ -835,8 +857,7 @@ fn appendCanonicalInstantiatedLocals(c: inout Comp, bodyId: U64, error: inout Mi
         if localI < source.locals.len {
             sourceLocal = c.mid.locals[source.locals.start + localI]
             typeTerm = instantiateMidType(c: inout c, typeTerm: sourceLocal.typeTerm, typeRecipe: sourceLocal.typeRecipe, bodyId: bodyId, environment: environment, error: inout error)
-            if sourceLocal.typeRecipe != 0U64 && typeTerm == 0U64 {
-                error = <MidInstantiateError.InvalidLocalResultType />
+            if midInstantiateHasError(error: error) {
                 return <MidRange start=localStart len=0U64 />
             }
         }

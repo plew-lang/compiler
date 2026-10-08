@@ -1,0 +1,15 @@
+use @Std/Io only { print }
+trait First { type Item }
+trait Second { type Item }
+trait Combined: First[Item=I64] + Second[Item=Self#First.Item] {
+    fn value() -> Self#Second.Item
+}
+struct Value {}
+impl Value { factory }
+impl Value as First { type Item=I64 }
+impl Value as Second { type Item=I64 }
+impl Value as Combined { fn value() -> I64 { return 42 } }
+fn main() {
+    val value: any Combined = <Value />
+    print(value.value())
+}

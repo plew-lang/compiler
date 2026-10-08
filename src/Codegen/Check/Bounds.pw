@@ -671,18 +671,18 @@ pub impl Comp {
         return self.groundTermInEnvironment(ref: ref, params: params, values: values, selfRef: receiverRef)
     }
 
-    inout fn traitBoundTypeTerm(ref: U64, bound: TraitBound, traitIndex: U64) -> U64 {
+    inout fn traitBoundTypeTerm(ref: U64, bound: TraitBound, traitIndex: U64, includeInherited: Bool = true) -> U64 {
         val declaration = self.decls.traitAt(index: traitIndex)
-        val reified = self.reifyBoundAssociatedTerms(ref: ref, traitDef: declaration, receiverRef: bound.subject, traitOwner: declaration.nameStart, traitArgs: bound.constraint.key.positionalArgs, predicates: bound.constraint.assocPredicates)
+        val reified = self.reifyBoundAssociatedTerms(ref: ref, traitDef: declaration, receiverRef: bound.subject, traitOwner: declaration.nameStart, traitArgs: bound.constraint.key.positionalArgs, predicates: bound.constraint.assocPredicates, includeInherited: includeInherited)
         return self.groundTraitRequirementType(ref: reified, traitIdx: traitIndex, receiverRef: bound.subject, params: self.copyTraitBinds(binds: declaration.typeParams), args: bound.constraint.key.positionalArgs)
     }
 
-    inout fn traitConstraintInBound(constraint: TraitConstraint, bound: TraitBound, traitIndex: U64) -> TraitConstraint {
+    inout fn traitConstraintInBound(constraint: TraitConstraint, bound: TraitBound, traitIndex: U64, includeInherited: Bool = true) -> TraitConstraint {
         mut val arguments: Array[U64] = []
-        for val argument in constraint.key.positionalArgs { arguments.append(self.traitBoundTypeTerm(ref: argument, bound: bound, traitIndex: traitIndex)) }
+        for val argument in constraint.key.positionalArgs { arguments.append(self.traitBoundTypeTerm(ref: argument, bound: bound, traitIndex: traitIndex, includeInherited: includeInherited)) }
         mut val predicates: Array[TraitAssocPredicate] = []
         for val predicate in constraint.assocPredicates {
-            predicates.append(<TraitAssocPredicate member=predicate.member value=self.traitBoundTypeTerm(ref: predicate.value, bound: bound, traitIndex: traitIndex) span=predicate.span />)
+            predicates.append(<TraitAssocPredicate member=predicate.member value=self.traitBoundTypeTerm(ref: predicate.value, bound: bound, traitIndex: traitIndex, includeInherited: includeInherited) span=predicate.span />)
         }
         return <TraitConstraint key=<TraitInstanceKey owner=constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=constraint.positionalArgsOpen assocPredicates=predicates />
     }
@@ -770,6 +770,63 @@ pub impl Comp {
         return <Result.Ok value=bound />
     }
 
+    inout fn mergeTraitProjectionEquality(selected: TraitProjectionEquality, candidate: TraitProjectionEquality) -> TraitProjectionEquality {
+        match selected {
+            TraitProjectionEquality.Conflict => { return selected }
+            TraitProjectionEquality.Missing => { return candidate }
+            TraitProjectionEquality.Value(term: val value) => {
+                match candidate {
+                    TraitProjectionEquality.Missing => { return selected }
+                    TraitProjectionEquality.Conflict => { return candidate }
+                    TraitProjectionEquality.Value(term: val other) => {
+                        if self.typeRefEq(a: value, b: other) { return selected }
+                        return <TraitProjectionEquality.Conflict />
+                    }
+                }
+            }
+        }
+    }
+
+    // Read only equalities entailed by this authored bound and its parents.
+    // Traversing a constraint substitutes its declaring trait's binders; it
+    // does not search concrete implementations or create a static witness.
+    inout fn traitProjectionEquality(bound: TraitBound, receiver: U64, owner: U64, arguments: Array[U64], member: U64, context: TraitBound, projectionPath: Array[U64], path: Array[U64] = []) -> TraitProjectionEquality {
+        if !self.typeRefEq(a: bound.subject, b: receiver) { return <TraitProjectionEquality.Missing /> }
+        for visited in path { if visited == bound.constraint.key.owner { return <TraitProjectionEquality.Missing /> } }
+        val traitIndex = self.decls.traitIndexByOffset(offset: bound.constraint.key.owner)
+        if traitIndex >= self.decls.traitCount() { return <TraitProjectionEquality.Missing /> }
+        val declaration = self.decls.traitAt(index: traitIndex)
+        mut val selected = <TraitProjectionEquality.Missing />
+        val contextIndex = self.decls.traitIndexByOffset(offset: context.constraint.key.owner)
+        if contextIndex >= self.decls.traitCount() { return <TraitProjectionEquality.Missing /> }
+        val contextDeclaration = self.decls.traitAt(index: contextIndex)
+        mut val normalizedArguments: Array[U64] = []
+        for argument in bound.constraint.key.positionalArgs {
+            normalizedArguments.append(self.reifyBoundAssociatedTerms(ref: argument, traitDef: contextDeclaration, receiverRef: context.subject, traitOwner: context.constraint.key.owner, traitArgs: context.constraint.key.positionalArgs, predicates: context.constraint.assocPredicates, projectionPath: projectionPath))
+        }
+        if bound.constraint.key.owner == owner && self.sameResolvedTypeRefs(a: normalizedArguments, b: arguments) {
+            for predicate in bound.constraint.assocPredicates {
+                if predicate.member == member {
+                    val value = self.reifyBoundAssociatedTerms(ref: predicate.value, traitDef: contextDeclaration, receiverRef: context.subject, traitOwner: context.constraint.key.owner, traitArgs: context.constraint.key.positionalArgs, predicates: context.constraint.assocPredicates, projectionPath: projectionPath)
+                    selected = self.mergeTraitProjectionEquality(selected: selected, candidate: <TraitProjectionEquality.Value term=value />)
+                }
+            }
+        }
+        if declaration.supertraits.count() == 0U64 { return selected }
+        mut val nextPath = path
+        nextPath.append(bound.constraint.key.owner)
+        mut val index = 0U64
+        while index < declaration.supertraits.count() {
+            // Preparing this edge uses only its source environment. Recursing
+            // into inherited normalization here would re-enter this traversal.
+            val constraint = self.traitConstraintInBound(constraint: self.traitConstraintAt(constraints: declaration.supertraits, index: index), bound: bound, traitIndex: traitIndex, includeInherited: false)
+            val parent = <TraitBound subject=bound.subject constraint=constraint offset=bound.offset />
+            selected = self.mergeTraitProjectionEquality(selected: selected, candidate: self.traitProjectionEquality(bound: parent, receiver: receiver, owner: owner, arguments: arguments, member: member, context: context, projectionPath: projectionPath, path: nextPath))
+            index += 1U64
+        }
+        return selected
+    }
+
     // A provided copy can have a source-trait receiver while its body belongs
     // to the path's target. Project the requested declaration from the retained
     // path; the terminal edge alone is not the receiver's complete evidence.
@@ -818,22 +875,35 @@ pub impl Comp {
     // in a requirement result.  The owner is the already-selected TraitDef,
     // never a name search: `Optional[Item]` must receive the same treatment as
     // a top-level `Item` under `where T: Iterator[Item=E]`.
-    inout fn reifyBoundAssociatedTerms(ref: U64, traitDef: TraitDef, receiverRef: U64, traitOwner: U64, traitArgs: Array[U64], predicates: Array[TraitAssocPredicate]) -> U64 {
+    inout fn reifyBoundAssociatedTerms(ref: U64, traitDef: TraitDef, receiverRef: U64, traitOwner: U64, traitArgs: Array[U64], predicates: Array[TraitAssocPredicate], includeInherited: Bool = true, projectionPath: Array[U64] = []) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
         val raw: TypeRef = self.arena.typeAt(index: ref)
         if raw.assocNameId != 0U64 {
+            // Cyclic authored equations remain symbolic, never recurse forever
+            // or acquire an answer by declaration order.
+            for visited in projectionPath { if self.typeRefEq(a: ref, b: visited) { return ref } }
+            mut val nextProjectionPath = projectionPath
+            nextProjectionPath.append(ref)
             // A written projection and the associated binder denote the same
             // output only for this exact subject and trait instance.
-            val receiver = self.reifyBoundAssociatedTerms(ref: self.typeTermProjectionReceiver(t: raw), traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitOwner, traitArgs: traitArgs, predicates: predicates)
+            val receiver = self.reifyBoundAssociatedTerms(ref: self.typeTermProjectionReceiver(t: raw), traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitOwner, traitArgs: traitArgs, predicates: predicates, includeInherited: includeInherited, projectionPath: projectionPath)
             mut val arguments: Array[U64] = []
             for argument in raw.assocTraitArgs {
-                arguments.append(self.reifyBoundAssociatedTerms(ref: argument, traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitOwner, traitArgs: traitArgs, predicates: predicates))
+                arguments.append(self.reifyBoundAssociatedTerms(ref: argument, traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitOwner, traitArgs: traitArgs, predicates: predicates, includeInherited: includeInherited, projectionPath: projectionPath))
             }
             val selectedReceiver = self.staticRequirementType(ref: receiver, traitDef: traitDef, receiverRef: receiverRef, traitArgs: traitArgs)
             mut val selectedArguments: Array[U64] = []
             for argument in arguments { selectedArguments.append(self.staticRequirementType(ref: argument, traitDef: traitDef, receiverRef: receiverRef, traitArgs: traitArgs)) }
             val owner = if raw.hasAssocTraitDecl { give raw.assocTraitDeclOffset } else { give raw.assocTraitStart }
-            if owner == traitOwner && self.typeRefEq(a: selectedReceiver, b: receiverRef) && self.sameResolvedTypeRefs(a: selectedArguments, b: traitArgs) {
+            if includeInherited {
+                val bound = <TraitBound subject=receiverRef constraint=<TraitConstraint key=<TraitInstanceKey owner=traitOwner positionalArgs=traitArgs /> positionalArgsOpen=false assocPredicates=predicates /> offset=raw.siteOffset />
+                match self.traitProjectionEquality(bound: bound, receiver: selectedReceiver, owner: owner, arguments: selectedArguments, member: raw.assocNameId, context: bound, projectionPath: nextProjectionPath) {
+                    TraitProjectionEquality.Value(term: val value) => { return value }
+                    // Preserve unresolved projections rather than choosing a
+                    // declaration-order-dependent answer from conflicting facts.
+                    TraitProjectionEquality.Missing | TraitProjectionEquality.Conflict => {}
+                }
+            } else if owner == traitOwner && self.typeRefEq(a: selectedReceiver, b: receiverRef) && self.sameResolvedTypeRefs(a: selectedArguments, b: traitArgs) {
                 for predicate in predicates {
                     if predicate.member == raw.assocNameId { return predicate.value }
                 }
@@ -870,7 +940,7 @@ pub impl Comp {
             mut val changed: Bool = false
             mut val ri: U64 = 0U64
             while ri < raw.recordFieldTerms.count() {
-                val next: U64 = self.reifyBoundAssociatedTerms(ref: raw.recordFieldTerms[ri], traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitOwner, traitArgs: traitArgs, predicates: predicates)
+                val next: U64 = self.reifyBoundAssociatedTerms(ref: raw.recordFieldTerms[ri], traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitOwner, traitArgs: traitArgs, predicates: predicates, includeInherited: includeInherited, projectionPath: projectionPath)
                 if next != raw.recordFieldTerms[ri] { changed = true }
                 fields.append(next)
                 ri += 1U64
@@ -882,7 +952,7 @@ pub impl Comp {
         mut val argsChanged: Bool = false
         mut val i: U64 = 0U64
         while i < raw.args.count() {
-            val next: U64 = self.reifyBoundAssociatedTerms(ref: raw.args[i], traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitOwner, traitArgs: traitArgs, predicates: predicates)
+            val next: U64 = self.reifyBoundAssociatedTerms(ref: raw.args[i], traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitOwner, traitArgs: traitArgs, predicates: predicates, includeInherited: includeInherited, projectionPath: projectionPath)
             if next != raw.args[i] { argsChanged = true }
             args.append(next)
             i += 1U64
@@ -1027,7 +1097,7 @@ pub impl Comp {
             val expected = self.funcParamAt(params: requirement.params, index: index)
             if actual.noLabel != expected.noLabel || (!expected.noLabel && actual.nameId != expected.nameId) { return false }
             val expectedType = self.groundTermInEnvironment(ref: self.traitBoundTypeTerm(ref: expected.ty, bound: bound, traitIndex: traitIndex), params: binders, values: arguments)
-            val actualType = self.groundTermInEnvironment(ref: actual.ty, params: [], values: [], selfRef: bound.subject)
+            val actualType = self.traitBoundTypeTerm(ref: self.groundTermInEnvironment(ref: actual.ty, params: [], values: [], selfRef: bound.subject), bound: bound, traitIndex: traitIndex)
             if !self.typeRefEq(a: expectedType, b: actualType) { return false }
             index += 1U64
         }
@@ -1280,8 +1350,8 @@ pub impl Comp {
                         parameterIndex += 1U64
                     }
                     val expectedResult = self.groundTermInEnvironment(ref: self.traitBoundTypeTerm(ref: self.semanticCallableReturnTerm(function: requirement), bound: traitBound, traitIndex: traitIndex), params: parameters, values: arguments)
-                    val actualResult = self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: function), params: [], values: [], selfRef: traitBound.subject)
-                    if !(self.callableResultIsUnit(ref: expectedResult) && self.callableResultIsUnit(ref: actualResult)) && !self.typeRefEq(a: expectedResult, b: actualResult) {
+                    val actualResult = self.traitBoundTypeTerm(ref: self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: function), params: [], values: [], selfRef: traitBound.subject), bound: traitBound, traitIndex: traitIndex)
+                    if !self.callableResultTypesEqual(a: expectedResult, b: actualResult) {
                         if requirement.isFactory { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "factory return type does not match the trait requirement") /> }
                         return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation return type does not match the trait requirement") />
                     }

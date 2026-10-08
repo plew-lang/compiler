@@ -1796,7 +1796,7 @@ pub impl LlvmCtx {
                 val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
                 if !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: receiver.operand), b: selected.recvTypeRef) { return <Result.Ok value=<MidCallPreflight.Receiver /> /> }
                 if term.args.len != requirement.params.count() || selected.parameterTypeRefs.len != term.args.len || selected.argumentPassings.len != term.args.len { return <Result.Ok value=<MidCallPreflight.ArgumentShape /> /> }
-                if requirement.hasRet {
+                if selected.resultTypeRef != 0U64 {
                     if selected.resultTypeRef == 0U64 || selected.resultTypeRef >= c.arena.typeCount() || !(try self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: term.destination)) { return <Result.Ok value=<MidCallPreflight.Result /> /> }
                     val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
                     if destination.projections.len != 0U64 || !c.typeRefEq(a: destination.typeTerm, b: selected.resultTypeRef) { return <Result.Ok value=<MidCallPreflight.Result /> /> }
@@ -1873,10 +1873,10 @@ pub impl LlvmCtx {
                     index += 1U64
                 }
                 mut val resultType: LLVMTypeRef = self.voidty
-                if requirement.hasRet { resultType = (try self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef)) }
+                if selected.resultTypeRef != 0U64 { resultType = (try self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef)) }
                 val signature: LLVMTypeRef = LLVMFunctionType(resultType, arrayCPtr(types), types.count(), 0I32)
                 val result: LLVMValueRef = (try self.callValueFunction(signature: signature, function: function, arguments: values))
-                if requirement.hasRet { llvmStore(self.b, result, (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[term.destination - 1U64], forWrite: true))) }
+                if selected.resultTypeRef != 0U64 { llvmStore(self.b, result, (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[term.destination - 1U64], forWrite: true))) }
                 return <Result.Ok value=true />
             }
             _ => { return <Result.Ok value=false /> }

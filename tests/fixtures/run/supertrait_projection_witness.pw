@@ -1,0 +1,19 @@
+use @Std/Io only { print }
+trait Parent { type Item fn read() -> Item }
+trait Middle[T]: Parent[Item=T] {}
+trait Child[T]: Middle[T] { fn childRead() -> Self#Parent.Item fn optional() -> Optional[Self#Parent.Item] }
+struct Value { val number: I64 }
+impl Value { factory }
+impl Value as Parent { type Item=I64 fn read() -> I64 { return self.number } }
+impl Value as Middle[I64] {}
+impl Value as Child[I64] { fn childRead() -> I64 { return self.number } fn optional() -> Optional[I64] { return <Optional.Some v=self.number /> } }
+fn implicit[T](value: T) -> I64 where T: Child[I64] { return value.read() }
+fn explicit[T](value: T) -> T#Parent.Item where T: Child[I64] { return value.read() }
+fn main() {
+    val value: any Child[I64] = <Value number=42 />
+    print(value.childRead())
+    match value.optional() {
+        Optional.Some(v: val item) => { print(item) }
+        Optional.None => { panic "lost optional result" }
+    }
+}

@@ -49,5 +49,20 @@ fn main() {
     compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 2U64, recvTypeRef: firstType, resultTypeRef: firstOptional).unwrap()
     val missing = instantiateCanonicalMidBody(c: inout compiler, body: source, bodyId: missingBody)
     match missing.error { MidInstantiateError.InvalidLocalResultType => {} _ => { panic "missing dependency accepted" } }
+    // A selected no-payload call is known Unit, not a missing result.
+    val unitBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=firstOptional />)
+    compiler.cur.bodyId = unitBody
+    compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 2U64, recvTypeRef: firstType, resultTypeRef: 0U64, generatedSite: site).unwrap()
+    compiler.arena.setBodyTypeRecipeResult(bodyId: unitBody, recipeId: 1U64, resultType: 0U64)
+    val unitSource = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=0U64 typeRecipe=1U64 sourceScope=0U64 isUnique=false isParameter=false />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    val unit = instantiateCanonicalMidBody(c: inout compiler, body: unitSource, bodyId: unitBody)
+    match unit.error { MidInstantiateError.None => {} _ => { panic "known Unit rejected" } }
+    // A forged zero cannot replace the selected call's non-Unit result.
+    compiler.arena.setBodyTypeRecipeResult(bodyId: missingBody, recipeId: 1U64, resultType: 0U64)
+    val forged = instantiateCanonicalMidBody(c: inout compiler, body: unitSource, bodyId: missingBody)
+    match forged.error { MidInstantiateError.InvalidLocalResultType => {} _ => { panic "non-Unit call accepted as Unit" } }
+    val absentBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=secondOptional />)
+    val absent = instantiateCanonicalMidBody(c: inout compiler, body: unitSource, bodyId: absentBody)
+    match absent.error { MidInstantiateError.InvalidLocalResultType => {} _ => { panic "absent result accepted as Unit" } }
     write(s: "mid-type-recipe-instances-ok\n")
 }

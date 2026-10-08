@@ -736,7 +736,7 @@ pub impl Comp {
         val f: Func = self.arena.functionAt(index: callee)
         val noMethodArgs: Array[U64] = []
         val environment: InstanceEnvironment = (try self.bodyInstanceEnvironment(fnIdx: callee, args: noMethodArgs, recvInstRef: recvRef))
-        return <Result.Ok value=(try self.groundTermForBody(ref: f.retTy, environment: environment, selfRef: environment.receiverRef, itemRef: (try self.bodyProvidedItemTerm(f: f, environment: environment)))) />
+        return <Result.Ok value=self.callableResultSlot(ref: (try self.groundTermForBody(ref: f.retTy, environment: environment, selfRef: environment.receiverRef, itemRef: (try self.bodyProvidedItemTerm(f: f, environment: environment))))) />
     }
 
     // The final descriptor carries the *complete* callable substitution
@@ -2697,7 +2697,7 @@ pub impl Comp {
         mut val passing = <CallReceiverPassing.Borrow />
         if requirement.selfInout { passing = <CallReceiverPassing.Inout /> }
         else if requirement.selfMove { passing = <CallReceiverPassing.Move /> }
-        val result = self.traitBoundTypeTerm(ref: self.semanticCallableReturnTerm(function: requirement), bound: bound, traitIndex: traitIndex)
+        val result = self.callableResultSlot(ref: self.traitBoundTypeTerm(ref: self.semanticCallableReturnTerm(function: requirement), bound: bound, traitIndex: traitIndex))
         return <Result.Ok value=<ExistentialRequirementSignature receiverPassing=passing parameterTypes=parameterTypes argumentPassings=passings resultType=result /> />
     }
 
@@ -2712,7 +2712,7 @@ pub impl Comp {
         if !(try self.existentialRequirementIsDispatchable(req: requested, target: evidence.targetRef, traitIndex: evidence.traitIdx)) { return <Result.Ok value=<Optional.None /> /> }
         val signature = try self.existentialRequirementSignature(target: evidence.targetRef, traitIndex: evidence.traitIdx, requirement: requested)
         val bound = try self.existentialRequirementBound(target: evidence.targetRef, traitIndex: evidence.traitIdx, receiver: sourceReceiver, offset: requested.nameStart)
-        val sourceResult = self.traitBoundTypeTerm(ref: self.semanticCallableReturnTerm(function: requested), bound: bound, traitIndex: evidence.traitIdx)
+        val sourceResult = self.callableResultSlot(ref: self.traitBoundTypeTerm(ref: self.semanticCallableReturnTerm(function: requested), bound: bound, traitIndex: evidence.traitIdx))
         mut val conversion = <ValueConversionProof.Identity />
         if sourceResult != 0U64 || signature.resultType != 0U64 {
             conversion = try self.callArgumentConversion(sourceRef: sourceResult, targetRef: signature.resultType, knownBox: <Optional.Some v=evidence />)
@@ -2728,7 +2728,7 @@ pub impl Comp {
         val environment = try self.bodyInstanceEnvironment(fnIdx: implementation.function, args: implementation.arguments, recvInstRef: evidence.sourceRef, selectedProof: evidence.proof)
         val parameters = try self.groundedSelectedCalleeParameterTypes(callee: implementation.function, environment: environment)
         val result = try self.groundedSelectedCalleeReturn(callee: implementation.function, environment: environment)
-        if !self.sameResolvedTypeRefs(a: parameters, b: plan.signature.parameterTypes) || !self.typeRefEq(a: result, b: plan.sourceResultType) || !self.sameCallReceiverPassing(a: self.selectedReceiverPassing(callee: implementation.function), b: plan.signature.receiverPassing) || !self.sameCallArgumentPassings(a: self.selectedArgumentPassings(callee: implementation.function), b: plan.signature.argumentPassings) {
+        if !self.sameResolvedTypeRefs(a: parameters, b: plan.signature.parameterTypes) || !self.callableResultTypesEqual(a: result, b: plan.sourceResultType) || !self.sameCallReceiverPassing(a: self.selectedReceiverPassing(callee: implementation.function), b: plan.signature.receiverPassing) || !self.sameCallArgumentPassings(a: self.selectedArgumentPassings(callee: implementation.function), b: plan.signature.argumentPassings) {
             return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: implementation.function).nameStart, msg: "existential witness signature does not match its selected requirement") />
         }
         return <Result.Ok value=() />
