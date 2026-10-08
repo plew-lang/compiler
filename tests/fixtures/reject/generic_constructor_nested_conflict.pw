@@ -1,0 +1,8 @@
+struct Rows[T] {
+    pub val first: Array[T]
+    pub val second: Array[T]
+}
+pub impl Rows { factory }
+fn main() {
+    val rows = <Rows first=[1I64] second=["text"] />
+}

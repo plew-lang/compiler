@@ -1,0 +1,21 @@
+use @Std/Io only { print }
+
+struct Box[T] { pub val value: T }
+pub impl Box { factory }
+struct Rows[T] { pub val values: Array[T] }
+pub impl Rows { factory }
+struct Nested[T] { pub val box: Box[T] }
+pub impl Nested { factory }
+
+fn rows[T](values: Array[T]) -> Rows[T] {
+    return <Rows values=values />
+}
+
+fn main() {
+    val numbers = <Rows values=[1I64, 2I64] />
+    print(numbers.values[1])
+    val nested = <Nested box=<Box value="text" /> />
+    print(nested.box.value)
+    print(rows(values: [3I64]).values[0])
+    print(rows(values: ["symbolic"]).values[0])
+}

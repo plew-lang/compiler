@@ -1711,6 +1711,10 @@ pub impl Comp {
     // A projection is not invertible; retain obligations without inferring its
     // receiver. Head/child identity is shared with structural type equality.
     inout fn matchCallTypeArguments(pattern: U64, argument: U64, params: FuncBindRange, values: inout Array[U64]) -> TypeArgumentMatch {
+        return self.matchTypeArgumentConstraints(pattern: pattern, argument: argument, params: <PatternBindInput.Function range=params />, values: inout values)
+    }
+
+    inout fn matchTypeArgumentConstraints(pattern: U64, argument: U64, params: PatternBindInput, values: inout Array[U64]) -> TypeArgumentMatch {
         if pattern == 0U64 || argument == 0U64 || pattern >= self.arena.typeTerms.count() || argument >= self.arena.typeTerms.count() { return <TypeArgumentMatch.Deferred /> }
         val term = self.arena.typeTerms[pattern]
         if term.assocNameId != 0U64 {
@@ -1720,7 +1724,7 @@ pub impl Comp {
         if self.bareInferenceParamId(ref: pattern) != 0U64 {
             mut val index = 0U64
             while index < params.count() && index < values.count() {
-                if self.funcBindAt(binds: params, index: index).paramId == term.paramId {
+                if params.at(index: index, declarations: self.decls, functions: self.arena).paramId == term.paramId {
                     if values[index] == 0U64 {
                         values.set(i: index, value: argument)
                         return <TypeArgumentMatch.Matched />
@@ -1739,7 +1743,7 @@ pub impl Comp {
         mut val index = 0U64
         while index < count {
             if self.typeTermRefIdentityChildLabel(ref: pattern, index: index) != self.typeTermRefIdentityChildLabel(ref: argument, index: index) { return <TypeArgumentMatch.Mismatch /> }
-            match self.matchCallTypeArguments(pattern: self.typeTermRefChildRef(ref: pattern, index: index), argument: self.typeTermRefChildRef(ref: argument, index: index), params: params, values: inout values) {
+            match self.matchTypeArgumentConstraints(pattern: self.typeTermRefChildRef(ref: pattern, index: index), argument: self.typeTermRefChildRef(ref: argument, index: index), params: params, values: inout values) {
                 TypeArgumentMatch.Matched => {}
                 TypeArgumentMatch.Deferred => { deferred = true }
                 TypeArgumentMatch.Mismatch => { return <TypeArgumentMatch.Mismatch /> }
@@ -2542,39 +2546,21 @@ pub impl Comp {
             return <Result.Ok value=0U64 />
         }
         mut val args: Array[U64] = []
-        mut val pi: U64 = 0
-        while pi < sd.typeParams.count() {
-            val parameterId = sd.typeParams[pi].paramId
-            mut val argRef: U64 = 0
-            mut val fj: U64 = 0
-            while fj < sd.fields.count() {
-                val fd: FieldDef = sd.fields[fj]
-                // only a field whose declared type IS this bare parameter (`v: T`, not
-                // `xs: Array[T]` — nested unification is a follow-on) pins it.
-                if !(fd.tyIsArray) {
-                    if parameterId != 0U64 && self.bareInferenceParamId(ref: fd.ty) == parameterId {
-                        // an untyped field value (a bare literal) does not pin the parameter —
-                        // skip it; another (typed) field must, and this one is grounded to the
-                        // inferred type by context downstream (`0..<n` binds T from `n`, then
-                        // `0` takes T). A conflict between two TYPED fields fails inference.
-                        val cand: U64 = (try self.makeFieldArgRef(fieldNameId: fd.nameId, fields: fields))
-                        if cand != 0U64 {
-                            if argRef == 0U64 {
-                                argRef = cand
-                            } else if !(self.typeRefEq(a: argRef, b: cand)) {
-                                return <Result.Ok value=0U64 />
-                            }
-                        }
-                    }
-                }
-                fj += 1
+        while args.count() < sd.typeParams.count() { args.append(0U64) }
+        val parameters = <PatternBindInput.Values values=sd.typeParams />
+        mut val index = 0U64
+        while index < sd.fields.count() {
+            val field = sd.fields[index]
+            val argument = try self.makeFieldArgRef(fieldNameId: field.nameId, fields: fields)
+            mut val candidate = args
+            match self.matchTypeArgumentConstraints(pattern: field.ty, argument: argument, params: parameters, values: inout candidate) {
+                TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { args = candidate }
+                TypeArgumentMatch.Mismatch => {}
+                TypeArgumentMatch.Conflict => { return <Result.Ok value=0U64 /> }
             }
-            if argRef == 0U64 {
-                return <Result.Ok value=0U64 />
-            }
-            args.append(argRef)
-            pi += 1
+            index += 1U64
         }
+        if !self.fnArgsAllResolved(args: args) { return <Result.Ok value=0U64 /> }
         // Inference selects the arguments of this declaration; it must not
         // erase its nominal identity. Mid ownership classification and later
         // substitutions consume that identity without repeating name lookup.
