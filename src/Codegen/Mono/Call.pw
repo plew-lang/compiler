@@ -677,18 +677,6 @@ pub impl Comp {
 
 
 
-    // Ground a selected method's result under the same concrete receiver that
-    // selected it.  Control-flow desugars such as `for` have no explicit AST
-    // Method node for their iterator result, so this keeps that intermediate
-    // type recovery in Mono instead of asking LLVM to rediscover it.
-    inout fn groundedCalleeReturn(callee: U64, recvRef: U64) -> Result[U64, CompileDiagnostic] {
-        if callee >= self.arena.functionCount() { return <Result.Ok value=0U64 />}
-        val f: Func = self.arena.functionAt(index: callee)
-        val noMethodArgs: Array[U64] = []
-        val environment: InstanceEnvironment = (try self.bodyInstanceEnvironment(fnIdx: callee, args: noMethodArgs, recvInstRef: recvRef))
-        return <Result.Ok value=self.callableResultSlot(ref: (try self.groundTermForBody(ref: f.retTy, environment: environment, selfRef: environment.receiverRef, itemRef: (try self.bodyProvidedItemTerm(f: f, environment: environment))))) />
-    }
-
     // The final descriptor carries the *complete* callable substitution
     // vector, including method-owned arguments.  Use it for every result
     // projection so later backend consumers never have to ground a declaration
@@ -3727,38 +3715,6 @@ pub impl Comp {
     inout fn finalAnyTraitIdx(anyRef: U64) -> U64 {
         return self.recordAnyTraitIndex(anyRef: anyRef)
     }
-
-
-
-    // Complete only generic slots that value arguments could not determine
-    // from the call's already-selected result term. This is the ordinary
-    // bidirectional case `val b: Buffer[I64] = Buffer.new()` and the wrapper
-    // body `fn new[T]() -> Buffer[T] { bufferNew() }`: the result is semantic
-    // call-site evidence, not a backend recovery or ambient expected-type
-    // lookup.
-    inout fn fillCalleeArgsFromResult(f: Func, args: Array[U64], resultRef: U64) -> Result[Array[U64], CompileDiagnostic] {
-        mut val out: Array[U64] = args
-        if resultRef == 0U64 || resultRef >= self.arena.typeCount() || f.retTy == 0U64 || f.retTy >= self.arena.typeCount() {
-            return <Result.Ok value=out />
-        }
-        while out.count() < f.typeParams.count() { out.append(0U64) }
-        mut val i: U64 = 0U64
-        while i < f.typeParams.count() {
-            if out[i] == 0U64 || !((try self.tyRefIsGround(ref: out[i]))) {
-                val p: Bind = self.funcBindAt(binds: f.typeParams, index: i)
-                val inferred: U64 = self.unifyTypeParam(paramRef: f.retTy, argRef: resultRef, tpStart: p.nameStart, tpLen: p.nameLen)
-                if inferred != 0U64 && (try self.tyRefIsGround(ref: inferred)) {
-                    out.set(i: i, value: inferred)
-                }
-            }
-            i += 1U64
-        }
-        return <Result.Ok value=out />
-    }
-
-
-
-
 
 
 
