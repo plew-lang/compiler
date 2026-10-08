@@ -4790,7 +4790,11 @@ pub impl Comp {
         mut val gi: U64 = 0U64
         while !self.genMode && gi < self.arena.globals.count() {
             tracePhaseProgress(c: inout self, label: "finalize-callables:global", count: gi, stride: 16U64)
+            val target = self.arena.globals[gi].nameStart
+            try self.prepareGlobalInitializer(target: target)
+            try self.enterGlobalInitializer(target: target)
             try self.scanStmtInsts(stmtId: self.arena.globals[gi].letStmt)
+            self.cur.globalInitializerTarget = <Optional.None />
             gi += 1U64
         }
         return <Result.Ok value=() />

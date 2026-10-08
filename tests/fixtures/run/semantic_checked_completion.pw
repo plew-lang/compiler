@@ -1,6 +1,6 @@
 // Internal handoff: the final reader requires a completed owner and consumes
 // its recorded flow, rather than recomputing from source syntax.
-use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, finalizeFrontendExecutables, spansEqual }
 use /SourceAccess only { SourceAccess }
 use /Ir only { Expr, Stmt, TypeInfo }
 use @Std/Io only { print }
@@ -87,5 +87,15 @@ fn main() {
     }
     globals.prepareGlobalInitializer(target: global.nameStart).unwrap()
     if !globals.checkedSemanticExprCompletion(exprId: initializer).unwrap().source.normal() { panic "global completion missing" }
+    // Whole-build finalization must demand individual initializer readiness,
+    // including source blocks introduced before concrete bodies exist.
+    mut val whole = <Comp />
+    analyzeFrontendForRequests(c: inout whole,
+        input: <FrontendInput.Text path="whole-global.pw" text="val value: I64 = if true {{ give 1I64 }} else {{ give 2I64 }} fn main() {{}}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val target = whole.arena.globals[0U64].nameStart
+    if whole.globalInitializerPrepared(target: target) { panic "admission published initializer readiness" }
+    finalizeFrontendExecutables(c: inout whole).unwrap()
+    if !whole.globalInitializerPrepared(target: target) { panic "whole build bypassed initializer preparation" }
     print("checked-completion")
 }
