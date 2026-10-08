@@ -159,7 +159,12 @@ pub impl Comp {
         // A declared Self is rigid but has the lexical receiver equation of
         // this body. Apply that equation before matching another method's
         // receiver pattern, rather than leaving its impl binders unresolved.
-        val semanticReceiver = self.groundTermInEnvironment(ref: receiverRef, params: [], values: [], selfRef: self.cur.selfRef)
+        // Closedness is registered with the immutable type graph. No Self
+        // can occur below a closed term, so this Self-only substitution is
+        // an identity without traversing its arguments again.
+        val semanticReceiver = if self.arena.typeIsClosed(ref: receiverRef) { give receiverRef } else {
+            give self.groundTermInEnvironment(ref: receiverRef, params: [], values: [], selfRef: self.cur.selfRef)
+        }
         if semanticReceiver == 0U64 || semanticReceiver >= self.arena.typeCount() {
             return <Result.Ok value=semanticReceiver />
         }
