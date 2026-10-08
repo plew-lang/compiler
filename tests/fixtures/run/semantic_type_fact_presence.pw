@@ -1,0 +1,22 @@
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Expr, TypeInfo, TypeRef }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen nameId=integerName.nameId args=[] />)
+    val literal = compiler.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=integerName.nameStart tyLen=integerName.nameLen isNeg=false />)
+    compiler.ensureSemanticExprType(exprId: literal)
+    if compiler.hasSemanticExprTypeFact(exprId: literal) { panic "allocation is not a type fact" }
+    if !compiler.typeRefEq(a: compiler.inferenceArgumentType(exprId: literal).unwrap(), b: integer) { panic "unrecorded declaration query lost its source type" }
+    compiler.recordSemanticExprInfo(exprId: literal, ti: <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />)
+    if !compiler.hasSemanticExprTypeFact(exprId: literal) { panic "recorded unknown was mistaken for missing" }
+    if compiler.inferenceArgumentType(exprId: literal).unwrap() != 0U64 { panic "recorded unknown was re-inferred from syntax" }
+    compiler.recordInvocationCompletion(exprId: literal, diverging: false)
+    if !compiler.hasSemanticExprTypeFact(exprId: literal) { panic "invocation update erased the type fact" }
+    compiler.recordSemanticExprTerm(exprId: literal, term: integer)
+    if !compiler.typeRefEq(a: compiler.inferenceArgumentType(exprId: literal).unwrap(), b: integer) { panic "explicit refinement was not retained" }
+    print("semantic-type-fact-presence")
+}
