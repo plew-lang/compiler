@@ -1,0 +1,3 @@
+fn main() {
+    for val value: String in [1I64] {}
+}

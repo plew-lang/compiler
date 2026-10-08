@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+trait Value { fn value() -> I64 }
+struct Sample {}
+pub impl Sample { factory }
+impl Sample as Value { fn value() -> I64 { return 7I64 } }
+fn category(value: Sample) -> I64 { return 1I64 }
+fn category(value: any Value) -> I64 { return 2I64 }
+fn generic[T](values: Array[T]) { for val item: T in values {} }
+fn main() {
+    for val item: I64 in [1I64] { print(item) }
+    generic(values: [2I64])
+    for val item: any Value in [<Sample />] { print(item.value()) print(category(value: item)) }
+    for val item: I32 in 0..<2 { print(item) }
+}
