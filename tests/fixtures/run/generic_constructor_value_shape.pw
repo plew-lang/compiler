@@ -1,0 +1,21 @@
+use @Std/Io only { print }
+
+struct Box[T] {
+    pub val value: T
+}
+pub impl Box { factory }
+
+fn boxed[T](value: T) -> Box[T] {
+    return <Box value=value />
+}
+
+fn main() {
+    val integers = <Box value=[1I64, 2I64] />
+    print(integers.value[1])
+    val nested = <Box value=<Box value="text" /> />
+    print(nested.value.value)
+    val first = boxed(value: 3I64)
+    val second = boxed(value: "symbolic")
+    print(first.value)
+    print(second.value)
+}

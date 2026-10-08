@@ -1696,6 +1696,17 @@ pub impl Comp {
         return self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment params=params args=typeArgs receiverRef=receiverTerm proof=proof />)
     }
 
+    // Decorations carry constraints and cannot be solved as a bare variable.
+    // The identity belongs to a declaration binder, never its source spelling.
+    inout fn bareInferenceParamId(ref: U64) -> U64 {
+        if ref == 0U64 || ref >= self.arena.typeTerms.count() { return 0U64 }
+        val term = self.arena.typeTerms[ref]
+        if term.paramId != 0U64 && !term.isAny && !term.isSendable && !term.isDiverging && term.args.len == 0U64 && term.assocNameId == 0U64 && term.assocTraitId == 0U64 && !term.hasTopLevelView() {
+            return term.paramId
+        }
+        return 0U64
+    }
+
     // Only the selected declaration's bare ParamIds are inference variables.
     // A projection is not invertible; retain obligations without inferring its
     // receiver. Head/child identity is shared with structural type equality.
@@ -1706,7 +1717,7 @@ pub impl Comp {
             if self.typeRefEq(a: pattern, b: argument) { return <TypeArgumentMatch.Matched /> }
             return <TypeArgumentMatch.Deferred />
         }
-        if term.paramId != 0U64 && !term.isAny && !term.isSendable && !term.isDiverging && term.args.len == 0U64 && term.assocTraitId == 0U64 && term.viewExtId == 0U64 && term.viewIds.len == 0U64 && term.viewSources.len == 0U64 {
+        if self.bareInferenceParamId(ref: pattern) != 0U64 {
             mut val index = 0U64
             while index < params.count() && index < values.count() {
                 if self.funcBindAt(binds: params, index: index).paramId == term.paramId {
@@ -2533,7 +2544,7 @@ pub impl Comp {
         mut val args: Array[U64] = []
         mut val pi: U64 = 0
         while pi < sd.typeParams.count() {
-            val pName: U64 = sd.typeParams[pi].nameId
+            val parameterId = sd.typeParams[pi].paramId
             mut val argRef: U64 = 0
             mut val fj: U64 = 0
             while fj < sd.fields.count() {
@@ -2541,7 +2552,7 @@ pub impl Comp {
                 // only a field whose declared type IS this bare parameter (`v: T`, not
                 // `xs: Array[T]` — nested unification is a follow-on) pins it.
                 if !(fd.tyIsArray) {
-                    if fd.tyNameId == pName {
+                    if parameterId != 0U64 && self.bareInferenceParamId(ref: fd.ty) == parameterId {
                         // an untyped field value (a bare literal) does not pin the parameter —
                         // skip it; another (typed) field must, and this one is grounded to the
                         // inferred type by context downstream (`0..<n` binds T from `n`, then
@@ -2570,36 +2581,17 @@ pub impl Comp {
         return <Result.Ok value=self.pushType(t: <TypeRef nameStart=typeStart nameLen=typeLen hasDecl=true declOffset=sd.defOffset args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />) />
     }
 
-    // The TypeRef for the value supplied to the make-field named `fieldNameId`, or 0 when
-    // the field is absent, or its value's type is untyped / unknown / an array (which a
-    // bare parameter can't take in this increment).
+    // Field values use the same lexical type authority as call arguments.
+    // Unknown/contextual values remain unknown; concrete body substitutions
+    // and spelling-based TypeRef reconstruction cannot choose the result.
     inout fn makeFieldArgRef(fieldNameId: U64, fields: MakeFieldRange) -> Result[U64, CompileDiagnostic] {
-        mut val k: U64 = 0
-        while k < fields.len {
-            val mf: MakeField = self.makeFieldAt(fields: fields, index: k)
-            if intern(c: inout self, start: mf.nameStart, len: mf.nameLen) == fieldNameId {
-                // Recorded child terms preserve lexical ParamIds, views and
-                // complete generic arguments. The early pre-Record scan has
-                // no such fact yet and retains its existing TypeInfo bridge.
-                val recorded: U64 = self.semanticExprTerm(exprId: mf.value)
-                if recorded != 0U64 { return <Result.Ok value=recorded />}
-                val ti: TypeInfo = (try self.exprType(id: mf.value))
-                if ti.kind == 3 {
-                    return <Result.Ok value=0U64 />
-                }
-                if ti.nameLen == 0U64 {
-                    return <Result.Ok value=0U64 />
-                }
-                // a generic-instance value (`v=<Box v2=1I32/>`): reuse its grounded ref.
-                if ti.ref != 0U64 {
-                    if self.isGenericInst(ref: ti.ref) {
-                        return <Result.Ok value=ti.ref />
-                    }
-                }
-                mut val noArgs: Array[U64] = []
-                return <Result.Ok value=self.pushType(t: <TypeRef nameStart=ti.nameStart nameLen=ti.nameLen args=noArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />) />
+        mut val index = 0U64
+        while index < fields.len {
+            val field = self.makeFieldAt(fields: fields, index: index)
+            if intern(c: inout self, start: field.nameStart, len: field.nameLen) == fieldNameId {
+                return self.inferenceArgumentType(exprId: field.value)
             }
-            k += 1
+            index += 1U64
         }
         return <Result.Ok value=0U64 />
     }
