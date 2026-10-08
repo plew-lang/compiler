@@ -215,98 +215,34 @@ pub impl Comp {
         }
     }
 
-    // Register a method instance from the final callable chosen by resolution.  The
-    // optional index lets every call spelling (`.` and `#`) share demand discovery
-    // without a second source-selection query in Mono.
-    inout fn registerMethodInst(callId: U64 = 4000000000U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange, finalIdx: U64 = 4000000000U64) -> Result[(), CompileDiagnostic] {
-        // Demand discovery consumes the selected receiver result before any
-        // construction-time query. A canonical receiver cannot be invalidated
-        // by reopening its source expression merely to recover its name.
-        val concreteRecvRef: U64 = (try self.groundedBodyReceiverRef(exprId: recv))
-        val rt0: TypeInfo = if concreteRecvRef != 0U64 && concreteRecvRef < self.arena.typeCount() {
-            give self.typeInfoOfRef(ref: concreteRecvRef)
-        } else {
-            give try self.typeOf(id: recv)
+    // Method demand uses the completed CallResolution. Source selection and
+    // receiver typing have already finished before this registration boundary.
+    inout fn registerMethodInst(callId: U64, finalIdx: U64) -> Result[(), CompileDiagnostic] {
+        val concreteRecvRef = try self.selectedCallReceiverRef(exprId: callId, callee: finalIdx)
+        if concreteRecvRef != 0U64 { try self.scanType(ref: concreteRecvRef) }
+        if finalIdx >= self.arena.functionCount() { return <Result.Ok value=() /> }
+        val method = self.arena.functionAt(index: finalIdx)
+        if method.isAssoc || method.typeParams.count() == 0U64 { return <Result.Ok value=() /> }
+        if concreteRecvRef == 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: callId), msg: "internal error: selected method has no receiver type") />
         }
-        // recover the receiver type-name span: a struct/enum (kind 2) carries it; a
-        // String value (kind 1) recovers "String"; a primitive (kind 0, e.g. `U64`)
-        // already carries its name. A generic method on a primitive (`u64.hash[H]`)
-        // must register its instance too, so we no longer bail on non-struct kinds —
-        // only arrays (kind 3, handled per element type) and nameless values are skipped.
-        mut val rt: TypeInfo = rt0
-        // A method body can be the first use that exposes a nested generic
-        // receiver (`self.data.append` => Buffer[T]).  Register that concrete
-        // receiver before resolving its call so the final-callee body walk is
-        // complete before backend starts emitting lazy generic methods.
-        if concreteRecvRef != 0U64 {
-            try self.scanType(ref: concreteRecvRef)
-        } else if rt.ref != 0U64 {
-            try self.scanType(ref: rt.ref)
+        val receiver = self.typeInfoOfRef(ref: concreteRecvRef)
+        if receiver.kind == 3 || receiver.nameLen == 0U64 { return <Result.Ok value=() /> }
+        mut val receiverInstance = 0U64
+        if self.isGenericInst(ref: concreteRecvRef) {
+            if method.typeParams.count() <= self.recvParamCount(ref: concreteRecvRef) { return <Result.Ok value=() /> }
+            receiverInstance = concreteRecvRef
         }
-        if rt.kind == 3 {
-            return <Result.Ok value=() />
-        }
-        if rt.nameLen == 0 {
-            return <Result.Ok value=() />
-        }
-        val genericRecv: Bool = self.isGenericInst(ref: concreteRecvRef)
-        mut val mi: U64 = finalIdx
-        if mi == 4000000000U64 {
-            mi = (try self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args))
-        }
-        if mi == self.arena.functionCount() {
-            return <Result.Ok value=() />
-        }
-        val mf: Func = self.arena.functionAt(index: mi)
-        // Associated functions have no value receiver.  Their instance is
-        // registered from the completed final-callee table, where the selected
-        // subject is explicit; treating the type-name AST as a method receiver
-        // here creates a competing (often receiver-less) FnInst.
-        if mf.isAssoc { return <Result.Ok value=() /> }
-        if mf.typeParams.count() == 0 {
-            return <Result.Ok value=() />
-        }
-        // a generic receiver supplies the first `rcount` type params; the method must
-        // have its OWN params beyond that to need a call-site instance (`filterIter.map`).
-        // Without own params (`filterIter.filter`) it is emitted per receiver
-        // instantiation (emitMonoMethods), so skip it here.
-        mut val rcount: U64 = 0
-        mut val recvInst: U64 = 0
-        if genericRecv {
-            rcount = self.recvParamCount(ref: concreteRecvRef)
-            recvInst = concreteRecvRef
-            if mf.typeParams.count() <= rcount {
-                return <Result.Ok value=() />
+        val arguments = try self.bodyCalleeTypeArgs(exprId: callId)
+        if try self.fnArgsAllGround(args: arguments) {
+            if !self.fnInstExists(fnIdx: finalIdx, args: arguments, recvInstRef: receiverInstance) {
+                self.monoWork.fnInsts.append(<FnInst fnIdx=finalIdx args=arguments recvInstRef=receiverInstance />)
+            }
+            if method.hasRet {
+                val result = try self.bodyCalleeResultRef(exprId: callId)
+                if result != 0U64 { try self.scanType(ref: result) }
             }
         }
-        try self.setSelfItemEnv(recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: recvInst)
-        // As for free calls, a method-own instance is keyed by the resolved
-        // callable descriptor.  Its receiver substitutions and own generic
-        // substitutions are one vector selected by Mono, never a second
-        // inference from this method AST.
-        mut val fullArgs: Array[U64] = []
-        if callId != 4000000000U64 {
-            fullArgs = (try self.bodyCalleeTypeArgs(exprId: callId))
-        }
-        if (try self.fnArgsAllGround(args: fullArgs)) {
-            if !(self.fnInstExists(fnIdx: mi, args: fullArgs, recvInstRef: recvInst)) {
-                self.monoWork.fnInsts.append(<FnInst fnIdx=mi args=fullArgs recvInstRef=recvInst />)
-            }
-            // Mono has already selected and grounded this call under its
-            // concrete receiver/proof.  Registration is a consumer of that
-            // final decision, not another return-type resolver: re-grounding
-            // `mf.retTy` from the shared provided-method template can turn a
-            // completed `MapIter[..., fn[I64, I64], I64]` back into
-            // `MapIter[..., fn[I64, Item], I64]`.  Use the descriptor both for
-            // reachability and for the type scan; LLVM receives the same term.
-            if mf.hasRet && callId != 4000000000U64 {
-                val finalResult: U64 = (try self.bodyCalleeResultRef(exprId: callId))
-                if finalResult != 0U64 {
-                    try self.scanType(ref: finalResult)
-                }
-            }
-        }
-        self.clearSelfItemEnv()
         return <Result.Ok value=() />
     }
 

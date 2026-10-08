@@ -370,171 +370,6 @@ pub impl Comp {
         return out
     }
 
-    // Recover an expression's concrete receiver TypeRef under the body instance
-    // being scanned.  The parametric table normally supplies this directly.  A
-    // plain scalar type parameter is deliberately representation-free in a few
-    // older AST paths, so rebuild its named TypeRef before applying the same
-    // body substitution.  This remains frontend resolution; backend never uses
-    // this recovery.
-    inout fn groundedBodyReceiverRef(exprId: U64) -> Result[U64, CompileDiagnostic] {
-        mut val out: U64 = 0U64
-        // A selected call owns its result, including Unit. CallSiteKey and
-        // BodyInstance identify the record; zero is not evidence of absence.
-        val finalIndex = (try self.bodyCalleeIndex(exprId: exprId))
-        if finalIndex < self.finalCalleeCount() {
-            val result = self.arena.finalCallees[finalIndex].resultTypeRef
-            if result >= self.arena.typeCount() {
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: recorded receiver result is outside the type arena") />
-            }
-            return <Result.Ok value=result />
-        }
-        // Locals retain their declared structured type even when the generic
-        // type-recovery projection exposes an Array through its element view.
-        // Prefer that declaration for source selection.
-        match self.arena.exprs[exprId] {
-            Expr.Ident(val start, val len) => {
-                if self.cur.hasRecv {
-                    val selfName: Bind = self.kwSpan(kw: "self", kwLen: 4U64)
-                    if spansEqual(c: inout self, aStart: start, aLen: len, bStart: selfName.nameStart, bLen: selfName.nameLen) {
-                        // The body-instance receiver is the semantic identity
-                        // that selected this callable.  Prefer it over the
-                        // mutable Self/Item convenience environment: provided
-                        // trait bodies are shared, and that ambient environment
-                        // may still describe another conformer after a nested
-                        // resolution query.
-                        if self.cur.bodyEnvironment.receiverRef != 0U64 { return <Result.Ok value=self.cur.bodyEnvironment.receiverRef />}
-                        if self.cur.bodySelfRef != 0U64 { return <Result.Ok value=self.cur.bodySelfRef />}
-                    }
-                }
-                val li: U64 = self.localIndexByName(start: start, len: len)
-                if li < self.cur.locals.count() {
-                    val lo: Local = self.cur.locals[li]
-                    out = lo.ty
-                    if lo.isArray {
-                        if out == 0U64 || out >= self.arena.typeCount() || !(rangeEquals(bytes: self.arena.bytes, start: self.arena.typeTerms[out].nameStart, len: self.arena.typeTerms[out].nameLen, kw: "Array")) {
-                            val elem: U64 = out
-                            if elem != 0U64 { out = self.arrayRefOfElem(elemRef: elem) }
-                        }
-                    }
-                    // A free generic parameter can have no standalone `ty`
-                    // ref in an older lowered body, but its declaration span
-                    // still identifies the binder. Consult the body-instance
-                    // substitution before relying on that optional cache.
-                    if !lo.isArray {
-                        mut val binderI: U64 = 0U64
-                        while binderI < self.cur.bodyEnvironment.params.count() {
-                            if spansEqual(c: inout self, aStart: lo.tyStart, aLen: lo.tyLen, bStart: self.cur.bodyEnvironment.params[binderI].nameStart, bLen: self.cur.bodyEnvironment.params[binderI].nameLen) {
-                                if binderI < self.cur.bodyEnvironment.args.count() && self.cur.bodyEnvironment.args[binderI] != 0U64 {
-                                    return <Result.Ok value=self.cur.bodyEnvironment.args[binderI] />
-                                }
-                            }
-                            binderI += 1U64
-                        }
-                    }
-                    if out != 0U64 {
-                        // A free generic parameter is represented by the
-                        // parameter's bare TypeRef in the shared body.  Its
-                        // body-instance argument is the semantic identity,
-                        // including a `#Trait` / extension view; return that
-                        // entry directly rather than reconstructing through a
-                        // cache that may retain only the unviewed head.
-                        val savedP: Array[Bind] = self.cur.typeParams
-                        val savedA: Array[U64] = self.cur.typeArgs
-                        val savedS: U64 = self.cur.selfRef
-                        val savedI: U64 = self.cur.itemRef
-                        val savedR: U64 = self.cur.recvInstRef
-                        self.cur.typeParams = self.cur.bodyEnvironment.params
-                        self.cur.typeArgs = self.cur.bodyEnvironment.args
-                        self.cur.selfRef = self.cur.bodySelfRef
-                        self.cur.itemRef = self.cur.bodyItemRef
-                        self.cur.recvInstRef = self.cur.bodyEnvironment.receiverRef
-                        val grounded = self.groundBodyTerm(ref: out)
-                        self.cur.typeParams = savedP
-                        self.cur.typeArgs = savedA
-                        self.cur.selfRef = savedS
-                        self.cur.itemRef = savedI
-                        self.cur.recvInstRef = savedR
-                        return grounded
-                    }
-                }
-            }
-            _ => {}
-        }
-        // The final body instance is also usable before a caller has rebuilt
-        // the lexical-local table (some layout/discovery walks intentionally
-        // do not).  Recover a parameter `x: T` directly from the owning
-        // function's declaration in that case.  This is not a second type
-        // inference path: it reads the same body-instance substitution used
-        // for locals above, including its view facets.
-        match self.arena.exprs[exprId] {
-            Expr.Ident(start: val identStart, len: val identLen) => {
-                if self.cur.bodyFnIdx < self.arena.functionCount() {
-                    val owner: Func = self.arena.functionAt(index: self.cur.bodyFnIdx)
-                    mut val pi: U64 = 0U64
-                    while pi < owner.params.count() {
-                        val param: Param = self.funcParamAt(params: owner.params, index: pi)
-                        if spansEqual(c: inout self, aStart: identStart, aLen: identLen, bStart: param.nameStart, bLen: param.nameLen) {
-                            mut val ti: U64 = 0U64
-                            while ti < self.cur.bodyEnvironment.params.count() {
-                                if spansEqual(c: inout self, aStart: param.tyStart, aLen: param.tyLen, bStart: self.cur.bodyEnvironment.params[ti].nameStart, bLen: self.cur.bodyEnvironment.params[ti].nameLen) {
-                                    if ti < self.cur.bodyEnvironment.args.count() && self.cur.bodyEnvironment.args[ti] != 0U64 {
-                                        if param.tyIsArray {
-                                            return <Result.Ok value=self.arrayRefOfElem(elemRef: self.cur.bodyEnvironment.args[ti]) />
-                                        }
-                                        return <Result.Ok value=self.cur.bodyEnvironment.args[ti] />
-                                    }
-                                }
-                                ti += 1U64
-                            }
-                        }
-                        pi += 1U64
-                    }
-                }
-            }
-            _ => {}
-        }
-        // TypeInfo's legacy array projection is just its element type.  It is
-        // useful for scalar typing, but not for a method receiver: an
-        // `Array[U8]` local must retain the full instance identity selected at
-        // the call site.  Ident locals above therefore win; non-local
-        // expressions ca use the ordinary typed-IR recovery.
-        out = (try self.groundedTypeOf(id: exprId))
-        if out != 0U64 {
-            return <Result.Ok value=out />
-        }
-        val ti: TypeInfo = (try self.typeOf(id: exprId))
-        if ti.nameLen == 0U64 {
-            return <Result.Ok value=0U64 />
-        }
-        // Preserve a structured recovery such as Array[E] before falling back
-        // to a bare head.  Rebuilding only `E` here was enough to make an
-        // Array method's final Func known while losing the receiver instance
-        // required to emit that very Func.
-        out = self.typedIrRefOfInfo(ti: ti)
-        if out == 0U64 {
-            out = self.findOrAddTypeRef(nameStart: ti.nameStart, nameLen: ti.nameLen)
-        }
-        if out == 0U64 {
-            return <Result.Ok value=0U64 />
-        }
-        val savedP: Array[Bind] = self.cur.typeParams
-        val savedA: Array[U64] = self.cur.typeArgs
-        val savedS: U64 = self.cur.selfRef
-        val savedI: U64 = self.cur.itemRef
-        self.cur.typeParams = self.cur.bodyEnvironment.params
-        self.cur.typeArgs = self.cur.bodyEnvironment.args
-        self.cur.selfRef = self.cur.bodySelfRef
-        self.cur.itemRef = self.cur.bodyItemRef
-        val grounded = self.groundBodyTerm(ref: out)
-        self.cur.typeParams = savedP
-        self.cur.typeArgs = savedA
-        self.cur.selfRef = savedS
-        self.cur.itemRef = savedI
-        return grounded
-    }
-
-
-
     // Control-flow protocol calls have no receiver expression at finalization:
     // their receiver is already a grounded CallTemplate term.  Do not feed a
     // statement's iterable AST back into view collection; all source facets
@@ -1470,10 +1305,8 @@ pub impl Comp {
         return <Result.Ok value=true />
     }
 
-    // Ground one explicitly-recorded call argument. This is intentionally
-    // separate from groundedBodyReceiverRef: that helper remains a migration
-    // reader for arbitrary Expr navigation, whereas a CallTemplate owns its
-    // complete semantic input and must not rediscover it from shared AST.
+    // Ground one explicitly-recorded call argument. The CallTemplate owns
+    // its semantic input; do not rediscover it from the shared AST.
     inout fn groundCallArgumentSource(source: CallArgumentSource) -> Result[U64, CompileDiagnostic] {
         match source {
             CallArgumentSource.Term(exprId: _, val term) => {
@@ -2313,6 +2146,23 @@ pub impl Comp {
         return <Result.Ok value=0U64 />
     }
 
+
+    // Demand registration consumes the selected call's receiver, not the
+    // receiver expression's syntax or ambient local-name table.
+    inout fn selectedCallReceiverRef(exprId: U64, callee: U64) -> Result[U64, CompileDiagnostic] {
+        val index = try self.bodyCalleeIndex(exprId: exprId)
+        if index >= self.finalCalleeCount() {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: selected call receiver was not recorded") />
+        }
+        val selected = self.arena.finalCallees[index]
+        if selected.callee != callee {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: selected call receiver belongs to another callee") />
+        }
+        if selected.recvTypeRef >= self.arena.typeCount() {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: selected call receiver is outside the type arena") />
+        }
+        return <Result.Ok value=selected.recvTypeRef />
+    }
 
     inout fn bodyCalleeResultRef(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         val i: U64 = (try self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
@@ -5653,7 +5503,7 @@ pub impl Comp {
                     try self.scanExprInsts(exprId: self.argAt(args: callArgs, index: i).expr)
                     i += 1
                 }
-                try self.registerMethodInst(callId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: callArgs, finalIdx: (try self.resolveBodyCallee(exprId: exprId)))
+                try self.registerMethodInst(callId: exprId, finalIdx: (try self.resolveBodyCallee(exprId: exprId)))
                 try self.finalizeAccessWriteFacets(parentExpr: exprId)
             }
             Expr.ExtView(val recv, source: _, strip: _) => {
@@ -5671,7 +5521,7 @@ pub impl Comp {
                     i += 1
                 }
                 val finalIdx: U64 = (try self.resolveBodyCallee(exprId: exprId))
-                try self.registerMethodInst(callId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: callArgs, finalIdx: finalIdx)
+                try self.registerMethodInst(callId: exprId, finalIdx: finalIdx)
                 try self.finalizeAccessWriteFacets(parentExpr: exprId)
             }
             Expr.Field(val base, val nameStart, val nameLen) => { try self.scanExprInsts(exprId: base) }

@@ -15,19 +15,23 @@ fn main() {
     val args = compiler.pushArgs(args: [])
     val method = compiler.pushExpr(e: <Expr.Method recv=receiver nameStart=second.nameStart nameLen=second.nameLen args=args />)
     val results = [firstTerm, 0U64, secondTerm]
+    val receivers = [secondTerm, firstTerm, 0U64]
     mut val index = 0U64
     while index < results.count() {
         compiler.cur.bodyId = index + 1U64
-        compiler.appendFinalCallee(exprId: method, callee: 0U64, siteIsStmt: false, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: results[index]).unwrap()
+        compiler.appendFinalCallee(exprId: method, callee: 0U64, siteIsStmt: false, slot: 0U64, recvTypeRef: receivers[index], resultTypeRef: results[index]).unwrap()
         if compiler.exprTypeWithChainHole(id: method, chainHoleRef: 0U64).unwrap().ref != results[index] { panic "recorded result was re-inferred" }
-        if compiler.groundedBodyReceiverRef(exprId: method).unwrap() != results[index] { panic "receiver result was re-inferred" }
+        if compiler.selectedCallReceiverRef(exprId: method, callee: 0U64).unwrap() != receivers[index] { panic "receiver result was re-inferred" }
         index += 1U64
     }
     compiler.cur.bodyId = 1U64
     if compiler.exprTypeWithChainHole(id: method, chainHoleRef: 0U64).unwrap().ref != firstTerm { panic "body instance result was overwritten" }
+    if !compiler.selectedCallReceiverRef(exprId: method, callee: 1U64).isErr() { panic "receiver from another callee accepted" }
+    compiler.cur.bodyId = 5U64
+    if !compiler.selectedCallReceiverRef(exprId: method, callee: 0U64).isErr() { panic "missing receiver record silently fell back to syntax" }
     compiler.cur.bodyId = 4U64
-    compiler.appendFinalCallee(exprId: method, callee: 0U64, siteIsStmt: false, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: compiler.arena.typeCount()).unwrap()
+    compiler.appendFinalCallee(exprId: method, callee: 0U64, siteIsStmt: false, slot: 0U64, recvTypeRef: compiler.arena.typeCount(), resultTypeRef: compiler.arena.typeCount()).unwrap()
     if !compiler.exprTypeWithChainHole(id: method, chainHoleRef: 0U64).isErr() { panic "corrupt result silently fell back to syntax" }
-    if !compiler.groundedBodyReceiverRef(exprId: method).isErr() { panic "corrupt receiver result silently fell back to syntax" }
+    if !compiler.selectedCallReceiverRef(exprId: method, callee: 0U64).isErr() { panic "corrupt receiver result silently fell back to syntax" }
     write(s: "recorded-method-result-authority-ok\n")
 }
