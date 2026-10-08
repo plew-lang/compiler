@@ -125,6 +125,10 @@ pub impl LexicalBodyPreparations {
     }
 }
 
+// A capability candidate is semantic metadata, not an evaluated source value.
+// Its selected signature is required only when the access plan demands it.
+pub enum ExpressionRecordPurpose { Execution Capability }
+
 // Sparse source obligations retain only expressions that still require a type.
 // One linked list per lexical/global owner avoids rescanning the expression arena.
 pub struct SourceTypingObligation {

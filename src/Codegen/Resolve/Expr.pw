@@ -1073,6 +1073,24 @@ pub impl Comp {
     // symbolic closure type or existential witness until a BodyInstance
     // grounds it.  Mono must never reopen the call expression to rediscover
     // lexical scope, field identity, or requirement overload selection.
+    // Only completed signature producers call this API. Their zero result is
+    // Unit; an unresolved expression still uses recordSemanticExprTerm(0).
+    // Preserve the callable no-payload representation and publish its explicit
+    // Unit state. Presence is never inferred from a zero term alone.
+    inout fn recordKnownExpressionResult(exprId: U64, resultTerm: U64) -> Result[(), CompileDiagnostic] {
+        self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
+        if self.callableResultIsUnit(ref: resultTerm) {
+            self.ensureSemanticExprType(exprId: exprId)
+            val prior = self.arena.semanticExprTypes[exprId]
+            val state = match prior.typeState {
+                SemanticExpressionTypeState.NoNormalValue => <SemanticExpressionTypeState.NoNormalValue />,
+                _ => <SemanticExpressionTypeState.Unit />,
+            }
+            self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType typeState=state completion=prior.completion invocation=prior.invocation term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />)
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn recordInvocationCompletion(exprId: U64, diverging: Bool, returnsUnit: Bool = false) {
         self.ensureSemanticExprType(exprId: exprId)
         val prior = self.arena.semanticExprTypes[exprId]
@@ -1141,7 +1159,7 @@ pub impl Comp {
         }
     }
 
-    inout fn recordDynamicCallTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, target: DynamicCallTemplateTarget) -> Result[(), CompileDiagnostic] {
+    inout fn recordDynamicCallTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, target: DynamicCallTemplateTarget, receiverTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         mut val functionType: U64 = 0U64
         match target {
             DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: _, fnTypeTerm: val term) => { functionType = term }
@@ -1152,7 +1170,9 @@ pub impl Comp {
             DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val trait, slot: val slot) => {
                 if slot > 0U64 {
                     val declaration = self.traitReqAt(reqs: self.decls.traitAt(index: trait).reqs, index: slot - 1U64)
-                    self.recordInvocationCompletion(exprId: exprId, diverging: declaration.isDiverging, returnsUnit: self.callableResultIsUnit(ref: self.semanticCallableReturnTerm(function: declaration)))
+                    val signature = try self.existentialRequirementSignature(target: receiverTerm, traitIndex: trait, requirement: declaration)
+                    try self.recordKnownExpressionResult(exprId: exprId, resultTerm: signature.resultType)
+                    self.recordInvocationCompletion(exprId: exprId, diverging: declaration.isDiverging, returnsUnit: self.callableResultIsUnit(ref: signature.resultType))
                 }
             }
             _ => {}
@@ -1160,6 +1180,7 @@ pub impl Comp {
         if functionType != 0U64 && self.isFnType(ref: functionType) {
             self.recordInvocationCompletion(exprId: exprId, diverging: self.arena.typeAt(index: functionType).isDiverging, returnsUnit: self.functionTypeReturnsUnit(ref: functionType))
             val signature: TypeRef = self.arena.typeAt(index: functionType)
+            if signature.args.count() > 0U64 { try self.recordKnownExpressionResult(exprId: exprId, resultTerm: signature.args[0U64]) }
             mut val index: U64 = 0U64
             while index < args.len && index + 1U64 < signature.args.count() {
                 val expected: U64 = signature.args[index + 1U64]
@@ -1201,45 +1222,63 @@ pub impl Comp {
             }
             _ => {}
         }
-        // Selection fixes contextual construction arguments even when the
-        // receiver is still a type parameter. Publish those expressions before
-        // freezing argument sources; Mid must never receive an unresolved Make.
-        mut val argumentIndex = 0U64
-        while argumentIndex < args.len {
-            val argument = self.argAt(args: args, index: argumentIndex).expr
-            if self.expressionNeedsTypeContext(exprId: argument) {
-                val expected = try self.staticRequirementParamType(resolution: resolution, args: args, argIdx: argumentIndex)
-                if expected != 0U64 { try self.recordExpr(exprId: argument, expectedTerm: expected) }
-            }
-            argumentIndex += 1U64
-        }
         // A provided member has a selected declaration and proof just like
         // a requirement. Compute its result from that signature rather than
         // reading the still-untyped call expression back into its own record.
         mut val methodArguments: Array[U64] = []
         mut val selectedResult = resultTerm
+        mut val selectedEnvironment = <InstanceEnvironment />
         match resolution {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: val owner, reqIdx: val index) => {
+                val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: index)
+                methodArguments = try self.inferFnArgs(f: requirement, args: args)
+                selectedEnvironment = <InstanceEnvironment params=self.copyFuncBinds(binds: requirement.typeParams) args=methodArguments />
+            }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
                 val function = self.arena.functionAt(index: callee)
                 val inferred = try self.inferMethodEnvironment(f: function, receiverRef: receiverTerm, args: args, selectedProof: proof)
                 val environment = try self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment params=inferred.params args=inferred.args receiverRef=receiverTerm proof=proof />)
+                selectedEnvironment = environment
                 methodArguments = self.signatureTypeArguments(f: function, environment: environment)
                 selectedResult = try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: function), environment: environment, selfRef: receiverTerm, itemRef: 0U64)
             }
             _ => {}
         }
+        // The selected provided environment supplies both parameter and result
+        // terms. Numeric literals need this context just as constructions do.
+        mut val argumentIndex = 0U64
+        while argumentIndex < args.len {
+            val argument = self.argAt(args: args, index: argumentIndex).expr
+            mut val expected = try self.staticRequirementParamType(resolution: resolution, args: args, argIdx: argumentIndex)
+            match resolution {
+                StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
+                    expected = try self.groundTermForBody(ref: expected, environment: selectedEnvironment, selfRef: receiverTerm, itemRef: 0U64)
+                }
+                StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => {
+                    val function = self.arena.functionAt(index: callee)
+                    val parameter = self.paramIndexForArg(params: function.params, args: args, argIdx: argumentIndex)
+                    if parameter < function.params.count() {
+                        expected = try self.groundTermForBody(ref: self.funcParamAt(params: function.params, index: parameter).ty, environment: selectedEnvironment, selfRef: receiverTerm, itemRef: 0U64)
+                    }
+                }
+                _ => {}
+            }
+            if expected != 0U64 {
+                if self.expressionNeedsTypeContext(exprId: argument) { try self.recordExpr(exprId: argument, expectedTerm: expected) }
+                try self.recordSemanticExprExpectedResult(exprId: argument, expectedTerm: expected)
+                try self.tcCheckValue(expectedRef: expected, valueExpr: argument, pos: "static method argument")
+            }
+            argumentIndex += 1U64
+        }
         // Parent chains and match payloads read the expression term during
         // both Record walks, before call-template publication is enabled.
-        self.recordSemanticExprTerm(exprId: exprId, term: selectedResult)
+        val declaration = try self.selectedStaticCallDeclaration(resolution: resolution, offset: self.exprOffset(id: exprId))
+        if self.callableResultIsUnit(ref: self.semanticCallableReturnTerm(function: declaration)) {
+            try self.recordKnownExpressionResult(exprId: exprId, resultTerm: selectedResult)
+        } else { self.recordSemanticExprTerm(exprId: exprId, term: selectedResult) }
         // Like Direct calls, keep the unsealed selection during preparation.
         // The generic checker needs its contextual substitution before the
         // publication walk; closure still happens only after validation.
-        match resolution {
-            StaticMemberResolution.Requirement(proof: _, traitIdx: val owner, reqIdx: val index) => {
-                methodArguments = try self.inferFnArgs(f: self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: index), args: args)
-            }
-            _ => {}
-        }
         val methodTypeArgs = self.publishCallTemplateTypeArgs(args: methodArguments)
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
         mut val templateArgs: CallTemplateArgumentRange = (try self.directCallTemplateArgs(args: args))
@@ -2105,10 +2144,12 @@ pub impl Comp {
             contract = if self.arena.functionAt(index: callee).isDiverging { give <InvocationCompletion.Diverges /> } else { give <InvocationCompletion.Returns /> }
         }
         mut val state = prior.typeState
+        mut val returnsUnit = false
         if callee < self.arena.functionCount() {
             val declaration = self.arena.functionAt(index: callee)
+            returnsUnit = self.callableResultIsUnit(ref: self.semanticCallableReturnTerm(function: declaration))
             if declaration.isDiverging { state = <SemanticExpressionTypeState.NoNormalValue /> }
-            else if self.callableResultIsUnit(ref: self.semanticCallableReturnTerm(function: declaration)) { state = <SemanticExpressionTypeState.Unit /> }
+            else if returnsUnit { state = <SemanticExpressionTypeState.Unit /> }
         }
         mut val next: SemanticExprType = <SemanticExprType typeState=state completion=prior.completion invocation=contract term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />
         if resultTerm != 0U64 && resultTerm < self.arena.typeCount() {
@@ -2116,6 +2157,9 @@ pub impl Comp {
             next = <SemanticExprType typeState=self.refinedSemanticTypeState(prior: next.typeState, term: resultTerm) completion=prior.completion invocation=contract term=resultTerm shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />
         }
         self.arena.semanticExprTypes.set(i: exprId, value: next)
+        if returnsUnit {
+            try self.recordKnownExpressionResult(exprId: exprId, resultTerm: resultTerm)
+        }
         // Every Direct producer (including one whose callee was cached by
         // verification) crosses this single semantic boundary.  If the
         // selected declaration is a provided copy, attach its static proof

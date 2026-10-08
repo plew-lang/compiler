@@ -489,7 +489,7 @@ pub impl Comp {
             if traitIndex < self.decls.traitCount() && slot != 0U64 {
                 val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
                 try self.checkExistentialRequirementCall(req: requirement, target: receiverTerm, traitIndex: traitIndex, requirement: slot - 1U64, offset: self.exprOffset(id: exprId))
-                try self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ExistentialRequirement traitIdx=traitIndex slot=slot />)
+                try self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ExistentialRequirement traitIdx=traitIndex slot=slot />, receiverTerm: receiverTerm)
                 return <Result.Ok value=true />
             }
             return <Result.Ok value=false />
@@ -1407,7 +1407,7 @@ pub impl Comp {
         val writeExpr: U64 = self.decls.accessCandidateAt(index: candidateIndex).writeExpr
         if writeExpr >= self.arena.exprs.count() { return <Result.Ok value=() /> }
         self.cur.recordingAccessWriteFacet = true
-        try self.recordExpr(exprId: writeExpr)
+        try self.recordExpr(exprId: writeExpr, needsValue: false, purpose: <ExpressionRecordPurpose.Capability />)
         self.cur.recordingAccessWriteFacet = false
         return <Result.Ok value=() />
     }
@@ -1618,7 +1618,7 @@ pub impl Comp {
     // unique enclosing chain stage. The payload is a structural child input,
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
-    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false, needsValue: Bool = true) -> Result[(), CompileDiagnostic] {
+    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false, needsValue: Bool = true, purpose: ExpressionRecordPurpose = <ExpressionRecordPurpose.Execution />) -> Result[(), CompileDiagnostic] {
         // Normalize at the context boundary before inspecting expression shape.
         mut val normalizedContext = expectedTerm
         if self.typeTermContainsAssociatedProjection(ref: normalizedContext) {
@@ -1629,7 +1629,7 @@ pub impl Comp {
         if normalizedContext == 0U64 && deferContext && self.expressionNeedsTypeContext(exprId: exprId) {
             if needsValue { try self.requireExpressionValue(exprId: exprId) }
             // Retain the obligation without publishing an unchecked completion.
-            try self.recordSourceTypingObligation(exprId: exprId, needsValue: needsValue)
+            try self.recordSourceTypingObligation(exprId: exprId, needsValue: needsValue, purpose: purpose)
             return <Result.Ok value=() />
         }
         match self.arena.exprs[exprId] {
@@ -2233,7 +2233,9 @@ pub impl Comp {
                 if promiseTerm != 0U64 && promiseTerm < self.arena.typeCount() {
                     val promise: TypeRef = self.arena.typeAt(index: promiseTerm)
                     if promise.args.count() > 0U64 {
-                        self.recordSemanticExprTerm(exprId: exprId, term: promise.args[0])
+                        // Promise's result slot is a complete signature: zero is
+                        // its declared Unit result, never an inference variable.
+                        try self.recordKnownExpressionResult(exprId: exprId, resultTerm: promise.args[0])
                     }
                 }
             }
@@ -2316,13 +2318,17 @@ pub impl Comp {
             }
             _ => {}
         }
-        try self.recordSourceTypingObligation(exprId: exprId, needsValue: needsValue)
+        try self.recordSourceTypingObligation(exprId: exprId, needsValue: needsValue, purpose: purpose)
         return <Result.Ok value=() />
     }
 
     // Record may visit operands before their parent supplies context. Defer
     // completeness to the owner boundary, using the final refined type fact.
-    inout fn recordSourceTypingObligation(exprId: U64, needsValue: Bool) -> Result[(), CompileDiagnostic] {
+    inout fn recordSourceTypingObligation(exprId: U64, needsValue: Bool, purpose: ExpressionRecordPurpose) -> Result[(), CompileDiagnostic] {
+        match purpose {
+            ExpressionRecordPurpose.Capability => { return <Result.Ok value=() /> }
+            ExpressionRecordPurpose.Execution => {}
+        }
         if !self.cur.recordCallTemplates { return <Result.Ok value=() /> }
         self.ensureSemanticExprType(exprId: exprId)
         val fact = self.arena.semanticExprTypes[exprId]
