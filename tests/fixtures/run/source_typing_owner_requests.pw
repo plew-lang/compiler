@@ -1,6 +1,7 @@
 // Internal owner boundary: unresolved source types fail before any Mid request.
 use /Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendDeclarations, analyzeFrontendForRequests, spansEqual }
 use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, SemanticCompletionOwner }
 use @Std/Io only { print }
 use /Diag only { CompileDiagnostic }
 fn functionOwner(compiler: inout Comp, name: String) -> U64 {
@@ -36,6 +37,30 @@ fn main() {
     if compiler.lexicalBodyPreparations.count() != 1U64 { panic("retry duplicated owner") }
     compiler.prepareLexicalBody(fnIdx: good).unwrap()
     print(compiler.lexicalBodyPreparations.count())
+    // Deferring contextual typing records an obligation, not a checked flow.
+    mut val deferred = <Comp />
+    analyzeFrontendDeclarations(c: inout deferred,
+        input: <FrontendInput.Text path="deferred-owner.pw" text="fn pending() {{ val callback = fn() {{ return 1I64 }} }} fn main() {{}}" />,
+        sources: <SourceAccess stdRoot=[] />, options: <FrontendOptions genMode=true />).unwrap()
+    val pending = functionOwner(compiler: inout deferred, name: "pending")
+    mut val expression = 0U64
+    while expression < deferred.arena.exprs.count() {
+        match deferred.arena.exprs[expression] {
+            Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => { break }
+            _ => {}
+        }
+        expression += 1U64
+    }
+    if expression >= deferred.arena.exprs.count() { panic("missing deferred closure") }
+    deferred.cur.checkFn = pending
+    deferred.cur.recordCallTemplates = true
+    deferred.recordExpr(exprId: expression, deferContext: true).unwrap()
+    match deferred.arena.semanticExprTypes[expression].completion {
+        Optional.Some(v: _) => { panic("deferred expression published unchecked flow") }
+        Optional.None => {}
+    }
+    expectTypeFailure(result: deferred.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Function index=pending />))
+    print(deferred.lexicalBodyPreparations.count())
     mut val globals = <Comp />
     analyzeFrontendForRequests(c: inout globals,
         input: <FrontendInput.Text path="global-type-owner.pw" text="val broken = [] val good: I64 = 2I64 fn main() {{}}" />,

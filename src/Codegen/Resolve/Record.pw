@@ -1628,6 +1628,8 @@ pub impl Comp {
         // once the selected parameter supplies its result context.
         if normalizedContext == 0U64 && deferContext && self.expressionNeedsTypeContext(exprId: exprId) {
             if needsValue { try self.requireExpressionValue(exprId: exprId) }
+            // Retain the obligation without publishing an unchecked completion.
+            try self.recordSourceTypingObligation(exprId: exprId, needsValue: needsValue)
             return <Result.Ok value=() />
         }
         match self.arena.exprs[exprId] {
@@ -2322,7 +2324,7 @@ pub impl Comp {
     // completeness to the owner boundary, using the final refined type fact.
     inout fn recordSourceTypingObligation(exprId: U64, needsValue: Bool) -> Result[(), CompileDiagnostic] {
         if !self.cur.recordCallTemplates { return <Result.Ok value=() /> }
-        if exprId >= self.arena.semanticExprTypes.count() { return <Result.Ok value=() /> }
+        self.ensureSemanticExprType(exprId: exprId)
         val fact = self.arena.semanticExprTypes[exprId]
         // A type-qualified factory receiver names a declaration, not a
         // runtime value. Its recorded identifier decision owns this distinction.
@@ -2341,24 +2343,14 @@ pub impl Comp {
                 _ => {}
             }
         }
-        match fact.completion {
-            Optional.Some(v: val completion) => {
-                if !self.sourceTypingObligations.record(expression: exprId, owner: completion.owner) {
+        match self.sourceRecordingOwner() {
+            Optional.Some(v: val owner) => {
+                if !self.sourceTypingObligations.record(expression: exprId, owner: owner) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: source typing obligation changed owner") />
                 }
             }
-            Optional.None => {
-                // Declaration/field recording also uses Record, but is not a
-                // requested lexical/global body. Its obligations belong to
-                // declaration checking, not an invented successful body owner.
-                if self.cur.checkFn != 18446744073709551615U64 {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: source typing obligation has no owner") />
-                }
-                match self.cur.globalInitializerTarget {
-                    Optional.Some(v: _) => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: source typing obligation has no owner") /> }
-                    Optional.None => {}
-                }
-            }
+            // Declaration/field recording has its own checking boundary.
+            Optional.None => {}
         }
         return <Result.Ok value=() />
     }
@@ -2373,6 +2365,14 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: obligation.expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") />
                 }
                 _ => {}
+            }
+            match fact.completion {
+                Optional.Some(v: val completion) => {
+                    if !semanticCompletionOwnersEqual(recorded: completion.owner, prepared: owner) {
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: obligation.expression), msg: "internal error: source typing obligation completion changed owner") />
+                    }
+                }
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: obligation.expression), msg: "internal error: typed source obligation has no checked completion") /> }
             }
             cursor = obligation.next
         }

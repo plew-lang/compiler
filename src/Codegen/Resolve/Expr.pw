@@ -1087,16 +1087,25 @@ pub impl Comp {
         />)
     }
 
-    // Publish only after the expression's operands and branches have been
-    // checked and composed. A single arm's exit is not its parent's exit.
-    inout fn recordedCompletionFact(completion: SourceCompletion) -> Optional[SemanticExpressionCompletion] {
+    // A source site's owner exists before its type and completion are checked.
+    // Sharing this identity rule does not publish a completed semantic fact.
+    inout fn sourceRecordingOwner() -> Optional[SemanticCompletionOwner] {
         if !self.cur.recordCallTemplates { return <Optional.None /> }
         val owner = self.decls.callTemplateLexicalRoots.getOr(key: self.cur.checkFn, fallback: self.cur.checkFn)
         if owner != 18446744073709551615U64 {
-            return <Optional.Some v=<SemanticExpressionCompletion owner=<SemanticCompletionOwner.Function index=owner /> flow=completion /> />
+            return <Optional.Some v=<SemanticCompletionOwner.Function index=owner /> />
         }
         match self.cur.globalInitializerTarget {
-            Optional.Some(v: val target) => { return <Optional.Some v=<SemanticExpressionCompletion owner=<SemanticCompletionOwner.Global target=target /> flow=completion /> /> }
+            Optional.Some(v: val target) => { return <Optional.Some v=<SemanticCompletionOwner.Global target=target /> /> }
+            Optional.None => { return <Optional.None /> }
+        }
+    }
+
+    // Publish only after the expression's operands and branches have been
+    // checked and composed. A single arm's exit is not its parent's exit.
+    inout fn recordedCompletionFact(completion: SourceCompletion) -> Optional[SemanticExpressionCompletion] {
+        match self.sourceRecordingOwner() {
+            Optional.Some(v: val owner) => { return <Optional.Some v=<SemanticExpressionCompletion owner=owner flow=completion /> /> }
             Optional.None => { return <Optional.None /> }
         }
     }
