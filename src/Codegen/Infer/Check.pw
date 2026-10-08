@@ -7,11 +7,13 @@ pub impl Comp {
             return <Result.Ok value=() />
         }
         try self.requireExpressionValue(exprId: valueExpr)
-        // a void function's result is `()` — using it where a typed value is expected
-        // (`val x: I64 = doNothing()`) is a type error (spec/04).
-        if (try self.exprIsVoidCall(id: valueExpr)) {
+        // Unit is a known result state, independent of syntax and hasRet.
+        // Compare its completed type before any construction-time fallback.
+        if self.recordedExpressionHasUnitResult(exprId: valueExpr) {
+            val expected = try self.groundTypeRef(ref: expectedRef)
+            if expected != 0U64 && self.callableResultIsUnit(ref: expected) { return <Result.Ok value=() /> }
             if !(self.tcLog) {
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "cannot use the result of a function that returns no value (spec/04)") />
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "cannot use a Unit result where a non-Unit value is required (spec/04)") />
             }
             return <Result.Ok value=() />
         }

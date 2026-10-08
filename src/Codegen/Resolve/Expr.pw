@@ -419,6 +419,16 @@ pub impl Comp {
         }
     }
 
+    // Source checking consumes the recorded result, not a declaration's
+    // annotation presence. In particular, an implicit async result is Promise.
+    fn recordedExpressionHasUnitResult(exprId: U64) -> Bool {
+        if exprId >= self.arena.semanticExprTypes.count() { return false }
+        match self.arena.semanticExprTypes[exprId].typeState {
+            SemanticExpressionTypeState.Unit => { return true }
+            _ => { return false }
+        }
+    }
+
     // A zero term is unresolved here. Unit is established only by an explicit
     // empty-record term or a selected callable's completed result signature.
     inout fn refinedSemanticTypeState(prior: SemanticExpressionTypeState, term: U64) -> SemanticExpressionTypeState {
@@ -654,7 +664,10 @@ pub impl Comp {
     inout fn semanticCallableReturnTerm(function: Func) -> U64 {
         if function.isAsync && !function.hasRet {
             val promise = self.internBytes(s: "Promise")
-            return self.pushType(t: <TypeRef nameStart=promise.nameStart nameLen=promise.nameLen args=[0U64] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+            // The payload is an ordinary source type, not a callable result
+            // slot. Keep omitted logical Unit out of generic type arguments.
+            val unit = self.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[] recordFieldTerms=[] />)
+            return self.pushType(t: <TypeRef nameStart=promise.nameStart nameLen=promise.nameLen args=[unit] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
         }
         return function.retTy
     }
@@ -1650,7 +1663,7 @@ pub impl Comp {
                 // term itself. The same completed substitution is retained for Mono.
                 val selectedReceiver = self.selectedCallableReceiver(function: function, receiver: receiver, receiverTerm: receiverTerm, params: self.copyFuncBinds(binds: function.typeParams), typeArgs: completed)
                 val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: selectedReceiver, typeArgs: completed, proof: self.thawStaticConformanceProof(id: proofId))
-                val result = (try self.groundTermForBody(ref: function.retTy, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64))
+                val result = (try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: function), environment: environment, selfRef: environment.receiverRef, itemRef: 0U64))
                 self.recordSemanticExprTerm(exprId: exprId, term: result)
                 return <Result.Ok value=<CallTemplateKind.Direct callee=callee receiver=receiver args=args calleeTypeArgs=self.publishCallTemplateTypeArgs(args: completed) proofId=proofId /> />
             }

@@ -390,33 +390,6 @@ pub impl Comp {
         return 0U64
     }
 
-    inout fn exprIsVoidCall(id: U64) -> Result[Bool, CompileDiagnostic] {
-        match self.arena.exprs[id] {
-            Expr.Call(val nameStart, val nameLen, val args) => {
-                val fi: U64 = (try self.resolvedCallee(id: id))
-                if fi < self.arena.functionCount() {
-                    return <Result.Ok value=!self.arena.functionAt(index: fi).hasRet />
-                }
-            }
-            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
-                // The verifier has already resolved every method-shaped call to its
-                // final callable.  Value-context checking must consume that decision,
-                // not re-resolve only the bare spelling and accidentally exclude `#`.
-                val mi: U64 = (try self.resolvedCallee(id: id))
-                if mi < self.arena.functionCount() {
-                    return <Result.Ok value=!self.arena.functionAt(index: mi).hasRet />
-                }
-            }
-            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
-                val mi: U64 = (try self.resolvedCallee(id: id))
-                if mi < self.arena.functionCount() {
-                    return <Result.Ok value=!self.arena.functionAt(index: mi).hasRet />
-                }
-            }
-            _ => {}
-        }
-        return <Result.Ok value=false />
-    }
     fn typeCompatibilityResult(matches: Bool) -> TypeCompatibility {
         if matches { return <TypeCompatibility.Compatible /> }
         return <TypeCompatibility.Incompatible />

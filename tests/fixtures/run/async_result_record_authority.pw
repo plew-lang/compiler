@@ -1,0 +1,14 @@
+use @Std/Async only { sleep }
+use @Std/Io only { print }
+
+async fn task() { await sleep(ms: 1I64) }
+fn keep(promise: Promise[()]) -> Promise[()] { return promise }
+async fn main() {
+    val direct: Promise[()] = task()
+    val wrapped: Promise[()] = { give task() }
+    val argument = keep(promise: task())
+    await direct
+    await wrapped
+    await argument
+    print(1I64)
+}

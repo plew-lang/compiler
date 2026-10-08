@@ -378,7 +378,7 @@ pub impl Comp {
         if f.typeParams.count() > 0U64 {
             calleeArgs = try self.inferRecordedFreeCallArgs(f: f, args: args)
         }
-        mut val result: U64 = f.retTy
+        mut val result: U64 = self.semanticCallableReturnTerm(function: f)
         // A source body may call `id[T](value: T) -> T` while its own T is
         // still symbolic.  That is a complete *semantic* substitution even
         // though it is not an emittable Mono instance yet.  Preserve the
@@ -391,7 +391,7 @@ pub impl Comp {
             // environment used by method signatures before publishing the
             // call result to field selection and local inference.
             val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=calleeArgs />
-            result = (try self.groundTermForBody(ref: f.retTy, environment: environment, selfRef: 0U64, itemRef: 0U64))
+            result = (try self.groundTermForBody(ref: result, environment: environment, selfRef: 0U64, itemRef: 0U64))
         }
         try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: calleeArgs, resultTerm: result)
         return <Result.Ok value=() />
@@ -572,7 +572,7 @@ pub impl Comp {
                     try self.recordParametricMethodCall(exprId: exprId, callee: callee, receiverSource: <CallTemplateReceiver.Term term=inferredReceiver />, receiverTerm: inferredReceiver, args: args)
                     return <Result.Ok value=() />
                 }
-                try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [], resultTerm: f.retTy)
+                try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [], resultTerm: self.semanticCallableReturnTerm(function: f))
                 return <Result.Ok value=() />
             }
             // A compiler-internal receiver such as `Comp` has no language
@@ -581,7 +581,7 @@ pub impl Comp {
             // reopen the written call. Trait-provided calls are excluded:
             // their proof necessarily needs a real receiver term.
             if !(f.isProvided) {
-                try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.Opaque />, args: args, calleeTypeArgs: [], resultTerm: f.retTy)
+                try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.Opaque />, args: args, calleeTypeArgs: [], resultTerm: self.semanticCallableReturnTerm(function: f))
             }
             return <Result.Ok value=() />
         }
@@ -626,7 +626,7 @@ pub impl Comp {
         // substitutes the authored receiver. Mono supplies the adapter that
         // separates this surface from the executable body's original Self.
         val finalEnvironment: InstanceEnvironment = (try self.finalMethodEnvironment(f: f, receiverRef: receiverTerm, args: args))
-        val result: U64 = (try self.groundFinalMethodSignatureInEnvironment(f: f, environment: finalEnvironment, signatureTerm: f.retTy))
+        val result: U64 = (try self.groundFinalMethodSignatureInEnvironment(f: f, environment: finalEnvironment, signatureTerm: self.semanticCallableReturnTerm(function: f)))
         // The final callable's complete ParamId substitution is provenance,
         // not a Mono inference request.  Persist it beside the selected
         // callee so every downstream consumer sees the same method/impl
