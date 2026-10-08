@@ -334,23 +334,16 @@ pub impl Comp {
         return term
     }
 
-    // Complete only the holes left by the general inference helper with the
-    // declaration receiver pattern described above.  This deliberately lives
-    // on the Record path: generic checking also calls `inferFnArgs`, where
-    // abstract `Self` must remain opaque.  A recorded CallTemplate, by
-    // contrast, is a body-owned substitution program and may retain the
-    // enclosing `impl[T] Receiver[T]` pattern needed to ground the call later.
-    inout fn completeRecordedFreeCallArgs(f: Func, args: ArgRange, inferred: Array[U64]) -> Array[U64] {
-        mut val out: Array[U64] = inferred
+    // Build a source call substitution from the declaration-time argument
+    // terms once. Record owns the lexical Self projection above; no legacy
+    // TypeInfo result or concrete BodyInstance descriptor participates.
+    // Signature verification checks the resulting argument constraints before
+    // the lexical call template is sealed.
+    inout fn inferRecordedFreeCallArgs(f: Func, args: ArgRange) -> Array[U64] {
+        mut val out: Array[U64] = []
         mut val ti: U64 = 0U64
         while ti < f.typeParams.count() {
-            if ti >= out.count() { out.append(0U64) }
-            // The semantic argument term is more precise than legacy
-            // TypeInfo even when that adapter produced a nonzero answer:
-            // a for-local can be `I64` by its selected Iterator proof while
-            // TypeInfo still spells the provided method's template `Item`.
-            // CallTemplate is the body-instance authority, so refine rather
-            // than merely fill holes.
+            out.append(0U64)
             val tp: Bind = self.funcBindAt(binds: f.typeParams, index: ti)
             mut val pi: U64 = 0U64
             while pi < f.params.count() {
@@ -397,7 +390,7 @@ pub impl Comp {
         try self.checkCallDeclarationKind(exprId: exprId, declaration: f)
         mut val calleeArgs: Array[U64] = []
         if f.typeParams.count() > 0U64 {
-            calleeArgs = self.completeRecordedFreeCallArgs(f: f, args: args, inferred: self.inferParametricFnArgs(f: f, args: args))
+            calleeArgs = self.inferRecordedFreeCallArgs(f: f, args: args)
         }
         mut val result: U64 = f.retTy
         // A source body may call `id[T](value: T) -> T` while its own T is

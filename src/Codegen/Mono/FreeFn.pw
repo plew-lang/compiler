@@ -6,41 +6,6 @@
 
 pub impl Comp {
 
-    // Infer a generic free-call substitution from declaration-time semantic
-    // expression terms.  Unlike inferFnArgs this deliberately has no
-    // BodyInstance/descriptor dependency: it creates the reusable call
-    // provenance template stored next to SemanticExprType.
-    inout fn inferParametricFnArgs(f: Func, args: ArgRange) -> Array[U64] {
-        mut val out: Array[U64] = []
-        mut val ti: U64 = 0U64
-        while ti < f.typeParams.count() {
-            val tp: Bind = self.funcBindAt(binds: f.typeParams, index: ti)
-            mut val found: U64 = 0U64
-            mut val pi: U64 = 0U64
-            while pi < f.params.count() {
-                val p: Param = self.funcParamAt(params: f.params, index: pi)
-                val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
-                if ai < args.len {
-                    val argTerm: U64 = self.parametricExprTerm(exprId: self.argAt(args: args, index: ai).expr)
-                    if p.tyIsArray {
-                        if p.tyNameId == tp.nameId && argTerm != 0U64 && argTerm < self.arena.typeCount() {
-                            val at: TypeRef = self.arena.typeAt(index: argTerm)
-                            if at.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
-                                found = at.args[0]
-                            }
-                        }
-                    } else if argTerm != 0U64 {
-                        val candidate: U64 = self.unifyTypeParam(paramRef: p.ty, argRef: argTerm, tpStart: tp.nameStart, tpLen: tp.nameLen)
-                        if candidate != 0U64 { found = candidate }
-                    }
-                }
-                pi += 1U64
-            }
-            out.append(found)
-            ti += 1U64
-        }
-        return out
-    }
     inout fn isGenericFreeFn(fi: U64) -> Bool {
         if fi >= self.arena.functionCount() {
             return false
