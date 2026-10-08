@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+use /Frontend only { Comp }
+
+fn main() {
+    mut val compiler = <Comp />
+    match compiler.closeCallTemplatesForBody(fnIdx: 0U64) {
+        Result.Ok(value: _) => { panic "missing owner was accepted" }
+        Result.Err(error: _) => {}
+    }
+    if compiler.globalCallTemplatesClosed { panic "individual request closed the program frontier" }
+    compiler.closeProgramCallTemplates().unwrap()
+    if !compiler.globalCallTemplatesClosed { panic "program closure did not publish its own completion" }
+    print("call-closure-owner-boundary")
+}

@@ -588,8 +588,7 @@ pub impl Comp {
 
     inout fn closeCallTemplatesForBody(fnIdx: U64) -> Result[(), CompileDiagnostic] {
         if fnIdx >= self.arena.functionCount() {
-            self.globalCallTemplatesClosed = true
-            return <Result.Ok value=() />
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: lexical call closure has no declaration") />
         }
         val owner = (try self.semanticBodyOwner(fnIdx: fnIdx))
         if owner < self.closedCallTemplateBodies.count() && self.closedCallTemplateBodies[owner] { return <Result.Ok value=() /> }
