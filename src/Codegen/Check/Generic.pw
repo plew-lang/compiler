@@ -902,11 +902,10 @@ pub impl Comp {
         // projections. Reuse that proof before materializing an owning view.
         if self.arena.typeIsClosed(ref: ref) { return false }
         if ref == 0U64 || ref >= self.arena.typeCount() { return false }
-        val t: TypeRef = self.arena.typeAt(index: ref)
-        if t.assocNameId != 0U64 { return true }
+        if self.arena.typeTerms[ref].assocNameId != 0U64 { return true }
         mut val i: U64 = 0U64
-        while i < self.typeTermChildCount(t: t) {
-            if self.typeTermContainsAssociatedProjection(ref: self.typeTermChildRef(t: t, index: i)) { return true }
+        while i < self.typeTermRefChildCount(ref: ref) {
+            if self.typeTermContainsAssociatedProjection(ref: self.typeTermRefChildRef(ref: ref, index: i)) { return true }
             i += 1U64
         }
         return false

@@ -1225,8 +1225,8 @@ pub impl Comp {
         }
         val success = self.arena.typeArgumentPool[self.arena.typeTerms[operandTerm].args.start]
         self.recordSemanticExprTerm(exprId: exprId, term: success)
-        val source = self.resultErrArgRef(ref: operandTerm)
-        val target = self.resultErrArgRef(ref: returnTerm)
+        val source = self.arena.typeArgumentPool[self.arena.typeTerms[operandTerm].args.start + 1U64]
+        val target = self.arena.typeArgumentPool[self.arena.typeTerms[returnTerm].args.start + 1U64]
         try self.putSemanticTry(fact: <SemanticTry resultEnumIndex=enumIndex okVariantIndex=okVariant errVariantIndex=errVariant ownerFnIdx=(try self.semanticBodyOwner(fnIdx: self.cur.checkFn)) exprId=exprId operandTerm=operandTerm returnTerm=returnTerm successTerm=success sourceErrorTerm=source targetErrorTerm=target />)
         if self.typeRefEq(a: source, b: target) { return <Result.Ok value=() /> }
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId, slot: 1U64)
@@ -2104,19 +2104,16 @@ pub impl Comp {
     // The resulting type comes from that substitution into the declaration;
     // expected terms never replace the expression's independent meaning.
     inout fn recordSemanticExprExpectedResult(exprId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
-        mut val context = expectedTerm
-        if self.typeTermContainsAssociatedProjection(ref: context) {
-            context = try self.normalizedValueType(ref: context)
+        // Normalize at the context boundary before inspecting expression shape.
+        mut val normalizedContext = expectedTerm
+        if self.typeTermContainsAssociatedProjection(ref: normalizedContext) {
+            normalizedContext = try self.normalizedValueType(ref: normalizedContext)
         }
-        return self.recordSemanticExprNormalizedContext(exprId: exprId, expectedTerm: context)
-    }
-
-    inout fn recordSemanticExprNormalizedContext(exprId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
-        if expectedTerm == 0U64 || expectedTerm >= self.arena.typeCount() { return <Result.Ok value=() /> }
-        if self.expressionNeedsTypeContext(exprId: exprId) { try self.recordExpr(exprId: exprId, expectedTerm: expectedTerm) }
+        if normalizedContext == 0U64 || normalizedContext >= self.arena.typeCount() { return <Result.Ok value=() /> }
+        if self.expressionNeedsTypeContext(exprId: exprId) { try self.recordExpr(exprId: exprId, expectedTerm: normalizedContext) }
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
-        try self.recordCallTemplateExpectedResult(exprId: exprId, expectedTerm: expectedTerm)
+        try self.recordCallTemplateExpectedResult(exprId: exprId, expectedTerm: normalizedContext)
         // Array construction is a bidirectional value form: at its explicit
         // expected-result boundary the Array[E] term is the semantic result,
         // not merely a hint for an empty literal. Record also refreshes its
@@ -2128,16 +2125,16 @@ pub impl Comp {
             // Use recorded child types afterwards; never label a mismatched
             // explicit child with the expected type to make it pass.
             Expr.Sequence(val body) => {
-                try self.recordBlockExpectedResult(blkId: body, expectedTerm: expectedTerm)
+                try self.recordBlockExpectedResult(blkId: body, expectedTerm: normalizedContext)
                 self.recordValueBlockResult(exprId: exprId, blockId: body)
             }
             Expr.Block(val body, offset: _) => {
-                try self.recordBlockExpectedResult(blkId: body, expectedTerm: expectedTerm)
+                try self.recordBlockExpectedResult(blkId: body, expectedTerm: normalizedContext)
                 self.recordValueBlockResult(exprId: exprId, blockId: body)
             }
             Expr.IfChain(conditions: _, val thenBlk, val elseBlk) | Expr.IfExpr(cond: _, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
-                try self.recordBlockExpectedResult(blkId: thenBlk, expectedTerm: expectedTerm)
-                try self.recordBlockExpectedResult(blkId: elseBlk, expectedTerm: expectedTerm)
+                try self.recordBlockExpectedResult(blkId: thenBlk, expectedTerm: normalizedContext)
+                try self.recordBlockExpectedResult(blkId: elseBlk, expectedTerm: normalizedContext)
                 if !self.recordValueBlockResult(exprId: exprId, blockId: thenBlk) {
                     self.recordValueBlockResult(exprId: exprId, blockId: elseBlk)
                 }
@@ -2147,7 +2144,7 @@ pub impl Comp {
                 mut val selected: Bool = false
                 while index < arms.len {
                     val arm = self.matchArmAt(arms: arms, index: index)
-                    try self.recordBlockExpectedResult(blkId: arm.body, expectedTerm: expectedTerm)
+                    try self.recordBlockExpectedResult(blkId: arm.body, expectedTerm: normalizedContext)
                     if !selected {
                         selected = self.recordValueBlockResult(exprId: exprId, blockId: arm.body)
                     }
@@ -2156,17 +2153,17 @@ pub impl Comp {
             }
 
             Expr.Make(typeStart: val typeStart, typeLen: val typeLen, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: val writtenTerm, fields: val fields) => {
-                val acceptsContext: Bool = (try self.makeAcceptsExpectedTerm(exprId: exprId, writtenTerm: writtenTerm, isEnum: isEnum, fields: fields, expectedTerm: expectedTerm))
+                val acceptsContext: Bool = (try self.makeAcceptsExpectedTerm(exprId: exprId, writtenTerm: writtenTerm, isEnum: isEnum, fields: fields, expectedTerm: normalizedContext))
                 if acceptsContext {
-                        self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
+                        self.recordSemanticExprTerm(exprId: exprId, term: normalizedContext)
                         mut val fieldIndex: U64 = 0U64
                         while fieldIndex < fields.len {
                             val field = self.makeFieldAt(fields: fields, index: fieldIndex)
                             mut val fieldTerm: U64 = 0U64
                             if isEnum {
-                                fieldTerm = self.typedIrRefOfInfo(ti: (try self.genericEnumFieldTypeInfo(instRef: expectedTerm, variantStart: variantStart, variantLen: variantLen, fieldStart: field.nameStart, fieldLen: field.nameLen)))
+                                fieldTerm = self.typedIrRefOfInfo(ti: (try self.genericEnumFieldTypeInfo(instRef: normalizedContext, variantStart: variantStart, variantLen: variantLen, fieldStart: field.nameStart, fieldLen: field.nameLen)))
                             } else {
-                                fieldTerm = (try self.fieldTypeRefOfReceiver(receiverRef: expectedTerm, fieldStart: field.nameStart, fieldLen: field.nameLen))
+                                fieldTerm = (try self.fieldTypeRefOfReceiver(receiverRef: normalizedContext, fieldStart: field.nameStart, fieldLen: field.nameLen))
                             }
                             try self.recordSemanticExprExpectedResult(exprId: field.value, expectedTerm: fieldTerm)
                             fieldIndex += 1U64
@@ -2180,12 +2177,12 @@ pub impl Comp {
             // range validation; explicit suffixes and Bool own their types.
             Expr.Int(value: _, offset: _, isBool: val isBool, tyStart: _, tyLen: val suffixLen, isNeg: _) => {
                 if !isBool && suffixLen == 0U64 {
-                    val expected: TypeRef = self.arena.typeAt(index: expectedTerm)
+                    val expected: TypeRef = self.arena.typeAt(index: normalizedContext)
                     if self.isIntType(start: expected.nameStart, len: expected.nameLen) {
                         try self.checkLitCtx(id: exprId, eKind: 1U64, eBits: self.intBits(start: expected.nameStart, len: expected.nameLen), eSgn: self.intSigned(start: expected.nameStart, len: expected.nameLen))
-                        self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
+                        self.recordSemanticExprTerm(exprId: exprId, term: normalizedContext)
                     } else if self.isFloatType(start: expected.nameStart, len: expected.nameLen) {
-                        self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
+                        self.recordSemanticExprTerm(exprId: exprId, term: normalizedContext)
                     }
                 }
             }
@@ -2196,14 +2193,14 @@ pub impl Comp {
             // consumer, including Mid return resolution, observes it.
             Expr.Float(start: _, len: _, tyStart: _, tyLen: val suffixLen) => {
                 if suffixLen == 0U64 {
-                    val expected: TypeRef = self.arena.typeAt(index: expectedTerm)
+                    val expected: TypeRef = self.arena.typeAt(index: normalizedContext)
                     if self.isFloatType(start: expected.nameStart, len: expected.nameLen) {
-                        self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
+                        self.recordSemanticExprTerm(exprId: exprId, term: normalizedContext)
                     }
                 }
             }
             Expr.Array(elems: _) => {
-                try self.recordArrayLitCtx(exprId: exprId, ctxRef: expectedTerm)
+                try self.recordArrayLitCtx(exprId: exprId, ctxRef: normalizedContext)
             }
             _ => {}
         }
@@ -2214,37 +2211,37 @@ pub impl Comp {
         // untyped arithmetic: an ordinary trait operation may have an
         // independent associated Output, and comparisons produce Bool, so
         // neither admits this equality propagation.
-        val expectedNumeric = self.arena.typeTerms[expectedTerm]
+        val expectedNumeric = self.arena.typeTerms[normalizedContext]
         val floatingContext = self.isFloatType(start: expectedNumeric.nameStart, len: expectedNumeric.nameLen)
         val integerContext = self.isIntType(start: expectedNumeric.nameStart, len: expectedNumeric.nameLen)
         val numericContext = (floatingContext || integerContext) && contextualNumericExpression(self.arena.exprs, exprId: exprId, floatingLiterals: floatingContext)
         match self.arena.exprs[exprId] {
             Expr.Unary(val op, val operand) => {
                 if numericContext {
-                    try self.recordSemanticExprExpectedResult(exprId: operand, expectedTerm: expectedTerm)
+                    try self.recordSemanticExprExpectedResult(exprId: operand, expectedTerm: normalizedContext)
                     val operandType = self.typeInfoOfRef(ref: self.parametricExprTerm(exprId: operand))
                     self.recordSemanticExprInfo(exprId: exprId, ti: (try self.unaryOperatorResultType(operand: operandType, op: op)))
                     try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [operand], isUnary: true)
                 } else if (op == opSub() || op == opBitNot()) && self.parametricExprTerm(exprId: operand) == 0U64 {
-                    try self.recordSemanticExprExpectedResult(exprId: operand, expectedTerm: expectedTerm)
+                    try self.recordSemanticExprExpectedResult(exprId: operand, expectedTerm: normalizedContext)
                 }
             }
             Expr.Binary(val op, val lhs, val rhs) => {
                 if numericContext {
-                    try self.recordSemanticExprExpectedResult(exprId: lhs, expectedTerm: expectedTerm)
-                    try self.recordSemanticExprExpectedResult(exprId: rhs, expectedTerm: expectedTerm)
+                    try self.recordSemanticExprExpectedResult(exprId: lhs, expectedTerm: normalizedContext)
+                    try self.recordSemanticExprExpectedResult(exprId: rhs, expectedTerm: normalizedContext)
                     val left = self.typeInfoOfRef(ref: self.parametricExprTerm(exprId: lhs))
                     val right = self.typeInfoOfRef(ref: self.parametricExprTerm(exprId: rhs))
                     self.recordSemanticExprInfo(exprId: exprId, ti: (try self.operatorOutputType(lt: left, rt: right, op: op)))
                     try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [lhs, rhs], isUnary: false)
                 } else if isBinTraitOp(op: op) && self.parametricExprTerm(exprId: lhs) == 0U64 && self.parametricExprTerm(exprId: rhs) == 0U64 {
-                    try self.recordSemanticExprExpectedResult(exprId: lhs, expectedTerm: expectedTerm)
-                    try self.recordSemanticExprExpectedResult(exprId: rhs, expectedTerm: expectedTerm)
+                    try self.recordSemanticExprExpectedResult(exprId: lhs, expectedTerm: normalizedContext)
+                    try self.recordSemanticExprExpectedResult(exprId: rhs, expectedTerm: normalizedContext)
                 }
             }
             _ => {}
         }
-        try self.recordDeclarationConversion(exprId: exprId, target: expectedTerm)
+        try self.recordDeclarationConversion(exprId: exprId, target: normalizedContext)
         return <Result.Ok value=() />
     }
 
