@@ -5711,28 +5711,10 @@ pub impl Comp {
                     try self.scanExprInsts(exprId: self.makeFieldAt(fields: fields, index: i).value)
                     i += 1
                 }
-                // bottom-up type-argument inference for a generic construction the front
-                // end did NOT ground top-down (`val r = 0 ..< n` — no annotation / return /
-                // field context). We run it HERE, inside the per-function body walk, so the
-                // field values' types resolve under the live env (`n`'s local type). A
-                // standalone global pass has empty `cur.locals` and can't type a local
-                // endpoint. On success we rewrite Make.ty to the grounded instance so both
-                // this scan and the backend read the concrete type; the untyped endpoint
-                // literal (`0`) then takes T from the field's declared type at construction.
-                mut val gty: U64 = ty
-                if !isEnum {
-                    if !(self.isGenericInst(ref: gty)) {
-                        val inferred: U64 = (try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, typeRef: gty, fields: fields))
-                        if inferred != 0U64 {
-                            self.arena.exprs.set(i: exprId, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=inferred fields=fields />)
-                            gty = inferred
-                        }
-                    }
-                }
-                // register the constructed type's grounded instance (`<Entry[K,V] …/>`
-                // under K=U64,V=U64 -> Entry_U64_U64). Without this, a construction that
-                // appears only as a call argument (`xs.append(<Entry[K,V] …/>)`) — whose
-                // result type no field/return scan reaches — never gets its genInst typedef.
+                // The declaration records the construction's nominal type and
+                // substitution. Mono instantiates that fact; field values do
+                // not select another instance or rewrite the shared source AST.
+                val gty = try self.groundAndRecordBodyType(ref: self.semanticExprTerm(exprId: exprId), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
                 if gty != 0U64 {
                     try self.scanType(ref: gty)
                 }
