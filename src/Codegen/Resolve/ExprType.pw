@@ -515,6 +515,18 @@ pub impl Comp {
     // The context-free expression query. An optional-chain continuation uses
     // the explicit variant below: its root ChainHole is a structural input from
     // the preceding chain stage, never ambient mutable Cursor state.
+    // Declaration inference consumes the lexical argument term. A body ID
+    // can already exist while contextual arguments are still being checked;
+    // it is not proof that this source expression has been recorded. Never
+    // substitute a concrete BodyInstance or use a finalized call descriptor
+    // to decide a reusable declaration's generic arguments.
+    inout fn inferenceArgumentType(exprId: U64) -> Result[U64, CompileDiagnostic] {
+        val recorded = self.parametricExprTerm(exprId: exprId)
+        if recorded != 0U64 { return <Result.Ok value=recorded /> }
+        val info = try self.exprType(id: exprId)
+        return <Result.Ok value=self.argViewRef(argExpr: exprId, baseRef: self.tyRefOfInfo(ti: info)) />
+    }
+
     inout fn exprType(id: U64) -> Result[TypeInfo, CompileDiagnostic] {
         return <Result.Ok value=(try self.exprTypeWithChainHole(id: id, chainHoleRef: 0U64)) />
     }

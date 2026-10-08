@@ -1,0 +1,28 @@
+// Declaration inference must preserve a caller-owned symbolic argument even
+// when a concrete body environment is present on the compatibility cursor.
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Bind, Expr, InstanceEnvironment, TypeRef }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "Parameter")
+    val concreteName = compiler.internBytes(s: "I64")
+    val binder = <Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=11U64 fieldStart=0U64 fieldLen=0U64 />
+    val parameter = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=11U64 args=[] />)
+    val concrete = compiler.pushType(t: <TypeRef nameStart=concreteName.nameStart nameLen=concreteName.nameLen nameId=concreteName.nameId args=[] />)
+    val expression = compiler.pushExpr(e: <Expr.Ident start=name.nameStart len=name.nameLen />)
+    compiler.recordSemanticExprInfo(exprId: expression, ti: compiler.typeInfoOfRef(ref: parameter))
+    compiler.cur.bodyId = 1U64
+    compiler.cur.bodyEnvironment = <InstanceEnvironment params=[binder] args=[concrete] />
+    if compiler.inferenceArgumentType(exprId: expression).unwrap() != parameter {
+        panic "declaration inference captured a concrete body substitution"
+    }
+    // An allocated body does not seal every contextual source expression.
+    val literal = compiler.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=concreteName.nameStart tyLen=concreteName.nameLen isNeg=false />)
+    if !compiler.typeRefEq(a: compiler.inferenceArgumentType(exprId: literal).unwrap(), b: concrete) {
+        panic "pending explicit literal lost its declaration type"
+    }
+    print("generic-inference-lexical-term")
+}
