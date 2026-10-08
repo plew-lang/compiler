@@ -36,6 +36,11 @@ fn main() {
     compiler.recordSemanticExprInfo(exprId: array, ti: <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />)
     if compiler.semanticExprTerm(exprId: array) != arrayType || compiler.arena.semanticExprTypes[array].shape != arrayShape { panic "unknown adapter erased an aggregate fact" }
     if compiler.semanticExprTypeInfo(exprId: array).kind != arrayInfo.kind { panic "unknown adapter erased an aggregate projection" }
+    for val kind in [1I64, 2I64, 3I64] {
+        compiler.recordSemanticExprInfo(exprId: array, ti: <TypeInfo kind=kind nameStart=0U64 nameLen=0U64 ref=0U64 />)
+        if compiler.semanticExprTerm(exprId: array) != arrayType || compiler.arena.semanticExprTypes[array].shape != arrayShape { panic "pending structural adapter erased a value fact" }
+        if compiler.semanticExprTypeInfo(exprId: array).kind != arrayInfo.kind { panic "pending structural adapter erased the canonical projection" }
+    }
     compiler.recordInvocationCompletion(exprId: literal, diverging: true)
     compiler.recordSemanticExprTerm(exprId: literal, term: integer)
     match compiler.arena.semanticExprTypes[literal].typeState {

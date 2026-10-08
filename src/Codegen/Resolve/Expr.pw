@@ -2019,10 +2019,10 @@ pub impl Comp {
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         val term: U64 = self.typedIrRefOfInfo(ti: ti)
-        // An adapter with no type information cannot invalidate a published
-        // semantic term or its shape. This applies to every expression, not
-        // only literals whose term came from a numeric context.
-        if term == 0U64 && ti.kind == 0I64 && ti.nameLen == 0U64 && ti.ref == 0U64 && ti.viewExtId == 0U64 && prior.term != 0U64 { return }
+        // An unresolved adapter cannot invalidate a published semantic term
+        // or its canonical projection. A partial structural shape supplies no
+        // replacement type, just as an unknown scalar supplies none.
+        if term == 0U64 && prior.term != 0U64 { return }
         self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType typeState=self.refinedSemanticTypeState(prior: prior.typeState, term: term) completion=prior.completion invocation=prior.invocation term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />)
     }
 
