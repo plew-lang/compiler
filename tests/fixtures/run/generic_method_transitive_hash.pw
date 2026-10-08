@@ -2,7 +2,7 @@
 // own type parameter (`key.hash[H]` -> `String.hash[SipHasher]`) discovers and
 // emits that nested instance, even when the struct is the entry file's first
 // definition (so its method body lands at the reserved-past block 0). Exercises
-// scanGenInstMethodBodies + the block-0 "no body" sentinel reservation. This is
+// the final body worklist and the block-0 "no body" sentinel reservation. This is
 // the Dictionary `hashOf` pattern in miniature.
 use @Std/Io only { print }
 use @Std/Hash only { Hash, SipHasher }

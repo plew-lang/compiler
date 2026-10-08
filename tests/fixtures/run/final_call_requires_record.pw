@@ -1,0 +1,37 @@
+// Finalization must not recover a missing lexical selection from AST names or
+// the older callee cache, even before a body is marked closed.
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { CachedCallee, CallTemplate, CallTemplateKind, CallTemplateReceiver, Expr, Func }
+
+fn rejected(compiler: inout Comp, expression: U64) {
+    match compiler.resolveBodyCallee(exprId: expression) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "internal error: written call CallTemplate was not recorded" { panic diagnostic.message }
+        }
+        Result.Ok(value: _) => { panic "final call reselected without a lexical record" }
+    }
+    if compiler.finalCalleeCount() != 0U64 { panic "failed selection published a final call" }
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internTmpName(prefix: "call", n: 0U64)
+    compiler.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen
+        typeParams=compiler.pushFuncBinds(binds: []) params=compiler.pushFuncParams(params: [])
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    compiler.cur.bodyFnIdx = 0U64
+    val expression = compiler.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=compiler.pushArgs(args: []) />)
+    while compiler.typeCache.callee.count() <= expression { compiler.typeCache.callee.append(<CachedCallee.Selected callee=0U64 />) }
+    rejected(compiler: inout compiler, expression: expression)
+    val site = compiler.templateCallSiteKey(fnIdx: 0U64, exprId: expression).unwrap()
+    compiler.appendCallTemplate(template: <CallTemplate siteKey=site kind=<CallTemplateKind.Pending /> />)
+    rejected(compiler: inout compiler, expression: expression)
+    val arguments = compiler.publishCallTemplateArguments(args: [])
+    val types = compiler.publishCallTemplateTypeArgs(args: [])
+    compiler.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Direct callee=compiler.arena.functionCount() receiver=<CallTemplateReceiver.None /> args=arguments calleeTypeArgs=types proofId=0U64 /> />)
+    rejected(compiler: inout compiler, expression: expression)
+    print("final-call-requires-record")
+}

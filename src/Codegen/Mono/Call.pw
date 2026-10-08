@@ -3770,31 +3770,7 @@ pub impl Comp {
         return self.recordAnyTraitIndex(anyRef: anyRef)
     }
 
-    // Source/implicit resolvers construct the whole dynamic call decision.
-    // Finalization only copies this value into CallResolution; it never reopens
-    // a shared expression or looks through an earlier descriptor.
-    inout fn selectedClosureFieldCall(exprId: U64, callee: U64, recvRef: U64, resultHintRef: U64, nameStart: U64, nameLen: U64) -> Result[CallSiteSelection, CompileDiagnostic] {
-        if recvRef == 0U64 || recvRef >= self.arena.typeCount() { return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef /> />}
-        val sidx: U64 = self.structIndexForType(ref: recvRef)
-        if sidx >= self.arena.structCount() { return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef /> />}
-        val fieldName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val fi: U64 = 0U64
-        while fi < self.arena.structAt(index: sidx).fields.count() {
-            if self.arena.structFieldAt(structIndex: sidx, fieldIndex: fi).nameId == fieldName { break }
-            fi += 1U64
-        }
-        if fi >= self.arena.structAt(index: sidx).fields.count() { return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef /> />}
-        val fnRef: U64 = (try self.groundTypeRef(ref: self.arena.structFieldAt(structIndex: sidx, fieldIndex: fi).ty))
-        if fnRef != 0U64 && self.isFnType(ref: fnRef) {
-            val fnTy: TypeRef = self.arena.typeAt(index: fnRef)
-            mut val resultRef: U64 = 0U64
-            if fnTy.args.count() > 0U64 {
-                resultRef = fnTy.args[0]
-            }
-            return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=resultRef target=<CallTarget.ClosureField fieldIndex=fi fnTypeRef=fnRef /> /> />
-        }
-        return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef /> />
-    }
+
 
     // Complete only generic slots that value arguments could not determine
     // from the call's already-selected result term. This is the ordinary
@@ -3822,95 +3798,11 @@ pub impl Comp {
         return <Result.Ok value=out />
     }
 
-    inout fn selectBodyCall(exprId: U64, callee: U64, recvRef: U64, resultHintRef: U64) -> Result[CallSiteSelection, CompileDiagnostic] {
-        match self.arena.exprs[exprId] {
-            Expr.Call(nameStart: val ns, nameLen: val nl, args: _) => {
-                val li: U64 = self.localIndexByName(start: ns, len: nl)
-                if li < self.cur.locals.count() {
-                    val fnRef: U64 = (try self.groundTypeRef(ref: self.cur.locals[li].ty))
-                    if fnRef != 0U64 && self.isFnType(ref: fnRef) {
-                        val fnTy: TypeRef = self.arena.typeAt(index: fnRef)
-                        mut val resultRef: U64 = 0U64
-                        if fnTy.args.count() > 0U64 && !self.functionTypeReturnsUnit(ref: fnRef) { resultRef = fnTy.args[0] }
-                        return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=resultRef target=<CallTarget.ClosureLocal bindingDeclStart=self.cur.locals[li].nameStart fnTypeRef=fnRef /> /> />
-                    }
-                }
-            }
-            Expr.Method(recv: _, nameStart: val ns, nameLen: val nl, args: val args) => {
-                if recvRef != 0U64 && recvRef < self.arena.typeCount() && self.arena.typeTerms[recvRef].isAny {
-                    val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: recvRef)
-                    val reqSlot: U64 = self.finalAnyRequirementSlot(anyRef: recvRef, nameStart: ns, nameLen: nl, args: args)
-                    if traitIdx >= self.decls.traitCount() || reqSlot == 0U64 {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: existential call target was not finalized") />
-                    } else {
-                        val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqSlot - 1U64)
-                        return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=(try self.anyMemberRetInfo(anyRef: recvRef, req: req)).ref target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=reqSlot /> /> />
-                    }
-                }
-                val fieldSelection: CallSiteSelection = (try self.selectedClosureFieldCall(exprId: exprId, callee: callee, recvRef: recvRef, resultHintRef: resultHintRef, nameStart: ns, nameLen: nl))
-                match fieldSelection.target { CallTarget.ClosureField(fieldIndex: _, fnTypeRef: _) => { return <Result.Ok value=fieldSelection />} _ => {} }
-            }
-            Expr.ExtMethod(recv: _, source: _, nameStart: val ns, nameLen: val nl, args: val args) => {
-                if recvRef != 0U64 && recvRef < self.arena.typeCount() && self.arena.typeTerms[recvRef].isAny {
-                    val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: recvRef)
-                    val reqSlot: U64 = self.finalAnyRequirementSlot(anyRef: recvRef, nameStart: ns, nameLen: nl, args: args)
-                    if traitIdx < self.decls.traitCount() && reqSlot != 0U64 {
-                        val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqSlot - 1U64)
-                        return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=(try self.anyMemberRetInfo(anyRef: recvRef, req: req)).ref target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=reqSlot /> /> />
-                    }
-                }
-                val fieldSelection: CallSiteSelection = (try self.selectedClosureFieldCall(exprId: exprId, callee: callee, recvRef: recvRef, resultHintRef: resultHintRef, nameStart: ns, nameLen: nl))
-                match fieldSelection.target { CallTarget.ClosureField(fieldIndex: _, fnTypeRef: _) => { return <Result.Ok value=fieldSelection />} _ => {} }
-            }
-            _ => {}
-        }
-        val expected: U64 = (try self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
-        val calleeArgs: Array[U64] = (try self.groundSemanticCallTypeArgs(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
-        return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef args=self.selectedCallArgs(exprId: exprId) calleeTypeArgs=calleeArgs resultHintRef=expected resultRef=(try self.groundedTypeOf(id: exprId)) /> />
-    }
 
-    // Extract source children exactly once at the resolver boundary.  The
-    // static final builder receives this range and never pattern-matches Expr
-    // to rediscover it. Operators have no call node, so this is also where
-    // their two/one operand argument slices are materialized.
-    inout fn selectedCallArgs(exprId: U64) -> ArgRange {
-        match self.arena.exprs[exprId] {
-            Expr.Call(nameStart: _, nameLen: _, val args) => { return args }
-            Expr.Method(recv: _, nameStart: _, nameLen: _, val args) => { return args }
-            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, val args) => { return args }
-            Expr.Binary(op: _, val lhs, val rhs) => {
-                val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
-                mut val args: Array[Arg] = []
-                args.append(<Arg expr=lhs isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
-                args.append(<Arg expr=rhs isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
-                return self.pushArgs(args: args)
-            }
-            Expr.Unary(op: _, val operand) => {
-                val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
-                mut val args: Array[Arg] = []
-                args.append(<Arg expr=operand isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
-                return self.pushArgs(args: args)
-            }
-            _ => {}
-        }
-        return <ArgRange start=0U64 len=0U64 />
-    }
 
-    inout fn selectedCallReceiverRef(exprId: U64) -> Result[U64, CompileDiagnostic] {
-        val index: U64 = self.syntheticCallSiteIndex(exprId: exprId)
-        if index < self.decls.syntheticCallSites.count() {
-            val site: SyntheticCallSite = self.decls.syntheticCallSites[index]
-            if site.receiverTerm != 0U64 {
-                return <Result.Ok value=(try self.groundBodyTerm(ref: site.receiverTerm)) />
-            }
-        }
-        match self.arena.exprs[exprId] {
-            Expr.Method(recv: val recv, nameStart: _, nameLen: _, args: _) => { return <Result.Ok value=(try self.groundedBodyReceiverRef(exprId: recv)) />}
-            Expr.ExtMethod(recv: val recv, source: _, nameStart: _, nameLen: _, args: _) => { return <Result.Ok value=(try self.groundedBodyReceiverRef(exprId: recv)) />}
-            _ => {}
-        }
-        return <Result.Ok value=0U64 />
-    }
+
+
+
 
     // Build the finalizer input from a Direct CallTemplate alone. The ExprId
     // remains a navigation anchor for backend value emission, but callee,
@@ -4249,161 +4141,10 @@ pub impl Comp {
             }
             _ => {}
         }
-        if (try self.callTemplatesClosedForBody(fnIdx: self.cur.bodyFnIdx)) {
-            // Instance discovery precedes Record and may inspect the syntax to
-            // enqueue reachable generic bodies.  It does not publish a call
-            // descriptor.  After Record closes templates, however, reopening
-            // a written call here would permit a BodyInstance to select a
-            // different lexical target, field, trait slot, or view.
-            if self.traceCodegen {
-                eprint(text: "[trace-codegen] missing CallTemplate body=")
-                eprintU64(n: self.cur.bodyFnIdx)
-                eprint(text: " expr=")
-                eprintU64(n: exprId)
-                eprint(text: " offset=")
-                eprintU64(n: self.exprOffset(id: exprId))
-                eprint(text: " owner=")
-                eprintU64(n: (try self.semanticBodyOwner(fnIdx: self.cur.bodyFnIdx)))
-                eprint(text: "\n")
-            }
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: written call CallTemplate was not recorded") />
-        }
-        // Non-generic verification may provide an instance-invariant final
-        // callable, including generic free-call substitutions.  Keep that
-        // descriptor: it is the call-site authority consumed by Mono and LLVM.
-        // Its view choice is safe to reuse because overload matching itself
-        // compares an explicit argument `#` source set before filling this
-        // cache (rather than relying on a backend-only mismatch check).
-        // Generic/provided bodies still resolve under their concrete instance
-        // environment below.
-        mut val bodyIsProvided: Bool = false
-        if self.cur.bodyFnIdx < self.arena.functionCount() {
-            bodyIsProvided = self.arena.functionAt(index: self.cur.bodyFnIdx).isProvided
-        }
-        if !bodyIsProvided && self.cur.bodyEnvironment.params.count() == 0U64 && exprId < self.typeCache.callee.count() {
-            match self.typeCache.callee[exprId] {
-                CachedCallee.Selected(callee: val cached) => {
-                    if cached < self.arena.functionCount() {
-                        val recvRef: U64 = (try self.selectedCallReceiverRef(exprId: exprId))
-                        val selection: CallSiteSelection = (try self.selectBodyCall(exprId: exprId, callee: cached, recvRef: recvRef, resultHintRef: (try self.selectedResultHint(callee: cached))))
-                        try self.recordSelectedBodyCallee(selection: selection)
-                        try self.enqueueSelectedCallee(selection: selection)
-                        return <Result.Ok value=cached />
-                    }
-                }
-                _ => {}
-            }
-        }
-        mut val callee: U64 = self.arena.functionCount()
-        // A resolved receiver is part of a final call decision. In particular,
-        // an OptChain desugar replaces its hole with a synthetic local whose
-        // source spelling cannot be re-resolved after the rewrite.
-        mut val resolvedReceiverRef: U64 = 0U64
-        match self.arena.exprs[exprId] {
-            Expr.Call(val nameStart, val nameLen, val args) => {
-                val localIdx: U64 = self.localIndexByName(start: nameStart, len: nameLen)
-                if localIdx >= self.cur.locals.count() || !(self.isFnType(ref: (try self.groundTypeRef(ref: self.cur.locals[localIdx].ty)))) {
-                    callee = (try self.findFunc(nameStart: nameStart, nameLen: nameLen, args: args))
-                }
-                // `pow(base:, exp:)` is source sugar for the selected Pow
-                // associated callable.  Select it here with every other call;
-                // LLVM must never rediscover it from the base expression.
-                if callee >= self.arena.functionCount() {
-                    if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "pow") && args.len == 2U64 {
-                        val baseRef: U64 = (try self.groundedBodyReceiverRef(exprId: self.argAt(args: args, index: 0U64).expr))
-                        if baseRef != 0U64 && baseRef < self.arena.typeCount() {
-                            val baseTy: TypeRef = self.arena.typeAt(index: baseRef)
-                            callee = (try self.findAssoc(recvStart: baseTy.nameStart, recvLen: baseTy.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: baseRef))
-                        }
-                    }
-                }
-            }
-            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                // Factories (`<Type.name …/>`) are rewritten to Expr.Method so
-                // they share the AST surface with value methods.  They are still
-                // associated callables: decide that here, while source scope and
-                // type-name identity are available, then retain the Func in the
-                // same final-callable table as every other call.
-                val assocRecv: Bind = self.assocRecvName(recv: recv)
-                if assocRecv.nameLen != 0U64 {
-                    // A lowering-created associated call can carry an exact
-                    // receiver template even though its AST qualifier is the
-                    // bare type name.  Preserve that selection through the
-                    // same CallSiteSelection used by written methods.
-                    resolvedReceiverRef = (try self.selectedCallReceiverRef(exprId: exprId))
-                    callee = (try self.findAssoc(recvStart: assocRecv.nameStart, recvLen: assocRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedReceiverRef))
-                } else {
-                    val recvRef: U64 = (try self.groundedBodyReceiverRef(exprId: recv))
-                    resolvedReceiverRef = recvRef
-                    if recvRef != 0U64 && recvRef < self.arena.typeCount() {
-                        if rangeEquals(bytes: self.arena.bytes, start: self.arena.typeTerms[recvRef].nameStart, len: self.arena.typeTerms[recvRef].nameLen, kw: "Self") {
-                            return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "internal diagnostic: final method receiver remained Self after body substitution") />
-                        }
-                    }
-                    // A selected outer conformance path does not flow into a
-                    // shared witness body. Resolve `self.m()` from the body's
-                    // lexical receiver surface; multiple concrete witnesses are
-                    // therefore an ordinary ambiguity at this source call.
-                    callee = (try self.resolveBodyMethodForRef(recv: recv, recvRef: recvRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId)))
-                    if callee >= self.arena.functionCount() {
-                        callee = (try self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args))
-                    }
-                    // Some compiler-internal aggregate fields expose their precise
-                    // `Array[E]` ref only through the parametric type table.  This
-                    // is still Mono resolution (never backend recovery): use that
-                    // concrete receiver to finish the same final-callable query.
-                    if callee >= self.arena.functionCount() {
-                        val recvRef: U64 = (try self.groundedBodyReceiverRef(exprId: recv))
-                        if recvRef != 0U64 && recvRef < self.arena.typeCount() {
-                            val recvTy: TypeRef = self.arena.typeAt(index: recvRef)
-                            callee = (try self.findMethod(recvStart: recvTy.nameStart, recvLen: recvTy.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef, useOffset: self.exprOffset(id: exprId)))
-                        }
-                    }
-                    if self.traceCodegen && callee >= self.arena.functionCount() {
-                        eprint(text: "[trace-codegen] unresolved method expr=")
-                        eprintU64(n: exprId)
-                        eprint(text: " offset=")
-                        eprintU64(n: self.exprOffset(id: exprId))
-                        eprint(text: " body=")
-                        eprintU64(n: self.cur.bodyFnIdx)
-                        eprint(text: " receiver=")
-                        self.traceMonoTypeHead(ref: recvRef)
-                        if recvRef < self.arena.typeCount() {
-                            eprint(text: " any=")
-                            if self.arena.typeTerms[recvRef].isAny { eprint(text: "1") } else { eprint(text: "0") }
-                            eprint(text: " param=")
-                            eprintU64(n: self.arena.typeTerms[recvRef].paramId)
-                        }
-                        eprint(text: "\n")
-                    }
-                }
-            }
-            Expr.ExtMethod(val recv, val source, val nameStart, val nameLen, val args) => {
-                val recvRef: U64 = (try self.groundedBodyReceiverRef(exprId: recv))
-                resolvedReceiverRef = recvRef
-                val sourceId: U64 = source.surfaceId
-                callee = (try self.resolveBodyMethodForRef(recv: recv, recvRef: recvRef, sourceId: sourceId, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId)))
-                if callee >= self.arena.functionCount() {
-                    val sourceSpan: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
-                    callee = (try self.resolveExtMethodFinal(recv: recv, srcStart: sourceSpan.start, srcLen: sourceSpan.len, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args))
-                }
-            }
-            _ => {}
-        }
-        match self.arena.exprs[exprId] {
-            Expr.Method(recv: _, val nameStart, val nameLen, args: _) => {
-                if callee >= self.arena.functionCount() {
-                    if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "compare") {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: implicit compare was not resolved during finalization") />
-                    }
-                }
-            }
-            _ => {}
-        }
-        val selection: CallSiteSelection = (try self.selectBodyCall(exprId: exprId, callee: callee, recvRef: resolvedReceiverRef, resultHintRef: (try self.selectedResultHint(callee: callee))))
-        try self.recordSelectedBodyCallee(selection: selection)
-        try self.enqueueSelectedCallee(selection: selection)
-        return <Result.Ok value=callee />
+        // Finalization consumes the lexical selection. Missing or malformed
+        // records are invariant failures, never permission to resolve names,
+        // overloads, closure fields, or existential slots again from syntax.
+        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: written call CallTemplate was not recorded") />
     }
 
     // Access writeback is reachable only through a parent call whose selected
@@ -6620,68 +6361,5 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn scanGenInstMethodBodies() -> Result[(), CompileDiagnostic] {
-        mut val gi: U64 = 0
-        while gi < self.monoWork.genInsts.count() {
-            val instRef: U64 = self.monoWork.genInsts[gi]
-            val inst: TypeRef = self.arena.typeAt(index: instRef)
-            // Array A: Array's own generic methods (append/get/set/removeLast, pure Plew
-            // over self.data) are scanned like any other generic instance, so the transitive
-            // `Buffer[T]` method instances their bodies call get discovered and declared.
-            mut val mfi: U64 = 0
-            while mfi < self.arena.functionCount() {
-                val mf: Func = self.arena.functionAt(index: mfi)
-                if self.methodMatchesInst(f: mf, instRef: instRef) {
-                    // provided combinators (`map[B]`) instantiate from call sites, not here.
-                    if !(mf.isProvided) && !(self.methodRecvIsTrait(f: mf)) {
-                        if mf.body != 0 {
-                            self.cur.locals = []
-                            self.cur.hasRecv = true
-                            self.cur.recvStart = mf.recvStart
-                            self.cur.recvLen = mf.recvLen
-                            self.cur.extId = mf.extId
-                            self.cur.selfInout = mf.selfInout
-                            self.cur.recvInstRef = instRef
-                            self.cur.typeParams = self.copyFuncBinds(binds: mf.typeParams)
-                            self.cur.typeArgs = inst.args
-                            self.cur.bodyFnIdx = mfi
-                            self.cur.bodyEnvironment = (try self.bodyInstanceEnvironment(fnIdx: mfi, args: inst.args, recvInstRef: instRef))
-                            self.cur.bodyId = 0U64
-                            try self.setSelfItemEnv(recvStart: mf.recvStart, recvLen: mf.recvLen, recvInstRef: instRef)
-                            self.cur.bodySelfRef = self.cur.selfRef
-                            self.cur.bodyItemRef = self.cur.itemRef
-                            mut val pi: U64 = 0
-                            while pi < mf.params.count() {
-                                val p: Param = self.funcParamAt(params: mf.params, index: pi)
-                                self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
-                                try self.scanType(ref: p.ty)
-                                pi += 1
-                            }
-                            if mf.hasRet {
-                                try self.scanType(ref: mf.retTy)
-                            }
-                            try self.scanBlockInsts(blkId: mf.body)
-                            self.clearSelfItemEnv()
-                        }
-                    }
-                }
-                mfi += 1
-            }
-            gi += 1
-        }
-        val noP: Array[Bind] = []
-        val noA: Array[U64] = []
-        self.cur.locals = []
-        self.cur.hasRecv = false
-        self.cur.extId = 0
-        self.cur.recvInstRef = 0
-        self.cur.typeParams = noP
-        self.cur.typeArgs = noA
-        self.cur.bodyFnIdx = 18446744073709551615U64
-        self.cur.bodyEnvironment = <InstanceEnvironment />
-        self.cur.bodyId = 0U64
-        self.cur.bodySelfRef = 0U64
-        self.cur.bodyItemRef = 0U64
-        return <Result.Ok value=() />
-    }
+
 }
