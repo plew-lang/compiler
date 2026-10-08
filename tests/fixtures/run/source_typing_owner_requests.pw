@@ -1,0 +1,53 @@
+// Internal owner boundary: unresolved source types fail before any Mid request.
+use /Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendDeclarations, analyzeFrontendForRequests, spansEqual }
+use /SourceAccess only { SourceAccess }
+use @Std/Io only { print }
+use /Diag only { CompileDiagnostic }
+fn functionOwner(compiler: inout Comp, name: String) -> U64 {
+    val span = compiler.internBytes(s: name)
+    mut val index = 0U64
+    while index < compiler.arena.functionCount() {
+        val function = compiler.arena.functionAt(index: index)
+        if spansEqual(c: inout compiler, aStart: function.nameStart, aLen: function.nameLen, bStart: span.nameStart, bLen: span.nameLen) { return index }
+        index += 1U64
+    }
+    panic("missing owner")
+}
+fn expectTypeFailure(result: Result[(), CompileDiagnostic]) {
+    match result {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "cannot infer this expression's type; add a type annotation or provide an expected type" { panic("wrong diagnostic") }
+        }
+        Result.Ok(value: _) => { panic("unresolved owner succeeded") }
+    }
+}
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler,
+        input: <FrontendInput.Text path="type-owner.pw" text="fn broken() {{ val values = {{ give [] }} }} fn good() {{}} fn main() {{}}" />,
+        sources: <SourceAccess stdRoot=[] />, options: <FrontendOptions genMode=true />).unwrap()
+    val broken = functionOwner(compiler: inout compiler, name: "broken")
+    val good = functionOwner(compiler: inout compiler, name: "good")
+    compiler.cur.checkFn = 70001U64
+    compiler.cur.bodyId = 70002U64
+    expectTypeFailure(result: compiler.prepareLexicalBody(fnIdx: broken))
+    expectTypeFailure(result: compiler.prepareLexicalBody(fnIdx: broken))
+    if compiler.cur.checkFn != 70001U64 || compiler.cur.bodyId != 70002U64 { panic("failed owner leaked cursor") }
+    if compiler.lexicalBodyPreparations.count() != 1U64 { panic("retry duplicated owner") }
+    compiler.prepareLexicalBody(fnIdx: good).unwrap()
+    print(compiler.lexicalBodyPreparations.count())
+    mut val globals = <Comp />
+    analyzeFrontendForRequests(c: inout globals,
+        input: <FrontendInput.Text path="global-type-owner.pw" text="val broken = [] val good: I64 = 2I64 fn main() {{}}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val badTarget = globals.arena.globals[0U64].nameStart
+    val goodTarget = globals.arena.globals[1U64].nameStart
+    globals.cur.checkFn = 70001U64
+    globals.cur.bodyId = 70002U64
+    expectTypeFailure(result: globals.prepareGlobalInitializer(target: badTarget))
+    expectTypeFailure(result: globals.prepareGlobalInitializer(target: badTarget))
+    if globals.globalInitializerPrepared(target: badTarget) { panic("failed global published readiness") }
+    if globals.cur.checkFn != 70001U64 || globals.cur.bodyId != 70002U64 { panic("failed global leaked cursor") }
+    globals.prepareGlobalInitializer(target: goodTarget).unwrap()
+    print(globals.globalInitializerPrepared(target: goodTarget))
+}

@@ -125,6 +125,44 @@ pub impl LexicalBodyPreparations {
     }
 }
 
+// Sparse source obligations retain only expressions that still require a type.
+// One linked list per lexical/global owner avoids rescanning the expression arena.
+pub struct SourceTypingObligation {
+    val expression: U64
+    val owner: SemanticCompletionOwner
+    val next: U64
+}
+impl SourceTypingObligation { factory }
+pub struct SourceTypingObligations {
+    mut val entries: Array[SourceTypingObligation] = []
+    mut val expressionIndices: Dictionary[U64, U64] = [:]
+    mut val functionHeads: Dictionary[U64, U64] = [:]
+    mut val globalHeads: Dictionary[U64, U64] = [:]
+}
+impl SourceTypingObligations {
+    factory
+    fn first(owner: SemanticCompletionOwner) -> U64 {
+        match owner {
+            SemanticCompletionOwner.Function(index: val index) => { return self.functionHeads.getOr(key: index, fallback: 0U64) }
+            SemanticCompletionOwner.Global(target: val target) => { return self.globalHeads.getOr(key: target, fallback: 0U64) }
+        }
+    }
+    inout fn record(expression: U64, owner: SemanticCompletionOwner) -> Bool {
+        match self.expressionIndices.get(key: expression) {
+            Optional.Some(v: val index) => { return semanticCompletionOwnersEqual(recorded: self.entries[index].owner, prepared: owner) }
+            Optional.None => {}
+        }
+        val index = self.entries.count()
+        self.entries.append(<SourceTypingObligation expression=expression owner=owner next=self.first(owner: owner) />)
+        self.expressionIndices[expression] = index
+        match owner {
+            SemanticCompletionOwner.Function(index: val function) => { self.functionHeads[function] = index + 1U64 }
+            SemanticCompletionOwner.Global(target: val target) => { self.globalHeads[target] = index + 1U64 }
+        }
+        return true
+    }
+}
+
 // Append-only publication progress belongs to one finalization session.
 // A diagnostic is terminal for this publisher; partial rows are never retried
 // or presented as a successful publication boundary.
@@ -261,6 +299,7 @@ pub struct Comp {
     // Session-local outcomes of lexical preparation, not whole-body ownership
     // or effect proofs. Failure must remain failure even after template closure.
     pub mut val lexicalBodyPreparations: LexicalBodyPreparations = <LexicalBodyPreparations />
+    mut val sourceTypingObligations: SourceTypingObligations = <SourceTypingObligations />
     // Lowering assigns authored type uses to their declaration, expression or
     // block. Record requests local uses; declaration loading checks only the
     // remaining signature/field uses. Synthetic types are not new source uses.
@@ -1977,6 +2016,13 @@ pub fn analyzeFrontendForRequests(c: inout Comp, input: FrontendInput, sources: 
 
 // Complete the already admitted snapshot; never reload source between requests.
 pub fn completeFrontendDeclarations(c: inout Comp) -> Result[(), CompileDiagnostic] {
+    // Whole-target static Mid construction consumes initializers as well as
+    // functions. Global Record/admission alone is not a successful owner request.
+    mut val global = 0U64
+    while global < c.arena.globals.count() {
+        try c.prepareGlobalInitializer(target: c.arena.globals[global].nameStart)
+        global += 1U64
+    }
     val limit = c.arena.functionCount()
     mut val index = 0U64
     while index < limit {

@@ -1464,11 +1464,32 @@ pub impl Comp {
         mut val receiverTerm: U64 = 0U64
         if operandExprs.count() > 0U64 { receiverTerm = self.parametricExprTerm(exprId: operandExprs[0]) }
         val resolution: StaticMemberResolution = (try self.staticOperatorTemplateResolution(op: op, receiverTerm: receiverTerm, isUnary: isUnary))
+        // Concrete operand context must come from the same selected callable
+        // as dispatch. Literal verification is not guaranteed to revisit an
+        // operator nested inside another expression (for example `!(a == 2)`).
+        val selection = if self.cur.recordCallTemplates {
+            give try self.recordedOperatorSelection(op: op, receiverTerm: receiverTerm, operandExprs: operandExprs, resolution: resolution)
+        } else { give <OperatorSelection.Pending /> }
         mut val operands: Array[CallArgumentSource] = []
         mut val i: U64 = 0U64
         while i < operandExprs.count() {
             val operand = operandExprs[i]
-            val expected = try self.staticRequirementParamTypeAt(resolution: resolution, paramIdx: i)
+            mut val expected = try self.staticRequirementParamTypeAt(resolution: resolution, paramIdx: i)
+            // This is inference context for an unresolved source operand,
+            // not a new equality rule for an already-typed receiver. Selected
+            // receiver conversion retains its source view and callable boundary.
+            if expected == 0U64 && self.parametricExprTerm(exprId: operand) == 0U64 {
+                match selection {
+                    OperatorSelection.Direct(callee: val callee) => {
+                        val function = self.arena.functionAt(index: callee)
+                        if i < function.params.count() {
+                            val parameter = self.funcParamAt(params: function.params, index: i)
+                            expected = try self.operatorCalleeType(callee: callee, receiverRef: receiverTerm, term: parameter.ty)
+                        }
+                    }
+                    _ => {}
+                }
+            }
             if expected != 0U64 {
                 if self.expressionNeedsTypeContext(exprId: operand) { try self.recordExpr(exprId: operand, expectedTerm: expected) }
                 try self.recordSemanticExprExpectedResult(exprId: operand, expectedTerm: expected)
@@ -1485,7 +1506,6 @@ pub impl Comp {
         val staticResult: U64 = (try self.staticOperatorTemplateResultTerm(op: op, resolution: resolution))
         if staticResult != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: staticResult) }
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
-        val selection = try self.recordedOperatorSelection(op: op, receiverTerm: receiverTerm, operandExprs: operandExprs, resolution: resolution)
         val resultTerm: U64 = self.parametricExprTerm(exprId: exprId)
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
         val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)

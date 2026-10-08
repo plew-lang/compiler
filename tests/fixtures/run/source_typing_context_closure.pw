@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+fn count(values: Array[I64]) -> U64 { return values.count() }
+fn empty[T]() -> Array[T] { return [] }
+fn main() {
+    val values: Array[I64] = { give [] }
+    val nested: Array[Array[I64]] = [[]]
+    val generic: Array[I64] = empty()
+    val number: I64 = 2
+    if !(number == 2 || (number == 0 && number > 0I64)) { panic("comparison") }
+    print(values.count() + count(values: []) + generic.count())
+    print(nested.count())
+}

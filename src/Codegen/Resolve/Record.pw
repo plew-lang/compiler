@@ -2314,6 +2314,68 @@ pub impl Comp {
             }
             _ => {}
         }
+        try self.recordSourceTypingObligation(exprId: exprId, needsValue: needsValue)
+        return <Result.Ok value=() />
+    }
+
+    // Record may visit operands before their parent supplies context. Defer
+    // completeness to the owner boundary, using the final refined type fact.
+    inout fn recordSourceTypingObligation(exprId: U64, needsValue: Bool) -> Result[(), CompileDiagnostic] {
+        if !self.cur.recordCallTemplates { return <Result.Ok value=() /> }
+        if exprId >= self.arena.semanticExprTypes.count() { return <Result.Ok value=() /> }
+        val fact = self.arena.semanticExprTypes[exprId]
+        // A type-qualified factory receiver names a declaration, not a
+        // runtime value. Its recorded identifier decision owns this distinction.
+        if exprId < self.typeCache.identBind.count() && self.typeCache.identBind[exprId] == identTypeQualCode() {
+            return <Result.Ok value=() />
+        }
+        match fact.typeState {
+            SemanticExpressionTypeState.Pending | SemanticExpressionTypeState.Unrecorded => {}
+            _ => { return <Result.Ok value=() /> }
+        }
+        // Discarding a numeric literal needs no storage representation. Other
+        // normal expressions still need their type for calls and construction.
+        if !needsValue {
+            match self.arena.exprs[exprId] {
+                Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) | Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { return <Result.Ok value=() /> }
+                _ => {}
+            }
+        }
+        match fact.completion {
+            Optional.Some(v: val completion) => {
+                if !self.sourceTypingObligations.record(expression: exprId, owner: completion.owner) {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: source typing obligation changed owner") />
+                }
+            }
+            Optional.None => {
+                // Declaration/field recording also uses Record, but is not a
+                // requested lexical/global body. Its obligations belong to
+                // declaration checking, not an invented successful body owner.
+                if self.cur.checkFn != 18446744073709551615U64 {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: source typing obligation has no owner") />
+                }
+                match self.cur.globalInitializerTarget {
+                    Optional.Some(v: _) => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: source typing obligation has no owner") /> }
+                    Optional.None => {}
+                }
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkSourceTypingObligations(owner: SemanticCompletionOwner) -> Result[(), CompileDiagnostic] {
+        mut val cursor = self.sourceTypingObligations.first(owner: owner)
+        while cursor != 0U64 {
+            val obligation = self.sourceTypingObligations.entries[cursor - 1U64]
+            val fact = self.arena.semanticExprTypes[obligation.expression]
+            match fact.typeState {
+                SemanticExpressionTypeState.Pending | SemanticExpressionTypeState.Unrecorded => {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: obligation.expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") />
+                }
+                _ => {}
+            }
+            cursor = obligation.next
+        }
         return <Result.Ok value=() />
     }
 
@@ -2637,6 +2699,7 @@ pub impl Comp {
         }
         try self.closeCallTemplatesForBody(fnIdx: owner)
         try self.checkRecordedBodyCallConstraints(owner: owner)
+        try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Function index=owner />)
         return <Result.Ok value=() />
     }
 
