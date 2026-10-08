@@ -2604,11 +2604,9 @@ pub impl Comp {
 
     // This local request does not recursively request another source body:
     // calls consume registered signatures, never their callees' preparation.
-    // Template closure is only a phase prerequisite; constraints still run.
+    // Template closure is not evidence that the source body was checked.
+    // Only prepareLexicalBody's completed request cache authorizes reuse.
     inout fn prepareLexicalBodyUncached(owner: U64) -> Result[(), CompileDiagnostic] {
-        if (try self.callTemplatesClosedForBody(fnIdx: owner)) {
-            return self.checkRecordedBodyCallConstraints(owner: owner)
-        }
         self.cur.bodyFnIdx = owner
         self.cur.bodyEnvironment = <InstanceEnvironment />
         self.cur.bodyId = 0U64

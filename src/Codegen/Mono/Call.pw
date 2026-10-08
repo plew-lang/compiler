@@ -4257,9 +4257,7 @@ pub impl Comp {
             if instance.fnIdx >= self.arena.functionCount() {
                 return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: body request is not a source callable") />
             }
-            if !(try self.callTemplatesClosedForBody(fnIdx: instance.fnIdx)) {
-                try self.prepareLexicalBody(fnIdx: instance.fnIdx)
-            }
+            try self.prepareLexicalBody(fnIdx: instance.fnIdx)
         }
         try self.scanFinalBodyInstance(bodyId: bodyId)
         val signature = self.arena.bodySignature(bodyId: bodyId)

@@ -23,6 +23,8 @@ fn main() {
         sources: <SourceAccess stdRoot=[] />, options: <FrontendOptions genMode=true />).unwrap()
     val broken = owner(c: inout c, name: "broken")
     val good = owner(c: inout c, name: "good")
+    // Closing an empty template list must not authorize an unchecked body.
+    c.closeCallTemplatesForBody(fnIdx: broken).unwrap()
     c.cur.checkFn = 70001U64
     c.cur.bodyFnIdx = 70002U64
     c.cur.bodyId = 70003U64
