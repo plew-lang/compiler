@@ -22,6 +22,20 @@ fn main() {
         SemanticExpressionTypeState.Value => {}
         _ => { panic "integer fact has no value state" }
     }
+    compiler.recordSemanticExprInfo(exprId: literal, ti: <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />)
+    if !compiler.typeRefEq(a: compiler.inferenceArgumentType(exprId: literal).unwrap(), b: integer) { panic "unknown adapter erased a value fact" }
+    match compiler.arena.semanticExprTypes[literal].typeState {
+        SemanticExpressionTypeState.Value => {}
+        _ => { panic "unknown adapter made a value pending" }
+    }
+    val array = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    val arrayType = compiler.arrayRefOfElem(elemRef: integer)
+    compiler.recordSemanticExprTerm(exprId: array, term: arrayType)
+    val arrayShape = compiler.arena.semanticExprTypes[array].shape
+    val arrayInfo = compiler.semanticExprTypeInfo(exprId: array)
+    compiler.recordSemanticExprInfo(exprId: array, ti: <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />)
+    if compiler.semanticExprTerm(exprId: array) != arrayType || compiler.arena.semanticExprTypes[array].shape != arrayShape { panic "unknown adapter erased an aggregate fact" }
+    if compiler.semanticExprTypeInfo(exprId: array).kind != arrayInfo.kind { panic "unknown adapter erased an aggregate projection" }
     compiler.recordInvocationCompletion(exprId: literal, diverging: true)
     compiler.recordSemanticExprTerm(exprId: literal, term: integer)
     match compiler.arena.semanticExprTypes[literal].typeState {

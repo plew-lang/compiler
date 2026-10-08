@@ -2001,10 +2001,11 @@ pub impl Comp {
     inout fn recordSemanticExprInfo(exprId: U64, ti: TypeInfo) {
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
-        mut val term: U64 = self.typedIrRefOfInfo(ti: ti)
-        // The legacy adapter may still classify a context-typed literal as
-        // width-less. It cannot erase the term published by that context.
-        if term == 0U64 && ti.kind == 0I64 && ti.nameLen == 0U64 && prior.literalContext != 0U64 { term = prior.term }
+        val term: U64 = self.typedIrRefOfInfo(ti: ti)
+        // An adapter with no type information cannot invalidate a published
+        // semantic term or its shape. This applies to every expression, not
+        // only literals whose term came from a numeric context.
+        if term == 0U64 && ti.kind == 0I64 && ti.nameLen == 0U64 && ti.ref == 0U64 && ti.viewExtId == 0U64 && prior.term != 0U64 { return }
         self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType typeState=self.refinedSemanticTypeState(prior: prior.typeState, term: term) invocation=prior.invocation term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />)
     }
 
