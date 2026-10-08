@@ -2516,15 +2516,18 @@ pub impl Comp {
             }
             i += 1
         }
+        // The checked statements already composed this block's completion.
+        // Guard validation must consume that result rather than reopen syntax.
+        val completion = completionBlock(flow: flow)
         match self.blockExitRequirements.get(key: blkId) {
             Optional.Some(v: val offset) => {
-                if self.blockCompletesNormally(blkId: blkId) {
+                if completion.execution.normal() {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`guard` else block must diverge (end in return / break / continue / panic) — spec/11") />
                 }
             }
             Optional.None => {}
         }
-        return <Result.Ok value=completionBlock(flow: flow) />
+        return <Result.Ok value=completion />
     }
 
     inout fn recordBodyReceiverTerm(fnIdx: U64, term: U64) {
