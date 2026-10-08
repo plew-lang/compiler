@@ -486,39 +486,9 @@ pub impl Comp {
             Expr.ChainHole => {}
             Expr.Try(val expr) => {
                 try self.verifyExpr(id: expr)
-                // `try` is only valid in a function that RETURNS a Result (spec/13): it
-                // early-returns the enclosing function's Result on `Err`. In a void /
-                // non-Result function this used to crash the backend (it indexed the
-                // return type's variant table, which isn't a Result). Reject cleanly.
-                mut val retIsResult: Bool = false
-                if !(self.cur.retVoid) {
-                    if self.cur.retLen > 0U64 {
-                        if rangeEquals(bytes: self.arena.bytes, start: self.cur.retStart, len: self.cur.retLen, kw: "Result") {
-                            retIsResult = true
-                        }
-                    }
-                }
-                if !(retIsResult) {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expr), msg: "`try` is only valid in a function that returns a Result (spec/13)") />
-                }
-                // `try` works only on a Result (spec/13). The operand being some OTHER
-                // registered enum (notably `Optional`) used to crash the backend (it
-                // assumed Ok/Err variants and indexed out of bounds). An Optional uses
-                // `unwrapOr` / `?.` / `match` instead.
-                val operandTerm = self.parametricExprTerm(exprId: expr)
-                if operandTerm != 0U64 {
-                    val operandType = self.arena.typeAt(index: operandTerm)
-                    if !rangeEquals(bytes: self.arena.bytes, start: operandType.nameStart, len: operandType.nameLen, kw: "Result") {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expr), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)") />
-                    }
-                }
-                val tti: TypeInfo = (try self.typeOf(id: expr))
-                if tti.nameLen > 0U64 {
-                    if !(rangeEquals(bytes: self.arena.bytes, start: tti.nameStart, len: tti.nameLen, kw: "Result")) {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expr), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)") />
-                    }
-                }
-                try self.recordTryConversionTemplate(exprId: id, operand: expr)
+                // Record owns Result identity, normalized success/error terms
+                // and the selected conversion. Do not reclassify a return type
+                // from its authored spelling or infer the operand again here.
             }
 
             Expr.MatchExpr(val scrut, val arms) => {

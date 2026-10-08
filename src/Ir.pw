@@ -2136,6 +2136,22 @@ pub impl FinalAwaitResolution { factory }
 // layout and the already-selected implicit `From` conversion. `try` is an
 // early Result return, so both the operand and enclosing return Result types
 // remain explicit even though only their Err payload crosses the error edge.
+// Declaration-owned decomposition of a try expression. Mid reads these
+// normalized symbolic terms; body finalization substitutes them explicitly.
+pub struct SemanticTry {
+    pub val resultEnumIndex: U64
+    pub val okVariantIndex: U64
+    pub val errVariantIndex: U64
+    pub val ownerFnIdx: U64
+    pub val exprId: U64
+    pub val operandTerm: U64
+    pub val returnTerm: U64
+    pub val successTerm: U64
+    pub val sourceErrorTerm: U64
+    pub val targetErrorTerm: U64
+}
+pub impl SemanticTry { factory }
+
 pub struct FinalTryResolution {
     pub val bodyId: U64
     pub val exprId: U64
@@ -3337,6 +3353,8 @@ pub struct Decls {
     pub mut val semanticBindingEnds: Dictionary[U64, U64] = [:]
     // Let statement -> type resolved in its lexical Self/associated-type scope.
     pub mut val semanticLetTerms: Dictionary[U64, U64] = [:]
+    pub mut val semanticTries: Array[SemanticTry] = []
+    pub mut val semanticTryIndexSlots: Array[U64] = []
     pub mut val semanticMatches: Array[SemanticMatch] = []
     pub mut val semanticMatchIndexSlots: Array[U64] = []
     pub mut val declarationConversions: Array[DeclarationConversion] = []

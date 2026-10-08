@@ -1455,20 +1455,22 @@ pub impl Comp {
     // `from` factory from the two Result spellings.
     inout fn registerTryConversion(exprId: U64, operand: U64) -> Result[(), CompileDiagnostic] {
         if !(try self.callTemplatesClosedForBody(fnIdx: self.cur.bodyFnIdx)) { return <Result.Ok value=() /> }
-        val operandRef = try self.groundAndRecordBodyType(ref: self.parametricExprTerm(exprId: operand), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
-        val returnRef: U64 = (try self.groundAndRecordBodyType(ref: self.semanticBodyReturnTerm(fnIdx: self.cur.bodyFnIdx), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
-        val operandErr: U64 = self.resultErrArgRef(ref: operandRef)
-        val returnErr: U64 = self.resultErrArgRef(ref: returnRef)
-        if operandErr == 0U64 || returnErr == 0U64 || operandRef >= self.arena.typeCount() || returnRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
-        val operandResult: TypeRef = self.arena.typeAt(index: operandRef)
-        if operandResult.args.count() < 2U64 { return <Result.Ok value=() /> }
-        val enumIndex: U64 = self.genericEnumIndexForType(ref: operandRef)
-        if enumIndex >= self.arena.enumCount() { return <Result.Ok value=() /> }
-        val okName: Bind = self.kwSpan(kw: "Ok", kwLen: 2U64)
-        val errName: Bind = self.kwSpan(kw: "Err", kwLen: 3U64)
-        val okVariant: U64 = self.variantIndexInDeclaration(enumIndex: enumIndex, nameStart: okName.nameStart, nameLen: okName.nameLen)
-        val errVariant: U64 = self.variantIndexInDeclaration(enumIndex: enumIndex, nameStart: errName.nameStart, nameLen: errName.nameLen)
-        if okVariant >= self.arena.enumAt(index: enumIndex).variants.count() || errVariant >= self.arena.enumAt(index: enumIndex).variants.count() { return <Result.Ok value=() /> }
+        val semanticIndex = try self.semanticTryIndex(ownerFnIdx: self.cur.bodyFnIdx, exprId: exprId)
+        if semanticIndex >= self.decls.semanticTries.count() {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: try expression has no recorded decomposition") />
+        }
+        val semantic = self.decls.semanticTries[semanticIndex]
+        val operandRef = try self.groundAndRecordBodyType(ref: semantic.operandTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+        val returnRef = try self.groundAndRecordBodyType(ref: semantic.returnTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+        val operandErr = try self.groundAndRecordBodyType(ref: semantic.sourceErrorTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+        val returnErr = try self.groundAndRecordBodyType(ref: semantic.targetErrorTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+        val success = try self.groundAndRecordBodyType(ref: semantic.successTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+        val enumIndex = semantic.resultEnumIndex
+        val okVariant = semantic.okVariantIndex
+        val errVariant = semantic.errVariantIndex
+        if operandRef == 0U64 || returnRef == 0U64 || operandRef >= self.arena.typeCount() || returnRef >= self.arena.typeCount() || enumIndex >= self.arena.enumCount() {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: recorded try types were not finalized") />
+        }
         mut val hasConversion: Bool = !self.typeRefEq(a: operandErr, b: returnErr)
         mut val conversionResolution: U64 = 0U64
         if hasConversion {
@@ -1482,9 +1484,11 @@ pub impl Comp {
             try self.recordSelectedBodyCallee(selection: selection)
             try self.enqueueSelectedCallee(selection: selection)
             conversionResolution = (try self.bodyCalleeIndex(exprId: exprId, slot: 1U64))
-            if conversionResolution >= self.arena.finalCallees.count() { return <Result.Ok value=() /> }
+            if conversionResolution >= self.arena.finalCallees.count() {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: recorded try conversion was not finalized") />
+            }
         }
-        self.putFinalTry(fact: <FinalTryResolution bodyId=self.currentBodyInstanceId() exprId=exprId operandResultTypeRef=operandRef returnResultTypeRef=returnRef resultEnumIndex=enumIndex okVariantIndex=okVariant errVariantIndex=errVariant okPayloadTypeRef=operandResult.args[0U64] sourceErrorTypeRef=operandErr targetErrorTypeRef=returnErr hasErrorConversion=hasConversion errorConversionResolution=conversionResolution />)
+        self.putFinalTry(fact: <FinalTryResolution bodyId=self.currentBodyInstanceId() exprId=exprId operandResultTypeRef=operandRef returnResultTypeRef=returnRef resultEnumIndex=enumIndex okVariantIndex=okVariant errVariantIndex=errVariant okPayloadTypeRef=success sourceErrorTypeRef=operandErr targetErrorTypeRef=returnErr hasErrorConversion=hasConversion errorConversionResolution=conversionResolution />)
         return <Result.Ok value=() />
     }
 

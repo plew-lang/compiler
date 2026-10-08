@@ -1,0 +1,33 @@
+use @Std/Io only { print }
+trait Carrier { type Output }
+struct Key {}
+impl Key as Carrier { type Output = Result[I64, I64] }
+fn source() -> Result[I64, I64] { return <Result.Err error=7I64 /> }
+fn target() -> Key#Carrier.Output {
+    val value = try source()
+    return source()
+}
+fn generic[T](value: T) -> T#Carrier.Output where T: Carrier[Output=Result[I64, I64]] {
+    val result = try source()
+    return source()
+}
+fn successfulSource() -> Result[I64, I64] { return <Result.Ok value=11I64 /> }
+fn succeeds() -> Key#Carrier.Output {
+    val value = try successfulSource()
+    print(value)
+    return successfulSource()
+}
+fn projectedSource() -> Key#Carrier.Output { return source() }
+fn projectedOperand() -> Result[I64, I64] {
+    val value = try projectedSource()
+    return source()
+}
+fn main() {
+    val result: Result[I64, I64] = target()
+    print(result.err().unwrap())
+    val other: Result[I64, I64] = generic(value: <Key />)
+    print(other.err().unwrap())
+    val success: Result[I64, I64] = succeeds()
+    print(success.ok().unwrap())
+    print(projectedOperand().err().unwrap())
+}

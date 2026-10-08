@@ -1216,12 +1216,24 @@ pub impl Comp {
         return false
     }
 
+    // Result is a reserved Lang declaration, not the spelling of a projection
+    // receiver or a generic binder. Callers normalize declaration terms first.
+    inout fn resultEnumIndex(ref: U64) -> U64 {
+        if ref == 0U64 || ref >= self.arena.typeCount() { return self.arena.enumCount() }
+        val term = self.arena.typeTerms[ref]
+        if term.args.len != 2U64 { return self.arena.enumCount() }
+        val index = self.enumIndexForType(ref: ref)
+        if index >= self.arena.enumCount() { return index }
+        val declaration = self.arena.enumAt(index: index)
+        if self.moduleOf(offset: declaration.defOffset) != self.modules.langModule || !rangeEquals(bytes: self.arena.bytes, start: declaration.nameStart, len: declaration.nameLen, kw: "Result") {
+            return self.arena.enumCount()
+        }
+        return index
+    }
+
     inout fn resultErrArgRef(ref: U64) -> U64 {
-        if ref < self.arena.typeCount() {
-            val result = self.arena.typeAt(index: ref)
-            if result.args.count() == 2U64 && rangeEquals(bytes: self.arena.bytes, start: result.nameStart, len: result.nameLen, kw: "Result") {
-                return result.args[1U64]
-            }
+        if self.resultEnumIndex(ref: ref) < self.arena.enumCount() {
+            return self.arena.typeArgumentPool[self.arena.typeTerms[ref].args.start + 1U64]
         }
         return 0U64
     }

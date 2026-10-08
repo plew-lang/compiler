@@ -2,7 +2,7 @@
 // checks that require local or pattern bindings. Consumers ground these
 // facts under a BodyInstance; they do not repeat lexical type inference.
 
-use ../../Ir only { InstanceEnvironment, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload }
+use ../../Ir only { SemanticTry, InstanceEnvironment, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload }
 
 pub impl Comp {
     inout fn requireConstructionContext(ctxRef: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
@@ -923,7 +923,7 @@ pub impl Comp {
     // Keep one source-body aggregate identity and replace its frozen facts as
     // a whole; parallel "early" and "contextual" carriers would be two
     // semantic roots for the same construction.
-    fn semanticAggregateHash(ownerFnIdx: U64, exprId: U64) -> U64 {
+    fn semanticExpressionSiteHash(ownerFnIdx: U64, exprId: U64) -> U64 {
         // Keep every intermediate below 2^32: checked U64 arithmetic is part
         // of the self-hosted compiler's own execution contract.
         val modulus: U64 = 4294967291U64
@@ -942,7 +942,7 @@ pub impl Comp {
         mut val entry: U64 = 0U64
         while entry < self.decls.semanticAggregates.count() {
             val aggregate: SemanticAggregate = self.decls.semanticAggregates[entry]
-            mut val slot: U64 = self.semanticAggregateHash(ownerFnIdx: aggregate.ownerFnIdx, exprId: aggregate.exprId) % capacity
+            mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: aggregate.ownerFnIdx, exprId: aggregate.exprId) % capacity
             while self.decls.semanticAggregateIndexSlots[slot] != 0U64 {
                 slot = (slot + 1U64) % capacity
             }
@@ -966,7 +966,7 @@ pub impl Comp {
         val sourceOwner: U64 = (try self.semanticBodyOwner(fnIdx: ownerFnIdx))
         val capacity: U64 = self.decls.semanticAggregateIndexSlots.count()
         if capacity == 0U64 { return <Result.Ok value=self.decls.semanticAggregates.count() />}
-        mut val slot: U64 = self.semanticAggregateHash(ownerFnIdx: sourceOwner, exprId: exprId) % capacity
+        mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: sourceOwner, exprId: exprId) % capacity
         while self.decls.semanticAggregateIndexSlots[slot] != 0U64 {
             val entry: U64 = self.decls.semanticAggregateIndexSlots[slot] - 1U64
             val prior: SemanticAggregate = self.decls.semanticAggregates[entry]
@@ -985,11 +985,72 @@ pub impl Comp {
         self.ensureSemanticAggregateIndex(nextCount: self.decls.semanticAggregates.count() + 1U64)
         self.decls.semanticAggregates.append(aggregate)
         val capacity: U64 = self.decls.semanticAggregateIndexSlots.count()
-        mut val slot: U64 = self.semanticAggregateHash(ownerFnIdx: aggregate.ownerFnIdx, exprId: aggregate.exprId) % capacity
+        mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: aggregate.ownerFnIdx, exprId: aggregate.exprId) % capacity
         while self.decls.semanticAggregateIndexSlots[slot] != 0U64 {
             slot = (slot + 1U64) % capacity
         }
         self.decls.semanticAggregateIndexSlots.set(i: slot, value: self.decls.semanticAggregates.count())
+        return <Result.Ok value=() />
+    }
+
+    inout fn rebuildSemanticTryIndex(capacity: U64) {
+        self.decls.semanticTryIndexSlots = []
+        mut val zeroI: U64 = 0U64
+        while zeroI < capacity {
+            self.decls.semanticTryIndexSlots.append(0U64)
+            zeroI += 1U64
+        }
+        mut val entry: U64 = 0U64
+        while entry < self.decls.semanticTries.count() {
+            val fact: SemanticTry = self.decls.semanticTries[entry]
+            mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: fact.ownerFnIdx, exprId: fact.exprId) % capacity
+            while self.decls.semanticTryIndexSlots[slot] != 0U64 {
+                slot = (slot + 1U64) % capacity
+            }
+            self.decls.semanticTryIndexSlots.set(i: slot, value: entry + 1U64)
+            entry += 1U64
+        }
+    }
+
+    inout fn ensureSemanticTryIndex(nextCount: U64) {
+        if self.decls.semanticTryIndexSlots.count() == 0U64 {
+            self.rebuildSemanticTryIndex(capacity: 16U64)
+        }
+        if nextCount * 10U64 >= self.decls.semanticTryIndexSlots.count() * 7U64 {
+            self.rebuildSemanticTryIndex(capacity: self.decls.semanticTryIndexSlots.count() * 2U64)
+        }
+    }
+
+    // Return the canonical array index, or count() when absent. The vector is
+    // the semantic source; slots are a rebuildable reader for Record and Mid.
+    inout fn semanticTryIndex(ownerFnIdx: U64, exprId: U64) -> Result[U64, CompileDiagnostic] {
+        val sourceOwner: U64 = (try self.semanticBodyOwner(fnIdx: ownerFnIdx))
+        val capacity: U64 = self.decls.semanticTryIndexSlots.count()
+        if capacity == 0U64 { return <Result.Ok value=self.decls.semanticTries.count() />}
+        mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: sourceOwner, exprId: exprId) % capacity
+        while self.decls.semanticTryIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.decls.semanticTryIndexSlots[slot] - 1U64
+            val prior: SemanticTry = self.decls.semanticTries[entry]
+            if prior.ownerFnIdx == sourceOwner && prior.exprId == exprId { return <Result.Ok value=entry />}
+            slot = (slot + 1U64) % capacity
+        }
+        return <Result.Ok value=self.decls.semanticTries.count() />
+    }
+
+    inout fn putSemanticTry(fact: SemanticTry) -> Result[(), CompileDiagnostic] {
+        val prior: U64 = (try self.semanticTryIndex(ownerFnIdx: fact.ownerFnIdx, exprId: fact.exprId))
+        if prior < self.decls.semanticTries.count() {
+            self.decls.semanticTries.set(i: prior, value: fact)
+            return <Result.Ok value=() />
+        }
+        self.ensureSemanticTryIndex(nextCount: self.decls.semanticTries.count() + 1U64)
+        self.decls.semanticTries.append(fact)
+        val capacity: U64 = self.decls.semanticTryIndexSlots.count()
+        mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: fact.ownerFnIdx, exprId: fact.exprId) % capacity
+        while self.decls.semanticTryIndexSlots[slot] != 0U64 {
+            slot = (slot + 1U64) % capacity
+        }
+        self.decls.semanticTryIndexSlots.set(i: slot, value: self.decls.semanticTries.count())
         return <Result.Ok value=() />
     }
 
@@ -2142,14 +2203,7 @@ pub impl Comp {
             }
             Expr.Try(val expr) => {
                 try self.recordExpr(exprId: expr, chainHoleRef: chainHoleRef)
-                try self.recordTryConversionTemplate(exprId: exprId, operand: expr)
-                val resultTerm: U64 = self.parametricExprTerm(exprId: expr)
-                if self.isGenericInst(ref: resultTerm) {
-                    val result: TypeRef = self.arena.typeAt(index: resultTerm)
-                    if result.args.count() > 0U64 {
-                        self.recordSemanticExprTerm(exprId: exprId, term: result.args[0])
-                    }
-                }
+                try self.recordTryExpression(exprId: exprId, operand: expr)
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
                 try self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)

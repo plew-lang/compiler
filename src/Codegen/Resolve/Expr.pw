@@ -1,7 +1,7 @@
 // Part of name/type resolution (root: _.pw): expression type-cache table
 // construction.
 
-use ../../Ir only { SemanticAggregateKind, SemanticTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateArgumentRange, CallTemplateTypeArgumentRange, CallTemplateOperandRange, CallTemplateViewRange, DynamicCallTemplateTarget, StaticMemberResolution }
+use ../../Ir only { SemanticTry, SemanticAggregateKind, SemanticTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateArgumentRange, CallTemplateTypeArgumentRange, CallTemplateOperandRange, CallTemplateViewRange, DynamicCallTemplateTarget, StaticMemberResolution }
 
 pub impl Comp {
 
@@ -1206,12 +1206,29 @@ pub impl Comp {
     // assumptions are available. The error payload has a semantic type, not
     // a fabricated expression/local. Ordinary static-call obligations and
     // finalization consume this same template under each body environment.
-    inout fn recordTryConversionTemplate(exprId: U64, operand: U64) -> Result[(), CompileDiagnostic] {
-        val operandTerm = self.parametricExprTerm(exprId: operand)
-        val returnTerm = self.semanticBodyReturnTerm(fnIdx: self.cur.checkFn)
+    inout fn recordTryExpression(exprId: U64, operand: U64) -> Result[(), CompileDiagnostic] {
+        val returnTerm = try self.normalizedValueType(ref: self.semanticBodyReturnTerm(fnIdx: self.cur.checkFn))
+        if self.resultEnumIndex(ref: returnTerm) >= self.arena.enumCount() {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`try` is only valid in a function that returns a Result (spec/13)") />
+        }
+        val operandTerm = try self.normalizedValueType(ref: self.parametricExprTerm(exprId: operand))
+        val enumIndex = self.resultEnumIndex(ref: operandTerm)
+        if enumIndex >= self.arena.enumCount() {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)") />
+        }
+        val okName = self.kwSpan(kw: "Ok", kwLen: 2U64)
+        val errName = self.kwSpan(kw: "Err", kwLen: 3U64)
+        val okVariant = self.variantIndexInDeclaration(enumIndex: enumIndex, nameStart: okName.nameStart, nameLen: okName.nameLen)
+        val errVariant = self.variantIndexInDeclaration(enumIndex: enumIndex, nameStart: errName.nameStart, nameLen: errName.nameLen)
+        if okVariant >= self.arena.enumAt(index: enumIndex).variants.count() || errVariant >= self.arena.enumAt(index: enumIndex).variants.count() {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: Lang Result is missing its variants") />
+        }
+        val success = self.arena.typeArgumentPool[self.arena.typeTerms[operandTerm].args.start]
+        self.recordSemanticExprTerm(exprId: exprId, term: success)
         val source = self.resultErrArgRef(ref: operandTerm)
         val target = self.resultErrArgRef(ref: returnTerm)
-        if source == 0U64 || target == 0U64 || self.typeRefEq(a: source, b: target) { return <Result.Ok value=() /> }
+        try self.putSemanticTry(fact: <SemanticTry resultEnumIndex=enumIndex okVariantIndex=okVariant errVariantIndex=errVariant ownerFnIdx=(try self.semanticBodyOwner(fnIdx: self.cur.checkFn)) exprId=exprId operandTerm=operandTerm returnTerm=returnTerm successTerm=success sourceErrorTerm=source targetErrorTerm=target />)
+        if self.typeRefEq(a: source, b: target) { return <Result.Ok value=() /> }
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId, slot: 1U64)
         if self.decls.callTemplateIndex(siteKey: site) < self.decls.callTemplates.count() { return <Result.Ok value=() /> }
         val owner = self.coreTraitOwner(name: "From", arity: 1U64)

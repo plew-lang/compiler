@@ -1418,12 +1418,16 @@ fn materializeMidAwait(c: inout Comp, state: inout MidBuildState, exprId: U64, o
 }
 
 fn materializeMidTry(c: inout Comp, state: inout MidBuildState, exprId: U64, operandExpr: U64, resultTerm: U64) -> MidOperandBuild {
-    val operandResultTerm: U64 = c.semanticExprTerm(exprId: operandExpr)
+    val index = match c.semanticTryIndex(ownerFnIdx: state.sourceFunction, exprId: exprId) {
+        Result.Ok(value: val value) => { give value }
+        Result.Err(error: val diagnostic) => { return <MidOperandBuild.Error error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
+    }
+    if index >= c.decls.semanticTries.count() { return <MidOperandBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
+    val fact = c.decls.semanticTries[index]
+    val operandResultTerm = fact.operandTerm
+    val returnResultTerm = state.returnTypeTerm
     if operandResultTerm == 0U64 || operandResultTerm >= c.arena.typeCount() || resultTerm == 0U64 { return <MidOperandBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
-    val operandResult: TypeRef = c.arena.typeAt(index: operandResultTerm)
-    if operandResult.args.count() != 2U64 { return <MidOperandBuild.Error error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredValueControl /> /> /> }
-    val returnResultTerm: U64 = state.returnTypeTerm
-    if returnResultTerm == 0U64 || returnResultTerm >= c.arena.typeCount() || c.arena.typeAt(index: returnResultTerm).args.count() != 2U64 || !state.hasReturnPlace { return <MidOperandBuild.Error error=<MidBuildError.InvalidFunction /> /> }
+    if returnResultTerm == 0U64 || !state.hasReturnPlace { return <MidOperandBuild.Error error=<MidBuildError.InvalidFunction /> /> }
 
     // The yielded Ok value crosses the nested evaluation scope; all Result
     // storage and Err temporaries remain inside it and are cleaned on either
@@ -1470,8 +1474,8 @@ fn materializeMidTry(c: inout Comp, state: inout MidBuildState, exprId: U64, ope
     midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
 
     state.currentBlock = errTarget
-    val sourceErrorTerm: U64 = operandResult.args[1U64]
-    val targetErrorTerm: U64 = c.arena.typeAt(index: returnResultTerm).args[1U64]
+    val sourceErrorTerm: U64 = fact.sourceErrorTerm
+    val targetErrorTerm: U64 = fact.targetErrorTerm
     val sourceErrorLocal: U64 = addMidTemporary(state: inout state, typeTerm: sourceErrorTerm)
     val sourceError: MidPlace = <MidPlace local=sourceErrorLocal typeTerm=sourceErrorTerm />
     midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=sourceError value=<MidRvalue.TryPayloadCopy place=inputPlace exprId=exprId variantIndex=1U64 resultTerm=sourceErrorTerm /> />)
