@@ -152,6 +152,29 @@ pub impl Comp {
         return <Result.Ok value=fullArgs />
     }
 
+    // Candidate ranking and selected-signature inference use the same receiver
+    // equation. A bare generic qualifier is completed from call arguments;
+    // it must not be mistaken for a conflicting zero-argument instantiation.
+    inout fn callReceiverTerm(f: Func, receiverRef: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+        // A declared Self is rigid but has the lexical receiver equation of
+        // this body. Apply that equation before matching another method's
+        // receiver pattern, rather than leaving its impl binders unresolved.
+        val semanticReceiver = self.groundTermInEnvironment(ref: receiverRef, params: [], values: [], selfRef: self.cur.selfRef)
+        if semanticReceiver == 0U64 || semanticReceiver >= self.arena.typeCount() {
+            return <Result.Ok value=semanticReceiver />
+        }
+        // A generic type qualifier without written arguments is an inference
+        // request, not an instantiated receiver with zero parameters. Complete
+        // it from this call before matching the declaration's receiver pattern.
+        if f.isAssoc && f.recvTy != 0U64 && f.recvTy < self.arena.typeCount() && self.arena.typeTerms[semanticReceiver].args.len == 0U64 && self.arena.typeTerms[f.recvTy].args.len != 0U64 {
+            val inferredReceiver = try self.associatedReceiverFromArguments(f: f, args: args)
+            if inferredReceiver != 0U64 && inferredReceiver != semanticReceiver && self.typeTermRefSameHead(a: semanticReceiver, b: inferredReceiver) {
+                return <Result.Ok value=inferredReceiver />
+            }
+        }
+        return <Result.Ok value=semanticReceiver />
+    }
+
     // Infer the selected method's lexical substitution, retaining open slots.  Return
     // typing and parameter typing are two views of the same final callable:
     // letting either reconstruct a weaker receiver-only substitution loses a
@@ -160,22 +183,8 @@ pub impl Comp {
     // outcome; a valid non-generic method has a nonzero receiverRef and no
     // parameter entries.
     inout fn inferMethodEnvironment(f: Func, receiverRef: U64, args: ArgRange, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
-        // A declared Self is rigid but has the lexical receiver equation of
-        // this body. Apply that equation before matching another method's
-        // receiver pattern, rather than leaving its impl binders unresolved.
-        val semanticReceiver = self.groundTermInEnvironment(ref: receiverRef, params: [], values: [], selfRef: self.cur.selfRef)
-        if semanticReceiver == 0U64 || semanticReceiver >= self.arena.typeCount() {
-            return <Result.Ok value=<InstanceEnvironment /> />
-        }
-        // A generic type qualifier without written arguments is an inference
-        // request, not an instantiated receiver with zero parameters. Complete
-        // it from this call before matching the declaration's receiver pattern.
-        if f.isAssoc && f.recvTy != 0U64 && f.recvTy < self.arena.typeCount() && self.arena.typeTerms[semanticReceiver].args.len == 0U64 && self.arena.typeTerms[f.recvTy].args.len != 0U64 {
-            val inferredReceiver = try self.associatedReceiverFromArguments(f: f, args: args)
-            if inferredReceiver != 0U64 && inferredReceiver != semanticReceiver && self.typeTermRefSameHead(a: semanticReceiver, b: inferredReceiver) {
-                return self.inferMethodEnvironment(f: f, receiverRef: inferredReceiver, args: args, selectedProof: selectedProof)
-            }
-        }
+        val semanticReceiver = try self.callReceiverTerm(f: f, receiverRef: receiverRef, args: args)
+        if semanticReceiver == 0U64 || semanticReceiver >= self.arena.typeCount() { return <Result.Ok value=<InstanceEnvironment /> /> }
         // A method's generic binder list can contain the nominal declaration
         // binder, an impl receiver-pattern binder, and method-owned binders.
         // They are lexical identities, not positional aliases. Finalization

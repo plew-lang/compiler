@@ -1252,7 +1252,7 @@ pub impl Comp {
             val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
             if f.isAssoc {
-                if f.recvId == eNameId {
+                if f.recvId == eNameId && (try self.methodReceiverEnvironment(f: f, instRef: errRef)).conformIdx != 0U64 {
                     if f.nameId == fromN.nameId {
                         // a From factory takes exactly the source error value; select the
                         // overload whose parameter type is `F` — head-id prefilter (the

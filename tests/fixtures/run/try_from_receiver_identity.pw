@@ -1,0 +1,26 @@
+// Receiver type arguments participate in factory selection. Both impls
+// accept Dist[Meters], but only Dist[Feet] is the requested destination.
+// The earlier Dist[Yards] declaration must not match or cause ambiguity.
+use @Std/Io only { print }
+use @Std/Core only { From }
+struct Dist[Unit] { pub val v: I64 }
+pub impl Dist { factory }
+struct Meters {}
+pub impl Meters { factory }
+struct Yards {}
+pub impl Yards { factory }
+struct Feet {}
+pub impl Feet { factory }
+pub impl Dist[Yards] as From[Dist[Meters]] { factory(from: Dist[Meters]) { return <Dist[Yards] v=from.v * 99I64 /> } }
+pub impl Dist[Feet] as From[Dist[Meters]] { factory(from: Dist[Meters]) { return <Dist[Feet] v=from.v * 3I64 /> } }
+fn inner() -> Result[I64, Dist[Meters]] { return <Result.Err error=<Dist[Meters] v=10I64 /> /> }
+fn outer() -> Result[I64, Dist[Feet]] {
+    val x: I64 = try inner()
+    return <Result.Ok value=x />
+}
+fn main() {
+    match outer() {
+        Result.Ok(val value) => { print(value) }
+        Result.Err(val error) => { print(error.v) }   // 30 = 10 * 3 (converted through from)
+    }
+}

@@ -323,7 +323,8 @@ pub impl Comp {
     // before reading its recorded semantic TypeTerm.
     inout fn groundedMethodArgMatchRank(f: Func, args: ArgRange, recvRef: U64) -> Result[U64, CompileDiagnostic] {
         if !(self.paramsLabelsOk(params: f.params, args: args)) { return <Result.Ok value=0U64 />}
-        if recvRef == 0U64 || recvRef >= self.arena.typeCount() {
+        val receiver = try self.callReceiverTerm(f: f, receiverRef: recvRef, args: args)
+        if receiver == 0U64 || receiver >= self.arena.typeCount() {
             return <Result.Ok value=(try self.callableArgMatchRank(f: f, args: args)) />
         }
         // Capture the caller meaning before selecting a callee. The semantic
@@ -339,7 +340,13 @@ pub impl Comp {
         // by finalization too. Method-owned binders deliberately remain
         // absent while ranking; final callable publication performs their
         // one complete inference.
-        val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: recvRef))
+        val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: receiver))
+        // A failed structural receiver match is not an empty substitution.
+        // Provided members may instead be justified by a trait path; their
+        // applicability is established by the static proof query.
+        if f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 && !f.isProvided {
+            return <Result.Ok value=0U64 />
+        }
         mut val calleeParams: Array[Bind] = []
         mut val calleeArgs: Array[U64] = []
         mut val bindI: U64 = 0U64
@@ -363,7 +370,7 @@ pub impl Comp {
             }
             bindI += 1U64
         }
-        val calleeEnvironment: InstanceEnvironment = <InstanceEnvironment params=calleeParams args=calleeArgs receiverRef=recvRef />
+        val calleeEnvironment: InstanceEnvironment = <InstanceEnvironment params=calleeParams args=calleeArgs receiverRef=receiver />
         mut val allMatch: Bool = true
         mut val ai: U64 = 0U64
         while ai < args.len {
@@ -371,7 +378,7 @@ pub impl Comp {
             if pi >= f.params.count() {
                 allMatch = false
             } else {
-                val expected: U64 = (try self.groundTermForBody(ref: self.funcParamAt(params: f.params, index: pi).ty, environment: calleeEnvironment, selfRef: recvRef, itemRef: (try self.finalMethodItemRef(f: f, receiverRef: recvRef))))
+                val expected: U64 = (try self.groundTermForBody(ref: self.funcParamAt(params: f.params, index: pi).ty, environment: calleeEnvironment, selfRef: receiver, itemRef: (try self.finalMethodItemRef(f: f, receiverRef: receiver))))
                 // A method-owned binder remains abstract at this stage.  It is
                 // intentionally inferred from the argument later; receiver
                 // binders, by contrast, are concrete in calleeEnvironment.
