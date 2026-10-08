@@ -521,6 +521,12 @@ pub impl Comp {
     // substitute a concrete BodyInstance or use a finalized call descriptor
     // to decide a reusable declaration's generic arguments.
     inout fn inferenceArgumentType(exprId: U64) -> Result[U64, CompileDiagnostic] {
+        if exprId < self.arena.semanticExprTypes.count() {
+            match self.arena.semanticExprTypes[exprId].typeState {
+                SemanticExpressionTypeState.NoNormalValue => { return <Result.Ok value=0U64 /> }
+                _ => {}
+            }
+        }
         val recorded = self.parametricExprTerm(exprId: exprId)
         if recorded != 0U64 { return <Result.Ok value=recorded /> }
         if self.hasSemanticExprTypeFact(exprId: exprId) { return <Result.Ok value=0U64 /> }

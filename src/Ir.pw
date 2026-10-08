@@ -403,10 +403,16 @@ pub enum InvocationCompletion {
     Diverges
 }
 
+pub enum SemanticExpressionTypeState {
+    Unrecorded
+    Pending
+    Value
+    Unit
+    NoNormalValue
+}
+
 pub struct SemanticExprType {
-    // Allocating the slot does not record a type. A recorded unknown term
-    // remains a fact, distinct from an expression not inspected yet.
-    pub val hasTypeFact: Bool = false
+    pub val typeState: SemanticExpressionTypeState = <SemanticExpressionTypeState.Unrecorded />
     pub val invocation: InvocationCompletion = <InvocationCompletion.Pending />
     pub val term: U64 = 0
     pub val shape: U64 = 0

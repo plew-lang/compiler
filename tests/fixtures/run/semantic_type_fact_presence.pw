@@ -1,6 +1,6 @@
 use @Std/Io only { print }
 use /Frontend only { Comp }
-use /Ir only { Expr, TypeInfo, TypeRef }
+use /Ir only { Expr, TypeInfo, TypeRef, SemanticExpressionTypeState }
 
 fn main() {
     mut val compiler = <Comp />
@@ -18,5 +18,23 @@ fn main() {
     if !compiler.hasSemanticExprTypeFact(exprId: literal) { panic "invocation update erased the type fact" }
     compiler.recordSemanticExprTerm(exprId: literal, term: integer)
     if !compiler.typeRefEq(a: compiler.inferenceArgumentType(exprId: literal).unwrap(), b: integer) { panic "explicit refinement was not retained" }
+    match compiler.arena.semanticExprTypes[literal].typeState {
+        SemanticExpressionTypeState.Value => {}
+        _ => { panic "integer fact has no value state" }
+    }
+    compiler.recordInvocationCompletion(exprId: literal, diverging: true)
+    compiler.recordSemanticExprTerm(exprId: literal, term: integer)
+    match compiler.arena.semanticExprTypes[literal].typeState {
+        SemanticExpressionTypeState.NoNormalValue => {}
+        _ => { panic "diagnostic refinement erased divergence" }
+    }
+    if compiler.inferenceArgumentType(exprId: literal).unwrap() != 0U64 { panic "diagnostic type became an inference value" }
+    val unit = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    compiler.recordInvocationCompletion(exprId: unit, diverging: false, returnsUnit: true)
+    compiler.recordSemanticExprInfo(exprId: unit, ti: <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />)
+    match compiler.arena.semanticExprTypes[unit].typeState {
+        SemanticExpressionTypeState.Unit => {}
+        _ => { panic "selected Unit result became pending" }
+    }
     print("semantic-type-fact-presence")
 }

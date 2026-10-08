@@ -1,5 +1,5 @@
 use ./Ir only { ExistentialBoxEvidence, DeclarationTypeScope, DeclarationObligationState, CallConstraintInstance, DeclarationConversion, ExistentialImplementation }
-use ./Ir only { ProtocolSelection, OperatorSelection, InvocationCompletion, TypeCompatibility, TypeArgumentMatch, ConditionClause, ConditionClauseRange }
+use ./Ir only { ProtocolSelection, OperatorSelection, InvocationCompletion, SemanticExpressionTypeState, TypeCompatibility, TypeArgumentMatch, ConditionClause, ConditionClauseRange }
 use @Plew/Syntax only { CondClause, syntaxConditionClause }
 use ./SourceCompletion only { SourceCompletion, CompletionEdges, CompletionTransfer, BlockResultContext, completionThen, completionChoice, completionTransfer, completionBlock, completionLoop }
 use ./PublicSurfaceIndex only { PublicSurfaceIndex }
