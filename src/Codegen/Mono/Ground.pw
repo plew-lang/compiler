@@ -30,7 +30,7 @@ pub impl Comp {
         // nominal constructor (`MapIter[Self, fn(Item)->B, B]`), so this must
         // be part of the recursive term substitution rather than a root-only
         // convenience in groundTermForBody.
-        if t.assocNameId == 0U64 && t.paramId == 0U64 && t.args.len == 0U64 {
+        if !t.hasDecl && t.assocNameId == 0U64 && t.paramId == 0U64 && t.args.len == 0U64 {
             if selfRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
                 return self.typeRefWithAddedViewSources(ref: selfRef, additions: self.typeRefViewSources(ref: ref))
             }
@@ -102,14 +102,14 @@ pub impl Comp {
             }
         }
         // Some checked-in declaration templates predate ParamId stamping.  A
-        // bare legacy term is still unambiguous *at this boundary*: `params`
+        // bare unresolved legacy term is still unambiguous here: `params`
         // are the binders owned by one explicitly selected receiver instance,
         // not the caller's ambient scope.  Resolve it only against that
         // immutable instance map.  This keeps `Optional`'s historical `T`
         // field from being re-read as an unbound nominal type (and recursively
         // registering `Optional[T]`), while preserving the final rule that all
         // newly lowered terms use ParamId.
-        if t.paramId == 0U64 && t.args.len == 0U64 {
+        if !t.hasDecl && t.paramId == 0U64 && t.args.len == 0U64 {
             mut val termNameId: U64 = t.nameId
             if termNameId == 0U64 {
                 termNameId = intern(c: inout self, start: t.nameStart, len: t.nameLen)
@@ -210,7 +210,7 @@ pub impl Comp {
         // Self/Item are derived projections of the selected receiver, not
         // ParamId bindings. Preserve their established semantic meaning before
         // consulting the explicit binder map.
-        if t.assocNameId == 0U64 && t.paramId == 0U64 && t.args.len == 0U64 {
+        if !t.hasDecl && t.assocNameId == 0U64 && t.paramId == 0U64 && t.args.len == 0U64 {
             if environment.receiverRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
                 return <Result.Ok value=self.typeRefWithAddedViewSources(ref: environment.receiverRef, additions: self.typeRefViewSources(ref: ref)) />
             }

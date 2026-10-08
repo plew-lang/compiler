@@ -1,0 +1,25 @@
+use /Frontend only { Comp }
+use /Ir only { TypeRef, Bind, InstanceEnvironment }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val parameterName = compiler.internBytes(s: "Parameter")
+    val concreteName = compiler.internBytes(s: "Concrete")
+    val containerName = compiler.internBytes(s: "Container")
+    val replacement = compiler.pushType(t: <TypeRef nameStart=concreteName.nameStart nameLen=concreteName.nameLen args=[] />)
+    val binder = <Bind nameStart=parameterName.nameStart nameLen=parameterName.nameLen nameId=parameterName.nameId paramId=11U64 fieldStart=0U64 fieldLen=0U64 />
+    val nominal = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen hasDecl=true declOffset=100U64 args=[] />)
+    if compiler.groundTermInEnvironment(ref: nominal, params: [binder], values: [replacement]) != nominal { panic "nominal declaration treated as a legacy binder" }
+    val nested = compiler.pushType(t: <TypeRef nameStart=containerName.nameStart nameLen=containerName.nameLen args=[nominal] />)
+    if compiler.groundTermInEnvironment(ref: nested, params: [binder], values: [replacement]) != nested { panic "nested nominal declaration replaced" }
+    for val spelling in ["Self", "Item"] {
+        val name = compiler.internBytes(s: spelling)
+        val term = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen hasDecl=true declOffset=101U64 args=[] />)
+        if compiler.groundTermInEnvironment(ref: term, params: [], values: [], selfRef: replacement, itemRef: replacement) != term { panic "nominal declaration treated as a proof binder" }
+        val result = compiler.groundTermForBody(ref: term, environment: <InstanceEnvironment receiverRef=replacement />, selfRef: replacement, itemRef: replacement).unwrap()
+        if result != term { panic "body grounding replaced a nominal declaration" }
+    }
+    print("ground-nominal-identity")
+}
