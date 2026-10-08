@@ -352,8 +352,7 @@ pub impl Comp {
     // share one ExprId-keyed entry rather than parallel caches.
     inout fn semanticExprShape(ti: TypeInfo) -> U64 {
         if ti.ref != 0U64 && ti.ref < self.arena.typeCount() {
-            val t: TypeRef = self.arena.typeAt(index: ti.ref)
-            if t.isAny { return 6U64 }
+            if self.arena.typeTerms[ti.ref].isAny { return 6U64 }
             if self.isFnType(ref: ti.ref) { return 5U64 }
         }
         if ti.kind == 3I64 { return 4U64 }
