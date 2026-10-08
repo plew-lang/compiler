@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+trait Values { type Items }
+struct Group {}
+impl Group as Values { type Items = Array[I64] }
+fn block() -> Group#Values.Items { return { give [1, 2] } }
+fn branch(flag: Bool) -> Group#Values.Items {
+    return if flag { give [3, 4] } else { give [5] }
+}
+fn choose(flag: Bool) -> Group#Values.Items {
+    return match flag { true => [6, 7] false => [8] }
+}
+fn main() {
+    print(block().count())
+    print(branch(flag: false).count())
+    print(choose(flag: true).count())
+}

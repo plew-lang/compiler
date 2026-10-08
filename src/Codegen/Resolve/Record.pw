@@ -402,7 +402,7 @@ pub impl Comp {
         // caller-owned T in the expression result; retaining the callee's
         // ParamId would make a later body environment unable to ground it.
         // `fnArgsAllGround` is deliberately reserved for reachability/codegen.
-        if f.typeParams.count() > 0U64 && self.fnArgsAllResolved(args: calleeArgs) {
+        if f.typeParams.count() == 0U64 || self.fnArgsAllResolved(args: calleeArgs) {
             // Substitution alone leaves a concrete receiver's associated
             // output as a projection. Close it with the same explicit
             // environment used by method signatures before publishing the
@@ -1554,6 +1554,18 @@ pub impl Comp {
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
     inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false, needsValue: Bool = true) -> Result[(), CompileDiagnostic] {
+        // Every context consumer sees the same semantic outer shape. An
+        // associated type proven equal to Array/Result/function is that type,
+        // not the nominal receiver written on the projection. Keep unresolved
+        // projections symbolic; normalization never invents an equality.
+        mut val context = expectedTerm
+        if self.typeTermContainsAssociatedProjection(ref: context) {
+            context = try self.normalizedValueType(ref: context)
+        }
+        return self.recordExprWithContext(exprId: exprId, chainHoleRef: chainHoleRef, expectedTerm: context, deferContext: deferContext, needsValue: needsValue)
+    }
+
+    inout fn recordExprWithContext(exprId: U64, chainHoleRef: U64, expectedTerm: U64, deferContext: Bool, needsValue: Bool) -> Result[(), CompileDiagnostic] {
         // A deferred value block must be recorded again in its lexical scope
         // once the selected parameter supplies its result context.
         if expectedTerm == 0U64 && deferContext && self.expressionNeedsTypeContext(exprId: exprId) {

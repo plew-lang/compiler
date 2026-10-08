@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+trait Carrier { type Output }
+struct Key {}
+impl Key as Carrier { type Output = Result[I64, I64] }
+fn source() -> Result[I64, I64] { return <Result.Err error=7I64 /> }
+fn target() -> Key#Carrier.Output {
+    return source()
+}
+fn main() { print(target().err().unwrap()) }

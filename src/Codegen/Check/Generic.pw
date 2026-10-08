@@ -898,6 +898,9 @@ pub impl Comp {
     // Traverse the shared TypeTerm child relation so generic checking sees the
     // same complete term shape as grounding, equality, and monomorphization.
     inout fn typeTermContainsAssociatedProjection(ref: U64) -> Bool {
+        // Closedness is registered from canonical children and excludes
+        // projections. Reuse that proof before materializing an owning view.
+        if self.arena.typeIsClosed(ref: ref) { return false }
         if ref == 0U64 || ref >= self.arena.typeCount() { return false }
         val t: TypeRef = self.arena.typeAt(index: ref)
         if t.assocNameId != 0U64 { return true }

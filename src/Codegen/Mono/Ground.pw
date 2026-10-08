@@ -232,6 +232,10 @@ pub impl Comp {
     // This must stay here, rather than in individual call/local consumers, so
     // all frontend semantic reads agree on one closed type term.
     inout fn closeBodyProjectionTerms(ref: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[U64, CompileDiagnostic] {
+        // This operation closes projections; explicit parameter/Self/Item
+        // substitution has already happened at its caller. A registered
+        // closed term cannot contain a projection needing this walk.
+        if self.arena.typeIsClosed(ref: ref) { return <Result.Ok value=ref /> }
         if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=ref />}
         // A non-projection leaf has no children to close. Read its scalar
         // shape before materializing any owning compatibility type record.

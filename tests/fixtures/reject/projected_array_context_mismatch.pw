@@ -1,0 +1,5 @@
+trait Values { type Items }
+struct Group {}
+impl Group as Values { type Items = Array[I64] }
+fn block() -> Group#Values.Items { return { give [true] } }
+fn main() { block() }

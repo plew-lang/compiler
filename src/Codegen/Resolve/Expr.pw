@@ -2104,6 +2104,14 @@ pub impl Comp {
     // The resulting type comes from that substitution into the declaration;
     // expected terms never replace the expression's independent meaning.
     inout fn recordSemanticExprExpectedResult(exprId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
+        mut val context = expectedTerm
+        if self.typeTermContainsAssociatedProjection(ref: context) {
+            context = try self.normalizedValueType(ref: context)
+        }
+        return self.recordSemanticExprNormalizedContext(exprId: exprId, expectedTerm: context)
+    }
+
+    inout fn recordSemanticExprNormalizedContext(exprId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
         if expectedTerm == 0U64 || expectedTerm >= self.arena.typeCount() { return <Result.Ok value=() /> }
         if self.expressionNeedsTypeContext(exprId: exprId) { try self.recordExpr(exprId: exprId, expectedTerm: expectedTerm) }
         self.ensureSemanticExprType(exprId: exprId)
