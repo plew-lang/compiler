@@ -1,0 +1,23 @@
+use /Frontend only { Comp }
+use /Ir only { Expr, TypeRef, Bind, InstanceEnvironment }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "I64")
+    val integer = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
+    val literal = compiler.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    if compiler.inferType(id: literal).unwrap() != 0U64 { panic "unrecorded integer was assigned a type" }
+    compiler.recordSemanticExprTerm(exprId: literal, term: integer)
+    if compiler.inferType(id: literal).unwrap() != integer { panic "recorded contextual integer type was discarded" }
+    if compiler.inferenceArgumentType(exprId: literal).unwrap() != integer { panic "argument query disagrees with recorded integer type" }
+    val binderName = compiler.internBytes(s: "Element")
+    val binder = <Bind nameStart=binderName.nameStart nameLen=binderName.nameLen paramId=11U64 fieldStart=0U64 fieldLen=0U64 />
+    val parameter = compiler.pushType(t: <TypeRef nameStart=binderName.nameStart nameLen=binderName.nameLen paramId=11U64 args=[] />)
+    val genericLiteral = compiler.pushExpr(e: <Expr.Int value=2U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    compiler.recordSemanticExprTerm(exprId: genericLiteral, term: parameter)
+    compiler.cur.bodyEnvironment = <InstanceEnvironment params=[binder] args=[integer] />
+    if compiler.inferType(id: genericLiteral).unwrap() != integer { panic "recorded type was not grounded in its body environment" }
+    print("literal-record-authority")
+}

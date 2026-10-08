@@ -39,15 +39,14 @@ pub impl Comp {
     }
 
     inout fn inferType(id: U64) -> Result[U64, CompileDiagnostic] {
-        // an un-suffixed integer literal has no intrinsic type — it adapts to its context
-        // (`u64var + 5`, `val x: I32 = 5`). typeOf may attach an emission-context width to
-        // it, but for type CHECKING it is genuinely unknown, so report 0 (a typed literal
-        // `5I64` keeps its suffix type; `true`/`false` fall through to Bool).
+        // Unsuffixed integers have no intrinsic type before contextual
+        // checking. Once Record establishes their semantic term, subsequent
+        // checks consume that term rather than resetting it from syntax.
         match self.arena.exprs[id] {
             Expr.Int(value: _, offset: _, val isBool, tyStart: _, val tyLen, isNeg: _) => {
                 if !(isBool) {
                     if tyLen == 0U64 {
-                        return <Result.Ok value=0U64 />
+                        return self.groundSemanticExprTypeRef(exprId: id, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
                     }
                 }
             }
