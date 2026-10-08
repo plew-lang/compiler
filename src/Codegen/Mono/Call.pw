@@ -535,39 +535,7 @@ pub impl Comp {
         return <Result.Ok value=out />
     }
 
-    // Adapt this BodyInstance's receiver to the frontend semantic call query.
-    // `resolveMethodFinal(recv: ...)` is syntax-facing and starts from
-    // `typeOf(recv)`; a shared generic body's node still spells `T`, so Mono
-    // contributes only its grounded receiver term. Candidate selection itself
-    // is owned by `resolveMethodForResolvedReceiver` in the frontend resolver.
-    inout fn resolveBodyMethodForRef(recv: U64, recvRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: ArgRange, useOffset: U64) -> Result[U64, CompileDiagnostic] {
-        // The receiver argument is normally `groundedBodyReceiverRef(recv)`,
-        // but callers that arrived through an older TypeInfo recovery can hand
-        // us its bare runtime head.  The body-local ref is authoritative: it
-        // retains the caller's selected view (`S#P`) as part of the generic
-        // substitution, whereas the head does not.  Normalize once at the
-        // final resolver boundary so every Mono caller shares the same surface.
-        mut val surfaceRef: U64 = recvRef
-        // The explicit trailing `#Source` of an ExtMethod is semantic
-        // provenance for *all* downstream queries, including the proof query
-        // used by provided copies. `collectViewSources` used to receive it as
-        // a side argument while `callableReceiverMatches` received bare S,
-        // making an E-owned B -> A edge disappear between candidate selection
-        // and receiver applicability. The TypeRef view is the current
-        // migration carrier for this normalized source-set facet.
-        if sourceId != 0U64 && surfaceRef != 0U64 {
-            val additions: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=sourceId traitOwner=sourceOwner />]
-            surfaceRef = self.typeRefWithAddedViewSources(ref: surfaceRef, additions: additions)
-        }
-        val bodyRef: U64 = (try self.groundedBodyReceiverRef(exprId: recv))
-        if bodyRef != 0U64 && bodyRef < self.arena.typeCount() {
-            val bodyTy: TypeRef = self.arena.typeAt(index: bodyRef)
-            if bodyTy.viewExtId != 0U64 || bodyTy.viewIds.count() != 0U64 {
-                surfaceRef = bodyRef
-            }
-        }
-        return <Result.Ok value=(try self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: surfaceRef, sourceId: sourceId, sourceOwner: sourceOwner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: useOffset)) />
-    }
+
 
     // Control-flow protocol calls have no receiver expression at finalization:
     // their receiver is already a grounded CallTemplate term.  Do not feed a
@@ -709,15 +677,7 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: implicit protocol call dependency was not finalized") />
     }
 
-    // Instance collection discovers layouts before Record has produced the
-    // declaration-time template table.  Its selection is provisional: it is
-    // discarded before backend emission and may only enqueue reachable bodies.
-    // Once Record has supplied this site, finalization must take the template
-    // route above and may not recover the receiver from `Stmt.For.iter`.
-    inout fn hasProtocolCallTemplate(stmtId: U64, slot: U64) -> Result[Bool, CompileDiagnostic] {
-        val key: CallSiteKey = (try self.currentCallSiteKey(exprId: stmtId, siteIsStmt: true, slot: slot))
-        return <Result.Ok value=self.decls.callTemplateIndex(siteKey: key) < self.decls.callTemplates.count() />
-    }
+
 
     // Ground a selected method's result under the same concrete receiver that
     // selected it.  Control-flow desugars such as `for` have no explicit AST
@@ -6124,203 +6084,29 @@ pub impl Comp {
                     }
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: rtS, tyLen: rtL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
-                    // `for` is syntax for the Iterable/Iterator protocol.  It
-                    // has no written Method AST nodes, so select both implicit
-                    // calls here and retain them under the statement site. LLVM
-                    // subsequently receives only these Func identities.
-                    val useProtocolTemplate: Bool = (try self.hasProtocolCallTemplate(stmtId: stmtId, slot: 1U64))
-                    mut val initialRef: U64 = 0U64
-                    if useProtocolTemplate {
-                        initialRef = (try self.groundedProtocolTemplateReceiver(stmtId: stmtId, slot: 1U64))
-                    } else {
-                        // Provisional reachability collection only. Its output
-                        // is cleared by finalizeCallables; this AST recovery
-                        // must never publish a final CallResolution.
-                        initialRef = (try self.groundedBodyReceiverRef(exprId: iter))
-                        if initialRef == 0U64 {
-                            initialRef = (try self.bodyCalleeResultRef(exprId: iter))
-                        }
+                    // Record owns protocol selection and Item inference. This
+                    // body instance only grounds those facts and schedules the
+                    // selected bodies; missing facts never trigger AST lookup.
+                    val initialRef = try self.groundedProtocolTemplateReceiver(stmtId: stmtId, slot: 1U64)
+                    val iteratorSelection = try self.selectedProtocolTemplateCall(stmtId: stmtId, slot: 1U64, receiverRef: initialRef)
+                    try self.recordSelectedBodyCallee(selection: iteratorSelection)
+                    if iteratorSelection.callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: iteratorSelection) }
+                    val iteratorRef = try self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: 1U64)
+                    val nextSelection = try self.selectedProtocolTemplateCall(stmtId: stmtId, slot: 2U64, receiverRef: iteratorRef)
+                    try self.recordSelectedBodyCallee(selection: nextSelection)
+                    if nextSelection.callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: nextSelection) }
+                    val semanticItem = try self.finalizeForTypeRecipes(stmtId: stmtId)
+                    if semanticItem == 0U64 {
+                        return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal diagnostic: final for binding type recipe did not ground") />
                     }
-                    mut val iteratorRef: U64 = initialRef
-                    if useProtocolTemplate {
-                        val iteratorSelection = try self.selectedProtocolTemplateCall(stmtId: stmtId, slot: 1U64, receiverRef: initialRef)
-                        try self.recordSelectedBodyCallee(selection: iteratorSelection)
-                        if iteratorSelection.callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: iteratorSelection) }
-                        iteratorRef = try self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: 1U64)
-                        val nextSelection = try self.selectedProtocolTemplateCall(stmtId: stmtId, slot: 2U64, receiverRef: iteratorRef)
-                        try self.recordSelectedBodyCallee(selection: nextSelection)
-                        if nextSelection.callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: nextSelection) }
-                    } else {
-                        if initialRef != 0U64 && initialRef < self.arena.typeCount() && !(self.arena.typeTerms[initialRef].isAny) {
-                            val noArgs: Array[Arg] = []
-                            val iteratorName: Bind = self.kwSpan(kw: "iterator", kwLen: 8U64)
-                            mut val iteratorFn: U64 = self.arena.functionCount()
-                                iteratorFn = (try self.resolveBodyMethodForRef(recv: iter, recvRef: initialRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: self.pushArgs(args: noArgs), useOffset: 0U64))
-                            iteratorRef = initialRef
-                            // Record the iterator slot even when this value is already
-                            // an Iterator.  The sentinel tells LLVM that there is no
-                            // iterator() call; it must not rediscover that fact from
-                            // the receiver spelling.  Only that sentinel case is an
-                            // identity call.  A real `iterator()` has a distinct
-                            // carrier (for example Array[T] -> ArrayIter[T]), so leave
-                            // its source result absent and let completeStaticBodyCallee
-                            // publish the selected callee return as the one result.
-                            mut val iteratorResult: U64 = 0U64
-                            mut val iteratorTarget: CallTarget = <CallTarget.Direct />
-                            if iteratorFn >= self.arena.functionCount() {
-                                iteratorResult = initialRef
-                                iteratorTarget = <CallTarget.NoCallable />
-                            }
-                            val iteratorSelection: CallSiteSelection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=iteratorFn receiverRef=initialRef resultRef=iteratorResult resultHintRef=initialRef target=iteratorTarget />
-                            try self.recordSelectedBodyCallee(selection: iteratorSelection)
-                            if iteratorFn < self.arena.functionCount() {
-                                try self.enqueueSelectedCallee(selection: iteratorSelection)
-                                // `iterator()` has just been finalized under this
-                                // concrete body instance.  Its descriptor result
-                                // is the sole authority for the next receiver:
-                                // recomputing `Func.retTy` here loses the distinct
-                                // substitutions owned by a generic receiver and a
-                                // provided method, turning Array[I64] into
-                                // ArrayIter[T].
-                                val returned: U64 = (try self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: 1U64))
-                                if returned != 0U64 { iteratorRef = returned }
-                            }
-                            val nextName: Bind = self.kwSpan(kw: "next", kwLen: 4U64)
-                            mut val nextFn: U64 = self.arena.functionCount()
-                                nextFn = (try self.resolveBodyMethodForRef(recv: iter, recvRef: iteratorRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: self.pushArgs(args: noArgs), useOffset: 0U64))
-                            // A final protocol lookup can fail for an invalid iterand.
-                            // Diagnose that source error before publishing a missing
-                            // next target or asking its result recipe for an Item.
-                            if nextFn >= self.arena.functionCount() {
-                                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: iter), msg: "for-loop requires an Iterable or Iterator") />
-                            }
-                            val nextSelection: CallSiteSelection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=nextFn receiverRef=iteratorRef resultHintRef=iteratorRef />
-                            try self.recordSelectedBodyCallee(selection: nextSelection)
-                            if nextFn < self.arena.functionCount() {
-                                try self.enqueueSelectedCallee(selection: nextSelection)
-                            }
-                        } else if initialRef != 0U64 {
-                            // Each protocol slot owns its actual dispatch. An existential
-                            // Iterable first calls iterator dynamically; its returned cursor
-                            // may then have either a direct or an existential next call.
-                            val none = self.arena.functionCount()
-                            val noArgs = self.pushArgs(args: [])
-                            val iteratorName = self.internBytes(s: "iterator")
-                            val iteratorSlot = self.finalAnyRequirementSlot(anyRef: initialRef, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: noArgs)
-                            if iteratorSlot != 0U64 {
-                                val traitIndex = self.finalAnyTraitIdx(anyRef: initialRef)
-                                val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: iteratorSlot - 1U64)
-                                iteratorRef = (try self.anyMemberRetInfo(anyRef: initialRef, req: requirement)).ref
-                                try self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=none receiverRef=initialRef resultRef=iteratorRef target=<CallTarget.ExistentialRequirement traitIdx=traitIndex slot=iteratorSlot /> />)
-                            } else {
-                                try self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=none receiverRef=initialRef resultRef=initialRef target=<CallTarget.NoCallable /> />)
-                            }
-                            val nextName = self.internBytes(s: "next")
-                            if iteratorRef != 0U64 && self.arena.typeTerms[iteratorRef].isAny {
-                                val traitIndex = self.finalAnyTraitIdx(anyRef: iteratorRef)
-                                val nextSlot = self.finalAnyRequirementSlot(anyRef: iteratorRef, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: noArgs)
-                                if traitIndex >= self.decls.traitCount() || nextSlot == 0U64 {
-                                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: iter), msg: "for-loop requires an Iterable or Iterator") />
-                                }
-                                val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: nextSlot - 1U64)
-                                try self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=none receiverRef=iteratorRef resultRef=(try self.anyMemberRetInfo(anyRef: iteratorRef, req: requirement)).ref target=<CallTarget.ExistentialRequirement traitIdx=traitIndex slot=nextSlot /> />)
-                            } else {
-                                val next = try self.resolveProtocolMethodForReceiver(recvRef: iteratorRef, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: noArgs)
-                                val selection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=next receiverRef=iteratorRef resultHintRef=iteratorRef />
-                                try self.recordSelectedBodyCallee(selection: selection)
-                                if next < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: selection) }
-                            }
-                        }
-                    }
-                    val et: TypeInfo = (try self.typeOf(id: iter))
-                    // The Record pass and this instance scan introduce the
-                    // same source binding.  Both must consume the one
-                    // proof-derived Item TypeTerm, rather than letting Mono
-                    // reconstruct a second, legacy TypeInfo approximation.
-                    // `iteratorRef` is the final body-instance receiver: it
-                    // also covers an Iterable whose implicit iterator() call
-                    // changed the concrete iterator type.
-                    mut val semanticItem: U64 = 0U64
-                    if useProtocolTemplate {
-                        semanticItem = (try self.finalizeForTypeRecipes(stmtId: stmtId))
-                        if semanticItem == 0U64 {
-                            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal diagnostic: final for binding type recipe did not ground") />
-                        }
-                    } else {
-                        // Provisional collection has no Record contract yet.
-                        // Its selections are discarded before backend emission.
-                        semanticItem = (try self.iterableItemTerm(iterExpr: iter, iterTerm: iteratorRef))
-                    }
-                    if useProtocolTemplate && !(try self.freezeForResolution(stmtId: stmtId, itemRef: semanticItem)) {
+                    if !(try self.freezeForResolution(stmtId: stmtId, itemRef: semanticItem)) {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: iter), msg: "internal diagnostic: final for iteration layout was not recorded") />
                     }
-                    if semanticItem != 0U64 {
-                        val itemTi: TypeInfo = self.typeInfoOfRef(ref: semanticItem)
-                        if isStruct {
-                            try self.addForStructBinds(et: itemTi, binds: binds)
-                        } else {
-                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: itemTi.nameStart, tyLen: itemTi.nameLen, isArray: itemTi.kind == 3, ty: semanticItem, isInout: false, isMut: false, owned: false)
-                        }
-                    } else if isStruct {
-                        try self.addForStructBinds(et: et, binds: binds)
+                    val itemTi = self.typeInfoOfRef(ref: semanticItem)
+                    if isStruct {
+                        try self.addForStructBinds(et: itemTi, binds: binds)
                     } else {
-                        if et.kind == 3 {
-                            // A loop variable over Array[E] has E's full
-                            // structured type.  In particular E may be a
-                            // closure `fn(...) -> R`; dropping its TypeRef
-                            // here made `for f in fs { f() }` look like an
-                            // unresolved free-function call downstream.
-                            // `initialRef` is the final, body-grounded iterable
-                            // identity.  Prefer its Array element over the
-                            // legacy TypeInfo name projection: the latter loses
-                            // `Optional[I64]` versus `Optional[String]` when
-                            // two generic enum arrays occur in one body.
-                            mut val elemRef: U64 = 0U64
-                            if initialRef != 0U64 && initialRef < self.arena.typeCount() {
-                                val initialTy: TypeRef = self.arena.typeAt(index: initialRef)
-                                if rangeEquals(bytes: self.arena.bytes, start: initialTy.nameStart, len: initialTy.nameLen, kw: "Array") && initialTy.args.count() > 0U64 {
-                                    elemRef = initialTy.args[0]
-                                }
-                            }
-                            if elemRef == 0U64 {
-                                elemRef = self.arrayElemRef(start: et.nameStart, len: et.nameLen)
-                            }
-                            if elemRef == 0U64 && et.ref != 0U64 && et.ref < self.arena.typeCount() {
-                                val arrRef: TypeRef = self.arena.typeAt(index: et.ref)
-                                if arrRef.args.count() > 0U64 { elemRef = arrRef.args[0] }
-                            }
-                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: elemRef, isInout: false, isMut: false, owned: false)
-                        } else {
-                            // The selected implicit `next()` descriptor is the
-                            // concrete iterator proof for this body instance.
-                            // Its `Optional[Item]` result retains substitutions
-                            // that AST-wide `iterableItemInfo` necessarily loses
-                            // for a generic adapter chain.
-                            mut val itemRef: U64 = 0U64
-                            if iteratorRef != 0U64 && iteratorRef < self.arena.typeCount() {
-                                val iteratorTy: TypeRef = self.arena.typeAt(index: iteratorRef)
-                                // `for` is defined by the Iterator contract.
-                                // Its associated output is therefore selected
-                                // from the concrete conformance witness before
-                                // consulting the requirement body's legacy
-                                // template return type.
-                                itemRef = (try self.assocItemRef(recvStart: iteratorTy.nameStart, recvLen: iteratorTy.nameLen, recvInstRef: iteratorRef))
-                            }
-                            val nextResult: U64 = (try self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: 2U64))
-                            if itemRef == 0U64 && nextResult != 0U64 && nextResult < self.arena.typeCount() {
-                                val nextTy: TypeRef = self.arena.typeAt(index: nextResult)
-                                if rangeEquals(bytes: self.arena.bytes, start: nextTy.nameStart, len: nextTy.nameLen, kw: "Optional") && nextTy.args.count() == 1U64 {
-                                    itemRef = nextTy.args[0]
-                                }
-                            }
-                            if itemRef != 0U64 {
-                                val itemTi: TypeInfo = self.typeInfoOfRef(ref: itemRef)
-                                self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: itemTi.nameStart, tyLen: itemTi.nameLen, isArray: itemTi.kind == 3, ty: itemRef, isInout: false, isMut: false, owned: false)
-                            } else {
-                                val elemTi: TypeInfo = (try self.iterableItemInfo(et: et))
-                                self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
-                            }
-                        }
+                        self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: itemTi.nameStart, tyLen: itemTi.nameLen, isArray: itemTi.kind == 3, ty: semanticItem, isInout: false, isMut: false, owned: false)
                     }
                 }
                 try self.scanBlockInsts(blkId: body)
