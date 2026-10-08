@@ -1,0 +1,48 @@
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Expr, TypeInfo, TypeRef, SemanticExpressionTypeState }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val literal = compiler.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    val unknown = <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />
+    compiler.recordSemanticExprInfo(exprId: literal, ti: unknown)
+    match compiler.arena.semanticExprTypes[literal].typeState {
+        SemanticExpressionTypeState.Pending => {}
+        _ => { panic "untyped literal is not pending" }
+    }
+    compiler.recordSemanticExprLiteralContext(exprId: literal, context: 4U64)
+    val recorded = compiler.arena.semanticExprTypes[literal].term
+    if recorded == 0U64 { panic "context producer did not publish a term" }
+    match compiler.arena.semanticExprTypes[literal].typeState {
+        SemanticExpressionTypeState.Value => {}
+        _ => { panic "context producer left the literal pending" }
+    }
+    val typeCount = compiler.arena.typeCount()
+    if compiler.semanticExprTerm(exprId: literal) != recorded { panic "reader changed the term" }
+    if compiler.semanticExprTerm(exprId: literal) != recorded || compiler.arena.typeCount() != typeCount { panic "reader materialized a type" }
+    compiler.recordSemanticExprInfo(exprId: literal, ti: unknown)
+    if compiler.arena.semanticExprTypes[literal].term != recorded { panic "unknown adapter erased the checked context" }
+    val unsignedName = compiler.internBytes(s: "U8")
+    val unsigned = compiler.pushType(t: <TypeRef nameStart=unsignedName.nameStart nameLen=unsignedName.nameLen nameId=unsignedName.nameId args=[] />)
+    val explicit = compiler.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=unsignedName.nameStart tyLen=unsignedName.nameLen isNeg=false />)
+    compiler.recordSemanticExprTerm(exprId: explicit, term: unsigned)
+    compiler.recordSemanticExprLiteralContext(exprId: explicit, context: 4U64)
+    if compiler.semanticExprTerm(exprId: explicit) != unsigned { panic "expected context overwrote an explicit type" }
+    val unit = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    compiler.recordInvocationCompletion(exprId: unit, diverging: false, returnsUnit: true)
+    compiler.recordSemanticExprLiteralContext(exprId: unit, context: 4U64)
+    match compiler.arena.semanticExprTypes[unit].typeState {
+        SemanticExpressionTypeState.Unit => {}
+        _ => { panic "numeric context invented a Unit payload" }
+    }
+    if compiler.semanticExprTerm(exprId: unit) != 0U64 { panic "Unit acquired a numeric type" }
+    compiler.recordInvocationCompletion(exprId: literal, diverging: true)
+    compiler.recordSemanticExprLiteralContext(exprId: literal, context: 4U64)
+    match compiler.arena.semanticExprTypes[literal].typeState {
+        SemanticExpressionTypeState.NoNormalValue => {}
+        _ => { panic "context erased normal-value absence" }
+    }
+    print("semantic-literal-context-term")
+}
