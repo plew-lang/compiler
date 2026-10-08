@@ -190,93 +190,49 @@ pub impl Comp {
                 self.cur.verifyLoopDepth = self.cur.verifyLoopDepth - 1U64
                 self.cur.branchBase = savedBB
             }
-            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, varTy: _, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
+            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, varTy: _, val iter, val body, val isStruct, val patStart, val patLen, val binds) => {
                 try self.verifyExpr(id: iter)
                 // a record loop pattern lowered to this For: check its bind list
                 // against the ELEMENT record's fields (spec/03).
                 try self.checkDestructureSite(initId: iter, isElem: true)
-                if isRange {
-                    try self.verifyExpr(id: rangeHi)
-                    // a range is iterated via `Step`, which is integer-only (spec/02,11):
-                    // `for x in 0.0..<5.0` has no Step witness. Reject a float-typed range
-                    // (by the loop-var annotation or either bound).
-                    mut val rangeIsFloat: Bool = (try self.exprIsFloat(id: iter)) || (try self.exprIsFloat(id: rangeHi))
-                    if varTyLen != 0U64 {
-                        if self.isFloatType(start: varTyStart, len: varTyLen) {
-                            rangeIsFloat = true
-                        }
-                    }
-                    if rangeIsFloat {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: iter), msg: "a range is iterated via Step, which is integer-only — a float range cannot be a for-loop iterable (spec/02,11)") />
-                    }
-                    // a range bound annotated by the loop var (`for val i: I32 in …`)
-                    // types both bounds; otherwise each must determine its own type, so a
-                    // bare literal range (`0..<5`) is ambiguous and rejected.
-                    if varTyLen != 0U64 {
-                        try self.checkLitSpan(id: iter, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
-                        try self.checkLitSpan(id: rangeHi, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
-                        // checkLitSpan only range-checks a SUFFIXED literal against its own
-                        // suffix, so a mismatched width (`for val i: I64 in 0I64..<5I32`)
-                        // slips through — check each bound's type against the loop var type.
-                        val vref: U64 = self.simpleTypeRef(nameStart: varTyStart, nameLen: varTyLen)
-                        try self.tcCheckValue(expectedRef: vref, valueExpr: iter, pos: "range bound")
-                        try self.tcCheckValue(expectedRef: vref, valueExpr: rangeHi, pos: "range bound")
-                    } else {
-                        try self.checkArithNoCtx(lhs: iter, rhs: rangeHi)
-                        // both bounds must share a type (`0I64..<5I32` is a width mismatch).
-                        try self.tcCheckValue(expectedRef: (try self.inferType(id: iter)), valueExpr: rangeHi, pos: "range bound")
-                    }
-                }
+
                 // scope the loop binding(s) to the body, mirroring genStmt's For.
                 val forMark: U64 = self.scopeMark()
                 val savedForBB: U64 = self.cur.branchBase
                 self.cur.branchBase = forMark
-                if isRange {
-                    // loop var type: the annotation, else the range bound's own type.
-                    mut val ltS: U64 = varTyStart
-                    mut val ltL: U64 = varTyLen
-                    if ltL == 0U64 {
-                        val bt2: TypeInfo = (try self.typeOf(id: rangeHi))
-                        if bt2.kind == 0 {
-                            ltS = bt2.nameStart
-                            ltL = bt2.nameLen
+                val et: TypeInfo = (try self.sourceSubjectTypeInfo(exprId: iter))
+                if et.kind == 3 {
+                    if isStruct {
+                        // the destructure pattern type must name the element struct.
+                        if !self.structPatternMatches(typeStart: patStart, typeLen: patLen, subjectRef: (try self.destructureSubjectType(info: et, isElement: true))) {
+                            return <Result.Err error=self.diagnosticAt(offset: patStart, msg: "for-loop destructure pattern type does not match the element type") />
                         }
-                    }
-                    self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: ltS, tyLen: ltL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
-                } else {
-                    val et: TypeInfo = (try self.sourceSubjectTypeInfo(exprId: iter))
-                    if et.kind == 3 {
-                        if isStruct {
-                            // the destructure pattern type must name the element struct.
-                            if !self.structPatternMatches(typeStart: patStart, typeLen: patLen, subjectRef: (try self.destructureSubjectType(info: et, isElement: true))) {
-                                return <Result.Err error=self.diagnosticAt(offset: patStart, msg: "for-loop destructure pattern type does not match the element type") />
-                            }
-                            mut val bi: U64 = 0
-                            while bi < binds.len {
-                                val bd: Bind = self.bindAt(binds: binds, index: bi)
-                                val ft: TypeInfo = (try self.forBindFieldType(et: et, bd: bd))
-                                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
-                                bi += 1
-                            }
-                        } else {
-                            // single binding to the element type (`for val b in bs` -> U8).
-                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                        mut val bi: U64 = 0
+                        while bi < binds.len {
+                            val bd: Bind = self.bindAt(binds: binds, index: bi)
+                            val ft: TypeInfo = (try self.forBindFieldType(et: et, bd: bd))
+                            self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
+                            bi += 1
                         }
                     } else {
-                        // a custom Iterator / Iterable (kind 2 — `for v in counter`, an adapter
-                        // chain `xs.map(..).filter(..)`, or an `any Iterator`): recover the loop
-                        // variable's Item type from next()'s Optional[Item] (iterableItemInfo)
-                        // and bind it, so the body's references to it resolve. (When the Item is
-                        // unresolvable — e.g. an existential's associated type — it degrades to a
-                        // scalar binding, still in scope.)
-                        val item: TypeInfo = (try self.iterableItemInfo(et: et))
-                        if isStruct {
-                            try self.addForStructBinds(et: item, binds: binds)
-                        } else {
-                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: item.nameStart, tyLen: item.nameLen, isArray: item.kind == 3, ty: item.ref, isInout: false, isMut: false, owned: false)
-                        }
+                        // single binding to the element type (`for val b in bs` -> U8).
+                        self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                    }
+                } else {
+                    // a custom Iterator / Iterable (kind 2 — `for v in counter`, an adapter
+                    // chain `xs.map(..).filter(..)`, or an `any Iterator`): recover the loop
+                    // variable's Item type from next()'s Optional[Item] (iterableItemInfo)
+                    // and bind it, so the body's references to it resolve. (When the Item is
+                    // unresolvable — e.g. an existential's associated type — it degrades to a
+                    // scalar binding, still in scope.)
+                    val item: TypeInfo = (try self.iterableItemInfo(et: et))
+                    if isStruct {
+                        try self.addForStructBinds(et: item, binds: binds)
+                    } else {
+                        self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: item.nameStart, tyLen: item.nameLen, isArray: item.kind == 3, ty: item.ref, isInout: false, isMut: false, owned: false)
                     }
                 }
+
                 self.cur.verifyLoopDepth = self.cur.verifyLoopDepth + 1U64
                 try self.verifyBlock(blockId: body)
                 self.cur.verifyLoopDepth = self.cur.verifyLoopDepth - 1U64

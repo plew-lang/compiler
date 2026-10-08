@@ -954,27 +954,23 @@ pub impl Comp {
                 try self.checkBoundsExpr(exprId: cond)
                 try self.checkBoundsBlock(blkId: body)
             }
-            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, varTy: _, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
+            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, varTy: _, val iter, val body, val isStruct, val patStart, val patLen, val binds) => {
                 val forMark: U64 = self.scopeMark()
                 try self.checkBoundsExpr(exprId: iter)
-                if isRange {
-                    try self.checkBoundsExpr(exprId: rangeHi)
-                    self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                val et: TypeInfo = (try self.sourceSubjectTypeInfo(exprId: iter))
+                try self.checkAbstractIterationReceiver(receiver: et.ref, offset: self.exprOffset(id: iter))
+                if isStruct {
+                    try self.addForStructBinds(et: et, binds: binds)
                 } else {
-                    val et: TypeInfo = (try self.sourceSubjectTypeInfo(exprId: iter))
-                    try self.checkAbstractIterationReceiver(receiver: et.ref, offset: self.exprOffset(id: iter))
-                    if isStruct {
-                        try self.addForStructBinds(et: et, binds: binds)
+                    if et.kind == 3 {
+                        self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                     } else {
-                        if et.kind == 3 {
-                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
-                        } else {
-                            // a general Iterable: the loop var is the iterator's Item type.
-                            val elemTi: TypeInfo = (try self.iterableItemInfo(et: et))
-                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
-                        }
+                        // a general Iterable: the loop var is the iterator's Item type.
+                        val elemTi: TypeInfo = (try self.iterableItemInfo(et: et))
+                        self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
                     }
                 }
+
                 try self.checkBoundsBlock(blkId: body)
                 self.popLocals(mark: forMark)
             }

@@ -193,9 +193,8 @@ pub impl Comp {
                     self.resolveLexicalModuleExpr(id: cond, names: inout names)
                     self.resolveLexicalModuleBlock(blockId: body, names: inout names)
                 }
-                Stmt.For(val varStart, val varLen, varTyStart: _, varTyLen: _, varTy: _, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, patStart: _, patLen: _, val binds) => {
+                Stmt.For(val varStart, val varLen, varTyStart: _, varTyLen: _, varTy: _, val iter, val body, val isStruct, patStart: _, patLen: _, val binds) => {
                     self.resolveLexicalModuleExpr(id: iter, names: inout names)
-                    if isRange { self.resolveLexicalModuleExpr(id: rangeHi, names: inout names) }
                     val loopMark = names.count()
                     if isStruct { self.resolveLexicalModuleBinds(binds: binds, names: inout names) }
                     else { names.append(intern(c: inout self, start: varStart, len: varLen)) }

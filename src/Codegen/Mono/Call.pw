@@ -1700,7 +1700,7 @@ pub impl Comp {
             mut val end: U64 = 0U64
             if exprId < self.arena.stmts.count() {
                 match self.arena.stmts[exprId] {
-                    Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, isRange: _, inclusive: _, val iter, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {
+                    Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, val iter, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {
                         start = self.exprOffset(id: iter)
                         if iter < self.arena.exprSpanEnd.count() { end = self.arena.exprSpanEnd[iter] }
                     }
@@ -6013,49 +6013,34 @@ pub impl Comp {
                 if !(try self.scanValueContinuation(exprId: cond)) { return <Result.Ok value=() /> }
                 try self.scanBlockInsts(blkId: body)
             }
-            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, varTy: _, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
+            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, varTy: _, val iter, val body, val isStruct, val patStart, val patLen, val binds) => {
                 val forMark: U64 = self.scopeMark()
                 if !(try self.scanValueContinuation(exprId: iter)) { return <Result.Ok value=() /> }
-                if isRange {
-                    if !(try self.scanValueContinuation(exprId: rangeHi)) { return <Result.Ok value=() /> }
-                    // type the loop var so generic calls on it in the body (`print(i)`)
-                    // ground: the annotation if given, else the bound's own type.
-                    mut val rtS: U64 = varTyStart
-                    mut val rtL: U64 = varTyLen
-                    if rtL == 0 {
-                        val bt: TypeInfo = (try self.typeOf(id: rangeHi))
-                        if bt.kind == 0 {
-                            rtS = bt.nameStart
-                            rtL = bt.nameLen
-                        }
-                    }
-                    self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: rtS, tyLen: rtL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
-                } else {
-                    // Record owns protocol selection and Item inference. This
-                    // body instance only grounds those facts and schedules the
-                    // selected bodies; missing facts never trigger AST lookup.
-                    val initialRef = try self.groundedProtocolTemplateReceiver(stmtId: stmtId, slot: 1U64)
-                    val iteratorSelection = try self.selectedProtocolTemplateCall(stmtId: stmtId, slot: 1U64, receiverRef: initialRef)
-                    try self.recordSelectedBodyCallee(selection: iteratorSelection)
-                    if iteratorSelection.callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: iteratorSelection) }
-                    val iteratorRef = try self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: 1U64)
-                    val nextSelection = try self.selectedProtocolTemplateCall(stmtId: stmtId, slot: 2U64, receiverRef: iteratorRef)
-                    try self.recordSelectedBodyCallee(selection: nextSelection)
-                    if nextSelection.callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: nextSelection) }
-                    val semanticItem = try self.finalizeForTypeRecipes(stmtId: stmtId)
-                    if semanticItem == 0U64 {
-                        return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal diagnostic: final for binding type recipe did not ground") />
-                    }
-                    if !(try self.freezeForResolution(stmtId: stmtId, itemRef: semanticItem)) {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: iter), msg: "internal diagnostic: final for iteration layout was not recorded") />
-                    }
-                    val itemTi = self.typeInfoOfRef(ref: semanticItem)
-                    if isStruct {
-                        try self.addForStructBinds(et: itemTi, binds: binds)
-                    } else {
-                        self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: itemTi.nameStart, tyLen: itemTi.nameLen, isArray: itemTi.kind == 3, ty: semanticItem, isInout: false, isMut: false, owned: false)
-                    }
+                // Record owns protocol selection and Item inference. This
+                // body instance only grounds those facts and schedules the
+                // selected bodies; missing facts never trigger AST lookup.
+                val initialRef = try self.groundedProtocolTemplateReceiver(stmtId: stmtId, slot: 1U64)
+                val iteratorSelection = try self.selectedProtocolTemplateCall(stmtId: stmtId, slot: 1U64, receiverRef: initialRef)
+                try self.recordSelectedBodyCallee(selection: iteratorSelection)
+                if iteratorSelection.callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: iteratorSelection) }
+                val iteratorRef = try self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: 1U64)
+                val nextSelection = try self.selectedProtocolTemplateCall(stmtId: stmtId, slot: 2U64, receiverRef: iteratorRef)
+                try self.recordSelectedBodyCallee(selection: nextSelection)
+                if nextSelection.callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: nextSelection) }
+                val semanticItem = try self.finalizeForTypeRecipes(stmtId: stmtId)
+                if semanticItem == 0U64 {
+                    return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal diagnostic: final for binding type recipe did not ground") />
                 }
+                if !(try self.freezeForResolution(stmtId: stmtId, itemRef: semanticItem)) {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: iter), msg: "internal diagnostic: final for iteration layout was not recorded") />
+                }
+                val itemTi = self.typeInfoOfRef(ref: semanticItem)
+                if isStruct {
+                    try self.addForStructBinds(et: itemTi, binds: binds)
+                } else {
+                    self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: itemTi.nameStart, tyLen: itemTi.nameLen, isArray: itemTi.kind == 3, ty: semanticItem, isInout: false, isMut: false, owned: false)
+                }
+
                 try self.scanBlockInsts(blkId: body)
                 self.popLocals(mark: forMark)
             }

@@ -262,9 +262,8 @@ pub impl Comp {
                 val loopFlow = completionLoop(body: self.blockCompletion(blkId: body), maySkip: !self.condIsLiteralTrue(id: cond))
                 return completionThen(prefix: condition, next: loopFlow)
             }
-            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, val isRange, inclusive: _, val iter, val rangeHi, val body, isStruct: _, patStart: _, patLen: _, binds: _) => {
-                mut val iterator = self.exprCompletion(exprId: iter)
-                if isRange { iterator = completionThen(prefix: iterator, next: self.exprCompletion(exprId: rangeHi)) }
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, val iter, val body, isStruct: _, patStart: _, patLen: _, binds: _) => {
+                val iterator = self.exprCompletion(exprId: iter)
                 return completionThen(prefix: iterator, next: completionLoop(body: self.blockCompletion(blkId: body), maySkip: true))
             }
         }

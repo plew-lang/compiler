@@ -2365,7 +2365,7 @@ pub impl Comp {
                 try self.recordExpr(exprId: cond)
                 try self.recordBlock(blkId: body)
             }
-            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val varTy, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, patStart: _, patLen: _, val binds) => {
+            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val varTy, val iter, val body, val isStruct, patStart: _, patLen: _, val binds) => {
                 val forMark: U64 = self.scopeMark()
                 mut val iteratorContext = 0U64
                 if varTy != 0U64 {
@@ -2378,54 +2378,48 @@ pub impl Comp {
                     }
                 }
                 try self.recordExpr(exprId: iter, expectedTerm: iteratorContext)
-                if isRange {
-                    try self.recordExpr(exprId: rangeHi)
-                    // the annotated var type if any (`for i: U64 in a..b`); an unannotated
-                    // range var stays untyped here, same as the check pass.
-                    self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: varTyStart, tyLen: varTyLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
-                } else {
-                    val et: TypeInfo = (try self.sourceSubjectTypeInfo(exprId: iter))
-                    mut val iterTerm: U64 = self.parametricExprTerm(exprId: iter)
-                    if iterTerm == 0U64 { iterTerm = et.ref }
-                    // The preparation pass establishes lexical item bindings;
-                    // only the publication pass selects and stores protocol calls.
-                    // Neither protocol result is an input to the item binding below.
-                    if self.cur.recordCallTemplates {
-                        val iteratorReceiver: CallTemplateReceiver = (try self.protocolReceiverTemplateForExpr(exprId: iter))
-                        val nextReceiver: CallTemplateReceiver = <CallTemplateReceiver.PriorProtocolResult slot=1U64 />
-                        val iteratorResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 1U64, receiver: iteratorReceiver, receiverTerm: iterTerm)
-                        val nextResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 2U64, receiver: nextReceiver, receiverTerm: iteratorResult)
-                    }
-                    try self.recordForItemTypeRecipe(stmtId: stmtId)
-                    val semanticItem: U64 = (try self.iterableItemTerm(iterExpr: iter, iterTerm: iterTerm))
-                    if isStruct {
-                        if semanticItem != 0U64 {
-                            try self.addForStructBinds(et: self.typeInfoOfRef(ref: semanticItem), binds: binds)
-                        } else {
-                            try self.addForStructBinds(et: et, binds: binds)
-                        }
+                val et: TypeInfo = (try self.sourceSubjectTypeInfo(exprId: iter))
+                mut val iterTerm: U64 = self.parametricExprTerm(exprId: iter)
+                if iterTerm == 0U64 { iterTerm = et.ref }
+                // The preparation pass establishes lexical item bindings;
+                // only the publication pass selects and stores protocol calls.
+                // Neither protocol result is an input to the item binding below.
+                if self.cur.recordCallTemplates {
+                    val iteratorReceiver: CallTemplateReceiver = (try self.protocolReceiverTemplateForExpr(exprId: iter))
+                    val nextReceiver: CallTemplateReceiver = <CallTemplateReceiver.PriorProtocolResult slot=1U64 />
+                    val iteratorResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 1U64, receiver: iteratorReceiver, receiverTerm: iterTerm)
+                    val nextResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 2U64, receiver: nextReceiver, receiverTerm: iteratorResult)
+                }
+                try self.recordForItemTypeRecipe(stmtId: stmtId)
+                val semanticItem: U64 = (try self.iterableItemTerm(iterExpr: iter, iterTerm: iterTerm))
+                if isStruct {
+                    if semanticItem != 0U64 {
+                        try self.addForStructBinds(et: self.typeInfoOfRef(ref: semanticItem), binds: binds)
                     } else {
-                        if semanticItem != 0U64 {
-                            val itemTi: TypeInfo = self.typeInfoOfRef(ref: semanticItem)
-                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: itemTi.nameStart, tyLen: itemTi.nameLen, isArray: itemTi.kind == 3, ty: semanticItem, isInout: false, isMut: false, owned: false)
-                        } else if et.kind == 3 {
-                            // carry the ELEMENT ref off the array's carried `Array[E]`
-                            // (an `any P` / generic-inst element loses its structure as
-                            // a bare name — `for s in shapes` then can't dispatch on s).
-                            mut val fer: U64 = 0
-                            if et.ref != 0U64 && et.ref < self.arena.typeCount() {
-                                val fat: TypeRef = self.arena.typeAt(index: et.ref)
-                                if fat.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: fat.nameStart, len: fat.nameLen, kw: "Array") {
-                                    fer = fat.args[0]
-                                }
+                        try self.addForStructBinds(et: et, binds: binds)
+                    }
+                } else {
+                    if semanticItem != 0U64 {
+                        val itemTi: TypeInfo = self.typeInfoOfRef(ref: semanticItem)
+                        self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: itemTi.nameStart, tyLen: itemTi.nameLen, isArray: itemTi.kind == 3, ty: semanticItem, isInout: false, isMut: false, owned: false)
+                    } else if et.kind == 3 {
+                        // carry the ELEMENT ref off the array's carried `Array[E]`
+                        // (an `any P` / generic-inst element loses its structure as
+                        // a bare name — `for s in shapes` then can't dispatch on s).
+                        mut val fer: U64 = 0
+                        if et.ref != 0U64 && et.ref < self.arena.typeCount() {
+                            val fat: TypeRef = self.arena.typeAt(index: et.ref)
+                            if fat.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: fat.nameStart, len: fat.nameLen, kw: "Array") {
+                                fer = fat.args[0]
                             }
-                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: fer, isInout: false, isMut: false, owned: false)
-                        } else {
-                            val elemTi: TypeInfo = (try self.iterableItemInfo(et: et))
-                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
                         }
+                        self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: fer, isInout: false, isMut: false, owned: false)
+                    } else {
+                        val elemTi: TypeInfo = (try self.iterableItemInfo(et: et))
+                        self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
                     }
                 }
+
                 try self.recordBlock(blkId: body)
                 self.popLocals(mark: forMark)
             }

@@ -538,7 +538,7 @@ pub impl Comp {
                     pLen = pb.nameLen
                 }
                 val bnds: BindRange = self.lowerBinds(binds: binds)
-                result = self.pushStmt(s: <Stmt.For varStart=vStart varLen=vLen varTyStart=vtStart varTyLen=vtLen varTy=elementRef isRange=false inclusive=false iter=lo rangeHi=0U64 body=bd isStruct=isStruct patStart=pStart patLen=pLen binds=bnds />)
+                result = self.pushStmt(s: <Stmt.For varStart=vStart varLen=vLen varTyStart=vtStart varTyLen=vtLen varTy=elementRef iter=lo body=bd isStruct=isStruct patStart=pStart patLen=pLen binds=bnds />)
             }
             StmtAst.Match(val scrut, val arms, val span) => {
                 val sc: U64 = (try self.lowerExpr(e: scrut))
@@ -704,7 +704,7 @@ pub impl Comp {
             index += 1U64
         }
         val expanded: U64 = self.pushBlock(stmts: statements)
-        return self.pushStmt(s: <Stmt.For varStart=element.nameStart varLen=element.nameLen varTyStart=0U64 varTyLen=0U64 varTy=0U64 isRange=false inclusive=false iter=iter rangeHi=0U64 body=expanded isStruct=false patStart=0U64 patLen=0U64 binds=<BindRange start=0U64 len=0U64 /> />)
+        return self.pushStmt(s: <Stmt.For varStart=element.nameStart varLen=element.nameLen varTyStart=0U64 varTyLen=0U64 varTy=0U64 iter=iter body=expanded isStruct=false patStart=0U64 patLen=0U64 binds=<BindRange start=0U64 len=0U64 /> />)
     }
 
     inout fn lowerSyntaxFor(stmt: SyntaxStmt) -> Result[U64, CompileDiagnostic] {
@@ -734,7 +734,7 @@ pub impl Comp {
             val rangeSpan: Span = <Span start=syntaxExpr(file: self.syntax, id: stmt.child0).span.start end=syntaxExpr(file: self.syntax, id: stmt.child1).span.end />
             iter = self.lowerRangeConstruction(low: iter, high: rangeHi, inclusive: stmt.flag2, span: rangeSpan)
         }
-        return <Result.Ok value=self.pushStmt(s: <Stmt.For varStart=stmt.name.start varLen=stmt.name.end - stmt.name.start varTyStart=varTyStart varTyLen=varTyLen varTy=elementRef isRange=false inclusive=false iter=iter rangeHi=0U64 body=(try self.lowerSyntaxBlock(id: stmt.block0)) isStruct=stmt.flag3 patStart=stmt.typeName.start patLen=stmt.typeName.end - stmt.typeName.start binds=self.syntaxDestructureSiteBinds(stmt: stmt) />) />
+        return <Result.Ok value=self.pushStmt(s: <Stmt.For varStart=stmt.name.start varLen=stmt.name.end - stmt.name.start varTyStart=varTyStart varTyLen=varTyLen varTy=elementRef iter=iter body=(try self.lowerSyntaxBlock(id: stmt.block0)) isStruct=stmt.flag3 patStart=stmt.typeName.start patLen=stmt.typeName.end - stmt.typeName.start binds=self.syntaxDestructureSiteBinds(stmt: stmt) />) />
     }
 
     inout fn lowerBlock(b: BlockAst) -> Result[U64, CompileDiagnostic] {

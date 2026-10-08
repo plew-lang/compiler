@@ -777,7 +777,7 @@ pub impl Comp {
         mut val end: U64 = 0U64
         if stmtId < self.arena.stmts.count() {
             match self.arena.stmts[stmtId] {
-                Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, isRange: _, inclusive: _, val iter, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {
+                Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, val iter, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {
                     start = self.exprOffset(id: iter)
                     if iter < self.arena.exprSpanEnd.count() { end = self.arena.exprSpanEnd[iter] }
                 }

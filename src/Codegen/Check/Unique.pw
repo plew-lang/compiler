@@ -387,9 +387,8 @@ pub impl Comp {
                 if self.exprContainsAwait(exprId: cond) { return true }
                 return self.blockContainsAwait(blockId: body)
             }
-            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, isRange: _, inclusive: _, val iter, val rangeHi, val body, isStruct: _, patStart: _, patLen: _, binds: _) => {
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, val iter, val body, isStruct: _, patStart: _, patLen: _, binds: _) => {
                 if self.exprContainsAwait(exprId: iter) { return true }
-                if self.exprContainsAwait(exprId: rangeHi) { return true }
                 return self.blockContainsAwait(blockId: body)
             }
             Stmt.Match(val scrut, val arms) => {

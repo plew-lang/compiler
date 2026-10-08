@@ -946,13 +946,13 @@ pub enum Stmt {
     If(cond: U64, thenBlk: U64, elseBlk: U64, hasElse: Bool)
     IfChain(conditions: ConditionClauseRange, thenBlk: U64, elseBlk: U64)
     While(cond: U64, body: U64)
-    // `for val name in iter { body }`. isRange: iter is `lo ..(< | =) hi`
-    // (inclusive picks <=); otherwise iter is an array, walked by index.
+    // `for val name in iter { body }`. Every source uses Iterable/Iterator.
+    // Range syntax has already become an ordinary Range value during Lower.
     // isStruct: the header is a struct-destructure pattern `for S { val x } in
     // arr` — patStart/patLen name the written struct type and binds list the
     // fields to bind from each element (varStart/varLen unused then). isStruct
     // false is the single-binding form (binds empty).
-    For(varStart: U64, varLen: U64, varTyStart: U64, varTyLen: U64, varTy: U64, isRange: Bool, inclusive: Bool, iter: U64, rangeHi: U64, body: U64, isStruct: Bool, patStart: U64, patLen: U64, binds: BindRange)
+    For(varStart: U64, varLen: U64, varTyStart: U64, varTyLen: U64, varTy: U64, iter: U64, body: U64, isStruct: Bool, patStart: U64, patLen: U64, binds: BindRange)
     Match(scrut: U64, arms: MatchArmRange)
     // `panic <msg>`: a diverging statement (spec: unrecoverable, never returns).
     // msg is a String expression; offset is the `panic` keyword for diagnostics.

@@ -2572,7 +2572,7 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
             Stmt.While(cond: _, body: _) => {
                 result = buildMidWhile(c: inout c, state: inout state, stmtId: stmtId)
             }
-            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, isRange: _, inclusive: _, iter: _, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { result = buildMidFor(c: inout c, state: inout state, stmtId: stmtId) }
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, iter: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { result = buildMidFor(c: inout c, state: inout state, stmtId: stmtId) }
             Stmt.Match(scrut: _, arms: _) => { result = buildMidMatch(c: inout c, state: inout state, stmtId: stmtId) }
             Stmt.Panic(msg: val message, offset: _) => {
                 val messageTerm: U64 = c.semanticExprTerm(exprId: message)
@@ -3174,7 +3174,7 @@ pub fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> 
 // returns to the next call without releasing the iterator itself.
 pub fn buildMidFor(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     match c.arena.stmts[stmtId] {
-        Stmt.For(varStart: val varStart, varLen: _, varTyStart: _, varTyLen: _, varTy: _, isRange: val isRange, inclusive: _, iter: val iter, rangeHi: _, body: val body, isStruct: val isStruct, patStart: _, patLen: _, binds: _) => {
+        Stmt.For(varStart: val varStart, varLen: _, varTyStart: _, varTyLen: _, varTy: _, iter: val iter, body: val body, isStruct: val isStruct, patStart: _, patLen: _, binds: _) => {
             // The protocol and its storage exist only after the iterable
             // evaluation has produced a value. A terminating evaluation has
             // no iterator result or Item recipe to instantiate.
@@ -3192,7 +3192,7 @@ pub fn buildMidFor(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> Mi
                     MidOperandBuild.Value(operand: _) => { give <MidBuildError.InvalidBlock /> }
                 }
             }
-            if isRange || isStruct { return <MidBuildError.UnsupportedFor /> }
+            if isStruct { return <MidBuildError.UnsupportedFor /> }
             val recipe: ForTypeRecipe = match c.decls.forTypeRecipe(stmtId: stmtId) {
                 Optional.Some(v: val recorded) => { give recorded }
                 Optional.None => { return <MidBuildError.MissingSemanticType /> }

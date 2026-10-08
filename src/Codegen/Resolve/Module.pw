@@ -28,7 +28,7 @@ pub impl Comp {
             }
             Stmt.If(val cond, thenBlk: _, elseBlk: _, hasElse: _) => { return self.exprOffset(id: cond) }
             Stmt.While(val cond, body: _) => { return self.exprOffset(id: cond) }
-            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, isRange: _, inclusive: _, val iter, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { return self.exprOffset(id: iter) }
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, val iter, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { return self.exprOffset(id: iter) }
             Stmt.Match(val scrut, arms: _) => { return self.exprOffset(id: scrut) }
             Stmt.Panic(msg: _, val offset) => { return offset }
             Stmt.Give(val value) => { return self.exprOffset(id: value) }
