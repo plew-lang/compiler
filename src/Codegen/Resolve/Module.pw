@@ -1216,67 +1216,11 @@ pub impl Comp {
         return false
     }
 
-    inout fn typeRefHasFromFactory(errRef: U64, srcRef: U64) -> Result[Bool, CompileDiagnostic] {
-        return <Result.Ok value=(try self.typeRefFromFactoryIdx(errRef: errRef, srcRef: srcRef)) < self.arena.functionCount() />
-    }
-
-    // spec/13: `try` converts the operand's error `F` to the function's error `E`
-    // through `E`'s `from` factory, resolving the overload BY THE SOURCE TYPE `F`.
-    // We must match the `from` whose sole parameter's type is `F` — matching by name
-    // alone would pick an unrelated `from(I32)` and reinterpret an `F` bit-pattern as
-    // `I32` (silent type-confusion IR). The parameter type is compared STRUCTURALLY
-    // (head + every generic argument) via `typesCompatible`, so `from(Box[String])`
-    // does NOT match a `Box[I64]` source (a head-name-only test read the I64 payload as
-    // a String pointer -> SEGV). The head-id prefilter keeps the pre-`typesCompatible`
-    // safety floor for the degenerate case where the parameter's full type is unresolved
-    // (`ty == 0`, which `typesCompatible` treats permissively). Returns `funcs.count()`
-    // (= no match) when no `from` on `E` accepts `F`.
-    inout fn typeRefFromFactoryIdx(errRef: U64, srcRef: U64) -> Result[U64, CompileDiagnostic] {
-        if errRef >= self.arena.typeCount() {
-            return <Result.Ok value=self.arena.functionCount() />
-        }
-        val eNameId: U64 = self.arena.typeTerms[errRef].nameId
-        if eNameId == 0U64 {
-            return <Result.Ok value=self.arena.functionCount() />
-        }
-        if srcRef >= self.arena.typeCount() {
-            return <Result.Ok value=self.arena.functionCount() />
-        }
-        val srcNameId: U64 = self.arena.typeTerms[srcRef].nameId
-        if srcNameId == 0U64 {
-            return <Result.Ok value=self.arena.functionCount() />
-        }
-        val fromN: Bind = self.internBytes(s: "from")
-        mut val i: U64 = self.decls.firstCallableNamed(nameId: fromN.nameId)
-        while i < self.decls.callableCount() {
-            val cand: Callable = self.decls.callableAt(index: i)
-            val f: Func = self.arena.functionAt(index: cand.funcIdx)
-            if f.isAssoc {
-                if f.recvId == eNameId && (try self.methodReceiverEnvironment(f: f, instRef: errRef)).conformIdx != 0U64 {
-                    if f.nameId == fromN.nameId {
-                        // a From factory takes exactly the source error value; select the
-                        // overload whose parameter type is `F` — head-id prefilter (the
-                        // `ty == 0` floor) AND a full structural match on the generic args.
-                        if f.params.count() == 1U64 {
-                            val source: Param = self.funcParamAt(params: f.params, index: 0U64)
-                            if source.tyNameId == srcNameId {
-                                if (try self.typesCompatible(expected: source.ty, inferred: srcRef)) {
-                                    return <Result.Ok value=cand.funcIdx />
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            i = self.decls.nextCallableNamed(index: i)
-        }
-        return <Result.Ok value=self.arena.functionCount() />
-    }
-
     inout fn resultErrArgRef(ref: U64) -> U64 {
         if ref < self.arena.typeCount() {
-            if self.arena.typeAt(index: ref).args.count() >= 2U64 {
-                return self.arena.typeAt(index: ref).args[1]
+            val result = self.arena.typeAt(index: ref)
+            if result.args.count() == 2U64 && rangeEquals(bytes: self.arena.bytes, start: result.nameStart, len: result.nameLen, kw: "Result") {
+                return result.args[1U64]
             }
         }
         return 0U64

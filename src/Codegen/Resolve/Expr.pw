@@ -704,7 +704,7 @@ pub impl Comp {
     // Source calls are identified by the declaration body plus their complete
     // parsed span.  The arena index remains an implementation-navigation aid
     // only; using it as semantic identity made generated/shared bodies alias.
-    inout fn sourceCallSiteKey(fnIdx: U64, exprId: U64) -> Result[CallSiteKey, CompileDiagnostic] {
+    inout fn sourceCallSiteKey(fnIdx: U64, exprId: U64, slot: U64 = 0U64) -> Result[CallSiteKey, CompileDiagnostic] {
         val owner: U64 = self.callTemplateOwner(fnIdx: (try self.semanticBodyOwner(fnIdx: fnIdx)))
         mut val start: U64 = 0U64
         mut val end: U64 = 0U64
@@ -712,7 +712,7 @@ pub impl Comp {
         if exprId < self.arena.exprSpanStart.count() { start = self.arena.exprSpanStart[exprId] }
         if exprId < self.arena.exprSpanEnd.count() { end = self.arena.exprSpanEnd[exprId] }
         if exprId < self.arena.exprOriginSerial.count() { serial = self.arena.exprOriginSerial[exprId] }
-        return <Result.Ok value=<CallSiteKey ownerFnIdx=owner originKind=1U64 originStart=start originEnd=end originSerial=serial /> />
+        return <Result.Ok value=<CallSiteKey ownerFnIdx=owner originKind=1U64 originStart=start originEnd=end originSerial=serial slot=slot /> />
     }
 
     // Synthetic calls are created by several lowering rules, but their origin
@@ -748,14 +748,14 @@ pub impl Comp {
     // made one body own two unrelated keys, so a finalized generic body could
     // not find the template that created its call.  `exprId` remains only the
     // navigation anchor for locating the producer-assigned serial.
-    inout fn templateCallSiteKey(fnIdx: U64, exprId: U64) -> Result[CallSiteKey, CompileDiagnostic] {
+    inout fn templateCallSiteKey(fnIdx: U64, exprId: U64, slot: U64 = 0U64) -> Result[CallSiteKey, CompileDiagnostic] {
         val owner: U64 = self.callTemplateOwner(fnIdx: (try self.semanticBodyOwner(fnIdx: fnIdx)))
         val index: U64 = self.syntheticCallSiteIndex(exprId: exprId)
         if index < self.decls.syntheticCallSites.count() {
             val synthetic: SyntheticCallSite = self.decls.syntheticCallSites[index]
-            return <Result.Ok value=<CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=synthetic.originSerial /> />
+            return <Result.Ok value=<CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=synthetic.originSerial slot=slot /> />
         }
-        return <Result.Ok value=(try self.sourceCallSiteKey(fnIdx: fnIdx, exprId: exprId)) />
+        return <Result.Ok value=(try self.sourceCallSiteKey(fnIdx: fnIdx, exprId: exprId, slot: slot)) />
     }
 
     // `for` protocol calls have no Expr node. Their template key must match
@@ -1200,6 +1200,44 @@ pub impl Comp {
         }
         self.appendCallTemplate(template: <CallTemplate siteKey=siteKey receiverTypeTerm=receiverTerm kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution methodTypeArgs=methodTypeArgs resultTerm=selectedResult /> />)
         return <Result.Ok value=() />
+    }
+
+    // Error propagation selects the Core From requirement while the lexical
+    // assumptions are available. The error payload has a semantic type, not
+    // a fabricated expression/local. Ordinary static-call obligations and
+    // finalization consume this same template under each body environment.
+    inout fn recordTryConversionTemplate(exprId: U64, operand: U64) -> Result[(), CompileDiagnostic] {
+        val operandTerm = self.parametricExprTerm(exprId: operand)
+        val returnTerm = self.semanticBodyReturnTerm(fnIdx: self.cur.checkFn)
+        val source = self.resultErrArgRef(ref: operandTerm)
+        val target = self.resultErrArgRef(ref: returnTerm)
+        if source == 0U64 || target == 0U64 || self.typeRefEq(a: source, b: target) { return <Result.Ok value=() /> }
+        val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId, slot: 1U64)
+        if self.decls.callTemplateIndex(siteKey: site) < self.decls.callTemplates.count() { return <Result.Ok value=() /> }
+        val owner = self.coreTraitOwner(name: "From", arity: 1U64)
+        val traitIndex = self.decls.traitIndexByOffset(offset: owner)
+        if owner == 0U64 || traitIndex >= self.decls.traitCount() {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "`try` error conversion requires the Core From trait") />
+        }
+        val trait = self.decls.traitAt(index: traitIndex)
+        val proof = try self.staticTraitPatternProof(receiverRef: target, traitId: trait.nameId, traitOwner: owner, traitArgs: [source], patternParams: <PatternBindInput.Values values=[] />)
+        if self.proofIsMissing(proof: proof) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`try` error type does not match the function's Result error type, and the function's error type has no `from` factory that accepts it (spec/13)") />
+        }
+        mut val index = 0U64
+        while index < trait.reqs.count() {
+            val requirement = self.traitReqAt(reqs: trait.reqs, index: index)
+            if requirement.isAnonymousFactory && requirement.params.count() == 1U64 {
+                val parameter = self.funcParamAt(params: requirement.params, index: 0U64)
+                val argument = <CallTemplateArgument source=<CallArgumentSource.Term exprId=exprId term=source /> isInout=false labelStart=parameter.nameStart labelLen=parameter.nameLen hasLabel=!parameter.noLabel />
+                val arguments = self.publishCallTemplateArguments(args: [argument])
+                val resolution = <StaticMemberResolution.Requirement proof=proof traitIdx=traitIndex reqIdx=index />
+                self.appendCallTemplate(template: <CallTemplate siteKey=site receiverTypeTerm=target expectedResultTerm=target kind=<CallTemplateKind.StaticMethod receiver=<CallTemplateReceiver.Term term=target /> args=arguments resolution=resolution methodTypeArgs=self.publishCallTemplateTypeArgs(args: []) resultTerm=target /> />)
+                return <Result.Ok value=() />
+            }
+            index += 1U64
+        }
+        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: Core From has no conversion requirement") />
     }
 
     inout fn recordProtocolCallTemplate(stmtId: U64, slot: U64, receiver: CallTemplateReceiver, receiverTerm: U64) -> Result[U64, CompileDiagnostic] {
@@ -1672,8 +1710,8 @@ pub impl Comp {
         return true
     }
 
-    inout fn callTemplateForCurrentBody(exprId: U64) -> Result[CallTemplate, CompileDiagnostic] {
-        val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.bodyFnIdx, exprId: exprId))
+    inout fn callTemplateForCurrentBody(exprId: U64, slot: U64 = 0U64) -> Result[CallTemplate, CompileDiagnostic] {
+        val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.bodyFnIdx, exprId: exprId, slot: slot))
         val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() { return <Result.Ok value=self.decls.callTemplates[index] />}
         // See sameCallSiteOrigin: a callee-owned default expression is

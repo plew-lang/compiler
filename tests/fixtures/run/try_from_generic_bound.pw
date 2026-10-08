@@ -1,0 +1,19 @@
+// A symbolic From bound must select the same conversion as <E from=error />.
+use @Std/Core only { From }
+use @Std/Io only { print }
+struct Error { val code: I64 }
+impl Error as From[I64] {
+    factory(from: I64) { return <Error code=from /> }
+}
+fn source() -> Result[I64, I64] { return <Result.Err error=42I64 /> }
+fn converted[E]() -> Result[I64, E] where E: From[I64] {
+    val value = try source()
+    return <Result.Ok value=value />
+}
+fn main() {
+    val result: Result[I64, Error] = converted()
+    match result {
+        Result.Ok(val value) => { print(value) }
+        Result.Err(val error) => { print(error.code) }
+    }
+}

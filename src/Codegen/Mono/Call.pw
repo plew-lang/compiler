@@ -1462,7 +1462,8 @@ pub impl Comp {
     // the selected factory and its concrete substitutions, never rediscover a
     // `from` factory from the two Result spellings.
     inout fn registerTryConversion(exprId: U64, operand: U64) -> Result[(), CompileDiagnostic] {
-        val operandRef: U64 = (try self.groundedTypeOf(id: operand))
+        if !(try self.callTemplatesClosedForBody(fnIdx: self.cur.bodyFnIdx)) { return <Result.Ok value=() /> }
+        val operandRef = try self.groundAndRecordBodyType(ref: self.parametricExprTerm(exprId: operand), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
         val returnRef: U64 = (try self.groundAndRecordBodyType(ref: self.semanticBodyReturnTerm(fnIdx: self.cur.bodyFnIdx), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
         val operandErr: U64 = self.resultErrArgRef(ref: operandRef)
         val returnErr: U64 = self.resultErrArgRef(ref: returnRef)
@@ -1479,20 +1480,13 @@ pub impl Comp {
         mut val hasConversion: Bool = !self.typeRefEq(a: operandErr, b: returnErr)
         mut val conversionResolution: U64 = 0U64
         if hasConversion {
-            val factory: U64 = (try self.typeRefFromFactoryIdx(errRef: returnErr, srcRef: operandErr))
-            if factory >= self.arena.functionCount() {
-                // Verify owns the user diagnostic for a missing conversion.
-                return <Result.Ok value=() />
+            val template = try self.callTemplateForCurrentBody(exprId: exprId, slot: 1U64)
+            val selection = match template.kind {
+                CallTemplateKind.StaticMethod(val receiver, args: val arguments, val resolution, val methodTypeArgs, val resultTerm) => {
+                    give try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: self.callTemplateTypeArgs(range: methodTypeArgs), receiver: receiver, arguments: self.callTemplateArguments(range: arguments), resolution: resolution, resultTerm: resultTerm, slot: 1U64, expectedResultTerm: template.expectedResultTerm)
+                }
+                _ => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: error conversion has no recorded call template") /> }
             }
-            // This is a real, selected call with one semantic argument, even
-            // though source syntax spells it as `try` rather than `E.from`.
-            // Give it a distinct site slot and a frozen source term.  Reusing
-            // the `try` expression's ordinary slot left the final descriptor
-            // arity-zero, forcing later Mid/LLVM consumers to recover the
-            // missing argument from AST/type names.
-            val conversionArgument: CallTemplateArgument = <CallTemplateArgument source=<CallArgumentSource.Term exprId=exprId term=operandErr /> isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />
-            val typeArguments = try self.callConstraintTypeArguments(function: self.arena.functionAt(index: factory), receiver: returnErr, proof: <StaticConformanceProof.Missing />)
-            val selection: CallSiteSelection = <CallSiteSelection exprId=exprId slot=1U64 callee=factory receiverRef=returnErr argumentSources=[conversionArgument] calleeTypeArgs=typeArguments resultHintRef=returnErr resultRef=returnErr />
             try self.recordSelectedBodyCallee(selection: selection)
             try self.enqueueSelectedCallee(selection: selection)
             conversionResolution = (try self.bodyCalleeIndex(exprId: exprId, slot: 1U64))
@@ -4160,11 +4154,13 @@ pub impl Comp {
         return <Result.Ok value=selected />
     }
 
-    inout fn selectStaticMethodTemplateCall(exprId: U64, methodArguments: Array[U64], receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], resolution: StaticMemberResolution, resultTerm: U64) -> Result[CallSiteSelection, CompileDiagnostic] {
+    inout fn selectStaticMethodTemplateCall(exprId: U64, methodArguments: Array[U64], receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], resolution: StaticMemberResolution, resultTerm: U64, slot: U64 = 0U64, expectedResultTerm: U64 = 0U64) -> Result[CallSiteSelection, CompileDiagnostic] {
         val noCallee: U64 = self.arena.functionCount()
         val receiverRef: U64 = (try self.groundCallTemplateReceiver(receiver: receiver))
         val args: ArgRange = self.templateArgumentRangeFromValues(arguments: arguments)
-        val expected: U64 = (try self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+        val expected = if expectedResultTerm != 0U64 {
+            give try self.groundAndRecordBodyType(ref: expectedResultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+        } else { give try self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef) }
         mut val resultRef: U64 = (try self.groundAndRecordBodyType(ref: resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
         if resultRef == 0U64 { resultRef = expected }
         match resolution {
@@ -4198,7 +4194,7 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: static method selected a callable outside its proved trait") />
                 }
                 val typeArgs = try self.staticMemberInstanceArguments(resolution: resolution, function: callee, receiver: receiverRef, proof: concreteProof, methodArguments: methodArguments, environment: self.cur.bodyEnvironment)
-                return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=args argumentSources=arguments calleeTypeArgs=typeArgs proof=concreteProof resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> /> />
+                return <Result.Ok value=<CallSiteSelection exprId=exprId slot=slot callee=callee receiverRef=receiverRef args=args argumentSources=arguments calleeTypeArgs=typeArgs proof=concreteProof resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> /> />
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: val traitIdx, callee: val declaration) => {
                 if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || traitIdx >= self.decls.traitCount() || declaration >= self.arena.functionCount() {
@@ -4219,7 +4215,7 @@ pub impl Comp {
                 // Complete the result after enqueueSelectedCallee has inferred
                 // method arguments and selected the concrete body environment.
                 val typeArgs = try self.staticMemberInstanceArguments(resolution: resolution, function: callee, receiver: receiverRef, proof: concreteProof, methodArguments: methodArguments, environment: self.cur.bodyEnvironment)
-                return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=args argumentSources=arguments calleeTypeArgs=typeArgs proof=concreteProof resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> /> />
+                return <Result.Ok value=<CallSiteSelection exprId=exprId slot=slot callee=callee receiverRef=receiverRef args=args argumentSources=arguments calleeTypeArgs=typeArgs proof=concreteProof resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> /> />
             }
             _ => {}
         }

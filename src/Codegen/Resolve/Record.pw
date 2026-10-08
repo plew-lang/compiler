@@ -2142,6 +2142,7 @@ pub impl Comp {
             }
             Expr.Try(val expr) => {
                 try self.recordExpr(exprId: expr, chainHoleRef: chainHoleRef)
+                try self.recordTryConversionTemplate(exprId: exprId, operand: expr)
                 val resultTerm: U64 = self.parametricExprTerm(exprId: expr)
                 if self.isGenericInst(ref: resultTerm) {
                     val result: TypeRef = self.arena.typeAt(index: resultTerm)
