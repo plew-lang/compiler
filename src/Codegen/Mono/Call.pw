@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-use ../../Ir only { ExistentialRequirementSignature, ExistentialWitnessPlan, ExistentialBoxEvidence, DeclarationBoundRef, SelectedCallableSubstitution, BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalAwaitResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
+use ../../Ir only { ExistentialRequirementSignature, ExistentialWitnessPlan, ExistentialBoxEvidence, DeclarationBoundRef, SelectedCallableSubstitution, BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalAwaitResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, BodySignature, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
 use ../../Diag only { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -3528,29 +3528,33 @@ pub impl Comp {
 
     inout fn completeStaticBodyCallee(exprId: U64, callee: U64, recvRef: U64, calleeArgs: Array[U64], argumentSources: Array[CallTemplateArgument] = [], resultRef: U64 = 0U64, resultProjection: CallResultProjection = <CallResultProjection.Identity />, siteIsStmt: Bool = false, slot: U64 = 0U64, calleeBodyId: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         val i: U64 = (try self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
-        // A callable body already owns the selected proof and all lexical
-        // substitutions. Reconstructing from its ABI receiver can choose a
-        // different proof and leave associated outputs unresolved.
-        mut val environment: InstanceEnvironment = <InstanceEnvironment />
-        if calleeBodyId != 0U64 {
+        // An executable body already owns its closed ABI signature. Consume
+        // that selected fact; grounding its declaration again duplicates work
+        // and creates a second authority for parameter and result types.
+        val signature: BodySignature = if calleeBodyId != 0U64 {
             if calleeBodyId > self.arena.bodyInstanceCount() {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: final call has an invalid body identity") />
             }
-            val body: BodyInstance = self.arena.bodyInstanceAt(index: calleeBodyId - 1U64)
-            if body.fnIdx != callee {
+            if self.arena.bodyInstanceAt(index: calleeBodyId - 1U64).fnIdx != callee {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: final call body does not belong to its callee") />
             }
-            environment = body.environment
+            val prepared = self.arena.bodySignature(bodyId: calleeBodyId)
+            if !prepared.ready {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: final call requires a prepared callable signature") />
+            }
+            give prepared
         } else {
-            // Extern declarations have a signature but no executable body.
-            environment = (try self.bodyInstanceEnvironment(fnIdx: callee, args: calleeArgs, recvInstRef: recvRef))
+            // Declarations without an executable body have no BodySignature.
+            // Their selected environment remains the declaration boundary.
+            val environment = try self.bodyInstanceEnvironment(fnIdx: callee, args: calleeArgs, recvInstRef: recvRef)
+            give <BodySignature ready=true parameterTypes=try self.groundedSelectedCalleeParameterTypes(callee: callee, environment: environment) parameterPassings=self.selectedArgumentPassings(callee: callee) resultType=try self.groundedSelectedCalleeReturn(callee: callee, environment: environment) receiverPassing=self.selectedReceiverPassing(callee: callee) />
         }
-        val params: Array[U64] = (try self.groundedSelectedCalleeParameterTypes(callee: callee, environment: environment))
+        val params = signature.parameterTypes
         val sourceTypes = (try self.finalCallArgumentTypes(arguments: argumentSources, parameterTypes: params))
         val conversions: Array[ValueConversionProof] = (try self.callArgumentConversions(sources: argumentSources, parameterTypeRefs: params, sourceTypes: sourceTypes))
-        val receiverPassing: CallReceiverPassing = self.selectedReceiverPassing(callee: callee)
-        val argumentPassings: Array[CallArgumentPassing] = self.selectedArgumentPassings(callee: callee)
-        val carrierResult: U64 = (try self.groundedSelectedCalleeReturn(callee: callee, environment: environment))
+        val receiverPassing = signature.receiverPassing
+        val argumentPassings = signature.parameterPassings
+        val carrierResult = signature.resultType
         mut val result: U64 = (try self.finalSelectedSourceResult(resultRef: resultRef, carrierRef: carrierResult))
         val f: Func = self.arena.functionAt(index: callee)
         if !f.hasRet && !f.isAsync {

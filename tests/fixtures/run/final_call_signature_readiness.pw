@@ -1,0 +1,46 @@
+// A finalized call consumes an already prepared callable signature. Signature
+// readiness is not permission to skip lexical body validation.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
+use /SourceAccess only { SourceAccess }
+use /Ir only { InstanceEnvironment }
+use @Std/Io only { print }
+
+fn owner(compiler: inout Comp, name: String) -> U64 {
+    val span = compiler.internBytes(s: name)
+    mut val index = 0U64
+    while index < compiler.arena.functionCount() {
+        val function = compiler.arena.functionAt(index: index)
+        if spansEqual(c: inout compiler, aStart: function.nameStart, aLen: function.nameLen, bStart: span.nameStart, bLen: span.nameLen) { return index }
+        index += 1U64
+    }
+    panic "missing signature owner"
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="signature-readiness.pw" text="fn selected() -> I64 {{ missing() }} fn main() {{}}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val callee = owner(compiler: inout compiler, name: "selected")
+    val caller = owner(compiler: inout compiler, name: "main")
+    val environment = <InstanceEnvironment />
+    val body = compiler.internBodyInstance(fnIdx: callee, environment: environment)
+    compiler.cur.bodyId = compiler.internBodyInstance(fnIdx: caller, environment: environment)
+    compiler.cur.bodyFnIdx = caller
+    compiler.cur.checkFn = caller
+    val result = compiler.arena.functionAt(index: callee).retTy
+    match compiler.completeStaticBodyCallee(exprId: 0U64, callee: callee, recvRef: 0U64, calleeArgs: [], resultRef: result, calleeBodyId: body) {
+        Result.Ok(value: _) => { panic "unprepared signature supplied a final call" }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "internal error: final call requires a prepared callable signature" { panic "wrong signature diagnostic" }
+        }
+    }
+    compiler.prepareFinalCallableSignature(bodyId: body).unwrap()
+    compiler.completeStaticBodyCallee(exprId: 0U64, callee: callee, recvRef: 0U64, calleeArgs: [], resultRef: result, calleeBodyId: body).unwrap()
+    if compiler.lexicalBodyPreparations.count() != 0U64 { panic "signature reader prepared a lexical body" }
+    match compiler.prepareLexicalBody(fnIdx: callee) {
+        Result.Ok(value: _) => { panic "signature readiness authorized an invalid source body" }
+        Result.Err(error: _) => {}
+    }
+    print("final-call-signature-readiness")
+}
