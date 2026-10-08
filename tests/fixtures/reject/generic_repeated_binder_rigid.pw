@@ -1,0 +1,7 @@
+// Distinct caller binders are rigid; a deferred inference constraint cannot
+// certify that both satisfy one repeated callee parameter.
+fn same[T](first: T, second: T) -> T { return first }
+fn caller[T, U](first: T, second: U) -> T {
+    return same(first: first, second: second)
+}
+fn main() {}

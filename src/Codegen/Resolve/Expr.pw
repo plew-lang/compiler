@@ -1696,35 +1696,74 @@ pub impl Comp {
         return self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment params=params args=typeArgs receiverRef=receiverTerm proof=proof />)
     }
 
-    // Only the selected callee's bare ParamIds are inference variables.
-    // Caller binders are rigid, even if they have the same spelling. Traverse
-    // the canonical type children/labels shared with structural equality.
-    // Projections are not injective and therefore cannot supply substitutions.
-    inout fn matchCallResultArguments(pattern: U64, expected: U64, params: FuncBindRange, values: inout Array[U64]) -> Bool {
-        if pattern == 0U64 || expected == 0U64 || pattern >= self.arena.typeTerms.count() || expected >= self.arena.typeTerms.count() { return false }
+    // Only the selected declaration's bare ParamIds are inference variables.
+    // A projection is not invertible; retain obligations without inferring its
+    // receiver. Head/child identity is shared with structural type equality.
+    inout fn matchCallTypeArguments(pattern: U64, argument: U64, params: FuncBindRange, values: inout Array[U64]) -> TypeArgumentMatch {
+        if pattern == 0U64 || argument == 0U64 || pattern >= self.arena.typeTerms.count() || argument >= self.arena.typeTerms.count() { return <TypeArgumentMatch.Deferred /> }
         val term = self.arena.typeTerms[pattern]
-        if term.assocNameId != 0U64 { return self.typeRefEq(a: pattern, b: expected) }
+        if term.assocNameId != 0U64 {
+            if self.typeRefEq(a: pattern, b: argument) { return <TypeArgumentMatch.Matched /> }
+            return <TypeArgumentMatch.Deferred />
+        }
         if term.paramId != 0U64 && !term.isAny && !term.isSendable && !term.isDiverging && term.args.len == 0U64 && term.assocTraitId == 0U64 && term.viewExtId == 0U64 && term.viewIds.len == 0U64 && term.viewSources.len == 0U64 {
-            mut val index: U64 = 0U64
+            mut val index = 0U64
             while index < params.count() && index < values.count() {
                 if self.funcBindAt(binds: params, index: index).paramId == term.paramId {
-                    if values[index] != 0U64 { return self.typeRefEq(a: values[index], b: expected) }
-                    values.set(i: index, value: expected)
-                    return true
+                    if values[index] == 0U64 {
+                        values.set(i: index, value: argument)
+                        return <TypeArgumentMatch.Matched />
+                    }
+                    if self.typeRefEq(a: values[index], b: argument) { return <TypeArgumentMatch.Matched /> }
+                    if self.arena.typeIsClosed(ref: values[index]) && self.arena.typeIsClosed(ref: argument) { return <TypeArgumentMatch.Conflict /> }
+                    return <TypeArgumentMatch.Deferred />
                 }
                 index += 1U64
             }
         }
-        if !self.typeTermRefSameHead(a: pattern, b: expected) { return false }
+        if !self.typeTermRefSameHead(a: pattern, b: argument) { return <TypeArgumentMatch.Mismatch /> }
         val count = self.typeTermRefChildCount(ref: pattern)
-        if count != self.typeTermRefChildCount(ref: expected) { return false }
-        mut val index: U64 = 0U64
+        if count != self.typeTermRefChildCount(ref: argument) { return <TypeArgumentMatch.Mismatch /> }
+        mut val deferred = false
+        mut val index = 0U64
         while index < count {
-            if self.typeTermRefIdentityChildLabel(ref: pattern, index: index) != self.typeTermRefIdentityChildLabel(ref: expected, index: index) { return false }
-            if !self.matchCallResultArguments(pattern: self.typeTermRefChildRef(ref: pattern, index: index), expected: self.typeTermRefChildRef(ref: expected, index: index), params: params, values: inout values) { return false }
+            if self.typeTermRefIdentityChildLabel(ref: pattern, index: index) != self.typeTermRefIdentityChildLabel(ref: argument, index: index) { return <TypeArgumentMatch.Mismatch /> }
+            match self.matchCallTypeArguments(pattern: self.typeTermRefChildRef(ref: pattern, index: index), argument: self.typeTermRefChildRef(ref: argument, index: index), params: params, values: inout values) {
+                TypeArgumentMatch.Matched => {}
+                TypeArgumentMatch.Deferred => { deferred = true }
+                TypeArgumentMatch.Mismatch => { return <TypeArgumentMatch.Mismatch /> }
+                TypeArgumentMatch.Conflict => { return <TypeArgumentMatch.Conflict /> }
+            }
             index += 1U64
         }
-        return true
+        if deferred { return <TypeArgumentMatch.Deferred /> }
+        return <TypeArgumentMatch.Matched />
+    }
+
+    // Candidate writes are transactional: a mismatched constructor cannot
+    // leak partially collected substitutions into the next argument.
+    inout fn extendCallTypeArguments(pattern: U64, argument: U64, params: FuncBindRange, values: Array[U64], offset: U64) -> Result[Array[U64], CompileDiagnostic] {
+        mut val candidate = values
+        match self.matchCallTypeArguments(pattern: pattern, argument: argument, params: params, values: inout candidate) {
+            TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { return <Result.Ok value=candidate /> }
+            TypeArgumentMatch.Mismatch => { return <Result.Ok value=values /> }
+            TypeArgumentMatch.Conflict => {
+                return <Result.Err error=self.typeArgumentConflictDiagnostic(offset: offset) />
+            }
+        }
+    }
+
+    // Expected-result refinement needs a complete match; a deferred equation
+    // supplies no proof that the expected result fits the selected callable.
+    inout fn matchCallResultArguments(pattern: U64, expected: U64, params: FuncBindRange, values: inout Array[U64]) -> Bool {
+        mut val candidate = values
+        match self.matchCallTypeArguments(pattern: pattern, argument: expected, params: params, values: inout candidate) {
+            TypeArgumentMatch.Matched => {
+                values = candidate
+                return true
+            }
+            _ => { return false }
+        }
     }
 
     inout fn callTemplateForCurrentBody(exprId: U64, slot: U64 = 0U64) -> Result[CallTemplate, CompileDiagnostic] {

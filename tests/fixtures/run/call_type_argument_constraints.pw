@@ -1,0 +1,49 @@
+// Canonical inference variables, complete structural traversal, and
+// transactional publication are shared by argument and expected-result queries.
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Bind, TypeRef, TypeArgumentMatch }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "T")
+    val renamed = compiler.internBytes(s: "Renamed")
+    val integerName = compiler.internBytes(s: "I64")
+    val stringName = compiler.internBytes(s: "String")
+    val pairName = compiler.internBytes(s: "Pair")
+    val otherName = compiler.internBytes(s: "Other")
+    val binder = <Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=11U64 fieldStart=0U64 fieldLen=0U64 />
+    val parameters = compiler.pushFuncBinds(binds: [binder])
+    val parameter = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=11U64 args=[] />)
+    val alias = compiler.pushType(t: <TypeRef nameStart=renamed.nameStart nameLen=renamed.nameLen paramId=11U64 args=[] />)
+    val foreign = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=22U64 args=[] />)
+    val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
+    val string = compiler.pushType(t: <TypeRef nameStart=stringName.nameStart nameLen=stringName.nameLen args=[] />)
+    val inferred = compiler.extendCallTypeArguments(pattern: alias, argument: integer, params: parameters, values: [0U64], offset: 0U64).unwrap()
+    if inferred[0U64] != integer { panic "binder identity depended on its spelling" }
+    val rigid = compiler.extendCallTypeArguments(pattern: foreign, argument: integer, params: parameters, values: [0U64], offset: 0U64).unwrap()
+    if rigid[0U64] != 0U64 { panic "same-named foreign binder became an inference variable" }
+    val pair = compiler.pushType(t: <TypeRef nameStart=pairName.nameStart nameLen=pairName.nameLen args=[parameter, parameter] />)
+    val conflicting = compiler.pushType(t: <TypeRef nameStart=pairName.nameStart nameLen=pairName.nameLen args=[integer, string] />)
+    match compiler.extendCallTypeArguments(pattern: pair, argument: conflicting, params: parameters, values: [0U64], offset: 0U64) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic "a repeated binder ignored its second occurrence" }
+    }
+    val other = compiler.pushType(t: <TypeRef nameStart=otherName.nameStart nameLen=otherName.nameLen args=[integer, integer] />)
+    val mismatch = compiler.extendCallTypeArguments(pattern: pair, argument: other, params: parameters, values: [0U64], offset: 0U64).unwrap()
+    if mismatch[0U64] != 0U64 { panic "different nominal heads supplied inference evidence" }
+    val partialPattern = compiler.pushType(t: <TypeRef nameStart=pairName.nameStart nameLen=pairName.nameLen args=[parameter, integer] />)
+    val partialArgument = compiler.pushType(t: <TypeRef nameStart=pairName.nameStart nameLen=pairName.nameLen args=[string, string] />)
+    mut val resultArguments: Array[U64] = [0U64]
+    if compiler.matchCallResultArguments(pattern: partialPattern, expected: partialArgument, params: parameters, values: inout resultArguments) { panic "mismatched result accepted" }
+    if resultArguments[0U64] != 0U64 { panic "failed result match published a partial binding" }
+    val projection = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] projectionReceiver=parameter assocTraitId=31U64 assocNameId=32U64 />)
+    mut val projectionArguments: Array[U64] = [0U64]
+    match compiler.matchCallTypeArguments(pattern: projection, argument: integer, params: parameters, values: inout projectionArguments) {
+        TypeArgumentMatch.Deferred => {}
+        _ => { panic "a non-invertible projection was decided during inference" }
+    }
+    if projectionArguments[0U64] != 0U64 { panic "projection output inferred its receiver" }
+    print("call-type-argument-constraints")
+}

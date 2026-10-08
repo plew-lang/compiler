@@ -175,6 +175,10 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    inout fn typeArgumentConflictDiagnostic(offset: U64) -> CompileDiagnostic {
+        return self.diagnosticAt(offset: offset, msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types")
+    }
+
     inout fn tcCheckGenericArgConsistency(f: Func, args: ArgRange) -> Result[(), CompileDiagnostic] {
         if f.typeParams.count() == 0U64 {
             return <Result.Ok value=() />
@@ -197,7 +201,7 @@ pub impl Comp {
                                 firstRef = ar
                             } else {
                                 if !((try self.typesCompatible(expected: firstRef, inferred: ar))) {
-                                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: self.argAt(args: args, index: ai).expr), msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types") />
+                                    return <Result.Err error=self.typeArgumentConflictDiagnostic(offset: self.exprOffset(id: self.argAt(args: args, index: ai).expr)) />
                                 }
                             }
                         }

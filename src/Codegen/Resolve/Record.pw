@@ -339,26 +339,22 @@ pub impl Comp {
     // TypeInfo result or concrete BodyInstance descriptor participates.
     // Signature verification checks the resulting argument constraints before
     // the lexical call template is sealed.
-    inout fn inferRecordedFreeCallArgs(f: Func, args: ArgRange) -> Array[U64] {
+    inout fn inferRecordedFreeCallArgs(f: Func, args: ArgRange) -> Result[Array[U64], CompileDiagnostic] {
         mut val out: Array[U64] = []
-        mut val ti: U64 = 0U64
-        while ti < f.typeParams.count() {
-            out.append(0U64)
-            val tp: Bind = self.funcBindAt(binds: f.typeParams, index: ti)
-            mut val pi: U64 = 0U64
-            while pi < f.params.count() {
-                val p: Param = self.funcParamAt(params: f.params, index: pi)
-                val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
-                if ai < args.len {
-                    val argTerm: U64 = self.parametricCallArgumentTerm(exprId: self.argAt(args: args, index: ai).expr)
-                    val candidate = self.unifyTypeParam(paramRef: p.ty, argRef: argTerm, tpStart: tp.nameStart, tpLen: tp.nameLen)
-                    if candidate != 0U64 { out.set(i: ti, value: candidate) }
-                }
-                pi += 1U64
+        if f.typeParams.count() == 0U64 { return <Result.Ok value=out /> }
+        while out.count() < f.typeParams.count() { out.append(0U64) }
+        mut val index = 0U64
+        while index < f.params.count() {
+            val parameter = self.funcParamAt(params: f.params, index: index)
+            val supplied = self.argIndexForParam(params: f.params, args: args, paramIdx: index)
+            if supplied < args.len {
+                val expression = self.argAt(args: args, index: supplied).expr
+                val argument = self.parametricCallArgumentTerm(exprId: expression)
+                out = try self.extendCallTypeArguments(pattern: parameter.ty, argument: argument, params: f.typeParams, values: out, offset: self.exprOffset(id: expression))
             }
-            ti += 1U64
+            index += 1U64
         }
-        return out
+        return <Result.Ok value=out />
     }
 
     // Record the parametric result and the independently-carried source call
@@ -380,7 +376,7 @@ pub impl Comp {
         try self.checkCallDeclarationKind(exprId: exprId, declaration: f)
         mut val calleeArgs: Array[U64] = []
         if f.typeParams.count() > 0U64 {
-            calleeArgs = self.inferRecordedFreeCallArgs(f: f, args: args)
+            calleeArgs = try self.inferRecordedFreeCallArgs(f: f, args: args)
         }
         mut val result: U64 = f.retTy
         // A source body may call `id[T](value: T) -> T` while its own T is

@@ -350,6 +350,10 @@ pub struct Local {
 // for array: the element type name (always backed by a real declaration span).
 // An incomplete type query is not a successful compatibility proof.
 pub enum TypeCompatibility { Compatible Incompatible Unresolved }
+// Matching a declaration pattern can collect useful substitutions while a
+// projection remains deferred. A conflicting binder is distinct from a
+// structural mismatch, which supplies no inference evidence.
+pub enum TypeArgumentMatch { Matched Deferred Mismatch Conflict }
 pub impl TypeCompatibility {
     fn isCompatible() -> Bool {
         match self { TypeCompatibility.Compatible => { return true } _ => { return false } }
