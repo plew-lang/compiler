@@ -2282,7 +2282,9 @@ pub impl Comp {
             }
             _ => {}
         }
-        if needsValue { try self.requireExpressionValue(exprId: exprId) }
+        val completion = self.exprCompletion(exprId: exprId)
+        self.recordSemanticExprCompletion(exprId: exprId, completion: completion)
+        if needsValue { try self.requireExpressionCompletionValue(exprId: exprId, completion: completion) }
         if exprId < self.arena.semanticExprTypes.count() {
             if self.semanticExprTerm(exprId: exprId) == 0U64 {
                 self.recordSemanticExprInfo(exprId: exprId, ti: (try self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef)))

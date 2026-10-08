@@ -1096,6 +1096,20 @@ pub impl Comp {
         />)
     }
 
+    // Publish only after the expression's operands and branches have been
+    // checked and composed. A single arm's exit is not its parent's exit.
+    inout fn recordSemanticExprCompletion(exprId: U64, completion: SourceCompletion) {
+        if completion.source.normal() { return }
+        self.ensureSemanticExprType(exprId: exprId)
+        val prior = self.arena.semanticExprTypes[exprId]
+        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType
+            typeState=<SemanticExpressionTypeState.NoNormalValue /> invocation=prior.invocation term=prior.term shape=prior.shape
+            legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen
+            legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext
+            hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed
+        />)
+    }
+
     inout fn recordStaticInvocationCompletion(exprId: U64, resolution: StaticMemberResolution) {
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: val trait, reqIdx: val requirement) => {
