@@ -1,0 +1,30 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Stmt }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    val analysis = analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="pow-completion.pw" text="trait Pow[Exp] {{ type Output assoc fn pow(base: Self, exp: Exp) -> Self#Pow[Exp].Output }} fn square[T](value: T) -> T#Pow[U64].Output where T: Pow[U64] {{ return pow(base: value, exp: 2U64) }} fn main() {{}}" />, sources: <SourceAccess stdRoot=[] />)
+    match analysis { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { print(diagnostic.message) panic "analysis failed" } }
+    val name = compiler.internBytes(s: "square")
+    mut val index = 0U64
+    while index < compiler.arena.functionCount() {
+        val declaration = compiler.arena.functionAt(index: index)
+        if spansEqual(c: inout compiler, aStart: declaration.nameStart, aLen: declaration.nameLen, bStart: name.nameStart, bLen: name.nameLen) {
+            compiler.prepareLexicalBody(fnIdx: index).unwrap()
+            val statement = compiler.arena.stmts[compiler.blockStmtAt(blkId: declaration.body, index: 0U64)]
+            val expression = match statement {
+                Stmt.Return(value: val value, hasValue: _, offset: _) => value
+                _ => { panic "missing return" }
+            }
+            match compiler.checkedSemanticExprCompletion(exprId: expression) {
+                Result.Ok(value: _) => {}
+                Result.Err(error: val diagnostic) => { print(diagnostic.message) panic "missing checked call completion" }
+            }
+            print("call-completion")
+            return
+        }
+        index += 1U64
+    }
+    panic "missing owner"
+}

@@ -1532,6 +1532,88 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Call selection can finish early without bypassing the common expression
+    // completion, value-use and type publication boundary in recordExpr.
+    inout fn recordFreeCallExpression(exprId: U64, callStart: U64, callLen: U64, args: ArgRange, chainHoleRef: U64) -> Result[(), CompileDiagnostic] {
+        mut val i: U64 = 0
+        while i < args.len {
+            try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true)
+            i += 1
+        }
+        // `pow(base:, exp:)` has free-call syntax but is a static
+        // associated member selected from its first argument's
+        // conformance.  Record it through the same CallTemplate
+        // producers as every other static call; Mono must not reopen
+        // the spelling and rediscover its witness.
+        mut val cfi: U64 = self.arena.functionCount()
+        if rangeEquals(bytes: self.arena.bytes, start: callStart, len: callLen, kw: "pow") && args.len == 2U64 {
+            val baseExpr: U64 = self.argAt(args: args, index: 0U64).expr
+            val baseTerm: U64 = self.parametricExprTerm(exprId: baseExpr)
+            if baseTerm != 0U64 && baseTerm < self.arena.typeCount() {
+                val baseReceiver: CallTemplateReceiver = (try self.directReceiverTemplateForExpr(exprId: baseExpr))
+                val resolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: baseTerm, nameStart: callStart, nameLen: callLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
+                match resolution {
+                    StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
+                        try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: baseTerm, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: (try self.staticRequirementCallResultType(resolution: resolution, args: args)))
+                        return <Result.Ok value=() />
+                    }
+                    StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
+                        try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: baseTerm, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: self.parametricExprTerm(exprId: exprId))
+                        return <Result.Ok value=() />
+                    }
+                    _ => {}
+                }
+                cfi = (try self.resolveAssocForResolvedReceiver(surfaceRef: baseTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: callStart, nameLen: callLen, args: args, useOffset: self.exprOffset(id: exprId)))
+                if cfi < self.arena.functionCount() {
+                    try self.recordParametricMethodCall(exprId: exprId, callee: cfi, receiverSource: baseReceiver, receiverTerm: baseTerm, args: args)
+                    return <Result.Ok value=() />
+                }
+            }
+        }
+        cfi = (try self.resolvedCallee(id: exprId))
+        if cfi < self.arena.functionCount() {
+            val cf: Func = self.arena.functionAt(index: cfi)
+            val ps: Array[Param] = self.copyFuncParams(params: cf.params)
+            // A complete substitution may contain caller-owned symbolic
+            // terms. These are valid context in a generic declaration;
+            // only unresolved callee binders must stay out of the body.
+            val parameterEnvironment = try self.freeCallParameterEnvironment(f: cf, args: args)
+            val canSubstitute = cf.typeParams.count() == 0U64 || parameterEnvironment.args.count() == cf.typeParams.count()
+            mut val k: U64 = 0
+            while k < args.len {
+                val parameterIndex = self.paramIndexForArg(params: cf.params, args: args, argIdx: k)
+                if parameterIndex < ps.count() {
+                    mut val cctx: U64 = ps[parameterIndex].ty
+                    if cctx != 0U64 && canSubstitute && cf.typeParams.count() != 0U64 {
+                        cctx = try self.groundTermForBody(ref: cctx, environment: parameterEnvironment, selfRef: 0U64, itemRef: 0U64)
+                    }
+                    if cctx != 0U64 && (canSubstitute || (try self.tyRefIsGround(ref: cctx))) {
+                        try self.recordSemanticExprExpectedResult(exprId: self.argAt(args: args, index: k).expr, expectedTerm: cctx)
+                    }
+                }
+                k += 1
+            }
+            // A call template owns the type of the value it actually
+            // passes, not the pre-context probe used to choose a
+            // parameter context.  In particular `[Sq]` at a selected
+            // `Array[any Shape]` parameter is one contextual
+            // aggregate boundary; its parent call therefore receives
+            // the already-converted `Array[any Shape]` and records an
+            // Identity conversion.  Recording the template before
+            // this loop left two incompatible facts for the same
+            // value (raw Array[Sq] in CallResolution, boxed elements
+            // in SemanticAggregate).
+            try self.recordParametricFreeCall(exprId: exprId, callee: cfi, args: args)
+        } else {
+            val selected = try self.recordDynamicLocalCall(exprId: exprId, nameStart: callStart, nameLen: callLen, args: args)
+            if !selected {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching function for this argument list") />
+            }
+        }
+        try self.recordArgumentAccessUses(parentExpr: exprId, callee: cfi, args: args)
+        return <Result.Ok value=() />
+    }
+
     // Record an expression under an optional-chain payload supplied by its
     // unique enclosing chain stage. The payload is a structural child input,
     // not Cursor state: ordinary expressions use 0, and every continuation
@@ -1680,82 +1762,7 @@ pub impl Comp {
                 }
             }
             Expr.Call(nameStart: val callStart, nameLen: val callLen, args: val args) => {
-                mut val i: U64 = 0
-                while i < args.len {
-                    try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true)
-                    i += 1
-                }
-                // `pow(base:, exp:)` has free-call syntax but is a static
-                // associated member selected from its first argument's
-                // conformance.  Record it through the same CallTemplate
-                // producers as every other static call; Mono must not reopen
-                // the spelling and rediscover its witness.
-                mut val cfi: U64 = self.arena.functionCount()
-                if rangeEquals(bytes: self.arena.bytes, start: callStart, len: callLen, kw: "pow") && args.len == 2U64 {
-                    val baseExpr: U64 = self.argAt(args: args, index: 0U64).expr
-                    val baseTerm: U64 = self.parametricExprTerm(exprId: baseExpr)
-                    if baseTerm != 0U64 && baseTerm < self.arena.typeCount() {
-                        val baseReceiver: CallTemplateReceiver = (try self.directReceiverTemplateForExpr(exprId: baseExpr))
-                        val resolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: baseTerm, nameStart: callStart, nameLen: callLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
-                        match resolution {
-                            StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
-                                try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: baseTerm, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: (try self.staticRequirementCallResultType(resolution: resolution, args: args)))
-                                return <Result.Ok value=() />
-                            }
-                            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
-                                try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: baseTerm, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: self.parametricExprTerm(exprId: exprId))
-                                return <Result.Ok value=() />
-                            }
-                            _ => {}
-                        }
-                        cfi = (try self.resolveAssocForResolvedReceiver(surfaceRef: baseTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: callStart, nameLen: callLen, args: args, useOffset: self.exprOffset(id: exprId)))
-                        if cfi < self.arena.functionCount() {
-                            try self.recordParametricMethodCall(exprId: exprId, callee: cfi, receiverSource: baseReceiver, receiverTerm: baseTerm, args: args)
-                            return <Result.Ok value=() />
-                        }
-                    }
-                }
-                cfi = (try self.resolvedCallee(id: exprId))
-                if cfi < self.arena.functionCount() {
-                    val cf: Func = self.arena.functionAt(index: cfi)
-                    val ps: Array[Param] = self.copyFuncParams(params: cf.params)
-                    // A complete substitution may contain caller-owned symbolic
-                    // terms. These are valid context in a generic declaration;
-                    // only unresolved callee binders must stay out of the body.
-                    val parameterEnvironment = try self.freeCallParameterEnvironment(f: cf, args: args)
-                    val canSubstitute = cf.typeParams.count() == 0U64 || parameterEnvironment.args.count() == cf.typeParams.count()
-                    mut val k: U64 = 0
-                    while k < args.len {
-                        val parameterIndex = self.paramIndexForArg(params: cf.params, args: args, argIdx: k)
-                        if parameterIndex < ps.count() {
-                            mut val cctx: U64 = ps[parameterIndex].ty
-                            if cctx != 0U64 && canSubstitute && cf.typeParams.count() != 0U64 {
-                                cctx = try self.groundTermForBody(ref: cctx, environment: parameterEnvironment, selfRef: 0U64, itemRef: 0U64)
-                            }
-                            if cctx != 0U64 && (canSubstitute || (try self.tyRefIsGround(ref: cctx))) {
-                                try self.recordSemanticExprExpectedResult(exprId: self.argAt(args: args, index: k).expr, expectedTerm: cctx)
-                            }
-                        }
-                        k += 1
-                    }
-                    // A call template owns the type of the value it actually
-                    // passes, not the pre-context probe used to choose a
-                    // parameter context.  In particular `[Sq]` at a selected
-                    // `Array[any Shape]` parameter is one contextual
-                    // aggregate boundary; its parent call therefore receives
-                    // the already-converted `Array[any Shape]` and records an
-                    // Identity conversion.  Recording the template before
-                    // this loop left two incompatible facts for the same
-                    // value (raw Array[Sq] in CallResolution, boxed elements
-                    // in SemanticAggregate).
-                    try self.recordParametricFreeCall(exprId: exprId, callee: cfi, args: args)
-                } else {
-                    val selected = try self.recordDynamicLocalCall(exprId: exprId, nameStart: callStart, nameLen: callLen, args: args)
-                    if !selected {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching function for this argument list") />
-                    }
-                }
-                try self.recordArgumentAccessUses(parentExpr: exprId, callee: cfi, args: args)
+                try self.recordFreeCallExpression(exprId: exprId, callStart: callStart, callLen: callLen, args: args, chainHoleRef: chainHoleRef)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 try self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
