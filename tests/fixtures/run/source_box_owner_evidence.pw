@@ -1,0 +1,45 @@
+// Frozen box evidence must prove the target trait instance even when
+// its empty requirement list cannot expose a mismatched witness.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, DeclarationConversion, ValueConversionProof, StaticConformanceProof }
+use @Std/Io only { print }
+fn check(text: String, compatible: Bool, targetIndex: Bool = false) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text=text path="box-proof.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val source = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val yes = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val no = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    val selected = compiler.callArgumentConversion(sourceRef: source, targetRef: yes).unwrap()
+    val evidence = match selected {
+        ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val proof) => { give proof }
+        _ => { panic("missing real conformance") }
+    }
+    val expression = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    compiler.recordSemanticExprTerm(exprId: expression, term: source)
+    compiler.cur.checkFn = 0U64
+    compiler.cur.recordCallTemplates = true
+    compiler.recordDeclarationConversion(exprId: expression, target: no).unwrap()
+    val original = compiler.decls.declarationConversions[0U64]
+    val proof = compiler.freezeValueConversionProof(proof: <ValueConversionProof.ExistentialBox sourceRef=source targetRef=no traitIdx=compiler.recordAnyTraitIndex(anyRef: (if targetIndex { give no } else { give yes })) proof=evidence />)
+    compiler.decls.declarationConversions[0U64] = <DeclarationConversion site=original.site source=source target=no proof=proof />
+    match compiler.prepareLexicalBody(fnIdx: 0U64) {
+        Result.Ok(value: _) => { if !compatible { panic("owner accepted invalid box evidence") } }
+        Result.Err(error: val diagnostic) => { if compatible || diagnostic.message != "existential box evidence does not match its target trait instance" { panic(diagnostic.message) } }
+    }
+    match compiler.checkRecordedMemberObligations() {
+        Result.Ok(value: _) => { if !compatible { panic("whole target accepted invalid box evidence") } }
+        Result.Err(error: val diagnostic) => { if compatible || diagnostic.message != "existential box evidence does not match its target trait instance" { panic(diagnostic.message) } }
+    }
+}
+fn main() {
+    check(text: "trait P {{}} trait Q {{}} struct Value {{}} impl Value as P {{}} fn probe(source: Value, yes: any P, no: any Q) {{}}", compatible: false)
+    check(text: "trait P {{}} trait Q {{}} struct Value {{}} impl Value as P {{}} fn probe(source: Value, yes: any P, no: any Q) {{}}", compatible: false, targetIndex: true)
+    check(text: "trait P {{}} struct Value {{}} impl Value as P {{}} fn probe(source: Value, yes: any P, no: any P) {{}}", compatible: true)
+    check(text: "trait P[T] {{}} struct Value {{}} impl Value as P[I64] {{}} fn probe(source: Value, yes: any P[I64], no: any P[Bool]) {{}}", compatible: false, targetIndex: true)
+    check(text: "trait P[T] {{}} struct Value {{}} impl Value as P[I64] {{}} fn probe(source: Value, yes: any P[I64], no: any P[I64]) {{}}", compatible: true)
+    print("box-owner-evidence")
+}

@@ -92,8 +92,22 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential retag changes its dynamic interface or strengthens a guarantee") />
                 }
             }
-            ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val evidence) => {
+            ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: val target, traitIdx: val traitIdx, proof: val evidence) => {
                 if self.proofIsMissing(proof: evidence) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation has no conformance evidence") /> }
+                if target == 0U64 || target >= self.arena.typeCount() || traitIdx >= self.decls.traitCount() {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential box evidence does not match its target trait instance") />
+                }
+                val targetType = self.arena.typeAt(index: target)
+                if !targetType.isAny || !targetType.hasDecl || self.recordAnyTraitIndex(anyRef: target) != traitIdx {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential box evidence does not match its target trait instance") />
+                }
+                // Interpret the selected proof; never select another conformance
+                // to repair a frozen plan, including traits with no members.
+                val bound = try self.staticProofBound(proof: evidence, traitIdx: traitIdx)
+                val required = self.existentialTraitConstraint(ref: target)
+                if bound.subject == 0U64 || bound.constraint.key.owner != required.key.owner || !self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: required.key.positionalArgs) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential box evidence does not match its target trait instance") />
+                }
             }
             ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => { try self.checkConversionProofEvidence(proof: element, offset: offset) }
             ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, payloads: val payloads) => {
