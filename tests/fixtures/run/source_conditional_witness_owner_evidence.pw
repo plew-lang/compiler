@@ -1,7 +1,7 @@
 // Conditional conformance admission must retain the selected child evidence.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { Expr, DeclarationConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, WitnessConditionPlan }
+use /Ir only { Expr, DeclarationConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, WitnessConditionPlan, InstanceEnvironment, StaticProofInstantiation }
 use @Std/Io only { print }
 use @Std/Core only { assert }
 fn check(text: String, compatible: Bool, targetIndex: Bool = false, proofSubjectIndex: U64 = 0U64, rewrite: Bool = false, missingChild: Bool = false, message: String = "existential box evidence does not match its target trait instance") {
@@ -55,7 +55,39 @@ fn check(text: String, compatible: Bool, targetIndex: Bool = false, proofSubject
         Result.Err(error: val diagnostic) => { if compatible || diagnostic.message != message { panic(diagnostic.message) } }
     }
 }
+// A closed parent must not hide a condition whose positional argument is still symbolic.
+fn checkDeferredChild() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="trait P {{}} trait Q[V] {{}} struct A {{}} impl A as Q[I64] {{}} struct Wrap[T] {{}} impl[T] Wrap[T] as P where T: Q[I64] {{}} fn probe(source: Wrap[A], target: any P) {{}} fn unresolved[U]() where A: Q[U] {{}}" path="condition-closure.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val source = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val target = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val selected = compiler.callArgumentConversion(sourceRef: source, targetRef: target).unwrap()
+    val evidence = match selected {
+        ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val proof) => { give proof }
+        _ => { panic("missing conditional proof") }
+    }
+    match compiler.instantiateStaticMemberProof(proof: evidence, receiverRef: source, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64).unwrap() {
+        StaticProofInstantiation.Ready(proof: _) => {}
+        _ => { panic("closed condition was not ready") }
+    }
+    val bound = compiler.functionBoundAssumptions(fnIdx: 1U64)[0U64]
+    match evidence {
+        StaticConformanceProof.ConcreteWitness(witness: val witness) => {
+            val plan = compiler.arena.witnessConditionPlans[witness.conditions - 1U64]
+            compiler.arena.witnessConditionPlans[witness.conditions - 1U64] = <WitnessConditionPlan witness=plan.witness proofs=[compiler.freezeStaticConformanceProof(proof: <StaticConformanceProof.AssumedBound source=bound />)] />
+        }
+        _ => { panic("not a direct witness") }
+    }
+    match compiler.instantiateStaticMemberProof(proof: evidence, receiverRef: source, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64).unwrap() {
+        StaticProofInstantiation.Deferred => {}
+        _ => { panic("closed parent hid deferred child evidence") }
+    }
+}
 fn main() {
+    checkDeferredChild()
     check(text: "trait P {{}} trait Q {{}} struct A {{}} struct B {{}} impl A as Q {{}} struct Wrap[T] {{}} impl[T] Wrap[T] as P where T: Q {{}} fn probe(source: Wrap[A], yes: any P, no: any P, proofSubject: Wrap[A], replacement: B) {{}}", compatible: true)
     check(text: "trait P {{}} trait Q {{}} struct A {{}} struct B {{}} impl A as Q {{}} struct Wrap[T] {{}} impl[T] Wrap[T] as P where T: Q {{}} fn probe(source: Wrap[B], yes: any P, no: any P, proofSubject: Wrap[A], replacement: B) {{}}", compatible: false, proofSubjectIndex: 3U64, rewrite: true, message: "selected conformance evidence does not satisfy its declaration conditions")
     check(text: "trait P {{}} trait Q {{}} struct B {{}} struct Wrap[T] {{}} impl[T] Wrap[T] as P where T: Q {{}} fn probe[T](source: Wrap[T], yes: any P, no: any P, proofSubject: Wrap[T], replacement: B) where T: Q {{}}", compatible: true)

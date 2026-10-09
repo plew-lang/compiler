@@ -1,4 +1,4 @@
-use ./Ir only { WitnessConditionPlan, ExistentialBoxEvidence, DeclarationTypeScope, DeclarationObligationState, CallConstraintInstance, DeclarationConversion, ExistentialImplementation }
+use ./Ir only { SelectedWitnessInstantiation, WitnessConditionPlan, ExistentialBoxEvidence, DeclarationTypeScope, DeclarationObligationState, CallConstraintInstance, DeclarationConversion, ExistentialImplementation }
 use ./Ir only { ProtocolSelection, OperatorSelection, InvocationCompletion, SemanticExpressionTypeState, SemanticCompletionOwner, SemanticExpressionCompletion, TypeCompatibility, TypeArgumentMatch, ConditionClause, ConditionClauseRange }
 use @Plew/Syntax only { CondClause, syntaxConditionClause }
 use ./SourceCompletion only { SourceCompletion, CompletionEdges, CompletionTransfer, BlockResultContext, completionThen, completionChoice, completionTransfer, completionBlock, completionLoop }

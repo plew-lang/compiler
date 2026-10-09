@@ -742,7 +742,7 @@ pub impl Comp {
     // Instantiate a selected edge without changing its conformance identity.
     // Its impl binders already belong to this edge; only caller parameters
     // in their values and semantic Self are substituted here.
-    inout fn groundSelectedWitness(witness: WitnessMatch, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[WitnessMatch, CompileDiagnostic] {
+    inout fn groundSelectedWitness(witness: WitnessMatch, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[SelectedWitnessInstantiation, CompileDiagnostic] {
         mut val bindings: Array[WitnessBind] = []
         for val binding in witness.binds {
             val value = try self.groundTermForBody(ref: binding.term, environment: environment, selfRef: selfRef, itemRef: itemRef)
@@ -750,7 +750,7 @@ pub impl Comp {
         }
         val receiver = if witness.selfRef == 0U64 { give receiverRef } else { give try self.groundTermForBody(ref: witness.selfRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
         val grounded = <WitnessMatch conformIdx=witness.conformIdx binds=bindings selfRef=receiver />
-        if witness.conditions == 0U64 { return <Result.Ok value=grounded /> }
+        if witness.conditions == 0U64 { return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=grounded /> /> }
         if witness.conditions > self.arena.witnessConditionPlans.count() || witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected conformance has an invalid condition plan") /> }
         val plan = self.arena.witnessConditionPlans[witness.conditions - 1U64]
         val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
@@ -764,7 +764,7 @@ pub impl Comp {
             val original = self.thawStaticConformanceProof(id: plan.proofs[index])
             match (try self.instantiateStaticMemberProof(proof: original, receiverRef: subject, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
                 StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: clause.offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
-                StaticProofInstantiation.Deferred => { proofs.append(plan.proofs[index]) }
+                StaticProofInstantiation.Deferred => { return <Result.Ok value=<SelectedWitnessInstantiation.Deferred /> /> }
                 StaticProofInstantiation.Ready(proof: val proof) => {
                     if self.sameStaticConformanceProof(a: original, b: proof) { proofs.append(plan.proofs[index]) }
                     else { proofs.append(self.freezeStaticConformanceProof(proof: proof)) changed = true }
@@ -772,15 +772,15 @@ pub impl Comp {
             }
             index += 1U64
         }
-        if !changed { return <Result.Ok value=<WitnessMatch conformIdx=grounded.conformIdx binds=grounded.binds selfRef=grounded.selfRef conditions=witness.conditions /> /> }
+        if !changed { return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=<WitnessMatch conformIdx=grounded.conformIdx binds=grounded.binds selfRef=grounded.selfRef conditions=witness.conditions /> /> /> }
         self.arena.witnessConditionPlans.append(<WitnessConditionPlan witness=grounded proofs=proofs />)
-        return <Result.Ok value=<WitnessMatch conformIdx=grounded.conformIdx binds=grounded.binds selfRef=grounded.selfRef conditions=self.arena.witnessConditionPlans.count() /> />
+        return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=<WitnessMatch conformIdx=grounded.conformIdx binds=grounded.binds selfRef=grounded.selfRef conditions=self.arena.witnessConditionPlans.count() /> /> />
     }
 
     // An assumption needs a concrete witness at instantiation. Query exactly
     // that bound, including its complete trait arguments; path consumers then
     // append the already-selected edges instead of re-solving their target.
-    fn selectedWitnessIsClosed(witness: WitnessMatch) -> Bool {
+    fn selectedWitnessTypesAreClosed(witness: WitnessMatch) -> Bool {
         if witness.selfRef == 0U64 || !self.arena.typeIsClosed(ref: witness.selfRef) { return false }
         for binding in witness.binds {
             if binding.term == 0U64 || !self.arena.typeIsClosed(ref: binding.term) { return false }
@@ -831,16 +831,24 @@ pub impl Comp {
         if receiverRef == 0U64 || !self.arena.typeIsClosed(ref: receiverRef) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
         match proof {
             StaticConformanceProof.ConcreteWitness(witness: val witness) => {
-                val grounded = try self.groundSelectedWitness(witness: witness, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
-                if !self.selectedWitnessIsClosed(witness: grounded) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
-                return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.ConcreteWitness witness=grounded /> /> />
+                match (try self.groundSelectedWitness(witness: witness, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
+                    SelectedWitnessInstantiation.Deferred => { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+                    SelectedWitnessInstantiation.Ready(witness: val grounded) => {
+                        if !self.selectedWitnessTypesAreClosed(witness: grounded) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+                        return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.ConcreteWitness witness=grounded /> /> />
+                    }
+                }
             }
             StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: val terminal) => {
                 mut val grounded: Array[WitnessMatch] = []
                 for val edge in edges {
-                    val witness = try self.groundSelectedWitness(witness: edge, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
-                    if !self.selectedWitnessIsClosed(witness: witness) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
-                    grounded.append(witness)
+                    match (try self.groundSelectedWitness(witness: edge, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
+                        SelectedWitnessInstantiation.Deferred => { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+                        SelectedWitnessInstantiation.Ready(witness: val witness) => {
+                            if !self.selectedWitnessTypesAreClosed(witness: witness) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+                            grounded.append(witness)
+                        }
+                    }
                 }
                 return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.TraitPath edges=grounded terminalConformIdx=terminal /> /> />
             }
@@ -859,9 +867,13 @@ pub impl Comp {
                     _ => { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
                 }
                 for val edge in edges {
-                    val witness = try self.groundSelectedWitness(witness: edge, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
-                    if !self.selectedWitnessIsClosed(witness: witness) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
-                    grounded.append(witness)
+                    match (try self.groundSelectedWitness(witness: edge, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
+                        SelectedWitnessInstantiation.Deferred => { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+                        SelectedWitnessInstantiation.Ready(witness: val witness) => {
+                            if !self.selectedWitnessTypesAreClosed(witness: witness) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+                            grounded.append(witness)
+                        }
+                    }
                 }
                 if grounded.count() == 0U64 { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
                 return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.TraitPath edges=grounded terminalConformIdx=grounded[grounded.count() - 1U64].conformIdx /> /> />
