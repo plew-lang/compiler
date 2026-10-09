@@ -1,0 +1,30 @@
+// Field compatibility is construction context, not proof that the complete
+// record satisfies its destination type. Use a consistent recorded Make.
+use /Frontend only { Comp }
+use /Ir only { Expr, TypeRef, MakeField }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integerName = compiler.internBytes(s: "I64")
+    val valueName = compiler.internBytes(s: "value")
+    val otherName = compiler.internBytes(s: "other")
+    val actualName = compiler.internBytes(s: "(value)")
+    val expectedName = compiler.internBytes(s: "(value,other)")
+    val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
+    val valueLabel = valueName.nameId
+    val otherLabel = otherName.nameId
+    val actual = compiler.pushType(t: <TypeRef nameStart=actualName.nameStart nameLen=actualName.nameLen args=[] isRecord=true recordFieldLabels=[valueLabel] recordFieldTerms=[integer] />)
+    val expected = compiler.pushType(t: <TypeRef nameStart=expectedName.nameStart nameLen=expectedName.nameLen args=[] isRecord=true recordFieldLabels=[valueLabel, otherLabel] recordFieldTerms=[integer, integer] />)
+    val nameless = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[valueLabel] recordFieldTerms=[integer] />)
+    if compiler.callableResultIsUnit(ref: nameless) { panic "nonempty structural record was classified as Unit" }
+    val literal = compiler.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    compiler.recordSemanticExprTerm(exprId: literal, term: integer)
+    val fields = compiler.pushMakeFields(fields: [<MakeField nameStart=valueName.nameStart nameLen=valueName.nameLen value=literal />])
+    val expression = compiler.pushExpr(e: <Expr.Make typeStart=0U64 typeLen=0U64 variantStart=0U64 variantLen=0U64 isEnum=false ty=actual fields=fields />)
+    compiler.recordSemanticExprTerm(exprId: expression, term: actual)
+    compiler.tcCheckValue(expectedRef: actual, valueExpr: expression, pos: "record-probe").unwrap()
+    if compiler.tcCheckValue(expectedRef: expected, valueExpr: expression, pos: "record-probe").isOk() { panic "record field subset was treated as whole-type compatibility" }
+    print("recorded-record")
+}

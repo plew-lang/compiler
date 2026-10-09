@@ -40,20 +40,9 @@ pub impl Comp {
         // generic-payload case the head-name checks can't see (the un-annotated construction
         // carries no type args itself; they come from the expected type).
         try self.tcCheckMakeFields(expectedRef: expectedRef, makeId: valueExpr)
-        // Record literals are bidirectionally typed: after their labelled
-        // fields have been checked against the expected Record TypeTerm, that
-        // context is the literal's semantic type even when a field expression
-        // (such as `a / b`) has no bottom-up TypeInfo.  Do not fall through to
-        // the old nominal-layout comparison, which would discard the Record
-        // node merely because the literal had no independent annotation.
-        if expectedRef < self.arena.typeCount() {
-            if self.arena.typeTerms[expectedRef].isRecord {
-                match self.arena.exprs[valueExpr] {
-                    Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => { return <Result.Ok value=() /> }
-                    _ => {}
-                }
-            }
-        }
+        // Field checking supplies construction context. It is not evidence
+        // that the complete source record matches the destination: the saved
+        // semantic type must still pass the ordinary compatibility check.
         // Value-control results were checked with their lexical bindings by
         // Record. Do not reopen their give expressions outside that scope.
         match self.arena.exprs[valueExpr] {
