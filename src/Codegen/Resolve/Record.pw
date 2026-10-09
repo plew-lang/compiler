@@ -2735,6 +2735,7 @@ pub impl Comp {
         try self.closeCallTemplatesForBody(fnIdx: owner)
         try self.checkRecordedBodyCallConstraints(owner: owner)
         try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Function index=owner />)
+        try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Function index=owner />)
         try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Function index=owner />)
         return <Result.Ok value=() />
     }

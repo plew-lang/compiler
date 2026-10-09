@@ -582,6 +582,7 @@ pub impl Comp {
             try self.checkDeclarationConversionEvidence(conversion: conversion)
         }
 
+        try self.checkDiagnosticContinuationFailures()
         tracePhase(c: inout self, label: "member-obligations:relevance:start")
         val relevant = try self.memberObligationRelevance()
         tracePhase(c: inout self, label: "member-obligations:roots:start")

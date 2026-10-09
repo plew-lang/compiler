@@ -37,7 +37,7 @@ pub fn frontendRequest(sources: SourceAccess = <SourceAccess />, firstArgument: 
             recognized = true
         }
         // `plewc --tc-log <file>`: run the new TypeRef-based type checker in
-        // log-only mode (print mismatches, reject nothing) for development/triage.
+        // continuation mode: log mismatches, but retain failed-owner diagnostics.
         if option == "--tc-log" {
             tcLog = true
             recognized = true

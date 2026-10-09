@@ -205,6 +205,13 @@ pub struct InterpolationWrite {
 }
 pub impl InterpolationWrite { factory }
 
+// Diagnostic continuation retains failure separately from inferred type facts.
+pub struct SourceDiagnosticFailure {
+    pub val owner: SemanticCompletionOwner
+    pub val diagnostic: CompileDiagnostic
+}
+pub impl SourceDiagnosticFailure { factory }
+
 pub struct Comp {
     // Nonfatal diagnostics remain owned by the compilation/session. Only the
     // driver decides how to display them; requesting a body emits no process IO.
@@ -270,10 +277,10 @@ pub struct Comp {
     pub mut val genMode: Bool = false
     pub mut val genMainIdx: U64 = 0
     // type-checker log mode (`plewc --tc-log <file>`): the new TypeRef-based type
-    // checker (Codegen/Infer.pw) prints every type mismatch it finds instead of
-    // rejecting, so its coverage can be developed/triaged against self-compile
-    // without breaking the build. Off in a normal build (no behavior change yet).
+    // checker logs mismatches and may continue collecting owner-local facts.
+    // Failed owners cannot publish preparation success or executable code.
     pub mut val tcLog: Bool = false
+    pub mut val sourceDiagnosticFailures: Array[SourceDiagnosticFailure] = []
     // Codegen trace mode (`plewc --trace-codegen <file>`): emit the generic-instance
     // state transitions that lead to an LLVM body. This is observational only: it
     // never changes collection, worklist ordering, or the generated module.
@@ -1987,6 +1994,7 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
         try c.checkClosedIterationProtocols()
         try c.checkRecordedMemberObligations()
     }
+    try c.checkDiagnosticContinuationFailures()
     try c.prepareDiscriminantType()
     return <Result.Ok value=() />
 }

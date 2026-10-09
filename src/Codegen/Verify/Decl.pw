@@ -65,9 +65,12 @@ pub impl Comp {
                 traceU64(n: gvi)
                 eprint(text: "\n")
             }
+            self.cur.checkFn = 18446744073709551615U64
+            self.cur.globalInitializerTarget = <Optional.Some v=self.arena.globals[gvi].nameStart />
             try self.verifyStmt(stmtId: self.arena.globals[gvi].letStmt)
             gvi += 1
         }
+        self.cur.globalInitializerTarget = <Optional.None />
         self.cur.locals = []
         self.cur.verifyMovedIdx = []
         // Verification consumes the closed source declaration frontier.  Its

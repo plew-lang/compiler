@@ -1136,6 +1136,12 @@ pub impl Comp {
     // Sharing this identity rule does not publish a completed semantic fact.
     inout fn sourceRecordingOwner() -> Optional[SemanticCompletionOwner] {
         if !self.cur.recordCallTemplates { return <Optional.None /> }
+        return self.currentSourceOwner()
+    }
+
+    // Checking and diagnostic continuation also need lexical identity, without
+    // authorizing publication of a completed expression fact.
+    inout fn currentSourceOwner() -> Optional[SemanticCompletionOwner] {
         val owner = self.decls.callTemplateLexicalRoots.getOr(key: self.cur.checkFn, fallback: self.cur.checkFn)
         if owner != 18446744073709551615U64 {
             return <Optional.Some v=<SemanticCompletionOwner.Function index=owner /> />

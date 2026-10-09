@@ -2,6 +2,33 @@
 // assignments, indices, and make-fields against an expected type.
 
 pub impl Comp {
+    // Logging may continue within one owner, but must retain the semantic
+    // failure independently of conversions (invalid unary operators need none).
+    inout fn continueTypeDiagnostic(diagnostic: CompileDiagnostic) -> Result[(), CompileDiagnostic] {
+        if !self.tcLog { return <Result.Err error=diagnostic /> }
+        val owner = match self.currentSourceOwner() {
+            Optional.Some(v: val recorded) => { give recorded }
+            Optional.None => { return <Result.Err error=diagnostic /> }
+        }
+        for failure in self.sourceDiagnosticFailures {
+            if semanticCompletionOwnersEqual(recorded: failure.owner, prepared: owner) { return <Result.Ok value=() /> }
+        }
+        self.sourceDiagnosticFailures.append(<SourceDiagnosticFailure owner=owner diagnostic=diagnostic />)
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkSourceDiagnosticFailures(owner: SemanticCompletionOwner) -> Result[(), CompileDiagnostic] {
+        for failure in self.sourceDiagnosticFailures {
+            if semanticCompletionOwnersEqual(recorded: failure.owner, prepared: owner) { return <Result.Err error=failure.diagnostic /> }
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkDiagnosticContinuationFailures() -> Result[(), CompileDiagnostic] {
+        for failure in self.sourceDiagnosticFailures { return <Result.Err error=failure.diagnostic /> }
+        return <Result.Ok value=() />
+    }
+
     inout fn tcCheckValue(expectedRef: U64, valueExpr: U64, pos: String) -> Result[(), CompileDiagnostic] {
         if expectedRef == 0U64 {
             return <Result.Ok value=() />
@@ -12,10 +39,7 @@ pub impl Comp {
         if self.recordedExpressionHasUnitResult(exprId: valueExpr) {
             val expected = try self.groundTypeRef(ref: expectedRef)
             if expected != 0U64 && self.callableResultIsUnit(ref: expected) { return <Result.Ok value=() /> }
-            if !(self.tcLog) {
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "cannot use a Unit result where a non-Unit value is required (spec/04)") />
-            }
-            return <Result.Ok value=() />
+            return self.continueTypeDiagnostic(diagnostic: self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "cannot use a Unit result where a non-Unit value is required (spec/04)"))
         }
         // an array literal (`[]` / `[a, b]`) in a Dictionary-typed position: `[]` is ALWAYS
         // an empty array, never a dict — `[:]` is the empty-dictionary literal (spec/02). An
@@ -25,10 +49,7 @@ pub impl Comp {
             if rangeEquals(bytes: self.arena.bytes, start: self.arena.typeTerms[expectedRef].nameStart, len: self.arena.typeTerms[expectedRef].nameLen, kw: "Dictionary") {
                 match self.arena.exprs[valueExpr] {
                     Expr.Array(elems: _) => {
-                        if !(self.tcLog) {
-                            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "a dictionary value cannot be an array literal — use `[:]` for an empty dictionary, or `[k: v]` for entries (`[]` is an array literal; spec/02)") />
-                        }
-                        return <Result.Ok value=() />
+                        return self.continueTypeDiagnostic(diagnostic: self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "a dictionary value cannot be an array literal — use `[:]` for an empty dictionary, or `[k: v]` for entries (`[]` is an array literal; spec/02)"))
                     }
                     _ => {}
                 }
@@ -129,10 +150,7 @@ pub impl Comp {
                     if inferred != 0U64 {
                         if inferred < self.arena.typeCount() {
                             if !((try self.typeRefIsSendable(ref: inferred))) {
-                                if !(self.tcLog) {
-                                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "this value does not provide the `sendable` guarantee required here (use a `sendable fn` literal or a structurally sendable value; spec/04,14)") />
-                                }
-                                return <Result.Ok value=() />
+                                return self.continueTypeDiagnostic(diagnostic: self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "this value does not provide the `sendable` guarantee required here (use a `sendable fn` literal or a structurally sendable value; spec/04,14)"))
                             }
                         }
                     }
@@ -151,10 +169,8 @@ pub impl Comp {
             eprint(text: " line=")
             eprintInt(n: self.lineOf(offset: self.exprOffset(id: valueExpr)))
             eprint(text: "\n")
-        } else {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)") />
         }
-        return <Result.Ok value=() />
+        return self.continueTypeDiagnostic(diagnostic: self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)"))
     }
 
     inout fn tcCheckBinop(op: I64, lhs: U64, rhs: U64) -> Result[(), CompileDiagnostic] {
@@ -244,10 +260,8 @@ pub impl Comp {
             eprint(text: " line=")
             eprintInt(n: self.lineOf(offset: self.exprOffset(id: operand)))
             eprint(text: "\n")
-        } else {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: msg) />
         }
-        return <Result.Ok value=() />
+        return self.continueTypeDiagnostic(diagnostic: self.diagnosticAt(offset: self.exprOffset(id: operand), msg: msg))
     }
 
     inout fn tcCheckUnary(op: I64, operand: U64) -> Result[(), CompileDiagnostic] {
