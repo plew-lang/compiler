@@ -29,6 +29,8 @@ fn main() {
     val enumeration = compiler.pushExpr(e: <Expr.Make typeStart=enumName.nameStart typeLen=enumName.nameLen variantStart=variantName.nameStart variantLen=variantName.nameLen isEnum=true ty=actualEnum fields=fields />)
     compiler.recordSemanticExprTerm(exprId: structure, term: actualStruct)
     compiler.recordSemanticExprTerm(exprId: enumeration, term: actualEnum)
+    if !compiler.genericCheckMakeFields(expectedRef: expectedStruct, valueExpr: structure).unwrap() { panic "struct probe did not exercise construction field checking" }
+    if !compiler.genericCheckMakeFields(expectedRef: expectedEnum, valueExpr: enumeration).unwrap() { panic "enum probe did not exercise construction field checking" }
     if compiler.checkGenericTypeMatch(expectedRef: actualStruct, valueExpr: structure).isErr() { panic "matching phantom struct was rejected" }
     if compiler.checkGenericTypeMatch(expectedRef: actualEnum, valueExpr: enumeration).isErr() { panic "matching phantom enum was rejected" }
     if compiler.checkGenericTypeMatch(expectedRef: expectedStruct, valueExpr: structure).isOk() { panic "struct fields replaced complete nominal compatibility" }
