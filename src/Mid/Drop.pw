@@ -156,8 +156,20 @@ fn canonicalMidTransferBlock(arena: MidCanonicalArena, body: MidBodyNode, block:
 
 // Canonical ownership analysis consumes only scalar rows/ranges. Its nested
 // Arrays are transient fixed-point work state, never a body representation.
+pub struct MidOwnershipAnalysis {
+    pub val incoming: Array[MidOwnershipStates] = []
+    pub val reachable: Array[Bool] = []
+}
+pub impl MidOwnershipAnalysis { factory }
+
 pub fn analyzeCanonicalMidOwnership(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> Array[MidOwnershipStates] {
-    if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return [] }
+    return analyzeCanonicalMidOwnershipFlow(arena: arena, canonical: canonical).incoming
+}
+
+// One dataflow result owns both the entry states and their reachability.
+// Consumers must recompute it after any canonical CFG mutation.
+pub fn analyzeCanonicalMidOwnershipFlow(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> MidOwnershipAnalysis {
+    if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return <MidOwnershipAnalysis /> }
     val body: MidBodyNode = arena.bodies[canonical.body - 1U64]
     mut val incoming: Array[MidOwnershipStates] = []
     mut val reachable: Array[Bool] = []
@@ -175,7 +187,7 @@ pub fn analyzeCanonicalMidOwnership(arena: MidCanonicalArena, canonical: MidCano
         reachable.append(false)
         blockI = blockI + 1U64
     }
-    if body.entry >= body.blocks.len { return incoming }
+    if body.entry >= body.blocks.len { return <MidOwnershipAnalysis incoming=incoming reachable=reachable /> }
     incoming.set(i: body.entry, value: initial)
     reachable.set(i: body.entry, value: true)
     // Only a changed input can change a block's transfer result. Keep at
@@ -223,7 +235,7 @@ pub fn analyzeCanonicalMidOwnership(arena: MidCanonicalArena, canonical: MidCano
             }
         }
     }
-    return incoming
+    return <MidOwnershipAnalysis incoming=incoming reachable=reachable />
 }
 
 fn canonicalMidMakeOperandUnavailable(arena: MidCanonicalArena, states: inout MidAccessibilityStates, operandId: U64) {

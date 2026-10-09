@@ -7,7 +7,7 @@ use ../Frontend only { Comp }
 use ../Ir only { Global, MatchSource, SemanticMatchKind, SemanticMatchPayload }
 use ./Ir only { MidCanonicalArena, canonicalMidPlaceIsWhole, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidBody, MidOwnership }
 use ./Types only { canonicalMidStatementTypesMatch, canonicalMidTerminatorTypesMatch }
-use ./Drop only { analyzeCanonicalMidOwnership }
+use ./Drop only { analyzeCanonicalMidOwnershipFlow }
 
 // Verification phases have different representation contracts. Declaration
 // ownership may consume symbolic conversion boundaries; executable admission
@@ -818,8 +818,9 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
     val flags: MidVerification = verifyCanonicalMidFlagInitialization(arena: c.mid, canonical: canonical)
     match flags.error { MidVerifyError.None => {} _ => { return flags } }
     val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
-    val incoming: Array[MidOwnershipStates] = analyzeCanonicalMidOwnership(arena: c.mid, canonical: canonical)
-    val reachable = canonicalMidReachable(arena: c.mid, body: body)
+    val analysis = analyzeCanonicalMidOwnershipFlow(arena: c.mid, canonical: canonical)
+    val incoming = analysis.incoming
+    val reachable = analysis.reachable
 
     mut val hasAccessScopes = false
     mut val blockI: U64 = 0U64

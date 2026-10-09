@@ -1,0 +1,19 @@
+use /Mid/Ir only { MidCanonicalArena, MidCanonicalBody, MidBody, MidBlock, MidTerminator, MidOperand, MidConstant }
+use /Mid/Drop only { analyzeCanonicalMidOwnershipFlow }
+
+fn main() {
+    mut val arena = <MidCanonicalArena />
+    val branch = <MidTerminator.Switch discriminant=<MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=true typeTerm=0U64 /> /> values=[1I64] targets=[1U64] otherwise=2U64 />
+    val loopBranch = <MidTerminator.Switch discriminant=<MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=true typeTerm=0U64 /> /> values=[1I64] targets=[1U64] otherwise=3U64 />
+    val body = <MidBody locals=[] blocks=[<MidBlock terminator=branch />, <MidBlock terminator=<MidTerminator.Goto target=3U64 /> />, <MidBlock terminator=<MidTerminator.Goto target=3U64 /> />, <MidBlock terminator=loopBranch />, <MidBlock terminator=<MidTerminator.Goto target=5U64 /> />, <MidBlock terminator=<MidTerminator.Return /> />] entry=0U64 />
+    val canonical = arena.store(body: body)
+    val result = analyzeCanonicalMidOwnershipFlow(arena: arena, canonical: canonical)
+    if result.incoming.count() != 6U64 || result.reachable.count() != 6U64 { panic("analysis shape") }
+    mut val index = 0U64
+    while index < 6U64 {
+        if result.reachable[index] != (index < 4U64) { panic("cycle or dead predecessor changed reachability") }
+        index += 1U64
+    }
+    val missing = analyzeCanonicalMidOwnershipFlow(arena: arena, canonical: <MidCanonicalBody body=0U64 />)
+    if missing.incoming.count() != 0U64 || missing.reachable.count() != 0U64 { panic("invalid body produced flow") }
+}
