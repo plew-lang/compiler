@@ -712,11 +712,17 @@ pub impl Comp {
                 val result = self.declarationProofDependency(proof: self.arena.associatedBoundEvidence[index].prerequisite, scope: scope, offset: offset)
                 self.activeAssumptionAdmission.removeLast()
                 try result
+                val evidence = self.arena.associatedBoundEvidence[index]
+                val expected = try self.associatedClauseBound(projectionRef: evidence.projection, clauseIndex: evidence.clause, prerequisite: evidence.prerequisite, offset: offset)
+                if !self.typeRefEq(a: evidence.bound.subject, b: expected.subject) || !self.sameTraitConstraint(a: evidence.bound.constraint, b: expected.constraint) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption does not match its declaration clause") />
+                }
                 return <Result.Ok value=() />
             }
-            // Conformance declaration scopes are distinct from function
-            // scopes. Their placement authority is a separate obligation.
-            _ => { return <Result.Ok value=() /> }
+            // Function bodies receive impl/requirement conditions as FuncBound
+            // facts. Declaration checking's pool references are not their
+            // authority, even when the subjects happen to match.
+            _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration assumption is not available in its lexical scope") /> }
         }
         val lexical = self.decls.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
         if owner >= self.arena.functionCount() || (try self.semanticBodyOwner(fnIdx: lexical)) != scope.owner {

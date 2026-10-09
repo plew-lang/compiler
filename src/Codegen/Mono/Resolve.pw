@@ -345,27 +345,70 @@ pub impl Comp {
             StaticConformanceProof.AssumedSupertraitPath(source: _, steps: _) => {}
             _ => { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
         }
-        mut val predicates: Array[TraitAssocPredicate] = []
-        mut val index = 0U64
-        while index < declaration.assocTypes.count() {
-            val member = self.traitBindAt(binds: declaration.assocTypes, index: index)
-            val value = (try self.associatedOutputInProof(proof: prerequisite, traitOwner: owner, assocId: member.nameId))
-            if value != 0U64 { predicates.append(<TraitAssocPredicate member=member.nameId value=value span=member.nameStart />) }
-            index += 1U64
-        }
-        val context = <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=projection.assocTraitArgs /> positionalArgsOpen=false assocPredicates=predicates /> offset=projection.siteOffset />
         mut val facts = assumptions
-        index = 0U64
+        mut val index = 0U64
         while index < declaration.assocBounds.len {
             val clause = self.traitAssociatedBoundAt(bounds: declaration.assocBounds, index: index)
             if clause.member == projection.assocNameId {
-                val constraint = self.traitConstraintInBound(constraint: clause.constraint, bound: context, traitIndex: declarationIndex)
-                val evidence = <AssociatedBoundEvidence projection=baseRef clause=declaration.assocBounds.start + index prerequisite=prerequisite bound=<TraitBound subject=baseRef constraint=constraint offset=clause.offset /> />
+                val clauseIndex = declaration.assocBounds.start + index
+                val bound = try self.associatedClauseBound(projectionRef: baseRef, clauseIndex: clauseIndex, prerequisite: prerequisite, offset: clause.offset)
+                val evidence = <AssociatedBoundEvidence projection=baseRef clause=clauseIndex prerequisite=prerequisite bound=bound />
                 facts.append(self.registerAssociatedBoundEvidence(evidence: evidence))
             }
             index += 1U64
         }
         return self.traitPatternProofFromFacts(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: facts, sourceOwners: sourceOwners, requireUniqueWitness: requireUniqueWitness)
+    }
+
+    // Derive the clause from its retained receiver proof. Selection and later
+    // admission share this interpretation; neither trusts a fabricated bound
+    // or performs another conformance search to repair the evidence.
+    inout fn associatedClauseBound(projectionRef: U64, clauseIndex: U64, prerequisite: StaticConformanceProof, offset: U64) -> Result[TraitBound, CompileDiagnostic] {
+        if projectionRef == 0U64 || projectionRef >= self.arena.typeCount() {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption has an invalid declaration projection") />
+        }
+        val projection = self.arena.typeAt(index: projectionRef)
+        if projection.assocNameId == 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption has an invalid declaration projection") />
+        }
+        mut val owner = projection.assocTraitDeclOffset
+        if !projection.hasAssocTraitDecl { owner = self.canonicalTraitOwner(start: projection.assocTraitStart, len: projection.assocTraitLen) }
+        val traitIndex = self.decls.traitIndexByOffset(offset: owner)
+        if traitIndex >= self.decls.traitCount() {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption has an invalid declaration clause") />
+        }
+        val declaration = self.decls.traitAt(index: traitIndex)
+        if clauseIndex < declaration.assocBounds.start || clauseIndex - declaration.assocBounds.start >= declaration.assocBounds.len || clauseIndex >= self.decls.traitAssociatedBoundPool.count() {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption has an invalid declaration clause") />
+        }
+        val clause = self.decls.traitAssociatedBoundPool[clauseIndex]
+        if clause.member != projection.assocNameId {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption has an invalid declaration clause") />
+        }
+        match prerequisite {
+            StaticConformanceProof.AssumedBound(source: _) => {}
+            StaticConformanceProof.AssumedSupertraitPath(source: _, steps: _) => {}
+            _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption requires a declaration prerequisite") /> }
+        }
+        val receiver = self.typeTermProjectionReceiver(t: projection)
+        val parent = try self.staticProofBound(proof: prerequisite, traitIdx: traitIndex)
+        if parent.subject == 0U64 || !self.typeRefEq(a: parent.subject, b: receiver) || parent.constraint.key.owner != owner || !self.sameResolvedTypeRefs(a: parent.constraint.key.positionalArgs, b: projection.assocTraitArgs) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption does not match its receiver prerequisite") />
+        }
+        val output = try self.associatedOutputInProof(proof: prerequisite, traitOwner: owner, assocId: projection.assocNameId)
+        if output != 0U64 && !self.typeRefEq(a: output, b: projectionRef) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption does not match its selected output") />
+        }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        mut val index = 0U64
+        while index < declaration.assocTypes.count() {
+            val member = self.traitBindAt(binds: declaration.assocTypes, index: index)
+            val value = try self.associatedOutputInProof(proof: prerequisite, traitOwner: owner, assocId: member.nameId)
+            if value != 0U64 { predicates.append(<TraitAssocPredicate member=member.nameId value=value span=member.nameStart />) }
+            index += 1U64
+        }
+        val context = <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=projection.assocTraitArgs /> positionalArgsOpen=false assocPredicates=predicates /> offset=projection.siteOffset />
+        return <Result.Ok value=<TraitBound subject=projectionRef constraint=self.traitConstraintInBound(constraint: clause.constraint, bound: context, traitIndex: traitIndex) offset=clause.offset /> />
     }
 
     inout fn registerAssociatedBoundEvidence(evidence: AssociatedBoundEvidence) -> DeclarationBoundRef {

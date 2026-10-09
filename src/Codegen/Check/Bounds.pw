@@ -8,6 +8,19 @@ use ../../Ir only { DynamicCallTemplateTarget }
 // or the input name unchanged when it is not an associated type / has no binding.
 
 pub impl Comp {
+    // Compare canonical semantic constraints, excluding diagnostic spans.
+    inout fn sameTraitConstraint(a: TraitConstraint, b: TraitConstraint) -> Bool {
+        if a.key.owner != b.key.owner || a.positionalArgsOpen != b.positionalArgsOpen || !self.sameResolvedTypeRefs(a: a.key.positionalArgs, b: b.key.positionalArgs) || a.assocPredicates.count() != b.assocPredicates.count() { return false }
+        mut val index = 0U64
+        while index < a.assocPredicates.count() {
+            val left = a.assocPredicates[index]
+            val right = b.assocPredicates[index]
+            if left.member != right.member || !self.typeRefEq(a: left.value, b: right.value) { return false }
+            index += 1U64
+        }
+        return true
+    }
+
     fn functionBoundAssumptions(fnIdx: U64) -> Array[DeclarationBoundRef] {
         // A closure owns its call/body identity, but its generic assumptions
         // are declared by its lexical function. This mapping is published

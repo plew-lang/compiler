@@ -1,0 +1,84 @@
+// A declaration prerequisite authorizes only its real projected clauses.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, ConformBound, TraitBound, AssociatedBoundEvidence, DeclarationConversion, ValueConversionProof, StaticConformanceProof, DeclarationBoundRef }
+use @Std/Io only { print }
+fn check(kind: U64, message: String = "") {
+    mut val compiler = <Comp />
+    val text = if kind >= 3U64 {
+        give "trait Q {{}} trait R {{}} trait P {{ type Item: Q }} fn probe[T](source: T#P.Item, target: any Q, other: any R) where T: P, T: R {{}}"
+    } else if kind == 2U64 {
+        give "trait P {{}} trait Q {{}} fn probe[T](source: T, target: any Q) where T: P {{}}"
+    } else {
+        give "trait P {{}} fn probe[T](source: T, target: any P) where T: P {{}}"
+    }
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=text path="derived-assumption.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    val source = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    mut val target = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val expression = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    compiler.recordSemanticExprTerm(exprId: expression, term: source)
+    compiler.cur.checkFn = owner
+    compiler.cur.recordCallTemplates = true
+    compiler.recordDeclarationConversion(exprId: expression, target: target).unwrap()
+    val original = compiler.decls.declarationConversions[0U64]
+    mut val replacement = <StaticConformanceProof.Missing />
+    if kind == 1U64 {
+        val index = compiler.decls.conformBoundPool.count()
+        compiler.decls.conformBoundPool.append(<ConformBound subject=source constraint=compiler.existentialTraitConstraint(ref: target) offset=0U64 />)
+        replacement = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Conformance index=index /> />
+    } else if kind == 2U64 {
+        val index = compiler.arena.associatedBoundEvidence.count()
+        compiler.arena.associatedBoundEvidence.append(<AssociatedBoundEvidence projection=source clause=0U64 prerequisite=<StaticConformanceProof.AssumedBound source=compiler.functionBoundAssumptions(fnIdx: owner)[0U64] /> bound=<TraitBound subject=source constraint=compiler.existentialTraitConstraint(ref: target) offset=0U64 /> />)
+        replacement = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.AssociatedType index=index /> />
+    } else if kind >= 3U64 && kind != 4U64 {
+        val index = match compiler.thawValueConversionProof(id: original.proof) {
+            ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val proof) => {
+                give match proof {
+                    StaticConformanceProof.AssumedBound(source: val assumption) => {
+                        give match assumption { DeclarationBoundRef.AssociatedType(index: val index) => { give index } _ => { panic("missing derived clause") } }
+                    }
+                    _ => { panic("missing derived proof") }
+                }
+            }
+            _ => { panic("missing box proof") }
+        }
+        val evidence = compiler.arena.associatedBoundEvidence[index]
+        mut val bound = evidence.bound
+        mut val clause = evidence.clause
+        mut val prerequisite = evidence.prerequisite
+        if kind == 3U64 {
+            target = compiler.funcParamAt(params: function.params, index: 2U64).ty
+            bound = <TraitBound subject=source constraint=compiler.existentialTraitConstraint(ref: target) offset=0U64 />
+        } else if kind == 5U64 {
+            clause = compiler.decls.traitAssociatedBoundPool.count()
+        } else {
+            prerequisite = <StaticConformanceProof.AssumedBound source=compiler.functionBoundAssumptions(fnIdx: owner)[1U64] />
+        }
+        compiler.arena.associatedBoundEvidence[index] = <AssociatedBoundEvidence projection=evidence.projection clause=clause prerequisite=prerequisite bound=bound />
+        replacement = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.AssociatedType index=index /> />
+    }
+    if kind != 0U64 && kind != 4U64 {
+        val proof = compiler.freezeValueConversionProof(proof: <ValueConversionProof.ExistentialBox sourceRef=source targetRef=target traitIdx=compiler.recordAnyTraitIndex(anyRef: target) proof=replacement />)
+        compiler.decls.declarationConversions[0U64] = <DeclarationConversion site=original.site source=source target=target proof=proof />
+    }
+    match compiler.prepareLexicalBody(fnIdx: owner) {
+        Result.Ok(value: _) => { if message != "" { panic("owner accepted invalid derived assumption") } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message != message { panic(diagnostic.message) } }
+    }
+    match compiler.checkRecordedMemberObligations() {
+        Result.Ok(value: _) => { if message != "" { panic("whole target accepted invalid derived assumption") } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message != message { panic(diagnostic.message) } }
+    }
+}
+fn main() {
+    check(kind: 0U64)
+    check(kind: 1U64, message: "declaration assumption is not available in its lexical scope")
+    check(kind: 2U64, message: "associated assumption has an invalid declaration projection")
+    check(kind: 3U64, message: "associated assumption does not match its declaration clause")
+    check(kind: 4U64)
+    check(kind: 5U64, message: "associated assumption has an invalid declaration clause")
+    check(kind: 6U64, message: "associated assumption does not match its receiver prerequisite")
+    print("derived-assumption-evidence")
+}
