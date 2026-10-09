@@ -17,6 +17,7 @@ fn main() {
     val expression = compiler.pushExpr(e: <Expr.Ident start=bindingName.nameStart len=bindingName.nameLen />)
     compiler.recordSemanticExprTerm(exprId: expression, term: integer)
     compiler.addLocalCn(nameStart: bindingName.nameStart, nameLen: bindingName.nameLen, tyStart: booleanName.nameStart, tyLen: booleanName.nameLen, isArray: false, ty: boolean, isInout: false, isMut: false, owned: false, cnum: 0U64)
+    if compiler.inferType(id: expression).unwrap() != integer { panic "type query reopened a recorded lexical binding" }
     if compiler.tcCheckValue(expectedRef: integer, valueExpr: expression, pos: "binding-probe").isErr() { panic "value check reopened a recorded lexical binding" }
     if compiler.tcCheckValue(expectedRef: boolean, valueExpr: expression, pos: "binding-probe").isOk() { panic "value check used a later same-named binding" }
     if compiler.checkGenericTypeMatch(expectedRef: integer, valueExpr: expression).isErr() { panic "generic check reopened a recorded lexical binding" }

@@ -2493,12 +2493,12 @@ pub impl Comp {
         return <Result.Ok value=out />
     }
 
-    // Compatibility consumes an expression's saved lexical type first. The
+    // Local type queries consume an expression's saved lexical type first. The
     // current local stack can belong to a later scope, and its same-named
     // binding is not authority for this expression. Only an unrecorded
     // construction may request contextual supplementation below. A nonzero
     // term proves type existence, not that all body obligations are closed.
-    inout fn valueCompatibilitySourceType(exprId: U64) -> Result[U64, CompileDiagnostic] {
+    inout fn expressionSourceType(exprId: U64) -> Result[U64, CompileDiagnostic] {
         if self.semanticExprTerm(exprId: exprId) != 0U64 {
             return self.groundSemanticExprTypeRef(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         }

@@ -52,9 +52,10 @@ pub impl Comp {
             }
             _ => {}
         }
-        // Call inference and value compatibility consume the same body-local
-        // semantic term, including recorded operand context and projections.
-        return self.groundedTypeOf(id: id)
+        // Recorded expressions retain their lexical type. Only unrecorded
+        // construction requests contextual supplementation; this is not
+        // evidence that the owning body has completed all obligations.
+        return self.expressionSourceType(exprId: id)
     }
 
     // The empty-view case needs no owned array. Preserve the existing set

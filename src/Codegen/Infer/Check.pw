@@ -79,7 +79,7 @@ pub impl Comp {
                 }
             }
         }
-        val inferred = try self.valueCompatibilitySourceType(exprId: valueExpr)
+        val inferred = try self.expressionSourceType(exprId: valueExpr)
         val compatibility = try self.typeCompatibility(expected: expectedRef, inferred: inferred)
         if self.traceCodegen && !compatibility.isCompatible() {
             eprint(text: "[trace-codegen] value-type-mismatch expected=")

@@ -882,7 +882,7 @@ pub impl Comp {
         // Source recording owns call/operator selection and the completed
         // result substitution. Generic checking must not select a weaker
         // signature again from the expression's syntax.
-        val inferred: U64 = (try self.valueCompatibilitySourceType(exprId: valueExpr))
+        val inferred: U64 = (try self.expressionSourceType(exprId: valueExpr))
         // Operators and other values share the same proof-directed projection
         // normalization and rigid type comparison.
         if !((try self.typesCompatible(expected: expectedRef, inferred: inferred))) {
