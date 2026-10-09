@@ -1518,9 +1518,17 @@ pub impl WitnessMatch { factory }
 
 // One-based immutable plan ID in WitnessMatch. Child proofs remain static
 // evidence; a condition never requests an executable existential descriptor.
+pub struct ProjectionNormalizationStep {
+    pub val source: U64
+    pub val proof: U64
+    pub val output: U64
+}
+pub impl ProjectionNormalizationStep { factory }
+
 pub struct WitnessConditionPlan {
     pub val witness: WitnessMatch
     pub val proofs: Array[U64]
+    pub val normalizations: Array[ProjectionNormalizationStep] = []
 }
 pub impl WitnessConditionPlan { factory }
 

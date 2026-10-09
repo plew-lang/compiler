@@ -232,6 +232,18 @@ pub impl Comp {
     // This must stay here, rather than in individual call/local consumers, so
     // all frontend semantic reads agree on one closed type term.
     inout fn closeBodyProjectionTerms(ref: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[U64, CompileDiagnostic] {
+        if !self.arena.typeContainsAssociatedProjection(ref: ref) { return <Result.Ok value=ref /> }
+        mut val normalizations: Array[ProjectionNormalizationStep] = []
+        return self.closeBodyProjectionTermsRecording(ref: ref, environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: false)
+    }
+
+    // Condition types have already been substituted by the selected witness.
+    // Capture each projection's exact prerequisite before publishing the plan.
+    inout fn recordConditionTypeNormalization(ref: U64, assumptions: Array[DeclarationBoundRef], normalizations: inout Array[ProjectionNormalizationStep]) -> Result[U64, CompileDiagnostic] {
+        return self.closeBodyProjectionTermsRecording(ref: ref, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64, assumptions: assumptions, normalizations: inout normalizations, recording: true)
+    }
+
+    inout fn closeBodyProjectionTermsRecording(ref: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, assumptions: Array[DeclarationBoundRef], normalizations: inout Array[ProjectionNormalizationStep], recording: Bool) -> Result[U64, CompileDiagnostic] {
         // Substitution already happened at the caller. Open generic terms
         // without projections also need no closure work: inspect canonical
         // child IDs before creating compatibility views or replacement arrays.
@@ -248,7 +260,7 @@ pub impl Comp {
             mut val changed: Bool = false
             mut val ri: U64 = 0U64
             while ri < t.recordFieldTerms.count() {
-                val next: U64 = (try self.closeBodyProjectionTerms(ref: t.recordFieldTerms[ri], environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions))
+                val next: U64 = (try self.closeBodyProjectionTermsRecording(ref: t.recordFieldTerms[ri], environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording))
                 if next != t.recordFieldTerms[ri] { changed = true }
                 fields.append(next)
                 ri += 1U64
@@ -258,12 +270,12 @@ pub impl Comp {
         }
         if t.assocNameId != 0U64 {
             val rawReceiver: U64 = self.typeTermProjectionReceiver(t: t)
-            val receiver: U64 = (try self.closeBodyProjectionTerms(ref: rawReceiver, environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions))
+            val receiver: U64 = (try self.closeBodyProjectionTermsRecording(ref: rawReceiver, environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording))
             mut val traitArgs: Array[U64] = []
             mut val changed: Bool = receiver != rawReceiver
             mut val ai: U64 = 0U64
             while ai < t.assocTraitArgs.count() {
-                val next: U64 = (try self.closeBodyProjectionTerms(ref: t.assocTraitArgs[ai], environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions))
+                val next: U64 = (try self.closeBodyProjectionTermsRecording(ref: t.assocTraitArgs[ai], environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording))
                 if next != t.assocTraitArgs[ai] { changed = true }
                 traitArgs.append(next)
                 ai += 1U64
@@ -281,33 +293,40 @@ pub impl Comp {
             // or a different instance of this same trait. Only reuse it when
             // it proves the projection's full subject and trait arguments.
             mut val output: U64 = 0U64
+            mut val selectedProof = <StaticConformanceProof.Missing />
             if !self.proofIsMissing(proof: environment.proof) {
                 val selected = try self.staticProofBound(proof: environment.proof, traitIdx: self.decls.traitIndexByOffset(offset: traitOwner))
                 if selected.subject != 0U64 && self.typeRefEq(a: selected.subject, b: receiver) && self.sameResolvedTypeRefs(a: selected.constraint.key.positionalArgs, b: traitArgs) {
-                    output = try self.associatedOutputInProof(proof: environment.proof, traitOwner: traitOwner, assocId: p.assocNameId)
+                    selectedProof = environment.proof
+                    output = try self.associatedOutputInProof(proof: selectedProof, traitOwner: traitOwner, assocId: p.assocNameId)
                 }
             }
             if output == 0U64 {
                 val proof: StaticConformanceProof = (try self.traitPatternProof(baseRef: receiver, traitId: p.assocTraitId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions))
+                selectedProof = proof
                 output = (try self.associatedOutputInProof(proof: proof, traitOwner: traitOwner, assocId: p.assocNameId))
+            }
+            if recording && !self.proofIsMissing(proof: selectedProof) {
+                val recordedOutput = if output == 0U64 || output == projection { give 0U64 } else { give output }
+                normalizations.append(<ProjectionNormalizationStep source=projection proof=self.freezeStaticConformanceProof(proof: selectedProof) output=recordedOutput />)
             }
             if output == 0U64 || output == projection { return <Result.Ok value=projection />}
             val substituted: U64 = self.groundTermInEnvironment(ref: output, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
-            return <Result.Ok value=(try self.closeBodyProjectionTerms(ref: substituted, environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions)) />
+            return <Result.Ok value=(try self.closeBodyProjectionTermsRecording(ref: substituted, environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording)) />
         }
         mut val args: Array[U64] = []
         mut val assocArgs: Array[U64] = []
         mut val changed: Bool = false
         mut val i: U64 = 0U64
         while i < t.args.count() {
-            val next: U64 = (try self.closeBodyProjectionTerms(ref: t.args[i], environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions))
+            val next: U64 = (try self.closeBodyProjectionTermsRecording(ref: t.args[i], environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording))
             if next != t.args[i] { changed = true }
             args.append(next)
             i += 1U64
         }
         i = 0U64
         while i < t.assocTraitArgs.count() {
-            val next: U64 = (try self.closeBodyProjectionTerms(ref: t.assocTraitArgs[i], environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions))
+            val next: U64 = (try self.closeBodyProjectionTermsRecording(ref: t.assocTraitArgs[i], environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording))
             if next != t.assocTraitArgs[i] { changed = true }
             assocArgs.append(next)
             i += 1U64

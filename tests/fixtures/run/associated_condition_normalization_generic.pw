@@ -1,0 +1,12 @@
+trait Parser { type Output }
+trait Mark {}
+trait Use { fn use() -> I64 }
+struct NoMark {}
+impl NoMark as Mark {}
+struct S {}
+impl S as Parser { type Output = NoMark }
+struct Box[T] { val value: T }
+impl[T] Box[T] as Use where T#Parser.Output: Mark { fn use() -> I64 { return 1I64 } }
+fn needUse[T](value: T) where T: Use {}
+fn generic[T](value: Box[T]) where T: Parser, T#Parser.Output: Mark { needUse(value: value) }
+fn main() { generic(value: <Box[S] value=<S /> />) }

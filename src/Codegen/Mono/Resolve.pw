@@ -209,18 +209,28 @@ pub impl Comp {
     inout fn selectWitnessConditionEvidence(source: Conform, witness: WitnessMatch, assumptions: Array[DeclarationBoundRef]) -> Result[Optional[WitnessMatch], CompileDiagnostic] {
         val parameters = self.copyConformBinds(binds: source.typeParams)
         mut val proofs: Array[U64] = []
+        mut val normalizations: Array[ProjectionNormalizationStep] = []
         mut val index = 0U64
         while index < source.bounds.len {
             val bound = self.conformBoundAt(bounds: source.bounds, index: index)
-            val subject = try self.groundWitnessTypeTerm(ref: bound.subject, params: <PatternBindInput.Conformance range=source.typeParams />, matchResult: witness)
-            val constraint = try self.groundTraitConstraintThroughWitness(constraint: bound.constraint, params: parameters, matchResult: witness)
-            val proof = try self.viewedTraitConstraintProof(ref: subject, constraint: constraint, assumptions: assumptions)
+            val rawSubject = try self.groundWitnessTypeTerm(ref: bound.subject, params: <PatternBindInput.Conformance range=source.typeParams />, matchResult: witness)
+            val subject = try self.recordConditionTypeNormalization(ref: rawSubject, assumptions: assumptions, normalizations: inout normalizations)
+            val rawConstraint = try self.groundTraitConstraintThroughWitness(constraint: bound.constraint, params: parameters, matchResult: witness)
+            mut val arguments: Array[U64] = []
+            for argument in rawConstraint.key.positionalArgs { arguments.append(try self.recordConditionTypeNormalization(ref: argument, assumptions: assumptions, normalizations: inout normalizations)) }
+            mut val predicates: Array[TraitAssocPredicate] = []
+            for predicate in rawConstraint.assocPredicates { predicates.append(<TraitAssocPredicate member=predicate.member value=(try self.recordConditionTypeNormalization(ref: predicate.value, assumptions: assumptions, normalizations: inout normalizations)) span=predicate.span />) }
+            val constraint = <TraitConstraint key=<TraitInstanceKey owner=rawConstraint.key.owner positionalArgs=arguments /> positionalArgsOpen=rawConstraint.positionalArgsOpen assocPredicates=predicates />
+            mut val names: Array[U64] = []
+            mut val values: Array[U64] = []
+            for predicate in constraint.assocPredicates { names.append(predicate.member) values.append(predicate.value) }
+            val proof = try self.traitPatternProof(baseRef: subject, traitId: 0U64, traitOwner: constraint.key.owner, traitArgs: <PatternTypeInput.Values values=constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: constraint.positionalArgsOpen, assocNames: names, assocValues: values, assumptions: assumptions)
             if self.proofIsMissing(proof: proof) { return <Result.Ok value=<Optional.None /> /> }
             proofs.append(self.freezeStaticConformanceProof(proof: proof))
             index += 1U64
         }
         val substitution = <WitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=witness.binds />
-        self.arena.witnessConditionPlans.append(<WitnessConditionPlan witness=substitution proofs=proofs />)
+        self.arena.witnessConditionPlans.append(<WitnessConditionPlan witness=substitution proofs=proofs normalizations=normalizations />)
         return <Result.Ok value=<Optional.Some v=<WitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=witness.binds conditions=self.arena.witnessConditionPlans.count() /> /> />
     }
 

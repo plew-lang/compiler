@@ -759,10 +759,35 @@ pub impl Comp {
         if !self.sameWitnessSubstitution(a: witness, b: plan.witness) || plan.proofs.count() != declaration.bounds.len { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
         mut val proofs: Array[U64] = []
         mut val changed = !self.sameWitnessSubstitution(a: witness, b: grounded)
+        mut val normalizations: Array[ProjectionNormalizationStep] = []
+        for step in plan.normalizations {
+            val source = self.groundTermInEnvironment(ref: step.source, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
+            mut val output = self.groundTermInEnvironment(ref: step.output, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
+            if source == 0U64 || source >= self.arena.typeCount() || self.arena.typeAt(index: source).assocNameId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected condition has invalid projection evidence") /> }
+            val receiver = self.typeTermProjectionReceiver(t: self.arena.typeAt(index: source))
+            val original = self.thawStaticConformanceProof(id: step.proof)
+            match (try self.instantiateStaticMemberProof(proof: original, receiverRef: receiver, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
+                StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected condition has no concrete projection evidence") /> }
+                StaticProofInstantiation.Deferred => { return <Result.Ok value=<SelectedWitnessInstantiation.Deferred /> /> }
+                StaticProofInstantiation.Ready(proof: val proof) => {
+                    if step.output == 0U64 {
+                        val projection = self.arena.typeAt(index: source)
+                        val owner = if projection.assocTraitDeclOffset != 0U64 { give projection.assocTraitDeclOffset } else { give projection.assocTraitStart }
+                        val associated = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: projection.assocNameId)
+                        if associated != 0U64 && !self.typeRefEq(a: associated, b: source) { output = associated }
+                    }
+                    val proofId = if self.sameStaticConformanceProof(a: original, b: proof) { give step.proof } else { changed = true give self.freezeStaticConformanceProof(proof: proof) }
+                    if source != step.source || output != step.output { changed = true }
+                    normalizations.append(<ProjectionNormalizationStep source=source proof=proofId output=output />)
+                }
+            }
+        }
+        try self.checkProjectionNormalizations(normalizations: normalizations, offset: 0U64)
         mut val index = 0U64
         while index < plan.proofs.count() {
             val clause = self.conformBoundAt(bounds: declaration.bounds, index: index)
-            val subject = try self.groundWitnessTypeTerm(ref: clause.subject, params: <PatternBindInput.Conformance range=declaration.typeParams />, matchResult: grounded)
+            val rawSubject = try self.groundWitnessTypeTerm(ref: clause.subject, params: <PatternBindInput.Conformance range=declaration.typeParams />, matchResult: grounded)
+            val subject = try self.replayProjectionNormalizations(ref: rawSubject, normalizations: normalizations, offset: clause.offset)
             val original = self.thawStaticConformanceProof(id: plan.proofs[index])
             match (try self.instantiateStaticMemberProof(proof: original, receiverRef: subject, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
                 StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: clause.offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
@@ -775,7 +800,7 @@ pub impl Comp {
             index += 1U64
         }
         if !changed { return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=<WitnessMatch conformIdx=grounded.conformIdx binds=grounded.binds selfRef=grounded.selfRef conditions=witness.conditions /> /> /> }
-        self.arena.witnessConditionPlans.append(<WitnessConditionPlan witness=grounded proofs=proofs />)
+        self.arena.witnessConditionPlans.append(<WitnessConditionPlan witness=grounded proofs=proofs normalizations=normalizations />)
         return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=<WitnessMatch conformIdx=grounded.conformIdx binds=grounded.binds selfRef=grounded.selfRef conditions=self.arena.witnessConditionPlans.count() /> /> />
     }
 
