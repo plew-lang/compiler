@@ -156,6 +156,18 @@ pub impl Comp {
 
     inout fn checkStaticProofEvidence(proof: StaticConformanceProof, offset: U64) -> Result[(), CompileDiagnostic] {
         match proof {
+            StaticConformanceProof.TraitSelf(traitIdx: val owner, receiverRef: val receiver, traitArgs: val arguments) => {
+                // This proof denotes the selected interface's own lexical Self,
+                // not an arbitrary in-scope type parameter claiming that trait.
+                // Source authority remains a separate scope admission below.
+                if owner >= self.decls.traitCount() || receiver == 0U64 || receiver >= self.arena.typeCount() {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected trait Self evidence has an invalid interface") />
+                }
+                val trait = self.decls.traitAt(index: owner)
+                if arguments.count() != trait.typeParams.count() || !self.typeRefEq(a: receiver, b: (try self.existentialSelfTerm(traitIndex: owner))) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected trait Self evidence does not match its interface Self") />
+                }
+            }
             StaticConformanceProof.ConcreteWitness(witness: val witness) => {
                 if !(try self.selectedNominalWitnessSubjectMatches(witness: witness)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not match its declaration subject") /> }
                 try self.checkWitnessConditionEvidence(witness: witness, offset: offset)
