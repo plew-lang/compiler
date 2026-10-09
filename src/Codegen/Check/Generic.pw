@@ -908,20 +908,6 @@ pub impl Comp {
     // Projection identity may occur under a nominal constructor or record.
     // Traverse the shared TypeTerm child relation so generic checking sees the
     // same complete term shape as grounding, equality, and monomorphization.
-    inout fn typeTermContainsAssociatedProjection(ref: U64) -> Bool {
-        // Closedness is registered from canonical children and excludes
-        // projections. Reuse that proof before materializing an owning view.
-        if self.arena.typeIsClosed(ref: ref) { return false }
-        if ref == 0U64 || ref >= self.arena.typeCount() { return false }
-        if self.arena.typeTerms[ref].assocNameId != 0U64 { return true }
-        mut val i: U64 = 0U64
-        while i < self.typeTermRefChildCount(ref: ref) {
-            if self.typeTermContainsAssociatedProjection(ref: self.typeTermRefChildRef(ref: ref, index: i)) { return true }
-            i += 1U64
-        }
-        return false
-    }
-
     inout fn checkBoundsStmt(stmtId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {

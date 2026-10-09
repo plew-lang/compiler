@@ -2374,7 +2374,7 @@ pub impl Comp {
     inout fn recordSemanticExprExpectedResult(exprId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
         // Normalize at the context boundary before inspecting expression shape.
         mut val normalizedContext = expectedTerm
-        if self.typeTermContainsAssociatedProjection(ref: normalizedContext) {
+        if self.arena.typeContainsAssociatedProjection(ref: normalizedContext) {
             normalizedContext = try self.normalizedValueType(ref: normalizedContext)
         }
         if normalizedContext == 0U64 || normalizedContext >= self.arena.typeCount() { return <Result.Ok value=() /> }

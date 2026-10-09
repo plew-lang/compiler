@@ -1,0 +1,19 @@
+use ../../../src/Ir only { Arena, TypeRef }
+fn main() {
+    mut val arena = <Arena />
+    arena.reserveTypeSentinel()
+    val binder = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] paramId=7U64 />, nameCount: 0U64)
+    val plain = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[binder] />, nameCount: 0U64)
+    if arena.typeContainsAssociatedProjection(ref: plain) { panic("opaque binder is not a projection") }
+    val projected = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] assocNameId=9U64 projectionReceiver=binder />, nameCount: 0U64)
+    val record = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldTerms=[projected] />, nameCount: 0U64)
+    val trait = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] assocTraitArgs=[record] />, nameCount: 0U64)
+    if !arena.typeContainsAssociatedProjection(ref: trait) { panic("nested projection") }
+    arena.resolveTypeDeclaration(index: trait, hasDecl: true, declOffset: 12U64, hasAssocTraitDecl: true, assocTraitDeclOffset: 13U64)
+    if !arena.typeContainsAssociatedProjection(ref: trait) { panic("declaration stamping") }
+    val future = arena.typeCount() + 1U64
+    val parent = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[future] />, nameCount: 0U64)
+    if arena.typeContainsAssociatedProjection(ref: parent) { panic("unknown child is not yet a projection") }
+    arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] assocNameId=9U64 projectionReceiver=binder />, nameCount: 0U64)
+    if !arena.typeContainsAssociatedProjection(ref: parent) { panic("forward child was cached as absent") }
+}

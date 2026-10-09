@@ -89,7 +89,7 @@ pub impl Comp {
     // normalize associated outputs without binding an opaque parameter.
     inout fn normalizedValueType(ref: U64) -> Result[U64, CompileDiagnostic] {
         val grounded = try self.groundTypeRef(ref: ref)
-        if !self.typeTermContainsAssociatedProjection(ref: grounded) { return <Result.Ok value=grounded /> }
+        if !self.arena.typeContainsAssociatedProjection(ref: grounded) { return <Result.Ok value=grounded /> }
         return self.closeBodyProjectionTerms(ref: grounded, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))
     }
 

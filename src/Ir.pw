@@ -156,6 +156,8 @@ pub struct TypeTerm {
     // Derived only by Arena registration: 0 unknown, 1 closed, 2 open.
     // The canonical structural fields and child pools are append-only.
     val closedness: U64 = 0U64
+    // 0 unknown, 1 absent, 2 present; structural, independent of proof selection.
+    val projectionPresence: U64 = 0U64
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0U64

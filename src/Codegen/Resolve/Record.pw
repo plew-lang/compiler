@@ -1621,7 +1621,7 @@ pub impl Comp {
     inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false, needsValue: Bool = true, purpose: ExpressionRecordPurpose = <ExpressionRecordPurpose.Execution />) -> Result[(), CompileDiagnostic] {
         // Normalize at the context boundary before inspecting expression shape.
         mut val normalizedContext = expectedTerm
-        if self.typeTermContainsAssociatedProjection(ref: normalizedContext) {
+        if self.arena.typeContainsAssociatedProjection(ref: normalizedContext) {
             normalizedContext = try self.normalizedValueType(ref: normalizedContext)
         }
         // A deferred value block must be recorded again in its lexical scope
