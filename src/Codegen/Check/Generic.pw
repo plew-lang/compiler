@@ -681,8 +681,9 @@ pub impl Comp {
     // first loses opaque parameters nested below its outer constructor (for
     // example `Optional[(index: U64, value: E)]`).
     //
-    // Returns true only when `valueExpr` is a construction of `expectedRef`;
-    // callers can then skip the lossy whole-expression inference fallback.
+    // Returns true when declaration fields supplied construction context.
+    // This does not establish compatibility of an already-recorded type:
+    // phantom arguments and nominal capabilities are not field constraints.
     inout fn genericCheckMakeFields(expectedRef: U64, valueExpr: U64) -> Result[Bool, CompileDiagnostic] {
         if expectedRef >= self.arena.typeCount() {
             return <Result.Ok value=false />
@@ -851,7 +852,9 @@ pub impl Comp {
         // Record checks each value block while its bindings are live; the
         // enclosing generic check consumes the recorded result, not its AST.
         if (try self.genericCheckMakeFields(expectedRef: expectedRef, valueExpr: valueExpr)) {
-            return <Result.Ok value=() />
+            if self.semanticExprTerm(exprId: valueExpr) == 0U64 {
+                return <Result.Ok value=() />
+            }
         }
         // an array literal in an `Array[E]` position: recurse element-wise (inferType
         // reports an array literal as unknown, so check each element against E).
