@@ -37,6 +37,7 @@ pub impl CallableArgumentInput {
     fn count() -> U64 {
         match self {
             CallableArgumentInput.Expressions(val range) => { return range.len }
+            CallableArgumentInput.Templates(val range) => { return range.len }
             CallableArgumentInput.Parameters(val range) => { return range.len }
         }
     }

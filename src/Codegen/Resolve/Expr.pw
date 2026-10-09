@@ -477,7 +477,7 @@ pub impl Comp {
             CallTemplateKind.Pending => {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot resolve this call from the available context") />
             }
-            CallTemplateKind.Direct(val callee, receiver: _, val args, val calleeTypeArgs, proofId: _) => {
+            CallTemplateKind.Direct(val callee, receiver: _, val args, val calleeTypeArgs, proofId: val proofId) => {
                 if callee >= self.arena.functionCount() {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected call has no declaration") />
                 }
@@ -500,6 +500,7 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot establish the selected call's receiver type") />
                 }
                 try self.checkCallTemplateArguments(args: args, parameterCount: function.params.count(), offset: offset)
+                try self.checkSourceDirectCallArguments(template: template, function: function, arguments: args, typeArgs: calleeTypeArgs, proofId: proofId)
             }
             CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
                 val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: offset)

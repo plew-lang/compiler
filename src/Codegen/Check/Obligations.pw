@@ -839,6 +839,67 @@ pub impl Comp {
         }
     }
 
+    // A source operand keeps its semantic type even after its lexical walk
+    // ended. A late literal context is a recorded fact, never ABI inference.
+    inout fn sourceCallArgumentType(source: CallArgumentSource) -> U64 {
+        match source {
+            CallArgumentSource.Term(exprId: _, term: val term) => { return term }
+            CallArgumentSource.Local(exprId: val expression, declarationTarget: _, term: val term) => {
+                if term != 0U64 { return term }
+                return self.semanticExprTerm(exprId: expression)
+            }
+            CallArgumentSource.PriorCallResult(exprId: val expression, siteKey: _) => { return self.semanticExprTerm(exprId: expression) }
+            CallArgumentSource.Legacy(exprId: val expression, info: _) => { return self.semanticExprTerm(exprId: expression) }
+        }
+    }
+
+    inout fn checkSourceCallArgumentType(argument: CallTemplateArgument, expected: U64, owner: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        val source = self.sourceCallArgumentType(source: argument.source)
+        if source == 0U64 || source >= self.arena.typeCount() || expected == 0U64 || expected >= self.arena.typeCount() {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected call argument has no resolved signature type") />
+        }
+        if self.typeRefEq(a: source, b: expected) { return <Result.Ok value=() /> }
+        val normalizedSource = try self.normalizedValueType(ref: source)
+        val normalizedExpected = try self.normalizedValueType(ref: expected)
+        if self.typeRefEq(a: normalizedSource, b: normalizedExpected) { return <Result.Ok value=() /> }
+        val site = try self.templateCallSiteKey(fnIdx: owner, exprId: self.callArgumentExprId(source: argument.source))
+        val lexical = self.decls.callTemplateLexicalRoots.getOr(key: site.ownerFnIdx, fallback: site.ownerFnIdx)
+        for index in self.decls.declarationConversionOwners.getOr(key: lexical, fallback: []) {
+            val conversion = self.decls.declarationConversions[index]
+            if self.sameCallSiteKey(a: conversion.site, b: site) && self.typeRefEq(a: conversion.source, b: normalizedSource) && self.typeRefEq(a: conversion.target, b: normalizedExpected) {
+                return self.checkDeclarationConversionEvidence(conversion: conversion)
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected call argument does not match its signature or retained conversion") />
+    }
+
+    // Complete selections are checked against their recorded operands. The
+    // declaration substitution is interpreted once; no callee or conversion
+    // search can repair an inconsistent frozen signature.
+    inout fn checkSourceDirectCallArguments(template: CallTemplate, function: Func, arguments: CallTemplateArgumentRange, typeArgs: CallTemplateTypeArgumentRange, proofId: U64) -> Result[(), CompileDiagnostic] {
+        if arguments.len == 0U64 { return <Result.Ok value=() /> }
+        val input = <CallableArgumentInput.Templates range=arguments />
+        if !self.callableInputLabelsOk(params: function.params, input: input) {
+            return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call arguments do not match its parameter labels") />
+        }
+        val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: self.thawStaticConformanceProof(id: proofId))
+        mut val index = 0U64
+        mut val position = 0U64
+        while index < arguments.len {
+            position = self.callableNextParameter(params: function.params, input: input, index: index, start: position)
+            val parameter = self.funcParamAt(params: function.params, index: position)
+            val argument = self.decls.callTemplateArgumentPool[arguments.start + index]
+            if argument.isInout != parameter.isInout {
+                return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call argument does not match its parameter access mode") />
+            }
+            val expected = try self.groundTermForBody(ref: parameter.ty, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+            try self.checkSourceCallArgumentType(argument: argument, expected: expected, owner: template.siteKey.ownerFnIdx, offset: template.siteKey.originStart)
+            position += 1U64
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn checkCallTemplateEvidence(template: CallTemplate) -> Result[(), CompileDiagnostic] {
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: val proof) => {

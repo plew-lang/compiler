@@ -1,0 +1,36 @@
+// Frozen signature shape/type admission; this does not prove source-place
+// mutability or the remaining ownership checks for a synthetic inout operand.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplate, CallTemplateKind, CallTemplateReceiver, CallSiteKey, CallTemplateArgument, CallArgumentSource }
+use @Std/Io only { print }
+fn check(name: String, label: String, labelled: Bool, inoutArgument: Bool, message: String) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="fn integer(value: I64) {{}} fn boolean(value: Bool) {{}} fn mutable(value: inout I64) {{}} fn positional(value~: I64) {{}} fn probe(source: I64) {{}}" path="signature.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val source = compiler.funcParamAt(params: compiler.arena.functionAt(index: owner).params, index: 0U64).ty
+    val labelSpan = compiler.internBytes(s: label)
+    val args = compiler.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=0U64 term=source /> labelStart=labelSpan.nameStart labelLen=labelSpan.nameLen hasLabel=labelled isInout=inoutArgument />])
+    val types = compiler.publishCallTemplateTypeArgs(args: [])
+    val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    val index = compiler.decls.callTemplates.count()
+    compiler.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=900U64 /> kind=<CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=args calleeTypeArgs=types proofId=0U64 /> />)
+    match compiler.checkRecordedCallTemplateBound(templateIndex: index) {
+        Result.Ok(value: _) => { if message != "" { panic("accepted inconsistent signature") } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message != message { panic(diagnostic.message) } }
+    }
+}
+fn main() {
+    check(name: "integer", label: "value", labelled: true, inoutArgument: false, message: "")
+    check(name: "boolean", label: "value", labelled: true, inoutArgument: false, message: "selected call argument does not match its signature or retained conversion")
+    check(name: "integer", label: "wrong", labelled: true, inoutArgument: false, message: "selected call arguments do not match its parameter labels")
+    check(name: "integer", label: "value", labelled: false, inoutArgument: false, message: "selected call arguments do not match its parameter labels")
+    check(name: "integer", label: "value", labelled: true, inoutArgument: true, message: "selected call argument does not match its parameter access mode")
+    check(name: "mutable", label: "value", labelled: true, inoutArgument: false, message: "selected call argument does not match its parameter access mode")
+    check(name: "mutable", label: "value", labelled: true, inoutArgument: true, message: "")
+    check(name: "positional", label: "value", labelled: false, inoutArgument: false, message: "")
+    check(name: "positional", label: "value", labelled: true, inoutArgument: false, message: "selected call arguments do not match its parameter labels")
+    print("direct-signature-evidence")
+}

@@ -75,14 +75,14 @@ pub impl Comp {
         return <Result.Ok value=out />
     }
 
+    inout fn callableLabelMatchesParameter(param: Param, hasLabel: Bool, labelStart: U64, labelLen: U64) -> Bool {
+        if param.noLabel { return !hasLabel }
+        if !hasLabel { return false }
+        return intern(c: inout self, start: labelStart, len: labelLen) == param.nameId
+    }
+
     inout fn argMatchesParamLabel(param: Param, arg: Arg) -> Bool {
-        if param.noLabel {
-            return !(arg.hasLabel)
-        }
-        if !(arg.hasLabel) {
-            return false
-        }
-        return intern(c: inout self, start: arg.labelStart, len: arg.labelLen) == param.nameId
+        return self.callableLabelMatchesParameter(param: param, hasLabel: arg.hasLabel, labelStart: arg.labelStart, labelLen: arg.labelLen)
     }
 
     // Expressions and requirement signatures expose the same callable form.
@@ -91,6 +91,10 @@ pub impl Comp {
         match input {
             CallableArgumentInput.Expressions(val range) => {
                 return self.argMatchesParamLabel(param: param, arg: self.argAt(args: range, index: index))
+            }
+            CallableArgumentInput.Templates(val range) => {
+                val argument = self.decls.callTemplateArgumentPool[range.start + index]
+                return self.callableLabelMatchesParameter(param: param, hasLabel: argument.hasLabel, labelStart: argument.labelStart, labelLen: argument.labelLen)
             }
             CallableArgumentInput.Parameters(val range) => {
                 val supplied = self.funcParamAt(params: range, index: index)
