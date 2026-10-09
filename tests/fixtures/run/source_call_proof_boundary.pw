@@ -1,0 +1,73 @@
+// Static member selection must retain the condition evidence it selected.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { ArgRange, StaticMemberResolution, StaticConformanceProof, WitnessMatch, CallTemplate, CallTemplateKind, CallSiteKey, CallTemplateReceiver, ProtocolSelection, OperatorSelection, CallTemplateOperandRange }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+fn check(family: U64, mode: U64, provided: Bool = false) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="trait B[V] {{}} trait Q {{}} trait P {{ fn value() -> I64 }} pub impl P {{ fn helper() -> I64 {{ return 3I64 }} }} trait R {{ fn other() -> I64 }} pub impl R {{ fn otherHelper() -> I64 {{ return 2I64 }} }} impl[V] B[V] as P where V: Q {{ fn value() -> I64 {{ return 1I64 }} }} fn probe[T,V,U](source: T, target: any P, foreign: U, wrong: any R) where T: B[V], U: B[V], V: Q {{}}" path="member-proof.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val functionIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: functionIndex)
+    val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val name = compiler.internBytes(s: "value")
+    val selected = compiler.staticMemberResolution(fnIdx: functionIndex, receiverRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: <ArgRange start=0U64 len=0U64 />, requiredTraitOwner: compiler.decls.traitAt(index: compiler.recordAnyTraitIndex(anyRef: compiler.funcParamAt(params: function.params, index: 1U64).ty)).nameStart).unwrap()
+    val proof = match selected {
+        StaticMemberResolution.Requirement(proof: val proof, traitIdx: _, reqIdx: _) => { give proof }
+        StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: _) => { give proof }
+        _ => { panic("missing member") }
+    }
+    val broken = proof
+    val foreign = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    val wrongTrait = compiler.recordAnyTraitIndex(anyRef: compiler.funcParamAt(params: function.params, index: 3U64).ty)
+    val helper = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: (if mode == 4U64 { give "otherHelper" } else { give "helper" })).nameId)
+    val resolution = if provided { give <StaticMemberResolution.Provided proof=proof traitIdx=(if mode == 2U64 { give wrongTrait } else { give compiler.recordAnyTraitIndex(anyRef: compiler.funcParamAt(params: function.params, index: 1U64).ty) }) callee=helper /> } else { give match selected {
+        StaticMemberResolution.Requirement(proof: _, traitIdx: val trait, reqIdx: val requirement) => { give <StaticMemberResolution.Requirement proof=broken traitIdx=(if mode == 2U64 { give wrongTrait } else { give trait }) reqIdx=requirement /> }
+        StaticMemberResolution.Provided(proof: _, traitIdx: val trait, callee: val callee) => { give <StaticMemberResolution.Provided proof=broken traitIdx=(if mode == 2U64 { give wrongTrait } else { give trait }) callee=callee /> }
+        _ => { panic("missing selected member") }
+    } }
+    val arguments = compiler.publishCallTemplateArguments(args: [])
+    val types = compiler.publishCallTemplateTypeArgs(args: [])
+    val actual = if mode == 1U64 { give foreign } else if mode == 3U64 { give 0U64 } else { give receiver }
+    val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: (if mode == 2U64 || mode == 4U64 { give "otherHelper" } else if provided { give "helper" } else { give "value" })).nameId)
+    val template = <CallTemplate siteKey=<CallSiteKey ownerFnIdx=functionIndex originKind=2U64 originSerial=900U64 /> receiverTypeTerm=actual kind=(if family == 0U64 {
+        give <CallTemplateKind.StaticMethod receiver=<CallTemplateReceiver.Term term=actual /> args=arguments resolution=resolution methodTypeArgs=types resultTerm=0U64 />
+    } else if family == 1U64 {
+        give <CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.Term term=actual /> args=arguments calleeTypeArgs=types proofId=compiler.freezeStaticConformanceProof(proof: proof) />
+    } else if family == 2U64 {
+        give <CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=actual /> selection=<ProtocolSelection.Direct callee=callee proof=proof /> resultTerm=0U64 />
+    } else if family == 3U64 {
+        give <CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=actual /> selection=<ProtocolSelection.Static resolution=resolution /> resultTerm=0U64 />
+    } else {
+        give <CallTemplateKind.Operator op=0I64 operands=<CallTemplateOperandRange start=0U64 len=0U64 /> resolution=<OperatorSelection.Static resolution=resolution /> resultTerm=0U64 />
+    }) />
+    val message = if provided && (family == 0U64 || family == 3U64 || family == 4U64) && (mode == 2U64 || mode == 4U64) { give "internal error: static call has no selected declaration and proof" } else if mode == 2U64 || mode == 4U64 { give "selected call evidence does not match its declaration trait" } else { give "selected call evidence does not match its receiver type" }
+    match compiler.checkCallTemplateEvidence(template: template) {
+        Result.Ok(value: _) => { if mode != 0U64 { panic("call accepted a foreign evidence boundary") } }
+        Result.Err(error: val diagnostic) => { if mode == 0U64 || diagnostic.message != message { panic(diagnostic.message) } }
+    }
+    if family == 0U64 {
+        val index = compiler.decls.callTemplates.count()
+        compiler.appendCallTemplate(template: template)
+        match compiler.checkCallTemplateSelection(templateIndex: index) {
+            Result.Ok(value: _) => { if mode != 0U64 { panic("sealed call accepted a foreign evidence boundary") } }
+            Result.Err(error: val diagnostic) => { if mode == 0U64 || diagnostic.message != message { panic(diagnostic.message) } }
+        }
+    }
+}
+fn main() {
+    mut val family = 0U64
+    while family < 5U64 {
+        mut val mode = 0U64
+        while mode < 4U64 {
+            check(family: family, mode: mode)
+            check(family: family, mode: mode, provided: true)
+            mode += 1U64
+        }
+        check(family: family, mode: 4U64, provided: true)
+        family += 1U64
+    }
+    print("call-proof-boundary")
+}

@@ -587,7 +587,11 @@ pub impl Comp {
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: val traitIndex, callee: val callee) => {
                 if !self.proofIsMissing(proof: proof) && traitIndex < self.decls.traitCount() && callee < self.arena.functionCount() {
-                    return <Result.Ok value=self.arena.functionAt(index: callee) />
+                    val function = self.arena.functionAt(index: callee)
+                    val trait = self.decls.traitAt(index: traitIndex)
+                    if !function.isProvided && function.hasRecv && function.body != 0U64 && function.recvId == trait.nameId && function.provTraitOwner == trait.nameStart {
+                        return <Result.Ok value=function />
+                    }
                 }
             }
             StaticMemberResolution.Missing => {}
