@@ -553,8 +553,8 @@ pub impl Comp {
     // Resolve an exact concrete trait instance through the same proof query
     // used by extension receiver applicability.  The queried positional args
     // are rigid, so no target binder list is supplied.
-    inout fn concreteConformanceProof(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput) -> Result[StaticConformanceProof, CompileDiagnostic] {
-        return <Result.Ok value=(try self.traitPatternProof(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: <PatternBindInput.Values values=[] />)) />
+    inout fn concreteConformanceProof(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        return <Result.Ok value=(try self.traitPatternProof(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions)) />
     }
 
     inout fn assocBindingFor(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: Array[U64], assocId: U64) -> Result[U64, CompileDiagnostic] {

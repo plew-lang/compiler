@@ -1,0 +1,36 @@
+// Provided fallback selection retains the declaration environment on paths.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { StaticConformanceProof }
+use @Std/Io only { print }
+fn check(text: String, sourceCopy: Bool, compatible: Bool) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=text path="provided-path.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    mut val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "helper").nameId)
+    while callee < compiler.arena.functionCount() {
+        val target = compiler.arena.functionAt(index: callee)
+        if target.isProvided && target.originConformIdx != 0U64 && (target.sourceConformIdx != 0U64) == sourceCopy {
+            val proof = compiler.providedBodyProof(f: target, receiverRef: receiver, assumptions: compiler.functionBoundAssumptions(fnIdx: owner)).unwrap()
+            if compiler.proofIsMissing(proof: proof) {
+                if compatible { panic("provided path lost its authored conditions") }
+            } else {
+                if !compatible { panic("provided path invented conditions") }
+                compiler.checkStaticProofEvidence(proof: proof, offset: 0U64).unwrap()
+                compiler.declarationProofDependency(proof: proof, scope: compiler.declarationTypeScope(owner: owner).unwrap(), offset: 0U64).unwrap()
+            }
+            return
+        }
+        callee = compiler.arena.nextFunctionNamed(index: callee)
+    }
+    panic("missing provided path copy")
+}
+fn main() {
+    check(text: "trait P {{}} trait Q {{}} pub impl P {{ fn helper() -> I64 {{ return 0I64 }} }} pub impl Q as P {{}} fn probe[T](source: T) where T: Q {{}}", sourceCopy: false, compatible: true)
+    check(text: "trait P {{}} trait Q {{}} pub impl P {{ fn helper() -> I64 {{ return 0I64 }} }} pub impl Q as P {{}} fn probe[T](source: T) {{}}", sourceCopy: false, compatible: false)
+    check(text: "trait P {{}} trait Q {{}} trait R {{}} pub impl Q as P {{ fn helper() -> I64 {{ return 0I64 }} }} struct Wrap[T] {{}} impl[T] Wrap[T] as Q where T: R {{}} fn probe[T](source: Wrap[T]) where T: R {{}}", sourceCopy: true, compatible: true)
+    check(text: "trait P {{}} trait Q {{}} trait R {{}} pub impl Q as P {{ fn helper() -> I64 {{ return 0I64 }} }} struct Wrap[T] {{}} impl[T] Wrap[T] as Q where T: R {{}} fn probe[T](source: Wrap[T]) {{}}", sourceCopy: true, compatible: false)
+    print("provided-path-conditions")
+}

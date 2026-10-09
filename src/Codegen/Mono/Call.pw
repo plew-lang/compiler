@@ -598,7 +598,7 @@ pub impl Comp {
                 val sources: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=source.extId />]
                 proofReceiver = self.typeRefWithAddedViewSources(ref: proofReceiver, additions: sources)
             }
-            return <Result.Ok value=(try self.concreteConformanceProof(baseRef: proofReceiver, traitId: source.traitId, traitOwner: source.traitStart, traitArgs: <PatternTypeInput.Conformance range=source.traitArgs />)) />
+            return <Result.Ok value=(try self.concreteConformanceProof(baseRef: proofReceiver, traitId: source.traitId, traitOwner: source.traitStart, traitArgs: <PatternTypeInput.Conformance range=source.traitArgs />, assumptions: assumptions)) />
         }
         // `originConformIdx` pins the placement edge that created this copy.
         // Its target must be the callable's origin trait. `srcTrait*` is the
@@ -629,7 +629,7 @@ pub impl Comp {
             val sources: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=f.extId />]
             proofReceiver = self.typeRefWithAddedViewSources(ref: proofReceiver, additions: sources)
         }
-        return <Result.Ok value=(try self.concreteConformanceProof(baseRef: proofReceiver, traitId: cf.traitId, traitOwner: cf.traitStart, traitArgs: <PatternTypeInput.Conformance range=cf.traitArgs />)) />
+        return <Result.Ok value=(try self.concreteConformanceProof(baseRef: proofReceiver, traitId: cf.traitId, traitOwner: cf.traitStart, traitArgs: <PatternTypeInput.Conformance range=cf.traitArgs />, assumptions: assumptions)) />
     }
 
     inout fn proofIsMissing(proof: StaticConformanceProof) -> Bool {
