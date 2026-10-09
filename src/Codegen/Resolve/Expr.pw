@@ -564,7 +564,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        return <Result.Ok value=() />
+        return self.checkCallTemplateAssumptionScope(template: template)
     }
 
     // Every selected call family uses the same frozen parameter-order plan.

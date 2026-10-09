@@ -257,6 +257,7 @@ pub struct Comp {
     // Active conditional witnesses are query state, never proof assumptions.
     pub mut val activeProjectionProofs: Array[U64] = []
     pub mut val activeConditionAdmission: Array[U64] = []
+    pub mut val activeAssumptionAdmission: Array[U64] = []
     pub mut val activeConformanceConditions: Array[WitnessMatch] = []
     // lowering-time where constraints for associated-type short projection
     // normalization (`T.Item` -> `T#Trait.Item`). Kept on Comp rather than Cursor

@@ -1,0 +1,54 @@
+// Authored assumption identity includes its source authority, not only its types.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, FuncBound, AssociatedBoundEvidence, DeclarationBoundRef, StaticConformanceProof }
+use @Std/Io only { print }
+fn check(foreign: Bool) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait P {{}} fn probe[T](source: T, target: any P) where T: P {{}} fn other() {{}}" path="authority.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "other").nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    val source = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val target = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val expression = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    compiler.recordSemanticExprTerm(exprId: expression, term: source)
+    compiler.cur.checkFn = owner
+    compiler.cur.recordCallTemplates = true
+    compiler.recordDeclarationConversion(exprId: expression, target: target).unwrap()
+    val bound = compiler.decls.funcBounds[0U64]
+    if foreign { compiler.decls.funcBounds[0U64] = <FuncBound fnIdx=other paramStart=bound.paramStart paramLen=bound.paramLen paramTy=bound.paramTy paramNameId=bound.paramNameId constraint=bound.constraint /> }
+    match compiler.prepareLexicalBody(fnIdx: owner) {
+        Result.Ok(value: _) => { if foreign { panic("owner accepted foreign assumption") } }
+        Result.Err(error: val diagnostic) => { if !foreign || diagnostic.message != "declaration assumption is not available in its lexical scope" { panic(diagnostic.message) } }
+    }
+    match compiler.checkRecordedMemberObligations() {
+        Result.Ok(value: _) => { if foreign { panic("whole target accepted foreign assumption") } }
+        Result.Err(error: val diagnostic) => { if !foreign || diagnostic.message != "declaration assumption is not available in its lexical scope" { panic(diagnostic.message) } }
+    }
+}
+
+fn checkCycle() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait P {{}} fn probe[T](source: T) where T: P {{}}" path="assumption-cycle.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val root = compiler.functionBoundAssumptions(fnIdx: owner)[0U64]
+    val source = <DeclarationBoundRef.AssociatedType index=compiler.arena.associatedBoundEvidence.count() />
+    compiler.arena.associatedBoundEvidence.append(<AssociatedBoundEvidence projection=compiler.declarationBound(source: root).subject clause=0U64 prerequisite=<StaticConformanceProof.AssumedBound source=source /> bound=compiler.declarationBound(source: root) />)
+    val scope = compiler.declarationTypeScope(owner: owner).unwrap()
+    mut val attempt = 0U64
+    while attempt < 2U64 {
+        match compiler.checkDeclarationAssumptionScope(source: source, scope: scope, offset: 0U64) {
+            Result.Ok(value: _) => { panic("accepted cyclic assumption prerequisite") }
+            Result.Err(error: val diagnostic) => { if diagnostic.message != "declaration assumption prerequisite is cyclic" { panic(diagnostic.message) } }
+        }
+        if compiler.activeAssumptionAdmission.count() != 0U64 { panic("assumption admission leaked active state") }
+        attempt += 1U64
+    }
+}
+fn main() {
+    checkCycle()
+    check(foreign: false)
+    check(foreign: true)
+    print("assumption-owner-evidence")
+}

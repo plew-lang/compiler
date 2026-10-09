@@ -55,7 +55,11 @@ pub impl Comp {
     // Evidence admission is shared by local owner publication and whole-target
     // closure. Concrete instantiation and member constraints remain separate.
     inout fn checkDeclarationConversionEvidence(conversion: DeclarationConversion) -> Result[(), CompileDiagnostic] {
-        return self.checkConversionProofAtBoundary(proof: self.thawValueConversionProof(id: conversion.proof), source: conversion.source, target: conversion.target, offset: conversion.site.originStart)
+        val proof = self.thawValueConversionProof(id: conversion.proof)
+        try self.checkConversionProofAtBoundary(proof: proof, source: conversion.source, target: conversion.target, offset: conversion.site.originStart)
+        val scope = try self.declarationTypeScope(owner: conversion.site.ownerFnIdx)
+        try self.declarationConversionDependency(conversion: proof, scope: scope, offset: conversion.site.originStart)
+        return <Result.Ok value=() />
     }
 
     inout fn checkConversionProofAtBoundary(proof: ValueConversionProof, source: U64, target: U64, offset: U64) -> Result[(), CompileDiagnostic] {
@@ -693,6 +697,34 @@ pub impl Comp {
         return <Result.Ok value=dependent />
     }
 
+    // Binder compatibility does not authorize another body's assumptions.
+    // Canonical source owners preserve legitimate closure/provided aliases.
+    inout fn checkDeclarationAssumptionScope(source: DeclarationBoundRef, scope: DeclarationTypeScope, offset: U64) -> Result[(), CompileDiagnostic] {
+        if !self.declarationBoundIsValid(source: source) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no valid trait bound") /> }
+        val owner = match source {
+            DeclarationBoundRef.Function(index: val index) => { give self.decls.funcBounds[index].fnIdx }
+            DeclarationBoundRef.MethodReceiver(index: val index) => { give index }
+            DeclarationBoundRef.AssociatedType(index: val index) => {
+                for active in self.activeAssumptionAdmission {
+                    if active == index { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration assumption prerequisite is cyclic") /> }
+                }
+                self.activeAssumptionAdmission.append(index)
+                val result = self.declarationProofDependency(proof: self.arena.associatedBoundEvidence[index].prerequisite, scope: scope, offset: offset)
+                self.activeAssumptionAdmission.removeLast()
+                try result
+                return <Result.Ok value=() />
+            }
+            // Conformance declaration scopes are distinct from function
+            // scopes. Their placement authority is a separate obligation.
+            _ => { return <Result.Ok value=() /> }
+        }
+        val lexical = self.decls.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
+        if owner >= self.arena.functionCount() || (try self.semanticBodyOwner(fnIdx: lexical)) != scope.owner {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration assumption is not available in its lexical scope") />
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn declarationProofDependency(proof: StaticConformanceProof, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
         mut val dependent = false
         match proof {
@@ -702,13 +734,15 @@ pub impl Comp {
                 for edge in edges { if (try self.declarationWitnessDependency(witness: edge, scope: scope, offset: offset)) { dependent = true } }
             }
             StaticConformanceProof.AssumedBound(source: val source) => {
-                if !self.declarationBoundIsValid(source: source) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no valid trait bound") /> }
+                try self.checkDeclarationAssumptionScope(source: source, scope: scope, offset: offset)
                 return self.declarationBoundDependency(bound: self.declarationBound(source: source), scope: scope, offset: offset)
             }
             StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => {
+                try self.checkDeclarationAssumptionScope(source: source, scope: scope, offset: offset)
                 return self.declarationBoundDependency(bound: self.assumedSupertraitBound(source: source, steps: steps), scope: scope, offset: offset)
             }
             StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
+                try self.checkDeclarationAssumptionScope(source: source, scope: scope, offset: offset)
                 dependent = try self.declarationBoundDependency(bound: self.assumedSupertraitBound(source: source, steps: steps), scope: scope, offset: offset)
                 for edge in edges { if (try self.declarationWitnessDependency(witness: edge, scope: scope, offset: offset)) { dependent = true } }
             }
@@ -726,6 +760,42 @@ pub impl Comp {
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: _) => { return self.declarationProofDependency(proof: proof, scope: scope, offset: offset) }
             StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no selected member") /> }
         }
+    }
+
+    // Admission applies before deciding whether a call is closed or deferred.
+    // The recorded source owner, not the current executable request, supplies
+    // the authority of any retained declaration assumptions.
+    inout fn checkCallTemplateAssumptionScope(template: CallTemplate) -> Result[(), CompileDiagnostic] {
+        match template.kind {
+            CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: val proof) => {
+                if proof == 0U64 { return <Result.Ok value=() /> }
+                val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
+                try self.declarationProofDependency(proof: self.thawStaticConformanceProof(id: proof), scope: scope, offset: template.siteKey.originStart)
+            }
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: _, resultTerm: _) => {
+                val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
+                try self.declarationStaticMemberDependency(resolution: resolution, scope: scope, offset: template.siteKey.originStart)
+            }
+            CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
+                val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
+                match selection {
+                    ProtocolSelection.Direct(callee: _, proof: val proof) => { try self.declarationProofDependency(proof: proof, scope: scope, offset: template.siteKey.originStart) }
+                    ProtocolSelection.Static(resolution: val resolution) => { try self.declarationStaticMemberDependency(resolution: resolution, scope: scope, offset: template.siteKey.originStart) }
+                    _ => {}
+                }
+            }
+            CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
+                match selection {
+                    OperatorSelection.Static(resolution: val resolution) => {
+                        val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
+                        try self.declarationStaticMemberDependency(resolution: resolution, scope: scope, offset: template.siteKey.originStart)
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=() />
     }
 
     inout fn checkDeferredCallDependency(template: CallTemplate) -> Result[(), CompileDiagnostic] {
