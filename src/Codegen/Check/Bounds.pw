@@ -314,10 +314,9 @@ pub impl Comp {
     // proof match deliberately compares the resolved owner and positional
     // terms only.
     inout fn assumedBoundProof(fnIdx: U64, receiverRef: U64, constraint: TraitConstraint) -> StaticConformanceProof {
-        mut val i: U64 = 0U64
-        while i < self.decls.funcBounds.count() {
+        for i in self.decls.funcBounds.indices(owner: fnIdx) {
             val bound: FuncBound = self.decls.funcBounds.at(index: i)
-            if bound.fnIdx == fnIdx && bound.constraint.key.owner == constraint.key.owner && bound.paramTy != 0U64 && self.typeRefEq(a: bound.paramTy, b: self.typeRefWithoutOuterViews(ref: receiverRef)) && bound.constraint.key.positionalArgs.count() == constraint.key.positionalArgs.count() {
+            if bound.constraint.key.owner == constraint.key.owner && bound.paramTy != 0U64 && self.typeRefEq(a: bound.paramTy, b: self.typeRefWithoutOuterViews(ref: receiverRef)) && bound.constraint.key.positionalArgs.count() == constraint.key.positionalArgs.count() {
                 mut val same: Bool = true
                 mut val ai: U64 = 0U64
                 while ai < constraint.key.positionalArgs.count() {
@@ -326,7 +325,6 @@ pub impl Comp {
                 }
                 if same { return <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=i /> /> }
             }
-            i += 1U64
         }
         return <StaticConformanceProof.Missing />
     }
