@@ -790,9 +790,11 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected call evidence has no declaration") />
         }
         val function = self.arena.functionAt(index: callee)
-        // origin describes the selected trait target; srcTrait describes
-        // body provenance and may be a different edge in a legitimate path.
-        val owner = if function.originTraitOwner != 0U64 { give function.originTraitOwner } else { give function.provTraitOwner }
+        // A copied provided callable is selected through its public target.
+        // An original trait receiver declaration (including a default-value
+        // function with that lexical receiver environment) uses that receiver
+        // trait. Its public conformance target can be a different path edge.
+        val owner = if function.isProvided || function.provTraitOwner == 0U64 { give function.originTraitOwner } else { give function.provTraitOwner }
         return self.checkDeclarationCallBoundary(proof: proof, receiverRef: receiverRef, traitIndex: self.decls.traitIndexByOffset(offset: owner), offset: offset)
     }
 
