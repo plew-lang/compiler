@@ -23,7 +23,7 @@ fn main() {
             match plan.signature.argumentPassings[0U64] { CallArgumentPassing.Borrow => {} _ => { panic "changed value parameter passing" } }
             match plan.signature.argumentPassings[1U64] { CallArgumentPassing.Inout => {} _ => { panic "lost inout parameter" } }
             match plan.resultConversion {
-                ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, payloads: val payloads) => {
+                ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, argumentProofs: _, payloads: val payloads) => {
                     assert(payloads.count() == 1U64)
                     match payloads[0U64].conversion {
                         ValueConversionProof.ExistentialBox(sourceRef: val actualSource, targetRef: val actualTarget, traitIdx: _, proof: val actualProof) => {

@@ -1,0 +1,73 @@
+// Corrupt selected plans without reselecting conformance at admission.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, DeclarationConversion, ValueConversionProof, EnumPayloadConversion }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn check(array: Bool, phantom: Bool, corruption: U64, message: String = "") {
+    mut val compiler = <Comp />
+    val wrapper = if array { give "Array" } else { give "Wrap" }
+    val payload = if phantom { give "" } else { give "(value: T)" }
+    val declaration = if array { give "struct Array[T] {{}}" } else { give "enum Wrap[T] {{ Value{payload} }}" }
+    val text = "trait P {{}} struct Value {{}} impl Value as P {{}} {declaration} fn probe(source: {wrapper}[Value], target: {wrapper}[any P]) {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=text path="structural-proof.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    if array { compiler.modules.langModule = compiler.moduleOf(offset: compiler.arena.structAt(index: 1U64).nameStart) }
+    val function = compiler.arena.functionAt(index: 0U64)
+    val source = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val target = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val selected = compiler.callArgumentConversion(sourceRef: source, targetRef: target).unwrap()
+    val damaged = match selected {
+        ValueConversionProof.ArrayRepack(sourceRef: val sourceType, targetRef: val targetType, element: val child) => {
+            give <ValueConversionProof.ArrayRepack sourceRef=sourceType targetRef=targetType element=(if corruption == 1U64 { give <ValueConversionProof.Identity /> } else { give child }) />
+        }
+        ValueConversionProof.EnumRepack(sourceRef: val sourceType, targetRef: val targetType, enumIdx: val enumIndex, argumentProofs: val arguments, payloads: val payloads) => {
+            mut val checkedArguments = arguments
+            mut val checkedPayloads = payloads
+            if corruption == 1U64 { checkedArguments = [<ValueConversionProof.Identity />] }
+            if corruption == 2U64 { checkedArguments = [] }
+            if corruption == 3U64 { checkedPayloads = [] }
+            if corruption == 4U64 {
+                val field = payloads[0U64]
+                checkedPayloads = [<EnumPayloadConversion sourceRef=field.sourceRef targetRef=field.targetRef conversion=<ValueConversionProof.Identity /> />]
+            }
+            if corruption == 5U64 {
+                val field = payloads[0U64]
+                checkedPayloads = [<EnumPayloadConversion sourceRef=field.targetRef targetRef=field.targetRef conversion=field.conversion />]
+            }
+            give <ValueConversionProof.EnumRepack sourceRef=sourceType targetRef=targetType enumIdx=enumIndex argumentProofs=checkedArguments payloads=checkedPayloads />
+        }
+        _ => { panic("missing selected structural conversion") }
+    }
+    val expression = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    compiler.recordSemanticExprTerm(exprId: expression, term: source)
+    compiler.cur.checkFn = 0U64
+    compiler.cur.recordCallTemplates = true
+    compiler.recordDeclarationConversion(exprId: expression, target: target).unwrap()
+    val original = compiler.decls.declarationConversions[0U64]
+    compiler.decls.declarationConversions[0U64] = <DeclarationConversion site=original.site source=source target=target proof=compiler.freezeValueConversionProof(proof: damaged) />
+    match compiler.prepareLexicalBody(fnIdx: 0U64) {
+        Result.Ok(value: _) => { assert(message == "") }
+        Result.Err(error: val diagnostic) => { assert(message != "" && diagnostic.message == message) }
+    }
+    match compiler.checkRecordedMemberObligations() {
+        Result.Ok(value: _) => { assert(message == "") }
+        Result.Err(error: val diagnostic) => { assert(message != "" && diagnostic.message == message) }
+    }
+    if phantom {
+        assert(compiler.arena.finalExistentials.count() == 0U64)
+        assert(compiler.monoWork.bodyCount() == 0U64)
+    }
+}
+fn main() {
+    check(array: true, phantom: false, corruption: 0U64)
+    check(array: true, phantom: false, corruption: 1U64, message: "identity conversion changes the source value type")
+    check(array: false, phantom: false, corruption: 0U64)
+    check(array: false, phantom: false, corruption: 3U64, message: "enum conversion payload plan is incomplete")
+    check(array: false, phantom: false, corruption: 4U64, message: "identity conversion changes the source value type")
+    check(array: false, phantom: false, corruption: 5U64, message: "enum conversion payload does not match its declaration field")
+    check(array: false, phantom: true, corruption: 0U64)
+    check(array: false, phantom: true, corruption: 1U64, message: "identity conversion changes the source value type")
+    check(array: false, phantom: true, corruption: 2U64, message: "enum conversion type argument plan is incomplete")
+    print("structural-owner-evidence")
+}

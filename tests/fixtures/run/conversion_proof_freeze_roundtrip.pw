@@ -1,4 +1,5 @@
 use @Std/Io only { write }
+use @Std/Core only { assert }
 use /Frontend only { Comp }
 use /Ir only { DeclarationBoundRef, ValueConversionProof, EnumPayloadConversion, StaticConformanceProof }
 
@@ -18,7 +19,7 @@ fn describe(proof: ValueConversionProof) {
             write(s: "array\n")
             describe(proof: element)
         }
-        ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, payloads: val payloads) => {
+        ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, argumentProofs: _, payloads: val payloads) => {
             write(s: "enum\n")
             for payload in payloads { describe(proof: payload.conversion) }
         }
@@ -28,8 +29,8 @@ fn describe(proof: ValueConversionProof) {
 fn main() {
     mut val compiler: Comp = <Comp />
     val leaf: ValueConversionProof = <ValueConversionProof.ExistentialBox sourceRef=11U64 targetRef=12U64 traitIdx=13U64 proof=<StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=7U64 /> /> />
-    val inner: ValueConversionProof = <ValueConversionProof.EnumRepack sourceRef=21U64 targetRef=22U64 enumIdx=23U64 payloads=[<EnumPayloadConversion sourceRef=31U64 targetRef=31U64 conversion=<ValueConversionProof.Identity /> />] />
-    val tree: ValueConversionProof = <ValueConversionProof.EnumRepack sourceRef=41U64 targetRef=42U64 enumIdx=43U64 payloads=[
+    val inner: ValueConversionProof = <ValueConversionProof.EnumRepack sourceRef=21U64 targetRef=22U64 enumIdx=23U64 argumentProofs=[leaf] payloads=[<EnumPayloadConversion sourceRef=31U64 targetRef=31U64 conversion=<ValueConversionProof.Identity /> />] />
+    val tree: ValueConversionProof = <ValueConversionProof.EnumRepack sourceRef=41U64 targetRef=42U64 enumIdx=43U64 argumentProofs=[inner, leaf] payloads=[
         <EnumPayloadConversion sourceRef=21U64 targetRef=22U64 conversion=inner />,
         <EnumPayloadConversion sourceRef=51U64 targetRef=52U64 conversion=<ValueConversionProof.ArrayRepack sourceRef=51U64 targetRef=52U64 element=leaf /> />,
         <EnumPayloadConversion sourceRef=61U64 targetRef=62U64 conversion=<ValueConversionProof.Missing /> />,
@@ -39,6 +40,8 @@ fn main() {
     val prefix: U64 = compiler.freezeValueConversionProof(proof: <ValueConversionProof.Identity />)
     val first: U64 = compiler.freezeValueConversionProof(proof: tree)
     val second: U64 = compiler.freezeValueConversionProof(proof: tree)
+    assert(compiler.sameValueConversionProof(a: tree, b: compiler.thawValueConversionProof(id: first)))
+    assert(compiler.sameValueConversionProof(a: tree, b: compiler.thawValueConversionProof(id: second)))
     describe(proof: compiler.thawValueConversionProof(id: prefix))
     describe(proof: compiler.thawValueConversionProof(id: first))
     describe(proof: compiler.thawValueConversionProof(id: second))

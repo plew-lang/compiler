@@ -49,6 +49,22 @@ pub impl Comp {
         return 0U64
     }
 
+    // Array syntax and conversion select the declared lang item, not a
+    // same-spelled user struct. The module surface owns this fixed identity.
+    inout fn langArrayIdentity() -> Bind {
+        if self.modules.langModule == 4000000000U64 { return self.missingDeclIdentity() }
+        val name = self.internBytes(s: "Array")
+        return self.typeDeclIdentityFromSurface(surfaceMod: self.modules.langModule, start: name.nameStart, len: name.nameLen)
+    }
+
+    inout fn isLangArrayType(ref: U64) -> Bool {
+        if ref == 0U64 || ref >= self.arena.typeCount() { return false }
+        val term = self.arena.typeTerms[ref]
+        if !term.hasDecl || term.isAny || term.isRecord || term.paramId != 0U64 || term.assocNameId != 0U64 { return false }
+        val identity = self.langArrayIdentity()
+        return identity.nameLen != 0U64 && term.declOffset == identity.nameStart && term.args.len == 1U64
+    }
+
     inout fn traitNameLenByOwner(owner: U64) -> U64 {
         val index = self.decls.traitOwnerIndex(offset: owner)
         if index < self.decls.traitOwnerCount() { return self.decls.traitOwnerAt(index: index).nameLen }

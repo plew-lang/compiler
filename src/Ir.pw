@@ -1568,10 +1568,10 @@ pub enum ValueConversionProof {
     // Interface-equivalent binding spellings use the same representation proof.
     ExistentialRetag(sourceRef: U64, targetRef: U64)
     ArrayRepack(sourceRef: U64, targetRef: U64, element: ValueConversionProof)
-    // One entry per physical payload field, in declaration variant order. This
-    // is the complete conversion plan; LLVM must not reconstruct a field type
-    // from enum generic arguments to discover a proof.
-    EnumRepack(sourceRef: U64, targetRef: U64, enumIdx: U64, payloads: Array[EnumPayloadConversion])
+    // Argument proofs establish semantic type changes, including phantom arguments.
+    // Payloads describe physical fields in declaration variant order; only these
+    // require runtime conversion. LLVM never reconstructs selected proofs.
+    EnumRepack(sourceRef: U64, targetRef: U64, enumIdx: U64, argumentProofs: Array[ValueConversionProof], payloads: Array[EnumPayloadConversion])
 }
 
 // Selected receiver evidence for covariant Self results. It is available
@@ -1590,6 +1590,14 @@ pub struct EnumPayloadConversion {
     pub val conversion: ValueConversionProof
 }
 pub impl EnumPayloadConversion { factory }
+
+// A type boundary without a selected conversion. Enum declaration readers
+// expose these to both selection and admission; they never invent evidence.
+pub struct ValueConversionBoundary {
+    pub val sourceRef: U64
+    pub val targetRef: U64
+}
+pub impl ValueConversionBoundary { factory }
 
 // Frozen proof rows are the ownership-safe form of StaticConformanceProof and
 // ValueConversionProof.  The source-facing sums above remain a transitional
@@ -1631,6 +1639,8 @@ pub struct ConversionProofNode {
     pub val enumIdx: U64 = 0U64
     pub val payloads: U64 = 0U64
     pub val payloadCount: U64 = 0U64
+    pub val argumentProofs: U64 = 0U64
+    pub val argumentProofCount: U64 = 0U64
 }
 pub impl ConversionProofNode { factory }
 
@@ -2053,6 +2063,8 @@ pub struct FinalMatchArmResolution {
     // a time and never need a value copy of an enclosing match descriptor.
     pub val payloadStart: U64 = 0U64
     pub val payloadCount: U64 = 0U64
+    pub val argumentProofs: U64 = 0U64
+    pub val argumentProofCount: U64 = 0U64
 }
 pub impl FinalMatchArmResolution { factory }
 
@@ -2710,6 +2722,7 @@ pub struct Arena {
     pub mut val staticProofWitnessPool: Array[FrozenWitnessMatch] = []
     pub mut val conversionProofs: Array[ConversionProofNode] = []
     pub mut val conversionPayloadPool: Array[FrozenEnumPayloadConversion] = []
+    pub mut val conversionArgumentProofPool: Array[U64] = []
     // Source byte offset of each expr (parallel to `exprs`; 0 = unknown). Lower
     // records the parsed ExprAst's span start (the AST carries a span on every
     // node); backend-synthesized exprs keep 0. THE diagnostic-position store:

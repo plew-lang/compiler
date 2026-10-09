@@ -6,8 +6,9 @@ use /Ir only { ExistentialBoxEvidence, ValueConversionProof, StaticConformancePr
 
 fn main() {
     mut val compiler = <Comp />
-    val source = "fn probe[T](value: T, target: any P, values: Array[T], targets: Array[any P], wrapped: Wrap[T], erased: Wrap[any P], nested: Array[Wrap[T]], nestedErased: Array[Wrap[any P]], other: any Q) where T: P {{}}\ntrait P {{}}\ntrait Q {{}}\nenum Wrap[T] {{ Some(value: T) None }}\n"
+    val source = "fn probe[T](value: T, target: any P, values: Array[T], targets: Array[any P], wrapped: Wrap[T], erased: Wrap[any P], nested: Array[Wrap[T]], nestedErased: Array[Wrap[any P]], other: any Q) where T: P {{}}\nstruct Array[T] {{}}\ntrait P {{}}\ntrait Q {{}}\nenum Wrap[T] {{ Some(value: T) None }}\n"
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="rebox.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    compiler.modules.langModule = compiler.moduleOf(offset: compiler.arena.structAt(index: 0U64).nameStart)
     val function = compiler.arena.functionAt(index: 0U64)
     val sourceType = compiler.funcParamAt(params: function.params, index: 0U64).ty
     val targetType = compiler.funcParamAt(params: function.params, index: 1U64).ty

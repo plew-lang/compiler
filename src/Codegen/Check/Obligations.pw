@@ -55,13 +55,16 @@ pub impl Comp {
     // Evidence admission is shared by local owner publication and whole-target
     // closure. Concrete instantiation and member constraints remain separate.
     inout fn checkDeclarationConversionEvidence(conversion: DeclarationConversion) -> Result[(), CompileDiagnostic] {
-        if conversion.source == 0U64 { return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "source conversion requires a resolved value type") /> }
-        if conversion.source >= self.arena.typeCount() || conversion.target == 0U64 || conversion.target >= self.arena.typeCount() {
-            return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "source conversion has an invalid type boundary") />
+        return self.checkConversionProofAtBoundary(proof: self.thawValueConversionProof(id: conversion.proof), source: conversion.source, target: conversion.target, offset: conversion.site.originStart)
+    }
+
+    inout fn checkConversionProofAtBoundary(proof: ValueConversionProof, source: U64, target: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        if source == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "source conversion requires a resolved value type") /> }
+        if source >= self.arena.typeCount() || target == 0U64 || target >= self.arena.typeCount() {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "source conversion has an invalid type boundary") />
         }
-        val proof = self.thawValueConversionProof(id: conversion.proof)
-        try self.checkConversionProofBoundary(proof: proof, source: conversion.source, target: conversion.target, offset: conversion.site.originStart)
-        return self.checkConversionProofEvidence(proof: proof, offset: conversion.site.originStart)
+        try self.checkConversionProofBoundary(proof: proof, source: source, target: target, offset: offset)
+        return self.checkConversionProofEvidence(proof: proof, offset: offset)
     }
 
     // A frozen plan cannot describe another conversion than the source row
@@ -76,7 +79,7 @@ pub impl Comp {
             ValueConversionProof.ExistentialRetag(sourceRef: val actualSource, targetRef: val actualTarget) => { give (source: actualSource, target: actualTarget) }
             ValueConversionProof.ExistentialBox(sourceRef: val actualSource, targetRef: val actualTarget, traitIdx: _, proof: _) => { give (source: actualSource, target: actualTarget) }
             ValueConversionProof.ArrayRepack(sourceRef: val actualSource, targetRef: val actualTarget, element: _) => { give (source: actualSource, target: actualTarget) }
-            ValueConversionProof.EnumRepack(sourceRef: val actualSource, targetRef: val actualTarget, enumIdx: _, payloads: _) => { give (source: actualSource, target: actualTarget) }
+            ValueConversionProof.EnumRepack(sourceRef: val actualSource, targetRef: val actualTarget, enumIdx: _, argumentProofs: _, payloads: _) => { give (source: actualSource, target: actualTarget) }
         }
         if !self.typeRefEq(a: source, b: boundary.source) || !self.typeRefEq(a: target, b: boundary.target) {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conversion proof does not match its recorded source and target types") />
@@ -115,13 +118,42 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential box evidence does not satisfy its target associated types") />
                 }
             }
-            ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => { try self.checkConversionProofEvidence(proof: element, offset: offset) }
-            ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, payloads: val payloads) => {
-                for payload in payloads { try self.checkConversionProofEvidence(proof: payload.conversion, offset: offset) }
+            ValueConversionProof.ArrayRepack(sourceRef: val source, targetRef: val target, element: val element) => {
+                val boundary = try self.arrayConversionElementBoundary(sourceRef: source, targetRef: target, offset: offset)
+                try self.checkConversionProofAtBoundary(proof: element, source: boundary.sourceRef, target: boundary.targetRef, offset: offset)
+            }
+            ValueConversionProof.EnumRepack(sourceRef: val source, targetRef: val target, enumIdx: val enumIndex, argumentProofs: val arguments, payloads: val payloads) => {
+                val boundaries = try self.enumRepackPayloadBoundaries(sourceRef: source, targetRef: target, enumIdx: enumIndex)
+                val sourceType = self.arena.typeAt(index: source)
+                val targetType = self.arena.typeAt(index: target)
+                if arguments.count() != sourceType.args.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "enum conversion type argument plan is incomplete") /> }
+                mut val index = 0U64
+                while index < arguments.count() {
+                    try self.checkConversionProofAtBoundary(proof: arguments[index], source: sourceType.args[index], target: targetType.args[index], offset: offset)
+                    index += 1U64
+                }
+                if payloads.count() != boundaries.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "enum conversion payload plan is incomplete") /> }
+                index = 0U64
+                while index < payloads.count() {
+                    val payload = payloads[index]
+                    val boundary = boundaries[index]
+                    if !self.typeRefEq(a: payload.sourceRef, b: boundary.sourceRef) || !self.typeRefEq(a: payload.targetRef, b: boundary.targetRef) {
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "enum conversion payload does not match its declaration field") />
+                    }
+                    try self.checkConversionProofAtBoundary(proof: payload.conversion, source: boundary.sourceRef, target: boundary.targetRef, offset: offset)
+                    index += 1U64
+                }
             }
             _ => {}
         }
         return <Result.Ok value=() />
+    }
+
+    inout fn arrayConversionElementBoundary(sourceRef: U64, targetRef: U64, offset: U64) -> Result[ValueConversionBoundary, CompileDiagnostic] {
+        if !self.isLangArrayType(ref: sourceRef) || !self.isLangArrayType(ref: targetRef) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "array conversion has an invalid declaration boundary") />
+        }
+        return <Result.Ok value=<ValueConversionBoundary sourceRef=self.arena.typeAt(index: sourceRef).args[0U64] targetRef=self.arena.typeAt(index: targetRef).args[0U64] /> />
     }
 
     inout fn checkSourceConversionEvidence(owner: SemanticCompletionOwner) -> Result[(), CompileDiagnostic] {
@@ -145,6 +177,37 @@ pub impl Comp {
             index += 1U64
         }
         return <Result.Ok value=() />
+    }
+
+    // A phantom argument changes static type, but produces no dynamic value.
+    // Interpret the same proof instantiation and admission contracts while
+    // avoiding executable witness plans and body requests for absent payloads.
+    inout fn checkSemanticConversionObligations(conversion: ValueConversionProof, environment: InstanceEnvironment) -> Result[DeclarationObligationState, CompileDiagnostic] {
+        mut val completion = <DeclarationObligationState.Complete />
+        match conversion {
+            ValueConversionProof.ExistentialBox(sourceRef: val source, targetRef: val target, traitIdx: val traitIndex, proof: val proof) => {
+                val receiver = try self.groundTermForBody(ref: source, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                val targetType = try self.groundTermForBody(ref: target, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                match (try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)) {
+                    StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no concrete conformance evidence") /> }
+                    StaticProofInstantiation.Deferred => { completion = <DeclarationObligationState.Deferred /> }
+                    StaticProofInstantiation.Ready(proof: val evidence) => { try self.checkConversionProofEvidence(proof: <ValueConversionProof.ExistentialBox sourceRef=receiver targetRef=targetType traitIdx=traitIndex proof=evidence />, offset: 0U64) }
+                }
+            }
+            ValueConversionProof.ExistentialRetag(sourceRef: val source, targetRef: val target) => {
+                val sourceType = try self.groundTermForBody(ref: source, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                val targetType = try self.groundTermForBody(ref: target, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                try self.checkConversionProofEvidence(proof: <ValueConversionProof.ExistentialRetag sourceRef=sourceType targetRef=targetType />, offset: 0U64)
+            }
+            ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => { return self.checkSemanticConversionObligations(conversion: element, environment: environment) }
+            ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, argumentProofs: val arguments, payloads: val payloads) => {
+                for argument in arguments { if (try self.checkSemanticConversionObligations(conversion: argument, environment: environment)).isDeferred() { completion = <DeclarationObligationState.Deferred /> } }
+                for payload in payloads { if (try self.checkSemanticConversionObligations(conversion: payload.conversion, environment: environment)).isDeferred() { completion = <DeclarationObligationState.Deferred /> } }
+            }
+            ValueConversionProof.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "source value does not satisfy the required conversion") /> }
+            ValueConversionProof.Identity => {}
+        }
+        return <Result.Ok value=completion />
     }
 
     inout fn checkConversionObligations(conversion: ValueConversionProof, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[DeclarationObligationState, CompileDiagnostic] {
@@ -197,7 +260,8 @@ pub impl Comp {
             ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => {
                 if (try self.checkConversionObligations(conversion: element, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() { completion = <DeclarationObligationState.Deferred /> }
             }
-            ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, payloads: val payloads) => {
+            ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, argumentProofs: val arguments, payloads: val payloads) => {
+                for argument in arguments { if (try self.checkSemanticConversionObligations(conversion: argument, environment: environment)).isDeferred() { completion = <DeclarationObligationState.Deferred /> } }
                 for payload in payloads { if (try self.checkConversionObligations(conversion: payload.conversion, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() { completion = <DeclarationObligationState.Deferred /> } }
             }
             ValueConversionProof.Identity => {}
@@ -615,8 +679,15 @@ pub impl Comp {
                 if (try self.declarationProofDependency(proof: proof, scope: scope, offset: offset)) { dependent = true }
             }
             ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => { return self.declarationConversionDependency(conversion: element, scope: scope, offset: offset) }
-            ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, payloads: val payloads) => {
-                for payload in payloads { if (try self.declarationConversionDependency(conversion: payload.conversion, scope: scope, offset: offset)) { dependent = true } }
+            ValueConversionProof.EnumRepack(sourceRef: val source, targetRef: val target, enumIdx: _, argumentProofs: val arguments, payloads: val payloads) => {
+                dependent = try self.declarationTypeDependency(ref: source, scope: scope, offset: offset)
+                if (try self.declarationTypeDependency(ref: target, scope: scope, offset: offset)) { dependent = true }
+                for argument in arguments { if (try self.declarationConversionDependency(conversion: argument, scope: scope, offset: offset)) { dependent = true } }
+                for payload in payloads {
+                    if (try self.declarationTypeDependency(ref: payload.sourceRef, scope: scope, offset: offset)) { dependent = true }
+                    if (try self.declarationTypeDependency(ref: payload.targetRef, scope: scope, offset: offset)) { dependent = true }
+                    if (try self.declarationConversionDependency(conversion: payload.conversion, scope: scope, offset: offset)) { dependent = true }
+                }
             }
             ValueConversionProof.Identity => {}
             ValueConversionProof.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration conversion has no evidence") /> }

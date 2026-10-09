@@ -21,8 +21,8 @@ fn main() {
     val outer = envelope(compiler: inout compiler, name: "Outer", payload: inner)
     // A redundant but valid structural copy isolates nested identity leaves:
     // no conformance or source-language conversion selection is under test.
-    val child = <ValueConversionProof.EnumRepack sourceRef=inner targetRef=inner enumIdx=0U64 payloads=[<EnumPayloadConversion sourceRef=payload targetRef=payload conversion=<ValueConversionProof.Identity /> />] />
-    val conversion = compiler.freezeValueConversionProof(proof: <ValueConversionProof.EnumRepack sourceRef=outer targetRef=outer enumIdx=1U64 payloads=[<EnumPayloadConversion sourceRef=inner targetRef=inner conversion=child />] />)
+    val child = <ValueConversionProof.EnumRepack sourceRef=inner targetRef=inner enumIdx=0U64 argumentProofs=[] payloads=[<EnumPayloadConversion sourceRef=payload targetRef=payload conversion=<ValueConversionProof.Identity /> />] />
+    val conversion = compiler.freezeValueConversionProof(proof: <ValueConversionProof.EnumRepack sourceRef=outer targetRef=outer enumIdx=1U64 argumentProofs=[] payloads=[<EnumPayloadConversion sourceRef=inner targetRef=inner conversion=child />] />)
     compiler.enqueueFinalDestruction(typeRef: outer).unwrap()
     val source = <MidPlace local=0U64 typeTerm=outer />
     val destination = <MidPlace local=1U64 typeTerm=outer />

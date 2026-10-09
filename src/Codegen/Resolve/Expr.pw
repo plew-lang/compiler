@@ -330,7 +330,8 @@ pub impl Comp {
         val ab: Bind = self.kwSpan(kw: "Array", kwLen: 5)
         mut val args: Array[U64] = []
         args.append(elemRef)
-        return self.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+        val identity = self.langArrayIdentity()
+        return self.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen nameId=ab.nameId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] hasDecl=identity.nameLen != 0U64 declOffset=identity.nameStart />)
     }
 
     inout fn typedIrRefOfInfo(ti: TypeInfo) -> U64 {
