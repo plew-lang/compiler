@@ -1,0 +1,25 @@
+// A recorded expression belongs to its lexical binding. A later same-named
+// local must not change the source type consumed by compatibility checking.
+use /Frontend only { Comp }
+use /Ir only { Expr, TypeRef, Func }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integerName = compiler.internBytes(s: "I64")
+    val booleanName = compiler.internBytes(s: "Bool")
+    val bindingName = compiler.internBytes(s: "value")
+    val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
+    val boolean = compiler.pushType(t: <TypeRef nameStart=booleanName.nameStart nameLen=booleanName.nameLen args=[] />)
+    compiler.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    compiler.cur.checkFn = 0U64
+    val expression = compiler.pushExpr(e: <Expr.Ident start=bindingName.nameStart len=bindingName.nameLen />)
+    compiler.recordSemanticExprTerm(exprId: expression, term: integer)
+    compiler.addLocalCn(nameStart: bindingName.nameStart, nameLen: bindingName.nameLen, tyStart: booleanName.nameStart, tyLen: booleanName.nameLen, isArray: false, ty: boolean, isInout: false, isMut: false, owned: false, cnum: 0U64)
+    if compiler.tcCheckValue(expectedRef: integer, valueExpr: expression, pos: "binding-probe").isErr() { panic "value check reopened a recorded lexical binding" }
+    if compiler.tcCheckValue(expectedRef: boolean, valueExpr: expression, pos: "binding-probe").isOk() { panic "value check used a later same-named binding" }
+    if compiler.checkGenericTypeMatch(expectedRef: integer, valueExpr: expression).isErr() { panic "generic check reopened a recorded lexical binding" }
+    if compiler.checkGenericTypeMatch(expectedRef: boolean, valueExpr: expression).isOk() { panic "generic check used a later same-named binding" }
+    print("recorded-binding")
+}

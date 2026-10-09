@@ -2493,15 +2493,24 @@ pub impl Comp {
         return <Result.Ok value=out />
     }
 
-    // The grounded TypeRef of expression `id` under the BODY instance env — the typed-IR
-    // read口 that replaces the backend's per-form exprTypeRef re-derivation. If the parametric
-    // store has this expr's type (recorded during a locals-populated front-end walk), SUBSTITUTE
-    // the emitted body's type args into it (groundTypeRef resolves `T`/`Self`/`Item`);
-    // an already-grounded / scalar parametric ref grounds to itself. Grounding uses the
-    // body-scoped env snapshot (cur.body*) — NOT the ambient cursor, which call
-    // resolution transiently points at a CALLEE's env while this expr belongs to the
-    // caller. Falls back to the instance-independent typeCache/typeOf projection (a
-    // node the record pass could not reach).
+    // Compatibility consumes an expression's saved lexical type first. The
+    // current local stack can belong to a later scope, and its same-named
+    // binding is not authority for this expression. Only an unrecorded
+    // construction may request contextual supplementation below. A nonzero
+    // term proves type existence, not that all body obligations are closed.
+    inout fn valueCompatibilitySourceType(exprId: U64) -> Result[U64, CompileDiagnostic] {
+        if self.semanticExprTerm(exprId: exprId) != 0U64 {
+            return self.groundSemanticExprTypeRef(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        }
+        return self.groundedTypeOf(id: exprId)
+    }
+
+    // Construction-time contextual query. Local bindings and semantic child
+    // terms may still be incomplete here; typeOf supplies the legacy
+    // supplementation at the end. This is not a prepared-body reader and
+    // must not replace an already recorded source type during compatibility.
+    // Grounding uses the caller body's environment, never a transient callee
+    // selection environment. Final consumers use recorded body recipes.
     inout fn groundedTypeOf(id: U64) -> Result[U64, CompileDiagnostic] {
         // A shared generic body cannot take a field/index result from the
         // AST-global parametric cache: `self.items[i]` in `Set[E]` is stored
