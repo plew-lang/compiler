@@ -22,12 +22,64 @@ pub impl Comp {
         mut val indices = self.decls.declarationConversionOwners.getOr(key: owner, fallback: [])
         for index in indices {
             val prior = self.decls.declarationConversions[index]
-            if self.sameCallSiteKey(a: prior.site, b: site) && self.typeRefEq(a: prior.source, b: source) && self.typeRefEq(a: prior.target, b: normalizedTarget) { return <Result.Ok value=() /> }
+            if self.sameCallSiteKey(a: prior.site, b: site) && self.typeRefEq(a: prior.source, b: source) && self.typeRefEq(a: prior.target, b: normalizedTarget) {
+                self.recordGlobalConversionOwner(index: index)
+                return <Result.Ok value=() />
+            }
         }
         val proof = self.freezeValueConversionProof(proof: conversion)
         indices.append(self.decls.declarationConversions.count())
         self.decls.declarationConversions.append(<DeclarationConversion site=site source=source target=normalizedTarget proof=proof />)
         self.decls.declarationConversionOwners[owner] = indices
+        self.recordGlobalConversionOwner(index: self.decls.declarationConversions.count() - 1U64)
+        return <Result.Ok value=() />
+    }
+
+    inout fn recordGlobalConversionOwner(index: U64) {
+        match self.sourceRecordingOwner() {
+            Optional.Some(v: val owner) => {
+                match owner {
+                    SemanticCompletionOwner.Global(target: val target) => {
+                        mut val indices = self.decls.globalDeclarationConversionOwners.getOr(key: target, fallback: [])
+                        for prior in indices { if prior == index { return } }
+                        indices.append(index)
+                        self.decls.globalDeclarationConversionOwners[target] = indices
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Evidence admission is shared by local owner publication and whole-target
+    // closure. Concrete instantiation and member constraints remain separate.
+    inout fn checkDeclarationConversionEvidence(conversion: DeclarationConversion) -> Result[(), CompileDiagnostic] {
+        if conversion.source == 0U64 { return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "source conversion requires a resolved value type") /> }
+        return self.checkConversionProofEvidence(proof: self.thawValueConversionProof(id: conversion.proof), offset: conversion.site.originStart)
+    }
+
+    inout fn checkConversionProofEvidence(proof: ValueConversionProof, offset: U64) -> Result[(), CompileDiagnostic] {
+        match proof {
+            ValueConversionProof.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "source value does not satisfy the required conversion") /> }
+            ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val evidence) => {
+                if self.proofIsMissing(proof: evidence) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation has no conformance evidence") /> }
+            }
+            ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => { try self.checkConversionProofEvidence(proof: element, offset: offset) }
+            ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, payloads: val payloads) => {
+                for payload in payloads { try self.checkConversionProofEvidence(proof: payload.conversion, offset: offset) }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkSourceConversionEvidence(owner: SemanticCompletionOwner) -> Result[(), CompileDiagnostic] {
+        val indices = match owner {
+            SemanticCompletionOwner.Function(index: val function) => { give self.decls.declarationConversionOwners.getOr(key: function, fallback: []) }
+            SemanticCompletionOwner.Global(target: val target) => { give self.decls.globalDeclarationConversionOwners.getOr(key: target, fallback: []) }
+        }
+        for index in indices { try self.checkDeclarationConversionEvidence(conversion: self.decls.declarationConversions[index]) }
         return <Result.Ok value=() />
     }
 
@@ -527,11 +579,7 @@ pub impl Comp {
         // rather than suppressing it or replacing those diagnostics early.
         // No unresolved conversion may survive declaration completion.
         for conversion in self.decls.declarationConversions {
-            if conversion.source == 0U64 { return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "source conversion requires a resolved value type") /> }
-            match self.thawValueConversionProof(id: conversion.proof) {
-                ValueConversionProof.Missing => { return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "source value does not satisfy the required conversion") /> }
-                _ => {}
-            }
+            try self.checkDeclarationConversionEvidence(conversion: conversion)
         }
 
         tracePhase(c: inout self, label: "member-obligations:relevance:start")

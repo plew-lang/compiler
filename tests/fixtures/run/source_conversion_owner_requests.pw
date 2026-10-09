@@ -1,0 +1,53 @@
+// Diagnostic continuation must not publish a body with missing conversion
+// evidence. Global initializers have distinct owners despite one call sentinel.
+use /Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, spansEqual }
+use /SourceAccess only { SourceAccess }
+use /Diag only { CompileDiagnostic }
+use @Std/Io only { print }
+
+fn owner(compiler: inout Comp, name: String) -> U64 {
+    val span = compiler.internBytes(s: name)
+    mut val index = 0U64
+    while index < compiler.arena.functionCount() {
+        val function = compiler.arena.functionAt(index: index)
+        if spansEqual(c: inout compiler, aStart: function.nameStart, aLen: function.nameLen, bStart: span.nameStart, bLen: span.nameLen) { return index }
+        index += 1U64
+    }
+    panic("missing owner")
+}
+fn expectFailure(result: Result[(), CompileDiagnostic]) {
+    match result {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "source value does not satisfy the required conversion" { panic(diagnostic.message) }
+        }
+        Result.Ok(value: _) => { panic("missing conversion evidence published owner success") }
+    }
+}
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="conversion-owner.pw" text="fn broken() -> I64 {{ return true }} fn nested() -> fn() -> I64 {{ return fn() -> I64 {{ return true }} }} fn good() -> I64 {{ return 1I64 }} fn main() {{}}" />,
+        sources: <SourceAccess stdRoot=[] />, options: <FrontendOptions tcLog=true />).unwrap()
+    val broken = owner(compiler: inout compiler, name: "broken")
+    val nested = owner(compiler: inout compiler, name: "nested")
+    val good = owner(compiler: inout compiler, name: "good")
+    compiler.cur.checkFn = 70001U64
+    compiler.cur.bodyId = 70002U64
+    expectFailure(result: compiler.prepareLexicalBody(fnIdx: broken))
+    expectFailure(result: compiler.prepareLexicalBody(fnIdx: broken))
+    if compiler.cur.checkFn != 70001U64 || compiler.cur.bodyId != 70002U64 { panic("conversion failure leaked cursor") }
+    expectFailure(result: compiler.prepareLexicalBody(fnIdx: nested))
+    compiler.prepareLexicalBody(fnIdx: good).unwrap()
+    mut val globals = <Comp />
+    analyzeFrontendForRequests(c: inout globals,
+        input: <FrontendInput.Text path="global-conversion-owner.pw" text="trait P {{}} struct Value {{}} impl Value as P {{}} val broken: I64 = true val good: any P = <Value /> fn main() {{}}" />,
+        sources: <SourceAccess stdRoot=[] />, options: <FrontendOptions tcLog=true />).unwrap()
+    val badTarget = globals.arena.globals[0U64].nameStart
+    val goodTarget = globals.arena.globals[1U64].nameStart
+    expectFailure(result: globals.prepareGlobalInitializer(target: badTarget))
+    expectFailure(result: globals.prepareGlobalInitializer(target: badTarget))
+    if globals.globalInitializerPrepared(target: badTarget) { panic("bad global conversion published readiness") }
+    globals.prepareGlobalInitializer(target: goodTarget).unwrap()
+    if !globals.globalInitializerPrepared(target: goodTarget) { panic("unrelated global blocked by another owner's conversion") }
+    print("source-conversions")
+}
