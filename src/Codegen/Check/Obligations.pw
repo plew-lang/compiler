@@ -797,11 +797,17 @@ pub impl Comp {
     }
 
     inout fn checkDeclarationDirectCallBoundary(callee: U64, proof: StaticConformanceProof, receiverRef: U64, offset: U64) -> Result[(), CompileDiagnostic] {
-        if self.proofIsMissing(proof: proof) { return <Result.Ok value=() /> }
         if callee >= self.arena.functionCount() {
+            if self.proofIsMissing(proof: proof) { return <Result.Ok value=() /> }
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected call evidence has no declaration") />
         }
         val function = self.arena.functionAt(index: callee)
+        if self.proofIsMissing(proof: proof) {
+            if function.isProvided {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected provided call has no conformance evidence") />
+            }
+            return <Result.Ok value=() />
+        }
         // A copied provided callable is selected through its public target.
         // An original trait receiver declaration (including a default-value
         // function with that lexical receiver environment) uses that receiver
@@ -836,7 +842,9 @@ pub impl Comp {
     inout fn checkCallTemplateEvidence(template: CallTemplate) -> Result[(), CompileDiagnostic] {
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: val proof) => {
-                if proof == 0U64 { return <Result.Ok value=() /> }
+                if proof == 0U64 {
+                    return self.checkDeclarationDirectCallBoundary(callee: callee, proof: <StaticConformanceProof.Missing />, receiverRef: template.receiverTypeTerm, offset: template.siteKey.originStart)
+                }
                 val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
                 val selected = self.thawStaticConformanceProof(id: proof)
                 try self.checkDeclarationCallProof(proof: selected, scope: scope, offset: template.siteKey.originStart)

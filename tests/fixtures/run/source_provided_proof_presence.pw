@@ -1,0 +1,51 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { StaticConformanceProof, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallSiteKey, ProtocolSelection }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="trait P {{}} pub impl P {{ fn helper() -> I64 {{ return 0I64 }} }} struct A {{}} impl A as P {{}} fn probe(source: A) {{}}" path="provided-presence.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    mut val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "helper").nameId)
+    while callee < compiler.arena.functionCount() && !compiler.arena.functionAt(index: callee).isProvided { callee = compiler.arena.nextFunctionNamed(index: callee) }
+    if callee >= compiler.arena.functionCount() { panic("missing provided copy") }
+    val proof = compiler.providedBodyProof(f: compiler.arena.functionAt(index: callee), receiverRef: receiver, assumptions: compiler.functionBoundAssumptions(fnIdx: owner)).unwrap()
+    if compiler.proofIsMissing(proof: proof) { panic("missing valid provided proof") }
+    val args = compiler.publishCallTemplateArguments(args: [])
+    val types = compiler.publishCallTemplateTypeArgs(args: [])
+    mut val family = 0U64
+    while family < 2U64 {
+        mut val iteration = 0U64
+        while iteration < 2U64 {
+            val missing = iteration == 1U64
+            val selected = if missing { give <StaticConformanceProof.Missing /> } else { give proof }
+            val kind = if family == 0U64 {
+                give <CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.Term term=receiver /> args=args calleeTypeArgs=types proofId=compiler.freezeStaticConformanceProof(proof: selected) />
+            } else {
+                give <CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=receiver /> selection=<ProtocolSelection.Direct callee=callee proof=selected /> resultTerm=0U64 />
+            }
+            val template = <CallTemplate siteKey=<CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=900U64 /> receiverTypeTerm=receiver kind=kind />
+            match compiler.checkCallTemplateEvidence(template: template) {
+                Result.Ok(value: _) => { if missing { panic("provided call accepted without proof") } }
+                Result.Err(error: val diagnostic) => { if !missing || diagnostic.message != "selected provided call has no conformance evidence" { panic(diagnostic.message) } }
+            }
+            if family == 0U64 {
+                val index = compiler.decls.callTemplates.count()
+                compiler.appendCallTemplate(template: template)
+                match compiler.checkCallTemplateSelection(templateIndex: index) {
+                    Result.Ok(value: _) => { if missing { panic("sealed provided call accepted without proof") } }
+                    Result.Err(error: val diagnostic) => { if !missing || diagnostic.message != "selected provided call has no conformance evidence" { panic(diagnostic.message) } }
+                }
+            }
+            iteration += 1U64
+        }
+        family += 1U64
+    }
+    // Ordinary free declarations do not require conformance evidence.
+    compiler.checkCallTemplateEvidence(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=owner /> kind=<CallTemplateKind.Direct callee=owner receiver=<CallTemplateReceiver.None /> args=args calleeTypeArgs=types proofId=0U64 /> />).unwrap()
+    print("provided-proof-presence")
+}
