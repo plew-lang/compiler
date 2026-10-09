@@ -44,7 +44,7 @@ fn main() {
     val proof = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=0U64 /> />
     assert(compiler.declarationProofDependency(proof: proof, scope: scope, offset: 0U64).unwrap())
     match compiler.declarationProofDependency(proof: proof, scope: compiler.declarationTypeScope(owner: 1U64).unwrap(), offset: 0U64) {
-        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation refers to a type parameter outside its lexical scope") }
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration assumption is not available in its lexical scope") }
         Result.Ok(value: _) => { panic "foreign proof binder was accepted" }
     }
     print("ok")
