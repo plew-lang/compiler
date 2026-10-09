@@ -324,58 +324,6 @@ pub impl Comp {
         return self.knownNamedTypeIdForTerm(type: ia) != 0U64
     }
 
-    inout fn activeTypeParamConformsToTrait(source: TypeRef, trait: TypeRef) -> Bool {
-        if self.cur.checkFn >= self.arena.functionCount() {
-            return false
-        }
-        val qTp: U64 = source.nameId
-        val constraint: TraitConstraint = self.existentialTraitConstraintFor(t: trait)
-        mut val bi: U64 = 0
-        while bi < self.decls.funcBounds.count() {
-            val fb: FuncBound = self.decls.funcBounds.at(index: bi)
-            if fb.fnIdx == self.cur.checkFn {
-                if fb.paramNameId == qTp {
-                    if constraint.key.owner != 0U64 && fb.constraint.key.owner == constraint.key.owner && fb.constraint.key.positionalArgs.count() == constraint.key.positionalArgs.count() {
-                        mut val binds: Array[UnifyBind] = []
-                        mut val ai: U64 = 0U64
-                        mut val matches: Bool = true
-                        while ai < fb.constraint.key.positionalArgs.count() {
-                            if !(self.unifyPatterns(a: fb.constraint.key.positionalArgs[ai], aSide: 0U64, b: constraint.key.positionalArgs[ai], bSide: 1U64, aParams: <PatternBindInput.Values values=self.cur.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) {
-                                matches = false
-                            }
-                            ai += 1U64
-                        }
-                        // Associated outputs are not positional trait inputs.
-                        // A generic bound entails an existential constraint only
-                        // when it promises the same selected-witness outputs;
-                        // `T: Iter[Item=String]` must not erase to
-                        // `any Iter[Item=I64]` merely because both share Iter.
-                        if fb.constraint.assocPredicates.count() != constraint.assocPredicates.count() { matches = false }
-                        mut val need: U64 = 0U64
-                        while need < constraint.assocPredicates.count() {
-                            mut val found: Bool = false
-                            mut val bi: U64 = 0U64
-                            while bi < fb.constraint.assocPredicates.count() {
-                                val provided: TraitAssocPredicate = fb.constraint.assocPredicates[bi]
-                                if provided.member == constraint.assocPredicates[need].member {
-                                    if self.typeRefEq(a: provided.value, b: constraint.assocPredicates[need].value) { found = true }
-                                }
-                                bi += 1U64
-                            }
-                            if !found { matches = false }
-                            need += 1U64
-                        }
-                        if matches {
-                            return true
-                        }
-                    }
-                }
-            }
-            bi += 1U64
-        }
-        return false
-    }
-
     // The interned name id of a GENERIC struct def head (`Box` of `struct Box[T]`),
     // 0 when the span names no generic struct. compatNamed's identity supplement —
     // see the comment there.

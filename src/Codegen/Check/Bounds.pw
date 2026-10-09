@@ -313,22 +313,6 @@ pub impl Comp {
     // declaration-time bound names the same symbolic trait instance, so this
     // proof match deliberately compares the resolved owner and positional
     // terms only.
-    inout fn assumedBoundProof(fnIdx: U64, receiverRef: U64, constraint: TraitConstraint) -> StaticConformanceProof {
-        for i in self.decls.funcBounds.indices(owner: fnIdx) {
-            val bound: FuncBound = self.decls.funcBounds.at(index: i)
-            if bound.constraint.key.owner == constraint.key.owner && bound.paramTy != 0U64 && self.typeRefEq(a: bound.paramTy, b: self.typeRefWithoutOuterViews(ref: receiverRef)) && bound.constraint.key.positionalArgs.count() == constraint.key.positionalArgs.count() {
-                mut val same: Bool = true
-                mut val ai: U64 = 0U64
-                while ai < constraint.key.positionalArgs.count() {
-                    if !(self.typeRefEq(a: bound.constraint.key.positionalArgs[ai], b: constraint.key.positionalArgs[ai])) { same = false }
-                    ai += 1U64
-                }
-                if same { return <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=i /> /> }
-            }
-        }
-        return <StaticConformanceProof.Missing />
-    }
-
     // A declaration-time receiver is established either by its own `where`
     // constraint or by a concrete/trait-path witness.  Callers such as view
     // applicability must consume this proof rather than special-case generic
