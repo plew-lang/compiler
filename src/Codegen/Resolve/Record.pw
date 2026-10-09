@@ -2653,11 +2653,16 @@ pub impl Comp {
             mut val pi: U64 = 0
             while pi < f.params.count() {
                 val p: Param = self.funcParamAt(params: f.params, index: pi)
-                self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
+                // Parameter annotations belong to this declaration's receiver.
+                // Use the same Self substitution as declaration checking before
+                // recording uses; a later local lookup cannot repair a saved
+                // expression type with an unbound Self projection.
+                val parameterTerm = self.groundTermInEnvironment(ref: p.ty, params: [], values: [], selfRef: self.cur.selfRef)
+                self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: parameterTerm, isInout: p.isInout, isMut: false, owned: false)
                 // After preparation the generator is the sole Record
                 // owner of this expression and of its lexical locals.
                 if p.hasDefault && self.decls.defaultGeneratorRanges.count() == 0U64 {
-                    try self.recordExpr(exprId: p.defaultExpr, expectedTerm: p.ty)
+                    try self.recordExpr(exprId: p.defaultExpr, expectedTerm: parameterTerm)
                 }
                 pi += 1
             }
