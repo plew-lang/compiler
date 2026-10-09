@@ -3312,7 +3312,11 @@ pub fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
     mut val paramI: U64 = 0U64
     while paramI < f.params.count() {
         val param: Param = c.funcParamAt(params: f.params, index: paramI)
-        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: param.nameStart, typeTerm: param.ty, isUnique: midTermIsUnique(c: inout c, term: param.ty), isParameter: true, ownsAtEntry: f.isAsync || param.isMove, isInout: param.isInout, isCaptureCell: midBindingNeedsCaptureCell(closures: c.decls.semanticClosures, sourceFunction: fnIdx, bindingTarget: param.nameStart))
+        val parameterTerm = match c.semanticBodyParameterTerm(fnIdx: fnIdx, index: paramI) {
+            Result.Ok(value: val term) => { give term }
+            Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
+        }
+        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: param.nameStart, typeTerm: parameterTerm, isUnique: midTermIsUnique(c: inout c, term: parameterTerm), isParameter: true, ownsAtEntry: f.isAsync || param.isMove, isInout: param.isInout, isCaptureCell: midBindingNeedsCaptureCell(closures: c.decls.semanticClosures, sourceFunction: fnIdx, bindingTarget: param.nameStart))
         paramI += 1U64
     }
     // Async activations own their argument snapshots across suspension. Entry

@@ -23,6 +23,15 @@ fn main() {
     assert(compiler.semanticBodyReturnTerm(fnIdx: 1U64) == promise)
     assert(compiler.semanticBodyReturnTerm(fnIdx: 2U64) == 0U64)
     assert(compiler.arena.functionAt(index: 0U64).retTy == promise)
+    // Mid consumes declaration-body facts, not the authored public signature.
+    // Missing parameter recording must fail before building a typed body.
+    match buildParametricMidBody(c: inout compiler, fnIdx: 0U64).error {
+        MidBuildError.Frontend(diagnostic: _) => {}
+        _ => { assert(false) }
+    }
+    compiler.recordBodyParameterTerms(fnIdx: 0U64, terms: [integer])
+    compiler.recordBodyParameterTerms(fnIdx: 1U64, terms: [integer])
+    compiler.recordBodyParameterTerms(fnIdx: 2U64, terms: [integer])
     val asynchronous = buildParametricMidBody(c: inout compiler, fnIdx: 0U64)
     match asynchronous.error { MidBuildError.MissingTerminator => {} _ => { assert(false) } }
     assert(asynchronous.body.locals[0U64].ownsAtEntry)

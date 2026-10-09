@@ -3374,6 +3374,10 @@ pub struct Decls {
     // These retain lexical views; Func.recvTy is the dispatch namespace and
     // BodySignature holds the later grounded ABI. Zero is no recorded receiver.
     pub mut val semanticBodyReceiverTerms: Array[U64] = []
+    // Record publishes the lexical parameter terms after applying the
+    // declaration's Self receiver. Authored Func parameters retain public
+    // signature semantics (including newtype boundary adaptation).
+    pub mut val semanticBodyParameterTerms: Array[Optional[FuncTypeRange]] = []
     // Lexical unique-binding lifetime ends are independent of instantiation.
     pub mut val semanticBindingEnds: Dictionary[U64, U64] = [:]
     // Let statement -> type resolved in its lexical Self/associated-type scope.

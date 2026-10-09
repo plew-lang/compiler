@@ -2614,6 +2614,27 @@ pub impl Comp {
         return <Result.Ok value=self.decls.semanticBodyReceiverTerms[owner] />
     }
 
+    inout fn recordBodyParameterTerms(fnIdx: U64, terms: Array[U64]) {
+        while self.decls.semanticBodyParameterTerms.count() <= fnIdx {
+            self.decls.semanticBodyParameterTerms.append(<Optional.None />)
+        }
+        val range = self.pushFuncTypes(types: terms)
+        self.decls.semanticBodyParameterTerms.set(i: fnIdx, value: <Optional.Some v=range />)
+    }
+
+    inout fn semanticBodyParameterTerm(fnIdx: U64, index: U64) -> Result[U64, CompileDiagnostic] {
+        val owner = try self.semanticBodyOwner(fnIdx: fnIdx)
+        if owner < self.decls.semanticBodyParameterTerms.count() {
+            match self.decls.semanticBodyParameterTerms[owner] {
+                Optional.Some(v: val terms) => {
+                    if index < terms.len { return <Result.Ok value=self.funcTypeAt(types: terms, index: index) /> }
+                }
+                Optional.None => {}
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: lexical body parameter requires a recorded declaration type") />
+    }
+
     // Record one lexical declaration using the same contract as the eager walk.
     // Selection/order belongs to the caller; generated provided copies share
     // their source declaration's semantic rows and are never recorded twice.
@@ -2650,6 +2671,7 @@ pub impl Comp {
             self.cur.typeArgs = []
             self.cur.checkFn = fnIdx
             if !recordCallTemplates { try self.checkDefaultGeneratorRestrictions(fnIdx: fnIdx) }
+            mut val parameterTerms: Array[U64] = []
             mut val pi: U64 = 0
             while pi < f.params.count() {
                 val p: Param = self.funcParamAt(params: f.params, index: pi)
@@ -2658,6 +2680,7 @@ pub impl Comp {
                 // recording uses; a later local lookup cannot repair a saved
                 // expression type with an unbound Self projection.
                 val parameterTerm = self.groundTermInEnvironment(ref: p.ty, params: [], values: [], selfRef: self.cur.selfRef)
+                if recordCallTemplates { parameterTerms.append(parameterTerm) }
                 self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: parameterTerm, isInout: p.isInout, isMut: false, owned: false)
                 // After preparation the generator is the sole Record
                 // owner of this expression and of its lexical locals.
@@ -2666,6 +2689,7 @@ pub impl Comp {
                 }
                 pi += 1
             }
+            if recordCallTemplates { self.recordBodyParameterTerms(fnIdx: fnIdx, terms: parameterTerms) }
             try self.recordBlock(blkId: f.body)
             if !recordCallTemplates { try self.checkDefaultGenerator(fnIdx: fnIdx) }
         }
