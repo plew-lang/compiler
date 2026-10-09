@@ -3408,19 +3408,17 @@ pub impl Comp {
         mut val result: U64 = (try self.finalSelectedSourceResult(resultRef: resultRef, carrierRef: carrierResult))
         val f: Func = self.arena.functionAt(index: callee)
         if !f.hasRet && !f.isAsync {
-            // Calls without a returned value have neither an ABI carrier nor a
-            // source-observed result.  They may not carry a value projection:
-            // a projection is a relationship between those two value types.
+            // Omitted Unit has no ABI payload, but it remains a source value.
+            // Only an identity projection of that completed Unit is valid.
             match resultProjection {
                 CallResultProjection.Identity => {}
                 _ => {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: a no-result call cannot have a result projection") />
                 }
             }
-            if resultRef != 0U64 {
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: a no-result call has a source result type") />
+            if !self.callableResultIsUnit(ref: result) {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: Unit callable has a non-Unit source result type") />
             }
-            result = 0U64
         } else {
             if result == 0U64 || !(self.callResultProjectionIsValid(carrierRef: carrierResult, resultRef: result, projection: resultProjection)) {
                 if self.traceCodegen {

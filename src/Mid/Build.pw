@@ -1078,18 +1078,19 @@ fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U6
     // value result depends on the frozen call descriptor, including ground
     // source types; do not substitute the callee binder in the caller environment.
     val recipe: U64 = if returnsUnit { give 0U64 } else { give template.resultTypeRecipe }
+    val sourceTerm: U64 = if returnsUnit { give term } else { give 0U64 }
     // Reserve the result's lifetime before evaluating its inputs, but publish
     // its type recipe only if those inputs reach the actual call. A return in
     // an operand leaves no call result for instantiation to resolve.
     val scope = state.currentScope
-    val local: U64 = addMidTemporary(state: inout state, typeTerm: 0U64)
-    val place: MidPlace = <MidPlace local=local typeTerm=0U64 typeRecipe=recipe />
+    val local: U64 = addMidTemporary(state: inout state, typeTerm: sourceTerm)
+    val place: MidPlace = <MidPlace local=local typeTerm=sourceTerm typeRecipe=recipe />
     val built: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: exprId, destination: place)
     match built { MidBuildError.None => {} _ => { return <MidOperandBuild.Error error=built /> } }
     if !midCurrentBlockIsOpen(state: state) {
         return <MidOperandBuild.NoContinuation />
     }
-    state.locals.set(i: local, value: <MidLocalDecl typeTerm=0U64 typeRecipe=recipe sourceScope=scope isUnique=ownsUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 />)
+    state.locals.set(i: local, value: <MidLocalDecl typeTerm=sourceTerm typeRecipe=recipe sourceScope=scope isUnique=ownsUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 />)
     state.callValues.append(<MidCallValue siteKey=siteKey place=place />)
     // A call result has the same ownership as a freshly built aggregate.
     // Never let a unique result enter a consuming call as a Copy.

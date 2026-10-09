@@ -669,6 +669,11 @@ pub impl Comp {
             val unit = self.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[] recordFieldTerms=[] />)
             return self.pushType(t: <TypeRef nameStart=promise.nameStart nameLen=promise.nameLen args=[unit] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
         }
+        if !function.hasRet && !function.isDiverging {
+            // Unit is an ordinary source value type. The callable ABI may
+            // erase its payload, but source typing must not erase its type.
+            return self.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[] recordFieldTerms=[] />)
+        }
         return function.retTy
     }
 
