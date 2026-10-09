@@ -106,7 +106,7 @@ pub impl Comp {
                 }
                 // Interpret the selected proof; never select another conformance
                 // to repair a frozen plan, including traits with no members.
-                try self.checkStaticProofConditionEvidence(proof: evidence, offset: offset)
+                try self.checkStaticProofEvidence(proof: evidence, offset: offset)
                 val bound = try self.staticProofBound(proof: evidence, traitIdx: traitIdx)
                 val required = self.existentialTraitConstraint(ref: target)
                 if bound.subject == 0U64 || bound.constraint.key.owner != required.key.owner || !self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: required.key.positionalArgs) {
@@ -150,19 +150,51 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkStaticProofConditionEvidence(proof: StaticConformanceProof, offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkStaticProofEvidence(proof: StaticConformanceProof, offset: U64) -> Result[(), CompileDiagnostic] {
         match proof {
             StaticConformanceProof.ConcreteWitness(witness: val witness) => {
                 if !(try self.selectedNominalWitnessSubjectMatches(witness: witness)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not match its declaration subject") /> }
                 try self.checkWitnessConditionEvidence(witness: witness, offset: offset)
             }
-            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
-                for edge in edges { try self.checkWitnessConditionEvidence(witness: edge, offset: offset) }
+            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: val terminal) => {
+                if edges.count() == 0U64 || edges[edges.count() - 1U64].conformIdx != terminal { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance path has an invalid terminal") /> }
+                try self.checkStaticPathEvidence(edges: edges, root: self.missingTraitBound(), offset: offset)
             }
-            StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: val edges) => {
-                for edge in edges { try self.checkWitnessConditionEvidence(witness: edge, offset: offset) }
+            StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
+                val root = self.assumedSupertraitBound(source: source, steps: steps)
+                if root.subject == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance path has an invalid assumption root") /> }
+                try self.checkStaticPathEvidence(edges: edges, root: root, offset: offset)
             }
             _ => {}
+        }
+        return <Result.Ok value=() />
+    }
+
+    // Interpret the recorded predecessor chain, including its nominal or
+    // authored-bound root. Intermediate projection is a separate reader.
+    inout fn checkStaticPathEvidence(edges: Array[WitnessMatch], root: TraitBound, offset: U64) -> Result[(), CompileDiagnostic] {
+        if edges.count() == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance path has no edges") /> }
+        mut val previous = root
+        mut val index = 0U64
+        for witness in edges {
+            if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance path has an invalid edge") /> }
+            val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
+            if index == 0U64 && previous.subject == 0U64 {
+                if !(try self.selectedNominalWitnessSubjectMatches(witness: witness)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not match its declaration subject") /> }
+            } else {
+                if declaration.subjectTraitOwner == 0U64 || declaration.subjectTraitOwner != previous.constraint.key.owner || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: witness.selfRef), b: self.typeRefWithoutOuterViews(ref: previous.subject)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance path does not match its predecessor") /> }
+                mut val arguments: Array[U64] = []
+                mut val argument = 0U64
+                while argument < declaration.subjectArgs.count() {
+                    arguments.append((try self.groundWitnessTypeTerm(ref: self.conformTypeAt(types: declaration.subjectArgs, index: argument), params: <PatternBindInput.Conformance range=declaration.typeParams />, matchResult: witness)))
+                    argument += 1U64
+                }
+                if !self.sameResolvedTypeRefs(a: arguments, b: previous.constraint.key.positionalArgs) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance path does not match its predecessor") /> }
+            }
+            try self.checkWitnessConditionEvidence(witness: witness, offset: offset)
+            previous = try self.staticProofBound(proof: <StaticConformanceProof.ConcreteWitness witness=witness />, traitIdx: self.decls.traitIndexByOffset(offset: declaration.traitStart))
+            if previous.subject == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance path has an invalid edge output") /> }
+            index += 1U64
         }
         return <Result.Ok value=() />
     }
@@ -199,7 +231,7 @@ pub impl Comp {
             mut val values: Array[U64] = []
             for predicate in constraint.assocPredicates { names.append(predicate.member) values.append(predicate.value) }
             if !(try self.selectedProofAssociatedTypesMatch(proof: proof, traitOwner: constraint.key.owner, names: names, values: values)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
-            try self.checkStaticProofConditionEvidence(proof: proof, offset: offset)
+            try self.checkStaticProofEvidence(proof: proof, offset: offset)
             index += 1U64
         }
         return <Result.Ok value=() />

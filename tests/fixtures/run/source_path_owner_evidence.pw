@@ -1,0 +1,70 @@
+// Frozen path admission checks every predecessor, not only the target trait.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, DeclarationConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind }
+use @Std/Io only { print }
+fn check(mode: U64, text: String = "trait P[V] {{}} trait Q {{}} trait R[V] {{}} struct A {{}} struct B {{}} impl A as P[I64] {{}} impl B as R[I64] {{}} impl[V] P[V] as Q {{}} fn probe(source: A, target: any Q, foreign: B, foreignTarget: any R[I64], wrong: I32) {{}}") {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=text path="path-proof.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val source = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val target = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val foreign = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    val foreignTarget = compiler.funcParamAt(params: function.params, index: 3U64).ty
+    val wrong = compiler.funcParamAt(params: function.params, index: 4U64).ty
+    val selected = compiler.callArgumentConversion(sourceRef: source, targetRef: target, assumptions: compiler.functionBoundAssumptions(fnIdx: 0U64)).unwrap()
+    val evidence = match selected {
+        ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val proof) => { give proof }
+        _ => { panic("missing path") }
+    }
+    val alternate = compiler.callArgumentConversion(sourceRef: foreign, targetRef: foreignTarget).unwrap()
+    val foreignRoot = match alternate {
+        ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val proof) => {
+            give match proof {
+                StaticConformanceProof.ConcreteWitness(witness: val witness) => { give witness }
+                _ => { panic("missing foreign root") }
+            }
+        }
+        _ => { panic("missing foreign proof") }
+    }
+    val tampered = match evidence {
+        StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: val terminal) => {
+            val edge = edges[1U64]
+            val binding = edge.binds[0U64]
+            give if mode == 1U64 {
+                give <StaticConformanceProof.TraitPath edges=[edges[0U64], <WitnessMatch conformIdx=edge.conformIdx binds=[<WitnessBind binder=binding.binder paramId=binding.paramId term=wrong />] selfRef=edge.selfRef conditions=edge.conditions />] terminalConformIdx=terminal />
+            } else if mode == 2U64 {
+                give <StaticConformanceProof.TraitPath edges=[foreignRoot, <WitnessMatch conformIdx=edge.conformIdx binds=edge.binds selfRef=foreign conditions=edge.conditions />] terminalConformIdx=terminal />
+            } else if mode == 3U64 {
+                give <StaticConformanceProof.TraitPath edges=edges terminalConformIdx=edges[0U64].conformIdx />
+            } else { give evidence }
+        }
+        StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: _) => { if mode != 0U64 { panic("expected concrete path") } give evidence }
+        _ => { panic("not path") }
+    }
+    val actual = if mode == 2U64 { give foreign } else { give source }
+    val expression = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    compiler.recordSemanticExprTerm(exprId: expression, term: actual)
+    compiler.cur.checkFn = 0U64
+    compiler.cur.recordCallTemplates = true
+    compiler.recordDeclarationConversion(exprId: expression, target: target).unwrap()
+    val original = compiler.decls.declarationConversions[0U64]
+    val proof = compiler.freezeValueConversionProof(proof: <ValueConversionProof.ExistentialBox sourceRef=actual targetRef=target traitIdx=compiler.recordAnyTraitIndex(anyRef: target) proof=tampered />)
+    compiler.decls.declarationConversions[0U64] = <DeclarationConversion site=original.site source=actual target=target proof=proof />
+    match compiler.prepareLexicalBody(fnIdx: 0U64) {
+        Result.Ok(value: _) => { if mode != 0U64 { panic("owner accepted invalid path evidence") } }
+        Result.Err(error: val diagnostic) => { if mode == 0U64 || diagnostic.message != (if mode == 3U64 { give "selected conformance path has an invalid terminal" } else { give "selected conformance path does not match its predecessor" }) { panic(diagnostic.message) } }
+    }
+    match compiler.checkRecordedMemberObligations() {
+        Result.Ok(value: _) => { if mode != 0U64 { panic("whole target accepted invalid path evidence") } }
+        Result.Err(error: val diagnostic) => { if mode == 0U64 || diagnostic.message != (if mode == 3U64 { give "selected conformance path has an invalid terminal" } else { give "selected conformance path does not match its predecessor" }) { panic(diagnostic.message) } }
+    }
+}
+fn main() {
+    check(mode: 0U64)
+    check(mode: 1U64)
+    check(mode: 2U64)
+    check(mode: 3U64)
+    check(mode: 0U64, text: "trait P[V] {{}} trait Q {{}} trait R[V] {{}} struct B {{}} impl B as R[I64] {{}} impl[V] P[V] as Q {{}} fn probe[T](source: T, target: any Q, foreign: B, foreignTarget: any R[I64], wrong: I32) where T: P[I64] {{}}")
+    print("path-owner-evidence")
+}
