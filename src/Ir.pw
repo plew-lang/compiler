@@ -1713,6 +1713,15 @@ pub enum SourceCallSignature {
     Trait(bound: TraitBound, traitIndex: U64, environment: InstanceEnvironment)
 }
 
+// Ordered signature obligations and their selected proofs belong to one
+// source owner. The bounds are a substitution snapshot, not fresh queries.
+pub struct SelectedCallConstraints {
+    pub val owner: U64
+    pub val bounds: Array[TraitBound]
+    pub val proofs: Array[U64]
+}
+pub impl SelectedCallConstraints { factory }
+
 // A runtime ABI operation selected from a finalized plewIntrinsic declaration.
 // It is deliberately separate from a source spelling: after frontend selection
 // neither Mid nor LLVM needs to inspect a function name to decide the ABI.
@@ -3433,6 +3442,8 @@ pub struct Decls {
     // sentinel used by call sites. This is an index into declarationConversions.
     pub mut val globalDeclarationConversionOwners: Dictionary[U64, Array[U64]] = [:]
     pub mut val callTemplates: Array[CallTemplate] = []
+    pub mut val selectedCallConstraints: Dictionary[U64, SelectedCallConstraints] = [:]
+    pub mut val globalCallTemplateOwners: Dictionary[U64, Array[U64]] = [:]
     pub mut val callTemplateArgumentPool: Array[CallTemplateArgument] = []
     pub mut val callTemplateTypeArgumentPool: Array[U64] = []
     pub mut val callTemplateOperandPool: Array[CallArgumentSource] = []

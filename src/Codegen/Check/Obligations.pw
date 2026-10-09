@@ -241,13 +241,13 @@ pub impl Comp {
             val constraint = try self.groundTraitConstraintThroughWitness(constraint: clause.constraint, params: parameters, matchResult: witness)
             val traitIndex = self.decls.traitIndexByOffset(offset: constraint.key.owner)
             val proof = self.thawStaticConformanceProof(id: proofs[index])
+            try self.checkStaticProofEvidence(proof: proof, offset: offset)
             val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
             if bound.subject == 0U64 || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: subject), b: self.typeRefWithoutOuterViews(ref: bound.subject)) || bound.constraint.key.owner != constraint.key.owner || (!constraint.positionalArgsOpen && !self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: constraint.key.positionalArgs)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
             mut val names: Array[U64] = []
             mut val values: Array[U64] = []
             for predicate in constraint.assocPredicates { names.append(predicate.member) values.append(predicate.value) }
             if !(try self.selectedProofAssociatedTypesMatch(proof: proof, traitOwner: constraint.key.owner, names: names, values: values)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
-            try self.checkStaticProofEvidence(proof: proof, offset: offset)
             index += 1U64
         }
         return <Result.Ok value=() />
@@ -930,6 +930,155 @@ pub impl Comp {
             index += 1U64
         }
         return <Result.Ok value=() />
+    }
+
+    inout fn sourceCallSignatureConstraint(constraint: TraitConstraint, signature: SourceCallSignature) -> Result[TraitConstraint, CompileDiagnostic] {
+        mut val arguments: Array[U64] = []
+        for argument in constraint.key.positionalArgs { arguments.append(try self.sourceCallSignatureParameter(ref: argument, signature: signature)) }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        for predicate in constraint.assocPredicates {
+            predicates.append(<TraitAssocPredicate member=predicate.member value=(try self.sourceCallSignatureParameter(ref: predicate.value, signature: signature)) span=predicate.span />)
+        }
+        return <Result.Ok value=<TraitConstraint key=<TraitInstanceKey owner=constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=constraint.positionalArgsOpen assocPredicates=predicates /> />
+    }
+
+    fn sourceDeclarationCallBoundIndices(functionIndex: U64) -> Array[U64] {
+        val function = self.arena.functionAt(index: functionIndex)
+        val owner = if function.lexicalOwnerFnId != 0U64 { give function.lexicalOwnerFnId - 1U64 } else { give functionIndex }
+        mut val indices: Array[U64] = []
+        mut val index = 0U64
+        while index < self.decls.funcBounds.count() {
+            val bound = self.decls.funcBounds[index]
+            if bound.fnIdx == functionIndex || bound.fnIdx == owner { indices.append(index) }
+            index += 1U64
+        }
+        return indices
+    }
+
+    inout fn sourceDeclarationCallBounds(indices: Array[U64], signature: SourceCallSignature) -> Result[Array[TraitBound], CompileDiagnostic] {
+        mut val bounds: Array[TraitBound] = []
+        for index in indices {
+            val bound = self.decls.funcBounds[index]
+            bounds.append(<TraitBound subject=(try self.sourceCallSignatureParameter(ref: bound.paramTy, signature: signature)) constraint=(try self.sourceCallSignatureConstraint(constraint: bound.constraint, signature: signature)) offset=bound.paramStart />)
+        }
+        return <Result.Ok value=bounds />
+    }
+
+    // Interpret only the already-selected public signature. Requirement
+    // obligations remain distinct from its eventual witness body's bounds.
+    inout fn sourceSelectedCallBounds(template: CallTemplate) -> Result[Array[TraitBound], CompileDiagnostic] {
+        match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: val proofId) => {
+                val indices = self.sourceDeclarationCallBoundIndices(functionIndex: callee)
+                if indices.count() == 0U64 { return <Result.Ok value=[] /> }
+                val function = self.arena.functionAt(index: callee)
+                val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: arguments), proof: self.thawStaticConformanceProof(id: proofId))
+                return self.sourceDeclarationCallBounds(indices: indices, signature: <SourceCallSignature.Direct environment=environment />)
+            }
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val arguments, resultTerm: _) => {
+                val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: template.siteKey.originStart)
+                match resolution {
+                    StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIndex, reqIdx: _) => {
+                        if function.signatureBounds.len == 0U64 { return <Result.Ok value=[] /> }
+                        val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+                        val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: function.typeParams) args=self.callTemplateTypeArgs(range: arguments) receiverRef=template.receiverTypeTerm proof=proof />
+                        val signature = <SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=environment />
+                        mut val bounds: Array[TraitBound] = []
+                        mut val index = 0U64
+                        while index < function.signatureBounds.len {
+                            val clause = self.conformBoundAt(bounds: function.signatureBounds, index: index)
+                            bounds.append(<TraitBound subject=(try self.sourceCallSignatureParameter(ref: clause.subject, signature: signature)) constraint=(try self.sourceCallSignatureConstraint(constraint: clause.constraint, signature: signature)) offset=clause.offset />)
+                            index += 1U64
+                        }
+                        return <Result.Ok value=bounds />
+                    }
+                    StaticMemberResolution.Provided(proof: val proof, traitIdx: val traitIndex, callee: val callee) => {
+                        val indices = self.sourceDeclarationCallBoundIndices(functionIndex: callee)
+                        if indices.count() == 0U64 { return <Result.Ok value=[] /> }
+                        val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+                        val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: arguments), proof: proof)
+                        return self.sourceDeclarationCallBounds(indices: indices, signature: <SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=environment />)
+                    }
+                    StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "deferred declaration obligation has no selected member") /> }
+                }
+            }
+            _ => { return <Result.Ok value=[] /> }
+        }
+    }
+
+    // Admission precedes this boundary reader: a malformed child must never
+    // participate in proof-dependent projection or associated-type lookup.
+    inout fn checkSelectedCallConstraintBoundary(expected: TraitBound, proof: StaticConformanceProof, offset: U64) -> Result[(), CompileDiagnostic] {
+        val traitIndex = self.decls.traitIndexByOffset(offset: expected.constraint.key.owner)
+        val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+        if bound.subject == 0U64 || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: expected.subject), b: self.typeRefWithoutOuterViews(ref: bound.subject)) || bound.constraint.key.owner != expected.constraint.key.owner || (!expected.constraint.positionalArgsOpen && !self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: expected.constraint.key.positionalArgs)) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected call constraint evidence does not satisfy its signature") />
+        }
+        mut val names: Array[U64] = []
+        mut val values: Array[U64] = []
+        for predicate in expected.constraint.assocPredicates { names.append(predicate.member) values.append(predicate.value) }
+        if !(try self.selectedProofAssociatedTypesMatch(proof: proof, traitOwner: expected.constraint.key.owner, names: names, values: values)) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected call constraint evidence does not satisfy its signature") />
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkSelectedCallConstraintPlan(template: CallTemplate, expected: Array[TraitBound], plan: SelectedCallConstraints) -> Result[(), CompileDiagnostic] {
+        val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
+        if plan.owner != scope.owner || plan.bounds.count() != expected.count() || plan.proofs.count() != expected.count() {
+            return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has incomplete constraint evidence") />
+        }
+        mut val index = 0U64
+        while index < expected.count() {
+            val bound = expected[index]
+            if !self.typeRefEq(a: plan.bounds[index].subject, b: bound.subject) || !self.sameTraitConstraint(a: plan.bounds[index].constraint, b: bound.constraint) {
+                return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call constraint evidence has a different substitution") />
+            }
+            val proof = self.thawStaticConformanceProof(id: plan.proofs[index])
+            try self.checkDeclarationCallProof(proof: proof, scope: scope, offset: template.siteKey.originStart)
+            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: template.siteKey.originStart)
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
+    // This is the construction frontier. A repeated request consumes the
+    // existing plan; it cannot repair a missing or inconsistent selected proof.
+    inout fn prepareCallTemplateConstraints(templateIndex: U64) -> Result[(), CompileDiagnostic] {
+        try self.checkCallTemplateSelection(templateIndex: templateIndex)
+        val template = self.decls.callTemplates[templateIndex]
+        val bounds = try self.sourceSelectedCallBounds(template: template)
+        // No declared obligations need no chosen evidence. This is derived
+        // from the exact signature, not an unprepared-plan success sentinel.
+        if bounds.count() == 0U64 { return <Result.Ok value=() /> }
+        match self.decls.selectedCallConstraints.get(key: templateIndex) {
+            Optional.Some(v: val plan) => { return self.checkSelectedCallConstraintPlan(template: template, expected: bounds, plan: plan) }
+            Optional.None => {}
+        }
+        val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
+        val assumptions = self.functionBoundAssumptions(fnIdx: template.siteKey.ownerFnIdx)
+        mut val proofs: Array[U64] = []
+        for bound in bounds {
+            val proof = try self.viewedTraitConstraintProof(ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)
+            if self.proofIsMissing(proof: proof) {
+                return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "type argument does not conform to the trait required by `where`") />
+            }
+            try self.checkDeclarationCallProof(proof: proof, scope: scope, offset: template.siteKey.originStart)
+            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: template.siteKey.originStart)
+            proofs.append(self.freezeStaticConformanceProof(proof: proof))
+        }
+        self.decls.selectedCallConstraints[templateIndex] = <SelectedCallConstraints owner=scope.owner bounds=bounds proofs=proofs />
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkRecordedCallConstraintEvidence(templateIndex: U64) -> Result[(), CompileDiagnostic] {
+        val template = self.decls.callTemplates[templateIndex]
+        val bounds = try self.sourceSelectedCallBounds(template: template)
+        if bounds.count() == 0U64 { return <Result.Ok value=() /> }
+        match self.decls.selectedCallConstraints.get(key: templateIndex) {
+            Optional.Some(v: val plan) => { return self.checkSelectedCallConstraintPlan(template: template, expected: bounds, plan: plan) }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has no retained constraint evidence") /> }
+        }
     }
 
     inout fn checkCallTemplateEvidence(template: CallTemplate) -> Result[(), CompileDiagnostic] {

@@ -187,6 +187,7 @@ pub impl Comp {
         if (try self.completeRecordedDefaultCalls()) != 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: target, msg: "internal error: global default argument plans are incomplete") />
         }
+        try self.prepareGlobalCallTemplateConstraints(target: target)
         try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Global target=target />)
         try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Global target=target />)
         try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Global target=target />)

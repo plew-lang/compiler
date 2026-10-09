@@ -1,0 +1,63 @@
+// Selected public signature constraints retain ordered source-scope evidence.
+// These synthetic rows isolate admission, not source place/ownership checks.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplate, CallTemplateKind, CallTemplateReceiver, CallSiteKey, CallTemplateArgument, CallArgumentSource, StaticMemberResolution, StaticConformanceProof, PatternTypeInput, PatternBindInput, SelectedCallConstraints, TraitBound }
+use @Std/Io only { print }
+fn check(family: U64, mode: U64) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="trait Q {{}} trait P {{ fn accept[Value](value: Value) where Value: Q }} pub impl P {{ fn helper[Value](value: Value) where Value: Q {{}} }} fn free[Value](value: Value) where Value: Q {{}} fn probe[T,V,U](receiver: T, value: V, foreign: U, target: any P) where T: P, V: Q, U: Q {{}} fn other[Value](value: Value) where Value: Q {{}}" path="constraint.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val source = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val foreign = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    val traitIndex = compiler.recordAnyTraitIndex(anyRef: compiler.funcParamAt(params: function.params, index: 3U64).ty)
+    val trait = compiler.decls.traitAt(index: traitIndex)
+    val proof = compiler.traitPatternProof(baseRef: receiver, traitId: trait.nameId, traitOwner: trait.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assumptions: compiler.functionBoundAssumptions(fnIdx: owner)).unwrap()
+    val label = compiler.internBytes(s: "value")
+    val arguments = compiler.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=0U64 term=source /> labelStart=label.nameStart labelLen=label.nameLen hasLabel=true isInout=false />])
+    val types = compiler.publishCallTemplateTypeArgs(args: [source])
+    val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: (if family == 0U64 { give "free" } else { give "helper" })).nameId)
+    val index = compiler.decls.callTemplates.count()
+    val kind = if family == 0U64 {
+        give <CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=arguments calleeTypeArgs=types proofId=0U64 />
+    } else {
+        val resolution = if family == 1U64 { give <StaticMemberResolution.Requirement proof=proof traitIdx=traitIndex reqIdx=0U64 /> } else { give <StaticMemberResolution.Provided proof=proof traitIdx=traitIndex callee=callee /> }
+        give <CallTemplateKind.StaticMethod receiver=<CallTemplateReceiver.Term term=receiver /> args=arguments resolution=resolution methodTypeArgs=types resultTerm=0U64 />
+    }
+    compiler.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=900U64 /> receiverTypeTerm=(if family == 0U64 { give 0U64 } else { give receiver }) kind=kind />)
+    // The constructor runs only on completed selections. A reader never
+    // recreates missing evidence or chooses a substitute proof.
+    compiler.checkCallTemplateSelection(templateIndex: index).unwrap()
+    if mode != 1U64 {
+        compiler.prepareCallTemplateConstraints(templateIndex: index).unwrap()
+        compiler.prepareCallTemplateConstraints(templateIndex: index).unwrap()
+        val plan = compiler.decls.selectedCallConstraints.get(key: index).unwrap()
+        val saved = plan.bounds[0U64]
+        val requiredTrait = compiler.decls.traitAt(index: compiler.decls.traitIndexByOffset(offset: saved.constraint.key.owner))
+        val otherProof = compiler.traitPatternProof(baseRef: foreign, traitId: requiredTrait.nameId, traitOwner: requiredTrait.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assumptions: compiler.functionBoundAssumptions(fnIdx: owner)).unwrap()
+        val otherOwner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "other").nameId)
+        val otherTerm = compiler.funcParamAt(params: compiler.arena.functionAt(index: otherOwner).params, index: 0U64).ty
+        val foreignScope = compiler.traitPatternProof(baseRef: otherTerm, traitId: requiredTrait.nameId, traitOwner: requiredTrait.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assumptions: compiler.functionBoundAssumptions(fnIdx: otherOwner)).unwrap()
+        val proofs: Array[U64] = if mode == 2U64 { give [] } else if mode == 3U64 { give [compiler.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />)] } else if mode == 4U64 { give [compiler.freezeStaticConformanceProof(proof: otherProof)] } else if mode == 5U64 { give [compiler.freezeStaticConformanceProof(proof: proof)] } else if mode == 8U64 { give [compiler.freezeStaticConformanceProof(proof: foreignScope)] } else { give plan.proofs }
+        val bounds: Array[TraitBound] = if mode == 6U64 { give [<TraitBound subject=foreign constraint=saved.constraint offset=saved.offset />] } else { give plan.bounds }
+        compiler.decls.selectedCallConstraints[index] = <SelectedCallConstraints owner=(if mode == 7U64 { give otherOwner } else { give plan.owner }) bounds=bounds proofs=proofs />
+    }
+    val message = if mode == 0U64 { give "" } else if mode == 1U64 { give "selected call has no retained constraint evidence" } else if mode == 2U64 || mode == 7U64 { give "selected call has incomplete constraint evidence" } else if mode == 6U64 { give "selected call constraint evidence has a different substitution" } else if mode == 8U64 { give "declaration assumption is not available in its lexical scope" } else { give "selected call constraint evidence does not satisfy its signature" }
+    match compiler.checkRecordedCallTemplateBound(templateIndex: index) {
+        Result.Ok(value: _) => { if message != "" { panic("accepted inconsistent constraint evidence") } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message != message { panic(diagnostic.message) } }
+    }
+}
+fn main() {
+    mut val family = 0U64
+    while family < 3U64 {
+        mut val mode = 0U64
+        while mode < 9U64 { check(family: family, mode: mode) mode += 1U64 }
+        family += 1U64
+    }
+    print("call-constraint-evidence")
+}

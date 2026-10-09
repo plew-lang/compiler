@@ -1,0 +1,33 @@
+// Selected public method conditions combine trait inputs, associated outputs
+// and method-owned binders. Both symbolic and concrete calls are exercised.
+use @Std/Io only { print }
+trait Q[Input] { type Output }
+struct Item {}
+impl Item as Q[I64] { type Output = Bool }
+trait P[Input] {
+    type Output
+    fn accept[Value](value: Value) -> I64 where Value: Q[Input, Output = Output]
+}
+pub impl[Input] P[Input] {
+    fn helper[Value](value: Value) -> I64 where Value: Q[Input, Output = Output] {
+        return self.accept(value: value)
+    }
+}
+struct Sample {}
+impl Sample as P[I64] {
+    type Output = Bool
+    fn accept[Value](value: Value) -> I64 where Value: Q[I64, Output = Bool] { return 7I64 }
+}
+fn free[Value](value: Value) -> I64 where Value: Q[I64, Output = Bool] { return 3I64 }
+fn invoke[T, Value](subject: T, value: Value) where T: P[I64, Output = Bool], Value: Q[I64, Output = Bool] {
+    print(free(value: value))
+    print(subject.accept(value: value))
+    print(subject.helper(value: value))
+}
+val initial: I64 = free(value: <Item />)
+fn main() {
+    print(initial)
+    invoke(subject: <Sample />, value: <Item />)
+    print(free(value: <Item />))
+    print(<Sample />.accept(value: <Item />))
+}

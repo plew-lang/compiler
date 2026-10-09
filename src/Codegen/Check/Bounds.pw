@@ -1805,35 +1805,13 @@ pub impl Comp {
     // discovering executable instances. The caller owns demand/iteration.
     inout fn checkRecordedCallTemplateBound(templateIndex: U64) -> Result[(), CompileDiagnostic] {
         try self.checkCallTemplateSelection(templateIndex: templateIndex)
-        val template = self.decls.callTemplates[templateIndex]
-        match template.kind {
-            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: val proofId) => {
-                val function = self.arena.functionAt(index: callee)
-                val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: arguments), proof: self.thawStaticConformanceProof(id: proofId))
-                val owner = self.decls.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
-                try self.checkSelectedCallableBounds(fnIdx: callee, environment: environment, assumptions: self.functionBoundAssumptions(fnIdx: owner))
-            }
-            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val arguments, resultTerm: _) => {
-                match resolution {
-                    StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
-                        val function = self.arena.functionAt(index: callee)
-                        val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: arguments), proof: proof)
-                        val owner = self.decls.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
-                        try self.checkSelectedCallableBounds(fnIdx: callee, environment: environment, assumptions: self.functionBoundAssumptions(fnIdx: owner))
-                    }
-                    _ => {}
-                }
-            }
-            _ => {}
-        }
-        return <Result.Ok value=() />
+        return self.checkRecordedCallConstraintEvidence(templateIndex: templateIndex)
     }
 
     // Unused source calls still impose constraints. Symbolic substitutions
     // retain their bound-aware abstract checking and later instance obligations.
     // This pass never registers an executable body or resolves a new callee.
     inout fn checkRecordedCallTemplateBounds() -> Result[(), CompileDiagnostic] {
-        if self.decls.funcBounds.count() == 0U64 { return <Result.Ok value=() /> }
         mut val constrained: Array[Bool] = []
         mut val index = 0U64
         while index < self.arena.functionCount() { constrained.append(false)

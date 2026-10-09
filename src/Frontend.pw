@@ -1,4 +1,4 @@
-use ./Ir only { SourceCallSignature, SelectedWitnessInstantiation, WitnessConditionPlan, ExistentialBoxEvidence, DeclarationTypeScope, DeclarationObligationState, CallConstraintInstance, DeclarationConversion, ExistentialImplementation }
+use ./Ir only { SelectedCallConstraints, SourceCallSignature, SelectedWitnessInstantiation, WitnessConditionPlan, ExistentialBoxEvidence, DeclarationTypeScope, DeclarationObligationState, CallConstraintInstance, DeclarationConversion, ExistentialImplementation }
 use ./Ir only { ProtocolSelection, OperatorSelection, InvocationCompletion, SemanticExpressionTypeState, SemanticCompletionOwner, SemanticExpressionCompletion, TypeCompatibility, TypeArgumentMatch, ConditionClause, ConditionClauseRange }
 use @Plew/Syntax only { CondClause, syntaxConditionClause }
 use ./SourceCompletion only { SourceCompletion, CompletionEdges, CompletionTransfer, BlockResultContext, completionThen, completionChoice, completionTransfer, completionBlock, completionLoop }
@@ -2019,6 +2019,7 @@ pub fn analyzeFrontendForRequests(c: inout Comp, input: FrontendInput, sources: 
     if (try c.completeRecordedDefaultCalls()) != 0U64 {
         return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: global default argument plans are incomplete") />
     }
+    try c.checkBodyCallTemplateSelections(owner: 18446744073709551615U64)
     try c.checkRecordedCallTemplateBounds()
     try c.checkClosedIterationProtocols()
     try c.checkGenericUniqueArgs()

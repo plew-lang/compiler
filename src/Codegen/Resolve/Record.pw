@@ -2766,9 +2766,11 @@ pub impl Comp {
         self.cur.checkFn = 18446744073709551615U64
         mut val gvi: U64 = 0
         while !self.genMode && gvi < self.arena.globals.count() {
+            self.cur.globalInitializerTarget = <Optional.Some v=self.arena.globals[gvi].nameStart />
             try self.recordStmt(stmtId: self.arena.globals[gvi].letStmt)
             gvi += 1
         }
+        self.cur.globalInitializerTarget = <Optional.None />
         // This phase records the parametric semantic contract of the declaration
         // set that existed at its start.  Recording can discover derived
         // call/proof facts, which may materialize implementation-only Func rows;

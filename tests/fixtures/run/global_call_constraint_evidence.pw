@@ -1,0 +1,44 @@
+// A failed global call plan cannot prevent an unrelated initializer request.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplateKind, SelectedCallConstraints }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="trait Q {{}} struct Item {{}} impl Item as Q {{}} fn free[Value](value: Value) -> I64 where Value: Q {{ return 1I64 }} val broken: I64 = free(value: <Item />) val good: I64 = free(value: <Item />) fn main() {{}}" path="global-constraints.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val broken = compiler.arena.globals[0U64].nameStart
+    val good = compiler.arena.globals[1U64].nameStart
+    val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "free").nameId)
+    mut val selected = compiler.decls.callTemplates.count()
+    for index in compiler.decls.globalCallTemplateOwners.get(key: broken).unwrap() {
+        match compiler.decls.callTemplates[index].kind {
+            CallTemplateKind.Direct(callee: val function, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                if function == callee { selected = index }
+            }
+            _ => {}
+        }
+    }
+    if selected == compiler.decls.callTemplates.count() { panic("missing global call membership") }
+    val plan = compiler.decls.selectedCallConstraints.get(key: selected).unwrap()
+    compiler.decls.selectedCallConstraints[selected] = <SelectedCallConstraints owner=plan.owner bounds=plan.bounds proofs=[] />
+    compiler.cur.checkFn = 70001U64
+    compiler.cur.bodyFnIdx = 70002U64
+    compiler.cur.globalInitializerTarget = <Optional.Some v=70003U64 />
+    compiler.prepareGlobalInitializer(target: good).unwrap()
+    if !compiler.globalInitializerPrepared(target: good) || compiler.globalInitializerPrepared(target: broken) { panic("global readiness was not independent") }
+    match compiler.prepareGlobalInitializer(target: broken) {
+        Result.Ok(value: _) => { panic("global with missing constraint evidence was prepared") }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "selected call has incomplete constraint evidence" { panic(diagnostic.message) }
+        }
+    }
+    if compiler.globalInitializerPrepared(target: broken) { panic("failed request published readiness") }
+    if compiler.cur.checkFn != 70001U64 || compiler.cur.bodyFnIdx != 70002U64 { panic("global request leaked its cursor") }
+    match compiler.cur.globalInitializerTarget {
+        Optional.Some(v: val target) => { if target != 70003U64 { panic("global target leaked") } }
+        Optional.None => { panic("global target disappeared") }
+    }
+    print("global-call-constraint-evidence")
+}
