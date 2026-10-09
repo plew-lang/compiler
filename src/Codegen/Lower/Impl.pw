@@ -620,7 +620,7 @@ pub impl Comp {
         val boundCount = self.decls.funcBounds.count()
         mut val boundIndex = 0U64
         while boundIndex < boundCount {
-            val bound = self.decls.funcBounds[boundIndex]
+            val bound = self.decls.funcBounds.at(index: boundIndex)
             if bound.fnIdx == sourceIndex {
                 self.decls.funcBounds.append(<FuncBound fnIdx=index paramStart=bound.paramStart paramLen=bound.paramLen
                     paramNameId=bound.paramNameId paramTy=bound.paramTy constraint=bound.constraint />)

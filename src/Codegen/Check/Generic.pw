@@ -220,7 +220,7 @@ pub impl Comp {
         val qTp: U64 = intern(c: inout self, start: tpStart, len: tpLen)
         mut val bi: U64 = 0
         while bi < self.decls.funcBounds.count() {
-            val fb: FuncBound = self.decls.funcBounds[bi]
+            val fb: FuncBound = self.decls.funcBounds.at(index: bi)
             if fb.fnIdx == fnIdx {
                 if fb.paramNameId == qTp {
                     val owner: U64 = fb.constraint.key.owner
@@ -238,7 +238,7 @@ pub impl Comp {
         val qTp: U64 = intern(c: inout self, start: tpStart, len: tpLen)
         mut val bi: U64 = 0
         while bi < self.decls.funcBounds.count() {
-            val fb: FuncBound = self.decls.funcBounds[bi]
+            val fb: FuncBound = self.decls.funcBounds.at(index: bi)
             if fb.fnIdx == fnIdx {
                 if fb.paramNameId == qTp {
                     val owner: U64 = fb.constraint.key.owner
@@ -262,7 +262,7 @@ pub impl Comp {
                 val recvArgs: Array[U64] = self.positionalTraitArgs(t: self.arena.typeAt(index: f.recvTy))
                 mut val bi: U64 = 0U64
                 while bi < self.decls.funcBounds.count() {
-                    val bound: FuncBound = self.decls.funcBounds[bi]
+                    val bound: FuncBound = self.decls.funcBounds.at(index: bi)
                     if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
                         val boundOwner: U64 = bound.constraint.key.owner
                         if boundOwner == f.provTraitOwner {
@@ -285,7 +285,7 @@ pub impl Comp {
                 val subjectOwner: U64 = cf.subjectTraitOwner
                 mut val bi: U64 = 0U64
                 while bi < self.decls.funcBounds.count() {
-                    val bound: FuncBound = self.decls.funcBounds[bi]
+                    val bound: FuncBound = self.decls.funcBounds.at(index: bi)
                     if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
                         // Both ids are resolved during lowering.  Compare them rather
                         // than their source spans: a bound may use an imported alias.

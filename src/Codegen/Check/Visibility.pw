@@ -702,7 +702,7 @@ pub impl Comp {
         }
         mut val bi: U64 = 0
         while bi < self.decls.funcBounds.count() {
-            val b: FuncBound = self.decls.funcBounds[bi]
+            val b: FuncBound = self.decls.funcBounds.at(index: bi)
             if b.fnIdx == fnIdx {
                 try self.checkSurfaceType(surfaces: inout surfaces, surfaceMod: surfaceMod, ref: b.paramTy, offset: offset)
                 try self.checkSurfaceTraitOwner(surfaces: inout surfaces, surfaceMod: surfaceMod, owner: b.constraint.key.owner, offset: offset)

@@ -32,7 +32,7 @@ fn main() {
     if original == placed { write(s: "shared-declaration\n") }
     if c.arena.functionCount() == 3U64 { write(s: "one-record-body\n") }
     if c.arena.functionAt(index: placed).lexicalOwnerFnId == 1U64 { write(s: "lexical-source-owner\n") }
-    if c.decls.funcBounds.count() == 3U64 && c.decls.funcBounds[2U64].fnIdx == original { write(s: "source-bounds-once\n") }
+    if c.decls.funcBounds.count() == 3U64 && c.decls.funcBounds.at(index: 2U64).fnIdx == original { write(s: "source-bounds-once\n") }
     match c.defaultGeneratorTypeArguments(callee: 1U64, generator: placed, args: [99U64, 17U64]) {
         Optional.Some(val v) => {
             if v.count() == 1U64 && v[0U64] == 17U64 { write(s: "lexical-binder-projection\n") }

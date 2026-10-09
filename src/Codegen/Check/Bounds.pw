@@ -27,10 +27,8 @@ pub impl Comp {
         // before recording the closure body and preserves ParamId identity.
         val owner = self.decls.callTemplateLexicalRoots.getOr(key: fnIdx, fallback: fnIdx)
         mut val result: Array[DeclarationBoundRef] = []
-        mut val index = 0U64
-        while index < self.decls.funcBounds.count() {
-            if self.decls.funcBounds[index].fnIdx == owner { result.append(<DeclarationBoundRef.Function index=index />) }
-            index += 1U64
+        for index in self.decls.funcBounds.indices(owner: owner) {
+            result.append(<DeclarationBoundRef.Function index=index />)
         }
         if functionHasTraitReceiver(self.arena, self.decls, fnIdx: owner) { result.append(<DeclarationBoundRef.MethodReceiver index=owner />) }
         return result
@@ -61,7 +59,7 @@ pub impl Comp {
     inout fn declarationBound(source: DeclarationBoundRef) -> TraitBound {
         match source {
             DeclarationBoundRef.Function(val index) => {
-                val bound = self.decls.funcBounds[index]
+                val bound = self.decls.funcBounds.at(index: index)
                 return <TraitBound subject=bound.paramTy constraint=bound.constraint offset=bound.paramStart />
             }
             DeclarationBoundRef.Conformance(val index) => {
@@ -318,7 +316,7 @@ pub impl Comp {
     inout fn assumedBoundProof(fnIdx: U64, receiverRef: U64, constraint: TraitConstraint) -> StaticConformanceProof {
         mut val i: U64 = 0U64
         while i < self.decls.funcBounds.count() {
-            val bound: FuncBound = self.decls.funcBounds[i]
+            val bound: FuncBound = self.decls.funcBounds.at(index: i)
             if bound.fnIdx == fnIdx && bound.constraint.key.owner == constraint.key.owner && bound.paramTy != 0U64 && self.typeRefEq(a: bound.paramTy, b: self.typeRefWithoutOuterViews(ref: receiverRef)) && bound.constraint.key.positionalArgs.count() == constraint.key.positionalArgs.count() {
                 mut val same: Bool = true
                 mut val ai: U64 = 0U64
@@ -1391,7 +1389,7 @@ pub impl Comp {
                     val authoredCount = self.decls.funcBounds.count()
                     boundIndex = 0U64
                     while boundIndex < authoredCount {
-                        val bound = self.decls.funcBounds[boundIndex]
+                        val bound = self.decls.funcBounds.at(index: boundIndex)
                         if bound.fnIdx == functionIndex {
                             if !(try self.viewedTypeConformsTraitConstraint(ref: bound.paramTy, constraint: bound.constraint, assumptions: assumptions)) {
                                 return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation requires a trait constraint not guaranteed by the requirement") />
@@ -1601,7 +1599,7 @@ pub impl Comp {
         val owner = if function.lexicalOwnerFnId != 0U64 { give function.lexicalOwnerFnId - 1U64 } else { give fnIdx }
         mut val index = 0U64
         while index < self.decls.funcBounds.count() {
-            val bound = self.decls.funcBounds[index]
+            val bound = self.decls.funcBounds.at(index: index)
             if bound.fnIdx == fnIdx || bound.fnIdx == owner {
                 val subject = try self.groundTermForBody(ref: bound.paramTy, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                 mut val arguments: Array[U64] = []
@@ -1818,7 +1816,7 @@ pub impl Comp {
             index += 1U64 }
         index = 0U64
         while index < self.decls.funcBounds.count() {
-            val bound = self.decls.funcBounds[index]
+            val bound = self.decls.funcBounds.at(index: index)
             if bound.fnIdx < constrained.count() { constrained.set(i: bound.fnIdx, value: true) }
             index += 1U64
         }

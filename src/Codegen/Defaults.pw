@@ -455,7 +455,7 @@ pub impl Comp {
     inout fn copyDefaultGeneratorBounds(boundLimit: U64, owners: Array[U64]) {
         mut val index: U64 = 0U64
         while index < boundLimit {
-            val bound: FuncBound = self.decls.funcBounds[index]
+            val bound: FuncBound = self.decls.funcBounds.at(index: index)
             if bound.fnIdx < owners.count() && owners[bound.fnIdx] == bound.fnIdx {
                 val range: DefaultGeneratorRange = self.decls.defaultGeneratorRanges[bound.fnIdx]
                 mut val parameterIndex: U64 = 0U64

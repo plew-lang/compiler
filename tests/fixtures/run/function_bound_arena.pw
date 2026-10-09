@@ -1,0 +1,17 @@
+use ../../../src/Ir only { FunctionBoundArena, FuncBound }
+fn main() {
+    mut val arena = <FunctionBoundArena.empty />
+    arena.append(<FuncBound paramStart=0U64 paramLen=0U64 fnIdx=1U64 />)
+    arena.append(<FuncBound paramStart=0U64 paramLen=0U64 fnIdx=2U64 />)
+    arena.append(<FuncBound paramStart=0U64 paramLen=0U64 fnIdx=1U64 />)
+    val saved = arena.indices(owner: 1U64)
+    if saved.count() != 2U64 || saved[0U64] != 0U64 || saved[1U64] != 2U64 { panic("append order") }
+    arena.set(index: 1U64, value: <FuncBound paramStart=0U64 paramLen=0U64 fnIdx=1U64 />)
+    val merged = arena.indices(owner: 1U64)
+    if merged.count() != 3U64 || merged[1U64] != 1U64 || arena.indices(owner: 2U64).count() != 0U64 { panic("owner replacement") }
+    arena.set(index: 0U64, value: <FuncBound paramStart=0U64 paramLen=0U64 fnIdx=1U64 paramTy=7U64 />)
+    if arena.at(index: 0U64).paramTy != 7U64 || arena.count() != 3U64 { panic("same owner update") }
+    mut val copied = arena
+    copied.append(<FuncBound paramStart=0U64 paramLen=0U64 fnIdx=1U64 />)
+    if arena.count() != 3U64 || saved.count() != 2U64 || copied.indices(owner: 1U64).count() != 4U64 { panic("value isolation") }
+}

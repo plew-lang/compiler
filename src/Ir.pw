@@ -1423,6 +1423,43 @@ pub impl TraitConstraint { factory }
 // `where T: A, U: B` expand to one FuncBound per atom. Enforced at instantiation:
 // the concrete type bound to the parameter must conform to that exact trait
 // instance, else a loud error.
+// Stable proof indices and owner membership are maintained by one storage API.
+pub struct FunctionBoundArena {
+    mut val rows: Array[FuncBound] = []
+    mut val owners: Dictionary[U64, Array[U64]] = [:]
+}
+pub impl FunctionBoundArena {
+    factory empty() { return <FunctionBoundArena /> }
+    fn count() -> U64 { return self.rows.count() }
+    fn at(index: U64) -> FuncBound { return self.rows[index] }
+    fn indices(owner: U64) -> Array[U64] { return self.owners.getOr(key: owner, fallback: []) }
+    inout fn append(value~: FuncBound) {
+        val index = self.rows.count()
+        self.rows.append(value)
+        mut val indices = self.indices(owner: value.fnIdx)
+        indices.append(index)
+        self.owners[value.fnIdx] = indices
+    }
+    inout fn set(index: U64, value: FuncBound) {
+        val previous = self.rows[index].fnIdx
+        self.rows.set(i: index, value: value)
+        if previous == value.fnIdx { return }
+        mut val oldIndices: Array[U64] = []
+        for item in self.indices(owner: previous) {
+            if item != index { oldIndices.append(item) }
+        }
+        self.owners[previous] = oldIndices
+        mut val newIndices: Array[U64] = []
+        mut val inserted = false
+        for item in self.indices(owner: value.fnIdx) {
+            if !inserted && index < item { newIndices.append(index) inserted = true }
+            newIndices.append(item)
+        }
+        if !inserted { newIndices.append(index) }
+        self.owners[value.fnIdx] = newIndices
+    }
+}
+
 pub struct FuncBound {
     pub val fnIdx: U64
     pub val paramStart: U64
@@ -3379,7 +3416,7 @@ pub struct Decls {
     pub mut val conformFuncIdPool: Array[U64] = []
     pub mut val viaWitnesses: Array[ViaWitness] = []
     pub mut val derives: Array[DeriveReq] = []
-    pub mut val funcBounds: Array[FuncBound] = []
+    pub mut val funcBounds: FunctionBoundArena = <FunctionBoundArena.empty />
     // Func rows are copied throughout selection and emission. Keep every
     // variable-sized signature child in a typed declaration pool so that row
     // inspection is scalar and fixed-point safe.

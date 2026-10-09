@@ -433,7 +433,7 @@ pub impl Comp {
         val qTp: U64 = intern(c: inout self, start: tpStart, len: tpLen)
         mut val bi: U64 = 0
         while bi < self.decls.funcBounds.count() {
-            val fb: FuncBound = self.decls.funcBounds[bi]
+            val fb: FuncBound = self.decls.funcBounds.at(index: bi)
             if fb.fnIdx == fnIdx && fb.paramNameId == qTp {
                 val owner: U64 = fb.constraint.key.owner
                 mut val traitIdx: U64 = 0U64

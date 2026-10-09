@@ -714,7 +714,7 @@ pub impl Comp {
     inout fn checkDeclarationAssumptionScope(source: DeclarationBoundRef, scope: DeclarationTypeScope, offset: U64) -> Result[(), CompileDiagnostic] {
         if !self.declarationBoundIsValid(source: source) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no valid trait bound") /> }
         val owner = match source {
-            DeclarationBoundRef.Function(index: val index) => { give self.decls.funcBounds[index].fnIdx }
+            DeclarationBoundRef.Function(index: val index) => { give self.decls.funcBounds.at(index: index).fnIdx }
             DeclarationBoundRef.MethodReceiver(index: val index) => { give index }
             DeclarationBoundRef.AssociatedType(index: val index) => {
                 for active in self.activeAssumptionAdmission {
@@ -945,12 +945,21 @@ pub impl Comp {
     fn sourceDeclarationCallBoundIndices(functionIndex: U64) -> Array[U64] {
         val function = self.arena.functionAt(index: functionIndex)
         val owner = if function.lexicalOwnerFnId != 0U64 { give function.lexicalOwnerFnId - 1U64 } else { give functionIndex }
+        val direct = self.decls.funcBounds.indices(owner: functionIndex)
+        if owner == functionIndex { return direct }
+        val inherited = self.decls.funcBounds.indices(owner: owner)
         mut val indices: Array[U64] = []
-        mut val index = 0U64
-        while index < self.decls.funcBounds.count() {
-            val bound = self.decls.funcBounds[index]
-            if bound.fnIdx == functionIndex || bound.fnIdx == owner { indices.append(index) }
-            index += 1U64
+        mut val cursor = 0U64
+        for index in direct {
+            while cursor < inherited.count() && inherited[cursor] < index {
+                indices.append(inherited[cursor])
+                cursor += 1U64
+            }
+            indices.append(index)
+        }
+        while cursor < inherited.count() {
+            indices.append(inherited[cursor])
+            cursor += 1U64
         }
         return indices
     }
@@ -958,7 +967,7 @@ pub impl Comp {
     inout fn sourceDeclarationCallBounds(indices: Array[U64], signature: SourceCallSignature) -> Result[Array[TraitBound], CompileDiagnostic] {
         mut val bounds: Array[TraitBound] = []
         for index in indices {
-            val bound = self.decls.funcBounds[index]
+            val bound = self.decls.funcBounds.at(index: index)
             bounds.append(<TraitBound subject=(try self.sourceCallSignatureParameter(ref: bound.paramTy, signature: signature)) constraint=(try self.sourceCallSignatureConstraint(constraint: bound.constraint, signature: signature)) offset=bound.paramStart />)
         }
         return <Result.Ok value=bounds />

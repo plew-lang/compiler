@@ -16,8 +16,8 @@ fn check(foreign: Bool) {
     compiler.cur.checkFn = owner
     compiler.cur.recordCallTemplates = true
     compiler.recordDeclarationConversion(exprId: expression, target: target).unwrap()
-    val bound = compiler.decls.funcBounds[0U64]
-    if foreign { compiler.decls.funcBounds[0U64] = <FuncBound fnIdx=other paramStart=bound.paramStart paramLen=bound.paramLen paramTy=bound.paramTy paramNameId=bound.paramNameId constraint=bound.constraint /> }
+    val bound = compiler.decls.funcBounds.at(index: 0U64)
+    if foreign { compiler.decls.funcBounds.set(index: 0U64, value: <FuncBound fnIdx=other paramStart=bound.paramStart paramLen=bound.paramLen paramTy=bound.paramTy paramNameId=bound.paramNameId constraint=bound.constraint />) }
     match compiler.prepareLexicalBody(fnIdx: owner) {
         Result.Ok(value: _) => { if foreign { panic("owner accepted foreign assumption") } }
         Result.Err(error: val diagnostic) => { if !foreign || diagnostic.message != "declaration assumption is not available in its lexical scope" { panic(diagnostic.message) } }

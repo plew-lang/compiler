@@ -332,7 +332,7 @@ pub impl Comp {
         val constraint: TraitConstraint = self.existentialTraitConstraintFor(t: trait)
         mut val bi: U64 = 0
         while bi < self.decls.funcBounds.count() {
-            val fb: FuncBound = self.decls.funcBounds[bi]
+            val fb: FuncBound = self.decls.funcBounds.at(index: bi)
             if fb.fnIdx == self.cur.checkFn {
                 if fb.paramNameId == qTp {
                     if constraint.key.owner != 0U64 && fb.constraint.key.owner == constraint.key.owner && fb.constraint.key.positionalArgs.count() == constraint.key.positionalArgs.count() {
