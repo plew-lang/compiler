@@ -1,0 +1,30 @@
+// Trait arguments, associated outputs and method binders share the retained
+// substitution context for requirements and provided members.
+use @Std/Io only { print }
+trait P[Input] {
+    type Output
+    fn input(value: Input) -> Input
+    fn output(value: Output) -> Output
+    fn method[Value](value: Value) -> Value
+}
+pub impl[Input] P[Input] {
+    fn passInput(value: Input) -> Input { return self.input(value: value) }
+    fn passOutput(value: Output) -> Output { return self.output(value: value) }
+    fn passMethod[Value](value: Value) -> Value { return self.method(value: value) }
+}
+struct Sample {}
+impl Sample as P[I64] {
+    type Output = Bool
+    fn input(value: I64) -> I64 { return value }
+    fn output(value: Bool) -> Bool { return value }
+    fn method[Value](value: Value) -> Value { return value }
+}
+fn invoke[T](subject: T) where T: P[I64, Output = Bool] {
+    print(subject.input(value: 7I64))
+    print(subject.output(value: true))
+    print(subject.method(value: "requirement"))
+    print(subject.passInput(value: 9I64))
+    print(subject.passOutput(value: false))
+    print(subject.passMethod(value: "provided"))
+}
+fn main() { invoke(subject: <Sample />) }

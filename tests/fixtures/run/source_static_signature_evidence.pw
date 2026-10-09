@@ -1,0 +1,48 @@
+// Frozen signature shape/type admission; this does not prove source-place
+// mutability or the remaining ownership checks for a synthetic inout operand.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplate, CallTemplateKind, CallTemplateReceiver, CallSiteKey, CallTemplateArgument, CallArgumentSource, StaticMemberResolution, PatternTypeInput, PatternBindInput }
+use @Std/Io only { print }
+fn check(provided: Bool, name: String, label: String, labelled: Bool, inoutArgument: Bool, message: String) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="trait P {{ fn integer(value: I64) fn boolean(value: Bool) fn mutable(value: inout I64) fn positional(value~: I64) }} pub impl P {{ fn helper(value: I64) {{}} fn wrongType(value: Bool) {{}} fn mutableHelper(value: inout I64) {{}} fn positionalHelper(value~: I64) {{}} }} fn probe[T](receiver: T, source: I64, target: any P) where T: P {{}}" path="signature.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    val source = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val traitIndex = compiler.recordAnyTraitIndex(anyRef: compiler.funcParamAt(params: function.params, index: 2U64).ty)
+    val trait = compiler.decls.traitAt(index: traitIndex)
+    val proof = compiler.traitPatternProof(baseRef: receiver, traitId: trait.nameId, traitOwner: trait.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assumptions: compiler.functionBoundAssumptions(fnIdx: owner)).unwrap()
+    val labelSpan = compiler.internBytes(s: label)
+    val args = compiler.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=0U64 term=source /> labelStart=labelSpan.nameStart labelLen=labelSpan.nameLen hasLabel=labelled isInout=inoutArgument />])
+    val types = compiler.publishCallTemplateTypeArgs(args: [])
+    val declarationName = if provided {
+        give if name == "integer" { give "helper" } else if name == "boolean" { give "wrongType" } else if name == "mutable" { give "mutableHelper" } else { give "positionalHelper" }
+    } else { give name }
+    val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: declarationName).nameId)
+    val requirement = if name == "integer" { give 0U64 } else if name == "boolean" { give 1U64 } else if name == "mutable" { give 2U64 } else { give 3U64 }
+    val resolution = if provided { give <StaticMemberResolution.Provided proof=proof traitIdx=traitIndex callee=callee /> } else { give <StaticMemberResolution.Requirement proof=proof traitIdx=traitIndex reqIdx=requirement /> }
+    val index = compiler.decls.callTemplates.count()
+    compiler.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=900U64 /> receiverTypeTerm=receiver kind=<CallTemplateKind.StaticMethod receiver=<CallTemplateReceiver.Term term=receiver /> args=args resolution=resolution methodTypeArgs=types resultTerm=0U64 /> />)
+    match compiler.checkRecordedCallTemplateBound(templateIndex: index) {
+        Result.Ok(value: _) => { if message != "" { panic("accepted inconsistent signature") } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message != message { panic(diagnostic.message) } }
+    }
+}
+fn main() {
+    for provided in [false, true] {
+        check(provided: provided, name: "integer", label: "value", labelled: true, inoutArgument: false, message: "")
+        check(provided: provided, name: "boolean", label: "value", labelled: true, inoutArgument: false, message: "selected call argument does not match its signature or retained conversion")
+        check(provided: provided, name: "integer", label: "wrong", labelled: true, inoutArgument: false, message: "selected call arguments do not match its parameter labels")
+        check(provided: provided, name: "integer", label: "value", labelled: false, inoutArgument: false, message: "selected call arguments do not match its parameter labels")
+        check(provided: provided, name: "integer", label: "value", labelled: true, inoutArgument: true, message: "selected call argument does not match its parameter access mode")
+        check(provided: provided, name: "mutable", label: "value", labelled: true, inoutArgument: false, message: "selected call argument does not match its parameter access mode")
+        check(provided: provided, name: "mutable", label: "value", labelled: true, inoutArgument: true, message: "")
+        check(provided: provided, name: "positional", label: "value", labelled: false, inoutArgument: false, message: "")
+        check(provided: provided, name: "positional", label: "value", labelled: true, inoutArgument: false, message: "selected call arguments do not match its parameter labels")
+    }
+    print("static-signature-evidence")
+}

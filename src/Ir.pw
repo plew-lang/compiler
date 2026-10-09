@@ -1705,6 +1705,14 @@ pub struct InstanceEnvironment {
     pub val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
 }
 
+// A saved callable signature is interpreted in its explicit substitution
+// context. Trait parameters/associated outputs come from admitted evidence,
+// separately from method-owned binders; no member selection is repeated.
+pub enum SourceCallSignature {
+    Direct(environment: InstanceEnvironment)
+    Trait(bound: TraitBound, traitIndex: U64, environment: InstanceEnvironment)
+}
+
 // A runtime ABI operation selected from a finalized plewIntrinsic declaration.
 // It is deliberately separate from a source spelling: after frontend selection
 // neither Mid nor LLVM needs to inspect a function name to decide the ABI.

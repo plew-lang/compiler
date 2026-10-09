@@ -873,16 +873,48 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected call argument does not match its signature or retained conversion") />
     }
 
-    // Complete selections are checked against their recorded operands. The
-    // declaration substitution is interpreted once; no callee or conversion
-    // search can repair an inconsistent frozen signature.
+    // Complete selections consume the same frozen operand plan. Root evidence
+    // is admitted before either substitution context is constructed.
     inout fn checkSourceDirectCallArguments(template: CallTemplate, function: Func, arguments: CallTemplateArgumentRange, typeArgs: CallTemplateTypeArgumentRange, proofId: U64) -> Result[(), CompileDiagnostic] {
         if arguments.len == 0U64 { return <Result.Ok value=() /> }
+        val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: self.thawStaticConformanceProof(id: proofId))
+        return self.checkSourceCallArguments(template: template, function: function, arguments: arguments, signature: <SourceCallSignature.Direct environment=environment />)
+    }
+
+    inout fn checkSourceStaticCallArguments(template: CallTemplate, function: Func, arguments: CallTemplateArgumentRange, typeArgs: CallTemplateTypeArgumentRange, resolution: StaticMemberResolution) -> Result[(), CompileDiagnostic] {
+        if arguments.len == 0U64 { return <Result.Ok value=() /> }
+        match resolution {
+            StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIndex, reqIdx: _) => {
+                val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+                val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: function.typeParams) args=self.callTemplateTypeArgs(range: typeArgs) receiverRef=template.receiverTypeTerm proof=proof />
+                return self.checkSourceCallArguments(template: template, function: function, arguments: arguments, signature: <SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=environment />)
+            }
+            StaticMemberResolution.Provided(proof: val proof, traitIdx: val traitIndex, callee: _) => {
+                val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+                val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: proof)
+                return self.checkSourceCallArguments(template: template, function: function, arguments: arguments, signature: <SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=environment />)
+            }
+            StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "deferred declaration obligation has no selected member") /> }
+        }
+    }
+
+    inout fn sourceCallSignatureParameter(ref: U64, signature: SourceCallSignature) -> Result[U64, CompileDiagnostic] {
+        match signature {
+            SourceCallSignature.Direct(environment: val environment) => {
+                return self.groundTermForBody(ref: ref, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+            }
+            SourceCallSignature.Trait(bound: val bound, traitIndex: val traitIndex, environment: val environment) => {
+                val traitTerm = self.traitBoundTypeTerm(ref: ref, bound: bound, traitIndex: traitIndex)
+                return self.groundTermForBody(ref: traitTerm, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+            }
+        }
+    }
+
+    inout fn checkSourceCallArguments(template: CallTemplate, function: Func, arguments: CallTemplateArgumentRange, signature: SourceCallSignature) -> Result[(), CompileDiagnostic] {
         val input = <CallableArgumentInput.Templates range=arguments />
         if !self.callableInputLabelsOk(params: function.params, input: input) {
             return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call arguments do not match its parameter labels") />
         }
-        val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: self.thawStaticConformanceProof(id: proofId))
         mut val index = 0U64
         mut val position = 0U64
         while index < arguments.len {
@@ -892,7 +924,7 @@ pub impl Comp {
             if argument.isInout != parameter.isInout {
                 return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call argument does not match its parameter access mode") />
             }
-            val expected = try self.groundTermForBody(ref: parameter.ty, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+            val expected = try self.sourceCallSignatureParameter(ref: parameter.ty, signature: signature)
             try self.checkSourceCallArgumentType(argument: argument, expected: expected, owner: template.siteKey.ownerFnIdx, offset: template.siteKey.originStart)
             position += 1U64
             index += 1U64

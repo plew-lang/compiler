@@ -500,12 +500,17 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot establish the selected call's receiver type") />
                 }
                 try self.checkCallTemplateArguments(args: args, parameterCount: function.params.count(), offset: offset)
+                try self.checkCallTemplateEvidence(template: template)
                 try self.checkSourceDirectCallArguments(template: template, function: function, arguments: args, typeArgs: calleeTypeArgs, proofId: proofId)
+                return <Result.Ok value=() />
             }
             CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
                 val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: offset)
                 try self.checkCallTemplateTypeArguments(arguments: typeArgs, parameterCount: function.typeParams.count(), offset: offset)
                 try self.checkCallTemplateArguments(args: args, parameterCount: function.params.count(), offset: offset)
+                try self.checkCallTemplateEvidence(template: template)
+                try self.checkSourceStaticCallArguments(template: template, function: function, arguments: args, typeArgs: typeArgs, resolution: resolution)
+                return <Result.Ok value=() />
             }
             CallTemplateKind.Operator(op: _, operands: val operands, resolution: val selection, resultTerm: _) => {
                 if operands.len == 0U64 || operands.len > 2U64 || operands.start > self.decls.callTemplateOperandPool.count() || operands.len > self.decls.callTemplateOperandPool.count() - operands.start {
