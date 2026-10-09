@@ -12,7 +12,14 @@ fn main() {
     assert(result != 0U64)
     val promise = c.arena.typeAt(index: result)
     assert(promise.args.count() == 1U64)
-    assert(promise.args[0U64] == 0U64)
+    // A generic payload is a resolved semantic type, not the zero sentinel
+    // reserved for completed callable result slots. Unit is an empty record.
+    val payload = promise.args[0U64]
+    assert(payload != 0U64)
+    val unit = c.arena.typeAt(index: payload)
+    assert(unit.isRecord)
+    assert(unit.recordFieldTerms.count() == 0U64)
+    assert(c.callableResultIsUnit(ref: payload))
     assert(c.semanticBodyReturnTerm(fnIdx: 0U64) == 0U64)
     match c.arcClassOfRef(ref: result).unwrap() {
         ArcClass.PromiseCell(inst: _) => {}
