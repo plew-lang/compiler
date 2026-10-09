@@ -1595,27 +1595,21 @@ pub impl Comp {
     // The same closed callable constraint is checked whether selected during
     // declaration analysis or demanded later by executable discovery.
     inout fn checkSelectedCallableBounds(fnIdx: U64, environment: InstanceEnvironment, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
-        val function = self.arena.functionAt(index: fnIdx)
-        val owner = if function.lexicalOwnerFnId != 0U64 { give function.lexicalOwnerFnId - 1U64 } else { give fnIdx }
-        mut val index = 0U64
-        while index < self.decls.funcBounds.count() {
+        for index in self.sourceDeclarationCallBoundIndices(functionIndex: fnIdx) {
             val bound = self.decls.funcBounds.at(index: index)
-            if bound.fnIdx == fnIdx || bound.fnIdx == owner {
-                val subject = try self.groundTermForBody(ref: bound.paramTy, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
-                mut val arguments: Array[U64] = []
-                for val argument in bound.constraint.key.positionalArgs {
-                    arguments.append((try self.groundTermForBody(ref: argument, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)))
-                }
-                mut val predicates: Array[TraitAssocPredicate] = []
-                for val predicate in bound.constraint.assocPredicates {
-                    predicates.append(<TraitAssocPredicate member=predicate.member value=(try self.groundTermForBody(ref: predicate.value, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)) span=predicate.span />)
-                }
-                val constraint = <TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates />
-                if !(try self.viewedTypeConformsTraitConstraint(ref: subject, constraint: constraint, assumptions: assumptions)) {
-                    return <Result.Err error=self.diagnosticAt(offset: bound.paramStart, msg: "type argument does not conform to the trait required by `where`") />
-                }
+            val subject = try self.groundTermForBody(ref: bound.paramTy, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+            mut val arguments: Array[U64] = []
+            for val argument in bound.constraint.key.positionalArgs {
+                arguments.append((try self.groundTermForBody(ref: argument, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)))
             }
-            index += 1U64
+            mut val predicates: Array[TraitAssocPredicate] = []
+            for val predicate in bound.constraint.assocPredicates {
+                predicates.append(<TraitAssocPredicate member=predicate.member value=(try self.groundTermForBody(ref: predicate.value, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)) span=predicate.span />)
+            }
+            val constraint = <TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates />
+            if !(try self.viewedTypeConformsTraitConstraint(ref: subject, constraint: constraint, assumptions: assumptions)) {
+                return <Result.Err error=self.diagnosticAt(offset: bound.paramStart, msg: "type argument does not conform to the trait required by `where`") />
+            }
         }
         return <Result.Ok value=() />
     }
