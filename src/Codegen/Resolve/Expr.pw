@@ -564,7 +564,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        return self.checkCallTemplateAssumptionScope(template: template)
+        return self.checkCallTemplateEvidence(template: template)
     }
 
     // Every selected call family uses the same frozen parameter-order plan.

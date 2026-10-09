@@ -1,0 +1,90 @@
+// Static member selection must retain the condition evidence it selected.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { ArgRange, StaticMemberResolution, StaticConformanceProof, WitnessMatch, CallTemplate, CallTemplateKind, CallSiteKey, CallTemplateReceiver, ProtocolSelection, OperatorSelection, CallTemplateOperandRange, WitnessConditionPlan, ConformBound }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+fn check(family: U64, invalid: Bool, cyclic: Bool = false) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="trait B[V] {{}} trait Q {{}} trait P {{ fn value() -> I64 }} impl[V] B[V] as P where V: Q {{ fn value() -> I64 {{ return 1I64 }} }} fn probe[T,V](source: T, target: any P) where T: B[V], V: Q {{}}" path="member-proof.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val functionIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: functionIndex)
+    val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val name = compiler.internBytes(s: "value")
+    val selected = compiler.staticMemberResolution(fnIdx: functionIndex, receiverRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: <ArgRange start=0U64 len=0U64 />, requiredTraitOwner: compiler.decls.traitAt(index: compiler.recordAnyTraitIndex(anyRef: compiler.funcParamAt(params: function.params, index: 1U64).ty)).nameStart).unwrap()
+    val proof = match selected {
+        StaticMemberResolution.Requirement(proof: val proof, traitIdx: _, reqIdx: _) => { give proof }
+        StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: _) => { give proof }
+        _ => { panic("missing member") }
+    }
+    if cyclic {
+        val edge = match proof {
+            StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: val edges) => { give edges[0U64] }
+            _ => { panic("missing cyclic path setup") }
+        }
+        val declaration = compiler.decls.conformAt(index: edge.conformIdx - 1U64)
+        val trait = match selected {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: val trait, reqIdx: _) => { give trait }
+            StaticMemberResolution.Provided(proof: _, traitIdx: val trait, callee: _) => { give trait }
+            _ => { panic("missing cycle trait") }
+        }
+        val output = compiler.staticProofBound(proof: proof, traitIdx: trait).unwrap()
+        compiler.decls.conformBoundPool[declaration.bounds.start] = <ConformBound subject=receiver constraint=output.constraint offset=0U64 />
+        val plan = compiler.arena.witnessConditionPlans[edge.conditions - 1U64]
+        val child = compiler.freezeStaticConformanceProof(proof: proof)
+        compiler.arena.witnessConditionPlans[edge.conditions - 1U64] = <WitnessConditionPlan witness=plan.witness proofs=[child] />
+    }
+    val rejected = invalid || cyclic
+    val message = if cyclic { give "selected conformance condition evidence is cyclic" } else { give "selected conformance evidence does not satisfy its declaration conditions" }
+    val broken = if !invalid { give proof } else { give match proof {
+        StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
+            val edge = edges[0U64]
+            give <StaticConformanceProof.AssumedTraitPath source=source steps=steps edges=[<WitnessMatch conformIdx=edge.conformIdx binds=edge.binds selfRef=edge.selfRef conditions=0U64 />] />
+        }
+        _ => { panic("missing selected conditional path") }
+    } }
+    val resolution = match selected {
+        StaticMemberResolution.Requirement(proof: _, traitIdx: val trait, reqIdx: val requirement) => { give <StaticMemberResolution.Requirement proof=broken traitIdx=trait reqIdx=requirement /> }
+        StaticMemberResolution.Provided(proof: _, traitIdx: val trait, callee: val callee) => { give <StaticMemberResolution.Provided proof=broken traitIdx=trait callee=callee /> }
+        _ => { panic("missing selected member") }
+    }
+    val arguments = compiler.publishCallTemplateArguments(args: [])
+    val types = compiler.publishCallTemplateTypeArgs(args: [])
+    val template = <CallTemplate siteKey=<CallSiteKey ownerFnIdx=functionIndex originKind=2U64 originSerial=900U64 /> receiverTypeTerm=receiver kind=(if family == 0U64 {
+        give <CallTemplateKind.StaticMethod receiver=<CallTemplateReceiver.Term term=receiver /> args=arguments resolution=resolution methodTypeArgs=types resultTerm=0U64 />
+    } else if family == 1U64 {
+        give <CallTemplateKind.Direct callee=compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "value").nameId) receiver=<CallTemplateReceiver.Term term=receiver /> args=arguments calleeTypeArgs=types proofId=compiler.freezeStaticConformanceProof(proof: broken) />
+    } else if family == 2U64 {
+        give <CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=receiver /> selection=<ProtocolSelection.Direct callee=0U64 proof=broken /> resultTerm=0U64 />
+    } else if family == 3U64 {
+        give <CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=receiver /> selection=<ProtocolSelection.Static resolution=resolution /> resultTerm=0U64 />
+    } else {
+        give <CallTemplateKind.Operator op=0I64 operands=<CallTemplateOperandRange start=0U64 len=0U64 /> resolution=<OperatorSelection.Static resolution=resolution /> resultTerm=0U64 />
+    }) />
+    // These synthetic rows isolate the evidence contract. Operator/Protocol
+    // signature and operand validation is covered by their ordinary fixtures.
+    match compiler.checkCallTemplateEvidence(template: template) {
+        Result.Ok(value: _) => { if rejected { panic("call accepted missing condition evidence") } }
+        Result.Err(error: val diagnostic) => { if !rejected || diagnostic.message != message { panic(diagnostic.message) } }
+    }
+    if family == 0U64 {
+        val index = compiler.decls.callTemplates.count()
+        compiler.appendCallTemplate(template: template)
+        match compiler.checkCallTemplateSelection(templateIndex: index) {
+            Result.Ok(value: _) => { if rejected { panic("sealed call accepted missing condition evidence") } }
+            Result.Err(error: val diagnostic) => { if !rejected || diagnostic.message != message { panic(diagnostic.message) } }
+        }
+    }
+}
+fn main() {
+    mut val family = 0U64
+    while family < 5U64 {
+        check(family: family, invalid: false)
+        check(family: family, invalid: true)
+        check(family: family, invalid: false, cyclic: true)
+        family += 1U64
+    }
+    print("call-proof-evidence")
+}

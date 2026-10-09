@@ -771,22 +771,38 @@ pub impl Comp {
     // Admission applies before deciding whether a call is closed or deferred.
     // The recorded source owner, not the current executable request, supplies
     // the authority of any retained declaration assumptions.
-    inout fn checkCallTemplateAssumptionScope(template: CallTemplate) -> Result[(), CompileDiagnostic] {
+    inout fn checkDeclarationCallProof(proof: StaticConformanceProof, scope: DeclarationTypeScope, offset: U64) -> Result[(), CompileDiagnostic] {
+        // Integrity precedes dependency traversal: malformed conditional plans
+        // must not be interpreted as authorizing premises or recurse forever.
+        try self.checkStaticProofEvidence(proof: proof, offset: offset)
+        try self.declarationProofDependency(proof: proof, scope: scope, offset: offset)
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkDeclarationStaticCallEvidence(resolution: StaticMemberResolution, scope: DeclarationTypeScope, offset: U64) -> Result[(), CompileDiagnostic] {
+        match resolution {
+            StaticMemberResolution.Requirement(proof: val proof, traitIdx: _, reqIdx: _) => { return self.checkDeclarationCallProof(proof: proof, scope: scope, offset: offset) }
+            StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: _) => { return self.checkDeclarationCallProof(proof: proof, scope: scope, offset: offset) }
+            StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no selected member") /> }
+        }
+    }
+
+    inout fn checkCallTemplateEvidence(template: CallTemplate) -> Result[(), CompileDiagnostic] {
         match template.kind {
             CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: val proof) => {
                 if proof == 0U64 { return <Result.Ok value=() /> }
                 val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
-                try self.declarationProofDependency(proof: self.thawStaticConformanceProof(id: proof), scope: scope, offset: template.siteKey.originStart)
+                try self.checkDeclarationCallProof(proof: self.thawStaticConformanceProof(id: proof), scope: scope, offset: template.siteKey.originStart)
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: _, resultTerm: _) => {
                 val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
-                try self.declarationStaticMemberDependency(resolution: resolution, scope: scope, offset: template.siteKey.originStart)
+                try self.checkDeclarationStaticCallEvidence(resolution: resolution, scope: scope, offset: template.siteKey.originStart)
             }
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
                 match selection {
-                    ProtocolSelection.Direct(callee: _, proof: val proof) => { try self.declarationProofDependency(proof: proof, scope: scope, offset: template.siteKey.originStart) }
-                    ProtocolSelection.Static(resolution: val resolution) => { try self.declarationStaticMemberDependency(resolution: resolution, scope: scope, offset: template.siteKey.originStart) }
+                    ProtocolSelection.Direct(callee: _, proof: val proof) => { try self.checkDeclarationCallProof(proof: proof, scope: scope, offset: template.siteKey.originStart) }
+                    ProtocolSelection.Static(resolution: val resolution) => { try self.checkDeclarationStaticCallEvidence(resolution: resolution, scope: scope, offset: template.siteKey.originStart) }
                     _ => {}
                 }
             }
@@ -794,7 +810,7 @@ pub impl Comp {
                 match selection {
                     OperatorSelection.Static(resolution: val resolution) => {
                         val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
-                        try self.declarationStaticMemberDependency(resolution: resolution, scope: scope, offset: template.siteKey.originStart)
+                        try self.checkDeclarationStaticCallEvidence(resolution: resolution, scope: scope, offset: template.siteKey.originStart)
                     }
                     _ => {}
                 }
