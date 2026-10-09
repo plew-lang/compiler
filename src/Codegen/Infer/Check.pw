@@ -78,9 +78,10 @@ pub impl Comp {
             }
             _ => {}
         }
-        // Only unsuffixed numeric syntax accepts a floating context. Named
-        // values and explicit suffixes must pass ordinary type compatibility.
-        if contextualNumericExpression(self.arena.exprs, exprId: valueExpr) {
+        // Numeric syntax supplies context only before a semantic type exists.
+        // A recorded literal is an ordinary typed value, just like a binding
+        // or an explicitly suffixed literal; never reinterpret it on recheck.
+        if contextualNumericExpression(self.arena.exprs, exprId: valueExpr) && self.semanticExprTerm(exprId: valueExpr) == 0U64 {
             val expectedGround = (try self.groundTypeRef(ref: expectedRef))
             if expectedGround < self.arena.typeCount() {
                 val expected = self.arena.typeAt(index: expectedGround)

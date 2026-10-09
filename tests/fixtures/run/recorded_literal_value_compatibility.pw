@@ -1,0 +1,21 @@
+// Once a literal has a semantic type, compatibility cannot reinterpret its
+// numeric syntax using a different context. This is an internal fact test.
+use /Frontend only { Comp }
+use /Ir only { Expr, TypeRef }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integerName = compiler.internBytes(s: "I64")
+    val floatName = compiler.internBytes(s: "F64")
+    val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
+    val floating = compiler.pushType(t: <TypeRef nameStart=floatName.nameStart nameLen=floatName.nameLen args=[] />)
+    val expression = compiler.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    compiler.tcCheckValue(expectedRef: floating, valueExpr: expression, pos: "unresolved-literal-probe").unwrap()
+    compiler.recordSemanticExprTerm(exprId: expression, term: integer)
+    compiler.tcCheckValue(expectedRef: integer, valueExpr: expression, pos: "literal-probe").unwrap()
+    if compiler.tcCheckValue(expectedRef: floating, valueExpr: expression, pos: "literal-probe").isOk() { panic "recorded integer was reinterpreted as floating" }
+    if !compiler.typeRefEq(a: compiler.inferType(id: expression).unwrap(), b: integer) { panic "recorded literal type was lost" }
+    print("recorded-literal")
+}
