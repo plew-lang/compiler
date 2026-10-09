@@ -1,18 +1,24 @@
 use @Std/Io only { print }
 
-// Unit calls execute in value-discarding statement position without a
-// fabricated result type. Cover declaration, requirement and closure targets.
+// Implicit Unit is an ordinary source value even when its ABI has no payload.
+// Preserve the result through declarations, blocks, generics and dynamic calls.
 fn emit(value: I64) { print(value) }
 trait Emit { fn emit() }
 struct Message {}
 pub impl Message { factory }
 pub impl Message as Emit { fn emit() { print(2I64) } }
-fn emitGeneric[T](value: T) where T: Emit { value.emit() }
-fn emitErased(value: any Emit) { value.emit() }
+fn emitGeneric[T](value: T) -> () where T: Emit { return value.emit() }
+fn emitErased(value: any Emit) -> () { return value.emit() }
+fn identity[T](value: T) -> T { return value }
+fn take(value: ()) {}
 fn main() {
-    emit(value: 1I64)
-    emitGeneric(value: <Message />)
+    val first: () = { give emit(value: 1I64) }
+    take(value: first)
+    val second = identity(value: emitGeneric(value: <Message />))
+    take(value: second)
     val callback: fn() = fn() { print(3I64) }
-    callback()
-    emitErased(value: <Message />)
+    val third: () = callback()
+    take(value: third)
+    val fourth: () = emitErased(value: <Message />)
+    take(value: fourth)
 }

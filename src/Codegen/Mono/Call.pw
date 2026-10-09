@@ -3419,6 +3419,7 @@ pub impl Comp {
             if !self.callableResultIsUnit(ref: result) {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: Unit callable has a non-Unit source result type") />
             }
+            if !f.isDiverging { result = self.semanticSourceResultTerm(ref: result) }
         } else {
             if result == 0U64 || !(self.callResultProjectionIsValid(carrierRef: carrierResult, resultRef: result, projection: resultProjection)) {
                 if self.traceCodegen {
@@ -3621,7 +3622,7 @@ pub impl Comp {
                 }
                 val fnTy: TypeRef = self.arena.typeAt(index: fnTypeRef)
                 mut val resultRef: U64 = 0U64
-                if fnTy.args.count() > 0U64 && !self.functionTypeReturnsUnit(ref: fnTypeRef) { resultRef = fnTy.args[0] }
+                if fnTy.args.count() > 0U64 && !fnTy.isDiverging { resultRef = self.semanticSourceResultTerm(ref: fnTy.args[0]) }
                 return <Result.Ok value=<CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected resultRef=resultRef target=<CallTarget.ClosureLocal bindingDeclStart=bindingDeclStart fnTypeRef=fnTypeRef /> /> />
             }
             DynamicCallTemplateTarget.ClosureField(fieldIndex: val fieldIndex, fnTypeTerm: val fnTypeTerm) => {
@@ -3631,7 +3632,7 @@ pub impl Comp {
                 }
                 val fnTy: TypeRef = self.arena.typeAt(index: fnTypeRef)
                 mut val resultRef: U64 = 0U64
-                if fnTy.args.count() > 0U64 && !self.functionTypeReturnsUnit(ref: fnTypeRef) { resultRef = fnTy.args[0] }
+                if fnTy.args.count() > 0U64 && !fnTy.isDiverging { resultRef = self.semanticSourceResultTerm(ref: fnTy.args[0]) }
                 return <Result.Ok value=<CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected resultRef=resultRef target=<CallTarget.ClosureField fieldIndex=fieldIndex fnTypeRef=fnTypeRef /> /> />
             }
             DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIdx, slot: val slot) => {
@@ -3640,7 +3641,7 @@ pub impl Comp {
                 }
                 val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: slot - 1U64)
                 val signature = try self.existentialRequirementSignature(target: receiverRef, traitIndex: traitIdx, requirement: req)
-                val resultRef = signature.resultType
+                val resultRef = if req.isDiverging { give 0U64 } else { give self.semanticSourceResultTerm(ref: signature.resultType) }
                 return <Result.Ok value=<CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected resultRef=resultRef target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=slot /> /> />
             }
         }
@@ -4961,6 +4962,7 @@ pub impl Comp {
         }
         mut val result = returnType
         if !hasReturn && !isDiverging && contextual { result = expected[0U64] }
+        if !isDiverging { result = self.semanticSourceResultTerm(ref: result) }
         mut val types: Array[U64] = [result]
         mut val labels: Array[U64] = [0U64]
         mut val index = 0U64

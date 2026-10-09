@@ -457,6 +457,9 @@ pub impl Comp {
             args.append(ap.ref)
             i += 1
         }
+        if args.count() > 0U64 && !t.isDiverging && rangeEquals(bytes: self.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "fn") {
+            args.set(i: 0U64, value: self.semanticSourceResultTerm(ref: args[0U64]))
+        }
         mut val viewExtId: U64 = 0
         mut val viewIds: Array[U64] = []
         mut val viewSources: Array[ResolvedViewSource] = []
@@ -645,6 +648,9 @@ pub impl Comp {
             argPtys.append(arg)
             args.append(arg.ref)
             i += 1U64
+        }
+        if args.count() > 0U64 && !t.isDiverging && rangeEquals(bytes: self.arena.bytes, start: name.nameStart, len: name.nameLen, kw: "fn") {
+            args.set(i: 0U64, value: self.semanticSourceResultTerm(ref: args[0U64]))
         }
 
         mut val viewSources: Array[ResolvedViewSource] = []
