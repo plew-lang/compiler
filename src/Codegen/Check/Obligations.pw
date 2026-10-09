@@ -1044,11 +1044,12 @@ pub impl Comp {
     }
 
     fn sourceDeclarationCallBoundIndices(functionIndex: U64) -> Array[U64] {
-        val function = self.arena.functionAt(index: functionIndex)
-        val owner = if function.lexicalOwnerFnId != 0U64 { give function.lexicalOwnerFnId - 1U64 } else { give functionIndex }
+        val owner = self.arena.functionLexicalOwner(index: functionIndex)
         val direct = self.decls.funcBounds.indices(owner: functionIndex)
         if owner == functionIndex { return direct }
         val inherited = self.decls.funcBounds.indices(owner: owner)
+        if direct.count() == 0U64 { return inherited }
+        if inherited.count() == 0U64 { return direct }
         mut val indices: Array[U64] = []
         mut val cursor = 0U64
         for index in direct {
