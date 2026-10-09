@@ -106,6 +106,12 @@ pub impl Comp {
                 }
                 // Interpret the selected proof; never select another conformance
                 // to repair a frozen plan, including traits with no members.
+                match evidence {
+                    StaticConformanceProof.ConcreteWitness(witness: val witness) => {
+                        if !(try self.selectedNominalWitnessSubjectMatches(witness: witness)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not match its declaration subject") /> }
+                    }
+                    _ => {}
+                }
                 val bound = try self.staticProofBound(proof: evidence, traitIdx: traitIdx)
                 val required = self.existentialTraitConstraint(ref: target)
                 if bound.subject == 0U64 || bound.constraint.key.owner != required.key.owner || !self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: required.key.positionalArgs) {

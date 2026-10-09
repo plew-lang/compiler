@@ -1,0 +1,58 @@
+// Frozen box evidence must prove the target trait instance even when
+// its empty requirement list cannot expose a mismatched witness.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, DeclarationConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind }
+use @Std/Io only { print }
+fn check(text: String, compatible: Bool, targetIndex: Bool = false, proofSubjectIndex: U64 = 0U64, corrupt: Bool = false, corruptBindings: Bool = false, message: String = "existential box evidence does not match its target trait instance") {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text=text path="box-proof.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val source = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val yes = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val no = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    val proofSubject = compiler.funcParamAt(params: function.params, index: proofSubjectIndex).ty
+    val selected = compiler.callArgumentConversion(sourceRef: proofSubject, targetRef: yes, assumptions: compiler.functionBoundAssumptions(fnIdx: 0U64)).unwrap()
+    val evidence = match selected {
+        ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val proof) => { give proof }
+        _ => { panic("missing real conformance") }
+    }
+    val tampered = match evidence {
+        StaticConformanceProof.ConcreteWitness(witness: val witness) => {
+            mut val bindings = witness.binds
+            if corruptBindings {
+                val binding = bindings[0U64]
+                bindings = [<WitnessBind binder=binding.binder paramId=binding.paramId term=no />]
+            }
+            give <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=witness.conformIdx binds=bindings selfRef=(if corrupt { give source } else { give witness.selfRef }) /> />
+        }
+        _ => { panic("not concrete") }
+    }
+    val expression = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    compiler.recordSemanticExprTerm(exprId: expression, term: source)
+    compiler.cur.checkFn = 0U64
+    compiler.cur.recordCallTemplates = true
+    compiler.recordDeclarationConversion(exprId: expression, target: no).unwrap()
+    val original = compiler.decls.declarationConversions[0U64]
+    val proof = compiler.freezeValueConversionProof(proof: <ValueConversionProof.ExistentialBox sourceRef=source targetRef=no traitIdx=compiler.recordAnyTraitIndex(anyRef: (if targetIndex { give no } else { give yes })) proof=tampered />)
+    compiler.decls.declarationConversions[0U64] = <DeclarationConversion site=original.site source=source target=no proof=proof />
+    match compiler.prepareLexicalBody(fnIdx: 0U64) {
+        Result.Ok(value: _) => { if !compatible { panic("owner accepted invalid box evidence") } }
+        Result.Err(error: val diagnostic) => { if compatible || diagnostic.message != message { panic(diagnostic.message) } }
+    }
+    match compiler.checkRecordedMemberObligations() {
+        Result.Ok(value: _) => { if !compatible { panic("whole target accepted invalid box evidence") } }
+        Result.Err(error: val diagnostic) => { if compatible || diagnostic.message != message { panic(diagnostic.message) } }
+    }
+}
+fn main() {
+    check(text: "trait P {{}} struct Value {{}} struct Other {{}} impl Other as P {{}} fn probe(source: Value, yes: any P, no: any P, proofSubject: Other) {{}}", compatible: false, proofSubjectIndex: 3U64, corrupt: true, message: "selected conformance evidence does not match its declaration subject")
+    check(text: "trait P {{}} struct Value {{}} impl Value as P {{}} fn probe(source: Value, yes: any P, no: any P) {{}}", compatible: true)
+    check(text: "trait P {{}} struct Value {{}} impl Value as P {{}} newtype Wrapped = Value fn probe(source: Wrapped, yes: any P, no: any P) {{}}", compatible: true)
+    check(text: "trait P {{}} struct Value[T] {{}} impl[T] Value[T] as P {{}} fn probe(source: Value[I64], yes: any P, no: any P) {{}}", compatible: true)
+    check(text: "trait P {{}} struct Value {{}} extension E {{ impl Value as P {{}} }} fn probe(source: Value#E, yes: any P, no: any P) {{}}", compatible: true)
+    check(text: "trait P {{}} struct Value[T] {{}} impl[T] Value[T] as P {{}} fn probe(source: Value[I64], yes: any P, no: any P) {{}}", compatible: false, corruptBindings: true, message: "selected conformance evidence does not match its declaration subject")
+    print("selected-witness-owner-evidence")
+}

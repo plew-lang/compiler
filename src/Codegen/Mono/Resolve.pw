@@ -171,6 +171,17 @@ pub impl Comp {
         return <StaticConformanceProof.TraitPath edges=state.edges terminalConformIdx=terminal.conformIdx />
     }
 
+    // Interpret the selected declaration under its recorded substitution.
+    // No matching candidate or new binder assignment repairs a stored proof.
+    inout fn selectedNominalWitnessSubjectMatches(witness: WitnessMatch) -> Result[Bool, CompileDiagnostic] {
+        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() || witness.selfRef == 0U64 || witness.selfRef >= self.arena.typeCount() { return <Result.Ok value=false /> }
+        val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
+        if declaration.subjectTraitOwner != 0U64 || declaration.subjectTy == 0U64 { return <Result.Ok value=false /> }
+        val declared = try self.groundWitnessTypeTerm(ref: declaration.subjectTy, params: <PatternBindInput.Conformance range=declaration.typeParams />, matchResult: witness)
+        val actual = self.conformancePhysicalSubject(typeRef: witness.selfRef)
+        return <Result.Ok value=self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: declared), b: self.typeRefWithoutOuterViews(ref: actual)) />
+    }
+
     // Conditions belong to the source impl and are substituted by its selected
     // witness. An active obligation is not evidence for itself. Preserve stack
     // cleanup on diagnostics as well as success/failure.
