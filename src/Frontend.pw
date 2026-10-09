@@ -1,4 +1,4 @@
-use ./Ir only { ExistentialBoxEvidence, DeclarationTypeScope, DeclarationObligationState, CallConstraintInstance, DeclarationConversion, ExistentialImplementation }
+use ./Ir only { WitnessConditionPlan, ExistentialBoxEvidence, DeclarationTypeScope, DeclarationObligationState, CallConstraintInstance, DeclarationConversion, ExistentialImplementation }
 use ./Ir only { ProtocolSelection, OperatorSelection, InvocationCompletion, SemanticExpressionTypeState, SemanticCompletionOwner, SemanticExpressionCompletion, TypeCompatibility, TypeArgumentMatch, ConditionClause, ConditionClauseRange }
 use @Plew/Syntax only { CondClause, syntaxConditionClause }
 use ./SourceCompletion only { SourceCompletion, CompletionEdges, CompletionTransfer, BlockResultContext, completionThen, completionChoice, completionTransfer, completionBlock, completionLoop }
@@ -256,6 +256,7 @@ pub struct Comp {
     pub mut val nextParamId: U64 = 1
     // Active conditional witnesses are query state, never proof assumptions.
     pub mut val activeProjectionProofs: Array[U64] = []
+    pub mut val activeConditionAdmission: Array[U64] = []
     pub mut val activeConformanceConditions: Array[WitnessMatch] = []
     // lowering-time where constraints for associated-type short projection
     // normalization (`T.Item` -> `T#Trait.Item`). Kept on Comp rather than Cursor

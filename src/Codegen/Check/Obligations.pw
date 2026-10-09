@@ -106,12 +106,7 @@ pub impl Comp {
                 }
                 // Interpret the selected proof; never select another conformance
                 // to repair a frozen plan, including traits with no members.
-                match evidence {
-                    StaticConformanceProof.ConcreteWitness(witness: val witness) => {
-                        if !(try self.selectedNominalWitnessSubjectMatches(witness: witness)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not match its declaration subject") /> }
-                    }
-                    _ => {}
-                }
+                try self.checkStaticProofConditionEvidence(proof: evidence, offset: offset)
                 val bound = try self.staticProofBound(proof: evidence, traitIdx: traitIdx)
                 val required = self.existentialTraitConstraint(ref: target)
                 if bound.subject == 0U64 || bound.constraint.key.owner != required.key.owner || !self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: required.key.positionalArgs) {
@@ -151,6 +146,61 @@ pub impl Comp {
                 }
             }
             _ => {}
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkStaticProofConditionEvidence(proof: StaticConformanceProof, offset: U64) -> Result[(), CompileDiagnostic] {
+        match proof {
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => {
+                if !(try self.selectedNominalWitnessSubjectMatches(witness: witness)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not match its declaration subject") /> }
+                try self.checkWitnessConditionEvidence(witness: witness, offset: offset)
+            }
+            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
+                for edge in edges { try self.checkWitnessConditionEvidence(witness: edge, offset: offset) }
+            }
+            StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: val edges) => {
+                for edge in edges { try self.checkWitnessConditionEvidence(witness: edge, offset: offset) }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkWitnessConditionEvidence(witness: WitnessMatch, offset: U64) -> Result[(), CompileDiagnostic] {
+        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+        val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
+        if declaration.bounds.len == 0U64 && witness.conditions == 0U64 { return <Result.Ok value=() /> }
+        if witness.conditions == 0U64 || witness.conditions > self.arena.witnessConditionPlans.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+        val plan = self.arena.witnessConditionPlans[witness.conditions - 1U64]
+        if !self.sameWitnessSubstitution(a: plan.witness, b: witness) || plan.proofs.count() != declaration.bounds.len { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+        for active in self.activeConditionAdmission {
+            if active == witness.conditions { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance condition evidence is cyclic") /> }
+        }
+        self.activeConditionAdmission.append(witness.conditions)
+        val result = self.checkWitnessConditionChildren(witness: witness, proofs: plan.proofs, offset: offset)
+        self.activeConditionAdmission.removeLast()
+        return result
+    }
+
+    inout fn checkWitnessConditionChildren(witness: WitnessMatch, proofs: Array[U64], offset: U64) -> Result[(), CompileDiagnostic] {
+        val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
+        val parameters = self.copyConformBinds(binds: declaration.typeParams)
+        mut val index = 0U64
+        while index < proofs.count() {
+            val clause = self.conformBoundAt(bounds: declaration.bounds, index: index)
+            val subject = try self.groundWitnessTypeTerm(ref: clause.subject, params: <PatternBindInput.Conformance range=declaration.typeParams />, matchResult: witness)
+            val constraint = try self.groundTraitConstraintThroughWitness(constraint: clause.constraint, params: parameters, matchResult: witness)
+            val traitIndex = self.decls.traitIndexByOffset(offset: constraint.key.owner)
+            val proof = self.thawStaticConformanceProof(id: proofs[index])
+            val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+            if bound.subject == 0U64 || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: subject), b: self.typeRefWithoutOuterViews(ref: bound.subject)) || bound.constraint.key.owner != constraint.key.owner || (!constraint.positionalArgsOpen && !self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: constraint.key.positionalArgs)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+            mut val names: Array[U64] = []
+            mut val values: Array[U64] = []
+            for predicate in constraint.assocPredicates { names.append(predicate.member) values.append(predicate.value) }
+            if !(try self.selectedProofAssociatedTypesMatch(proof: proof, traitOwner: constraint.key.owner, names: names, values: values)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+            try self.checkStaticProofConditionEvidence(proof: proof, offset: offset)
+            index += 1U64
         }
         return <Result.Ok value=() />
     }
@@ -601,6 +651,12 @@ pub impl Comp {
         mut val dependent = try self.declarationTypeDependency(ref: witness.selfRef, scope: scope, offset: offset)
         for binding in witness.binds {
             if (try self.declarationTypeDependency(ref: binding.term, scope: scope, offset: offset)) { dependent = true }
+        }
+        if witness.conditions != 0U64 {
+            if witness.conditions > self.arena.witnessConditionPlans.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance has an invalid condition plan") /> }
+            for proof in self.arena.witnessConditionPlans[witness.conditions - 1U64].proofs {
+                if (try self.declarationProofDependency(proof: self.thawStaticConformanceProof(id: proof), scope: scope, offset: offset)) { dependent = true }
+            }
         }
         return <Result.Ok value=dependent />
     }

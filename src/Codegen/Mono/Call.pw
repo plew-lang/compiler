@@ -26,7 +26,7 @@ pub impl Comp {
             self.arena.staticProofWitnessBindPool.append(witness.binds[i])
             i += 1U64
         }
-        return <FrozenWitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=start bindCount=witness.binds.count() />
+        return <FrozenWitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=start bindCount=witness.binds.count() conditions=witness.conditions />
     }
 
     inout fn freezeStaticConformanceProof(proof: StaticConformanceProof) -> U64 {
@@ -37,7 +37,7 @@ pub impl Comp {
             }
             StaticConformanceProof.ConcreteWitness(witness: val witness) => {
                 val frozen: FrozenWitnessMatch = self.freezeWitnessMatch(witness: witness)
-                self.arena.staticProofs.append(<StaticProofNode tag=1U64 conformIdx=frozen.conformIdx witnessBinds=frozen.binds witnessBindCount=frozen.bindCount witnessSelfRef=frozen.selfRef />)
+                self.arena.staticProofs.append(<StaticProofNode tag=1U64 conformIdx=frozen.conformIdx witnessBinds=frozen.binds witnessBindCount=frozen.bindCount witnessSelfRef=frozen.selfRef witnessConditions=frozen.conditions />)
             }
             StaticConformanceProof.AssumedBound(source: val boundRef) => {
                 self.arena.staticProofs.append(<StaticProofNode tag=2U64 boundKind=self.declarationBoundKind(source: boundRef) boundIdx=self.declarationBoundIndex(source: boundRef) />)
@@ -136,7 +136,7 @@ pub impl Comp {
             binds.append(self.arena.staticProofWitnessBindPool[witness.binds + i])
             i += 1U64
         }
-        return <WitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=binds />
+        return <WitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=binds conditions=witness.conditions />
     }
 
     // Transitional compatibility reader. It is used only while Mid's draft
@@ -147,7 +147,7 @@ pub impl Comp {
         val node: StaticProofNode = self.arena.staticProofs[id - 1U64]
         if node.tag == 0U64 { return <StaticConformanceProof.Missing /> }
         if node.tag == 1U64 {
-            return <StaticConformanceProof.ConcreteWitness witness=self.thawFrozenWitnessMatch(witness: <FrozenWitnessMatch selfRef=node.witnessSelfRef conformIdx=node.conformIdx binds=node.witnessBinds bindCount=node.witnessBindCount />) />
+            return <StaticConformanceProof.ConcreteWitness witness=self.thawFrozenWitnessMatch(witness: <FrozenWitnessMatch selfRef=node.witnessSelfRef conformIdx=node.conformIdx binds=node.witnessBinds bindCount=node.witnessBindCount conditions=node.witnessConditions />) />
         }
         if node.tag >= 2U64 && node.tag <= 4U64 && node.boundKind > 4U64 { return <StaticConformanceProof.Missing /> }
         if node.tag == 2U64 { return <StaticConformanceProof.AssumedBound source=self.thawDeclarationBound(kind: node.boundKind, index: node.boundIdx) /> }
@@ -636,6 +636,21 @@ pub impl Comp {
     }
 
     inout fn sameWitnessMatch(a: WitnessMatch, b: WitnessMatch) -> Bool {
+        if !self.sameWitnessSubstitution(a: a, b: b) { return false }
+        if a.conditions == b.conditions { return true }
+        if a.conditions == 0U64 || b.conditions == 0U64 || a.conditions > self.arena.witnessConditionPlans.count() || b.conditions > self.arena.witnessConditionPlans.count() { return false }
+        val left = self.arena.witnessConditionPlans[a.conditions - 1U64]
+        val right = self.arena.witnessConditionPlans[b.conditions - 1U64]
+        if !self.sameWitnessSubstitution(a: left.witness, b: right.witness) || left.proofs.count() != right.proofs.count() { return false }
+        mut val index = 0U64
+        while index < left.proofs.count() {
+            if !self.sameStaticConformanceProof(a: self.thawStaticConformanceProof(id: left.proofs[index]), b: self.thawStaticConformanceProof(id: right.proofs[index])) { return false }
+            index += 1U64
+        }
+        return true
+    }
+
+    inout fn sameWitnessSubstitution(a: WitnessMatch, b: WitnessMatch) -> Bool {
         if a.conformIdx != b.conformIdx || a.binds.count() != b.binds.count() { return false }
         if a.selfRef != b.selfRef && !self.typeRefEq(a: a.selfRef, b: b.selfRef) { return false }
         mut val i: U64 = 0U64
@@ -734,7 +749,32 @@ pub impl Comp {
             bindings.append(<WitnessBind binder=binding.binder paramId=binding.paramId term=value />)
         }
         val receiver = if witness.selfRef == 0U64 { give receiverRef } else { give try self.groundTermForBody(ref: witness.selfRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
-        return <Result.Ok value=<WitnessMatch conformIdx=witness.conformIdx binds=bindings selfRef=receiver /> />
+        val grounded = <WitnessMatch conformIdx=witness.conformIdx binds=bindings selfRef=receiver />
+        if witness.conditions == 0U64 { return <Result.Ok value=grounded /> }
+        if witness.conditions > self.arena.witnessConditionPlans.count() || witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected conformance has an invalid condition plan") /> }
+        val plan = self.arena.witnessConditionPlans[witness.conditions - 1U64]
+        val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
+        if !self.sameWitnessSubstitution(a: witness, b: plan.witness) || plan.proofs.count() != declaration.bounds.len { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+        mut val proofs: Array[U64] = []
+        mut val changed = !self.sameWitnessSubstitution(a: witness, b: grounded)
+        mut val index = 0U64
+        while index < plan.proofs.count() {
+            val clause = self.conformBoundAt(bounds: declaration.bounds, index: index)
+            val subject = try self.groundWitnessTypeTerm(ref: clause.subject, params: <PatternBindInput.Conformance range=declaration.typeParams />, matchResult: grounded)
+            val original = self.thawStaticConformanceProof(id: plan.proofs[index])
+            match (try self.instantiateStaticMemberProof(proof: original, receiverRef: subject, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
+                StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: clause.offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+                StaticProofInstantiation.Deferred => { proofs.append(plan.proofs[index]) }
+                StaticProofInstantiation.Ready(proof: val proof) => {
+                    if self.sameStaticConformanceProof(a: original, b: proof) { proofs.append(plan.proofs[index]) }
+                    else { proofs.append(self.freezeStaticConformanceProof(proof: proof)) changed = true }
+                }
+            }
+            index += 1U64
+        }
+        if !changed { return <Result.Ok value=<WitnessMatch conformIdx=grounded.conformIdx binds=grounded.binds selfRef=grounded.selfRef conditions=witness.conditions /> /> }
+        self.arena.witnessConditionPlans.append(<WitnessConditionPlan witness=grounded proofs=proofs />)
+        return <Result.Ok value=<WitnessMatch conformIdx=grounded.conformIdx binds=grounded.binds selfRef=grounded.selfRef conditions=self.arena.witnessConditionPlans.count() /> />
     }
 
     // An assumption needs a concrete witness at instantiation. Query exactly

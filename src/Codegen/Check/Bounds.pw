@@ -277,7 +277,11 @@ pub impl Comp {
     // Keep this policy beside the constraint API, rather than asking each
     // generic-bound checker to unpack owner, positional args and predicates.
     inout fn viewedTypeConformsTraitConstraint(ref: U64, constraint: TraitConstraint, assumptions: Array[DeclarationBoundRef] = []) -> Result[Bool, CompileDiagnostic] {
-        if constraint.key.owner == 0U64 { return <Result.Ok value=false />}
+        return <Result.Ok value=!self.proofIsMissing(proof: (try self.viewedTraitConstraintProof(ref: ref, constraint: constraint, assumptions: assumptions))) />
+    }
+
+    inout fn viewedTraitConstraintProof(ref: U64, constraint: TraitConstraint, assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        if constraint.key.owner == 0U64 { return <Result.Ok value=<StaticConformanceProof.Missing /> />}
         mut val names: Array[U64] = []
         mut val values: Array[U64] = []
         mut val i: U64 = 0U64
@@ -286,7 +290,7 @@ pub impl Comp {
             values.append(constraint.assocPredicates[i].value)
             i += 1U64
         }
-        return <Result.Ok value=(try self.viewedTypeConforms(ref: ref, traitStart: constraint.key.owner, traitLen: self.traitNameLenByOwner(owner: constraint.key.owner), traitArgs: constraint.key.positionalArgs, traitArgsOpen: constraint.positionalArgsOpen, assocNames: names, assocValues: values, assumptions: assumptions)) />
+        return <Result.Ok value=(try self.viewedTraitProof(ref: ref, traitStart: constraint.key.owner, traitLen: self.traitNameLenByOwner(owner: constraint.key.owner), traitArgs: constraint.key.positionalArgs, traitArgsOpen: constraint.positionalArgsOpen, assocNames: names, assocValues: values, assumptions: assumptions)) />
     }
 
     // Declaration-time evidence is a separate query from concrete
@@ -1012,13 +1016,14 @@ pub impl Comp {
     // source to establish the requested conformance; the trait selector itself
     // is already validated as singular when the TypeRef/value view is formed.
     inout fn viewedTypeConforms(ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = []) -> Result[Bool, CompileDiagnostic] {
-        if ref == 0U64 || ref >= self.arena.typeCount() || traitStart == 0U64 || self.traitNameLenByOwner(owner: traitStart) != traitLen { return <Result.Ok value=false /> }
+        return <Result.Ok value=!self.proofIsMissing(proof: (try self.viewedTraitProof(ref: ref, traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions))) />
+    }
+
+    inout fn viewedTraitProof(ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        if ref == 0U64 || ref >= self.arena.typeCount() || traitStart == 0U64 || self.traitNameLenByOwner(owner: traitStart) != traitLen { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
         val resolved = (try self.resolveTy(tyRef: ref))
         val proof = (try self.traitPatternProof(baseRef: resolved, traitId: 0U64, traitOwner: traitStart, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions))
-        match proof {
-            StaticConformanceProof.Missing => { return <Result.Ok value=false /> }
-            _ => { return <Result.Ok value=true /> }
-        }
+        return <Result.Ok value=proof />
     }
 
     // Completeness belongs to one selected impl, not every same-named

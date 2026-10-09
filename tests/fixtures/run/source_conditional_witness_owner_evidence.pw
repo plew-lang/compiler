@@ -1,9 +1,10 @@
 // Conditional conformance admission must retain the selected child evidence.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { Expr, DeclarationConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind }
+use /Ir only { Expr, DeclarationConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, WitnessConditionPlan }
 use @Std/Io only { print }
-fn check(text: String, compatible: Bool, targetIndex: Bool = false, proofSubjectIndex: U64 = 0U64, rewrite: Bool = false, message: String = "existential box evidence does not match its target trait instance") {
+use @Std/Core only { assert }
+fn check(text: String, compatible: Bool, targetIndex: Bool = false, proofSubjectIndex: U64 = 0U64, rewrite: Bool = false, missingChild: Bool = false, message: String = "existential box evidence does not match its target trait instance") {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler,
         input: <FrontendInput.Text text=text path="box-proof.pw" />,
@@ -18,10 +19,21 @@ fn check(text: String, compatible: Bool, targetIndex: Bool = false, proofSubject
         ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val proof) => { give proof }
         _ => { panic("missing real conformance") }
     }
+    val repeated = compiler.callArgumentConversion(sourceRef: proofSubject, targetRef: yes, assumptions: compiler.functionBoundAssumptions(fnIdx: 0U64)).unwrap()
+    assert(compiler.sameValueConversionProof(a: selected, b: repeated))
+    if missingChild {
+        match evidence {
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => {
+                val plan = compiler.arena.witnessConditionPlans[witness.conditions - 1U64]
+                compiler.arena.witnessConditionPlans[witness.conditions - 1U64] = <WitnessConditionPlan witness=plan.witness proofs=[compiler.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />)] />
+            }
+            _ => { panic("not concrete") }
+        }
+    }
     val replacement = compiler.funcParamAt(params: function.params, index: 4U64).ty
     val tampered = match evidence {
         StaticConformanceProof.ConcreteWitness(witness: val witness) => {
-            give if rewrite { give <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=witness.conformIdx binds=[<WitnessBind binder=witness.binds[0U64].binder paramId=witness.binds[0U64].paramId term=replacement />] selfRef=source /> /> }
+            give if rewrite { give <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=witness.conformIdx binds=[<WitnessBind binder=witness.binds[0U64].binder paramId=witness.binds[0U64].paramId term=replacement />] selfRef=source conditions=witness.conditions /> /> }
             else { give evidence }
         }
         _ => { panic("not concrete") }
@@ -46,5 +58,8 @@ fn check(text: String, compatible: Bool, targetIndex: Bool = false, proofSubject
 fn main() {
     check(text: "trait P {{}} trait Q {{}} struct A {{}} struct B {{}} impl A as Q {{}} struct Wrap[T] {{}} impl[T] Wrap[T] as P where T: Q {{}} fn probe(source: Wrap[A], yes: any P, no: any P, proofSubject: Wrap[A], replacement: B) {{}}", compatible: true)
     check(text: "trait P {{}} trait Q {{}} struct A {{}} struct B {{}} impl A as Q {{}} struct Wrap[T] {{}} impl[T] Wrap[T] as P where T: Q {{}} fn probe(source: Wrap[B], yes: any P, no: any P, proofSubject: Wrap[A], replacement: B) {{}}", compatible: false, proofSubjectIndex: 3U64, rewrite: true, message: "selected conformance evidence does not satisfy its declaration conditions")
+    check(text: "trait P {{}} trait Q {{}} struct B {{}} struct Wrap[T] {{}} impl[T] Wrap[T] as P where T: Q {{}} fn probe[T](source: Wrap[T], yes: any P, no: any P, proofSubject: Wrap[T], replacement: B) where T: Q {{}}", compatible: true)
+    check(text: "trait P {{}} trait Q {{}} trait Required {{}} struct A {{}} impl A as Required {{}} struct B {{}} struct Source[T] {{}} impl[T] Source[T] as Q where T: Required {{}} struct Wrap[T] {{}} impl[T] Wrap[T] as P where T: Q {{}} fn probe(source: Wrap[Source[A]], yes: any P, no: any P, proofSubject: Wrap[Source[A]], replacement: B) {{}}", compatible: true)
+    check(text: "trait P {{}} trait Q {{}} struct A {{}} struct B {{}} impl A as Q {{}} struct Wrap[T] {{}} impl[T] Wrap[T] as P where T: Q {{}} fn probe(source: Wrap[A], yes: any P, no: any P, proofSubject: Wrap[A], replacement: B) {{}}", compatible: false, missingChild: true, message: "selected conformance evidence does not satisfy its declaration conditions")
     print("conditional-witness-owner-evidence")
 }

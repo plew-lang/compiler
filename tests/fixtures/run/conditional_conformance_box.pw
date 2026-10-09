@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+trait Required {}
+trait Marker {}
+struct Item {}
+impl Item as Required {}
+struct Wrapped[T] { val value: T }
+impl[T] Wrapped[T] as Marker where T: Required {}
+fn erased[T](value: Wrapped[T]) -> any Marker where T: Required {
+    return value
+}
+fn main() {
+    val value: any Marker = erased(value: <Wrapped[Item] value=<Item /> />)
+    print("ok")
+}

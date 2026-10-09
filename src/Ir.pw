@@ -1472,8 +1472,17 @@ pub struct WitnessMatch {
     pub val selfRef: U64 = 0U64
     pub val conformIdx: U64 = 0U64
     pub val binds: Array[WitnessBind] = []
+    pub val conditions: U64 = 0U64
 }
 pub impl WitnessMatch { factory }
+
+// One-based immutable plan ID in WitnessMatch. Child proofs remain static
+// evidence; a condition never requests an executable existential descriptor.
+pub struct WitnessConditionPlan {
+    pub val witness: WitnessMatch
+    pub val proofs: Array[U64]
+}
+pub impl WitnessConditionPlan { factory }
 
 // Static conformance evidence is deliberately richer than a direct impl
 // match. A generic declaration may rely on an assumed `where` bound before
@@ -1609,6 +1618,7 @@ pub struct StaticProofNode {
     pub val witnessBinds: U64 = 0U64
     pub val witnessBindCount: U64 = 0U64
     pub val witnessSelfRef: U64 = 0U64
+    pub val witnessConditions: U64 = 0U64
     pub val boundKind: U64 = 0U64
     pub val boundIdx: U64 = 0U64
     pub val path: U64 = 0U64
@@ -1622,6 +1632,7 @@ pub struct StaticProofNode {
 pub impl StaticProofNode { factory }
 
 pub struct FrozenWitnessMatch {
+    pub val conditions: U64 = 0U64
     pub val selfRef: U64 = 0U64
     pub val conformIdx: U64
     pub val binds: U64 = 0U64
@@ -2714,6 +2725,7 @@ pub struct Arena {
     // Immutable semantic evidence DAG. Rows contain only scalar identities
     // and typed ranges; final calls and Mid bodies must not embed recursive
     // proof values with owning Array payloads.
+    pub mut val witnessConditionPlans: Array[WitnessConditionPlan] = []
     pub mut val staticProofs: Array[StaticProofNode] = []
     pub mut val staticProofWitnessBindPool: Array[WitnessBind] = []
     pub mut val staticProofU64Pool: Array[U64] = []
