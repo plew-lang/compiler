@@ -1,0 +1,50 @@
+// Conditional conformance admission must retain the selected child evidence.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, DeclarationConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind }
+use @Std/Io only { print }
+fn check(text: String, compatible: Bool, targetIndex: Bool = false, proofSubjectIndex: U64 = 0U64, rewrite: Bool = false, message: String = "existential box evidence does not match its target trait instance") {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text=text path="box-proof.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val source = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val yes = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val no = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    val proofSubject = compiler.funcParamAt(params: function.params, index: proofSubjectIndex).ty
+    val selected = compiler.callArgumentConversion(sourceRef: proofSubject, targetRef: yes, assumptions: compiler.functionBoundAssumptions(fnIdx: 0U64)).unwrap()
+    val evidence = match selected {
+        ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val proof) => { give proof }
+        _ => { panic("missing real conformance") }
+    }
+    val replacement = compiler.funcParamAt(params: function.params, index: 4U64).ty
+    val tampered = match evidence {
+        StaticConformanceProof.ConcreteWitness(witness: val witness) => {
+            give if rewrite { give <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=witness.conformIdx binds=[<WitnessBind binder=witness.binds[0U64].binder paramId=witness.binds[0U64].paramId term=replacement />] selfRef=source /> /> }
+            else { give evidence }
+        }
+        _ => { panic("not concrete") }
+    }
+    val expression = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    compiler.recordSemanticExprTerm(exprId: expression, term: source)
+    compiler.cur.checkFn = 0U64
+    compiler.cur.recordCallTemplates = true
+    compiler.recordDeclarationConversion(exprId: expression, target: no).unwrap()
+    val original = compiler.decls.declarationConversions[0U64]
+    val proof = compiler.freezeValueConversionProof(proof: <ValueConversionProof.ExistentialBox sourceRef=source targetRef=no traitIdx=compiler.recordAnyTraitIndex(anyRef: (if targetIndex { give no } else { give yes })) proof=tampered />)
+    compiler.decls.declarationConversions[0U64] = <DeclarationConversion site=original.site source=source target=no proof=proof />
+    match compiler.prepareLexicalBody(fnIdx: 0U64) {
+        Result.Ok(value: _) => { if !compatible { panic("owner accepted invalid box evidence") } }
+        Result.Err(error: val diagnostic) => { if compatible || diagnostic.message != message { panic(diagnostic.message) } }
+    }
+    match compiler.checkRecordedMemberObligations() {
+        Result.Ok(value: _) => { if !compatible { panic("whole target accepted invalid box evidence") } }
+        Result.Err(error: val diagnostic) => { if compatible || diagnostic.message != message { panic(diagnostic.message) } }
+    }
+}
+fn main() {
+    check(text: "trait P {{}} trait Q {{}} struct A {{}} struct B {{}} impl A as Q {{}} struct Wrap[T] {{}} impl[T] Wrap[T] as P where T: Q {{}} fn probe(source: Wrap[A], yes: any P, no: any P, proofSubject: Wrap[A], replacement: B) {{}}", compatible: true)
+    check(text: "trait P {{}} trait Q {{}} struct A {{}} struct B {{}} impl A as Q {{}} struct Wrap[T] {{}} impl[T] Wrap[T] as P where T: Q {{}} fn probe(source: Wrap[B], yes: any P, no: any P, proofSubject: Wrap[A], replacement: B) {{}}", compatible: false, proofSubjectIndex: 3U64, rewrite: true, message: "selected conformance evidence does not satisfy its declaration conditions")
+    print("conditional-witness-owner-evidence")
+}
