@@ -92,9 +92,9 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential retag changes its dynamic interface or strengthens a guarantee") />
                 }
             }
-            ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: val target, traitIdx: val traitIdx, proof: val evidence) => {
+            ValueConversionProof.ExistentialBox(sourceRef: val source, targetRef: val target, traitIdx: val traitIdx, proof: val evidence) => {
                 if self.proofIsMissing(proof: evidence) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation has no conformance evidence") /> }
-                if target == 0U64 || target >= self.arena.typeCount() || traitIdx >= self.decls.traitCount() {
+                if source == 0U64 || source >= self.arena.typeCount() || target == 0U64 || target >= self.arena.typeCount() || traitIdx >= self.decls.traitCount() {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential box evidence does not match its target trait instance") />
                 }
                 val targetType = self.arena.typeAt(index: target)
@@ -107,6 +107,12 @@ pub impl Comp {
                 val required = self.existentialTraitConstraint(ref: target)
                 if bound.subject == 0U64 || bound.constraint.key.owner != required.key.owner || !self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: required.key.positionalArgs) {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential box evidence does not match its target trait instance") />
+                }
+                if !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: bound.subject), b: self.typeRefWithoutOuterViews(ref: source)) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential box evidence does not match its source value type") />
+                }
+                if !(try self.selectedProofAssociatedTypesMatch(proof: evidence, traitOwner: required.key.owner, names: self.traitAssocArgNames(t: targetType), values: self.traitAssocArgValues(t: targetType))) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential box evidence does not satisfy its target associated types") />
                 }
             }
             ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => { try self.checkConversionProofEvidence(proof: element, offset: offset) }

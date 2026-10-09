@@ -4,7 +4,7 @@ use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
 use /Ir only { Expr, DeclarationConversion, ValueConversionProof, StaticConformanceProof }
 use @Std/Io only { print }
-fn check(text: String, compatible: Bool, targetIndex: Bool = false) {
+fn check(text: String, compatible: Bool, targetIndex: Bool = false, proofSubjectIndex: U64 = 0U64, message: String = "existential box evidence does not match its target trait instance") {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler,
         input: <FrontendInput.Text text=text path="box-proof.pw" />,
@@ -13,7 +13,8 @@ fn check(text: String, compatible: Bool, targetIndex: Bool = false) {
     val source = compiler.funcParamAt(params: function.params, index: 0U64).ty
     val yes = compiler.funcParamAt(params: function.params, index: 1U64).ty
     val no = compiler.funcParamAt(params: function.params, index: 2U64).ty
-    val selected = compiler.callArgumentConversion(sourceRef: source, targetRef: yes).unwrap()
+    val proofSubject = compiler.funcParamAt(params: function.params, index: proofSubjectIndex).ty
+    val selected = compiler.callArgumentConversion(sourceRef: proofSubject, targetRef: yes, assumptions: compiler.functionBoundAssumptions(fnIdx: 0U64)).unwrap()
     val evidence = match selected {
         ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val proof) => { give proof }
         _ => { panic("missing real conformance") }
@@ -28,11 +29,11 @@ fn check(text: String, compatible: Bool, targetIndex: Bool = false) {
     compiler.decls.declarationConversions[0U64] = <DeclarationConversion site=original.site source=source target=no proof=proof />
     match compiler.prepareLexicalBody(fnIdx: 0U64) {
         Result.Ok(value: _) => { if !compatible { panic("owner accepted invalid box evidence") } }
-        Result.Err(error: val diagnostic) => { if compatible || diagnostic.message != "existential box evidence does not match its target trait instance" { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if compatible || diagnostic.message != message { panic(diagnostic.message) } }
     }
     match compiler.checkRecordedMemberObligations() {
         Result.Ok(value: _) => { if !compatible { panic("whole target accepted invalid box evidence") } }
-        Result.Err(error: val diagnostic) => { if compatible || diagnostic.message != "existential box evidence does not match its target trait instance" { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if compatible || diagnostic.message != message { panic(diagnostic.message) } }
     }
 }
 fn main() {
@@ -41,5 +42,14 @@ fn main() {
     check(text: "trait P {{}} struct Value {{}} impl Value as P {{}} fn probe(source: Value, yes: any P, no: any P) {{}}", compatible: true)
     check(text: "trait P[T] {{}} struct Value {{}} impl Value as P[I64] {{}} fn probe(source: Value, yes: any P[I64], no: any P[Bool]) {{}}", compatible: false, targetIndex: true)
     check(text: "trait P[T] {{}} struct Value {{}} impl Value as P[I64] {{}} fn probe(source: Value, yes: any P[I64], no: any P[I64]) {{}}", compatible: true)
+    check(text: "trait P {{}} struct Value {{}} struct Other {{}} impl Other as P {{}} fn probe(source: Value, yes: any P, no: any P, proofSubject: Other) {{}}", compatible: false, proofSubjectIndex: 3U64, message: "existential box evidence does not match its source value type")
+    check(text: "trait P {{ type Item }} struct Value {{}} impl Value as P {{ type Item = I64 }} fn probe(source: Value, yes: any P[Item=I64], no: any P[Item=Bool]) {{}}", compatible: false, message: "existential box evidence does not satisfy its target associated types")
+    check(text: "trait P {{ type Item }} struct Value {{}} impl Value as P {{ type Item = I64 }} fn probe(source: Value, yes: any P[Item=I64], no: any P[Item=I64]) {{}}", compatible: true)
+    check(text: "trait P {{}} fn probe[T](source: T, yes: any P, no: any P) where T: P {{}}", compatible: true)
+    check(text: "trait P {{}} trait Q: P {{}} fn probe[T](source: T, yes: any P, no: any P) where T: Q {{}}", compatible: true)
+    check(text: "trait P {{ type Item }} fn probe[T](source: T, yes: any P[Item=I64], no: any P[Item=I64]) where T: P[Item=I64] {{}}", compatible: true)
+    check(text: "trait P {{}} struct Value {{}} extension E {{ impl Value as P {{}} }} fn probe(source: Value#E, yes: any P, no: any P) {{}}", compatible: true)
+    check(text: "trait P {{}} trait Q {{}} struct Value {{}} impl Value as Q {{}} impl Q as P {{}} fn probe(source: Value, yes: any P, no: any P) {{}}", compatible: true)
+    check(text: "trait P {{}} trait Q {{}} impl Q as P {{}} fn probe[T](source: T, yes: any P, no: any P) where T: Q {{}}", compatible: true)
     print("box-owner-evidence")
 }

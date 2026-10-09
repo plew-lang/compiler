@@ -258,12 +258,18 @@ pub impl Comp {
             if !(try self.witnessSourceSelected(witness: state.edges[index], assumptions: assumptions)) { return <Result.Ok value=false /> }
             index += 1U64
         }
-        if assocNames.count() == 0U64 { return <Result.Ok value=true /> }
-        val proof = self.traitProofStateEvidence(state: state)
-        index = 0U64
-        while index < assocNames.count() {
-            val output = (try self.associatedOutputInProof(proof: proof, traitOwner: state.traitOwner, assocId: assocNames[index]))
-            if output == 0U64 || !(try self.typesCompatible(expected: assocValues[index], inferred: output)) { return <Result.Ok value=false /> }
+        return self.selectedProofAssociatedTypesMatch(proof: self.traitProofStateEvidence(state: state), traitOwner: state.traitOwner, names: assocNames, values: assocValues)
+    }
+
+    // Associated bindings constrain the selected proof's outputs, not which
+    // conformance is selected. Selection and frozen evidence admission share
+    // this reader so they cannot silently enforce different constraints.
+    inout fn selectedProofAssociatedTypesMatch(proof: StaticConformanceProof, traitOwner: U64, names: Array[U64], values: Array[U64]) -> Result[Bool, CompileDiagnostic] {
+        if names.count() != values.count() { return <Result.Ok value=false /> }
+        mut val index = 0U64
+        while index < names.count() {
+            val output = try self.associatedOutputInProof(proof: proof, traitOwner: traitOwner, assocId: names[index])
+            if output == 0U64 || !(try self.typesCompatible(expected: values[index], inferred: output)) { return <Result.Ok value=false /> }
             index += 1U64
         }
         return <Result.Ok value=true />
