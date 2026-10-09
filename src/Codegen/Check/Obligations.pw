@@ -56,12 +56,42 @@ pub impl Comp {
     // closure. Concrete instantiation and member constraints remain separate.
     inout fn checkDeclarationConversionEvidence(conversion: DeclarationConversion) -> Result[(), CompileDiagnostic] {
         if conversion.source == 0U64 { return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "source conversion requires a resolved value type") /> }
-        return self.checkConversionProofEvidence(proof: self.thawValueConversionProof(id: conversion.proof), offset: conversion.site.originStart)
+        if conversion.source >= self.arena.typeCount() || conversion.target == 0U64 || conversion.target >= self.arena.typeCount() {
+            return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "source conversion has an invalid type boundary") />
+        }
+        val proof = self.thawValueConversionProof(id: conversion.proof)
+        try self.checkConversionProofBoundary(proof: proof, source: conversion.source, target: conversion.target, offset: conversion.site.originStart)
+        return self.checkConversionProofEvidence(proof: proof, offset: conversion.site.originStart)
+    }
+
+    // A frozen plan cannot describe another conversion than the source row
+    // authorizes. Identity preserves the complete type, including guarantees.
+    inout fn checkConversionProofBoundary(proof: ValueConversionProof, source: U64, target: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        val boundary = match proof {
+            ValueConversionProof.Identity => {
+                if !self.typeRefEq(a: source, b: target) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "identity conversion changes the source value type") /> }
+                give (source: source, target: target)
+            }
+            ValueConversionProof.Missing => { return <Result.Ok value=() /> }
+            ValueConversionProof.ExistentialRetag(sourceRef: val actualSource, targetRef: val actualTarget) => { give (source: actualSource, target: actualTarget) }
+            ValueConversionProof.ExistentialBox(sourceRef: val actualSource, targetRef: val actualTarget, traitIdx: _, proof: _) => { give (source: actualSource, target: actualTarget) }
+            ValueConversionProof.ArrayRepack(sourceRef: val actualSource, targetRef: val actualTarget, element: _) => { give (source: actualSource, target: actualTarget) }
+            ValueConversionProof.EnumRepack(sourceRef: val actualSource, targetRef: val actualTarget, enumIdx: _, payloads: _) => { give (source: actualSource, target: actualTarget) }
+        }
+        if !self.typeRefEq(a: source, b: boundary.source) || !self.typeRefEq(a: target, b: boundary.target) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conversion proof does not match its recorded source and target types") />
+        }
+        return <Result.Ok value=() />
     }
 
     inout fn checkConversionProofEvidence(proof: ValueConversionProof, offset: U64) -> Result[(), CompileDiagnostic] {
         match proof {
             ValueConversionProof.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "source value does not satisfy the required conversion") /> }
+            ValueConversionProof.ExistentialRetag(sourceRef: val source, targetRef: val target) => {
+                if !self.existentialTypesCompatible(sourceRef: source, targetRef: target) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential retag changes its dynamic interface or strengthens a guarantee") />
+                }
+            }
             ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val evidence) => {
                 if self.proofIsMissing(proof: evidence) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation has no conformance evidence") /> }
             }
