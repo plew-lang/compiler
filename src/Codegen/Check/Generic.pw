@@ -866,7 +866,13 @@ pub impl Comp {
                                 try self.checkGenericTypeMatch(expectedRef: elemRef, valueExpr: self.exprAt(exprs: elems, index: ei))
                                 ei += 1
                             }
-                            return <Result.Ok value=() />
+                            // Child checks supply context for an unresolved
+                            // construction. Once the array has a semantic
+                            // type, compare that complete type below instead
+                            // of replacing it with the destination's element.
+                            if self.semanticExprTerm(exprId: valueExpr) == 0U64 {
+                                return <Result.Ok value=() />
+                            }
                         }
                         _ => {}
                     }
