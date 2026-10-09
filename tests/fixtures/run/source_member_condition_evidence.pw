@@ -1,0 +1,36 @@
+// Static member selection must retain the condition evidence it selected.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { ArgRange, StaticMemberResolution, StaticConformanceProof }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="trait B[V] {{}} trait Q {{}} trait P {{ fn value() -> I64 }} impl[V] B[V] as P where V: Q {{ fn value() -> I64 {{ return 1I64 }} }} fn probe[T,V](source: T, target: any P) where T: B[V], V: Q {{}}" path="member-proof.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val functionIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: functionIndex)
+    val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val name = compiler.internBytes(s: "value")
+    val selected = compiler.staticMemberResolution(fnIdx: functionIndex, receiverRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: <ArgRange start=0U64 len=0U64 />, requiredTraitOwner: compiler.decls.traitAt(index: compiler.recordAnyTraitIndex(anyRef: compiler.funcParamAt(params: function.params, index: 1U64).ty)).nameStart).unwrap()
+    val proof = match selected {
+        StaticMemberResolution.Requirement(proof: val proof, traitIdx: _, reqIdx: _) => { give proof }
+        StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: _) => { give proof }
+        _ => { panic("missing member") }
+    }
+    match proof {
+        StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: val edges) => {
+            assert(edges.count() == 1U64)
+            if edges[0U64].conditions == 0U64 { panic("member producer dropped selected condition evidence") }
+            compiler.checkStaticProofEvidence(proof: proof, offset: 0U64).unwrap()
+        }
+        StaticConformanceProof.AssumedBound(source: _) => { panic("unexpected AssumedBound") }
+        StaticConformanceProof.AssumedSupertraitPath(source: _, steps: _) => { panic("unexpected AssumedSupertraitPath") }
+        StaticConformanceProof.ConcreteWitness(witness: _) => { panic("unexpected ConcreteWitness") }
+        StaticConformanceProof.TraitPath(edges: _, terminalConformIdx: _) => { panic("unexpected TraitPath") }
+        StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => { panic("unexpected TraitSelf") }
+        StaticConformanceProof.Missing => { panic("unexpected Missing") }
+    }
+    print("member-condition-evidence")
+}

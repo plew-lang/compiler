@@ -572,7 +572,7 @@ pub impl Comp {
     // The provided copy itself records which conformance created it. Preserve
     // that fact in the body environment: matching by the receiver again would
     // conflate same-head parameterized or view-selected witnesses.
-    inout fn providedBodyProof(f: Func, receiverRef: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
+    inout fn providedBodyProof(f: Func, receiverRef: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
         if !(f.isProvided) || f.originConformIdx == 0U64 || receiverRef == 0U64 { return <Result.Ok value=<StaticConformanceProof.Missing /> />}
         val ci: U64 = f.originConformIdx - 1U64
         if ci >= self.decls.conformCount() { return <Result.Ok value=<StaticConformanceProof.Missing /> />}
@@ -613,8 +613,10 @@ pub impl Comp {
         // traversal because the concrete receiver may reach A via S:B.
         if !placementIsTraitSubject {
             val witness: WitnessMatch = (try self.conformanceWitnessMatch(conformIdx: ci, typeRef: receiverRef, traitArgs: [], traitArgsOpen: true))
-            if witness.conformIdx == 0U64 { return <Result.Ok value=<StaticConformanceProof.Missing /> />}
-            return <Result.Ok value=<StaticConformanceProof.ConcreteWitness witness=witness /> />
+            match (try self.witnessWithConditions(witness: witness, assumptions: assumptions)) {
+                Optional.Some(v: val completed) => { return <Result.Ok value=<StaticConformanceProof.ConcreteWitness witness=completed /> /> }
+                Optional.None => { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+            }
         }
         // The body key intentionally normalizes a caller's view away when it
         // denotes the same executable Func.  Proof construction must still
@@ -934,8 +936,8 @@ pub impl Comp {
             // its placement conformance supplies the canonical fallback.
             if !(self.proofIsMissing(proof: selectedProof)) {
                 proof = selectedProof
-            } else {
-                proof = (try self.providedBodyProof(f: f, receiverRef: canonicalRecv))
+            } else if f.isProvided {
+                proof = (try self.providedBodyProof(f: f, receiverRef: canonicalRecv, assumptions: self.functionBoundAssumptions(fnIdx: fnIdx)))
             }
         }
         if canonicalRecv != 0U64 && canonicalRecv < self.arena.typeCount() {

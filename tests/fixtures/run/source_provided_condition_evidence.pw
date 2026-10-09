@@ -1,0 +1,31 @@
+// A fixed provided copy must complete its placement conditions, including
+// symbolic authored assumptions, before publishing fallback body evidence.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { StaticConformanceProof }
+use @Std/Io only { print }
+fn check(text: String, compatible: Bool) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=text path="provided-proof.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val functionIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: functionIndex)
+    val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    mut val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "helper").nameId)
+    while callee < compiler.arena.functionCount() && !compiler.arena.functionAt(index: callee).isProvided { callee = compiler.arena.nextFunctionNamed(index: callee) }
+    if callee >= compiler.arena.functionCount() { panic("missing provided copy") }
+    val proof = compiler.providedBodyProof(f: compiler.arena.functionAt(index: callee), receiverRef: receiver, assumptions: compiler.functionBoundAssumptions(fnIdx: functionIndex)).unwrap()
+    match proof {
+        StaticConformanceProof.ConcreteWitness(witness: val witness) => {
+            if !compatible || witness.conditions == 0U64 { panic("provided producer dropped its placement conditions") }
+            compiler.checkStaticProofEvidence(proof: proof, offset: 0U64).unwrap()
+        }
+        StaticConformanceProof.Missing => { if compatible { panic("missing valid provided evidence") } }
+        _ => { panic("unexpected provided evidence") }
+    }
+}
+fn main() {
+    check(text: "trait P {{}} trait Q {{}} pub impl P {{ fn helper() -> I64 {{ return 0I64 }} }} struct A {{}} impl A as Q {{}} struct Wrap[T] {{}} impl[T] Wrap[T] as P where T: Q {{}} fn probe(source: Wrap[A]) {{}}", compatible: true)
+    check(text: "trait P {{}} trait Q {{}} pub impl P {{ fn helper() -> I64 {{ return 0I64 }} }} struct Wrap[T] {{}} impl[T] Wrap[T] as P where T: Q {{}} fn probe[T](source: Wrap[T]) where T: Q {{}}", compatible: true)
+    check(text: "trait P {{}} trait Q {{}} pub impl P {{ fn helper() -> I64 {{ return 0I64 }} }} struct B {{}} struct Wrap[T] {{}} impl[T] Wrap[T] as P where T: Q {{}} fn probe(source: Wrap[B]) {{}}", compatible: false)
+    print("provided-condition-evidence")
+}

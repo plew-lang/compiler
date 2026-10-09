@@ -521,8 +521,11 @@ pub impl Comp {
                         while ci < self.decls.conformCount() {
                             val edge: Conform = self.decls.conformAt(index: ci)
                             if edge.subjectTraitOwner != 0U64 && edge.typeStart == bound.constraint.key.owner && self.proofSourceIsActive(baseRef: receiverRef, extId: edge.extId) {
-                                val selectedWitness = self.traitSubjectWitnessMatch(conformIdx: ci, subjectArgs: bound.constraint.key.positionalArgs, selfRef: receiverRef)
-                                if selectedWitness.conformIdx == 0U64 || !(try self.witnessConditionsSatisfied(witness: selectedWitness, assumptions: self.functionBoundAssumptions(fnIdx: fnIdx))) { ci += 1U64 continue }
+                                val shape = self.traitSubjectWitnessMatch(conformIdx: ci, subjectArgs: bound.constraint.key.positionalArgs, selfRef: receiverRef)
+                                val selectedWitness = match (try self.witnessWithConditions(witness: shape, assumptions: assumptions)) {
+                                    Optional.Some(v: val witness) => { give witness }
+                                    Optional.None => { ci += 1U64 continue }
+                                }
                                 mut val ti: U64 = 0U64
                                 while ti < self.decls.traitCount() {
                                     val traitDef: TraitDef = self.decls.traitAt(index: ti)

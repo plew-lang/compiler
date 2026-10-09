@@ -1407,7 +1407,7 @@ pub impl Comp {
                         val callee = try self.resolveProtocolMethodForReceiver(recvRef: receiverTerm, nameStart: name.nameStart, nameLen: name.nameLen, args: arguments)
                         if callee < self.arena.functionCount() {
                             val function = self.arena.functionAt(index: callee)
-                            val proof = try self.providedBodyProof(f: function, receiverRef: receiverTerm)
+                            val proof = if function.isProvided { give try self.providedBodyProof(f: function, receiverRef: receiverTerm, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn)) } else { give <StaticConformanceProof.Missing /> }
                             val environment = try self.finalMethodEnvironment(f: function, receiverRef: receiverTerm, args: arguments, selectedProof: proof)
                             resultTerm = try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: function), environment: environment, selfRef: receiverTerm, itemRef: 0U64)
                             selection = <ProtocolSelection.Direct callee=callee proof=proof />
