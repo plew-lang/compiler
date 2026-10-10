@@ -1,6 +1,12 @@
 // The ordered worklist and its membership index share one owner. Body IDs
 // are dense, one-based Arena identities; the index is not semantic evidence.
 pub impl MonoWork {
+    fn entryBody(function: U64) -> U64 { return self.entryBodies.getOr(key: function, fallback: 0U64) }
+    inout fn recordEntryBody(function: U64, bodyId: U64) {
+        val prior = self.entryBody(function: function)
+        if bodyId == 0U64 || (prior != 0U64 && prior != bodyId) { panic("inconsistent executable entry body") }
+        self.entryBodies[function] = bodyId
+    }
     fn bodyCount() -> U64 { return self.bodyRows.count() }
     fn bodyAt(index: U64) -> U64 { return self.bodyRows[index] }
     fn bodies() -> Array[U64] { return self.bodyRows }
@@ -15,6 +21,7 @@ pub impl MonoWork {
         self.bodyRows.append(bodyId)
     }
     inout fn clearBodies() {
+        self.entryBodies = [:]
         self.bodyRows = []
         self.bodyMembership = []
     }

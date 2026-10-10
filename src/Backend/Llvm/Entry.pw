@@ -136,8 +136,7 @@ pub impl LlvmCtx {
 
     // Emit the user `main` as C `i32 @main()` returning 0 (Plew main returns ()).
     inout fn genLlvmMain(c: inout Comp, fi: U64) -> Result[(), CompileDiagnostic] {
-        val rootEnvironment: InstanceEnvironment = <InstanceEnvironment />
-        val bodyId: U64 = c.findBodyInstance(fnIdx: fi, environment: rootEnvironment)
+        val bodyId: U64 = c.monoWork.entryBody(function: fi)
         if !self.admitBody(bodyId: bodyId) { return <Result.Ok value=() /> }
         // `i32 main(i32 argc, ptr argv)` so the program can read its command-line args
         // (@Std/Process argCount/argAt) — the args are stashed into the runtime via

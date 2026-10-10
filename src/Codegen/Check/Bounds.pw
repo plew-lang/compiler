@@ -1603,6 +1603,29 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Prepare the body substitution once. Source-recorded evidence is admitted
+    // against the callee declaration before acquiring its declaration identities.
+    inout fn environmentWithCallableConstraints(fnIdx: U64, environment: InstanceEnvironment, evidence: CallableConstraintEvidence) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        mut val proofs: Array[U64] = []
+        match evidence {
+            CallableConstraintEvidence.Declaration => {
+                for bound in (try self.groundCallableSignatureBounds(fnIdx: fnIdx, environment: environment)) {
+                    val proof = try self.viewedTraitConstraintProof(ref: bound.subject, constraint: bound.constraint)
+                    if self.proofIsMissing(proof: proof) {
+                        return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "type argument does not conform to the trait required by `where`") />
+                    }
+                    proofs.append(self.freezeStaticConformanceProof(proof: proof))
+                }
+            }
+            CallableConstraintEvidence.Recorded(bounds: _, proofs: val recorded) => {
+                try self.checkCallableConstraintEvidence(fnIdx: fnIdx, environment: environment, evidence: evidence)
+                for proof in recorded { proofs.append(self.freezeStaticConformanceProof(proof: proof)) }
+            }
+        }
+        val prepared = self.arena.prepareCallableConstraints(function: fnIdx, indices: self.sourceDeclarationCallBoundIndices(functionIndex: fnIdx), proofs: proofs)
+        return <Result.Ok value=<InstanceEnvironment params=environment.params args=environment.args receiverRef=environment.receiverRef proof=environment.proof constraints=<Optional.Some v=prepared /> /> />
+    }
+
     // Resolve a no-argument protocol signature without demanding its body.
     // Zero retains an unresolved substitution for the later instance obligation.
     // Async declarations expose a Promise at the call boundary. An omitted

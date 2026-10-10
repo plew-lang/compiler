@@ -1,0 +1,25 @@
+// Construction takes admitted evidence; no API can replace an issued set.
+pub impl Arena {
+    inout fn prepareCallableConstraints(function: U64, indices: Array[U64], proofs: Array[U64]) -> PreparedCallableConstraints {
+        if indices.count() != proofs.count() { panic("callable constraint binding count mismatch") }
+        if indices.count() == 0U64 { return <PreparedCallableConstraints index=0U64 /> }
+        for proof in proofs {
+            if !self.hasStaticConformanceProof(id: proof) { panic("callable constraint binding has no proof") }
+        }
+        self.callableConstraintBindings.append(<CallableConstraintBindings function=function indices=indices proofs=proofs />)
+        return <PreparedCallableConstraints index=self.callableConstraintBindings.count() />
+    }
+    fn callableConstraintCount(evidence: PreparedCallableConstraints) -> U64 {
+        if evidence.index == 0U64 { return 0U64 }
+        return self.callableConstraintBindings[evidence.index - 1U64].indices.count()
+    }
+    fn callableConstraintFunction(evidence: PreparedCallableConstraints) -> U64 {
+        return self.callableConstraintBindings[evidence.index - 1U64].function
+    }
+    fn callableConstraintSourceAt(evidence: PreparedCallableConstraints, index: U64) -> U64 {
+        return self.callableConstraintBindings[evidence.index - 1U64].indices[index]
+    }
+    fn callableConstraintProofAt(evidence: PreparedCallableConstraints, index: U64) -> U64 {
+        return self.callableConstraintBindings[evidence.index - 1U64].proofs[index]
+    }
+}

@@ -14,6 +14,7 @@ part ./Ir/TraitOwners
 part ./Ir/Types
 part ./Ir/Conformances
 part ./Ir/DeclarationNames
+part ./Ir/InstanceConstraints
 part ./Ir/BodyInstances
 part ./Ir/MonoWork
 
@@ -1746,6 +1747,17 @@ pub impl TraitProofState { factory }
 // binder can coexist without textual shadowing. `receiverRef` is the selected
 // concrete receiver and is part of the same semantic key, never ambient cursor
 // state. TypeRef indices are the current TypeTerm migration carrier.
+// Opaque immutable set of declaration-bound substitutions, owned by Arena.
+// Zero is the prepared empty set; absence in InstanceEnvironment is unprepared.
+pub struct PreparedCallableConstraints { val index: U64 }
+impl PreparedCallableConstraints { factory }
+struct CallableConstraintBindings {
+    val function: U64
+    val indices: Array[U64]
+    val proofs: Array[U64]
+}
+impl CallableConstraintBindings { factory }
+
 pub struct InstanceEnvironment {
     pub val params: Array[Bind] = []
     pub val args: Array[U64] = []
@@ -1753,6 +1765,7 @@ pub struct InstanceEnvironment {
     // Selected evidence for a provided body. Associated outputs must be
     // projected from this proof, never rediscovered by receiver spelling.
     pub val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
+    pub val constraints: Optional[PreparedCallableConstraints] = <Optional.None />
 }
 
 // A saved callable signature is interpreted in its explicit substitution
@@ -2829,6 +2842,7 @@ pub struct Arena {
     // and typed ranges; final calls and Mid bodies must not embed recursive
     // proof values with owning Array payloads.
     pub mut val witnessConditionPlans: Array[WitnessConditionPlan] = []
+    mut val callableConstraintBindings: Array[CallableConstraintBindings] = []
     mut val staticProofs: Array[StaticProofNode]
     mut val staticProofWitnessBindPool: Array[WitnessBind] = []
     mut val staticProofU64Pool: Array[U64] = []
@@ -3655,6 +3669,7 @@ pub impl Modules { factory empty() { return <Modules /> } }
 // stored behind a heap pointer (deref-on-read / repoint-on-write keeps value
 // semantics); keyed by the field decl's nameStart.
 pub struct MonoWork {
+    mut val entryBodies: Dictionary[U64, U64] = [:]
     pub mut val genInsts: Array[U64] = []
     pub mut val fnInsts: Array[FnInst] = []
     pub mut val fnTypes: Array[U64] = []

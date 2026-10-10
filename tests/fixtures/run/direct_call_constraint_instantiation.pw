@@ -2,7 +2,7 @@
 // could prove the same trait. Missing evidence must not be silently repaired.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { CallTemplateKind, CallableConstraintEvidence, StaticConformanceProof, SelectedCallConstraints }
+use /Ir only { CallTemplateKind, CallableConstraintEvidence, StaticConformanceProof, StaticProofInstantiation, DeclarationBoundRef, InstanceEnvironment, SelectedCallConstraints }
 use @Std/Io only { print }
 
 fn main() {
@@ -34,6 +34,23 @@ fn main() {
                     match evidence {
                         CallableConstraintEvidence.Recorded(val bounds, val proofs) => {
                             if bounds.count() != 1U64 || proofs.count() != 1U64 { panic("missing concrete call evidence") }
+                            val body = compiler.enqueueFinalBody(fnIdx: callee, args: arguments, recvInstRef: 0U64, constraints: evidence).unwrap()
+                            val retained = compiler.arena.bodyInstanceAt(index: body - 1U64).environment
+                            val bindings = retained.constraints.unwrap()
+                            if compiler.arena.callableConstraintCount(evidence: bindings) != 1U64 { panic("callee discarded constraint evidence") }
+                            val declared = compiler.arena.callableConstraintSourceAt(evidence: bindings, index: 0U64)
+                            val savedEnvironment = compiler.cur.bodyEnvironment
+                            compiler.cur.bodyEnvironment = retained
+                            val assumed = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=declared /> />
+                            match compiler.instantiateCallConstraintProof(proof: assumed, receiverRef: bounds[0U64].subject).unwrap() {
+                                StaticProofInstantiation.Ready(proof: val forwarded) => {
+                                    if !compiler.sameStaticConformanceProof(a: forwarded, b: proofs[0U64]) { panic("forwarded call selected a different proof") }
+                                }
+                                _ => { panic("retained call constraint did not instantiate") }
+                            }
+                            compiler.cur.bodyEnvironment = <InstanceEnvironment />
+                            if compiler.instantiateCallConstraintProof(proof: assumed, receiverRef: bounds[0U64].subject).isOk() { panic("missing binding was repaired by conformance lookup") }
+                            compiler.cur.bodyEnvironment = savedEnvironment
                             val broken = <CallableConstraintEvidence.Recorded bounds=bounds proofs=[<StaticConformanceProof.Missing />] />
                             if compiler.enqueueFinalBody(fnIdx: callee, args: arguments, recvInstRef: 0U64, constraints: broken).isOk() {
                                 panic("final body gate replaced missing retained proof with a fresh conformance")
