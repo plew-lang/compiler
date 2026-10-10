@@ -28,7 +28,7 @@ grep -F 'Plew.lock' "$tmp/out/source-inputs.sha256" >/dev/null
 grep -E '^compiler_head=[0-9a-f]{40}$' "$tmp/out/environment.txt" >/dev/null
 grep -E '^compiler_worktree=[0-9a-f]{64}$' "$tmp/out/environment.txt" >/dev/null
 grep -E '^syntax_head=[0-9a-f]{40}$' "$tmp/out/environment.txt" >/dev/null
-grep -E '^syntax_worktree=[0-9a-f]{64}$' "$tmp/out/environment.txt" >/dev/null
+grep -E '^syntax_tree_sha256=[0-9a-f]{64}$' "$tmp/out/environment.txt" >/dev/null
 
 # Sampling must be opt-in, write a stack artifact beside the trace, and keep
 # the normal carrier output/exit status intact.  A tiny stand-in avoids making

@@ -92,11 +92,27 @@ PY
     echo "source_inputs_sha256_manifest=source-inputs.sha256"
     echo "compiler_head=$(git rev-parse HEAD)"
     echo "compiler_worktree=$(git diff --no-ext-diff --binary HEAD | shasum -a 256 | awk '{print $1}')"
-    echo "syntax_head=$(git -C ../syntax rev-parse HEAD)"
-    echo "syntax_worktree=$(git -C ../syntax diff --no-ext-diff --binary HEAD | shasum -a 256 | awk '{print $1}')"
-    echo "syntax_status_begin"
-    git -C ../syntax status --short
-    echo "syntax_status_end"
+    python3 -B - <<'PYTHON'
+import hashlib
+import os
+from pathlib import Path
+import sys
+import tomllib
+sys.path.insert(0, 'scripts/support')
+from dependency_inputs import locked_git_source
+root = locked_git_source(Path.cwd(), os.environ, 'https://github.com/plew-lang/syntax.git')
+packages = tomllib.loads(Path('Plew.lock').read_text())['package']
+package = next(p for p in packages if p.get('git') == 'https://github.com/plew-lang/syntax.git')
+digest = hashlib.sha256()
+for path in sorted(p for p in root.rglob('*') if p.is_file() and '.git' not in p.parts):
+    digest.update(str(path.relative_to(root)).encode())
+    digest.update(b'\0')
+    digest.update(path.read_bytes())
+    digest.update(b'\0')
+print(f'syntax_source={root}')
+print(f"syntax_head={package['commit']}")
+print(f'syntax_tree_sha256={digest.hexdigest()}')
+PYTHON
     uname -a
     "$LLVM_CONFIG" --version 2>&1 || true
     clang --version 2>&1 | sed -n '1p'
