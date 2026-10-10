@@ -38,7 +38,7 @@ fn check(source: String, conflict: Bool, functions: U64) {
             _ => {}
         }
     }
-    if count != functions || c.lexicalBodyPreparations.count() != functions { panic "incorrect static dependency closure" }
+    if count != functions || c.lexicalBodyPreparationCount() != functions { panic "incorrect static dependency closure" }
     val bodies = c.mid.bodies.count()
     val repeated = analyzeDeclarationGlobalAccessRoots(c: inout c, templates: inout templates, requests: inout requests, roots: roots).unwrap()
     if repeated.conflictingNode != analysis.conflictingNode || repeated.nodes.count() != analysis.nodes.count() || c.mid.bodies.count() != bodies { panic "effect request changed cached body snapshots" }

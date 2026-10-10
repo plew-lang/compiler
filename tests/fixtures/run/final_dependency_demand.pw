@@ -43,7 +43,7 @@ fn main() {
     if destruction == 0U64 { panic "result destruction dependency missing" }
     val contract = c.arena.finalDestructions[destruction - 1U64]
     if !contract.ready || !contract.deinitCall.ready || contract.deinitCall.bodyId == 0U64 { panic "destructor ABI was not published" }
-    if c.lexicalBodyPreparations.count() != 1U64 { panic "dependency closure requested a callee body" }
+    if c.lexicalBodyPreparationCount() != 1U64 { panic "dependency closure requested a callee body" }
     val calls = c.arena.finalCalleeCount()
     val types = c.arena.finalDestructions.count()
     c.closeFinalDependencies(state: inout dependencies).unwrap()

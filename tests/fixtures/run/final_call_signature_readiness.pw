@@ -37,7 +37,7 @@ fn main() {
     }
     compiler.prepareFinalCallableSignature(bodyId: body).unwrap()
     compiler.completeStaticBodyCallee(exprId: 0U64, callee: callee, recvRef: 0U64, calleeArgs: [], resultRef: result, calleeBodyId: body).unwrap()
-    if compiler.lexicalBodyPreparations.count() != 0U64 { panic "signature reader prepared a lexical body" }
+    if compiler.lexicalBodyPreparationCount() != 0U64 { panic "signature reader prepared a lexical body" }
     match compiler.prepareLexicalBody(fnIdx: callee) {
         Result.Ok(value: _) => { panic "signature readiness authorized an invalid source body" }
         Result.Err(error: _) => {}

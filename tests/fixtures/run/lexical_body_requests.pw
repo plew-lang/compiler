@@ -44,7 +44,7 @@ fn main() {
     if c.cur.checkFn != 70001U64 || c.cur.bodyFnIdx != 70002U64 || c.cur.bodyId != 70003U64 || !c.cur.recordCallTemplates { panic("successful request leaked its cursor") }
     val complete = c.callTemplateCount()
     c.prepareLexicalBody(fnIdx: good).unwrap()
-    if c.callTemplateCount() != complete || c.lexicalBodyPreparations.count() != 2U64 { panic("owner requests were not cached separately") }
+    if c.callTemplateCount() != complete || c.lexicalBodyPreparationCount() != 2U64 { panic("owner requests were not cached separately") }
 
     // A preclosed selection is not proof of constraints. Supply an invalid
     // protocol row for another owner and require its diagnostic on every demand.

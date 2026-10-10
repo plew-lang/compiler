@@ -1,6 +1,6 @@
 // Internal handoff: the final reader requires a completed owner and consumes
 // its recorded flow, rather than recomputing from source syntax.
-use /Frontend only { Comp, LexicalBodyPreparations, FrontendInput, analyzeFrontendForRequests, finalizeFrontendExecutables, spansEqual }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, finalizeFrontendExecutables, spansEqual }
 use /SourceAccess only { SourceAccess }
 use /Ir only { Expr, Stmt, TypeInfo }
 use @Std/Io only { print }
@@ -72,29 +72,24 @@ fn main() {
     compiler.prepareLexicalBody(fnIdx: looping).unwrap()
     val loopFlow = compiler.checkedSemanticExprCompletion(exprId: loopExpression).unwrap()
     if !loopFlow.source.normal() || loopFlow.execution.normal() { panic "source and execution completion were conflated" }
-    compiler.lexicalBodyPreparations = <LexicalBodyPreparations />
-    match compiler.checkedSemanticStmtCompletion(stmtId: statement) {
-        Result.Ok(value: _) => { panic "statement fact bypassed owner readiness" }
-        Result.Err(error: _) => {}
+    // Exercise failed readiness through its actual producer, not an injected cache.
+    mut val failed = <Comp />
+    analyzeFrontendForRequests(c: inout failed,
+        input: <FrontendInput.Text path="failed-completion.pw" text="fn rejected() -> I64 {{ return true }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val failedOwner = owner(compiler: inout failed, name: "rejected")
+    val failedStatement = failed.blockStmtAt(blkId: failed.arena.functionAt(index: failedOwner).body, index: 0U64)
+    val failure = match failed.prepareLexicalBody(fnIdx: failedOwner) {
+        Result.Err(error: val diagnostic) => diagnostic
+        Result.Ok(value: _) => { panic "invalid owner was prepared" }
     }
-    match compiler.checkedSemanticExprCompletion(exprId: expression) {
-        Result.Ok(value: _) => { panic "recorded flow bypassed owner readiness" }
-        Result.Err(error: _) => {}
-    }
-    val failure = compiler.diagnosticAt(offset: compiler.arena.functionAt(index: source).nameStart, msg: "fixture owner failure")
-    compiler.lexicalBodyPreparations.record(owner: source, result: <Result.Err error=failure />)
-    compiler.lexicalBodyPreparations.record(owner: source, result: <Result.Ok value=() />)
-    match compiler.checkedSemanticStmtCompletionOwner(stmtId: statement) {
-        Result.Ok(value: _) => { panic "failed owner authorized a prepared reader" }
+    match failed.prepareLexicalBody(fnIdx: failedOwner) {
         Result.Err(error: val diagnostic) => { if diagnostic.message != failure.message { panic "completed request was overwritten" } }
+        Result.Ok(value: _) => { panic "retry replaced failed owner readiness" }
     }
-    match compiler.checkedSemanticStmtCompletion(stmtId: statement) {
-        Result.Ok(value: _) => { panic "failed owner supplied statement flow" }
+    match failed.checkedSemanticStmtCompletion(stmtId: failedStatement) {
         Result.Err(error: val diagnostic) => { if diagnostic.message != failure.message { panic "statement reader lost owner diagnostic" } }
-    }
-    match compiler.checkedSemanticExprCompletion(exprId: expression) {
-        Result.Ok(value: _) => { panic "failed owner supplied expression flow" }
-        Result.Err(error: val diagnostic) => { if diagnostic.message != failure.message { panic "expression reader lost owner diagnostic" } }
+        Result.Ok(value: _) => { panic "failed owner supplied statement flow" }
     }
     mut val globals = <Comp />
     analyzeFrontendForRequests(c: inout globals,

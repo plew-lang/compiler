@@ -19,7 +19,7 @@ fn check(source: String) {
     analyzeFrontendForRequests(c: inout demanded, input: input, sources: <SourceAccess stdRoot=[] />).unwrap()
     val good = owner(c: inout demanded, name: "main")
     demanded.prepareLexicalBody(fnIdx: good).unwrap()
-    if demanded.lexicalBodyPreparations.count() != 1U64 { panic "admission checked unused default" }
+    if demanded.lexicalBodyPreparationCount() != 1U64 { panic "admission checked unused default" }
     mut val generator = demanded.arena.functionCount()
     mut val index = 0U64
     while index < demanded.arena.functionCount() {

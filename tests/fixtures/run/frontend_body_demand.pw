@@ -19,14 +19,14 @@ fn main() {
     analyzeFrontendForRequests(c: inout compiler,
         input: <FrontendInput.Text path="demand.pw" text="fn identity[T](value: T) -> T {{ return value }} fn good() -> I64 {{ return identity(value: 1I64) }} fn goodClosure() -> I64 {{ val getter = fn() -> I64 {{ return identity(value: 2I64) }} return getter() }} fn broken() {{ missing() }} fn main() {{}}" />,
         sources: <SourceAccess stdRoot=[] />).unwrap()
-    if compiler.genMode || compiler.globalCallTemplatesClosed || compiler.lexicalBodyPreparations.count() != 0U64 { panic "entry checked source bodies" }
+    if compiler.genMode || compiler.globalCallTemplatesClosed || compiler.lexicalBodyPreparationCount() != 0U64 { panic "entry checked source bodies" }
     if compiler.monoWork.bodyCount() != 0U64 || compiler.arena.finalDestructions.count() != 0U64 { panic "entry discovered executable code" }
     val good = owner(c: inout compiler, name: "good")
     val identity = owner(c: inout compiler, name: "identity")
     val closure = owner(c: inout compiler, name: "goodClosure")
     val broken = owner(c: inout compiler, name: "broken")
     compiler.prepareLexicalBody(fnIdx: good).unwrap()
-    if compiler.lexicalBodyPreparations.count() != 1U64 { panic "request checked an unrelated callee body" }
+    if compiler.lexicalBodyPreparationCount() != 1U64 { panic "request checked an unrelated callee body" }
     val templates = compiler.callTemplateCount()
     compiler.prepareLexicalBody(fnIdx: good).unwrap()
     if compiler.callTemplateCount() != templates { panic "request repeated recording" }
@@ -44,7 +44,7 @@ fn main() {
             }
         }
     }
-    if compiler.lexicalBodyPreparations.count() != 4U64 { panic "requests were not independent" }
+    if compiler.lexicalBodyPreparationCount() != 4U64 { panic "requests were not independent" }
     if compiler.monoWork.bodyCount() != 0U64 || compiler.arena.finalDestructions.count() != 0U64 { panic "lexical preparation discovered executable code" }
     print("ok")
 }
