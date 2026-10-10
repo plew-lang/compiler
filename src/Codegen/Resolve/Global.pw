@@ -173,31 +173,6 @@ pub impl Comp {
         return result
     }
 
-    inout fn prepareGlobalInitializerUncached(target: U64) -> Result[(), CompileDiagnostic] {
-        try self.enterGlobalInitializer(target: target)
-        val index: U64 = self.globalIndexForDeclarationTarget(target: target)
-        val stmt: U64 = self.arena.globals[index].letStmt
-        try self.recordStmt(stmtId: stmt)
-        try self.enterGlobalInitializer(target: target)
-        try self.verifyStmt(stmtId: stmt)
-        try self.enterGlobalInitializer(target: target)
-        self.cur.recordCallTemplates = true
-        try self.recordStmt(stmtId: stmt)
-        self.cur.recordCallTemplates = false
-        if (try self.completeRecordedDefaultCalls()) != 0U64 {
-            return <Result.Err error=self.diagnosticAt(offset: target, msg: "internal error: global default argument plans are incomplete") />
-        }
-        try self.prepareGlobalCallTemplateConstraints(target: target)
-        try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Global target=target />)
-        try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Global target=target />)
-        try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Global target=target />)
-        for templateIndex in self.globalCallTemplateOwners.getOr(key: target, fallback: []) {
-            try self.publishPreparedCallConstraints(templateIndex: templateIndex)
-        }
-        self.preparedGlobalTargets.append(target)
-        return <Result.Ok value=() />
-    }
-
     inout fn retainSelectedGlobals() {
         mut val selected: Array[Global] = []
         mut val index: U64 = 0U64

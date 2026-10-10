@@ -965,7 +965,7 @@ pub impl Comp {
         if self.lexicalBodyPreparations.get(key: root).isSome() { return false }
         match self.cur.globalInitializerTarget {
             Optional.Some(v: val target) => { if self.globalInitializerPrepared(target: target) { return false } }
-            Optional.None => {}
+            Optional.None => { if template.siteKey.ownerFnIdx == 18446744073709551615U64 { return false } }
         }
         if self.callTemplateIndex(siteKey: template.siteKey) < self.callTemplateCount() { return false }
         self.ensureCallTemplateIndex(nextCount: self.callTemplateCount() + 1U64)

@@ -2,7 +2,7 @@
 // its recorded flow, rather than recomputing from source syntax.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, finalizeFrontendExecutables, spansEqual }
 use /SourceAccess only { SourceAccess }
-use /Ir only { Expr, Stmt, TypeInfo }
+use /Ir only { Expr, Stmt, TypeInfo, CallSiteKey, CallTemplate, CallTemplateKind }
 use @Std/Io only { print }
 
 fn owner(compiler: inout Comp, name: String) -> U64 {
@@ -106,6 +106,12 @@ fn main() {
     }
     globals.prepareGlobalInitializer(target: global.nameStart).unwrap()
     if !globals.checkedSemanticExprCompletion(exprId: initializer).unwrap().source.normal() { panic "global completion missing" }
+    val count = globals.callTemplateCount()
+    val globalCall = <CallTemplate siteKey=<CallSiteKey ownerFnIdx=18446744073709551615U64 originSerial=999U64 /> kind=<CallTemplateKind.Pending /> />
+    if globals.appendCallTemplate(template: globalCall) { panic "unowned global call was added" }
+    globals.cur.globalInitializerTarget = <Optional.Some v=global.nameStart />
+    if globals.appendCallTemplate(template: globalCall) { panic "prepared global accepted a new call" }
+    if globals.callTemplateCount() != count { panic "refused global append changed membership" }
     // Whole-build finalization must demand individual initializer readiness,
     // including source blocks introduced before concrete bodies exist.
     mut val whole = <Comp />
