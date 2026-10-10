@@ -874,7 +874,7 @@ pub impl Comp {
                         if count != 0U64 && self.arena.callableConstraintFunction(evidence: left) != self.arena.callableConstraintFunction(evidence: right) { return false }
                         mut val index = 0U64
                         while index < count {
-                            if self.arena.callableConstraintSourceAt(evidence: left, index: index) != self.arena.callableConstraintSourceAt(evidence: right, index: index) { return false }
+                            if !self.sameDeclarationBound(a: self.arena.callableConstraintSourceAt(evidence: left, index: index), b: self.arena.callableConstraintSourceAt(evidence: right, index: index)) { return false }
                             val leftProof = self.thawStaticConformanceProof(id: self.arena.callableConstraintProofAt(evidence: left, index: index))
                             val rightProof = self.thawStaticConformanceProof(id: self.arena.callableConstraintProofAt(evidence: right, index: index))
                             if !self.sameStaticConformanceProof(a: leftProof, b: rightProof) { return false }
@@ -3925,12 +3925,12 @@ pub impl Comp {
                     if grounded == 0U64 || !self.arena.typeIsClosed(ref: grounded) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
                 }
                 match source {
-                    DeclarationBoundRef.Function(index: val declared) => {
+                    DeclarationBoundRef.Function(index: _) | DeclarationBoundRef.Requirement(index: _) => {
                         match environment.constraints {
                             Optional.Some(v: val evidence) => {
                                 mut val index = 0U64
                                 while index < self.arena.callableConstraintCount(evidence: evidence) {
-                                    if self.arena.callableConstraintSourceAt(evidence: evidence, index: index) == declared {
+                                    if self.sameDeclarationBound(a: self.arena.callableConstraintSourceAt(evidence: evidence, index: index), b: source) {
                                         return <Result.Ok value=<StaticProofInstantiation.Ready proof=self.thawStaticConformanceProof(id: self.arena.callableConstraintProofAt(evidence: evidence, index: index)) /> />
                                     }
                                     index += 1U64
@@ -3996,6 +3996,21 @@ pub impl Comp {
         }
     }
 
+    inout fn requirementCallConstraintEvidence(template: CallTemplate, selection: CallSiteSelection, traitIndex: U64, requirement: U64) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
+        val witness = self.proofWitnessForTrait(proof: selection.proof, traitIdx: traitIndex)
+        if witness.conformIdx == 0U64 { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "requirement call has no selected conformance") /> }
+        val function = self.arena.functionAt(index: selection.callee)
+        val implementation = if function.sourceWitnessFuncId != 0U64 { give function.sourceWitnessFuncId - 1U64 } else { give selection.callee }
+        val plan = match self.arena.conformanceMethodPlan(conformance: witness.conformIdx - 1U64, traitIndex: traitIndex, requirement: requirement, implementation: implementation) {
+            Optional.Some(v: val plan) => { give plan }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "requirement call has no retained implementation evidence") /> }
+        }
+        match (try self.instantiateBodyCallConstraints(template: template)) {
+            CallableConstraintEvidence.Recorded(bounds: val bounds, proofs: val proofs) => { return <Result.Ok value=<CallableConstraintEvidence.Requirement plan=plan bounds=bounds proofs=proofs /> /> }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "requirement call has no retained public evidence") /> }
+        }
+    }
+
     inout fn resolveBodyCallee(exprId: U64) -> Result[U64, CompileDiagnostic] {
         val template: CallTemplate = (try self.callTemplateForCurrentBody(exprId: exprId))
         // Record selects written and synthesized calls alike. Their Direct
@@ -4020,11 +4035,11 @@ pub impl Comp {
             CallTemplateKind.StaticMethod(receiver: val receiver, args: val arguments, resolution: val resolution, methodTypeArgs: val methodTypeArgs, resultTerm: val resultTerm) => {
                 val selection: CallSiteSelection = (try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: self.callTemplateTypeArgs(range: methodTypeArgs), receiver: receiver, arguments: self.callTemplateArguments(range: arguments), resolution: resolution, resultTerm: resultTerm))
                 try self.recordSelectedBodyCallee(selection: selection)
-                // A provided declaration owns both this selected public plan
-                // and the lexical body's bound identities. Requirement calls
-                // need their separate requirement-to-witness mapping.
+                // Public and implementation clauses have distinct identities.
+                // Requirement calls use their retained declaration entailment.
                 val constraints = match resolution {
                     StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => { give try self.instantiateBodyCallConstraints(template: template) }
+                    StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIndex, reqIdx: val requirement) => { give try self.requirementCallConstraintEvidence(template: template, selection: selection, traitIndex: traitIndex, requirement: requirement) }
                     _ => { give <CallableConstraintEvidence.Declaration /> }
                 }
                 try self.enqueueSelectedCallee(selection: selection, constraints: constraints)

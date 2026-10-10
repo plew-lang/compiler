@@ -3,7 +3,7 @@ use ./Ir only { ProtocolSelection, OperatorSelection, InvocationCompletion, Sema
 use @Plew/Syntax only { CondClause, syntaxConditionClause }
 use ./SourceCompletion only { SourceCompletion, CompletionEdges, CompletionTransfer, BlockResultContext, completionThen, completionChoice, completionTransfer, completionBlock, completionLoop }
 use ./PublicSurfaceIndex only { PublicSurfaceIndex }
-use ./Ir only { PatternBindingType, ConformanceAssociatedEvidence, AssociatedBoundEvidence, TraitConstraintRange, SupertraitRef, TraitProofOrigin, DeclarationBoundRef, TraitBound, TraitProjectionEquality, TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
+use ./Ir only { PatternBindingType, RequirementBoundEvidence, ConformanceMethodEvidence, ConformanceAssociatedEvidence, AssociatedBoundEvidence, TraitConstraintRange, SupertraitRef, TraitProofOrigin, DeclarationBoundRef, TraitBound, TraitProjectionEquality, TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
 use @Plew/Syntax only { syntaxTraitAssocType, syntaxAssociatedTypeBound }
 use ./StringLiteral only { decodeStringLiteral }
 use ./SourceAccess only { SourceAccess }

@@ -42,7 +42,7 @@ fn main() {
                             val savedContext = compiler.cur
                             compiler.enterBodyInstance(fnIdx: callee, environment: retained)
                             if compiler.cur.bodyId != body { panic("callee context selected another body identity") }
-                            val assumed = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=declared /> />
+                            val assumed = <StaticConformanceProof.AssumedBound source=declared />
                             match compiler.instantiateConstraintProof(proof: assumed, receiverRef: bounds[0U64].subject, environment: compiler.cur.bodyEnvironment, selfRef: compiler.cur.bodySelfRef, itemRef: compiler.cur.bodyItemRef).unwrap() {
                                 StaticProofInstantiation.Ready(proof: val forwarded) => {
                                     if !compiler.sameStaticConformanceProof(a: forwarded, b: proofs[0U64]) { panic("forwarded call selected a different proof") }

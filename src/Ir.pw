@@ -1552,6 +1552,7 @@ pub enum DeclarationBoundRef {
     TraitSubject(index: U64)
     AssociatedType(index: U64)
     MethodReceiver(index: U64)
+    Requirement(index: U64)
 }
 
 // Common read-only semantic view of an authored condition. Storage and source
@@ -1578,6 +1579,31 @@ pub struct ConformanceAssociatedEvidence {
     pub val proof: U64
 }
 pub impl ConformanceAssociatedEvidence { factory }
+
+// A requirement clause translated into one implementation's binder space.
+// The authored clause identity remains distinct from conformance where bounds.
+pub struct RequirementBoundEvidence {
+    pub val conformance: U64
+    pub val traitIndex: U64
+    pub val requirement: U64
+    pub val implementation: U64
+    pub val clause: U64
+    pub val bound: TraitBound
+}
+pub impl RequirementBoundEvidence { factory }
+
+// Declaration-time entailment from public clauses and impl conditions to each
+// implementation-owned bound. Publication is append-only after checking.
+pub struct ConformanceMethodEvidence {
+    pub val conformance: U64
+    pub val traitIndex: U64
+    pub val requirement: U64
+    pub val implementation: U64
+    pub val requirements: Array[U64]
+    pub val indices: Array[U64]
+    pub val proofs: Array[U64]
+}
+pub impl ConformanceMethodEvidence { factory }
 
 pub struct AssociatedBoundEvidence {
     pub val projection: U64
@@ -1761,7 +1787,7 @@ pub struct PreparedCallableConstraints { val index: U64 }
 impl PreparedCallableConstraints { factory }
 struct CallableConstraintBindings {
     val function: U64
-    val indices: Array[U64]
+    val sources: Array[DeclarationBoundRef]
     val proofs: Array[U64]
 }
 impl CallableConstraintBindings { factory }
@@ -1812,6 +1838,7 @@ enum CallConstraintPlanState {
 pub enum CallableConstraintEvidence {
     Declaration
     Recorded(bounds: Array[TraitBound], proofs: Array[StaticConformanceProof])
+    Requirement(plan: U64, bounds: Array[TraitBound], proofs: Array[StaticConformanceProof])
 }
 
 
@@ -2851,6 +2878,9 @@ pub struct Arena {
     // proof values with owning Array payloads.
     mut val witnessConditionPlans: Array[WitnessConditionPlan] = []
     mut val callableConstraintBindings: Array[CallableConstraintBindings] = []
+    mut val requirementBoundEvidence: Array[RequirementBoundEvidence] = []
+    mut val conformanceMethodEvidence: Array[ConformanceMethodEvidence] = []
+    mut val conformanceMethodHeads: Dictionary[U64, Array[U64]] = [:]
     mut val conformanceAssociatedHeads: Dictionary[U64, U64] = [:]
     mut val conformanceAssociatedProofs: Array[Array[ConformanceAssociatedEvidence]] = []
     mut val conformanceSupertraitHeads: Dictionary[U64, U64] = [:]

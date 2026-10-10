@@ -51,6 +51,7 @@ pub impl Comp {
             DeclarationBoundRef.TraitSubject(val index) => { return index < self.decls.conformCount() }
             DeclarationBoundRef.AssociatedType(val index) => { return index < self.arena.associatedBoundEvidenceCount() }
             DeclarationBoundRef.MethodReceiver(val index) => { return functionHasTraitReceiver(self.arena, self.decls, fnIdx: index) }
+            DeclarationBoundRef.Requirement(val index) => { return index < self.arena.requirementBoundEvidenceCount() }
         }
     }
 
@@ -72,6 +73,7 @@ pub impl Comp {
                 return <TraitBound subject=self.receiverSubjectTerm(receiver: conformance.subjectTy, traitOwner: owner) constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=self.copyConformTypes(types: conformance.subjectArgs) /> positionalArgsOpen=false assocPredicates=[] /> offset=conformance.defOffset />
             }
             DeclarationBoundRef.AssociatedType(val index) => { return self.arena.associatedBoundEvidenceAt(index: index).bound }
+            DeclarationBoundRef.Requirement(val index) => { return self.arena.requirementBoundEvidenceAt(index: index).bound }
             DeclarationBoundRef.MethodReceiver(val index) => {
                 val function = self.arena.functionAt(index: index)
                 return <TraitBound subject=function.recvTy constraint=<TraitConstraint key=<TraitInstanceKey owner=function.recvStart positionalArgs=self.copyFuncTypes(types: function.recvTraitArgs) /> positionalArgsOpen=false assocPredicates=[] /> offset=function.defOffset />
@@ -95,6 +97,9 @@ pub impl Comp {
             }
             DeclarationBoundRef.MethodReceiver(index: val left) => {
                 match b { DeclarationBoundRef.MethodReceiver(index: val right) => { return left == right } _ => { return false } }
+            }
+            DeclarationBoundRef.Requirement(index: val left) => {
+                match b { DeclarationBoundRef.Requirement(index: val right) => { return left == right } _ => { return false } }
             }
         }
     }
@@ -1332,33 +1337,46 @@ pub impl Comp {
                         return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation return type does not match the trait requirement") />
                     }
                     mut val required: Array[ConformBound] = []
+                    mut val requirementSources: Array[U64] = []
                     mut val boundIndex = 0U64
                     while boundIndex < requirement.signatureBounds.len {
                         val raw = self.conformBoundAt(bounds: requirement.signatureBounds, index: boundIndex)
                         val subject = self.groundTermInEnvironment(ref: self.traitBoundTypeTerm(ref: raw.subject, bound: traitBound, traitIndex: traitIndex), params: parameters, values: arguments)
                         val constraint = self.groundTraitConstraintInEnvironment(constraint: self.traitConstraintInBound(constraint: raw.constraint, bound: traitBound, traitIndex: traitIndex), params: parameters, args: arguments)
                         required.append(<ConformBound subject=subject constraint=constraint offset=raw.offset />)
+                        requirementSources.append(self.arena.publishRequirementBoundEvidence(evidence: <RequirementBoundEvidence conformance=conformIndex traitIndex=traitIndex requirement=requirementIndex implementation=functionIndex clause=requirement.signatureBounds.start + boundIndex bound=<TraitBound subject=subject constraint=constraint offset=raw.offset /> />))
                         boundIndex += 1U64
                     }
-                    val range = self.pushConformBounds(bounds: required)
                     mut val assumptions = self.conformanceDeclarationAssumptions(conformIndex: conformIndex)
-                    for val assumption in self.conformanceBoundAssumptions(bounds: range) { assumptions.append(assumption) }
+                    for source in requirementSources { assumptions.append(<DeclarationBoundRef.Requirement index=source />) }
+                    mut val implementationIndices: Array[U64] = []
+                    mut val implementationProofs: Array[U64] = []
                     val authoredCount = self.decls.funcBounds.count()
                     boundIndex = 0U64
                     while boundIndex < authoredCount {
                         val bound = self.decls.funcBounds.at(index: boundIndex)
                         if bound.fnIdx == functionIndex {
-                            if !(try self.viewedTypeConformsTraitConstraint(ref: bound.paramTy, constraint: bound.constraint, assumptions: assumptions)) {
+                            val proof = try self.viewedTraitConstraintProof(ref: bound.paramTy, constraint: bound.constraint, assumptions: assumptions)
+                            if self.proofIsMissing(proof: proof) {
                                 return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation requires a trait constraint not guaranteed by the requirement") />
                             }
+                            implementationIndices.append(boundIndex)
+                            implementationProofs.append(self.freezeStaticConformanceProof(proof: proof))
                         }
                         boundIndex += 1U64
                     }
                     for val bound in required {
                         if !(try self.viewedTypeConformsTraitConstraint(ref: bound.subject, constraint: bound.constraint, assumptions: self.functionBoundAssumptions(fnIdx: functionIndex))) {
                             val subject = self.arena.typeAt(index: bound.subject)
+                            val proof = try self.viewedTraitConstraintProof(ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)
+                            if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "requirement constraint has no retained declaration evidence") /> }
+                            implementationIndices.append(self.decls.funcBounds.count())
+                            implementationProofs.append(self.freezeStaticConformanceProof(proof: proof))
                             self.decls.funcBounds.append(<FuncBound fnIdx=functionIndex paramStart=subject.nameStart paramLen=subject.nameLen paramNameId=subject.nameId paramTy=bound.subject constraint=bound.constraint />)
                         }
+                    }
+                    if !self.arena.publishConformanceMethodEvidence(evidence: <ConformanceMethodEvidence conformance=conformIndex traitIndex=traitIndex requirement=requirementIndex implementation=functionIndex requirements=requirementSources indices=implementationIndices proofs=implementationProofs />) {
+                        return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation constraint evidence was already published or is incomplete") />
                     }
                 }
                 witnessIndex += 1U64
@@ -1594,11 +1612,66 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Translate public requirement evidence through the declaration's retained
+    // entailment. Clause identities, not implementation array positions, bind it.
+    inout fn instantiateRequirementCallConstraints(fnIdx: U64, environment: InstanceEnvironment, planIndex: U64, bounds: Array[TraitBound], proofs: Array[StaticConformanceProof]) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
+        if planIndex >= self.arena.conformanceMethodEvidenceCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "requirement call has no retained implementation evidence") /> }
+        val plan = self.arena.conformanceMethodEvidenceAt(index: planIndex)
+        val function = self.arena.functionAt(index: fnIdx)
+        val implementation = if function.sourceWitnessFuncId != 0U64 { give function.sourceWitnessFuncId - 1U64 } else { give fnIdx }
+        val witness = self.proofWitnessForTrait(proof: environment.proof, traitIdx: plan.traitIndex)
+        if implementation != plan.implementation || witness.conformIdx != plan.conformance + 1U64 {
+            return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "requirement evidence belongs to another implementation") />
+        }
+        val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: plan.traitIndex).reqs, index: plan.requirement)
+        if bounds.count() != requirement.signatureBounds.len || proofs.count() != bounds.count() || plan.requirements.count() != bounds.count() {
+            return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "requirement call has incomplete public constraint evidence") />
+        }
+        mut val sources: Array[DeclarationBoundRef] = []
+        mut val publicProofs: Array[U64] = []
+        for index in plan.requirements {
+            val source = self.arena.requirementBoundEvidenceAt(index: index)
+            if source.clause < requirement.signatureBounds.start || source.clause - requirement.signatureBounds.start >= requirement.signatureBounds.len {
+                return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "requirement evidence has a foreign clause identity") />
+            }
+            val position = source.clause - requirement.signatureBounds.start
+            val expected = try self.groundCallableBound(bound: source.bound, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+            if !self.typeRefEq(a: expected.subject, b: bounds[position].subject) || !self.sameTraitConstraint(a: expected.constraint, b: bounds[position].constraint) {
+                return <Result.Err error=self.diagnosticAt(offset: source.bound.offset, msg: "requirement evidence has a different public substitution") />
+            }
+            try self.checkStaticProofEvidence(proof: proofs[position], offset: source.bound.offset)
+            try self.checkSelectedCallConstraintBoundary(expected: expected, proof: proofs[position], offset: source.bound.offset)
+            sources.append(<DeclarationBoundRef.Requirement index=index />)
+            publicProofs.append(self.freezeStaticConformanceProof(proof: proofs[position]))
+        }
+        val bindings = self.arena.prepareDeclarationConstraints(function: implementation, sources: sources, proofs: publicProofs)
+        val derivation = <InstanceEnvironment params=environment.params args=environment.args receiverRef=environment.receiverRef proof=environment.proof constraints=<Optional.Some v=bindings /> />
+        mut val implementationBounds: Array[TraitBound] = []
+        mut val implementationProofs: Array[StaticConformanceProof] = []
+        for index in self.sourceDeclarationCallBoundIndices(functionIndex: fnIdx) {
+            mut val position = 0U64
+            while position < plan.indices.count() && plan.indices[position] != index { position += 1U64 }
+            if position >= plan.indices.count() { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation bound has no retained requirement derivation") /> }
+            val declaration = self.decls.funcBounds.at(index: index)
+            val bound = try self.groundCallableBound(bound: <TraitBound subject=declaration.paramTy constraint=declaration.constraint offset=declaration.paramStart />, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+            val state = try self.instantiateConstraintProof(proof: self.thawStaticConformanceProof(id: plan.proofs[position]), receiverRef: bound.subject, environment: derivation, selfRef: environment.receiverRef, itemRef: 0U64)
+            match state {
+                StaticProofInstantiation.Ready(proof: val proof) => { implementationBounds.append(bound) implementationProofs.append(proof) }
+                _ => { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "implementation constraint derivation is unresolved") /> }
+            }
+        }
+        return <Result.Ok value=<CallableConstraintEvidence.Recorded bounds=implementationBounds proofs=implementationProofs /> />
+    }
+
     // An instantiated source plan is checked against the body signature by
     // equality and retained proof admission, never by conformance selection.
     inout fn checkCallableConstraintEvidence(fnIdx: U64, environment: InstanceEnvironment, evidence: CallableConstraintEvidence) -> Result[(), CompileDiagnostic] {
         match evidence {
             CallableConstraintEvidence.Declaration => { return self.checkSelectedCallableBounds(fnIdx: fnIdx, environment: environment) }
+            CallableConstraintEvidence.Requirement(plan: val plan, bounds: val bounds, proofs: val proofs) => {
+                val recorded = try self.instantiateRequirementCallConstraints(fnIdx: fnIdx, environment: environment, planIndex: plan, bounds: bounds, proofs: proofs)
+                return self.checkCallableConstraintEvidence(fnIdx: fnIdx, environment: environment, evidence: recorded)
+            }
             CallableConstraintEvidence.Recorded(val bounds, val proofs) => {
                 val expected = try self.groundCallableSignatureBounds(fnIdx: fnIdx, environment: environment)
                 if bounds.count() != expected.count() || proofs.count() != expected.count() {
@@ -1624,6 +1697,10 @@ pub impl Comp {
     inout fn environmentWithCallableConstraints(fnIdx: U64, environment: InstanceEnvironment, evidence: CallableConstraintEvidence) -> Result[InstanceEnvironment, CompileDiagnostic] {
         mut val proofs: Array[U64] = []
         match evidence {
+            CallableConstraintEvidence.Requirement(plan: val plan, bounds: val bounds, proofs: val proofs) => {
+                val recorded = try self.instantiateRequirementCallConstraints(fnIdx: fnIdx, environment: environment, planIndex: plan, bounds: bounds, proofs: proofs)
+                return self.environmentWithCallableConstraints(fnIdx: fnIdx, environment: environment, evidence: recorded)
+            }
             CallableConstraintEvidence.Declaration => {
                 for bound in (try self.groundCallableSignatureBounds(fnIdx: fnIdx, environment: environment)) {
                     val proof = try self.viewedTraitConstraintProof(ref: bound.subject, constraint: bound.constraint)

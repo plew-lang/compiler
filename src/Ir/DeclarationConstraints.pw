@@ -1,5 +1,38 @@
 // Declaration-owned evidence is published once; readers cannot replace it.
 pub impl Arena {
+    fn requirementBoundEvidenceCount() -> U64 { return self.requirementBoundEvidence.count() }
+    fn requirementBoundEvidenceAt(index: U64) -> RequirementBoundEvidence { return self.requirementBoundEvidence[index] }
+    inout fn publishRequirementBoundEvidence(evidence: RequirementBoundEvidence) -> U64 {
+        val index = self.requirementBoundEvidence.count()
+        self.requirementBoundEvidence.append(evidence)
+        return index
+    }
+    fn conformanceMethodEvidenceCount() -> U64 { return self.conformanceMethodEvidence.count() }
+    fn conformanceMethodEvidenceAt(index: U64) -> ConformanceMethodEvidence { return self.conformanceMethodEvidence[index] }
+    fn conformanceMethodPlan(conformance: U64, traitIndex: U64, requirement: U64, implementation: U64) -> Optional[U64] {
+        for index in self.conformanceMethodHeads.getOr(key: conformance, fallback: []) {
+            val plan = self.conformanceMethodEvidence[index]
+            if plan.traitIndex == traitIndex && plan.requirement == requirement && plan.implementation == implementation { return <Optional.Some v=index /> }
+        }
+        return <Optional.None />
+    }
+    inout fn publishConformanceMethodEvidence(evidence: ConformanceMethodEvidence) -> Bool {
+        if self.conformanceMethodPlan(conformance: evidence.conformance, traitIndex: evidence.traitIndex, requirement: evidence.requirement, implementation: evidence.implementation).isSome() { return false }
+        if evidence.indices.count() != evidence.proofs.count() { return false }
+        for proof in evidence.proofs { if !self.hasStaticConformanceProof(id: proof) { return false } }
+        for index in evidence.requirements {
+            if index >= self.requirementBoundEvidence.count() { return false }
+            val clause = self.requirementBoundEvidence[index]
+            if clause.conformance != evidence.conformance || clause.traitIndex != evidence.traitIndex || clause.requirement != evidence.requirement || clause.implementation != evidence.implementation { return false }
+        }
+        val index = self.conformanceMethodEvidence.count()
+        self.conformanceMethodEvidence.append(evidence)
+        mut val indices = self.conformanceMethodHeads.getOr(key: evidence.conformance, fallback: [])
+        indices.append(index)
+        self.conformanceMethodHeads[evidence.conformance] = indices
+        return true
+    }
+
     fn associatedBoundEvidenceCount() -> U64 { return self.associatedBoundEvidence.count() }
     fn associatedBoundEvidenceAt(index: U64) -> AssociatedBoundEvidence { return self.associatedBoundEvidence[index] }
     inout fn publishAssociatedBoundEvidence(evidence: AssociatedBoundEvidence) -> U64 {

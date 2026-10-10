@@ -7,6 +7,7 @@ impl Arena {
             DeclarationBoundRef.TraitSubject(index: _) => { return 2U64 }
             DeclarationBoundRef.AssociatedType(index: _) => { return 3U64 }
             DeclarationBoundRef.MethodReceiver(index: _) => { return 4U64 }
+            DeclarationBoundRef.Requirement(index: _) => { return 5U64 }
         }
     }
 
@@ -17,6 +18,7 @@ impl Arena {
             DeclarationBoundRef.TraitSubject(val index) => { return index }
             DeclarationBoundRef.AssociatedType(val index) => { return index }
             DeclarationBoundRef.MethodReceiver(val index) => { return index }
+            DeclarationBoundRef.Requirement(val index) => { return index }
         }
     }
 
@@ -26,7 +28,8 @@ impl Arena {
         if kind == 1U64 { return <DeclarationBoundRef.Conformance index=index /> }
         if kind == 2U64 { return <DeclarationBoundRef.TraitSubject index=index /> }
         if kind == 3U64 { return <DeclarationBoundRef.AssociatedType index=index /> }
-        return <DeclarationBoundRef.MethodReceiver index=index />
+        if kind == 4U64 { return <DeclarationBoundRef.MethodReceiver index=index /> }
+        return <DeclarationBoundRef.Requirement index=index />
     }
 
     inout fn freezeWitnessMatch(witness: WitnessMatch) -> FrozenWitnessMatch {
@@ -125,7 +128,7 @@ pub impl Arena {
         if node.tag == 1U64 {
             return <StaticConformanceProof.ConcreteWitness witness=self.thawFrozenWitnessMatch(witness: <FrozenWitnessMatch selfRef=node.witnessSelfRef conformIdx=node.conformIdx binds=node.witnessBinds bindCount=node.witnessBindCount conditions=node.witnessConditions />) />
         }
-        if node.tag >= 2U64 && node.tag <= 4U64 && node.boundKind > 4U64 { return <StaticConformanceProof.Missing /> }
+        if node.tag >= 2U64 && node.tag <= 4U64 && node.boundKind > 5U64 { return <StaticConformanceProof.Missing /> }
         if node.tag == 2U64 { return <StaticConformanceProof.AssumedBound source=self.thawDeclarationBound(kind: node.boundKind, index: node.boundIdx) /> }
         if node.tag == 3U64 {
             mut val edges: Array[WitnessMatch] = []
