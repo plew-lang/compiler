@@ -1,0 +1,48 @@
+// Source and concrete readers use semantic site identity. The expression
+// carried by an operand is a navigation/diagnostic anchor, not its type source.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallArgumentSource, CallSiteKey, CallTemplateKind }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="fn value() -> I64 {{ return 42I64 }} fn accept(value: I64) {{}} fn probe() {{ accept(value: value()) }}" path="source-result-site.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "accept").nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    mut val found = false
+    for template in compiler.decls.callTemplates {
+        match template.kind {
+            CallTemplateKind.Direct(callee: val function, receiver: _, args: val arguments, calleeTypeArgs: _, proofId: _) => {
+                if function == callee && template.siteKey.ownerFnIdx == owner {
+                    val argument = compiler.callTemplateArguments(range: arguments)[0U64]
+                    match argument.source {
+                        CallArgumentSource.PriorCallResult(exprId: val expression, siteKey: val site) => {
+                            val expected = compiler.semanticExprTerm(exprId: expression)
+                            if expected == 0U64 { panic("missing source call result") }
+                            val detached = <CallArgumentSource.PriorCallResult exprId=0U64 siteKey=site />
+                            if !compiler.typeRefEq(a: compiler.sourceCallArgumentType(source: detached), b: expected) {
+                                panic("source argument read its diagnostic expression instead of the saved site")
+                            }
+                            if !compiler.typeRefEq(a: compiler.closedSelectedCallResult(siteKey: site).unwrap(), b: expected) {
+                                panic("receiver and argument readers disagree")
+                            }
+                            val missing = <CallArgumentSource.PriorCallResult exprId=expression siteKey=<CallSiteKey /> />
+                            if compiler.sourceCallArgumentType(source: missing) != 0U64 {
+                                panic("missing source site borrowed an unrelated expression type")
+                            }
+                            found = true
+                        }
+                        _ => { panic("nested call lost its result dependency") }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    if !found { panic("missing nested source call") }
+    print("source-call-result-site-authority")
+}

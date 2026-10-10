@@ -960,9 +960,9 @@ pub impl Comp {
         return false
     }
 
-    inout fn appendCallTemplate(template: CallTemplate) {
+    inout fn appendCallTemplate(template: CallTemplate, resultExpression: Optional[U64] = <Optional.None />) {
         self.ensureCallTemplateIndex(nextCount: self.decls.callTemplates.count() + 1U64)
-        val resultRecipe = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 callSite=template.siteKey />)
+        val resultRecipe = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 callSite=template.siteKey sourceExpression=resultExpression />)
         self.decls.callTemplates.append(<CallTemplate siteKey=template.siteKey resultTypeRecipe=resultRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm />)
         val capacity: U64 = self.decls.callTemplateIndexSlots.count()
         mut val slot: U64 = template.siteKey.lookupHash() % capacity
@@ -1127,7 +1127,7 @@ pub impl Comp {
         }
         val kind = <CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=templateTypeArgs proofId=proofId />
         receiverTerm = self.completeCallTemplateReceiver(kind: kind, receiverTerm: receiverTerm)
-        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=kind receiverTypeTerm=receiverTerm />)
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=kind receiverTypeTerm=receiverTerm />, resultExpression: <Optional.Some v=exprId />)
         return <Result.Ok value=() />
     }
 
@@ -1277,7 +1277,7 @@ pub impl Comp {
             self.recordGlobalCallTemplateOwner(templateIndex: index)
             return <Result.Ok value=() />
         }
-        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Dynamic receiver=receiver args=templateArgs target=target /> />)
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Dynamic receiver=receiver args=templateArgs target=target /> />, resultExpression: <Optional.Some v=exprId />)
         return <Result.Ok value=() />
     }
 
@@ -1363,7 +1363,7 @@ pub impl Comp {
             self.recordGlobalCallTemplateOwner(templateIndex: index)
             return <Result.Ok value=() />
         }
-        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey receiverTypeTerm=receiverTerm kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution methodTypeArgs=methodTypeArgs resultTerm=selectedResult /> />)
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey receiverTypeTerm=receiverTerm kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution methodTypeArgs=methodTypeArgs resultTerm=selectedResult /> />, resultExpression: <Optional.Some v=exprId />)
         return <Result.Ok value=() />
     }
 
@@ -1635,7 +1635,7 @@ pub impl Comp {
             self.recordGlobalCallTemplateOwner(templateIndex: index)
             return <Result.Ok value=() />
         }
-        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=selection resultTerm=resultTerm /> receiverTypeTerm=receiverTerm />)
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=selection resultTerm=resultTerm /> receiverTypeTerm=receiverTerm />, resultExpression: <Optional.Some v=exprId />)
         return <Result.Ok value=() />
     }
 
@@ -1677,7 +1677,7 @@ pub impl Comp {
             val kind = if exprId >= self.arena.exprs.count() || self.sourceExprRequiresCallSelection(exprId: exprId) || self.syntheticCallSiteIndex(exprId: exprId) < self.decls.syntheticCallSites.count() {
                 give <CallTemplateKind.Pending />
             } else { give <CallTemplateKind.ExpectedValue /> }
-            self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=kind expectedResultTerm=expectedTerm />)
+            self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=kind expectedResultTerm=expectedTerm />, resultExpression: <Optional.Some v=exprId />)
             return <Result.Ok value=() />
         }
         val prior: CallTemplate = self.decls.callTemplates[index]

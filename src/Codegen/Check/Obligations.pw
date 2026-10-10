@@ -949,7 +949,7 @@ pub impl Comp {
                 if term != 0U64 { return term }
                 return self.semanticExprTerm(exprId: expression)
             }
-            CallArgumentSource.PriorCallResult(exprId: val expression, siteKey: _) => { return self.semanticExprTerm(exprId: expression) }
+            CallArgumentSource.PriorCallResult(exprId: _, siteKey: val dependency) => { return self.sourceSelectedCallResult(siteKey: dependency) }
             CallArgumentSource.Legacy(exprId: val expression, info: _) => { return self.semanticExprTerm(exprId: expression) }
         }
     }

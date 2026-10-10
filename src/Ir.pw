@@ -3185,6 +3185,9 @@ pub impl CallSiteKey { factory }
 // only, because implicit protocol calls are statement-owned rather than
 // expression-owned.
 pub struct SemanticTypeRecipe {
+    // CallResult can point to the canonical source expression fact. ExprId
+    // zero is valid; absence must not share its representation.
+    pub val sourceExpression: Optional[U64] = <Optional.None />
     pub val kind: U64 = 0U64
     pub val term: U64 = 0U64
     pub val input: U64 = 0U64
