@@ -5074,7 +5074,7 @@ impl Comp {
     fn closureSourceOwnerClosed(owner: SemanticCompletionOwner) -> Bool {
         match owner {
             SemanticCompletionOwner.Function(index: val index) => { return self.lexicalBodyPreparations.get(key: index).isSome() }
-            SemanticCompletionOwner.Global(target: val target) => { return self.globalInitializerPrepared(target: target) }
+            SemanticCompletionOwner.Global(target: val target) => { return self.globalInitializerConstructionClosed(target: target) }
         }
     }
 

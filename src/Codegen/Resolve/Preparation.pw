@@ -43,7 +43,6 @@ impl Comp {
         try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Global target=target />)
         try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Global target=target />)
         for token in admitted { self.publishPreparedCallConstraints(admitted: token) }
-        self.preparedGlobalTargets.append(target)
         return <Result.Ok value=() />
     }
 }

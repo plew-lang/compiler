@@ -26,7 +26,10 @@ pub impl Comp {
                 }
             }
             SemanticCompletionOwner.Global(target: val target) => {
-                if self.globalInitializerPrepared(target: target) { return <Result.Ok value=true /> }
+                match self.globalInitializerPreparations.get(key: target) {
+                    Optional.Some(v: val prepared) => { try prepared return <Result.Ok value=true /> }
+                    Optional.None => {}
+                }
             }
         }
         return <Result.Ok value=false />

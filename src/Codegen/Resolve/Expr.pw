@@ -964,7 +964,7 @@ pub impl Comp {
         val root = self.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
         if self.lexicalBodyPreparations.get(key: root).isSome() { return false }
         match self.cur.globalInitializerTarget {
-            Optional.Some(v: val target) => { if self.globalInitializerPrepared(target: target) { return false } }
+            Optional.Some(v: val target) => { if self.globalInitializerConstructionClosed(target: target) { return false } }
             Optional.None => { if template.siteKey.ownerFnIdx == 18446744073709551615U64 { return false } }
         }
         if findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: template.siteKey) < self.callTemplates.count() { return false }

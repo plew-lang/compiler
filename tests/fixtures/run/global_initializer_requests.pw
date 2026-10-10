@@ -1,7 +1,7 @@
 // Internal preparation boundary: failure and success restore the caller cursor.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { Expr, Stmt, Local }
+use /Ir only { Expr, Stmt, Local, SemanticCompletionOwner, CallTemplate, CallTemplateKind, CallSiteKey }
 use @Std/Io only { print }
 
 fn assertCursor(compiler: inout Comp) {
@@ -45,6 +45,18 @@ fn main() {
         Result.Ok(value: _) => { panic("retry accepted invalid initializer") }
     }
     assertCursor(compiler: inout compiler)
+    if compiler.globalInitializerPreparationCount() != 1U64 { panic("failed request was not cached once") }
+    match compiler.semanticCompletionOwnerPrepared(owner: <SemanticCompletionOwner.Global target=broken.nameStart />) {
+        Result.Err(error: val failure) => { if failure.message != diagnostic.message { panic("final reader lost failed owner diagnostic") } }
+        Result.Ok(value: _) => { panic("failed owner became an ordinary readiness result") }
+    }
+    val saved = compiler.cur
+    compiler.cur.checkFn = 18446744073709551615U64
+    compiler.cur.globalInitializerTarget = <Optional.Some v=broken.nameStart />
+    if compiler.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=18446744073709551615U64 originSerial=900U64 /> kind=<CallTemplateKind.Pending /> />) {
+        panic("failed initializer reopened call construction")
+    }
+    compiler.cur = saved
     compiler.prepareGlobalInitializer(target: good.nameStart).unwrap()
     assertCursor(compiler: inout compiler)
     compiler.prepareGlobalInitializer(target: good.nameStart).unwrap()
@@ -56,6 +68,6 @@ fn main() {
     assertCursor(compiler: inout compiler)
     if resolved.globalTypePending || compiler.cur.locals.count() != 1U64 || compiler.cur.locals[0U64].globalTypePending { panic("global type was not published to caller") }
     if compiler.resolvingGlobalTypes.count() != 1U64 || compiler.resolvingGlobalTypes[0U64] != 70005U64 { panic("type query leaked its stack") }
-    if !compiler.globalInitializerPrepared(target: good.nameStart) || compiler.globalInitializerPreparationCount() != 1U64 { panic("global readiness was not independent") }
+    if !compiler.globalInitializerPrepared(target: good.nameStart) || compiler.globalInitializerPreparationCount() != 2U64 { panic("global preparation results were not independent") }
     print("ok")
 }
