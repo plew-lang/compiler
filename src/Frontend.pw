@@ -2398,6 +2398,23 @@ pub impl Comp {
         }
         return self.preparedSemanticFacts(owner: self.semanticClosureOwners[index])
     }
+    inout fn preparedSourceExpression(owner: SemanticCompletionOwner, exprId: U64) -> Result[SemanticExprType, CompileDiagnostic] {
+        if !(try self.semanticCompletionOwnerPrepared(owner: owner)) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: expression requires a prepared source owner") />
+        }
+        if exprId < self.semanticExprRecords.count() {
+            val row = self.semanticExprRecords[exprId]
+            match row.owner {
+                Optional.Some(v: val recorded) => {
+                    if semanticCompletionOwnersEqual(recorded: recorded, prepared: owner) {
+                        return <Result.Ok value=row.expression />
+                    }
+                }
+                Optional.None => {}
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: prepared owner has no matching source expression") />
+    }
     fn sourceSemanticExprTypeCount() -> U64 { return self.semanticExprRecords.count() }
     fn sourceSemanticExprTypeAt(index: U64) -> SemanticExprType { return self.semanticExprRecords[index].expression }
 }

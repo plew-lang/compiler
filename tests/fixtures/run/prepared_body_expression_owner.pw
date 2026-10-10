@@ -1,0 +1,37 @@
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { InstanceEnvironment, Stmt }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="body-expression.pw" text="fn probe() -> I64 {{ return 1I64 }} fn unrelated() {{}}" />,
+        sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "unrelated").nameId)
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: owner).body, index: 0U64)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Return(value: val expression, hasValue: _, offset: _) => expression
+        _ => { panic("missing return") }
+    }
+    val body = compiler.internBodyInstance(fnIdx: owner, environment: <InstanceEnvironment />)
+    val foreign = compiler.internBodyInstance(fnIdx: other, environment: <InstanceEnvironment />)
+    match compiler.preparedBodyExpression(bodyId: body, exprId: expression) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("unprepared expression admitted") }
+    }
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    compiler.prepareLexicalBody(fnIdx: other).unwrap()
+    val fact = compiler.preparedBodyExpression(bodyId: body, exprId: expression).unwrap()
+    if fact.term == 0U64 { panic("saved type missing") }
+    match compiler.preparedBodyExpression(bodyId: foreign, exprId: expression) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("foreign expression admitted") }
+    }
+    match compiler.preparedBodyExpression(bodyId: 0U64, exprId: expression) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("missing body admitted") }
+    }
+    print("ok")
+}

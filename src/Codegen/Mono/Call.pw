@@ -2479,9 +2479,10 @@ pub impl Comp {
     // A selected call owns a result dependency; its callee binder must not be
     // substituted as though it belonged to the caller. ExpectedValue records
     // context without a call dependency; an absent template uses Pending.
-    inout fn groundRecordedValueTypeForBody(bodyId: U64, exprId: U64, term: U64, selfRef: U64, itemRef: U64) -> Result[U64, CompileDiagnostic] {
-        if bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() { return <Result.Ok value=0U64 />}
+    inout fn groundRecordedValueTypeForBody(bodyId: U64, exprId: U64, globalInitializerTarget: Optional[U64], selfRef: U64, itemRef: U64) -> Result[U64, CompileDiagnostic] {
+        val fact = try self.preparedBodyExpression(bodyId: bodyId, exprId: exprId, globalInitializerTarget: globalInitializerTarget)
         val body: BodyInstance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        val term = fact.term
         val template = (try self.callTemplateForSourceBody(fnIdx: body.fnIdx, exprId: exprId))
         match template.kind {
             CallTemplateKind.Pending => {
@@ -2572,7 +2573,7 @@ pub impl Comp {
 
     inout fn finalizeStorageConversion(stmtId: U64, exprId: U64, targetTerm: U64) -> Result[(), CompileDiagnostic] {
         if self.currentBodyInstanceId() == 0U64 { return <Result.Ok value=() /> }
-        val sourceRef: U64 = (try self.groundRecordedValueTypeForBody(bodyId: self.currentBodyInstanceId(), exprId: exprId, term: self.semanticExprTerm(exprId: exprId), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+        val sourceRef: U64 = (try self.groundRecordedValueTypeForBody(bodyId: self.currentBodyInstanceId(), exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         val targetRef: U64 = (try self.groundAndRecordBodyType(ref: targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
         val conversion: ValueConversionProof = (try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef, exprId: exprId))
         self.putFinalStorage(fact: <FinalStorageResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId sourceTypeRef=sourceRef targetTypeRef=targetRef conversion=self.freezeValueConversionProof(proof: conversion) />)
@@ -2887,7 +2888,7 @@ pub impl Comp {
     inout fn finalizeCurrentBodyAwait(exprId: U64, operandExprId: U64) -> Result[(), CompileDiagnostic] {
         val bodyId = self.currentBodyInstanceId()
         if bodyId == 0U64 { return <Result.Ok value=() /> }
-        val promise = (try self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: operandExprId, term: self.semanticExprTerm(exprId: operandExprId), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+        val promise = (try self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: operandExprId, globalInitializerTarget: self.cur.globalInitializerTarget, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         if promise == 0U64 { return <Result.Ok value=() /> }
         // The completed operand type carries the instantiated Promise payload;
         // a parametric await expression may still refer to its source binder.
@@ -3018,7 +3019,7 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < aggregate.elements.count() {
             val element: SemanticAggregateElement = aggregate.elements[i]
-            val sourceRef: U64 = (try self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: element.exprId, term: element.term, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+            val sourceRef: U64 = (try self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: element.exprId, globalInitializerTarget: self.cur.globalInitializerTarget, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
             val targetRef: U64 = (try self.groundAndRecordBodyType(ref: element.targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
             targets.append(targetRef)
             conversions.append((try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef, exprId: element.exprId)))
@@ -3142,7 +3143,7 @@ pub impl Comp {
         if bodyId == 0U64 { return <Result.Ok value=() /> }
         val targetTerm: U64 = (try self.preparedBodyReturnTerm(fnIdx: self.cur.bodyFnIdx))
         val targetRef: U64 = (try self.groundAndRecordBodyType(ref: targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
-        mut val sourceRef: U64 = (try self.groundRecordedValueTypeForBody(bodyId: self.currentBodyInstanceId(), exprId: exprId, term: self.semanticExprTerm(exprId: exprId), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+        mut val sourceRef: U64 = (try self.groundRecordedValueTypeForBody(bodyId: self.currentBodyInstanceId(), exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         // A direct record aggregate in return position has one ABI authority:
         // the declared return TypeTerm.  Its parametric aggregate carrier owns
         // source evaluation order, while this finalization supplies the
@@ -3165,7 +3166,7 @@ pub impl Comp {
                     if element.fieldIndex >= target.recordFieldTerms.count() {
                         complete = false
                     } else {
-                        val source: U64 = (try self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: element.exprId, term: element.term, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+                        val source: U64 = (try self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: element.exprId, globalInitializerTarget: self.cur.globalInitializerTarget, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
                         val fieldTarget: U64 = target.recordFieldTerms[element.fieldIndex]
                         targets.append(fieldTarget)
                         conversions.append((try self.finalValueConversion(sourceRef: source, targetRef: fieldTarget, exprId: element.exprId)))
@@ -5610,7 +5611,7 @@ pub impl Comp {
     inout fn collectRecordedValueLayout(exprId: U64) -> Result[(), CompileDiagnostic] {
         val bodyId = self.currentBodyInstanceId()
         if bodyId == 0U64 { return <Result.Ok value=() /> }
-        val type = (try self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: exprId, term: self.semanticExprTerm(exprId: exprId), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+        val type = (try self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         try self.enqueueFinalDestruction(typeRef: type)
         return <Result.Ok value=() />
     }
@@ -5947,7 +5948,7 @@ pub impl Comp {
         if bodyId == 0U64 || tyLen != 0U64 || tyIsArray {
             return <Result.Ok value=(try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)) />
         }
-        val ref: U64 = (try self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: init, term: self.semanticExprTerm(exprId: init), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+        val ref: U64 = (try self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: init, globalInitializerTarget: self.cur.globalInitializerTarget, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         val info: TypeInfo = self.typeInfoOfRef(ref: ref)
         return <Result.Ok value=<LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=ref /> />
     }
@@ -6140,5 +6141,27 @@ pub impl Comp {
             index += 1U64
         }
         return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: return boundary has no prepared source body") />
+    }
+}
+
+pub impl Comp {
+    // Execution bodies retain a lexical owner; global initializers additionally
+    // require their declaration target because they share an anonymous body.
+    inout fn preparedBodyExpression(bodyId: U64, exprId: U64, globalInitializerTarget: Optional[U64] = <Optional.None />) -> Result[SemanticExprType, CompileDiagnostic] {
+        if bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: expression has no executable body instance") />
+        }
+        val body = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        val source = try self.semanticBodyOwner(fnIdx: body.fnIdx)
+        val root = self.callTemplateLexicalRoots.getOr(key: source, fallback: source)
+        if root != 18446744073709551615U64 {
+            return self.preparedSourceExpression(owner: <SemanticCompletionOwner.Function index=root />, exprId: exprId)
+        }
+        match globalInitializerTarget {
+            Optional.Some(v: val target) => {
+                return self.preparedSourceExpression(owner: <SemanticCompletionOwner.Global target=target />, exprId: exprId)
+            }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: global expression has no initializer owner") /> }
+        }
     }
 }
