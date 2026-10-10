@@ -2285,6 +2285,22 @@ pub struct PreparedSemanticFacts {
 }
 impl PreparedSemanticFacts { factory }
 pub impl PreparedSemanticFacts {
+    fn expressionCompletion(exprId: U64) -> Optional[SourceCompletion] {
+        match self.expression(exprId: exprId) {
+            Optional.Some(v: val expression) => {
+                match expression.completion {
+                    Optional.Some(v: val fact) => {
+                        if semanticCompletionOwnersEqual(recorded: fact.owner, prepared: self.owner) {
+                            return <Optional.Some v=fact.flow />
+                        }
+                    }
+                    Optional.None => {}
+                }
+            }
+            Optional.None => {}
+        }
+        return <Optional.None />
+    }
     fn expression(exprId: U64) -> Optional[SemanticExprType] {
         if exprId >= self.expressions.count() || exprId >= self.owners.count() { return <Optional.None /> }
         match self.owners[exprId] {

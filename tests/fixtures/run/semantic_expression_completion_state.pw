@@ -12,13 +12,13 @@ fn main() {
     val yielding = compiler.pushBlock(stmts: [compiler.pushStmt(s: <Stmt.Give value=integer />)])
     val block = compiler.pushExpr(e: <Expr.Block body=returning offset=0U64 />)
     compiler.recordExpr(exprId: block, needsValue: false).unwrap()
-    match compiler.arena.semanticExprTypes[block].typeState {
+    match compiler.sourceSemanticExprTypeAt(index: block).typeState {
         SemanticExpressionTypeState.NoNormalValue => {}
         _ => { panic "returning block has a normal value" }
     }
     val mixed = compiler.pushExpr(e: <Expr.IfExpr cond=condition thenBlk=returning elseBlk=yielding />)
     compiler.recordExpr(exprId: mixed).unwrap()
-    match compiler.arena.semanticExprTypes[mixed].typeState {
+    match compiler.sourceSemanticExprTypeAt(index: mixed).typeState {
         SemanticExpressionTypeState.Value => {}
         _ => { panic "one divergent branch erased the normal result" }
     }
@@ -27,7 +27,7 @@ fn main() {
     if !compiler.typeRefEq(a: compiler.semanticExprTerm(exprId: mixed), b: compiler.semanticExprTerm(exprId: reversed)) { panic "branch order changed the result" }
     val allReturning = compiler.pushExpr(e: <Expr.IfExpr cond=condition thenBlk=returning elseBlk=returning />)
     compiler.recordExpr(exprId: allReturning, needsValue: false).unwrap()
-    match compiler.arena.semanticExprTypes[allReturning].typeState {
+    match compiler.sourceSemanticExprTypeAt(index: allReturning).typeState {
         SemanticExpressionTypeState.NoNormalValue => {}
         _ => { panic "all divergent branches have a normal value" }
     }
@@ -36,7 +36,7 @@ fn main() {
     val afterLoop = compiler.pushBlock(stmts: [looping, compiler.pushStmt(s: <Stmt.Give value=integer />)])
     val loopingBlock = compiler.pushExpr(e: <Expr.Block body=afterLoop offset=0U64 />)
     compiler.recordExpr(exprId: loopingBlock).unwrap()
-    match compiler.arena.semanticExprTypes[loopingBlock].typeState {
+    match compiler.sourceSemanticExprTypeAt(index: loopingBlock).typeState {
         SemanticExpressionTypeState.Value => {}
         _ => { panic "execution non-continuation became source divergence" }
     }
