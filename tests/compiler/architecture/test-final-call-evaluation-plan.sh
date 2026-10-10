@@ -15,21 +15,30 @@ for required in [
     "pub val sourceTypeRef: U64",
     "pub val adaptsReceiverView: Bool",
     "pub val arguments: CallResolutionArgumentRange",
-    "pub mut val finalCalleeArgumentPool: Array[CallEvaluationArgument]",
+    "mut val finalCalleeArgumentPool: Array[CallEvaluationArgument]",
+    "pub struct FinalCallArguments",
 ]:
     if required not in ir:
         raise SystemExit(f"final call evaluation plan is missing: {required}")
 
+if "pub mut val finalCalleeArgumentPool" in ir:
+    raise SystemExit("final call evaluation storage is publicly mutable")
+
+store = Path("src/Ir/FinalResolutions.pw").read_text()
+for required in ["fn beginFinalCallArguments()", "inout fn appendFinalCallArgument(", "inout fn publishFinalCallee(", "self.finalCalleeArgumentPool.append(argument)"]:
+    if required not in store:
+        raise SystemExit(f"final call evaluation store is missing: {required}")
+
 mono = Path("src/Codegen/Mono/Call.pw").read_text()
 for required in [
-    "inout fn pushFinalCalleeArguments(arguments: Array[CallTemplateArgument], parameterTypes: Array[U64], sourceTypes: Array[U64])",
+    "inout fn prepareFinalCalleeArguments(arguments: Array[CallTemplateArgument], parameterTypes: Array[U64], sourceTypes: Array[U64])",
     "arguments: selection.argumentSources",
     "arguments: argumentSources",
 ]:
     if required not in mono:
         raise SystemExit(f"final call evaluation plan is not published: {required}")
 
-for method in ["pushFinalCalleeArguments", "callArgumentConversions"]:
+for method in ["prepareFinalCalleeArguments", "callArgumentConversions"]:
     begin = mono.index("inout fn " + method + "(")
     end = mono.index("\n    }", begin)
     if "finalCallArgumentType(" in mono[begin:end] or "groundCallArgumentSource(" in mono[begin:end]:

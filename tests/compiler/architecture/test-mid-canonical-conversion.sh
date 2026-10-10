@@ -30,7 +30,7 @@ if ! printf '%s\n' "$canonical" | rg -q 'node\.tag == 4U64'; then
     echo "canonical conversion reader does not admit enum repacking" >&2
     exit 1
 fi
-if ! printf '%s\n' "$canonical" | rg -q 'node\.staticProof != 0U64'; then
+if ! printf '%s\n' "$canonical" | rg -q 'c\.arena\.hasStaticConformanceProof\(id: node\.staticProof\)'; then
     echo "canonical conversion reader does not reject a missing frozen proof" >&2
     exit 1
 fi
@@ -46,3 +46,15 @@ if ! printf '%s\n' "$aggregate" | rg -q '\bmidCanonicalEmitValueConversion\b'; t
     echo "canonical aggregate elements do not use the frozen conversion emitter" >&2
     exit 1
 fi
+
+# The shared reader must reject both invalid IDs and the frozen Missing row.
+python3 - <<'PYPROOF'
+from pathlib import Path
+source = Path("src/Ir/StaticProofs.pw").read_text()
+begin = source.index("fn hasStaticConformanceProof(")
+end = source.index("\n    }", begin)
+reader = source[begin:end]
+for required in ["id != 0U64", "id <= self.staticProofs.count()", "self.staticProofs[id - 1U64].tag != 0U64"]:
+    if required not in reader:
+        raise SystemExit(f"frozen proof reader lacks missing-proof rejection: {required}")
+PYPROOF
