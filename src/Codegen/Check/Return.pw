@@ -47,12 +47,12 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: statement completion requires a checked lexical owner") />
     }
 
-    inout fn checkedSemanticStmtCompletionOwner(stmtId: U64) -> Result[PreparedSemanticCompletionOwner, CompileDiagnostic] {
+    inout fn checkedSemanticStmtCompletionOwner(stmtId: U64) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
         if stmtId < self.semanticStatementCompletions.count() {
             match self.semanticStatementCompletions[stmtId] {
                 Optional.Some(v: val fact) => {
                     if try self.semanticCompletionOwnerPrepared(owner: fact.owner) {
-                        return <Result.Ok value=<PreparedSemanticCompletionOwner owner=fact.owner /> />
+                        return self.preparedSemanticFacts(owner: fact.owner)
                     }
                 }
                 Optional.None => {}
@@ -61,16 +61,10 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: statement completion requires a checked lexical owner") />
     }
 
-    inout fn semanticStmtCompletionInOwner(stmtId: U64, owner: PreparedSemanticCompletionOwner) -> Result[SourceCompletion, CompileDiagnostic] {
-        if stmtId < self.semanticStatementCompletions.count() {
-            match self.semanticStatementCompletions[stmtId] {
-                Optional.Some(v: val fact) => {
-                    if semanticCompletionOwnersEqual(recorded: fact.owner, prepared: owner.owner) {
-                        return <Result.Ok value=fact.flow />
-                    }
-                }
-                Optional.None => {}
-            }
+    inout fn semanticStmtCompletionInOwner(stmtId: U64, owner: PreparedSemanticFacts) -> Result[SourceCompletion, CompileDiagnostic] {
+        match owner.statementCompletion(stmtId: stmtId) {
+            Optional.Some(v: val flow) => { return <Result.Ok value=flow /> }
+            Optional.None => {}
         }
         return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: statement completion does not belong to this checked lexical owner") />
     }

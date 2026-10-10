@@ -79,13 +79,6 @@ fn functionHasTraitReceiver(arena ~: Arena, decls ~: Decls, fnIdx: U64) -> Bool 
 }
 
 
-// A checked owner is usable only within this loaded source snapshot.
-// Preparation results are append-only; another owner is not interchangeable.
-pub struct PreparedSemanticCompletionOwner {
-    val owner: SemanticCompletionOwner
-}
-impl PreparedSemanticCompletionOwner { factory }
-
 fn semanticCompletionOwnersEqual(recorded: SemanticCompletionOwner, prepared: SemanticCompletionOwner) -> Bool {
     match recorded {
         SemanticCompletionOwner.Function(index: val index) => {
@@ -2282,9 +2275,23 @@ pub struct PreparedSemanticFacts {
     val owner: SemanticCompletionOwner
     val expressions: Array[SemanticExprType]
     val owners: Array[Optional[SemanticCompletionOwner]]
+    val statements: Array[Optional[SemanticExpressionCompletion]]
 }
 impl PreparedSemanticFacts { factory }
 pub impl PreparedSemanticFacts {
+    fn statementCompletion(stmtId: U64) -> Optional[SourceCompletion] {
+        if stmtId < self.statements.count() {
+            match self.statements[stmtId] {
+                Optional.Some(v: val fact) => {
+                    if semanticCompletionOwnersEqual(recorded: fact.owner, prepared: self.owner) {
+                        return <Optional.Some v=fact.flow />
+                    }
+                }
+                Optional.None => {}
+            }
+        }
+        return <Optional.None />
+    }
     fn expressionCompletion(exprId: U64) -> Optional[SourceCompletion] {
         match self.expression(exprId: exprId) {
             Optional.Some(v: val expression) => {
@@ -2319,7 +2326,7 @@ pub impl Comp {
         if !(try self.semanticCompletionOwnerPrepared(owner: owner)) {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: semantic facts require a prepared source owner") />
         }
-        return <Result.Ok value=<PreparedSemanticFacts owner=owner expressions=self.semanticExprTypes owners=self.semanticExprOwners /> />
+        return <Result.Ok value=<PreparedSemanticFacts owner=owner expressions=self.semanticExprTypes owners=self.semanticExprOwners statements=self.semanticStatementCompletions /> />
     }
     inout fn preparedFunctionSemanticFacts(fnIdx: U64) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
         return self.preparedSemanticFacts(owner: <SemanticCompletionOwner.Function index=(try self.semanticBodyOwner(fnIdx: fnIdx)) />)

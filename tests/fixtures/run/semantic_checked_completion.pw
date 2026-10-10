@@ -39,7 +39,7 @@ fn main() {
     compiler.prepareLexicalBody(fnIdx: source).unwrap()
     val preparedOwner = compiler.checkedSemanticStmtCompletionOwner(stmtId: statement).unwrap()
     if !compiler.semanticStmtCompletionInOwner(stmtId: statement, owner: preparedOwner).unwrap().source.normal() { panic "prepared reader lost statement flow" }
-    val statementFlow = compiler.checkedSemanticStmtCompletion(stmtId: statement).unwrap()
+    val statementFlow = preparedOwner.statementCompletion(stmtId: statement).unwrap()
     if !statementFlow.source.normal() || !statementFlow.source.returns() { panic "statement completion was not retained" }
     val originalStatement = compiler.arena.stmts[statement]
     compiler.arena.stmts.set(i: statement, value: <Stmt.Break offset=0U64 />)
@@ -48,13 +48,17 @@ fn main() {
     compiler.arena.stmts.set(i: statement, value: originalStatement)
     val flow = compiler.checkedSemanticExprCompletion(exprId: expression).unwrap()
     if !flow.source.normal() || !flow.execution.normal() || !flow.source.returns() { panic "mixed completion was not retained" }
-    compiler.recordSemanticExprInfo(exprId: expression, ti: <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />)
+    match compiler.recordExpr(exprId: expression) {
+        Result.Ok(value: _) => { panic "completed expression reopened construction" }
+        Result.Err(error: _) => {}
+    }
     if !compiler.checkedSemanticExprCompletion(exprId: expression).unwrap().source.returns() { panic "type update erased completion" }
     val original = compiler.arena.exprs[expression]
     val stopped = owner(compiler: inout compiler, name: "stopped")
     compiler.prepareLexicalBody(fnIdx: stopped).unwrap()
     val otherStatement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: stopped).body, index: 0U64)
     val otherOwner = compiler.checkedSemanticStmtCompletionOwner(stmtId: otherStatement).unwrap()
+    if otherOwner.statementCompletion(stmtId: statement).isSome() { panic "snapshot accepted another owner" }
     match compiler.semanticStmtCompletionInOwner(stmtId: statement, owner: otherOwner) {
         Result.Ok(value: _) => { panic "prepared reader accepted another owner" }
         Result.Err(error: _) => {}

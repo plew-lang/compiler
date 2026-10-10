@@ -6103,7 +6103,7 @@ pub impl Comp {
     }
 
     inout fn scanBlockInsts(blkId: U64) -> Result[(), CompileDiagnostic] {
-        val owner: Optional[PreparedSemanticCompletionOwner] = if self.cur.bodyId != 0U64 && self.blockStmtCount(blkId: blkId) != 0U64 {
+        val owner: Optional[PreparedSemanticFacts] = if self.cur.bodyId != 0U64 && self.blockStmtCount(blkId: blkId) != 0U64 {
             give <Optional.Some v=try self.checkedSemanticStmtCompletionOwner(stmtId: self.blockStmtAt(blkId: blkId, index: 0U64)) />
         } else {
             give <Optional.None />
