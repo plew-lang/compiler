@@ -30,9 +30,9 @@ fn main() {
     val prepared = c.arena.finalExistentials[0U64].members[0U64]
     if prepared.callResolution == 0U64 || c.arena.finalCalleeAt(index: prepared.callResolution - 1U64).calleeBodyId != member.bodyId { panic "witness request lost selected target" }
     if c.lexicalBodyPreparations.count() != declarations { panic "adapter requested target source body" }
-    val calls = c.finalCalleeCount()
+    val calls = c.arena.finalCalleeCount()
     c.requestFinalBody(bodyId: member.adapterBodyId, requests: inout requests).unwrap()
-    if c.finalCalleeCount() != calls || c.cur.bodyId != 88U64 || c.cur.checkFn != 77U64 || c.inCollection { panic "witness request repeated or leaked context" }
+    if c.arena.finalCalleeCount() != calls || c.cur.bodyId != 88U64 || c.cur.checkFn != 77U64 || c.inCollection { panic "witness request repeated or leaked context" }
     c.closeFinalDependencies(state: inout dependencies).unwrap()
     c.publishFinalCallables(state: inout publication).unwrap()
     match c.requestFinalBody(bodyId: member.bodyId, requests: inout requests) {

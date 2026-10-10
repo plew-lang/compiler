@@ -28,12 +28,12 @@ fn main() {
     c.closeFinalDependencies(state: inout dependencies).unwrap()
     c.publishFinalCallables(state: inout publication).unwrap()
     if c.cur.checkFn != 77U64 || c.cur.bodyId != 88U64 || c.inCollection { panic "initializer request leaked context" }
-    val initialCalls = c.finalCalleeCount()
+    val initialCalls = c.arena.finalCalleeCount()
     val initialBodies = c.monoWork.bodyCount()
     if initialCalls == 0U64 || initialBodies == 0U64 { panic "global initializer did not prepare dependencies" }
     c.prepareFinalInitializers(state: inout dependencies).unwrap()
     c.closeFinalDependencies(state: inout dependencies).unwrap()
-    if c.finalCalleeCount() != initialCalls || c.monoWork.bodyCount() != initialBodies { panic "global initializer repeated" }
+    if c.arena.finalCalleeCount() != initialCalls || c.monoWork.bodyCount() != initialBodies { panic "global initializer repeated" }
     val maker = c.enqueueFinalBody(fnIdx: owner(c: inout c, name: "make"), args: [], recvInstRef: 0U64).unwrap()
     c.requestFinalBody(bodyId: maker, requests: inout requests).unwrap()
     c.closeFinalDependencies(state: inout dependencies).unwrap()
@@ -44,11 +44,11 @@ fn main() {
     val contract = c.arena.finalDestructions[destruction - 1U64]
     if !contract.ready || !contract.deinitCall.ready || contract.deinitCall.bodyId == 0U64 { panic "destructor ABI was not published" }
     if c.lexicalBodyPreparations.count() != 1U64 { panic "dependency closure requested a callee body" }
-    val calls = c.finalCalleeCount()
+    val calls = c.arena.finalCalleeCount()
     val types = c.arena.finalDestructions.count()
     c.closeFinalDependencies(state: inout dependencies).unwrap()
     c.publishFinalCallables(state: inout publication).unwrap()
-    if c.finalCalleeCount() != calls || c.arena.finalDestructions.count() != types { panic "dependency closure repeated" }
+    if c.arena.finalCalleeCount() != calls || c.arena.finalDestructions.count() != types { panic "dependency closure repeated" }
     match c.requestFinalBody(bodyId: contract.deinitCall.bodyId, requests: inout requests) {
         Result.Ok(value: _) => { panic "invalid destructor body accepted" }
         Result.Err(error: _) => {}

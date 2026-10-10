@@ -27,7 +27,7 @@ fn main() {
     val inputs = c.arena.semanticAccessInputs.count()
     if accesses == 0U64 || inputs == 0U64 { panic "no writeback provenance published" }
     val original = c.arena.semanticAccesses[0U64]
-    val calls = c.finalCalleeCount()
+    val calls = c.arena.finalCalleeCount()
     val second = c.enqueueFinalBody(fnIdx: owner(c: inout c, name: "second"), args: [], recvInstRef: 0U64).unwrap()
     c.scanFinalBodyInstance(bodyId: second).unwrap()
     c.publishFinalCallables(state: inout publication).unwrap()
@@ -35,9 +35,9 @@ fn main() {
     val preserved = c.arena.semanticAccesses[0U64]
     if preserved.bodyId != first || preserved.readResolution != original.readResolution || preserved.writeResolution != original.writeResolution || preserved.parentResolution != original.parentResolution || preserved.baseInput != original.baseInput || preserved.keyInput != original.keyInput || preserved.accessInput != original.accessInput { panic "published identity changed" }
     if c.arena.semanticAccesses[accesses].bodyId != second || c.arena.semanticAccesses[accesses].parentResolution < calls { panic "new access points at old body" }
-    val total = c.finalCalleeCount()
+    val total = c.arena.finalCalleeCount()
     c.publishFinalCallables(state: inout publication).unwrap()
-    if c.finalCalleeCount() != total || c.arena.semanticAccesses.count() != accesses * 2U64 || c.arena.semanticAccessInputs.count() != inputs * 2U64 { panic "empty publication changed tables" }
+    if c.arena.finalCalleeCount() != total || c.arena.semanticAccesses.count() != accesses * 2U64 || c.arena.semanticAccessInputs.count() != inputs * 2U64 { panic "empty publication changed tables" }
 
     // A malformed destructor ABI must not be published, even when ready.
     // The same publisher keeps that diagnostic and does not repeat partial work.

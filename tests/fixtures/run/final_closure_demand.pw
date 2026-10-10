@@ -43,10 +43,10 @@ fn main() {
         if call.bodyId == closure { calls += 1U64 }
     }
     if calls != 1U64 { panic "closure request did not prepare its call" }
-    val count = c.finalCalleeCount()
+    val count = c.arena.finalCalleeCount()
     c.requestFinalBody(bodyId: closure, requests: inout requests).unwrap()
     c.closeFinalDependencies(state: inout dependencies).unwrap()
     c.publishFinalCallables(state: inout publication).unwrap()
-    if c.finalCalleeCount() != count { panic "closure request repeated body scan" }
+    if c.arena.finalCalleeCount() != count { panic "closure request repeated body scan" }
     print("ok")
 }

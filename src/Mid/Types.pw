@@ -222,7 +222,7 @@ pub fn canonicalMidTerminatorTypesMatch(c: inout Comp, body: MidBodyNode, term: 
             // across evaluation of another argument or an inout call.
             val operandId = c.mid.callArguments[term.args.start + index]
             val actual = midOperandType(arena: c.mid, operandId: operandId)
-            val expected = c.finalCalleeParameterTypeAt(types: call.parameterTypeRefs, index: index)
+            val expected = c.arena.finalCalleeParameterTypeAt(types: call.parameterTypeRefs, index: index)
             if !midTypesEqual(c: inout c, left: actual, right: expected) { return false }
             index += 1U64
         }

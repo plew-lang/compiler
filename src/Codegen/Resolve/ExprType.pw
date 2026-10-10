@@ -1088,7 +1088,7 @@ pub impl Comp {
                 // Record presence distinguishes a known Unit result (zero)
                 // from a call not yet selected during declaration checking.
                 val finalIndex = (try self.bodyCalleeIndex(exprId: id))
-                if finalIndex < self.finalCalleeCount() {
+                if finalIndex < self.arena.finalCalleeCount() {
                     val finalResult = self.arena.finalCalleeAt(index: finalIndex).resultTypeRef
                     if finalResult >= self.arena.typeCount() {
                         return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "internal error: recorded method result is outside the type arena") />

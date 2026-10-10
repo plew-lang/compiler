@@ -6,7 +6,7 @@ fn main() {
     // Storage-level body identities: no generic environment needs interning.
     compiler.cur.bodyId = 1U64
     val firstKey = compiler.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: 0U64).unwrap()
-    if compiler.arena.finalCalleeIndexForKey(bodyId: 1U64, siteKey: firstKey) != compiler.finalCalleeCount() { panic "empty index must miss" }
+    if compiler.arena.finalCalleeIndexForKey(bodyId: 1U64, siteKey: firstKey) != compiler.arena.finalCalleeCount() { panic "empty index must miss" }
     // One implicit site with many independent slots forces repeated rehash.
     mut val slot: U64 = 0U64
     while slot < 257U64 {
@@ -32,7 +32,7 @@ fn main() {
     if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: expressionKey).unwrap() != 900U64 { panic "origin namespace aliased" }
     // The same lexical site in another instance has an independent result.
     compiler.cur.bodyId = 2U64
-    if compiler.arena.finalCalleeIndexForKey(bodyId: 2U64, siteKey: firstKey) != compiler.finalCalleeCount() { panic "body identity lost" }
+    if compiler.arena.finalCalleeIndexForKey(bodyId: 2U64, siteKey: firstKey) != compiler.arena.finalCalleeCount() { panic "body identity lost" }
     compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: 800U64).unwrap()
     if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: firstKey).unwrap() != 800U64 { panic "miss stayed cached" }
     compiler.cur.bodyId = 1U64

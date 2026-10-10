@@ -43,7 +43,7 @@ pub impl LlvmCtx {
         mut val index: U64 = 0U64
         while index < parameters.count() {
             if !(try self.resolvedCTypeSupported(c: inout c, ref: parameters[index])) { return <Result.Ok value=false /> }
-            (try self.cParameterType(c: inout c, ref: parameters[index], passing: c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index)))
+            (try self.cParameterType(c: inout c, ref: parameters[index], passing: c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index)))
             index += 1U64
         }
         return <Result.Ok value=!declaration.hasRet || (try self.resolvedCTypeSupported(c: inout c, ref: selected.resultTypeRef)) />
@@ -59,7 +59,7 @@ pub impl LlvmCtx {
         mut val types: Array[LLVMTypeRef] = []
         mut val index: U64 = 0U64
         while index < parameters.count() {
-            types.append((try self.cParameterType(c: inout c, ref: parameters[index], passing: c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index))))
+            types.append((try self.cParameterType(c: inout c, ref: parameters[index], passing: c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index))))
             index += 1U64
         }
         mut val result: LLVMTypeRef = self.voidty

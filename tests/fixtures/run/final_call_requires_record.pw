@@ -11,7 +11,7 @@ fn rejected(compiler: inout Comp, expression: U64) {
         }
         Result.Ok(value: _) => { panic "final call reselected without a lexical record" }
     }
-    if compiler.finalCalleeCount() != 0U64 { panic "failed selection published a final call" }
+    if compiler.arena.finalCalleeCount() != 0U64 { panic "failed selection published a final call" }
 }
 
 fn main() {

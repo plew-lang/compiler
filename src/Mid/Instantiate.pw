@@ -764,7 +764,7 @@ fn instantiateCanonicalCallTarget(c: inout Comp, targetId: U64, bodyId: U64, err
         1U64 => {
             val site: CallSiteKey = <CallSiteKey ownerFnIdx=source.ownerFnIdx originKind=source.originKind originStart=source.originStart originEnd=source.originEnd originSerial=source.originSerial slot=source.slot />
             val resolution: U64 = c.arena.finalCalleeIndexForKey(bodyId: bodyId, siteKey: site)
-            if resolution >= c.finalCalleeCount() {
+            if resolution >= c.arena.finalCalleeCount() {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingCallResolution /> }
                 return 0U64
             }
@@ -939,13 +939,13 @@ fn canonicalBlockTargets(c: Comp, source: MidBodyNode, bodyId: U64) -> Array[U64
                     mut val argumentI: U64 = 0U64
                     while argumentI < selected.argumentConversions.len {
                         mut val receiverCleanup = false
-                        if argumentI < selected.arguments.len && c.finalCalleeArgumentAt(arguments: selected.arguments, index: argumentI).adaptsReceiverView {
-                            match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
+                        if argumentI < selected.arguments.len && c.arena.finalCalleeArgumentAt(arguments: selected.arguments, index: argumentI).adaptsReceiverView {
+                            match c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
                                 CallArgumentPassing.Borrow => { receiverCleanup = true }
                                 _ => {}
                             }
                         }
-                        if receiverCleanup || !c.conversionProofIsIdentity(id: c.finalCalleeConversionAt(conversions: selected.argumentConversions, index: argumentI)) {
+                        if receiverCleanup || !c.conversionProofIsIdentity(id: c.arena.finalCalleeConversionAt(conversions: selected.argumentConversions, index: argumentI)) {
                             count = count + 1U64
                             argumentI = selected.argumentConversions.len
                         } else {
@@ -1214,14 +1214,14 @@ pub fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, local
     mut val argumentI: U64 = 0U64
     mut val cleanupPlaces: Array[U64] = []
     while argumentI < term.args.len {
-        val conversion: U64 = c.finalCalleeConversionAt(conversions: selected.argumentConversions, index: argumentI)
-        val targetType: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
-        val passing: CallArgumentPassing = c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI)
+        val conversion: U64 = c.arena.finalCalleeConversionAt(conversions: selected.argumentConversions, index: argumentI)
+        val targetType: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
+        val passing: CallArgumentPassing = c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI)
         if !midSignatureArgumentMatches(c: c, signature: signature, index: argumentI, passing: passing) {
             return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> />
         }
         mut val literalType = 0U64
-        if argumentI < selected.arguments.len { literalType = c.finalCalleeArgumentAt(arguments: selected.arguments, index: argumentI).sourceTypeRef }
+        if argumentI < selected.arguments.len { literalType = c.arena.finalCalleeArgumentAt(arguments: selected.arguments, index: argumentI).sourceTypeRef }
         mut val operand: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: c.mid.callArguments[term.args.start + argumentI], environment: environment, error: inout error, literalType: literalType)
         if operand == 0U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallConversionSource /> /> }
         if !c.conversionProofIsIdentity(id: conversion) {
@@ -1264,7 +1264,7 @@ pub fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, local
             operand = c.mid.operands.count()
             cleanupPlaces.append(temporaryPlace)
         }
-        if argumentI < selected.arguments.len && c.finalCalleeArgumentAt(arguments: selected.arguments, index: argumentI).adaptsReceiverView {
+        if argumentI < selected.arguments.len && c.arena.finalCalleeArgumentAt(arguments: selected.arguments, index: argumentI).adaptsReceiverView {
             if !c.conversionProofIsIdentity(id: conversion) || !midViewTypesMatch(c: inout c, sourceTerm: canonicalMidOperandTypeRef(c: c, operandId: operand), targetTerm: targetType) { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallConversionSource /> /> }
             val source = c.mid.operands[operand - 1U64]
             if source.tag != 1U64 && source.tag != 2U64 && source.tag != 5U64 && source.tag != 6U64 && source.tag != 7U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> /> }

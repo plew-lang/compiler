@@ -662,7 +662,7 @@ fn canonicalAccessAppendSelectedArgument(c: inout Comp, operandId: U64, resoluti
     if resolution >= c.arena.finalCalleeCount() || operandId == 0U64 || operandId > c.mid.operands.count() { return 0U64 }
     val selected: CallResolution = c.arena.finalCalleeAt(index: resolution)
     if index >= selected.argumentPassings.len { return 0U64 }
-    val passing = c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index)
+    val passing = c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index)
     val source: MidOperandNode = c.mid.operands[operandId - 1U64]
     match passing {
         CallArgumentPassing.Borrow => {

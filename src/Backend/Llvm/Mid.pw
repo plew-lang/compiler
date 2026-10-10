@@ -1024,7 +1024,7 @@ pub impl LlvmCtx {
         if selected.calleeTypeArgs.start > c.arena.finalCalleeTypeArgumentCount() || selected.calleeTypeArgs.len > c.arena.finalCalleeTypeArgumentCount() - selected.calleeTypeArgs.start { return <Result.Ok value=<MidCallPreflight.GenericArguments /> /> }
         mut val typeArgument = 0U64
         while typeArgument < selected.calleeTypeArgs.len {
-            val term = c.finalCalleeTypeArgAt(args: selected.calleeTypeArgs, index: typeArgument)
+            val term = c.arena.finalCalleeTypeArgAt(args: selected.calleeTypeArgs, index: typeArgument)
             if term == 0U64 || !c.arena.typeIsClosed(ref: term) { return <Result.Ok value=<MidCallPreflight.GenericArguments /> /> }
             typeArgument += 1U64
         }
@@ -1035,9 +1035,9 @@ pub impl LlvmCtx {
         mut val argumentI: U64 = 0U64
         while argumentI < term.args.len {
             val operandId: U64 = c.mid.callArguments[term.args.start + argumentI]
-            if operandId == 0U64 || operandId > c.mid.operands.count() || c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI) >= c.arena.typeCount() { return <Result.Ok value=<MidCallPreflight.ArgumentShape /> /> }
+            if operandId == 0U64 || operandId > c.mid.operands.count() || c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI) >= c.arena.typeCount() { return <Result.Ok value=<MidCallPreflight.ArgumentShape /> /> }
             val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
-            match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
+            match c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
                 CallArgumentPassing.Inout => { if !(try self.midCanonicalInoutOperandSupported(c: inout c, body: body, operand: operand)) { return <Result.Ok value=<MidCallPreflight.Argument /> /> } }
                 CallArgumentPassing.Move => { if operand.tag != 2U64 || !(try self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place)) { return <Result.Ok value=<MidCallPreflight.Argument /> /> } }
                 CallArgumentPassing.Borrow => {
@@ -1401,13 +1401,13 @@ pub impl LlvmCtx {
                             }
                             BufferIntrinsic.BytewiseComparable => {
                                 if !callee.hasRet || term.args.len != 1U64 || term.destination == 0U64 || selected.parameterTypeRefs.len != 1U64 { return <Result.Ok value=<MidCallPreflight.Buffer /> /> }
-                                val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64))
+                                val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64))
                                 if elementRef == 0U64 || !(try self.midCanonicalReadOperandSupported(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))) { return <Result.Ok value=<MidCallPreflight.Argument /> /> }
                             }
                             BufferIntrinsic.Eq => {
                                 if !callee.hasRet || term.args.len != 2U64 || term.destination == 0U64 || selected.parameterTypeRefs.len != 2U64 { return <Result.Ok value=<MidCallPreflight.Buffer /> /> }
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
-                                if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 || !c.typeRefEq(a: c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 1U64), b: bufferRef) { return <Result.Ok value=<MidCallPreflight.Buffer /> /> }
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 || !c.typeRefEq(a: c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 1U64), b: bufferRef) { return <Result.Ok value=<MidCallPreflight.Buffer /> /> }
                                 mut val i: U64 = 0U64
                                 while i < 2U64 {
                                     if !(try self.midCanonicalReadOperandSupported(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: i))) { return <Result.Ok value=<MidCallPreflight.Argument /> /> }
@@ -1416,17 +1416,17 @@ pub impl LlvmCtx {
                             }
                             BufferIntrinsic.Append => {
                                 if callee.hasRet || term.args.len != 2U64 || selected.parameterTypeRefs.len != 2U64 { return <Result.Ok value=<MidCallPreflight.Buffer /> /> }
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 || !(try self.midCanonicalBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))) || !(try self.midCanonicalReadOperandSupported(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64))) { return <Result.Ok value=<MidCallPreflight.Argument /> /> }
                             }
                             BufferIntrinsic.Reserve => {
                                 if callee.hasRet || term.args.len != 2U64 || selected.parameterTypeRefs.len != 2U64 { return <Result.Ok value=<MidCallPreflight.Buffer /> /> }
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 || !(try self.midCanonicalBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))) || !(try self.midCanonicalReadOperandSupported(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64))) { return <Result.Ok value=<MidCallPreflight.Argument /> /> }
                             }
                             BufferIntrinsic.Set => {
                                 if callee.hasRet || term.args.len != 3U64 || selected.parameterTypeRefs.len != 3U64 { return <Result.Ok value=<MidCallPreflight.Buffer /> /> }
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 || !(try self.midCanonicalBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))) { return <Result.Ok value=<MidCallPreflight.Argument /> /> }
                                 mut val i: U64 = 1U64
                                 while i < 3U64 {
@@ -1436,7 +1436,7 @@ pub impl LlvmCtx {
                             }
                             BufferIntrinsic.InsertAt => {
                                 if callee.hasRet || term.args.len != 3U64 || selected.parameterTypeRefs.len != 3U64 { return <Result.Ok value=<MidCallPreflight.Buffer /> /> }
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 || !(try self.midCanonicalBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))) { return <Result.Ok value=<MidCallPreflight.Argument /> /> }
                                 mut val i: U64 = 1U64
                                 while i < 3U64 {
@@ -1446,30 +1446,30 @@ pub impl LlvmCtx {
                             }
                             BufferIntrinsic.RemoveLast => {
                                 if !callee.hasRet || term.args.len != 1U64 || term.destination == 0U64 || selected.parameterTypeRefs.len != 1U64 || selected.resultTypeRef == 0U64 { return <Result.Ok value=<MidCallPreflight.Buffer /> /> }
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 if elementRef == 0U64 || !c.typeRefEq(a: selected.resultTypeRef, b: elementRef) || !(try self.midCanonicalBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))) { return <Result.Ok value=<MidCallPreflight.Argument /> /> }
                             }
                             BufferIntrinsic.RemoveAt => {
                                 if !callee.hasRet || term.args.len != 2U64 || term.destination == 0U64 || selected.parameterTypeRefs.len != 2U64 || selected.resultTypeRef == 0U64 { return <Result.Ok value=<MidCallPreflight.Buffer /> /> }
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 if elementRef == 0U64 || !c.typeRefEq(a: selected.resultTypeRef, b: elementRef) || !(try self.midCanonicalBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))) || !(try self.midCanonicalReadOperandSupported(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64))) { return <Result.Ok value=<MidCallPreflight.Argument /> /> }
                             }
                             BufferIntrinsic.SwapRemove => {
                                 if !callee.hasRet || term.args.len != 2U64 || term.destination == 0U64 || selected.parameterTypeRefs.len != 2U64 || selected.resultTypeRef == 0U64 { return <Result.Ok value=<MidCallPreflight.Buffer /> /> }
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 if elementRef == 0U64 || !c.typeRefEq(a: selected.resultTypeRef, b: elementRef) || !(try self.midCanonicalBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))) || !(try self.midCanonicalReadOperandSupported(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64))) { return <Result.Ok value=<MidCallPreflight.Argument /> /> }
                             }
                             BufferIntrinsic.Clear => {
                                 if callee.hasRet || term.args.len != 1U64 || selected.parameterTypeRefs.len != 1U64 { return <Result.Ok value=<MidCallPreflight.Buffer /> /> }
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 || !(try self.midCanonicalBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))) { return <Result.Ok value=<MidCallPreflight.Argument /> /> }
                             }
                             BufferIntrinsic.Truncate => {
                                 if callee.hasRet || term.args.len != 2U64 || selected.parameterTypeRefs.len != 2U64 { return <Result.Ok value=<MidCallPreflight.Buffer /> /> }
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 || !(try self.midCanonicalBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))) || !(try self.midCanonicalReadOperandSupported(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64))) { return <Result.Ok value=<MidCallPreflight.Argument /> /> }
                             }
                             _ => { return <Result.Ok value=<MidCallPreflight.Buffer /> /> }
@@ -1509,19 +1509,19 @@ pub impl LlvmCtx {
                                 llvmStore(self.b, result, destination)
                             }
                             BufferIntrinsic.BytewiseComparable => {
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 llvmStore(self.b, self.genLlvmBufferBytewiseComparable(elemTy: (try self.llvmTypeOfRef(c: inout c, ref: elementRef))), destination)
                             }
                             BufferIntrinsic.Eq => {
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val left: LLVMValueRef = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)))
                                 val right: LLVMValueRef = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64)))
                                 llvmStore(self.b, (try self.genLlvmBufferEqValues(c: inout c, elemTy: (try self.llvmTypeOfRef(c: inout c, ref: elementRef)), lhs: left, rhs: right)), destination)
                             }
                             BufferIntrinsic.Append => {
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: elementRef))
                                 val bufferOperandId: U64 = self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)
@@ -1538,7 +1538,7 @@ pub impl LlvmCtx {
                                 try self.rawbufSetCount(c: inout c, data: grown, n: LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
                             }
                             BufferIntrinsic.Reserve => {
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: elementRef))
                                 val bufferOperandId: U64 = self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)
@@ -1551,7 +1551,7 @@ pub impl LlvmCtx {
                                 llvmStore(self.b, (try self.rawbufReserve(c: inout c, data: data, elemSize: LLVMSizeOf(elementTy), mincap: minimum)), slot)
                             }
                             BufferIntrinsic.Set => {
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: elementRef))
                                 val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
@@ -1570,7 +1570,7 @@ pub impl LlvmCtx {
                                 } else { llvmStore(self.b, value, elementSlot) }
                             }
                             BufferIntrinsic.InsertAt => {
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: elementRef))
                                 val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
@@ -1589,7 +1589,7 @@ pub impl LlvmCtx {
                                 try self.rawbufSetCount(c: inout c, data: data, n: LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
                             }
                             BufferIntrinsic.RemoveLast => {
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: elementRef))
                                 val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
@@ -1603,7 +1603,7 @@ pub impl LlvmCtx {
                                 llvmStore(self.b, result, destination)
                             }
                             BufferIntrinsic.RemoveAt => {
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: elementRef))
                                 val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
@@ -1619,7 +1619,7 @@ pub impl LlvmCtx {
                                 llvmStore(self.b, result, destination)
                             }
                             BufferIntrinsic.SwapRemove => {
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: elementRef))
                                 val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
@@ -1635,7 +1635,7 @@ pub impl LlvmCtx {
                                 llvmStore(self.b, result, destination)
                             }
                             BufferIntrinsic.Clear => {
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: elementRef))
                                 val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
@@ -1646,7 +1646,7 @@ pub impl LlvmCtx {
                                 try self.emitArrayElemRangeRelease(c: inout c, data: data, start: LLVMConstInt(self.i64ty, 0U64, 0I32), end: count, elemTy: elementTy, elemRef: elementRef)
                             }
                             BufferIntrinsic.Truncate => {
-                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val bufferRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: elementRef))
                                 val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
@@ -1714,8 +1714,8 @@ pub impl LlvmCtx {
         if signature.args.count() != term.args.len + 1U64 || selected.parameterTypeRefs.len != term.args.len || selected.argumentPassings.len != term.args.len { return <Result.Ok value=<MidCallPreflight.ArgumentShape /> /> }
         mut val index: U64 = 0U64
         while index < term.args.len {
-            if !c.typeRefEq(a: c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index), b: signature.args[index + 1U64]) { return <Result.Ok value=<MidCallPreflight.ArgumentShape /> /> }
-            match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index) { CallArgumentPassing.Borrow => {} _ => { return <Result.Ok value=<MidCallPreflight.Argument /> /> } }
+            if !c.typeRefEq(a: c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index), b: signature.args[index + 1U64]) { return <Result.Ok value=<MidCallPreflight.ArgumentShape /> /> }
+            match c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index) { CallArgumentPassing.Borrow => {} _ => { return <Result.Ok value=<MidCallPreflight.Argument /> /> } }
             if !(try self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: c.mid.callArguments[term.args.start + index])) { return <Result.Ok value=<MidCallPreflight.Argument /> /> }
             index += 1U64
         }
@@ -1750,7 +1750,7 @@ pub impl LlvmCtx {
         mut val types: Array[LLVMTypeRef] = [self.ptrty]
         mut val index: U64 = 0U64
         while index < term.args.len {
-            val parameterRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index)
+            val parameterRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index)
             val parameter: TypeRef = c.arena.typeAt(index: parameterRef)
             val parameterType: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: parameterRef))
             mut val value: LLVMValueRef = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: c.mid.callArguments[term.args.start + index]))
@@ -1807,10 +1807,10 @@ pub impl LlvmCtx {
         mut val index: U64 = 0U64
         while index < term.args.len {
             val operandId: U64 = self.midCanonicalCallArgumentAt(c: c, term: term, index: index)
-            val parameter: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index)
+            val parameter: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index)
             if operandId == 0U64 || operandId > c.mid.operands.count() || parameter == 0U64 || parameter >= c.arena.typeCount() { return <Result.Ok value=<MidCallPreflight.ArgumentShape /> /> }
             val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
-            match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index) {
+            match c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index) {
                 CallArgumentPassing.Inout => { if !(try self.midCanonicalInoutOperandSupported(c: inout c, body: body, operand: operand)) { return <Result.Ok value=<MidCallPreflight.Argument /> /> } }
                 CallArgumentPassing.Move => { if operand.tag != 2U64 || !(try self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place)) { return <Result.Ok value=<MidCallPreflight.Argument /> /> } }
                 CallArgumentPassing.Borrow => {
@@ -1851,10 +1851,10 @@ pub impl LlvmCtx {
                 mut val index: U64 = 0U64
                 while index < term.args.len {
                     val operandId: U64 = c.mid.callArguments[term.args.start + index]
-                    val parameter: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index)
+                    val parameter: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index)
                     mut val parameterType: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: parameter))
                     mut val value: LLVMValueRef = LLVMConstNull(self.ptrty)
-                    match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index) {
+                    match c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index) {
                         CallArgumentPassing.Inout => {
                             parameterType = self.ptrty
                             val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
@@ -1912,10 +1912,10 @@ pub impl LlvmCtx {
         if !callee.isExtern || callee.isCExtern || callee.hasRecv || !callee.hasRet || callee.isAsync { return <Result.Ok value=<MidCallPreflight.RuntimeAbi /> /> }
         if term.args.len != 1U64 || selected.parameterTypeRefs.len != 1U64 || selected.argumentPassings.len != 1U64 { return <Result.Ok value=<MidCallPreflight.ArgumentShape /> /> }
         if !(try self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.None />)) { return <Result.Ok value=<MidCallPreflight.Receiver /> /> }
-        match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: 0U64) { CallArgumentPassing.Borrow => {} _ => { return <Result.Ok value=<MidCallPreflight.Argument /> /> } }
+        match c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: 0U64) { CallArgumentPassing.Borrow => {} _ => { return <Result.Ok value=<MidCallPreflight.Argument /> /> } }
         val argument: U64 = self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)
         if !(try self.midCanonicalReadOperandSupported(c: inout c, body: body, operandId: argument)) { return <Result.Ok value=<MidCallPreflight.Argument /> /> }
-        val source: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+        val source: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
         if strongInput {
             if !c.isStrongRefCellInst(ref: source) { return <Result.Ok value=<MidCallPreflight.RuntimeAbi /> /> }
         } else {
@@ -1986,7 +1986,7 @@ pub impl LlvmCtx {
         val operand: MidOperandNode = c.mid.operands[argument - 1U64]
         // The selected move ABI transfers ownership into the cell.
         if selected.argumentPassings.len != 1U64 || selected.parameterTypeRefs.len != 1U64 { return <Result.Ok value=<MidCallPreflight.ArgumentShape /> /> }
-        match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: 0U64) { CallArgumentPassing.Move => {} _ => { return <Result.Ok value=<MidCallPreflight.Argument /> /> } }
+        match c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: 0U64) { CallArgumentPassing.Move => {} _ => { return <Result.Ok value=<MidCallPreflight.Argument /> /> } }
         if operand.tag != 2U64 { return <Result.Ok value=<MidCallPreflight.Argument /> /> }
         if !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: argument), b: result.args[0U64]) || !(try self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place)) { return <Result.Ok value=<MidCallPreflight.Argument /> /> }
         val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
@@ -2116,9 +2116,9 @@ pub impl LlvmCtx {
         while argumentI < term.args.len {
             val operandId: U64 = c.mid.callArguments[term.args.start + argumentI]
             val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
-            val parameterRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
+            val parameterRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
             mut val value: LLVMValueRef = LLVMConstNull(self.ptrty)
-            match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
+            match c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
                 CallArgumentPassing.Inout => {
                     value = (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64], forWrite: true))
                     if callee.isExtern { value = (try self.prepareCInout(c: inout c, ref: parameterRef, pointer: value, toC: true, writebacks: inout cWritebacks)) }
@@ -2146,7 +2146,7 @@ pub impl LlvmCtx {
             try self.completeCInouts(c: inout c, writebacks: cWritebacks)
             argumentI = 0U64
             while argumentI < values.count() {
-                val parameterRef = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
+                val parameterRef = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
                 try self.attachCIntegerExtension(c: inout c, function: result, index: argumentI + 1U64, ref: parameterRef, physical: LLVMTypeOf(values[argumentI]), callSite: true)
                 argumentI += 1U64
             }
