@@ -2851,8 +2851,6 @@ pub struct Arena {
     // Complete semantic type entry per expression node. Kept with the expression
     // arena rather than Comp so every public user of Comp depends only on Arena,
     // and so the entry has the same lifetime/identity as its Expr.
-    pub mut val semanticExprTypes: Array[SemanticExprType] = []
-    pub mut val semanticStatementCompletions: Array[Optional[SemanticExpressionCompletion]] = []
     // Record-time completion with a separate unreachable-source type.
     pub mut val semanticValueBlocks: Array[SemanticValueBlockTyping] = []
     // Deferred semantic type-source recipes are a separate dependency graph;

@@ -1377,7 +1377,7 @@ pub impl Comp {
                 // decision in the first phase; defer it rather than reopening
                 // Expr syntax.  Once Record allocated the full table, a
                 // missing site is an invariant violation.
-                if self.arena.semanticExprTypes.count() < self.arena.exprs.count() { return <Result.Ok value=() /> }
+                if self.semanticExprTypes.count() < self.arena.exprs.count() { return <Result.Ok value=() /> }
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: operator CallTemplate was not recorded") />
             }
         }
@@ -4547,8 +4547,8 @@ pub impl Comp {
                 self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=2U64 integerValue=value integerNegative=isNegative integerBool=isBool typeTerm=term />)
             }
             Expr.Field(base: val base, nameStart: _, nameLen: _) => {
-                if exprId >= self.arena.semanticExprTypes.count() { return <Result.Ok value=0U64 />}
-                val semantic: SemanticExprType = self.arena.semanticExprTypes[exprId]
+                if exprId >= self.semanticExprTypes.count() { return <Result.Ok value=0U64 />}
+                val semantic: SemanticExprType = self.semanticExprTypes[exprId]
                 if !semantic.hasFieldProjection { return <Result.Ok value=0U64 />}
                 val baseInput: U64 = (try self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, exprId: base))
                 if baseInput == 0U64 { return <Result.Ok value=0U64 />}
@@ -4562,8 +4562,8 @@ pub impl Comp {
                 self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=7U64 base=baseInput typeTerm=term />)
             }
             Expr.Arrow(base: val base, nameStart: _, nameLen: _) => {
-                if exprId >= self.arena.semanticExprTypes.count() { return <Result.Ok value=0U64 />}
-                val semantic: SemanticExprType = self.arena.semanticExprTypes[exprId]
+                if exprId >= self.semanticExprTypes.count() { return <Result.Ok value=0U64 />}
+                val semantic: SemanticExprType = self.semanticExprTypes[exprId]
                 if !semantic.hasFieldProjection { return <Result.Ok value=0U64 />}
                 val referenceTerm: U64 = self.semanticExprTerm(exprId: base)
                 if referenceTerm == 0U64 || !self.isStrongRefInst(ref: referenceTerm) { return <Result.Ok value=0U64 />}
@@ -4586,14 +4586,14 @@ pub impl Comp {
             self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=4U64 typeTerm=self.semanticExprTerm(exprId: rootExpr) />)
             return self.arena.semanticAccessInputs.count()
         }
-        if exprId >= self.arena.exprs.count() || exprId >= self.arena.semanticExprTypes.count() { return 0U64 }
+        if exprId >= self.arena.exprs.count() || exprId >= self.semanticExprTypes.count() { return 0U64 }
         match self.arena.exprs[exprId] {
             // Views select a callable, but do not add a storage projection.
             Expr.ExtView(recv: val base, source: _, strip: _) => {
                 return self.freezeFinalAccessProjection(rootExpr: rootExpr, exprId: base)
             }
             Expr.Field(base: val base, nameStart: _, nameLen: _) => {
-                val semantic: SemanticExprType = self.arena.semanticExprTypes[exprId]
+                val semantic: SemanticExprType = self.semanticExprTypes[exprId]
                 if !semantic.hasFieldProjection { return 0U64 }
                 val baseInput: U64 = self.freezeFinalAccessProjection(rootExpr: rootExpr, exprId: base)
                 if baseInput == 0U64 { return 0U64 }

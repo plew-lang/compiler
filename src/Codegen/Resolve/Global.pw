@@ -213,8 +213,8 @@ pub impl Comp {
         if exprId >= self.typeCache.identBind.count() || exprId >= self.typeCache.identTarget.count() { return <Optional.None /> }
         if self.typeCache.identBind[exprId] != identValueCode() { return <Optional.None /> }
         val target = self.typeCache.identTarget[exprId]
-        if exprId >= self.arena.semanticExprTypes.count() { return <Optional.None /> }
-        val term = self.arena.semanticExprTypes[exprId].term
+        if exprId >= self.semanticExprTypes.count() { return <Optional.None /> }
+        val term = self.semanticExprTypes[exprId].term
         if term == 0U64 || term >= self.arena.typeCount() { return <Optional.None /> }
         mut val index: U64 = 0U64
         while index < self.arena.globals.count() {

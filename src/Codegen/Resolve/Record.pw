@@ -1619,6 +1619,9 @@ pub impl Comp {
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
     inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false, needsValue: Bool = true, purpose: ExpressionRecordPurpose = <ExpressionRecordPurpose.Execution />) -> Result[(), CompileDiagnostic] {
+        if self.semanticExprConstructionClosed(exprId: exprId) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: completed source owner cannot record an expression") />
+        }
         // Normalize at the context boundary before inspecting expression shape.
         mut val normalizedContext = expectedTerm
         if self.arena.typeContainsAssociatedProjection(ref: normalizedContext) {
@@ -2055,7 +2058,7 @@ pub impl Comp {
                 if elems.len > 0U64 {
                     val eRef: U64 = self.parametricExprTerm(exprId: self.exprAt(exprs: elems, index: 0U64))
                     if eRef != 0U64 {
-                        if exprId < self.arena.semanticExprTypes.count() {
+                        if exprId < self.semanticExprTypes.count() {
                             self.recordSemanticExprTerm(exprId: exprId, term: self.arrayRefOfElem(elemRef: eRef))
                         }
                     }
@@ -2147,7 +2150,7 @@ pub impl Comp {
                 // This form rewrites itself to MatchExpr below. Preserve its
                 // pre-rewrite legacy adapter before changing the AST node;
                 // other forms use the common post-order fallback.
-                if exprId < self.arena.semanticExprTypes.count() {
+                if exprId < self.semanticExprTypes.count() {
                     self.recordSemanticExprInfo(exprId: exprId, ti: (try self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef)))
                 }
                 try self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
@@ -2296,7 +2299,7 @@ pub impl Comp {
         val completion = self.exprCompletion(exprId: exprId)
         self.recordSemanticExprCompletion(exprId: exprId, completion: completion)
         if needsValue { try self.requireExpressionCompletionValue(exprId: exprId, completion: completion) }
-        if exprId < self.arena.semanticExprTypes.count() {
+        if exprId < self.semanticExprTypes.count() {
             if self.semanticExprTerm(exprId: exprId) == 0U64 {
                 self.recordSemanticExprInfo(exprId: exprId, ti: (try self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef)))
             }
@@ -2331,7 +2334,7 @@ pub impl Comp {
         }
         if !self.cur.recordCallTemplates { return <Result.Ok value=() /> }
         self.ensureSemanticExprType(exprId: exprId)
-        val fact = self.arena.semanticExprTypes[exprId]
+        val fact = self.semanticExprTypes[exprId]
         // A type-qualified factory receiver names a declaration, not a
         // runtime value. Its recorded identifier decision owns this distinction.
         if exprId < self.typeCache.identBind.count() && self.typeCache.identBind[exprId] == identTypeQualCode() {
@@ -2365,7 +2368,7 @@ pub impl Comp {
         mut val cursor = self.sourceTypingObligations.first(owner: owner)
         while cursor != 0U64 {
             val obligation = self.sourceTypingObligations.entries[cursor - 1U64]
-            val fact = self.arena.semanticExprTypes[obligation.expression]
+            val fact = self.semanticExprTypes[obligation.expression]
             match fact.typeState {
                 SemanticExpressionTypeState.Pending | SemanticExpressionTypeState.Unrecorded => {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: obligation.expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") />
@@ -2518,10 +2521,10 @@ pub impl Comp {
         if self.cur.recordCallTemplates {
             match self.recordedCompletionFact(completion: completion) {
                 Optional.Some(v: val fact) => {
-                    while self.arena.semanticStatementCompletions.count() <= stmtId {
-                        self.arena.semanticStatementCompletions.append(<Optional.None />)
+                    while self.semanticStatementCompletions.count() <= stmtId {
+                        self.semanticStatementCompletions.append(<Optional.None />)
                     }
-                    self.arena.semanticStatementCompletions.set(i: stmtId, value: <Optional.Some v=fact />)
+                    self.semanticStatementCompletions.set(i: stmtId, value: <Optional.Some v=fact />)
                 }
                 Optional.None => {}
             }
@@ -2639,6 +2642,10 @@ pub impl Comp {
     // Selection/order belongs to the caller; generated provided copies share
     // their source declaration's semantic rows and are never recorded twice.
     inout fn recordParametricFunction(fnIdx: U64, recordCallTemplates: Bool) -> Result[(), CompileDiagnostic] {
+        val sourceOwner = try self.semanticBodyOwner(fnIdx: fnIdx)
+        if self.sourceOwnerConstructionClosed(owner: <SemanticCompletionOwner.Function index=sourceOwner />) {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: completed source owner cannot record its body again") />
+        }
         self.cur.recordCallTemplates = recordCallTemplates
         val f: Func = self.arena.functionAt(index: fnIdx)
         // A trait-provided body is copied per conformance, but its lexical

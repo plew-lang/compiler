@@ -238,6 +238,9 @@ enum CallConstraintPlanState {
 
 pub struct Comp {
     mut val semanticClosures: Array[SemanticClosure] = []
+    mut val semanticExprTypes: Array[SemanticExprType] = []
+    mut val semanticExprOwners: Array[Optional[SemanticCompletionOwner]] = []
+    mut val semanticStatementCompletions: Array[Optional[SemanticExpressionCompletion]] = []
     mut val semanticClosureOwners: Array[SemanticCompletionOwner] = []
     mut val semanticClosureIndexSlots: Array[U64] = []
     mut val globalCallTemplateOwners: Dictionary[U64, Array[U64]] = [:]
@@ -1327,7 +1330,7 @@ fn traceLowerTopItem(c: inout Comp, index: U64, span: Span) {
 fn recordSemanticExpressionTypes(c: inout Comp, includeBodies: Bool = true) -> Result[(), CompileDiagnostic] {
     mut val i: U64 = 0U64
     while i < c.arena.exprs.count() {
-        c.arena.semanticExprTypes.append(<SemanticExprType />)
+        c.semanticExprTypes.append(<SemanticExprType />)
         i += 1U64
     }
     tracePhase(c: inout c, label: "semantic-expression-record:start")
@@ -2271,4 +2274,75 @@ pub impl Comp {
     inout fn semanticClosureCount() -> U64 { return self.semanticClosures.count() }
     inout fn semanticClosureAt(index: U64) -> SemanticClosure { return self.semanticClosures[index] }
     inout fn semanticClosureSnapshot() -> Array[SemanticClosure] { return self.semanticClosures }
+}
+
+// A body-scoped immutable semantic snapshot. Only successful source preparation
+// can create it; other owners' building metadata is not exposed by this view.
+pub struct PreparedSemanticFacts {
+    val owner: SemanticCompletionOwner
+    val expressions: Array[SemanticExprType]
+    val owners: Array[Optional[SemanticCompletionOwner]]
+}
+impl PreparedSemanticFacts { factory }
+pub impl PreparedSemanticFacts {
+    fn expression(exprId: U64) -> Optional[SemanticExprType] {
+        if exprId >= self.expressions.count() || exprId >= self.owners.count() { return <Optional.None /> }
+        match self.owners[exprId] {
+            Optional.Some(v: val owner) => {
+                if semanticCompletionOwnersEqual(recorded: owner, prepared: self.owner) {
+                    return <Optional.Some v=self.expressions[exprId] />
+                }
+            }
+            Optional.None => {}
+        }
+        return <Optional.None />
+    }
+}
+pub impl Comp {
+    inout fn preparedSemanticFacts(owner: SemanticCompletionOwner) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
+        if !(try self.semanticCompletionOwnerPrepared(owner: owner)) {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: semantic facts require a prepared source owner") />
+        }
+        return <Result.Ok value=<PreparedSemanticFacts owner=owner expressions=self.semanticExprTypes owners=self.semanticExprOwners /> />
+    }
+    inout fn preparedFunctionSemanticFacts(fnIdx: U64) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
+        return self.preparedSemanticFacts(owner: <SemanticCompletionOwner.Function index=(try self.semanticBodyOwner(fnIdx: fnIdx)) />)
+    }
+    inout fn preparedGlobalSemanticFacts(target: U64) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
+        return self.preparedSemanticFacts(owner: <SemanticCompletionOwner.Global target=target />)
+    }
+    inout fn preparedClosureSemanticFacts(closure: SemanticClosure) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
+        val index = try self.semanticClosureIndex(ownerFnIdx: closure.ownerFnIdx, exprId: closure.exprId)
+        if index >= self.semanticClosureOwners.count() {
+            return <Result.Err error=self.diagnosticAt(offset: closure.exprId, msg: "internal error: closure has no semantic source owner") />
+        }
+        return self.preparedSemanticFacts(owner: self.semanticClosureOwners[index])
+    }
+    fn sourceSemanticExprTypeCount() -> U64 { return self.semanticExprTypes.count() }
+    fn sourceSemanticExprTypeAt(index: U64) -> SemanticExprType { return self.semanticExprTypes[index] }
+}
+impl Comp {
+    fn semanticExprConstructionClosed(exprId: U64) -> Bool {
+        if exprId >= self.semanticExprOwners.count() { return false }
+        match self.semanticExprOwners[exprId] {
+            Optional.Some(v: val owner) => { return self.sourceOwnerConstructionClosed(owner: owner) }
+            Optional.None => { return false }
+        }
+    }
+    inout fn storeBuildingSemanticExprType(i: U64, value: SemanticExprType) {
+        if self.semanticExprConstructionClosed(exprId: i) { panic("internal error: completed source owner cannot replace an expression fact") }
+        while self.semanticExprOwners.count() <= i { self.semanticExprOwners.append(<Optional.None />) }
+        match self.sourceRecordingOwner() {
+            Optional.Some(v: val owner) => {
+                match self.semanticExprOwners[i] {
+                    Optional.Some(v: val prior) => {
+                        if !semanticCompletionOwnersEqual(recorded: prior, prepared: owner) { panic("internal error: expression fact changed its source owner") }
+                    }
+                    Optional.None => { self.semanticExprOwners.set(i: i, value: <Optional.Some v=owner />) }
+                }
+            }
+            Optional.None => {}
+        }
+        self.semanticExprTypes.set(i: i, value: value)
+    }
 }

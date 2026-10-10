@@ -4,8 +4,8 @@ pub impl Comp {
     // A final consumer reads the owner's last Record result. Allocation,
     // signature readiness, and template closure are not source-check proofs.
     inout fn checkedSemanticExprCompletion(exprId: U64) -> Result[SourceCompletion, CompileDiagnostic] {
-        if exprId < self.arena.semanticExprTypes.count() {
-            match self.arena.semanticExprTypes[exprId].completion {
+        if exprId < self.semanticExprTypes.count() {
+            match self.semanticExprTypes[exprId].completion {
                 Optional.Some(v: val fact) => {
                     if try self.semanticCompletionOwnerPrepared(owner: fact.owner) { return <Result.Ok value=fact.flow /> }
                 }
@@ -36,8 +36,8 @@ pub impl Comp {
     }
 
     inout fn checkedSemanticStmtCompletion(stmtId: U64) -> Result[SourceCompletion, CompileDiagnostic] {
-        if stmtId < self.arena.semanticStatementCompletions.count() {
-            match self.arena.semanticStatementCompletions[stmtId] {
+        if stmtId < self.semanticStatementCompletions.count() {
+            match self.semanticStatementCompletions[stmtId] {
                 Optional.Some(v: val fact) => {
                     if try self.semanticCompletionOwnerPrepared(owner: fact.owner) { return <Result.Ok value=fact.flow /> }
                 }
@@ -48,8 +48,8 @@ pub impl Comp {
     }
 
     inout fn checkedSemanticStmtCompletionOwner(stmtId: U64) -> Result[PreparedSemanticCompletionOwner, CompileDiagnostic] {
-        if stmtId < self.arena.semanticStatementCompletions.count() {
-            match self.arena.semanticStatementCompletions[stmtId] {
+        if stmtId < self.semanticStatementCompletions.count() {
+            match self.semanticStatementCompletions[stmtId] {
                 Optional.Some(v: val fact) => {
                     if try self.semanticCompletionOwnerPrepared(owner: fact.owner) {
                         return <Result.Ok value=<PreparedSemanticCompletionOwner owner=fact.owner /> />
@@ -62,8 +62,8 @@ pub impl Comp {
     }
 
     inout fn semanticStmtCompletionInOwner(stmtId: U64, owner: PreparedSemanticCompletionOwner) -> Result[SourceCompletion, CompileDiagnostic] {
-        if stmtId < self.arena.semanticStatementCompletions.count() {
-            match self.arena.semanticStatementCompletions[stmtId] {
+        if stmtId < self.semanticStatementCompletions.count() {
+            match self.semanticStatementCompletions[stmtId] {
                 Optional.Some(v: val fact) => {
                     if semanticCompletionOwnersEqual(recorded: fact.owner, prepared: owner.owner) {
                         return <Result.Ok value=fact.flow />
@@ -151,8 +151,8 @@ pub impl Comp {
     // templates. Pending is not rewritten to Returns by this construction-
     // time walker; finalized readers must require a completed selection.
     fn invocationDiverges(exprId: U64) -> Bool {
-        if exprId >= self.arena.semanticExprTypes.count() { return false }
-        match self.arena.semanticExprTypes[exprId].invocation {
+        if exprId >= self.semanticExprTypes.count() { return false }
+        match self.semanticExprTypes[exprId].invocation {
             InvocationCompletion.Diverges => { return true }
             _ => { return false }
         }
