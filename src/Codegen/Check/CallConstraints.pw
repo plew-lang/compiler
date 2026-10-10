@@ -165,3 +165,34 @@ impl Comp {
     }
 
 }
+
+impl Comp {
+    inout fn prepareLexicalBodyUncached(owner: U64) -> Result[(), CompileDiagnostic] {
+        self.cur.bodyFnIdx = owner
+        self.cur.bodyEnvironment = <InstanceEnvironment />
+        self.cur.bodyId = 0U64
+        self.cur.bodySelfRef = 0U64
+        self.cur.bodyItemRef = 0U64
+        try self.recordParametricFunction(fnIdx: owner, recordCallTemplates: false)
+        try self.checkGenericFunction(fnIdx: owner)
+        try self.verifyFunctionDeclaration(fnIdx: owner)
+        try self.recordParametricFunction(fnIdx: owner, recordCallTemplates: true)
+        self.cur.recordCallTemplates = false
+        if (try self.completeRecordedBodyDefaultCalls(owner: owner)) != 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: owner).defOffset, msg: "internal error: lexical body has incomplete default argument plans") />
+        }
+        try self.closeCallTemplatesForBody(fnIdx: owner)
+        try self.checkRecordedBodyCallConstraints(owner: owner)
+        try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Function index=owner />)
+        try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Function index=owner />)
+        try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Function index=owner />)
+        mut val row = self.firstLexicalCallTemplate(owner: owner)
+        while row != 0U64 {
+            val index = row - 1U64
+            try self.publishPreparedCallConstraints(templateIndex: index)
+            row = self.callTemplateBodyNext[index]
+        }
+        return <Result.Ok value=() />
+    }
+
+}

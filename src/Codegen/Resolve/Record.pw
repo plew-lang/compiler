@@ -2718,34 +2718,6 @@ pub impl Comp {
     // calls consume registered signatures, never their callees' preparation.
     // Template closure is not evidence that the source body was checked.
     // Only prepareLexicalBody's completed request cache authorizes reuse.
-    inout fn prepareLexicalBodyUncached(owner: U64) -> Result[(), CompileDiagnostic] {
-        self.cur.bodyFnIdx = owner
-        self.cur.bodyEnvironment = <InstanceEnvironment />
-        self.cur.bodyId = 0U64
-        self.cur.bodySelfRef = 0U64
-        self.cur.bodyItemRef = 0U64
-        try self.recordParametricFunction(fnIdx: owner, recordCallTemplates: false)
-        try self.checkGenericFunction(fnIdx: owner)
-        try self.verifyFunctionDeclaration(fnIdx: owner)
-        try self.recordParametricFunction(fnIdx: owner, recordCallTemplates: true)
-        self.cur.recordCallTemplates = false
-        if (try self.completeRecordedBodyDefaultCalls(owner: owner)) != 0U64 {
-            return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: owner).defOffset, msg: "internal error: lexical body has incomplete default argument plans") />
-        }
-        try self.closeCallTemplatesForBody(fnIdx: owner)
-        try self.checkRecordedBodyCallConstraints(owner: owner)
-        try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Function index=owner />)
-        try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Function index=owner />)
-        try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Function index=owner />)
-        mut val row = self.firstLexicalCallTemplate(owner: owner)
-        while row != 0U64 {
-            val index = row - 1U64
-            try self.publishPreparedCallConstraints(templateIndex: index)
-            row = self.callTemplateBodyNext[index]
-        }
-        return <Result.Ok value=() />
-    }
-
     // Record every function body's parametric types. Skips: externs / requirement
     // signatures (body 0 is the no-body sentinel), and provided-method COPIES
     // (srcTraitId != 0) — a copy SHARES the trait template's body, so recording it
