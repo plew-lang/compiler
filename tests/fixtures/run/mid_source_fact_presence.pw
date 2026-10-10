@@ -1,0 +1,37 @@
+// A known storage destination must not stand in for its initializer's source fact.
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Mid only { MidBuildState, MidBuildError, buildMidLet }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="source-fact.pw" text="fn probe() {{ val item = 1I64 }} fn unrelated() {{}}" />,
+        sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "unrelated").nameId)
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: owner).body, index: 0U64)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    compiler.prepareLexicalBody(fnIdx: other).unwrap()
+    mut val missing = <MidBuildState.initial sourceFunction=owner />
+    match buildMidLet(c: inout compiler, state: inout missing, stmtId: statement) {
+        MidBuildError.MissingSemanticType => {}
+        _ => { panic("missing source fact accepted") }
+    }
+    val foreignFacts = compiler.preparedFunctionSemanticFacts(fnIdx: other).unwrap()
+    mut val foreign = <MidBuildState.initial sourceFunction=owner sourceFacts=<Optional.Some v=foreignFacts /> />
+    match buildMidLet(c: inout compiler, state: inout foreign, stmtId: statement) {
+        MidBuildError.MissingSemanticType => {}
+        _ => { panic("foreign owner fact accepted") }
+    }
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    mut val recorded = <MidBuildState.initial sourceFunction=owner sourceFacts=<Optional.Some v=facts /> />
+    match buildMidLet(c: inout compiler, state: inout recorded, stmtId: statement) {
+        MidBuildError.None => {}
+        _ => { panic("recorded source fact rejected") }
+    }
+    assert(recorded.locals.count() > 0U64)
+    print("ok")
+}
