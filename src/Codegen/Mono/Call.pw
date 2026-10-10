@@ -1075,6 +1075,10 @@ pub impl Comp {
     inout fn enqueueFinalBody(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />, constraints: CallableConstraintEvidence = <CallableConstraintEvidence.Declaration />) -> Result[U64, CompileDiagnostic] {
         if fnIdx >= self.arena.functionCount() { return <Result.Ok value=0U64 />}
         val f: Func = self.arena.functionAt(index: fnIdx)
+        // A call contract exists even when its implementation has no Plew
+        // body. Admit the grounded signature before deciding body demand.
+        val environment: InstanceEnvironment = (try self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, selectedProof: selectedProof))
+        try self.checkCallableConstraintEvidence(fnIdx: fnIdx, environment: environment, evidence: constraints)
         if f.isExtern || f.body == 0U64 {
             if self.traceCodegen && !f.isExtern {
                 eprint(text: "[trace-codegen] no executable body fn=")
@@ -1088,9 +1092,7 @@ pub impl Comp {
         // a result-position call such as `val x: Token[Bad] = marker()` learns
         // T only when this final CallTemplate edge is grounded. Check exactly
         // here, before the instance becomes reachable by LLVM.
-        val environment: InstanceEnvironment = (try self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, selectedProof: selectedProof))
         val declaration: Func = (try self.lexicalFunction(f: f))
-        try self.checkCallableConstraintEvidence(fnIdx: fnIdx, environment: environment, evidence: constraints)
         // A provided copy has no standalone semantic body: its `Self`,
         // associated outputs and nested requirements are defined by the
         // conformance that selected it.  Never materialize one with Missing

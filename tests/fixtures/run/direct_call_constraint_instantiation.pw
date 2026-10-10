@@ -8,7 +8,7 @@ use @Std/Io only { print }
 fn main() {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler,
-        input: <FrontendInput.Text text="trait Q {{}} struct Item {{}} impl Item as Q {{}} fn free[Value](value: Value) where Value: Q {{}} fn probe() {{ free(value: <Item />) }}" path="direct-constraints.pw" />,
+        input: <FrontendInput.Text text="trait Q {{}} struct Item {{}} impl Item as Q {{}} fn free[Value](value: Value) where Value: Q {{}} extern(c) {{ fn foreign() }} fn probe() {{ free(value: <Item />) }}" path="direct-constraints.pw" />,
         sources: <SourceAccess stdRoot=[] />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "free").nameId)
@@ -28,6 +28,11 @@ fn main() {
                             val broken = <CallableConstraintEvidence.Recorded bounds=bounds proofs=[<StaticConformanceProof.Missing />] />
                             if compiler.enqueueFinalBody(fnIdx: callee, args: arguments, recvInstRef: 0U64, constraints: broken).isOk() {
                                 panic("final body gate replaced missing retained proof with a fresh conformance")
+                            }
+                            val bodyless = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreign").nameId)
+                            compiler.enqueueFinalBody(fnIdx: bodyless, args: [], recvInstRef: 0U64, constraints: <CallableConstraintEvidence.Recorded bounds=[] proofs=[] />).unwrap()
+                            if compiler.enqueueFinalBody(fnIdx: bodyless, args: [], recvInstRef: 0U64, constraints: broken).isOk() {
+                                panic("bodyless call skipped retained constraint evidence")
                             }
                         }
                         _ => { panic("direct call used declaration-time reselection") }
