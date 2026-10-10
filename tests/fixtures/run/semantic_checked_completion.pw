@@ -75,7 +75,7 @@ fn main() {
     // Exercise failed readiness through its actual producer, not an injected cache.
     mut val failed = <Comp />
     analyzeFrontendForRequests(c: inout failed,
-        input: <FrontendInput.Text path="failed-completion.pw" text="fn rejected() -> I64 {{ return true }}" />,
+        input: <FrontendInput.Text path="failed-completion.pw" text="fn rejected() {{ val retained = 0I64 val unresolved = [] }}" />,
         sources: <SourceAccess stdRoot=[] />).unwrap()
     val failedOwner = owner(compiler: inout failed, name: "rejected")
     val failedStatement = failed.blockStmtAt(blkId: failed.arena.functionAt(index: failedOwner).body, index: 0U64)
