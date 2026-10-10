@@ -1,34 +1,36 @@
 // Fields do not determine phantom generic arguments. A recorded construction
 // must satisfy its complete nominal type, including arguments not in fields.
-use /Frontend only { Comp }
-use /Ir only { Expr, TypeRef, Func, StructDef, EnumDef, Variant, Bind }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr }
 use @Std/Io only { print }
 
 fn main() {
     mut val compiler = <Comp />
-    compiler.arena.reserveTypeSentinel()
-    val integerName = compiler.internBytes(s: "I64")
-    val booleanName = compiler.internBytes(s: "Bool")
-    val structName = compiler.internBytes(s: "Token")
-    val enumName = compiler.internBytes(s: "Marker")
-    val variantName = compiler.internBytes(s: "Empty")
-    val parameterName = compiler.internBytes(s: "T")
-    val parameter = <Bind nameStart=parameterName.nameStart nameLen=parameterName.nameLen nameId=parameterName.nameId fieldStart=0U64 fieldLen=0U64 />
-    compiler.arena.registerStruct(<StructDef nameStart=structName.nameStart nameLen=structName.nameLen nameId=structName.nameId typeParams=[parameter] fields=[] isUnique=false isExtern=false defOffset=100U64 />)
-    compiler.arena.registerEnum(<EnumDef nameStart=enumName.nameStart nameLen=enumName.nameLen nameId=enumName.nameId typeParams=[parameter] variants=[<Variant nameStart=variantName.nameStart nameLen=variantName.nameLen nameId=variantName.nameId fields=[] />] defOffset=200U64 />)
-    compiler.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
-    compiler.cur.checkFn = 0U64
-    val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
-    val boolean = compiler.pushType(t: <TypeRef nameStart=booleanName.nameStart nameLen=booleanName.nameLen args=[] />)
-    val expectedStruct = compiler.pushType(t: <TypeRef nameStart=structName.nameStart nameLen=structName.nameLen args=[integer] hasDecl=true declOffset=100U64 />)
-    val actualStruct = compiler.pushType(t: <TypeRef nameStart=structName.nameStart nameLen=structName.nameLen args=[boolean] hasDecl=true declOffset=100U64 />)
-    val expectedEnum = compiler.pushType(t: <TypeRef nameStart=enumName.nameStart nameLen=enumName.nameLen args=[integer] hasDecl=true declOffset=200U64 />)
-    val actualEnum = compiler.pushType(t: <TypeRef nameStart=enumName.nameStart nameLen=enumName.nameLen args=[boolean] hasDecl=true declOffset=200U64 />)
-    val fields = compiler.pushMakeFields(fields: [])
-    val structure = compiler.pushExpr(e: <Expr.Make typeStart=structName.nameStart typeLen=structName.nameLen variantStart=0U64 variantLen=0U64 isEnum=false ty=actualStruct fields=fields />)
-    val enumeration = compiler.pushExpr(e: <Expr.Make typeStart=enumName.nameStart typeLen=enumName.nameLen variantStart=variantName.nameStart variantLen=variantName.nameLen isEnum=true ty=actualEnum fields=fields />)
-    compiler.recordSemanticExprTerm(exprId: structure, term: actualStruct)
-    compiler.recordSemanticExprTerm(exprId: enumeration, term: actualEnum)
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="nominal-probe.pw" text="struct Token[T] {{}} enum Marker[T] {{ Empty }} fn probe(expected: Token[I64], actual: Token[Bool], expectedEnum: Marker[I64], actualEnum: Marker[Bool]) {{ val structure = <Token[Bool] /> val enumeration = <Marker[Bool].Empty /> }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    val expectedStruct = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val actualStruct = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val expectedEnum = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    val actualEnum = compiler.funcParamAt(params: function.params, index: 3U64).ty
+    mut val structure = compiler.arena.exprs.count()
+    mut val enumeration = compiler.arena.exprs.count()
+    mut val index = 0U64
+    while index < compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: val isEnum, ty: _, fields: _) => {
+                if isEnum { enumeration = index } else { structure = index }
+            }
+            _ => {}
+        }
+        index += 1U64
+    }
+    if structure >= compiler.arena.exprs.count() || enumeration >= compiler.arena.exprs.count() { panic "missing construction probes" }
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    compiler.cur.checkFn = owner
     if !compiler.genericCheckMakeFields(expectedRef: expectedStruct, valueExpr: structure).unwrap() { panic "struct probe did not exercise construction field checking" }
     if !compiler.genericCheckMakeFields(expectedRef: expectedEnum, valueExpr: enumeration).unwrap() { panic "enum probe did not exercise construction field checking" }
     if compiler.checkGenericTypeMatch(expectedRef: actualStruct, valueExpr: structure).isErr() { panic "matching phantom struct was rejected" }
