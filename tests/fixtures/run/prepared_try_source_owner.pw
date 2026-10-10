@@ -1,0 +1,40 @@
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Ir only { InstanceEnvironment, Stmt }
+
+fn main() {
+    mut val compiler = <Comp />
+    val resources = [
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub enum Result[T, E] {{ Ok(value: T) Err(error: E) }}" />,
+        <SourceResource path="plew:std/TryProbe.pw".bytes() text="fn probe(input: Result[I64, I64]) -> Result[I64, I64] {{ val value = try input return <Result[I64, I64].Ok value=value /> }} fn unrelated() {{}}" />,
+    ]
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="plew:std/TryProbe.pw" />, sources: <SourceAccess stdRoot="plew:std/".bytes() resources=resources />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "unrelated").nameId)
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: owner).body, index: 0U64)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val expression) => expression
+        _ => { panic("missing try binding") }
+    }
+    val body = compiler.internBodyInstance(fnIdx: owner, environment: <InstanceEnvironment />)
+    match compiler.preparedBodyTry(bodyId: body, exprId: expression) {
+        Result.Err(error: _) => {}
+        _ => { panic("unprepared try admitted") }
+    }
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    compiler.prepareLexicalBody(fnIdx: other).unwrap()
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    val fact = facts.tryDecomposition(ownerFnIdx: owner, exprId: expression).unwrap()
+    if fact.operandTerm == 0U64 || fact.successTerm == 0U64 { panic("try decomposition lost") }
+    if compiler.preparedBodyTry(bodyId: body, exprId: expression).unwrap().unwrap().returnTerm != fact.returnTerm { panic("final consumer lost try fact") }
+    val foreign = compiler.preparedFunctionSemanticFacts(fnIdx: other).unwrap()
+    if foreign.tryDecomposition(ownerFnIdx: owner, exprId: expression).isSome() { panic("foreign try admitted") }
+    if facts.tryDecomposition(ownerFnIdx: owner, exprId: 18446744073709551615U64).isSome() { panic("missing try admitted") }
+    match compiler.recordStmt(stmtId: statement) {
+        Result.Err(error: _) => {}
+        _ => { panic("completed try recorded again") }
+    }
+    if facts.tryDecomposition(ownerFnIdx: owner, exprId: expression).unwrap().operandTerm != fact.operandTerm { panic("published try snapshot changed") }
+    print("ok")
+}
