@@ -236,7 +236,10 @@ impl CompilerSession {
             if !function.isExtern && function.body != 0U64 && (main || function.isExposed) {
                 val bodyId = (try self.compiler.enqueueFinalBody(fnIdx: index, args: [], recvInstRef: 0U64))
                 if bodyId == 0U64 { return <Result.Err error=self.compiler.diagnosticAt(offset: function.nameStart, msg: "program entry has no concrete body identity") /> }
-                if main { foundMain = true }
+                if main {
+                    self.compiler.monoWork.recordEntryBody(function: index, bodyId: bodyId)
+                    foundMain = true
+                }
             }
             index += 1U64
         }
