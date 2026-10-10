@@ -51,9 +51,6 @@ fn main() {
         if c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=completedOwner originSerial=999U64 /> kind=<CallTemplateKind.Pending /> />) {
             panic("completed owner accepted a new call")
         }
-        if c.registerCallTemplateLexicalRoot(owner: completedOwner, root: 999999U64) {
-            panic("completed owner changed its membership root")
-        }
     }
     if c.callTemplateCount() != complete { panic("refused append changed source membership") }
 

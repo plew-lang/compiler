@@ -6,7 +6,7 @@ use /Ir only { CallTemplate, CallTemplateKind, CallTemplateReceiver, CallSiteKey
 
 fn main() {
     mut val compiler = <Comp />
-    val source = "trait P[Value] {{}}\nfn target[T](value: T, nested: (value: T, callback: fn() -> T)) where I64: P[T] {{}}\nfn other[T](value: T) {{}}\nfn concrete(value: I64) {{}}\n"
+    val source = "trait P[Value] {{}}\nfn target[T](value: T, nested: (value: T, callback: fn() -> T)) where I64: P[T] {{ val closure = fn() {{}} }}\nfn other[T](value: T) {{}}\nfn concrete(value: I64) {{}}\n"
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="scope.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val target = compiler.arena.functionAt(index: 0U64)
     val other = compiler.arena.functionAt(index: 1U64)
@@ -29,8 +29,10 @@ fn main() {
     val kind = <CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=arguments calleeTypeArgs=typeArguments proofId=0U64 />
     compiler.checkDeferredCallDependency(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=0U64 /> kind=kind />).unwrap()
     // Closure identities explicitly inherit their lexical binder scope.
-    compiler.registerCallTemplateLexicalRoot(owner: 1000000U64, root: 0U64)
-    compiler.checkDeferredCallDependency(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=1000000U64 /> kind=kind />).unwrap()
+    compiler.prepareLexicalBody(fnIdx: 0U64).unwrap()
+    assert(compiler.semanticClosureCount() == 1U64)
+    val closureOwner = compiler.semanticClosureAt(index: 0U64).bodyKey
+    compiler.checkDeferredCallDependency(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=closureOwner /> kind=kind />).unwrap()
     match compiler.checkDeferredCallDependency(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=1U64 /> kind=kind />) {
         Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation refers to a type parameter outside its lexical scope") }
         Result.Ok(value: _) => { panic "call-site owner did not control its scope" }
