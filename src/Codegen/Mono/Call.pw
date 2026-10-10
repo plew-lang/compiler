@@ -3976,15 +3976,15 @@ pub impl Comp {
                 mut val position = 0U64
                 while position < plan.bounds.count() {
                     val source = plan.bounds[position]
-                    val subject = try self.groundTermForBody(ref: source.subject, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                    val grounded = try self.groundCallableBound(bound: source, environment: environment, selfRef: selfRef, itemRef: itemRef)
                     val proof = self.thawStaticConformanceProof(id: plan.proofs[position])
-                    val state = try self.instantiateConstraintProof(proof: proof, receiverRef: subject, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                    val state = try self.instantiateConstraintProof(proof: proof, receiverRef: grounded.subject, environment: environment, selfRef: selfRef, itemRef: itemRef)
                     match state {
                         StaticProofInstantiation.Ready(proof: val concrete) => {
                             // Preserve the selected obligation, including its
                             // associated predicates and view boundary. The proof
                             // satisfies that obligation; it does not redefine it.
-                            bounds.append((try self.groundCallableBound(bound: source, environment: environment, selfRef: selfRef, itemRef: itemRef)))
+                            bounds.append(grounded)
                             proofs.append(concrete)
                         }
                         _ => { return <Result.Err error=self.diagnosticAt(offset: source.offset, msg: "executable call retains an unresolved conformance obligation") /> }
