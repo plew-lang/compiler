@@ -1353,6 +1353,9 @@ pub impl Comp {
         while i < self.accessUses.count() {
             val prior: AccessUse = self.accessUses[i]
             if prior.candidateIndex == candidateIndex && prior.role == role && prior.argIndex == argIndex && self.sameCallSiteKey(a: prior.parent, b: parent) {
+                if !semanticCompletionOwnersEqual(recorded: prior.sourceOwner, prepared: owner) {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: parentExpr), msg: "internal error: access use changed its source owner") />
+                }
                 self.accessUses.set(i: i, value: <AccessUse sourceOwner=owner candidateIndex=candidateIndex accessExpr=readExpr parent=parent role=role argIndex=argIndex parameterIndex=parameterIndex modeKnown=modeKnown write=write />)
                 return <Result.Ok value=() />
             }
