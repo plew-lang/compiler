@@ -417,8 +417,10 @@ fn midPlaceForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64,
             return <MidPlaceBuild.Value lookup=midPlaceForRecordedIdent(c: inout c, state: state, exprId: exprId, typeTerm: typeTerm) />
         }
         Expr.Field(base: val base, nameStart: _, nameLen: _) => {
-            if !midHasSourceSemanticType(state: state, exprId: exprId) { return <MidPlaceBuild.Value lookup=<MidPlaceLookup /> /> }
-            val semantic: SemanticExprType = midSourceSemanticExprType(state: state, exprId: exprId)
+            val semantic: SemanticExprType = match midSourceSemanticExpression(state: state, exprId: exprId) {
+                Optional.Some(v: val fact) => fact
+                Optional.None => { return <MidPlaceBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
+            }
             if !(semantic.hasFieldProjection) { return <MidPlaceBuild.Value lookup=<MidPlaceLookup /> /> }
             // This is a frozen semantic-table read. Do not call the mutable
             // convenience accessor here: Mid construction must not mutate or
@@ -458,8 +460,12 @@ fn midPlaceForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64,
             return <MidPlaceBuild.Value lookup=<MidPlaceLookup found=true place=<MidPlace rootTag=basePlace.place.rootTag local=basePlace.place.local globalTarget=basePlace.place.globalTarget globalMutable=basePlace.place.globalMutable projections=projections typeTerm=typeTerm /> /> />
         }
         Expr.Arrow(base: val base, nameStart: _, nameLen: _) => {
-            if !midHasSourceSemanticType(state: state, exprId: exprId) || !midSourceSemanticExprType(state: state, exprId: exprId).hasFieldProjection { return <MidPlaceBuild.Value lookup=<MidPlaceLookup /> /> }
-            val built: MidOperandBuild = materializeMidReferencePlace(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: true, fieldIndex: midSourceSemanticExprType(state: state, exprId: exprId).fieldProjectionIndex, fieldIsBoxed: midSourceSemanticExprType(state: state, exprId: exprId).fieldProjectionIsBoxed)
+            val projection = match midSourceSemanticExpression(state: state, exprId: exprId) {
+                Optional.Some(v: val fact) => fact
+                Optional.None => { return <MidPlaceBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
+            }
+            if !projection.hasFieldProjection { return <MidPlaceBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
+            val built: MidOperandBuild = materializeMidReferencePlace(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: true, fieldIndex: projection.fieldProjectionIndex, fieldIsBoxed: projection.fieldProjectionIsBoxed)
             val builtValue: MidOperand = match built {
                 MidOperandBuild.Value(operand: val value) => { give value }
                 MidOperandBuild.NoContinuation => { return <MidPlaceBuild.NoContinuation /> }
@@ -510,8 +516,10 @@ fn midNormalizedInoutPlaceForSourceExpr(c: inout Comp, state: inout MidBuildStat
             return <MidNormalizedCallArgumentBuild.Value argument=<MidCallArgument tag=4U64 rootTag=root.place.rootTag local=root.place.local globalTarget=root.place.globalTarget globalMutable=root.place.globalMutable projections=<MidRange start=state.callArgumentProjections.count() len=0U64 /> capability=2U64 typeTerm=typeTerm /> />
         }
         Expr.Field(base: val base, nameStart: _, nameLen: _) => {
-            if !midHasSourceSemanticType(state: state, exprId: exprId) { return <MidNormalizedCallArgumentBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
-            val semantic: SemanticExprType = midSourceSemanticExprType(state: state, exprId: exprId)
+            val semantic: SemanticExprType = match midSourceSemanticExpression(state: state, exprId: exprId) {
+                Optional.Some(v: val fact) => fact
+                Optional.None => { return <MidNormalizedCallArgumentBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
+            }
             if !semantic.hasFieldProjection { return <MidNormalizedCallArgumentBuild.Error error=<MidBuildError.UnsupportedCallTemplate /> /> }
             mut val baseTerm: U64 = 0U64
             if midHasSourceSemanticType(state: state, exprId: base) { baseTerm = midSourceSemanticExprType(state: state, exprId: base).term }
@@ -544,8 +552,12 @@ fn midNormalizedInoutPlaceForSourceExpr(c: inout Comp, state: inout MidBuildStat
             return <MidNormalizedCallArgumentBuild.Value argument=<MidCallArgument tag=4U64 rootTag=parentValue.rootTag local=parentValue.local globalTarget=parentValue.globalTarget globalMutable=parentValue.globalMutable projections=projections capability=2U64 typeTerm=typeTerm /> />
         }
         Expr.Arrow(base: val base, nameStart: _, nameLen: _) => {
-            if !midHasSourceSemanticType(state: state, exprId: exprId) || !midSourceSemanticExprType(state: state, exprId: exprId).hasFieldProjection { return <MidNormalizedCallArgumentBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
-            return midNormalizedReferenceArgument(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: true, fieldIndex: midSourceSemanticExprType(state: state, exprId: exprId).fieldProjectionIndex, fieldIsBoxed: midSourceSemanticExprType(state: state, exprId: exprId).fieldProjectionIsBoxed)
+            val projection = match midSourceSemanticExpression(state: state, exprId: exprId) {
+                Optional.Some(v: val fact) => fact
+                Optional.None => { return <MidNormalizedCallArgumentBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
+            }
+            if !projection.hasFieldProjection { return <MidNormalizedCallArgumentBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
+            return midNormalizedReferenceArgument(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: true, fieldIndex: projection.fieldProjectionIndex, fieldIsBoxed: projection.fieldProjectionIsBoxed)
         }
         Expr.Deref(base: val base) => {
             return midNormalizedReferenceArgument(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: false, fieldIndex: 0U64)
@@ -1695,8 +1707,10 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             return materializeMidIndexValue(c: inout c, state: inout state, exprId: exprId, typeTerm: typeTerm)
         }
         Expr.Field(base: val base, nameStart: _, nameLen: _) => {
-            if !midHasSourceSemanticType(state: state, exprId: exprId) { return <MidOperandBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
-            val field: SemanticExprType = midSourceSemanticExprType(state: state, exprId: exprId)
+            val field: SemanticExprType = match midSourceSemanticExpression(state: state, exprId: exprId) {
+                Optional.Some(v: val fact) => fact
+                Optional.None => { return <MidOperandBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
+            }
             if !(field.hasFieldProjection) { return <MidOperandBuild.Error error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.FieldProjection /> /> /> }
             val baseTerm: U64 = midSourceSemanticTerm(state: state, exprId: base)
             // A field does not erase the selected inout access mode of its
@@ -1729,8 +1743,12 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
 
         Expr.Arrow(base: val base, nameStart: _, nameLen: _) => {
             if allowAccessMarker && !c.isMutableRefInst(ref: midSourceSemanticTerm(state: state, exprId: base)) { return <MidOperandBuild.Error error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredReference /> /> /> }
-            if !midHasSourceSemanticType(state: state, exprId: exprId) || !midSourceSemanticExprType(state: state, exprId: exprId).hasFieldProjection { return <MidOperandBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
-            return materializeMidReferencePlace(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: true, fieldIndex: midSourceSemanticExprType(state: state, exprId: exprId).fieldProjectionIndex, fieldIsBoxed: midSourceSemanticExprType(state: state, exprId: exprId).fieldProjectionIsBoxed)
+            val projection = match midSourceSemanticExpression(state: state, exprId: exprId) {
+                Optional.Some(v: val fact) => fact
+                Optional.None => { return <MidOperandBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
+            }
+            if !projection.hasFieldProjection { return <MidOperandBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
+            return materializeMidReferencePlace(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: true, fieldIndex: projection.fieldProjectionIndex, fieldIsBoxed: projection.fieldProjectionIsBoxed)
         }
         Expr.Deref(base: val base) => {
             if allowAccessMarker && !c.isMutableRefInst(ref: midSourceSemanticTerm(state: state, exprId: base)) { return <MidOperandBuild.Error error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredReference /> /> /> }
