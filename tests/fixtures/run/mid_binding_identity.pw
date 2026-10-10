@@ -1,46 +1,46 @@
 use @Std/Io only { write }
-use /Frontend only { Comp }
-use /Ir only { StructDef, TypeRef, Expr, Stmt, SemanticExprType, identValueCode }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, identValueCode }
 use /Mid only { MidBuildState, MidBuildError, MidOperand, MidRvalue, MidStatement, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet }
 
 fn main() {
     mut val c: Comp = <Comp />
-    c.arena.reserveTypeSentinel()
-    val typeName = c.internBytes(s: "File")
-    c.arena.registerStruct(<StructDef nameStart=typeName.nameStart nameLen=typeName.nameLen nameId=typeName.nameId typeParams=[] fields=[] isUnique=true isExtern=false defOffset=100U64 />)
-    val valueTerm = c.pushType(t: <TypeRef nameStart=typeName.nameStart nameLen=typeName.nameLen args=[] hasDecl=true declOffset=100U64 />)
+    analyzeFrontendForRequests(c: inout c,
+        input: <FrontendInput.Text path="binding-cfg.pw" text="unique struct File {{}} fn probe(file: move File) {{ val first = move file val second = move first }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = c.arena.firstFunctionNamed(nameId: c.internBytes(s: "probe").nameId)
+    val function = c.arena.functionAt(index: owner)
+    val parameter = c.funcParamAt(params: function.params, index: 0U64)
+    val valueTerm = parameter.ty
+    val firstBinding = c.blockStmtAt(blkId: function.body, index: 0U64)
+    val secondBinding = c.blockStmtAt(blkId: function.body, index: 1U64)
+    c.prepareLexicalBody(fnIdx: owner).unwrap()
+    val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
     mut val state: MidBuildState = <MidBuildState.initial sourceFunction=0U64 />
     val firstLocal = addMidLocal(state: inout state, declarationTarget: 10U64, typeTerm: valueTerm, isUnique: true, isParameter: false, ownsAtEntry: false)
     val secondLocal = addMidLocal(state: inout state, declarationTarget: 20U64, typeTerm: valueTerm, isUnique: true, isParameter: false, ownsAtEntry: false)
     val outer = midLocalForBinding(state: state, declarationTarget: 10U64)
     val inner = midLocalForBinding(state: state, declarationTarget: 20U64)
     val missing = midLocalForBinding(state: state, declarationTarget: 30U64)
-    c.typeCache.identBind.append(identValueCode())
-    c.typeCache.identTarget.append(20U64)
-    val place = midPlaceForRecordedIdent(c: inout c, state: state, exprId: 0U64, typeTerm: valueTerm)
-    c.typeCache.identTarget.set(i: 0U64, value: 30U64)
-    val absentPlace = midPlaceForRecordedIdent(c: inout c, state: state, exprId: 0U64, typeTerm: valueTerm)
-    // The initializer moves a real unique input, rather than assigning an integer to File.
-    c.typeCache.identTarget.set(i: 0U64, value: 60U64)
-    c.arena.exprs.append(<Expr.Ident start=60U64 len=4U64 />)
-    c.arena.exprs.append(<Expr.Move operand=0U64 isBorrow=false />)
-    c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
-    c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
-    c.typeCache.identBind.append(0I64)
-    c.typeCache.identTarget.append(0U64)
-    c.arena.stmts.append(<Stmt.Let mutable=false nameStart=40U64 nameLen=1U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=valueTerm init=1U64 />)
-    // The builder consumes the lexical type recorded by the frontend.
-    c.decls.semanticLetTerms[0U64] = valueTerm
-    mut val letState: MidBuildState = <MidBuildState.initial sourceFunction=0U64 />
-    val input = addMidLocal(state: inout letState, declarationTarget: 60U64, typeTerm: valueTerm, isUnique: true, isParameter: true, ownsAtEntry: true)
-    val letResult = buildMidLet(c: inout c, state: inout letState, stmtId: 0U64)
+    // Pure Mid binding lookup has explicit local identities and type input.
+    // Its navigation probe does not forge a source semantic result.
+    val bindingProbe = c.pushExpr(e: <Expr.Ident start=parameter.nameStart len=parameter.nameLen />)
+    while c.typeCache.identBind.count() <= bindingProbe { c.typeCache.identBind.append(identValueCode()) }
+    while c.typeCache.identTarget.count() <= bindingProbe { c.typeCache.identTarget.append(20U64) }
+    val place = midPlaceForRecordedIdent(c: inout c, state: state, exprId: bindingProbe, typeTerm: valueTerm)
+    c.typeCache.identTarget.set(i: bindingProbe, value: 30U64)
+    val absentPlace = midPlaceForRecordedIdent(c: inout c, state: state, exprId: bindingProbe, typeTerm: valueTerm)
+    mut val letState = <MidBuildState.initial sourceFunction=owner sourceFacts=<Optional.Some v=facts /> />
+    val input = addMidLocal(state: inout letState, declarationTarget: parameter.nameStart, typeTerm: valueTerm, isUnique: true, isParameter: true, ownsAtEntry: true)
+    val letResult = buildMidLet(c: inout c, state: inout letState, stmtId: firstBinding)
     mut val hasAssign: Bool = false
     match letState.blocks[0U64].statements[0U64] {
         MidStatement.Assign(destination: val destination, value: val value) => {
             match value {
                 MidRvalue.StorageBoundary(stmtId: val statement, targetTerm: val target, operand: val operand) => {
                     match operand {
-                        MidOperand.Move(place: val source) => { hasAssign = statement == 0U64 && target == valueTerm && destination.local == 1U64 && source.local == input }
+                        MidOperand.Move(place: val source) => { hasAssign = statement == firstBinding && target == valueTerm && destination.local == 1U64 && source.local == input }
                         _ => {}
                     }
                 }
@@ -49,24 +49,15 @@ fn main() {
         }
         _ => {}
     }
-    c.arena.exprs.append(<Expr.Ident start=40U64 len=1U64 />)
-    c.arena.exprs.append(<Expr.Move operand=2U64 isBorrow=false />)
-    c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
-    c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
-    c.typeCache.identBind.append(identValueCode())
-    c.typeCache.identTarget.append(40U64)
-    c.arena.stmts.append(<Stmt.Let mutable=false nameStart=50U64 nameLen=1U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=valueTerm init=3U64 />)
-    // The builder consumes the lexical type recorded by the frontend.
-    c.decls.semanticLetTerms[1U64] = valueTerm
     val secondStart = letState.blocks[0U64].statements.count()
-    val moveResult = buildMidLet(c: inout c, state: inout letState, stmtId: 1U64)
+    val moveResult = buildMidLet(c: inout c, state: inout letState, stmtId: secondBinding)
     mut val hasMove: Bool = false
     match letState.blocks[0U64].statements[secondStart] {
         MidStatement.Assign(destination: val destination, value: val value) => {
             match value {
                 MidRvalue.StorageBoundary(stmtId: val statement, targetTerm: val target, operand: val operand) => {
                     match operand {
-                        MidOperand.Move(place: val moved) => { hasMove = statement == 1U64 && target == valueTerm && destination.local == 2U64 && moved.local == 1U64 }
+                        MidOperand.Move(place: val moved) => { hasMove = statement == secondBinding && target == valueTerm && destination.local == 2U64 && moved.local == 1U64 }
                         _ => {}
                     }
                 }
