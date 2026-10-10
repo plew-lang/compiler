@@ -3566,14 +3566,9 @@ pub struct Decls {
     // sentinel used by call sites. This is an index into declarationConversions.
     pub mut val globalDeclarationConversionOwners: Dictionary[U64, Array[U64]] = [:]
     pub mut val globalCallTemplateOwners: Dictionary[U64, Array[U64]] = [:]
-    pub mut val callTemplateArgumentPool: Array[CallTemplateArgument] = []
-    pub mut val callTemplateTypeArgumentPool: Array[U64] = []
-    pub mut val callTemplateOperandPool: Array[CallArgumentSource] = []
-    pub mut val callTemplateViewPool: Array[ResolvedViewSource] = []
     // Derived open-addressed index for CallTemplate. Slots hold one-based
     // callTemplates indices and are rebuilt solely from CallSiteKey; this is
     // lookup structure, never a second semantic source.
-    pub mut val callTemplateIndexSlots: Array[U64] = []
     // Source-request membership, including nested closure bodies. Site keys
     // retain their exact owner; these derived lists only select request work.
     pub mut val callTemplateLexicalRoots: Dictionary[U64, U64] = [:]

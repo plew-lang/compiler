@@ -2,7 +2,7 @@ use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, completeFrontendDeclarations }
 use /SourceAccess only { SourceAccess }
-use /Ir only { CallTemplateKind, StaticMemberResolution, InstanceEnvironment, CallSiteSelection }
+use /Ir only { CallTemplateKind, StaticMemberResolution, InstanceEnvironment, CallSiteSelection, CallSiteKey, CallTemplate }
 
 fn main() {
     val source = "fn probe[T](receiver: T) -> I64 where T: P {{ return receiver.echo(value: 7I64) }}\ntrait P {{ fn echo[U](value: U) -> U }}\nstruct Box[Element] {{ val value: Element }}\nimpl[Element] Box[Element] as P {{ fn echo[Value](value: Value) -> Value {{ return value }} }}\nfn anchor(receiver: Box[I32], element: I32) {{}}\n"
@@ -18,7 +18,7 @@ fn main() {
     for template in compiler.callTemplateSnapshot() {
         if template.siteKey.ownerFnIdx == 0U64 {
             match template.kind {
-                CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
+                CallTemplateKind.StaticMethod(receiver: val receiverSource, args: val callArgs, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: val resultTerm) => {
                     val recorded = compiler.callTemplateTypeArgs(range: typeArgs)
                     assert(recorded.count() == 1U64)
                     assert(compiler.typeRefEq(a: recorded[0U64], b: probe.retTy))
@@ -49,8 +49,9 @@ fn main() {
                             }
                             // Corrupting the saved substitution must fail
                             // selection closure, not defer to runtime inference.
-                            compiler.decls.callTemplateTypeArgumentPool[typeArgs.start] = 0U64
-                            val templateIndex = compiler.callTemplateIndex(siteKey: template.siteKey)
+                            val templateIndex = compiler.callTemplateCount()
+                            val corruptKey = <CallSiteKey ownerFnIdx=template.siteKey.ownerFnIdx originKind=template.siteKey.originKind originStart=template.siteKey.originStart originEnd=template.siteKey.originEnd originSerial=template.siteKey.originSerial slot=template.siteKey.slot + 1000U64 />
+                            compiler.appendCallTemplate(template: <CallTemplate siteKey=corruptKey resultTypeRecipe=template.resultTypeRecipe receiverTypeTerm=template.receiverTypeTerm expectedResultTerm=template.expectedResultTerm kind=<CallTemplateKind.StaticMethod receiver=receiverSource args=callArgs resolution=resolution methodTypeArgs=compiler.publishCallTemplateTypeArgs(args: [0U64]) resultTerm=resultTerm /> />)
                             match compiler.checkCallTemplateSelection(templateIndex: templateIndex) {
                                 Result.Err(error: val diagnostic) => { assert(diagnostic.message == "cannot infer all type arguments for this call") }
                                 Result.Ok(value: _) => { panic "incomplete method substitution was sealed" }

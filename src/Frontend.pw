@@ -227,6 +227,11 @@ enum CallConstraintPlanState {
 }
 
 pub struct Comp {
+    mut val callTemplateArgumentPool: Array[CallTemplateArgument] = []
+    mut val callTemplateTypeArgumentPool: Array[U64] = []
+    mut val callTemplateOperandPool: Array[CallArgumentSource] = []
+    mut val callTemplateViewPool: Array[ResolvedViewSource] = []
+    mut val callTemplateIndexSlots: Array[U64] = []
     mut val callTemplates: Array[CallTemplate] = []
     mut val selectedCallConstraints: Dictionary[U64, CallConstraintPlanState]
     // Nonfatal diagnostics remain owned by the compilation/session. Only the

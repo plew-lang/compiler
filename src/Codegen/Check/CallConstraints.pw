@@ -63,11 +63,11 @@ impl Comp {
 
 pub impl Comp {
     fn callTemplateIndex(siteKey: CallSiteKey) -> U64 {
-        val capacity: U64 = self.decls.callTemplateIndexSlots.count()
+        val capacity: U64 = self.callTemplateIndexSlots.count()
         if capacity == 0U64 { return self.callTemplates.count() }
         mut val slot: U64 = siteKey.lookupHash() % capacity
-        while self.decls.callTemplateIndexSlots[slot] != 0U64 {
-            val entry: U64 = self.decls.callTemplateIndexSlots[slot] - 1U64
+        while self.callTemplateIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.callTemplateIndexSlots[slot] - 1U64
             if self.callTemplates[entry].siteKey.sameKey(other: siteKey) { return entry }
             slot = (slot + 1U64) % capacity
         }
@@ -102,4 +102,9 @@ pub impl Comp {
         val template = self.callTemplates[index]
         self.callTemplates.set(i: index, value: <CallTemplate siteKey=template.siteKey resultTypeRecipe=template.resultTypeRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm mayHaveStorageArguments=true />)
     }
+}
+
+pub impl Comp {
+    fn callTemplateOperandCount() -> U64 { return self.callTemplateOperandPool.count() }
+    fn callTemplateOperandAt(index: U64) -> CallArgumentSource { return self.callTemplateOperandPool[index] }
 }

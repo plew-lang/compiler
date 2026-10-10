@@ -1969,8 +1969,8 @@ fn midTemplateArguments(c: Comp, template: CallTemplate) -> Array[CallTemplateAr
             mut val args: Array[CallTemplateArgument] = []
             mut val i: U64 = 0U64
             while i < operands.len {
-                if operands.start + i >= c.decls.callTemplateOperandPool.count() { return [] }
-                args.append(<CallTemplateArgument source=c.decls.callTemplateOperandPool[operands.start + i] isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />)
+                if operands.start + i >= c.callTemplateOperandCount() { return [] }
+                args.append(<CallTemplateArgument source=c.callTemplateOperandAt(index: operands.start + i) isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />)
                 i += 1U64
             }
             return args
