@@ -8,7 +8,7 @@ fn main() {
     val context = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "context").nameId)
     val receiver = compiler.funcParamAt(params: compiler.arena.functionAt(index: context).params, index: 0U64).ty
     val trait = compiler.decls.traitAt(index: 0U64)
-    val selected = compiler.viewedTraitConstraintProof(ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=trait.nameStart positionalArgs=[] /> />).unwrap()
+    val selected = compiler.viewedTraitConstraintProof(ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=trait.nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
     val symbolic = <StaticConformanceProof.TraitSelf traitIdx=0U64 receiverRef=compiler.existentialSelfTerm(traitIndex: 0U64).unwrap() traitArgs=[] />
     val environment = <InstanceEnvironment receiverRef=receiver proof=selected />
     match compiler.instantiateConstraintProof(proof: symbolic, receiverRef: receiver, environment: environment, selfRef: receiver, itemRef: 0U64).unwrap() {
@@ -16,7 +16,7 @@ fn main() {
         _ => { panic("trait Self evidence was not retained") }
     }
     if compiler.instantiateConstraintProof(proof: symbolic, receiverRef: receiver, environment: <InstanceEnvironment receiverRef=receiver />, selfRef: receiver, itemRef: 0U64).isOk() { panic("missing trait Self evidence was repaired by search") }
-    val foreign = compiler.viewedTraitConstraintProof(ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 1U64).nameStart positionalArgs=[] /> />).unwrap()
+    val foreign = compiler.viewedTraitConstraintProof(ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 1U64).nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
     if compiler.instantiateConstraintProof(proof: symbolic, receiverRef: receiver, environment: <InstanceEnvironment receiverRef=receiver proof=foreign />, selfRef: receiver, itemRef: 0U64).isOk() { panic("foreign trait Self evidence was accepted") }
     print("retained-trait-self-evidence")
 }
