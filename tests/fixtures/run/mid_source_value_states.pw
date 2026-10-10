@@ -1,0 +1,27 @@
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Mid only { MidBuildError, buildParametricMidBody }
+
+fn prepare(source: String) {
+    mut val compiler: Comp = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="source-states.pw" text=source />,
+        sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    val built = buildParametricMidBody(c: inout compiler, fnIdx: owner)
+    match built.error {
+        MidBuildError.None => {}
+        _ => { panic("prepared source value state rejected") }
+    }
+    if !compiler.mid.isWellFormed(body: built.canonical) { panic("malformed Mid") }
+}
+
+fn main() {
+    prepare(source: "fn unit() {{}} fn probe() {{ val item = unit() }}")
+    prepare(source: "diverge fn stop() {{ panic(\"stop\") }} fn probe() {{ stop() }}")
+    prepare(source: "fn identity[T](value: T) -> T {{ return value }} fn probe[T](value: T) -> T {{ return identity(value: value) }}")
+    prepare(source: "fn probe(flag: Bool) -> I64 {{ return if flag {{ give 1I64 }} else {{ return 2I64 }} }}")
+    print("ok")
+}
