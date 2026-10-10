@@ -462,6 +462,15 @@ pub impl Comp {
             if !self.sameStaticConformanceProof(a: self.thawStaticConformanceProof(id: left.proofs[index]), b: self.thawStaticConformanceProof(id: right.proofs[index])) { return false }
             index += 1U64
         }
+        if left.normalizations.count() != right.normalizations.count() { return false }
+        index = 0U64
+        while index < left.normalizations.count() {
+            val leftStep = left.normalizations[index]
+            val rightStep = right.normalizations[index]
+            if !self.typeRefEq(a: leftStep.source, b: rightStep.source) || !self.typeRefEq(a: leftStep.output, b: rightStep.output) { return false }
+            if !self.sameStaticConformanceProof(a: self.thawStaticConformanceProof(id: leftStep.proof), b: self.thawStaticConformanceProof(id: rightStep.proof)) { return false }
+            index += 1U64
+        }
         return true
     }
 

@@ -27,6 +27,7 @@ fn control(mode~: U64) {
     val changed = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=parent proofs=plan.proofs normalizations=normalizations />)
     compiler.checkWitnessConditionEvidence(witness: witness, offset: 0U64).unwrap()
     val changedWitness = <WitnessMatch selfRef=parent.selfRef conformIdx=parent.conformIdx binds=parent.binds conditions=changed />
+    if compiler.sameWitnessMatch(a: witness, b: changedWitness) != (mode == 0U64) { panic("witness identity lost retained projection evidence") }
     val result = compiler.checkWitnessConditionEvidence(witness: changedWitness, offset: 0U64)
     if mode == 0U64 { result.unwrap() }
     else { if result.isOk() { panic("corrupt projection equation accepted") } }
