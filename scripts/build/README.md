@@ -137,7 +137,9 @@ The runtime object is compiled at distribution-build time, never per user build.
 `native/llvm_backend.cpp` provides a borrowed-module API for verification,
 optimization, and native PIC object generation. It rejects incompatible target
 triples/layouts. `native/llvm_pipeline.h` is shared with the development link
-helper; the additional `default<O2>` supplies the subsequent IR optimization
+helper. Field splitting and simplification run inside each call-graph SCC before
+argument promotion, so a delegate consumes its already-promoted callee signature
+instead of promoting a whole outer value. The additional `default<O2>` supplies the subsequent IR optimization
 formerly run by clang. The build-machine `llvm_object_main.cpp` worker uses this
 same API for explicit LLVM-file tests. Raw fixed-point materials remain text;
 ordinary object builds do not generate an intermediate `.ll`. Workers initialize

@@ -11,6 +11,7 @@ import tempfile
 ROOT = Path.cwd()
 sys.path.insert(0, str(ROOT / "scripts/support"))
 import clang_environment
+import llvm_link
 clang_environment.apply()
 CONFIG = os.environ.get('LLVM_CONFIG', '/opt/homebrew/opt/llvm/bin/llvm-config')
 CLANG = str(Path(subprocess.check_output([CONFIG, '--bindir'], text=True).strip()) / 'clang')
@@ -65,7 +66,7 @@ int main(int argc, char **argv) {
             expected_opt = shutil.which(os.environ['LLVM_OPT']) if os.environ.get('LLVM_OPT') else str(bindir / 'opt')
             assert Path(state['optimization_command'][0]) == Path(expected_opt), state
             assert state['clang_environment'] == clang_environment.settings(), state
-            assert '-passes=function(sroa,early-cse,instcombine<verify-fixpoint;max-iterations=8>),cgscc(argpromotion),default<O1>' in state['optimization_command'], state
+            assert '-passes=cgscc(function(sroa,early-cse,instcombine<verify-fixpoint;max-iterations=8>),argpromotion),default<O1>' in state['optimization_command'], state
             assert state['optimizer_version'], state
             for row in state['generations']:
                 if 'successor' in row:
@@ -75,6 +76,7 @@ int main(int argc, char **argv) {
                     assert opt_log.is_file() and 'Running pass:' in opt_log.read_text(), opt_log
                     assert link_log.with_name('link.optimized.ll').is_file()
         print('PASS', label, flush=True)
+        print('[trace-phase] self-host-test:' + label + ':done', file=sys.stderr, flush=True)
 
     compiler('stable', 'stable')
     compiler('transition', 'stable')
@@ -103,3 +105,45 @@ int main(int argc, char **argv) {
     # Invalid LLVM must propagate clang's failure and never publish a time.
     (work / 'invalid.ll').write_text('invalid llvm\n')
     run('link-failure', 'invalid', expected=1)
+
+    # The caller must be simplified after the callee's signature is promoted.
+    # A module-wide cleanup before argpromotion leaves delegate's outer byval.
+    nested = work / 'nested-delegate.ll'
+    nested.write_text("""%Inner = type { i64, i64, i64, i64 }
+%Outer = type { i64, %Inner, i64 }
+define internal i64 @leaf(ptr byval(%Inner) %input) noinline {
+  %field = getelementptr %Inner, ptr %input, i32 0, i32 2
+  %value = load i64, ptr %field
+  ret i64 %value
+}
+define internal i64 @delegate(ptr byval(%Outer) %input) noinline {
+  %slot = alloca %Inner
+  %whole = load %Outer, ptr %input
+  %inner = extractvalue %Outer %whole, 1
+  store %Inner %inner, ptr %slot
+  %value = call i64 @leaf(ptr byval(%Inner) %slot)
+  ret i64 %value
+}
+define i64 @entry(ptr %input) {
+  %value = call i64 @delegate(ptr byval(%Outer) %input)
+  ret i64 %value
+}
+""")
+    optimized = work / 'nested-delegate.optimized.ll'
+    with (work / 'nested-delegate.opt.log').open('wb') as log:
+        subprocess.run(llvm_link.optimization_command(CONFIG, nested, optimized),
+                       stderr=log, check=True)
+    signatures = [line for line in optimized.read_text().splitlines() if line.startswith('define ')]
+    assert all('%Outer' not in line and '%Inner' not in line for line in signatures), signatures
+    driver = work / 'nested-delegate.c'
+    driver.write_text('#include <stdint.h>\n'
+                      'struct Inner { int64_t a,b,c,d; };\n'
+                      'struct Outer { int64_t head; struct Inner inner; int64_t tail; };\n'
+                      'extern int64_t entry(struct Outer *);\n'
+                      'int main(void) { struct Outer value={1,{2,3,7,5},6}; '
+                      'return entry(&value)==7 ? 0 : 1; }\n')
+    executable = work / 'nested-delegate'
+    subprocess.run([CLANG, '-w', '-O2', str(optimized), str(driver), '-o', str(executable)], check=True)
+    subprocess.run([str(executable)], check=True)
+    print('PASS nested-delegate', flush=True)
+    print('[trace-phase] self-host-test:nested-delegate:done', file=sys.stderr, flush=True)

@@ -10,7 +10,8 @@ import sys
 
 import clang_environment
 
-# Split aggregate loads into field reads before promoting private byval arguments.
+# Split aggregate loads immediately before promoting each SCC's private byval
+# arguments, after its callees have been simplified and promoted.
 # Finish ordinary module optimization before any sanitizer instrumentation.
 # Field splitting alone can leave byval snapshots that ASan turns into copies.
 # Keep fixpoint verification enabled; generated bodies can need several rounds.
