@@ -1,6 +1,6 @@
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { TraitConstraint, TraitInstanceKey, StaticConformanceProof, StaticProofInstantiation, DeclarationBoundRef, PatternTypeInput, PatternBindInput, AssociatedBoundEvidence }
+use /Ir only { TraitConstraint, TraitInstanceKey, StaticConformanceProof, StaticProofInstantiation, DeclarationBoundRef, ConformanceAssociatedEvidence, PatternTypeInput, PatternBindInput, AssociatedBoundEvidence }
 use @Std/Io only { print }
 fn main() {
     mut val compiler = <Comp />
@@ -29,6 +29,12 @@ fn main() {
         _ => { panic("missing associated assumption") }
     }
     val original = compiler.arena.associatedBoundEvidenceAt(index: index)
+    // Input's selected Source declaration owns this clause's concrete proof.
+    val declaration = 2U64
+    val retained = compiler.arena.conformanceAssociatedProof(conformance: declaration, clause: original.clause).unwrap()
+    val replacement: Array[ConformanceAssociatedEvidence] = []
+    if compiler.arena.publishConformanceAssociatedEvidence(conformance: declaration, evidence: replacement) { panic("published associated evidence was replaced") }
+    if compiler.arena.conformanceAssociatedProof(conformance: declaration, clause: original.clause).unwrap() != retained { panic("retained associated proof changed") }
     val foreign = compiler.arena.publishAssociatedBoundEvidence(evidence: <AssociatedBoundEvidence projection=original.projection clause=original.clause + 100U64 prerequisite=original.prerequisite bound=original.bound />)
     if compiler.instantiateConstraintProof(proof: <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.AssociatedType index=foreign /> />, receiverRef: item, environment: environment, selfRef: receiver, itemRef: 0U64).isOk() { panic("missing clause was repaired by search") }
     print("retained-associated-constraint")
