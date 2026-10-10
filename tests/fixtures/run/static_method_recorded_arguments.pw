@@ -8,7 +8,8 @@ fn main() {
     val source = "fn probe[T](receiver: T) -> I64 where T: P {{ return receiver.echo(value: 7I64) }}\ntrait P {{ fn echo[U](value: U) -> U }}\nstruct Box[Element] {{ val value: Element }}\nimpl[Element] Box[Element] as P {{ fn echo[Value](value: Value) -> Value {{ return value }} }}\nfn anchor(receiver: Box[I32], element: I32) {{}}\n"
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="method-arguments.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
-    completeFrontendDeclarations(c: inout compiler).unwrap()
+    // Inspect construction-time rejection before the owner is published.
+    compiler.recordParametricFunction(fnIdx: 0U64, recordCallTemplates: true).unwrap()
     val probe = compiler.arena.functionAt(index: 0U64)
     val anchor = compiler.arena.functionAt(index: 2U64)
     val receiver = compiler.funcParamAt(params: anchor.params, index: 0U64).ty

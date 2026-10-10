@@ -14,14 +14,22 @@ for required in [
     "pub struct CallTemplateTypeArgumentRange",
     "pub struct CallTemplateOperandRange",
     "pub struct CallTemplateViewRange",
-    "pub mut val callTemplateArgumentPool: Array[CallTemplateArgument]",
-    "pub mut val callTemplateTypeArgumentPool: Array[U64]",
-    "pub mut val callTemplateOperandPool: Array[CallArgumentSource]",
-    "pub mut val callTemplateViewPool: Array[ResolvedViewSource]",
     "proofId: U64",
 ]:
     if required not in ir:
         raise SystemExit(f"missing scalar CallTemplate storage: {required}")
+
+frontend = Path("src/Frontend.pw").read_text()
+for field in [
+    "callTemplateArgumentPool: Array[CallTemplateArgument]",
+    "callTemplateTypeArgumentPool: Array[U64]",
+    "callTemplateOperandPool: Array[CallArgumentSource]",
+    "callTemplateViewPool: Array[ResolvedViewSource]",
+]:
+    if "    mut val " + field not in frontend:
+        raise SystemExit(f"missing private frontend CallTemplate pool: {field}")
+    if "pub mut val " + field in frontend or "pub mut val " + field in ir:
+        raise SystemExit(f"CallTemplate pool exposes mutable storage: {field}")
 
 receiver_start = ir.index("pub enum CallTemplateReceiver")
 receiver_end = ir.index("pub enum CallArgumentSource", receiver_start)

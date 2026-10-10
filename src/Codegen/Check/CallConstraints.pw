@@ -145,6 +145,7 @@ pub impl Comp {
 
 pub impl Comp {
     fn lexicalBodyPreparationCount() -> U64 { return self.lexicalBodyPreparations.count() }
+    fn globalInitializerPreparationCount() -> U64 { return self.preparedGlobalTargets.count() }
 }
 
 impl Comp {

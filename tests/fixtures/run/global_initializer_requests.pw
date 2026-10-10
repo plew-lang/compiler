@@ -56,6 +56,6 @@ fn main() {
     assertCursor(compiler: inout compiler)
     if resolved.globalTypePending || compiler.cur.locals.count() != 1U64 || compiler.cur.locals[0U64].globalTypePending { panic("global type was not published to caller") }
     if compiler.resolvingGlobalTypes.count() != 1U64 || compiler.resolvingGlobalTypes[0U64] != 70005U64 { panic("type query leaked its stack") }
-    if !compiler.globalInitializerPrepared(target: good.nameStart) || compiler.preparedGlobalTargets.count() != 1U64 { panic("global readiness was not independent") }
+    if !compiler.globalInitializerPrepared(target: good.nameStart) || compiler.globalInitializerPreparationCount() != 1U64 { panic("global readiness was not independent") }
     print("ok")
 }

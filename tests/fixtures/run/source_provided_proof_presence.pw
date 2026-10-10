@@ -15,6 +15,7 @@ fn main() {
     if callee >= compiler.arena.functionCount() { panic("missing provided copy") }
     val proof = compiler.providedBodyProof(f: compiler.arena.functionAt(index: callee), receiverRef: receiver, assumptions: compiler.functionBoundAssumptions(fnIdx: owner)).unwrap()
     if compiler.proofIsMissing(proof: proof) { panic("missing valid provided proof") }
+    mut val sampleSerial = 900U64
     val args = compiler.publishCallTemplateArguments(args: [])
     val types = compiler.publishCallTemplateTypeArgs(args: [])
     mut val family = 0U64
@@ -28,14 +29,15 @@ fn main() {
             } else {
                 give <CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=receiver /> selection=<ProtocolSelection.Direct callee=callee proof=selected /> resultTerm=0U64 />
             }
-            val template = <CallTemplate siteKey=<CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=900U64 /> receiverTypeTerm=receiver kind=kind />
+            val template = <CallTemplate siteKey=<CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=sampleSerial /> receiverTypeTerm=receiver kind=kind />
+            sampleSerial += 1U64
             match compiler.checkCallTemplateEvidence(template: template) {
                 Result.Ok(value: _) => { if missing { panic("provided call accepted without proof") } }
                 Result.Err(error: val diagnostic) => { if !missing || diagnostic.message != "selected provided call has no conformance evidence" { panic(diagnostic.message) } }
             }
             if family == 0U64 {
                 val index = compiler.callTemplateCount()
-                compiler.appendCallTemplate(template: template)
+                if !compiler.appendCallTemplate(template: template) { panic("construction sample was refused") }
                 match compiler.checkCallTemplateSelection(templateIndex: index) {
                     Result.Ok(value: _) => { if missing { panic("sealed provided call accepted without proof") } }
                     Result.Err(error: val diagnostic) => { if !missing || diagnostic.message != "selected provided call has no conformance evidence" { panic(diagnostic.message) } }

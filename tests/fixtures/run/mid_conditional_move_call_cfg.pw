@@ -1,11 +1,13 @@
 use @Std/Io only { write }
 use /Frontend only { Comp }
-use /Ir only { SemanticExprType, StructDef, Arg, ArgRange, Block, CallArgumentSource, CallTemplate, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, StaticConformanceProof, Stmt, identValueCode }
+use /Ir only { SemanticExprType, StructDef, Func, Arg, ArgRange, Block, CallArgumentSource, CallTemplate, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, StaticConformanceProof, Stmt, identValueCode }
 use /Mid only { MidBuildError, MidBuildState, MidBody, MidOwnership, MidStatement, MidVerifyError, addMidLocal, analyzeCanonicalMidOwnership, buildMidIf, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
 
 fn main() {
     mut val c: Comp = <Comp />
     c.arena.reserveTypeSentinel()
+    // The call belongs to a real source owner, not the no-function sentinel.
+    c.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 params=c.pushFuncParams(params: []) hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
     val typeName = c.internBytes(s: "File")
     c.arena.registerStruct(<StructDef nameStart=typeName.nameStart nameLen=typeName.nameLen nameId=typeName.nameId typeParams=[] fields=[] isUnique=true isExtern=false />)
     val valueTerm = c.simpleTypeRef(nameStart: typeName.nameStart, nameLen: typeName.nameLen)
