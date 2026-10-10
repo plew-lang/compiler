@@ -1,0 +1,45 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontend }
+use /SourceAccess only { SourceAccess }
+use /Ir only { DeclarationBoundRef, StaticConformanceProof }
+use @Std/Io only { print }
+
+fn check(source: String, publicCount: U64) {
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text=source path="requirement-constraints.pw" />, sources: <SourceAccess stdRoot=[] />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+    val name = compiler.internBytes(s: "fetch").nameId
+    mut val found = false
+    mut val index = 0U64
+    while index < compiler.arena.bodyInstanceCount() {
+        val body = compiler.arena.bodyInstanceAt(index: index)
+        if body.fnIdx < compiler.arena.functionCount() && compiler.arena.functionAt(index: body.fnIdx).nameId == name {
+            val bindings = body.environment.constraints.unwrap()
+            if compiler.arena.callableConstraintCount(evidence: bindings) == 0U64 { panic("implementation lost its retained constraints") }
+            mut val planIndex = 0U64
+            while planIndex < compiler.arena.conformanceMethodEvidenceCount() && compiler.arena.conformanceMethodEvidenceAt(index: planIndex).implementation != body.fnIdx { planIndex += 1U64 }
+            if planIndex >= compiler.arena.conformanceMethodEvidenceCount() { panic("implementation has no declaration entailment") }
+            val plan = compiler.arena.conformanceMethodEvidenceAt(index: planIndex)
+            if plan.requirements.count() != publicCount { panic("public and implementation bounds were conflated") }
+            if compiler.arena.publishConformanceMethodEvidence(evidence: plan) { panic("construction writer replaced a published method plan") }
+            if compiler.instantiateRequirementCallConstraints(fnIdx: body.fnIdx, environment: body.environment, planIndex: compiler.arena.conformanceMethodEvidenceCount(), bounds: [], proofs: []).isOk() { panic("missing derivation was repaired by lookup") }
+            if publicCount != 0U64 && compiler.instantiateRequirementCallConstraints(fnIdx: body.fnIdx, environment: body.environment, planIndex: planIndex, bounds: [], proofs: []).isOk() { panic("missing public evidence was repaired by lookup") }
+            for source in plan.requirements {
+                val assumed = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Requirement index=source /> />
+                val restored = compiler.thawStaticConformanceProof(id: compiler.freezeStaticConformanceProof(proof: assumed))
+                if !compiler.sameStaticConformanceProof(a: assumed, b: restored) { panic("requirement clause identity was lost in storage") }
+            }
+            found = true
+        }
+        index += 1U64
+    }
+    if !found { panic("requirement call did not demand its implementation") }
+}
+
+fn main() {
+    check(source: "trait First {{ fn read() -> I64 }}\ntrait Second {{}}\ntrait Service {{ fn fetch[T,U](first: T, second: U) -> I64 where T: First, U: Second }}\nstruct Item {{}}\nimpl Item as First {{ fn read() -> I64 {{ return 42I64 }} }}\nimpl Item as Second {{}}\nstruct Worker {{}}\nimpl Worker as Service {{ fn fetch[T,U](first: T, second: U) -> I64 where U: Second, T: First {{ return first.read() }} }}\nfn caller[R,T,U](receiver: R, first: T, second: U) -> I64 where R: Service, T: First, U: Second {{ return receiver.fetch(first: first, second: second) }}\nfn main() {{ val result = caller(receiver: <Worker />, first: <Item />, second: <Item />) }}\n", publicCount: 2U64)
+    check(source: "trait Parent {{ fn read() -> I64 }}\ntrait Child: Parent {{}}\ntrait Service {{ fn fetch[T](value: T) -> I64 where T: Child }}\nstruct Item {{}}\nimpl Item as Parent {{ fn read() -> I64 {{ return 42I64 }} }}\nimpl Item as Child {{}}\nstruct Worker {{}}\nimpl Worker as Service {{ fn fetch[T](value: T) -> I64 where T: Parent {{ return value.read() }} }}\nfn caller[R,T](receiver: R, value: T) -> I64 where R: Service, T: Child {{ return receiver.fetch(value: value) }}\nfn main() {{ val result = caller(receiver: <Worker />, value: <Item />) }}\n", publicCount: 1U64)
+    check(source: "trait Tag {{}}\ntrait Service {{ fn fetch[T](value: T) -> I64 }}\nstruct Item {{}}\nimpl Item as Tag {{}}\nstruct Worker[R] {{}}\nimpl[R] Worker[R] as Service where R: Tag {{ fn fetch[T](value: T) -> I64 where R: Tag {{ return 42I64 }} }}\nfn caller[R,T](receiver: R, value: T) -> I64 where R: Service {{ return receiver.fetch(value: value) }}\nfn main() {{ val result = caller(receiver: <Worker[Item] />, value: <Item />) }}\n", publicCount: 0U64)
+    print("retained-requirement-body-constraints")
+}
