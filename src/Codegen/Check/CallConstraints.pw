@@ -2,15 +2,7 @@
 // cannot mutate its private rows, and construction cannot replace Prepared.
 pub impl Comp {
     fn selectedCallConstraintPlan(index: U64) -> Optional[SelectedCallConstraints] {
-        match self.selectedCallConstraints.get(key: index) {
-            Optional.Some(v: val state) => {
-                match state {
-                    CallConstraintPlanState.Building(plan: val plan) => { return <Optional.Some v=plan /> }
-                    CallConstraintPlanState.Prepared(snapshot: val snapshot) => { return <Optional.Some v=snapshot.constraints() /> }
-                }
-            }
-            Optional.None => { return <Optional.None /> }
-        }
+        return sourceCallConstraintPlan(states: self.selectedCallConstraints, index: index)
     }
 
     inout fn recordBuildingCallConstraints(index: U64, plan: SelectedCallConstraints) -> Bool {
@@ -46,7 +38,7 @@ impl Comp {
         try self.checkRecordedCallConstraintEvidence(templateIndex: templateIndex)
         val template = self.callTemplates[templateIndex]
         val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
-        val plan = match self.selectedCallConstraintPlan(index: templateIndex) {
+        val plan = match sourceCallConstraintPlan(states: self.selectedCallConstraints, index: templateIndex) {
             Optional.Some(v: val selected) => selected
             Optional.None => <SelectedCallConstraints owner=scope.owner bounds=[] proofs=[] />
         }

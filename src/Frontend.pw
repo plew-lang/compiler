@@ -2242,3 +2242,15 @@ fn findSourceCallTemplateIndex(templates: Array[CallTemplate], indexSlots: Array
     }
     return templates.count()
 }
+
+fn sourceCallConstraintPlan(states: Dictionary[U64, CallConstraintPlanState], index: U64) -> Optional[SelectedCallConstraints] {
+        match states.get(key: index) {
+            Optional.Some(v: val state) => {
+                match state {
+                    CallConstraintPlanState.Building(plan: val plan) => { return <Optional.Some v=plan /> }
+                    CallConstraintPlanState.Prepared(snapshot: val snapshot) => { return <Optional.Some v=snapshot.constraints() /> }
+                }
+            }
+            Optional.None => { return <Optional.None /> }
+        }
+}

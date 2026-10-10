@@ -1170,7 +1170,7 @@ pub impl Comp {
         try self.checkCallTemplateSelection(templateIndex: templateIndex)
         val template = self.callTemplates[templateIndex]
         val bounds = try self.sourceSelectedCallBounds(template: template)
-        match self.selectedCallConstraintPlan(index: templateIndex) {
+        match sourceCallConstraintPlan(states: self.selectedCallConstraints, index: templateIndex) {
             Optional.Some(v: val plan) => { return self.checkSelectedCallConstraintPlan(template: template, expected: bounds, plan: plan) }
             Optional.None => {}
         }
@@ -1198,7 +1198,7 @@ pub impl Comp {
     inout fn checkRecordedCallConstraintEvidence(templateIndex: U64) -> Result[(), CompileDiagnostic] {
         val template = self.callTemplates[templateIndex]
         val bounds = try self.sourceSelectedCallBounds(template: template)
-        match self.selectedCallConstraintPlan(index: templateIndex) {
+        match sourceCallConstraintPlan(states: self.selectedCallConstraints, index: templateIndex) {
             Optional.Some(v: val plan) => { return self.checkSelectedCallConstraintPlan(template: template, expected: bounds, plan: plan) }
             Optional.None => {
                 if bounds.count() == 0U64 { return <Result.Ok value=() /> }
