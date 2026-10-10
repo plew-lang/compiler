@@ -4,8 +4,8 @@ pub impl Comp {
     // A final consumer reads the owner's last Record result. Allocation,
     // signature readiness, and template closure are not source-check proofs.
     inout fn checkedSemanticExprCompletion(exprId: U64) -> Result[SourceCompletion, CompileDiagnostic] {
-        if exprId < self.semanticExprTypes.count() {
-            match self.semanticExprTypes[exprId].completion {
+        if exprId < self.semanticExprRecords.count() {
+            match self.semanticExprRecords[exprId].expression.completion {
                 Optional.Some(v: val fact) => {
                     if try self.semanticCompletionOwnerPrepared(owner: fact.owner) { return <Result.Ok value=fact.flow /> }
                 }
@@ -145,8 +145,8 @@ pub impl Comp {
     // templates. Pending is not rewritten to Returns by this construction-
     // time walker; finalized readers must require a completed selection.
     fn invocationDiverges(exprId: U64) -> Bool {
-        if exprId >= self.semanticExprTypes.count() { return false }
-        match self.semanticExprTypes[exprId].invocation {
+        if exprId >= self.semanticExprRecords.count() { return false }
+        match self.semanticExprRecords[exprId].expression.invocation {
             InvocationCompletion.Diverges => { return true }
             _ => { return false }
         }

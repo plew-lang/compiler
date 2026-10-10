@@ -521,8 +521,8 @@ pub impl Comp {
     // substitute a concrete BodyInstance or use a finalized call descriptor
     // to decide a reusable declaration's generic arguments.
     inout fn inferenceArgumentType(exprId: U64) -> Result[U64, CompileDiagnostic] {
-        if exprId < self.semanticExprTypes.count() {
-            match self.semanticExprTypes[exprId].typeState {
+        if exprId < self.semanticExprRecords.count() {
+            match self.semanticExprRecords[exprId].expression.typeState {
                 SemanticExpressionTypeState.NoNormalValue => { return <Result.Ok value=0U64 /> }
                 _ => {}
             }
@@ -589,8 +589,8 @@ pub impl Comp {
     // fact under the caller's explicit instance environment; only unfinished
     // construction queries may enter the syntax-based producer below.
     inout fn exprTypeWithChainHole(id: U64, chainHoleRef: U64) -> Result[TypeInfo, CompileDiagnostic] {
-        if id < self.semanticExprTypes.count() {
-            match self.semanticExprTypes[id].typeState {
+        if id < self.semanticExprRecords.count() {
+            match self.semanticExprRecords[id].expression.typeState {
                 SemanticExpressionTypeState.Value | SemanticExpressionTypeState.Unit => {
                     val environment = <InstanceEnvironment params=self.cur.typeParams args=self.cur.typeArgs receiverRef=self.cur.recvInstRef proof=self.cur.bodyEnvironment.proof />
                     return self.groundSemanticExprTypeInfo(exprId: id, environment: environment, selfRef: self.cur.selfRef, itemRef: self.cur.itemRef)

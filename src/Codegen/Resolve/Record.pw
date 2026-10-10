@@ -2058,7 +2058,7 @@ pub impl Comp {
                 if elems.len > 0U64 {
                     val eRef: U64 = self.parametricExprTerm(exprId: self.exprAt(exprs: elems, index: 0U64))
                     if eRef != 0U64 {
-                        if exprId < self.semanticExprTypes.count() {
+                        if exprId < self.semanticExprRecords.count() {
                             self.recordSemanticExprTerm(exprId: exprId, term: self.arrayRefOfElem(elemRef: eRef))
                         }
                     }
@@ -2150,7 +2150,7 @@ pub impl Comp {
                 // This form rewrites itself to MatchExpr below. Preserve its
                 // pre-rewrite legacy adapter before changing the AST node;
                 // other forms use the common post-order fallback.
-                if exprId < self.semanticExprTypes.count() {
+                if exprId < self.semanticExprRecords.count() {
                     self.recordSemanticExprInfo(exprId: exprId, ti: (try self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef)))
                 }
                 try self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
@@ -2299,7 +2299,7 @@ pub impl Comp {
         val completion = self.exprCompletion(exprId: exprId)
         self.recordSemanticExprCompletion(exprId: exprId, completion: completion)
         if needsValue { try self.requireExpressionCompletionValue(exprId: exprId, completion: completion) }
-        if exprId < self.semanticExprTypes.count() {
+        if exprId < self.semanticExprRecords.count() {
             if self.semanticExprTerm(exprId: exprId) == 0U64 {
                 self.recordSemanticExprInfo(exprId: exprId, ti: (try self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef)))
             }
@@ -2334,7 +2334,7 @@ pub impl Comp {
         }
         if !self.cur.recordCallTemplates { return <Result.Ok value=() /> }
         self.ensureSemanticExprType(exprId: exprId)
-        val fact = self.semanticExprTypes[exprId]
+        val fact = self.semanticExprRecords[exprId].expression
         // A type-qualified factory receiver names a declaration, not a
         // runtime value. Its recorded identifier decision owns this distinction.
         if exprId < self.typeCache.identBind.count() && self.typeCache.identBind[exprId] == identTypeQualCode() {
@@ -2368,7 +2368,7 @@ pub impl Comp {
         mut val cursor = self.sourceTypingObligations.first(owner: owner)
         while cursor != 0U64 {
             val obligation = self.sourceTypingObligations.entries[cursor - 1U64]
-            val fact = self.semanticExprTypes[obligation.expression]
+            val fact = self.semanticExprRecords[obligation.expression].expression
             match fact.typeState {
                 SemanticExpressionTypeState.Pending | SemanticExpressionTypeState.Unrecorded => {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: obligation.expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") />

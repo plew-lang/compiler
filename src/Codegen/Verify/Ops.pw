@@ -326,7 +326,7 @@ pub impl Comp {
     }
 
     inout fn verifySelectedFieldExists(exprId: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, message: String) -> Result[(), CompileDiagnostic] {
-        if exprId < self.semanticExprTypes.count() && self.semanticExprTypes[exprId].hasFieldProjection { return <Result.Ok value=() /> }
+        if exprId < self.semanticExprRecords.count() && self.semanticExprRecords[exprId].expression.hasFieldProjection { return <Result.Ok value=() /> }
         val storage = self.fieldStorageTypeRef(receiverRef: self.lexicalLayoutReceiver(receiverTerm: receiverTerm))
         if storage == 0U64 { return <Result.Ok value=() /> }
         val storageType = self.arena.typeAt(index: storage)

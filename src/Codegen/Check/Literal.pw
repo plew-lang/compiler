@@ -127,7 +127,7 @@ pub impl Comp {
     inout fn checkLitCtx(id: U64, eKind: U64, eBits: U64, eSgn: Bool) -> Result[(), CompileDiagnostic] {
         // Verification without a new expected type must retain the concrete
         // literal context established by ordered semantic recording.
-        if eKind == 0 && id < self.semanticExprTypes.count() && self.semanticExprTypes[id].literalContext != 0U64 {
+        if eKind == 0 && id < self.semanticExprRecords.count() && self.semanticExprRecords[id].expression.literalContext != 0U64 {
             val recorded: TypeInfo = self.exprIntCtxTypeInfo(id: id)
             if self.tiIsInt(ti: recorded) || self.tiIsFloat(ti: recorded) {
                 return self.checkLitTi(id: id, ti: recorded)
