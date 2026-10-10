@@ -7,7 +7,7 @@ fn main() {
     mut val compiler = <Comp />
     val resources = [
         <SourceResource path="plew:std/Lang.pw".bytes() text="pub enum Result[T, E] {{ Ok(value: T) Err(error: E) }}" />,
-        <SourceResource path="plew:std/TryProbe.pw".bytes() text="fn probe(input: Result[I64, I64]) -> Result[I64, I64] {{ val value = try input return <Result[I64, I64].Ok value=value /> }} fn unrelated() {{}}" />,
+        <SourceResource path="plew:std/TryProbe.pw".bytes() text="fn probe(input: Result[I64, I64]) -> Result[I64, I64] {{ val value = try input return <Result[I64, I64].Ok value=value /> }} fn unrelated() {{}} fn generic[T](input: Result[T, I64]) -> Result[T, I64] {{ val value = try input return <Result[T, I64].Ok value=value /> }} val callback = fn(input: Result[I64, I64]) -> Result[I64, I64] {{ val value = try input return <Result[I64, I64].Ok value=value /> }}" />,
     ]
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="plew:std/TryProbe.pw" />, sources: <SourceAccess stdRoot="plew:std/".bytes() resources=resources />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
@@ -36,5 +36,24 @@ fn main() {
         _ => { panic("completed try recorded again") }
     }
     if facts.tryDecomposition(ownerFnIdx: owner, exprId: expression).unwrap().operandTerm != fact.operandTerm { panic("published try snapshot changed") }
+    val generic = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "generic").nameId)
+    compiler.prepareLexicalBody(fnIdx: generic).unwrap()
+    val genericStatement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: generic).body, index: 0U64)
+    val genericExpression = match compiler.arena.stmts[genericStatement] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val expression) => expression
+        _ => { panic("missing generic try") }
+    }
+    if !compiler.preparedFunctionSemanticFacts(fnIdx: generic).unwrap().tryDecomposition(ownerFnIdx: generic, exprId: genericExpression).isSome() { panic("generic try missing") }
+    val callback = compiler.arena.globals[0U64]
+    compiler.prepareGlobalInitializer(target: callback.nameStart).unwrap()
+    val closure = compiler.preparedSemanticClosureAt(index: 0U64).unwrap()
+    val closureStatement = compiler.blockStmtAt(blkId: closure.bodyBlock, index: 0U64)
+    val closureExpression = match compiler.arena.stmts[closureStatement] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val expression) => expression
+        _ => { panic("missing closure try") }
+    }
+    val closureBody = compiler.internBodyInstance(fnIdx: closure.bodyKey, environment: <InstanceEnvironment />)
+    if !compiler.preparedBodyTry(bodyId: closureBody, exprId: closureExpression).unwrap().isSome() { panic("global closure try missing") }
+    if facts.tryDecomposition(ownerFnIdx: closure.bodyKey, exprId: closureExpression).isSome() { panic("closure try admitted by unrelated owner") }
     print("ok")
 }
