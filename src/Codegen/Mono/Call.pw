@@ -3808,6 +3808,16 @@ pub impl Comp {
         if receiverRef == 0U64 || !self.arena.typeIsClosed(ref: receiverRef) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
         match proof {
             StaticConformanceProof.AssumedBound(source: val source) => {
+                if !self.declarationBoundIsValid(source: source) { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
+                val bound = self.declarationBound(source: source)
+                for argument in bound.constraint.key.positionalArgs {
+                    val grounded = try self.groundTermForBody(ref: argument, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                    if grounded == 0U64 || !self.arena.typeIsClosed(ref: grounded) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+                }
+                for predicate in bound.constraint.assocPredicates {
+                    val grounded = try self.groundTermForBody(ref: predicate.value, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                    if grounded == 0U64 || !self.arena.typeIsClosed(ref: grounded) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+                }
                 match source {
                     DeclarationBoundRef.Function(index: val declared) => {
                         match environment.constraints {
