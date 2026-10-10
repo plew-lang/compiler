@@ -1245,7 +1245,7 @@ pub impl Comp {
         mut val evidence: Array[ConformanceAssociatedEvidence] = []
         mut val outputs: Array[TraitAssocPredicate] = []
         mut val index = 0U64
-        while index < conformance.assocBindingIds.count() {
+        while declaration.assocBounds.len != 0U64 && index < conformance.assocBindingIds.count() {
             val binding = self.decls.assocBindings[self.conformFuncIdAt(ids: conformance.assocBindingIds, index: index)]
             val term = self.groundTermInEnvironment(ref: binding.ty, params: [], values: [], selfRef: conformance.subjectTy)
             outputs.append(<TraitAssocPredicate member=binding.nameId value=term span=binding.tyStart />)

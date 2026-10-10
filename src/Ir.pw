@@ -16,7 +16,7 @@ part ./Ir/Conformances
 part ./Ir/DeclarationNames
 part ./Ir/InstanceConstraints
 part ./Ir/WitnessConditions
-part ./Ir/ConformanceSupertraits
+part ./Ir/DeclarationConstraints
 part ./Ir/BodyInstances
 part ./Ir/MonoWork
 
