@@ -15,7 +15,7 @@ fn main() {
     val element = compiler.funcParamAt(params: anchor.params, index: 1U64).ty
     val environment = <InstanceEnvironment params=compiler.copyFuncBinds(binds: probe.typeParams) args=[receiver] />
     mut val found = false
-    for template in compiler.decls.callTemplates {
+    for template in compiler.callTemplateSnapshot() {
         if template.siteKey.ownerFnIdx == 0U64 {
             match template.kind {
                 CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
@@ -50,7 +50,7 @@ fn main() {
                             // Corrupting the saved substitution must fail
                             // selection closure, not defer to runtime inference.
                             compiler.decls.callTemplateTypeArgumentPool[typeArgs.start] = 0U64
-                            val templateIndex = compiler.decls.callTemplateIndex(siteKey: template.siteKey)
+                            val templateIndex = compiler.callTemplateIndex(siteKey: template.siteKey)
                             match compiler.checkCallTemplateSelection(templateIndex: templateIndex) {
                                 Result.Err(error: val diagnostic) => { assert(diagnostic.message == "cannot infer all type arguments for this call") }
                                 Result.Ok(value: _) => { panic "incomplete method substitution was sealed" }

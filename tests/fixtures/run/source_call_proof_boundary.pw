@@ -49,7 +49,7 @@ fn check(family: U64, mode: U64, provided: Bool = false) {
         Result.Err(error: val diagnostic) => { if mode == 0U64 || diagnostic.message != message { panic(diagnostic.message) } }
     }
     if family == 0U64 {
-        val index = compiler.decls.callTemplates.count()
+        val index = compiler.callTemplateCount()
         compiler.appendCallTemplate(template: template)
         match compiler.checkCallTemplateSelection(templateIndex: index) {
             Result.Ok(value: _) => { if mode != 0U64 { panic("sealed call accepted a foreign evidence boundary") } }

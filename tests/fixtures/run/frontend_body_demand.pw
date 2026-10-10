@@ -27,9 +27,9 @@ fn main() {
     val broken = owner(c: inout compiler, name: "broken")
     compiler.prepareLexicalBody(fnIdx: good).unwrap()
     if compiler.lexicalBodyPreparations.count() != 1U64 { panic "request checked an unrelated callee body" }
-    val templates = compiler.decls.callTemplates.count()
+    val templates = compiler.callTemplateCount()
     compiler.prepareLexicalBody(fnIdx: good).unwrap()
-    if compiler.decls.callTemplates.count() != templates { panic "request repeated recording" }
+    if compiler.callTemplateCount() != templates { panic "request repeated recording" }
     compiler.prepareLexicalBody(fnIdx: identity).unwrap()
     compiler.prepareLexicalBody(fnIdx: closure).unwrap()
     if compiler.decls.semanticClosures.count() != 1U64 { panic "requested closure not recorded" }

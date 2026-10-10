@@ -1737,9 +1737,9 @@ pub impl Comp {
     // is only a reference to the canonical source type fact. Never recover
     // a call result by rechecking the callee declaration or its bounds.
     inout fn sourceSelectedCallResult(siteKey: CallSiteKey) -> U64 {
-        val index = self.decls.callTemplateIndex(siteKey: siteKey)
-        if index >= self.decls.callTemplates.count() { return 0U64 }
-        val template = self.decls.callTemplates[index]
+        val index = self.callTemplateIndex(siteKey: siteKey)
+        if index >= self.callTemplateCount() { return 0U64 }
+        val template = self.callTemplateAt(index: index)
         val recipeId = template.resultTypeRecipe
         if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() { return 0U64 }
         val recipe = self.arena.semanticTypeRecipes[recipeId - 1U64]
@@ -1776,7 +1776,7 @@ pub impl Comp {
     }
 
     inout fn checkClosedIterationProtocols() -> Result[(), CompileDiagnostic] {
-        val count = self.decls.callTemplates.count()
+        val count = self.callTemplateCount()
         mut val index = 0U64
         while index < count {
             try self.checkClosedIterationProtocol(templateIndex: index)
@@ -1786,7 +1786,7 @@ pub impl Comp {
     }
 
     inout fn checkClosedIterationProtocol(templateIndex: U64) -> Result[(), CompileDiagnostic] {
-        val template = self.decls.callTemplates[templateIndex]
+        val template = self.callTemplateAt(index: templateIndex)
         match template.kind {
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 match selection {
@@ -1846,7 +1846,7 @@ pub impl Comp {
     // Selection closure is a prerequisite, not a whole-body checked token.
     // Symbolic obligations retain the same later instance checks as batch use.
     inout fn checkRecordedBodyCallConstraints(owner: U64) -> Result[(), CompileDiagnostic] {
-        val limit = self.decls.callTemplates.count()
+        val limit = self.callTemplateCount()
         mut val row = self.firstLexicalCallTemplate(owner: owner)
         while row != 0U64 && row <= limit {
             val index = row - 1U64
@@ -1884,10 +1884,10 @@ pub impl Comp {
             if owner != 0U64 && owner - 1U64 < constrained.count() && constrained[owner - 1U64] { constrained.set(i: index, value: true) }
             index += 1U64
         }
-        val count = self.decls.callTemplates.count()
+        val count = self.callTemplateCount()
         index = 0U64
         while index < count {
-            val template = self.decls.callTemplates[index]
+            val template = self.callTemplateAt(index: index)
             match template.kind {
                 CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                     if callee < constrained.count() && constrained[callee] {

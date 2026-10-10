@@ -34,9 +34,9 @@ fn main() {
     val identities = compiler.arena.bodyInstanceCount()
     mut val eager = compiler
     mut val index = 0U64
-    while index < eager.decls.callTemplates.count() {
-        val template = eager.decls.callTemplates[index]
-        eager.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=template.siteKey resultTypeRecipe=template.resultTypeRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm mayHaveStorageArguments=true />)
+    while index < eager.callTemplateCount() {
+        val template = eager.callTemplateAt(index: index)
+        eager.requireCallTemplateStorage(index: index)
         index += 1U64
     }
     mut val demanded = <MidFunctionTemplates />

@@ -21,7 +21,7 @@ fn check(family: U64, mode: U64) {
     val arguments = compiler.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=0U64 term=source /> labelStart=label.nameStart labelLen=label.nameLen hasLabel=true isInout=false />])
     val types = compiler.publishCallTemplateTypeArgs(args: [source])
     val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: (if family == 0U64 { give "free" } else { give "helper" })).nameId)
-    val index = compiler.decls.callTemplates.count()
+    val index = compiler.callTemplateCount()
     val kind = if family == 0U64 {
         give <CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=arguments calleeTypeArgs=types proofId=0U64 />
     } else {

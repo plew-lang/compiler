@@ -11,16 +11,16 @@ fn main() {
     val broken = compiler.arena.globals[0U64].nameStart
     val good = compiler.arena.globals[1U64].nameStart
     val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "free").nameId)
-    mut val selected = compiler.decls.callTemplates.count()
+    mut val selected = compiler.callTemplateCount()
     for index in compiler.decls.globalCallTemplateOwners.get(key: broken).unwrap() {
-        match compiler.decls.callTemplates[index].kind {
+        match compiler.callTemplateAt(index: index).kind {
             CallTemplateKind.Direct(callee: val function, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                 if function == callee { selected = index }
             }
             _ => {}
         }
     }
-    if selected == compiler.decls.callTemplates.count() { panic("missing global call membership") }
+    if selected == compiler.callTemplateCount() { panic("missing global call membership") }
     val plan = compiler.selectedCallConstraintPlan(index: selected).unwrap()
     if !compiler.recordBuildingCallConstraints(index: selected, plan: <SelectedCallConstraints owner=plan.owner bounds=plan.bounds proofs=[] />) { panic("construction plan was already prepared") }
     compiler.cur.checkFn = 70001U64

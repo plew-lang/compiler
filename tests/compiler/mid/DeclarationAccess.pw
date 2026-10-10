@@ -34,8 +34,10 @@ fn main() {
                 match analysis.obligations[obligation] {
                     DeclarationAccessObligation.Call(body: _, terminator: _, template: val template) => {
                         mut val broken = compiler
-                        val selected = broken.decls.callTemplates[template]
-                        broken.decls.callTemplates.set(i: template, value: <CallTemplate siteKey=selected.siteKey resultTypeRecipe=selected.resultTypeRecipe kind=<CallTemplateKind.Pending /> expectedResultTerm=selected.expectedResultTerm receiverTypeTerm=selected.receiverTypeTerm />)
+                        val selected = broken.callTemplateAt(index: template)
+                        if !broken.replaceBuildingCallTemplate(index: template, template: <CallTemplate siteKey=selected.siteKey resultTypeRecipe=selected.resultTypeRecipe kind=<CallTemplateKind.Pending /> expectedResultTerm=selected.expectedResultTerm receiverTypeTerm=selected.receiverTypeTerm />) {
+                            testedSelection = true
+                        } else {
                         match analyzeDeclarationGlobalAccess(c: inout broken, templates: inout templates) {
                             Result.Err(error: val error) => {
                                 match error {
@@ -44,6 +46,7 @@ fn main() {
                                 }
                             }
                             Result.Ok(value: _) => { panic "unfinished selection was accepted" }
+                        }
                         }
                     }
                     _ => {}

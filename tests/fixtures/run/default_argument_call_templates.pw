@@ -53,7 +53,7 @@ fn main() {
     }
     val repeated = c.recordDefaultArgumentCall(generator: generator, receiver: <CallTemplateReceiver.Term term=term />,
         calleeTypeArgs: [term], resultTerm: term, existingExpr: first).unwrap()
-    if repeated == first && c.decls.callTemplates.count() == 1U64 { write(s: "record-idempotent\n") }
+    if repeated == first && c.callTemplateCount() == 1U64 { write(s: "record-idempotent\n") }
     val second = c.recordDefaultArgumentCall(generator: generator, receiver: <CallTemplateReceiver.Term term=term />,
         calleeTypeArgs: [term], resultTerm: term, existingExpr: c.arena.exprs.count()).unwrap()
     if first != second && !c.sameCallSiteKey(a: firstKey, b: c.templateCallSiteKey(fnIdx: 0U64, exprId: second).unwrap()) { write(s: "distinct-evaluations\n") }
@@ -103,27 +103,27 @@ fn main() {
     c.putSemanticClosure(closure: <SemanticClosure ownerFnIdx=0U64 exprId=expression bodyKey=closureKey />).unwrap()
     val emptyArguments = c.publishCallTemplateArguments(args: [])
     val selectedTypes = c.publishCallTemplateTypeArgs(args: [term])
-    val missingIndex = c.decls.callTemplates.count()
+    val missingIndex = c.callTemplateCount()
     c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=0U64 originKind=2U64 originSerial=900U64 />
         kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=emptyArguments calleeTypeArgs=selectedTypes proofId=0U64 /> />)
     // Two explicit arguments cannot complete a one-parameter call. These
     // deliberately incomplete internal rows do not claim source acceptance.
     val excess = c.publishCallTemplateArguments(args: [explicitArgs[0U64], explicitArgs[0U64]])
-    val unrelatedIndex = c.decls.callTemplates.count()
+    val unrelatedIndex = c.callTemplateCount()
     c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=generator originKind=2U64 originSerial=901U64 />
         kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=excess calleeTypeArgs=selectedTypes proofId=0U64 /> />)
-    val closureIndex = c.decls.callTemplates.count()
+    val closureIndex = c.callTemplateCount()
     c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=closureKey originKind=2U64 originSerial=902U64 />
         kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=excess calleeTypeArgs=selectedTypes proofId=0U64 /> />)
     if c.completeRecordedBodyDefaultCalls(owner: 0U64).unwrap() != 1U64 { panic("lexical completion lost closure or included another owner") }
-    match c.decls.callTemplates[missingIndex].kind {
+    match c.callTemplateAt(index: missingIndex).kind {
         CallTemplateKind.Direct(callee: _, receiver: _, args: val arguments, calleeTypeArgs: _, proofId: _) => {
             if arguments.len != 1U64 { panic("requested default was not completed") }
         }
         _ => { panic("requested direct call changed kind") }
     }
-    val completedCount = c.decls.callTemplates.count()
-    if c.completeRecordedBodyDefaultCalls(owner: 0U64).unwrap() != 1U64 || c.decls.callTemplates.count() != completedCount { panic("lexical completion is not idempotent") }
+    val completedCount = c.callTemplateCount()
+    if c.completeRecordedBodyDefaultCalls(owner: 0U64).unwrap() != 1U64 || c.callTemplateCount() != completedCount { panic("lexical completion is not idempotent") }
     if c.completeRecordedDefaultCalls().unwrap() != 2U64 { panic("batch completion lost unrelated failure") }
     c.rebuildCallTemplateIndex(capacity: 128U64)
     if c.completeRecordedBodyDefaultCalls(owner: 0U64).unwrap() != 1U64 { panic("rebuilt request index changed membership") }
@@ -135,11 +135,11 @@ fn main() {
     }
     // Restore complete selections before independently probing iteration
     // membership. A preceding malformed call must not mask that diagnostic.
-    val completeKind = c.decls.callTemplates[missingIndex].kind
-    val unrelatedSite = c.decls.callTemplates[unrelatedIndex].siteKey
-    val closureSite = c.decls.callTemplates[closureIndex].siteKey
-    c.decls.callTemplates.set(i: unrelatedIndex, value: <CallTemplate siteKey=unrelatedSite kind=completeKind />)
-    c.decls.callTemplates.set(i: closureIndex, value: <CallTemplate siteKey=closureSite kind=completeKind />)
+    val completeKind = c.callTemplateAt(index: missingIndex).kind
+    val unrelatedSite = c.callTemplateAt(index: unrelatedIndex).siteKey
+    val closureSite = c.callTemplateAt(index: closureIndex).siteKey
+    c.replaceBuildingCallTemplate(index: unrelatedIndex, template: <CallTemplate siteKey=unrelatedSite kind=completeKind />)
+    c.replaceBuildingCallTemplate(index: closureIndex, template: <CallTemplate siteKey=closureSite kind=completeKind />)
     c.checkRecordedBodyCallConstraints(owner: 0U64).unwrap()
     c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=generator originKind=3U64 originSerial=1U64 slot=1U64 />
         kind=<CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=term /> selection=<ProtocolSelection.Pending /> resultTerm=0U64 /> />)

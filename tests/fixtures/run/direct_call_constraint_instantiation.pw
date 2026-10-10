@@ -14,11 +14,11 @@ fn main() {
     val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "free").nameId)
     compiler.prepareLexicalBody(fnIdx: owner).unwrap()
     mut val found = false
-    for template in compiler.decls.callTemplates {
+    for template in compiler.callTemplateSnapshot() {
         match template.kind {
             CallTemplateKind.Direct(callee: val function, receiver: _, args: _, calleeTypeArgs: val types, proofId: _) => {
                 if function == callee && template.siteKey.ownerFnIdx == owner {
-                    val index = compiler.decls.callTemplateIndex(siteKey: template.siteKey)
+                    val index = compiler.callTemplateIndex(siteKey: template.siteKey)
                     val snapshot = compiler.preparedCallConstraints(index: index).unwrap()
                     val plan = snapshot.constraints()
                     if compiler.recordBuildingCallConstraints(index: index, plan: <SelectedCallConstraints owner=plan.owner bounds=plan.bounds proofs=[] />) {

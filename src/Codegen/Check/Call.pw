@@ -16,9 +16,9 @@ pub impl Comp {
     inout fn checkSymbolicMethodArgs(exprId: U64, fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
         if receiverRef == 0U64 || fnIdx >= self.arena.functionCount() { return <Result.Ok value=false /> }
         val site = try self.templateCallSiteKey(fnIdx: fnIdx, exprId: exprId)
-        val templateIndex = self.decls.callTemplateIndex(siteKey: site)
-        if templateIndex >= self.decls.callTemplates.count() { return <Result.Ok value=false /> }
-        val template = self.decls.callTemplates[templateIndex]
+        val templateIndex = self.callTemplateIndex(siteKey: site)
+        if templateIndex >= self.callTemplateCount() { return <Result.Ok value=false /> }
+        val template = self.callTemplateAt(index: templateIndex)
         val selected = match template.kind {
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val arguments, resultTerm: _) => {
                 give (resolution: resolution, arguments: arguments)

@@ -27,8 +27,8 @@ fn main() {
     }
     mut val found = false
     mut val index = 0U64
-    while index < c.decls.callTemplates.count() {
-        val template = c.decls.callTemplates[index]
+    while index < c.callTemplateCount() {
+        val template = c.callTemplateAt(index: index)
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                 if callee == 0U64 {

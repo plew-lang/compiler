@@ -8,12 +8,12 @@ pub impl Comp {
     // Return the incomplete count so the pipeline cannot mistake a partial
     // completion for readiness to close its call graph.
     inout fn completeRecordedDefaultCalls() -> Result[U64, CompileDiagnostic] {
-        val limit = self.decls.callTemplates.count()
+        val limit = self.callTemplateCount()
         mut val incomplete: U64 = 0U64
         mut val index: U64 = 0U64
         while index < limit {
             tracePhaseProgress(c: inout self, label: "default-call-completion:template", count: index, stride: 64U64)
-            val template = self.decls.callTemplates[index]
+            val template = self.callTemplateAt(index: index)
             if !(try self.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm)) {
                 incomplete += 1U64
                 tracePhaseCount(c: inout self, label: "default-call-completion:incomplete-owner", count: template.siteKey.ownerFnIdx)
@@ -26,12 +26,12 @@ pub impl Comp {
     // Complete one lexical request, including its closure calls. Freeze the
     // frontier: newly published zero-argument default calls are already whole.
     inout fn completeRecordedBodyDefaultCalls(owner: U64) -> Result[U64, CompileDiagnostic] {
-        val limit = self.decls.callTemplates.count()
+        val limit = self.callTemplateCount()
         mut val incomplete = 0U64
         mut val row = self.firstLexicalCallTemplate(owner: owner)
         while row != 0U64 && row <= limit {
             val index = row - 1U64
-            val template = self.decls.callTemplates[index]
+            val template = self.callTemplateAt(index: index)
             if !(try self.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm)) { incomplete += 1U64 }
             row = self.decls.callTemplateBodyNext[index]
         }
@@ -43,8 +43,8 @@ pub impl Comp {
     // recipe's result in the caller environment, never a fresh name lookup.
     // The parent row is published only once every parameter has an operand.
     inout fn completeRecordedCallableDefaults(templateIndex: U64, receiverTerm: U64) -> Result[Bool, CompileDiagnostic] {
-        if templateIndex >= self.decls.callTemplates.count() { return <Result.Ok value=false />}
-        val template = self.decls.callTemplates[templateIndex]
+        if templateIndex >= self.callTemplateCount() { return <Result.Ok value=false />}
+        val template = self.callTemplateAt(index: templateIndex)
         val selected = match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val arguments, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
                 give (callee: callee, receiver: receiver, arguments: arguments, typeArgs: typeArgs, proof: self.thawStaticConformanceProof(id: proofId))
@@ -108,7 +108,7 @@ pub impl Comp {
                     }
                     _ => { return <Result.Ok value=false /> }
                 }
-                self.decls.callTemplates.set(i: templateIndex, value: <CallTemplate resultTypeRecipe=template.resultTypeRecipe siteKey=template.siteKey expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm kind=kind />)
+                self.replaceSourceCallTemplate(index: templateIndex, template: <CallTemplate resultTypeRecipe=template.resultTypeRecipe siteKey=template.siteKey expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm kind=kind />)
                 return <Result.Ok value=true />
             }
             Optional.None => { return <Result.Ok value=false />}

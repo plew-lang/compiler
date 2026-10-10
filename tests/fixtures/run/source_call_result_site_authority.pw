@@ -14,7 +14,7 @@ fn main() {
     val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "accept").nameId)
     compiler.prepareLexicalBody(fnIdx: owner).unwrap()
     mut val found = false
-    for template in compiler.decls.callTemplates {
+    for template in compiler.callTemplateSnapshot() {
         match template.kind {
             CallTemplateKind.Direct(callee: val function, receiver: _, args: val arguments, calleeTypeArgs: _, proofId: _) => {
                 if function == callee && template.siteKey.ownerFnIdx == owner {

@@ -80,7 +80,7 @@ impl DeclarationBodyRequests {
                 }
                 mut val row = c.firstLexicalCallTemplate(owner: lexical)
                 while row != 0U64 {
-                    if c.decls.callTemplates[row - 1U64].mayHaveStorageArguments { needsAccess = true
+                    if c.callTemplateAt(index: row - 1U64).mayHaveStorageArguments { needsAccess = true
                         break }
                     row = c.decls.callTemplateBodyNext[row - 1U64]
                 }

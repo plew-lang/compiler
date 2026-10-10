@@ -3565,7 +3565,6 @@ pub struct Decls {
     // Global source owners are initializer targets, not the shared no-function
     // sentinel used by call sites. This is an index into declarationConversions.
     pub mut val globalDeclarationConversionOwners: Dictionary[U64, Array[U64]] = [:]
-    pub mut val callTemplates: Array[CallTemplate] = []
     pub mut val globalCallTemplateOwners: Dictionary[U64, Array[U64]] = [:]
     pub mut val callTemplateArgumentPool: Array[CallTemplateArgument] = []
     pub mut val callTemplateTypeArgumentPool: Array[U64] = []

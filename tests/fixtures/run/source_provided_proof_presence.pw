@@ -34,7 +34,7 @@ fn main() {
                 Result.Err(error: val diagnostic) => { if !missing || diagnostic.message != "selected provided call has no conformance evidence" { panic(diagnostic.message) } }
             }
             if family == 0U64 {
-                val index = compiler.decls.callTemplates.count()
+                val index = compiler.callTemplateCount()
                 compiler.appendCallTemplate(template: template)
                 match compiler.checkCallTemplateSelection(templateIndex: index) {
                     Result.Ok(value: _) => { if missing { panic("sealed provided call accepted without proof") } }

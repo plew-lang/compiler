@@ -31,7 +31,7 @@ fn main() {
     rejected(compiler: inout compiler, expression: expression)
     val arguments = compiler.publishCallTemplateArguments(args: [])
     val types = compiler.publishCallTemplateTypeArgs(args: [])
-    compiler.decls.callTemplates.set(i: 0U64, value: <CallTemplate siteKey=site kind=<CallTemplateKind.Direct callee=compiler.arena.functionCount() receiver=<CallTemplateReceiver.None /> args=arguments calleeTypeArgs=types proofId=0U64 /> />)
+    compiler.replaceBuildingCallTemplate(index: 0U64, template: <CallTemplate siteKey=site kind=<CallTemplateKind.Direct callee=compiler.arena.functionCount() receiver=<CallTemplateReceiver.None /> args=arguments calleeTypeArgs=types proofId=0U64 /> />)
     rejected(compiler: inout compiler, expression: expression)
     print("final-call-requires-record")
 }

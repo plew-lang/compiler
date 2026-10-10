@@ -15,7 +15,7 @@ fn check(name: String, label: String, labelled: Bool, inoutArgument: Bool, messa
     val args = compiler.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=0U64 term=source /> labelStart=labelSpan.nameStart labelLen=labelSpan.nameLen hasLabel=labelled isInout=inoutArgument />])
     val types = compiler.publishCallTemplateTypeArgs(args: [])
     val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
-    val index = compiler.decls.callTemplates.count()
+    val index = compiler.callTemplateCount()
     compiler.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=900U64 /> kind=<CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=args calleeTypeArgs=types proofId=0U64 /> />)
     match compiler.checkRecordedCallTemplateBound(templateIndex: index) {
         Result.Ok(value: _) => { if message != "" { panic("accepted inconsistent signature") } }

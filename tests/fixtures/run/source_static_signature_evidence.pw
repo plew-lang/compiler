@@ -25,7 +25,7 @@ fn check(provided: Bool, name: String, label: String, labelled: Bool, inoutArgum
     val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: declarationName).nameId)
     val requirement = if name == "integer" { give 0U64 } else if name == "boolean" { give 1U64 } else if name == "mutable" { give 2U64 } else { give 3U64 }
     val resolution = if provided { give <StaticMemberResolution.Provided proof=proof traitIdx=traitIndex callee=callee /> } else { give <StaticMemberResolution.Requirement proof=proof traitIdx=traitIndex reqIdx=requirement /> }
-    val index = compiler.decls.callTemplates.count()
+    val index = compiler.callTemplateCount()
     compiler.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=900U64 /> receiverTypeTerm=receiver kind=<CallTemplateKind.StaticMethod receiver=<CallTemplateReceiver.Term term=receiver /> args=args resolution=resolution methodTypeArgs=types resultTerm=0U64 /> />)
     match compiler.checkRecordedCallTemplateBound(templateIndex: index) {
         Result.Ok(value: _) => { if message != "" { panic("accepted inconsistent signature") } }

@@ -44,7 +44,7 @@ pub impl Comp {
 impl Comp {
     inout fn publishPreparedCallConstraints(templateIndex: U64) -> Result[(), CompileDiagnostic] {
         try self.checkRecordedCallConstraintEvidence(templateIndex: templateIndex)
-        val template = self.decls.callTemplates[templateIndex]
+        val template = self.callTemplates[templateIndex]
         val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
         mut val plan = <SelectedCallConstraints owner=scope.owner bounds=[] proofs=[] />
         match self.selectedCallConstraints.get(key: templateIndex) {
@@ -58,5 +58,48 @@ impl Comp {
         }
         self.selectedCallConstraints[templateIndex] = <CallConstraintPlanState.Prepared snapshot=<PreparedCallConstraints plan=plan /> />
         return <Result.Ok value=() />
+    }
+}
+
+pub impl Comp {
+    fn callTemplateIndex(siteKey: CallSiteKey) -> U64 {
+        val capacity: U64 = self.decls.callTemplateIndexSlots.count()
+        if capacity == 0U64 { return self.callTemplates.count() }
+        mut val slot: U64 = siteKey.lookupHash() % capacity
+        while self.decls.callTemplateIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.decls.callTemplateIndexSlots[slot] - 1U64
+            if self.callTemplates[entry].siteKey.sameKey(other: siteKey) { return entry }
+            slot = (slot + 1U64) % capacity
+        }
+        return self.callTemplates.count()
+    }
+}
+
+
+pub impl Comp {
+    fn callTemplateCount() -> U64 { return self.callTemplates.count() }
+    fn callTemplateAt(index: U64) -> CallTemplate { return self.callTemplates[index] }
+    fn callTemplateSnapshot() -> Array[CallTemplate] { return self.callTemplates }
+    // Construction API; successful source publication removes write authority.
+    inout fn replaceBuildingCallTemplate(index: U64, template: CallTemplate) -> Bool {
+        if index >= self.callTemplates.count() || self.preparedCallConstraints(index: index).isSome() { return false }
+        if !self.callTemplates[index].siteKey.sameKey(other: template.siteKey) { return false }
+        self.callTemplates.set(i: index, value: template)
+        return true
+    }
+}
+
+impl Comp {
+    inout fn replaceSourceCallTemplate(index: U64, template: CallTemplate) {
+        if !self.replaceBuildingCallTemplate(index: index, template: template) {
+            panic("internal error: cannot replace a prepared source call template")
+        }
+    }
+}
+
+pub impl Comp {
+    inout fn requireCallTemplateStorage(index: U64) {
+        val template = self.callTemplates[index]
+        self.callTemplates.set(i: index, value: <CallTemplate siteKey=template.siteKey resultTypeRecipe=template.resultTypeRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm mayHaveStorageArguments=true />)
     }
 }

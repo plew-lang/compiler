@@ -29,11 +29,11 @@ fn main() {
     if compiler.instantiateConstraintProof(proof: foreign, receiverRef: receiver, environment: selectedEnvironment, selfRef: receiver, itemRef: 0U64).isOk() { panic("foreign conformance condition was accepted") }
     if compiler.arena.publishConformanceSupertraits(conformance: witness.conformIdx - 1U64, proofs: []) { panic("published supertrait evidence was replaced") }
     mut val found = false
-    for template in compiler.decls.callTemplates {
+    for template in compiler.callTemplateSnapshot() {
         if template.siteKey.ownerFnIdx == forward {
             match template.kind {
                 CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                    val index = compiler.decls.callTemplateIndex(siteKey: template.siteKey)
+                    val index = compiler.callTemplateIndex(siteKey: template.siteKey)
                     val plan = compiler.preparedCallConstraints(index: index).unwrap().constraints()
                     val proof = compiler.thawStaticConformanceProof(id: plan.proofs[0U64])
                     match proof {

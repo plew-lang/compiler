@@ -87,7 +87,7 @@ fn main() {
     if inferredArgument(c: inout c, pattern: recordPattern, expected: recordExpected, params: params) == callerTerm { write(s: "structural-record-children\n") }
     val relabelled = c.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[2U64] recordFieldTerms=[callerTerm] />)
     if inferredArgument(c: inout c, pattern: recordPattern, expected: relabelled, params: params) == 0U64 { write(s: "structural-record-labels\n") }
-    val index = c.decls.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: expression).unwrap())
+    val index = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: expression).unwrap())
     val before = c.arena.exprs.count()
     if !c.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: 0U64).unwrap() && c.arena.exprs.count() == before { write(s: "unprepared-no-publication\n") }
     val plainCallee = c.arena.functionCount()
@@ -102,7 +102,7 @@ fn main() {
     c.cur.recordCallTemplates = false
     if c.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: 0U64).unwrap() { write(s: "completed-parent-plan\n") }
     if c.cur.checkFn == 999U64 && !c.cur.recordCallTemplates { write(s: "record-cursor-restored\n") }
-    match c.decls.callTemplates[index].kind {
+    match c.callTemplateAt(index: index).kind {
         CallTemplateKind.Direct(callee: _, receiver: _, args: val range, calleeTypeArgs: _, proofId: _) => {
             val completed = c.callTemplateArguments(range: range)
             if completed.count() == 1U64 {
@@ -125,8 +125,8 @@ fn main() {
         }
         _ => {}
     }
-    val completedCount = c.decls.callTemplates.count()
-    if c.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: 0U64).unwrap() && c.decls.callTemplates.count() == completedCount && args.len == 0U64 { write(s: "completed-plan-idempotent\n") }
+    val completedCount = c.callTemplateCount()
+    if c.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: 0U64).unwrap() && c.callTemplateCount() == completedCount && args.len == 0U64 { write(s: "completed-plan-idempotent\n") }
     c.cur.bodyFnIdx = 0U64
     if c.callArgumentRangeForCurrentBody(exprId: expression, authored: args).unwrap().len == 0U64 { write(s: "pre-record-authored-navigation\n") }
     // The consumer sees a closed snapshot; later producer checks keep their
@@ -143,9 +143,9 @@ fn main() {
     c.cur.recordCallTemplates = true
     val unresolved = c.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=args />)
     c.recordCallTemplate(exprId: unresolved, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [0U64]).unwrap()
-    val unresolvedIndex = c.decls.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: unresolved).unwrap())
-    val unresolvedCount = c.decls.callTemplates.count()
-    if !c.completeRecordedCallableDefaults(templateIndex: unresolvedIndex, receiverTerm: 0U64).unwrap() && c.decls.callTemplates.count() == unresolvedCount { write(s: "unresolved-no-publication\n") }
+    val unresolvedIndex = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: unresolved).unwrap())
+    val unresolvedCount = c.callTemplateCount()
+    if !c.completeRecordedCallableDefaults(templateIndex: unresolvedIndex, receiverTerm: 0U64).unwrap() && c.callTemplateCount() == unresolvedCount { write(s: "unresolved-no-publication\n") }
     val method = c.pushExpr(e: <Expr.Method recv=expression nameStart=name.nameStart nameLen=name.nameLen args=args />)
     c.recordSemanticExprCall(exprId: method, callee: 1U64,
         receiver: <CallTemplateReceiver.PriorCallResult exprId=expression siteKey=c.templateCallSiteKey(fnIdx: 0U64, exprId: expression).unwrap() />,
@@ -164,6 +164,6 @@ fn main() {
     c.cur.recordCallTemplates = true
     val plainCall = c.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=args />)
     c.recordCallTemplate(exprId: plainCall, callee: plainCallee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: []).unwrap()
-    val plainIndex = c.decls.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: plainCall).unwrap())
+    val plainIndex = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: plainCall).unwrap())
     if c.completeRecordedCallableDefaults(templateIndex: plainIndex, receiverTerm: 0U64).unwrap() { write(s: "zero-type-arguments-complete\n") }
 }

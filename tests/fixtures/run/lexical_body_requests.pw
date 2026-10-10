@@ -34,17 +34,17 @@ fn main() {
         Result.Ok(value: _) => { panic("invalid requested body succeeded") }
     }
     if c.cur.checkFn != 70001U64 || c.cur.bodyFnIdx != 70002U64 || c.cur.bodyId != 70003U64 || !c.cur.recordCallTemplates { panic("failed request leaked its cursor") }
-    val templates = c.decls.callTemplates.count()
+    val templates = c.callTemplateCount()
     match c.prepareLexicalBody(fnIdx: broken) {
         Result.Err(error: val failure) => { if failure.message != diagnostic.message { panic("retry changed diagnostic") } }
         Result.Ok(value: _) => { panic("retry lost failure") }
     }
-    if c.decls.callTemplates.count() != templates { panic("retry repeated recording") }
+    if c.callTemplateCount() != templates { panic("retry repeated recording") }
     c.prepareLexicalBody(fnIdx: good).unwrap()
     if c.cur.checkFn != 70001U64 || c.cur.bodyFnIdx != 70002U64 || c.cur.bodyId != 70003U64 || !c.cur.recordCallTemplates { panic("successful request leaked its cursor") }
-    val complete = c.decls.callTemplates.count()
+    val complete = c.callTemplateCount()
     c.prepareLexicalBody(fnIdx: good).unwrap()
-    if c.decls.callTemplates.count() != complete || c.lexicalBodyPreparations.count() != 2U64 { panic("owner requests were not cached separately") }
+    if c.callTemplateCount() != complete || c.lexicalBodyPreparations.count() != 2U64 { panic("owner requests were not cached separately") }
 
     // A preclosed selection is not proof of constraints. Supply an invalid
     // protocol row for another owner and require its diagnostic on every demand.

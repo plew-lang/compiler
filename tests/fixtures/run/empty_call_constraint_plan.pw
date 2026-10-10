@@ -12,7 +12,7 @@ fn main() {
         sources: <SourceAccess stdRoot=[] />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "plain").nameId)
-    val index = compiler.decls.callTemplates.count()
+    val index = compiler.callTemplateCount()
     compiler.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=900U64 />
         kind=<CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=compiler.publishCallTemplateArguments(args: []) calleeTypeArgs=compiler.publishCallTemplateTypeArgs(args: []) proofId=0U64 /> />)
     compiler.prepareCallTemplateConstraints(templateIndex: index).unwrap()

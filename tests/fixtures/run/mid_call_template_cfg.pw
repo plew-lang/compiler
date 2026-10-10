@@ -50,9 +50,7 @@ fn main() {
     c.typeCache.identTarget.append(90U64)
     c.arena.exprs.set(i: 0U64, value: <Expr.Call nameStart=0U64 nameLen=0U64 args=<ArgRange start=0U64 len=1U64 /> />)
     val moveKey = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: 0U64).unwrap().siteKey
-    c.decls.callTemplates = []
-    c.decls.callTemplateIndexSlots = []
-    c.appendCallTemplate(template: <CallTemplate siteKey=moveKey kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=c.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=2U64 term=valueTerm /> isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />]) calleeTypeArgs=c.publishCallTemplateTypeArgs(args: []) proofId=c.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />) /> />)
+    c.replaceBuildingCallTemplate(index: 0U64, template: <CallTemplate siteKey=moveKey kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=c.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=2U64 term=valueTerm /> isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />]) calleeTypeArgs=c.publishCallTemplateTypeArgs(args: []) proofId=c.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />) /> />)
     mut val moveState: MidBuildState = <MidBuildState.initial sourceFunction=0U64 />
     val file = addMidLocal(state: inout moveState, declarationTarget: 90U64, typeTerm: valueTerm, isUnique: true, isParameter: false, ownsAtEntry: true)
     val moveResult = buildMidBlock(c: inout c, state: inout moveState, blockId: 0U64)
