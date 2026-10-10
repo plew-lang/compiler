@@ -1,11 +1,12 @@
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
+use /Ir only { Stmt }
 
 fn main() {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler,
-        input: <FrontendInput.Text path="binding.pw" text="val global: I64 = 3I64\nfn probe() {{ val local: I64 = 1I64 }} fn other() {{}}" />,
+        input: <FrontendInput.Text path="binding.pw" text="val global: I64 = 3I64\nfn probe() {{ val local: I64 = 1I64 }} fn other() {{}} unique struct File {{}} fn shadow() {{ val file = <File /> val file = <File /> }}" />,
         sources: <SourceAccess />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "other").nameId)
@@ -41,5 +42,17 @@ fn main() {
         Optional.None => {}
         Optional.Some(v: _) => { panic("function binding admitted by global owner") }
     }
+    val shadow = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "shadow").nameId)
+    compiler.prepareLexicalBody(fnIdx: shadow).unwrap()
+    val shadowFacts = compiler.preparedFunctionSemanticFacts(fnIdx: shadow).unwrap()
+    val block = compiler.arena.functionAt(index: shadow).body
+    val first = compiler.blockStmtAt(blkId: block, index: 0U64)
+    val second = compiler.blockStmtAt(blkId: block, index: 1U64)
+    val ended = shadowFacts.binding(stmtId: second).unwrap().endedBinding
+    val declaration = match compiler.arena.stmts[first] {
+        Stmt.Let(mutable: _, nameStart: val declaration, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => declaration
+        _ => { panic("missing shadow declaration") }
+    }
+    if ended != declaration { panic("shadow end lost declaration identity") }
     print("ok")
 }
