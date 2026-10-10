@@ -1,7 +1,7 @@
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { InstanceEnvironment, Stmt }
+use /Ir only { InstanceEnvironment, Stmt, CallArgumentSource }
 
 fn main() {
     mut val compiler = <Comp />
@@ -21,10 +21,22 @@ fn main() {
         Result.Err(error: _) => {}
         Result.Ok(value: _) => { panic("unprepared expression admitted") }
     }
+    compiler.cur.bodyId = body
+    match compiler.groundCallArgumentSource(source: <CallArgumentSource.Expression exprId=expression />) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("unprepared final argument admitted") }
+    }
     compiler.prepareLexicalBody(fnIdx: owner).unwrap()
     compiler.prepareLexicalBody(fnIdx: other).unwrap()
     val fact = compiler.preparedBodyExpression(bodyId: body, exprId: expression).unwrap()
     if fact.term == 0U64 { panic("saved type missing") }
+    compiler.cur.bodyId = body
+    if compiler.groundCallArgumentSource(source: <CallArgumentSource.Expression exprId=expression />).unwrap() != fact.term { panic("final argument lost saved type") }
+    compiler.cur.bodyId = foreign
+    match compiler.groundCallArgumentSource(source: <CallArgumentSource.Expression exprId=expression />) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("foreign final argument admitted") }
+    }
     match compiler.preparedBodyExpression(bodyId: foreign, exprId: expression) {
         Result.Err(error: _) => {}
         Result.Ok(value: _) => { panic("foreign expression admitted") }

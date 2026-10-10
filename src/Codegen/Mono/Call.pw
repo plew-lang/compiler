@@ -1671,7 +1671,7 @@ pub impl Comp {
                 index += 1U64
             }
         }
-        val sourceTypes = (try self.finalCallArgumentTypes(arguments: selection.argumentSources, parameterTypes: parameterTypes))
+        val sourceTypes = (try self.finalCallArgumentTypes(arguments: selection.argumentSources))
         val conversions: Array[ValueConversionProof] = (try self.callArgumentConversions(sources: selection.argumentSources, parameterTypeRefs: parameterTypes, sourceTypes: sourceTypes))
         val priorIdx: U64 = (try self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
         if priorIdx < self.arena.finalCalleeCount() {
@@ -2577,29 +2577,13 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Close the numeric-literal adapter in the frontend, where the selected
-    // parameter supplies its checked context. This never converts a typed
-    // operand or introduces an implicit newtype boundary.
-    inout fn finalCallArgumentType(source: CallArgumentSource, expected: U64) -> Result[U64, CompileDiagnostic] {
-        val type = (try self.groundCallArgumentSource(source: source))
-        if type != 0U64 { return <Result.Ok value=type />}
-        val expr = self.callArgumentExprId(source: source)
-        if expr >= self.arena.exprs.count() || expected == 0U64 { return <Result.Ok value=0U64 />}
-        val literal = self.castLiteralContextTerm(operand: expr, targetTerm: expected)
-        if literal != 0U64 && self.typeRefEq(a: literal, b: expected) { return <Result.Ok value=literal />}
-        return <Result.Ok value=0U64 />
-    }
-
-    // Resolve each source once under the selected parameter context. Both
-    // conversion selection and published evaluation facts consume this result.
-    inout fn finalCallArgumentTypes(arguments: Array[CallTemplateArgument], parameterTypes: Array[U64]) -> Result[Array[U64], CompileDiagnostic] {
+    // Source checking already completed argument context before publication.
+    // Finalization only instantiates saved sources; the selected parameter ABI
+    // cannot assign a new numeric type to an otherwise missing source fact.
+    inout fn finalCallArgumentTypes(arguments: Array[CallTemplateArgument]) -> Result[Array[U64], CompileDiagnostic] {
         mut val types: Array[U64] = []
-        mut val index = 0U64
-        while index < arguments.count() {
-            mut val expected = 0U64
-            if index < parameterTypes.count() { expected = parameterTypes[index] }
-            types.append((try self.finalCallArgumentType(source: arguments[index].source, expected: expected)))
-            index += 1U64
+        for argument in arguments {
+            types.append((try self.groundCallArgumentSource(source: argument.source)))
         }
         return <Result.Ok value=types />
     }
@@ -3262,7 +3246,7 @@ pub impl Comp {
             give <BodySignature ready=true parameterTypes=try self.groundedSelectedCalleeParameterTypes(callee: callee, environment: environment) parameterPassings=self.selectedArgumentPassings(callee: callee) resultType=try self.groundedSelectedCalleeReturn(callee: callee, environment: environment) receiverPassing=self.selectedReceiverPassing(callee: callee) />
         }
         val params = signature.parameterTypes
-        val sourceTypes = (try self.finalCallArgumentTypes(arguments: argumentSources, parameterTypes: params))
+        val sourceTypes = (try self.finalCallArgumentTypes(arguments: argumentSources))
         val conversions: Array[ValueConversionProof] = (try self.callArgumentConversions(sources: argumentSources, parameterTypeRefs: params, sourceTypes: sourceTypes))
         val receiverPassing = signature.receiverPassing
         val argumentPassings = signature.parameterPassings
@@ -6144,21 +6128,8 @@ pub impl Comp {
     // Execution bodies retain a lexical owner; global initializers additionally
     // require their declaration target because they share an anonymous body.
     inout fn preparedBodyExpression(bodyId: U64, exprId: U64, globalInitializerTarget: Optional[U64] = <Optional.None />) -> Result[SemanticExprType, CompileDiagnostic] {
-        if bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: expression has no executable body instance") />
-        }
-        val body = self.arena.bodyInstanceAt(index: bodyId - 1U64)
-        val source = try self.semanticBodyOwner(fnIdx: body.fnIdx)
-        val root = self.callTemplateLexicalRoots.getOr(key: source, fallback: source)
-        if root != 18446744073709551615U64 {
-            return self.preparedSourceExpression(owner: <SemanticCompletionOwner.Function index=root />, exprId: exprId)
-        }
-        match globalInitializerTarget {
-            Optional.Some(v: val target) => {
-                return self.preparedSourceExpression(owner: <SemanticCompletionOwner.Global target=target />, exprId: exprId)
-            }
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: global expression has no initializer owner") /> }
-        }
+        val owner = try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: globalInitializerTarget)
+        return self.preparedSourceExpression(owner: owner, exprId: exprId)
     }
 }
 
@@ -6176,19 +6147,43 @@ impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: access input has no prepared source expression") />
     }
     inout fn preparedAccessUseFacts(use: AccessUse, parent: CallResolution) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
-        if parent.bodyId == 0U64 || parent.bodyId > self.arena.bodyInstanceCount() {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: parent.exprId), msg: "internal error: access use has no executable body") />
+        val global: Optional[U64] = match use.sourceOwner {
+            SemanticCompletionOwner.Global(target: val target) => <Optional.Some v=target />
+            SemanticCompletionOwner.Function(index: _) => <Optional.None />
         }
-        val body = self.arena.bodyInstanceAt(index: parent.bodyId - 1U64)
-        val source = try self.semanticBodyOwner(fnIdx: body.fnIdx)
-        val root = self.callTemplateLexicalRoots.getOr(key: source, fallback: source)
-        val matches = match use.sourceOwner {
-            SemanticCompletionOwner.Function(index: val owner) => owner == root && root != 18446744073709551615U64
-            SemanticCompletionOwner.Global(target: _) => root == 18446744073709551615U64
-        }
-        if !matches {
+        val owner = try self.bodySourceOwner(bodyId: parent.bodyId, globalInitializerTarget: global)
+        if !semanticCompletionOwnersEqual(recorded: use.sourceOwner, prepared: owner) {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: parent.exprId), msg: "internal error: access use belongs to another source body") />
         }
         return self.preparedSemanticFacts(owner: use.sourceOwner)
+    }
+}
+
+impl Comp {
+    // Execution-body provenance comes from the saved declaration. In
+    // particular a global closure keeps its initializer owner after the
+    // initializer cursor is gone; it is not the shared anonymous body.
+    inout fn bodySourceOwner(bodyId: U64, globalInitializerTarget: Optional[U64]) -> Result[SemanticCompletionOwner, CompileDiagnostic] {
+        if bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: expression has no executable body instance") />
+        }
+        val body = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        val source = try self.semanticBodyOwner(fnIdx: body.fnIdx)
+        val root = self.callTemplateLexicalRoots.getOr(key: source, fallback: source)
+        if body.fnIdx >= 9223372036854775808U64 && body.fnIdx != 18446744073709551615U64 {
+            val expression = body.fnIdx - 9223372036854775808U64
+            val index = try self.semanticClosureIndex(ownerFnIdx: root, exprId: expression)
+            if index >= self.semanticClosureOwners.count() {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "internal error: closure body has no source owner") />
+            }
+            return <Result.Ok value=self.semanticClosureOwners[index] />
+        }
+        if root != 18446744073709551615U64 {
+            return <Result.Ok value=<SemanticCompletionOwner.Function index=root /> />
+        }
+        match globalInitializerTarget {
+            Optional.Some(v: val target) => { return <Result.Ok value=<SemanticCompletionOwner.Global target=target /> /> }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: global expression has no initializer owner") /> }
+        }
     }
 }

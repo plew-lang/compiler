@@ -81,7 +81,24 @@ fn globalDependencies() {
     }
 }
 
+fn globalClosureOwner() {
+    val source = "fn answer() -> I64 {{ return 42I64 }} val callback = fn() -> I64 {{ return answer() }} fn main() {{ val local = callback val result = local() }}"
+    match CompilerSession.open(input: <FrontendInput.Text path="global-closure.pw" text=source />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            session.prepareInitializers().unwrap()
+            mut val index = 0U64
+            while index < session.registeredBodies().count() {
+                session.prepareMidBody(bodyId: session.registeredBodies()[index]).unwrap()
+                index += 1U64
+            }
+        }
+    }
+}
+
 fn main() {
+    globalClosureOwner()
     globalDependencies()
     reuseInBuild()
     deferCallee()
