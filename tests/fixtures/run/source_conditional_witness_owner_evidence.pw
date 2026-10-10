@@ -15,7 +15,7 @@ fn check(text: String, compatible: Bool, targetIndex: Bool = false, proofSubject
     val no = compiler.funcParamAt(params: function.params, index: 2U64).ty
     val proofSubject = compiler.funcParamAt(params: function.params, index: proofSubjectIndex).ty
     val selected = compiler.callArgumentConversion(sourceRef: proofSubject, targetRef: yes, assumptions: compiler.functionBoundAssumptions(fnIdx: 0U64)).unwrap()
-    val evidence = match selected {
+    mut val evidence = match selected {
         ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val proof) => { give proof }
         _ => { panic("missing real conformance") }
     }
@@ -24,8 +24,9 @@ fn check(text: String, compatible: Bool, targetIndex: Bool = false, proofSubject
     if missingChild {
         match evidence {
             StaticConformanceProof.ConcreteWitness(witness: val witness) => {
-                val plan = compiler.arena.witnessConditionPlans[witness.conditions - 1U64]
-                compiler.arena.witnessConditionPlans[witness.conditions - 1U64] = <WitnessConditionPlan witness=plan.witness proofs=[compiler.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />)] />
+                val plan = compiler.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
+                val conditionId = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=plan.witness proofs=[compiler.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />)] />)
+                evidence = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=witness.binds conditions=conditionId /> />
             }
             _ => { panic("not concrete") }
         }
@@ -65,7 +66,7 @@ fn checkDeferredChild() {
     val source = compiler.funcParamAt(params: function.params, index: 0U64).ty
     val target = compiler.funcParamAt(params: function.params, index: 1U64).ty
     val selected = compiler.callArgumentConversion(sourceRef: source, targetRef: target).unwrap()
-    val evidence = match selected {
+    mut val evidence = match selected {
         ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val proof) => { give proof }
         _ => { panic("missing conditional proof") }
     }
@@ -76,8 +77,9 @@ fn checkDeferredChild() {
     val bound = compiler.functionBoundAssumptions(fnIdx: 1U64)[0U64]
     match evidence {
         StaticConformanceProof.ConcreteWitness(witness: val witness) => {
-            val plan = compiler.arena.witnessConditionPlans[witness.conditions - 1U64]
-            compiler.arena.witnessConditionPlans[witness.conditions - 1U64] = <WitnessConditionPlan witness=plan.witness proofs=[compiler.freezeStaticConformanceProof(proof: <StaticConformanceProof.AssumedBound source=bound />)] />
+            val plan = compiler.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
+            val conditionId = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=plan.witness proofs=[compiler.freezeStaticConformanceProof(proof: <StaticConformanceProof.AssumedBound source=bound />)] />)
+                evidence = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=witness.binds conditions=conditionId /> />
         }
         _ => { panic("not a direct witness") }
     }

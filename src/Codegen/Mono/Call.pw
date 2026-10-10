@@ -453,9 +453,9 @@ pub impl Comp {
     inout fn sameWitnessMatch(a: WitnessMatch, b: WitnessMatch) -> Bool {
         if !self.sameWitnessSubstitution(a: a, b: b) { return false }
         if a.conditions == b.conditions { return true }
-        if a.conditions == 0U64 || b.conditions == 0U64 || a.conditions > self.arena.witnessConditionPlans.count() || b.conditions > self.arena.witnessConditionPlans.count() { return false }
-        val left = self.arena.witnessConditionPlans[a.conditions - 1U64]
-        val right = self.arena.witnessConditionPlans[b.conditions - 1U64]
+        if a.conditions == 0U64 || b.conditions == 0U64 || a.conditions > self.arena.witnessConditionPlanCount() || b.conditions > self.arena.witnessConditionPlanCount() { return false }
+        val left = self.arena.witnessConditionPlanAt(index: a.conditions - 1U64)
+        val right = self.arena.witnessConditionPlanAt(index: b.conditions - 1U64)
         if !self.sameWitnessSubstitution(a: left.witness, b: right.witness) || left.proofs.count() != right.proofs.count() { return false }
         mut val index = 0U64
         while index < left.proofs.count() {
@@ -566,8 +566,8 @@ pub impl Comp {
         val receiver = if witness.selfRef == 0U64 { give receiverRef } else { give try self.groundTermForBody(ref: witness.selfRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
         val grounded = <WitnessMatch conformIdx=witness.conformIdx binds=bindings selfRef=receiver />
         if witness.conditions == 0U64 { return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=grounded /> /> }
-        if witness.conditions > self.arena.witnessConditionPlans.count() || witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected conformance has an invalid condition plan") /> }
-        val plan = self.arena.witnessConditionPlans[witness.conditions - 1U64]
+        if witness.conditions > self.arena.witnessConditionPlanCount() || witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected conformance has an invalid condition plan") /> }
+        val plan = self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
         val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
         if !self.sameWitnessSubstitution(a: witness, b: plan.witness) || plan.proofs.count() != declaration.bounds.len { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
         mut val proofs: Array[U64] = []
@@ -613,8 +613,8 @@ pub impl Comp {
             index += 1U64
         }
         if !changed { return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=<WitnessMatch conformIdx=grounded.conformIdx binds=grounded.binds selfRef=grounded.selfRef conditions=witness.conditions /> /> /> }
-        self.arena.witnessConditionPlans.append(<WitnessConditionPlan witness=grounded proofs=proofs normalizations=normalizations />)
-        return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=<WitnessMatch conformIdx=grounded.conformIdx binds=grounded.binds selfRef=grounded.selfRef conditions=self.arena.witnessConditionPlans.count() /> /> />
+        val conditionId = self.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=grounded proofs=proofs normalizations=normalizations />)
+        return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=<WitnessMatch conformIdx=grounded.conformIdx binds=grounded.binds selfRef=grounded.selfRef conditions=conditionId /> /> />
     }
 
     // An assumption needs a concrete witness at instantiation. Query exactly
@@ -3766,8 +3766,8 @@ pub impl Comp {
         if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "conformance constraint has an invalid owner") /> }
         val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
         if declared < declaration.bounds.start || declared - declaration.bounds.start >= declaration.bounds.len { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "conformance constraint belongs to another declaration") /> }
-        if witness.conditions == 0U64 || witness.conditions > self.arena.witnessConditionPlans.count() { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "conformance constraint has no retained condition plan") /> }
-        val plan = self.arena.witnessConditionPlans[witness.conditions - 1U64]
+        if witness.conditions == 0U64 || witness.conditions > self.arena.witnessConditionPlanCount() { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "conformance constraint has no retained condition plan") /> }
+        val plan = self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
         if !self.sameWitnessSubstitution(a: witness, b: plan.witness) || plan.proofs.count() != declaration.bounds.len { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "conformance constraint has a different substitution") /> }
         val proof = plan.proofs[declared - declaration.bounds.start]
         if !self.arena.hasStaticConformanceProof(id: proof) { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "conformance constraint has no retained child evidence") /> }

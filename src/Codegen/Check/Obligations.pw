@@ -219,8 +219,8 @@ pub impl Comp {
         if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
         val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
         if declaration.bounds.len == 0U64 && witness.conditions == 0U64 { return <Result.Ok value=() /> }
-        if witness.conditions == 0U64 || witness.conditions > self.arena.witnessConditionPlans.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
-        val plan = self.arena.witnessConditionPlans[witness.conditions - 1U64]
+        if witness.conditions == 0U64 || witness.conditions > self.arena.witnessConditionPlanCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+        val plan = self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
         if !self.sameWitnessSubstitution(a: plan.witness, b: witness) || plan.proofs.count() != declaration.bounds.len { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
         for active in self.activeConditionAdmission {
             if active == witness.conditions { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance condition evidence is cyclic") /> }
@@ -793,8 +793,8 @@ pub impl Comp {
             if (try self.declarationTypeDependency(ref: binding.term, scope: scope, offset: offset)) { dependent = true }
         }
         if witness.conditions != 0U64 {
-            if witness.conditions > self.arena.witnessConditionPlans.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance has an invalid condition plan") /> }
-            for step in self.arena.witnessConditionPlans[witness.conditions - 1U64].normalizations {
+            if witness.conditions > self.arena.witnessConditionPlanCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance has an invalid condition plan") /> }
+            for step in self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64).normalizations {
                 if step.source == 0U64 || step.source >= self.arena.typeCount() || self.arena.typeAt(index: step.source).assocNameId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected condition has invalid projection evidence") /> }
                 val projection = self.arena.typeAt(index: step.source)
                 // Integrity has admitted the projection equation. Its free
@@ -807,7 +807,7 @@ pub impl Comp {
                 if (try self.declarationTypeDependency(ref: step.output, scope: scope, offset: offset)) { dependent = true }
                 if (try self.declarationProofDependency(proof: self.thawStaticConformanceProof(id: step.proof), scope: scope, offset: offset)) { dependent = true }
             }
-            for proof in self.arena.witnessConditionPlans[witness.conditions - 1U64].proofs {
+            for proof in self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64).proofs {
                 if (try self.declarationProofDependency(proof: self.thawStaticConformanceProof(id: proof), scope: scope, offset: offset)) { dependent = true }
             }
         }

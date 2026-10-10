@@ -57,11 +57,11 @@ fn main() {
                                 _ => { panic("missing conditional witness") }
                             }
                             val substitution = <WitnessMatch selfRef=conditional.selfRef conformIdx=conditional.conformIdx binds=conditional.binds />
-                            compiler.arena.witnessConditionPlans.append(<WitnessConditionPlan witness=substitution proofs=[compiler.freezeStaticConformanceProof(proof: assumed)] />)
-                            val dependent = <WitnessMatch selfRef=substitution.selfRef conformIdx=substitution.conformIdx binds=substitution.binds conditions=compiler.arena.witnessConditionPlans.count() />
+                            val conditionId = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=substitution proofs=[compiler.freezeStaticConformanceProof(proof: assumed)] />)
+                            val dependent = <WitnessMatch selfRef=substitution.selfRef conformIdx=substitution.conformIdx binds=substitution.binds conditions=conditionId />
                             match compiler.groundSelectedWitness(witness: dependent, receiverRef: boxedType, environment: retained, selfRef: 0U64, itemRef: 0U64).unwrap() {
                                 SelectedWitnessInstantiation.Ready(witness: val concrete) => {
-                                    val child = compiler.thawStaticConformanceProof(id: compiler.arena.witnessConditionPlans[concrete.conditions - 1U64].proofs[0U64])
+                                    val child = compiler.thawStaticConformanceProof(id: compiler.arena.witnessConditionPlanAt(index: concrete.conditions - 1U64).proofs[0U64])
                                     if !compiler.sameStaticConformanceProof(a: child, b: proofs[0U64]) { panic("condition replaced retained presence proof") }
                                 }
                                 _ => { panic("condition did not consume retained evidence") }

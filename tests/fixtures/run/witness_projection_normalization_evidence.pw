@@ -6,14 +6,14 @@ fn control(mode~: U64) {
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait Parser {{ type Output }}\ntrait Mark {{}}\ntrait Use {{ fn use() -> I64 }}\nstruct NoMark {{}}\nimpl NoMark as Mark {{}}\nstruct S {{}}\nimpl S as Parser {{ type Output = NoMark }}\nstruct Box[T] {{ val value: T }}\nimpl[T] Box[T] as Use where T#Parser.Output: Mark {{ fn use() -> I64 {{ return 1I64 }} }}\nfn needUse[T](value: T) where T: Use {{}}\nfn generic[T](value: Box[T]) where T: Parser, T#Parser.Output: Mark {{ needUse(value: value) }}\nfn main() {{ needUse(value: <Box[S] value=<S /> />) }}\n" path="condition-projection.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
     compiler.prepareLexicalBody(fnIdx: owner).unwrap()
-    mut val selected = compiler.arena.witnessConditionPlans.count()
+    mut val selected = compiler.arena.witnessConditionPlanCount()
     mut val index = 0U64
-    while index < compiler.arena.witnessConditionPlans.count() {
-        if compiler.arena.witnessConditionPlans[index].normalizations.count() != 0U64 && compiler.arena.witnessConditionPlans[index].normalizations[0U64].output != 0U64 { selected = index }
+    while index < compiler.arena.witnessConditionPlanCount() {
+        if compiler.arena.witnessConditionPlanAt(index: index).normalizations.count() != 0U64 && compiler.arena.witnessConditionPlanAt(index: index).normalizations[0U64].output != 0U64 { selected = index }
         index += 1U64
     }
-    if selected == compiler.arena.witnessConditionPlans.count() { panic("no retained projection") }
-    val plan = compiler.arena.witnessConditionPlans[selected]
+    if selected == compiler.arena.witnessConditionPlanCount() { panic("no retained projection") }
+    val plan = compiler.arena.witnessConditionPlanAt(index: selected)
     val parent = plan.witness
     val witness = <WitnessMatch selfRef=parent.selfRef conformIdx=parent.conformIdx binds=parent.binds conditions=selected + 1U64 />
     compiler.checkWitnessConditionEvidence(witness: witness, offset: 0U64).unwrap()
@@ -24,8 +24,10 @@ fn control(mode~: U64) {
     if mode == 3U64 { normalizations[0U64] = <ProjectionNormalizationStep source=step.source proof=plan.proofs[0U64] output=step.output /> }
     if mode == 4U64 { normalizations[0U64] = <ProjectionNormalizationStep source=step.source proof=step.proof output=parent.selfRef /> }
     if mode == 5U64 { normalizations[0U64] = <ProjectionNormalizationStep source=step.output proof=step.proof output=step.output /> }
-    compiler.arena.witnessConditionPlans[selected] = <WitnessConditionPlan witness=parent proofs=plan.proofs normalizations=normalizations />
-    val result = compiler.checkWitnessConditionEvidence(witness: witness, offset: 0U64)
+    val changed = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=parent proofs=plan.proofs normalizations=normalizations />)
+    compiler.checkWitnessConditionEvidence(witness: witness, offset: 0U64).unwrap()
+    val changedWitness = <WitnessMatch selfRef=parent.selfRef conformIdx=parent.conformIdx binds=parent.binds conditions=changed />
+    val result = compiler.checkWitnessConditionEvidence(witness: changedWitness, offset: 0U64)
     if mode == 0U64 { result.unwrap() }
     else { if result.isOk() { panic("corrupt projection equation accepted") } }
 }

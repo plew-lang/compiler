@@ -15,6 +15,7 @@ part ./Ir/Types
 part ./Ir/Conformances
 part ./Ir/DeclarationNames
 part ./Ir/InstanceConstraints
+part ./Ir/WitnessConditions
 part ./Ir/ConformanceSupertraits
 part ./Ir/BodyInstances
 part ./Ir/MonoWork
@@ -2842,7 +2843,7 @@ pub struct Arena {
     // Immutable semantic evidence DAG. Rows contain only scalar identities
     // and typed ranges; final calls and Mid bodies must not embed recursive
     // proof values with owning Array payloads.
-    pub mut val witnessConditionPlans: Array[WitnessConditionPlan] = []
+    mut val witnessConditionPlans: Array[WitnessConditionPlan] = []
     mut val callableConstraintBindings: Array[CallableConstraintBindings] = []
     mut val conformanceSupertraitHeads: Dictionary[U64, U64] = [:]
     mut val conformanceSupertraitProofs: Array[Array[U64]] = []

@@ -1,0 +1,10 @@
+// Publication returns a stable one-based ID. Existing plans have no writer.
+// Semantic admission belongs to the frontend producer, not this store.
+pub impl Arena {
+    fn witnessConditionPlanCount() -> U64 { return self.witnessConditionPlans.count() }
+    fn witnessConditionPlanAt(index: U64) -> WitnessConditionPlan { return self.witnessConditionPlans[index] }
+    inout fn publishWitnessConditionPlan(plan: WitnessConditionPlan) -> U64 {
+        self.witnessConditionPlans.append(plan)
+        return self.witnessConditionPlans.count()
+    }
+}

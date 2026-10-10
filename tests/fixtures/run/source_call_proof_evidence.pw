@@ -14,7 +14,7 @@ fn check(family: U64, invalid: Bool, cyclic: Bool = false) {
     val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
     val name = compiler.internBytes(s: "value")
     val selected = compiler.staticMemberResolution(fnIdx: functionIndex, receiverRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: <ArgRange start=0U64 len=0U64 />, requiredTraitOwner: compiler.decls.traitAt(index: compiler.recordAnyTraitIndex(anyRef: compiler.funcParamAt(params: function.params, index: 1U64).ty)).nameStart).unwrap()
-    val proof = match selected {
+    mut val proof = match selected {
         StaticMemberResolution.Requirement(proof: val proof, traitIdx: _, reqIdx: _) => { give proof }
         StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: _) => { give proof }
         _ => { panic("missing member") }
@@ -32,9 +32,17 @@ fn check(family: U64, invalid: Bool, cyclic: Bool = false) {
         }
         val output = compiler.staticProofBound(proof: proof, traitIdx: trait).unwrap()
         compiler.decls.conformBoundPool[declaration.bounds.start] = <ConformBound subject=receiver constraint=output.constraint offset=0U64 />
-        val plan = compiler.arena.witnessConditionPlans[edge.conditions - 1U64]
+        val plan = compiler.arena.witnessConditionPlanAt(index: edge.conditions - 1U64)
+        // Construct a separate cyclic input; never replace an admitted plan.
+        val conditionId = compiler.arena.witnessConditionPlanCount() + 1U64
+        proof = match proof {
+            StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: _) => {
+                give <StaticConformanceProof.AssumedTraitPath source=source steps=steps edges=[<WitnessMatch conformIdx=edge.conformIdx binds=edge.binds selfRef=edge.selfRef conditions=conditionId />] />
+            }
+            _ => { panic("missing cyclic path") }
+        }
         val child = compiler.freezeStaticConformanceProof(proof: proof)
-        compiler.arena.witnessConditionPlans[edge.conditions - 1U64] = <WitnessConditionPlan witness=plan.witness proofs=[child] />
+        assert(compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=plan.witness proofs=[child] />) == conditionId)
     }
     val rejected = invalid || cyclic
     val message = if cyclic { give "selected conformance condition evidence is cyclic" } else { give "selected conformance evidence does not satisfy its declaration conditions" }

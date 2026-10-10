@@ -230,8 +230,8 @@ pub impl Comp {
             index += 1U64
         }
         val substitution = <WitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=witness.binds />
-        self.arena.witnessConditionPlans.append(<WitnessConditionPlan witness=substitution proofs=proofs normalizations=normalizations />)
-        return <Result.Ok value=<Optional.Some v=<WitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=witness.binds conditions=self.arena.witnessConditionPlans.count() /> /> />
+        val conditionId = self.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=substitution proofs=proofs normalizations=normalizations />)
+        return <Result.Ok value=<Optional.Some v=<WitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=witness.binds conditions=conditionId /> /> />
     }
 
     // Source precedence belongs to each conformance edge, not to the
