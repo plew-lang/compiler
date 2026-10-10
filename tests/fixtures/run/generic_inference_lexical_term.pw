@@ -1,19 +1,32 @@
 // Declaration inference must preserve a caller-owned symbolic argument even
 // when a concrete body environment is present on the compatibility cursor.
 use @Std/Io only { print }
-use /Frontend only { Comp }
-use /Ir only { Bind, Expr, InstanceEnvironment, TypeRef }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, InstanceEnvironment, TypeRef }
 
 fn main() {
     mut val compiler = <Comp />
-    compiler.arena.reserveTypeSentinel()
-    val name = compiler.internBytes(s: "Parameter")
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="lexical-term.pw" text="fn probe[Parameter](value: Parameter) -> Parameter {{ return value }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val binder = compiler.funcBindAt(binds: function.typeParams, index: 0U64)
+    val parameter = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    mut val expression = compiler.arena.exprs.count()
+    mut val index = 0U64
+    while index < compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Ident(start: _, len: _) => { expression = index }
+            _ => {}
+        }
+        index += 1U64
+    }
+    if expression >= compiler.arena.exprs.count() { panic "missing parameter expression" }
+    compiler.prepareLexicalBody(fnIdx: 0U64).unwrap()
     val concreteName = compiler.internBytes(s: "I64")
-    val binder = <Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=11U64 fieldStart=0U64 fieldLen=0U64 />
-    val parameter = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=11U64 args=[] />)
     val concrete = compiler.pushType(t: <TypeRef nameStart=concreteName.nameStart nameLen=concreteName.nameLen nameId=concreteName.nameId args=[] />)
-    val expression = compiler.pushExpr(e: <Expr.Ident start=name.nameStart len=name.nameLen />)
-    compiler.recordSemanticExprInfo(exprId: expression, ti: compiler.typeInfoOfRef(ref: parameter))
+    compiler.cur.checkFn = 0U64
     compiler.cur.bodyId = 1U64
     compiler.cur.bodyEnvironment = <InstanceEnvironment params=[binder] args=[concrete] />
     if compiler.inferenceArgumentType(exprId: expression).unwrap() != parameter {

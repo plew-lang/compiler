@@ -1,23 +1,37 @@
-use /Frontend only { Comp }
-use /Ir only { Expr, TypeRef, Bind, InstanceEnvironment }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, TypeRef, InstanceEnvironment }
 use @Std/Io only { print }
 
 fn main() {
     mut val compiler = <Comp />
-    compiler.arena.reserveTypeSentinel()
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="record-authority.pw" text="fn probe[Element](value: Element) -> Element {{ return value }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    compiler.cur.checkFn = 0U64
     val name = compiler.internBytes(s: "I64")
     val integer = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
     val literal = compiler.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
     if compiler.inferType(id: literal).unwrap() != 0U64 { panic "unrecorded integer was assigned a type" }
-    compiler.recordSemanticExprTerm(exprId: literal, term: integer)
+    compiler.recordExpr(exprId: literal, expectedTerm: integer).unwrap()
     if compiler.inferType(id: literal).unwrap() != integer { panic "recorded contextual integer type was discarded" }
     if compiler.inferenceArgumentType(exprId: literal).unwrap() != integer { panic "argument query disagrees with recorded integer type" }
-    val binderName = compiler.internBytes(s: "Element")
-    val binder = <Bind nameStart=binderName.nameStart nameLen=binderName.nameLen paramId=11U64 fieldStart=0U64 fieldLen=0U64 />
-    val parameter = compiler.pushType(t: <TypeRef nameStart=binderName.nameStart nameLen=binderName.nameLen paramId=11U64 args=[] />)
-    val genericLiteral = compiler.pushExpr(e: <Expr.Int value=2U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
-    compiler.recordSemanticExprTerm(exprId: genericLiteral, term: parameter)
+    // Ground a real symbolic parameter expression, rather than fabricating a
+    // generic numeric literal that no valid source program can establish.
+    val function = compiler.arena.functionAt(index: 0U64)
+    val binder = compiler.funcBindAt(binds: function.typeParams, index: 0U64)
+    mut val genericValue = compiler.arena.exprs.count()
+    mut val index = 0U64
+    while index < compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Ident(start: _, len: _) => { genericValue = index }
+            _ => {}
+        }
+        index += 1U64
+    }
+    if genericValue >= compiler.arena.exprs.count() { panic "missing generic expression" }
+    compiler.prepareLexicalBody(fnIdx: 0U64).unwrap()
     compiler.cur.bodyEnvironment = <InstanceEnvironment params=[binder] args=[integer] />
-    if compiler.inferType(id: genericLiteral).unwrap() != integer { panic "recorded type was not grounded in its body environment" }
+    if compiler.inferType(id: genericValue).unwrap() != integer { panic "recorded type was not grounded in its body environment" }
     print("literal-record-authority")
 }
