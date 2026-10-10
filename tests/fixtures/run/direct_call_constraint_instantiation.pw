@@ -19,6 +19,9 @@ fn main() {
             CallTemplateKind.Direct(callee: val function, receiver: _, args: _, calleeTypeArgs: val types, proofId: _) => {
                 if function == callee && template.siteKey.ownerFnIdx == owner {
                     val index = compiler.callTemplateIndex(siteKey: template.siteKey)
+                    if compiler.replaceBuildingCallTemplate(index: index, template: template) {
+                        panic("construction writer replaced a prepared call template")
+                    }
                     val snapshot = compiler.preparedCallConstraints(index: index).unwrap()
                     val plan = snapshot.constraints()
                     if compiler.recordBuildingCallConstraints(index: index, plan: <SelectedCallConstraints owner=plan.owner bounds=plan.bounds proofs=[] />) {
