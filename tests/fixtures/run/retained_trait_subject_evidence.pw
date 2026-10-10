@@ -1,0 +1,32 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { TraitConstraint, TraitInstanceKey, StaticConformanceProof, StaticProofInstantiation, DeclarationBoundRef, InstanceEnvironment }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait Root {{}} trait Target {{}} pub impl Root as Target {{}} struct Item {{}} impl Item as Root {{}} fn context(value: Item) {{}}" path="trait-subject-proof.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val context = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "context").nameId)
+    val receiver = compiler.funcParamAt(params: compiler.arena.functionAt(index: context).params, index: 0U64).ty
+    val path = compiler.viewedTraitConstraintProof(ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 1U64).nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+    val root = match path {
+        StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => { give edges[0U64] }
+        _ => { panic("missing selected trait path") }
+    }
+    val terminal = compiler.selectedConstraintWitness(proof: path).unwrap()
+    val environment = compiler.selectedConstraintEnvironment(witness: terminal, proof: path).unwrap()
+    val assumption = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.TraitSubject index=terminal.conformIdx - 1U64 /> />
+    val instantiated = match compiler.instantiateConstraintProof(proof: assumption, receiverRef: receiver, environment: environment, selfRef: receiver, itemRef: 0U64) {
+        Result.Ok(value: val state) => { give state }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+    match instantiated {
+        StaticProofInstantiation.Ready(proof: val selected) => {
+            if !compiler.sameStaticConformanceProof(a: selected, b: <StaticConformanceProof.ConcreteWitness witness=root />) { panic("trait subject did not retain its root evidence") }
+        }
+        _ => { panic("trait subject evidence was not ready") }
+    }
+    val incomplete = <InstanceEnvironment params=environment.params args=environment.args receiverRef=environment.receiverRef proof=<StaticConformanceProof.ConcreteWitness witness=terminal /> />
+    if compiler.instantiateConstraintProof(proof: assumption, receiverRef: receiver, environment: incomplete, selfRef: receiver, itemRef: 0U64).isOk() { panic("missing path root was repaired by search") }
+    if compiler.selectedConstraintEnvironment(witness: root, proof: path).isOk() { panic("foreign path terminal was accepted") }
+    print("retained-trait-subject-evidence")
+}

@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+trait Target {}
+trait Root { fn value() -> I64 }
+pub impl Root as Target {
+    fn forward() -> I64 { return accept(value: self) }
+}
+struct Item {}
+pub impl Item { factory }
+impl Item as Root { fn value() -> I64 { return 42I64 } }
+fn accept[T](value: T) -> I64 where T: Root { return value.value() }
+fn main() {
+    if <Item />.forward() != 42I64 { panic("trait subject forwarding changed implementation") }
+    print("retained-trait-subject")
+}

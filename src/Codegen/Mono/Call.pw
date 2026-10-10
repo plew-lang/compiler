@@ -3750,7 +3750,7 @@ pub impl Comp {
         return <Optional.None />
     }
 
-    inout fn selectedConstraintEnvironment(witness: WitnessMatch) -> Result[InstanceEnvironment, CompileDiagnostic] {
+    inout fn selectedConstraintEnvironment(witness: WitnessMatch, proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
         if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "constraint has no selected conformance") /> }
         val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
         mut val params: Array[Bind] = []
@@ -3764,7 +3764,14 @@ pub impl Comp {
             values.append(witness.binds[binding].term)
             index += 1U64
         }
-        return <Result.Ok value=<InstanceEnvironment params=params args=values receiverRef=witness.selfRef proof=<StaticConformanceProof.ConcreteWitness witness=witness /> /> />
+        val selected = if self.proofIsMissing(proof: proof) { give <StaticConformanceProof.ConcreteWitness witness=witness /> } else { give proof }
+        match self.selectedConstraintWitness(proof: selected) {
+            Optional.Some(v: val terminal) => {
+                if !self.sameWitnessSubstitution(a: terminal, b: witness) { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint environment has a different path terminal") /> }
+            }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint environment has no concrete path terminal") /> }
+        }
+        return <Result.Ok value=<InstanceEnvironment params=params args=values receiverRef=witness.selfRef proof=selected /> /> />
     }
 
     inout fn retainedConformanceConstraint(declared: U64, environment: InstanceEnvironment) -> Result[StaticProofInstantiation, CompileDiagnostic] {
@@ -3803,7 +3810,7 @@ pub impl Comp {
                 Optional.Some(v: val proof) => { give proof }
                 Optional.None => { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "supertrait edge has no retained declaration evidence") /> }
             }
-            val selectedEnvironment = try self.selectedConstraintEnvironment(witness: witness)
+            val selectedEnvironment = try self.selectedConstraintEnvironment(witness: witness, proof: current)
             val state = try self.instantiateConstraintProof(proof: self.thawStaticConformanceProof(id: saved), receiverRef: receiverRef, environment: selectedEnvironment, selfRef: witness.selfRef, itemRef: 0U64)
             match state {
                 StaticProofInstantiation.Ready(proof: val proof) => { current = proof }
@@ -3811,6 +3818,29 @@ pub impl Comp {
             }
         }
         return <Result.Ok value=<StaticProofInstantiation.Ready proof=current /> />
+    }
+
+    // Return the retained path prefix that proves this exact obligation. A
+    // later edge may witness a different trait and must not become its terminal.
+    inout fn retainedConstraintPrefix(proof: StaticConformanceProof, expected: TraitBound) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        match proof {
+            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
+                mut val prefix: Array[WitnessMatch] = []
+                for edge in edges {
+                    prefix.append(edge)
+                    val candidate = <StaticConformanceProof.ConcreteWitness witness=edge />
+                    if self.checkSelectedCallConstraintBoundary(expected: expected, proof: candidate, offset: expected.offset).isOk() {
+                        if prefix.count() == 1U64 { return <Result.Ok value=candidate /> }
+                        return <Result.Ok value=<StaticConformanceProof.TraitPath edges=prefix terminalConformIdx=edge.conformIdx /> />
+                    }
+                }
+                return <Result.Err error=self.diagnosticAt(offset: expected.offset, msg: "retained receiver path has no evidence for its constraint") />
+            }
+            _ => {
+                try self.checkSelectedCallConstraintBoundary(expected: expected, proof: proof, offset: expected.offset)
+                return <Result.Ok value=proof />
+            }
+        }
     }
 
     // Receiver assumptions share the enclosing body's selected conformance.
@@ -3831,7 +3861,7 @@ pub impl Comp {
         val state = try self.instantiateStaticMemberProof(proof: environment.proof, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
         match state {
             StaticProofInstantiation.Ready(proof: val selected) => {
-                try self.checkSelectedCallConstraintBoundary(expected: expected, proof: selected, offset: expected.offset)
+                return <Result.Ok value=<StaticProofInstantiation.Ready proof=(try self.retainedConstraintPrefix(proof: selected, expected: expected)) /> />
             }
             _ => {}
         }
@@ -3872,7 +3902,7 @@ pub impl Comp {
                         return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has no retained declaration binding") />
                     }
                     DeclarationBoundRef.Conformance(index: val declared) => { return self.retainedConformanceConstraint(declared: declared, environment: environment) }
-                    DeclarationBoundRef.MethodReceiver(index: _) => { return self.instantiateReceiverConstraint(bound: bound, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
+                    DeclarationBoundRef.MethodReceiver(index: _) | DeclarationBoundRef.TraitSubject(index: _) => { return self.instantiateReceiverConstraint(bound: bound, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
                     _ => {}
                 }
             }
