@@ -69,7 +69,7 @@ pub impl Comp {
             DeclarationBoundRef.TraitSubject(val index) => {
                 val conformance = self.decls.conformAt(index: index)
                 val owner = conformance.subjectTraitOwner
-                return <TraitBound subject=conformance.subjectTy constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=self.copyConformTypes(types: conformance.subjectArgs) /> positionalArgsOpen=false assocPredicates=[] /> offset=conformance.defOffset />
+                return <TraitBound subject=self.receiverSubjectTerm(receiver: conformance.subjectTy, traitOwner: owner) constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=self.copyConformTypes(types: conformance.subjectArgs) /> positionalArgsOpen=false assocPredicates=[] /> offset=conformance.defOffset />
             }
             DeclarationBoundRef.AssociatedType(val index) => { return self.arena.associatedBoundEvidence[index].bound }
             DeclarationBoundRef.MethodReceiver(val index) => {
@@ -676,14 +676,15 @@ pub impl Comp {
     }
 
     inout fn conformanceTraitBound(conformance: Conform) -> TraitBound {
+        val subject = self.receiverSubjectTerm(receiver: conformance.subjectTy, traitOwner: conformance.subjectTraitOwner)
         mut val outputs: Array[TraitAssocPredicate] = []
         mut val index = 0U64
         while index < conformance.assocBindingIds.count() {
             val binding = self.decls.assocBindings[self.conformFuncIdAt(ids: conformance.assocBindingIds, index: index)]
-            outputs.append(<TraitAssocPredicate member=binding.nameId value=self.groundTermInEnvironment(ref: binding.ty, params: [], values: [], selfRef: conformance.subjectTy) span=binding.tyStart />)
+            outputs.append(<TraitAssocPredicate member=binding.nameId value=self.groundTermInEnvironment(ref: binding.ty, params: [], values: [], selfRef: subject) span=binding.tyStart />)
             index += 1U64
         }
-        return <TraitBound subject=conformance.subjectTy constraint=<TraitConstraint key=<TraitInstanceKey owner=conformance.traitStart positionalArgs=self.copyConformTypes(types: conformance.traitArgs) /> positionalArgsOpen=false assocPredicates=outputs /> offset=conformance.defOffset />
+        return <TraitBound subject=subject constraint=<TraitConstraint key=<TraitInstanceKey owner=conformance.traitStart positionalArgs=self.copyConformTypes(types: conformance.traitArgs) /> positionalArgsOpen=false assocPredicates=outputs /> offset=conformance.defOffset />
     }
 
     inout fn conformanceDeclarationAssumptions(conformIndex: U64) -> Array[DeclarationBoundRef] {

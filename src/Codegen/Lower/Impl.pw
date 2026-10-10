@@ -437,13 +437,13 @@ pub impl Comp {
 
     // A trait subject is not a value type. Its executable methods receive
     // the lexical Self binder, grounded by the normal body environment.
-    inout fn lowerMethodReceiverType(receiver: U64, traitOwner: U64) -> U64 {
+    inout fn receiverSubjectTerm(receiver: U64, traitOwner: U64) -> U64 {
         if traitOwner == 0U64 { return receiver }
         val index = self.decls.traitOwnerIndex(offset: traitOwner)
         if index >= self.decls.traitOwnerCount() { return 0U64 }
         val declaration = self.decls.traitOwnerAt(index: index)
-        val name = self.kwSpan(kw: "Self", kwLen: 4U64)
-        return self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=declaration.selfParamId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+        val name = self.internBytes(s: "Self")
+        return self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=declaration.selfParamId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
     }
 
     inout fn lowerSyntaxMemberTypeParams(member: SyntaxMember) -> Result[Array[Bind], CompileDiagnostic] {
@@ -832,7 +832,7 @@ pub impl Comp {
             val target = <Bind nameStart=m.viaName.start nameLen=m.viaName.end - m.viaName.start fieldStart=m.viaName.start fieldLen=m.viaName.end - m.viaName.start />
             registerSurface = !spansEqual(c: inout self, aStart: nameN.nameStart, aLen: nameN.nameLen, bStart: target.nameStart, bLen: target.nameLen)
         }
-        (try self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.lowerMethodReceiverType(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=m.isAsync isDiverging=m.isDiverging isExtern=false isPub=im.isPub extId=extId provTraitArity=recvTraitArgs.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=fnIdx + 1U64 defOffset=m.name.start />, registerSurface: registerSurface))
+        (try self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.receiverSubjectTerm(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=m.isAsync isDiverging=m.isDiverging isExtern=false isPub=im.isPub extId=extId provTraitArity=recvTraitArgs.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=fnIdx + 1U64 defOffset=m.name.start />, registerSurface: registerSurface))
         try self.appendSyntaxMemberBounds(fnIdx: fnIdx, member: m)
         try self.appendSyntaxImplBounds(fnIdx: fnIdx, im: im)
         self.lowerAssociatedOwner = savedAssociatedOwner
@@ -988,7 +988,7 @@ pub impl Comp {
             val target = self.internBytes(s: m.viaName)
             registerSurface = !spansEqual(c: inout self, aStart: nameN.nameStart, aLen: nameN.nameLen, bStart: target.nameStart, bLen: target.nameLen)
         }
-        (try self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.lowerMethodReceiverType(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=m.isAsync isDiverging=m.isDiverging isExtern=false isPub=im.isPub extId=extId provTraitArity=recvTraitArgs.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=fnIdx + 1U64 defOffset=m.nameSpan.start />, registerSurface: registerSurface))
+        (try self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.receiverSubjectTerm(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=m.isAsync isDiverging=m.isDiverging isExtern=false isPub=im.isPub extId=extId provTraitArity=recvTraitArgs.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=fnIdx + 1U64 defOffset=m.nameSpan.start />, registerSurface: registerSurface))
         try self.appendFuncBounds(fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits, types: m.whereTypes, traitTypes: m.whereTraitTypes)
         try self.appendFuncBounds(fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits, types: im.whereTypes, traitTypes: im.whereTraitTypes)
         self.lowerAssociatedOwner = savedAssociatedOwner
