@@ -6,7 +6,7 @@ use @Std/Io only { print }
 fn main() {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler,
-        input: <FrontendInput.Text text="trait Parent[A] {{}} trait Child[A]: Parent[A] {{}} struct Box[V] {{}} impl[V] Box[V] as Parent[V] {{}} impl[V] Box[V] as Child[V] where Box[V]: Parent[V] {{}} fn accept[V](value: V) where V: Parent[I64] {{}} fn forward[V](value: V) where V: Child[I64] {{ accept(value: value) }} fn context(value: Box[I64]) {{}}" path="retained-supertraits.pw" />,
+        input: <FrontendInput.Text text="trait Parent[A] {{}} trait Child[A]: Parent[A] {{}} struct Box[V] {{}} impl[V] Box[V] as Parent[V] {{}} impl[V] Box[V] as Child[V] where Box[V]: Parent[V] {{}} struct Foreign {{}} impl Foreign as Parent[I64] {{}} impl Foreign as Child[I64] where Foreign: Parent[I64] {{}} fn accept[V](value: V) where V: Parent[I64] {{}} fn forward[V](value: V) where V: Child[I64] {{ accept(value: value) }} fn context(value: Box[I64]) {{}}" path="retained-supertraits.pw" />,
         sources: <SourceAccess stdRoot=[] />).unwrap()
     val forward = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "forward").nameId)
     val context = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "context").nameId)
@@ -24,7 +24,7 @@ fn main() {
         StaticProofInstantiation.Ready(proof: val proof) => { give proof }
         _ => { panic("missing retained conformance condition") }
     }
-    if compiler.instantiateConstraintProof(proof: condition, receiverRef: receiver, environment: <InstanceEnvironment />, selfRef: receiver, itemRef: 0U64).isOk() { panic("missing witness environment was repaired by search") }
+    if compiler.instantiateConstraintProof(proof: condition, receiverRef: receiver, environment: <InstanceEnvironment params=selectedEnvironment.params args=selectedEnvironment.args receiverRef=selectedEnvironment.receiverRef />, selfRef: receiver, itemRef: 0U64).isOk() { panic("missing witness environment was repaired by search") }
     val foreign = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Conformance index=declaration.bounds.start + declaration.bounds.len /> />
     if compiler.instantiateConstraintProof(proof: foreign, receiverRef: receiver, environment: selectedEnvironment, selfRef: receiver, itemRef: 0U64).isOk() { panic("foreign conformance condition was accepted") }
     if compiler.arena.publishConformanceSupertraits(conformance: witness.conformIdx - 1U64, proofs: []) { panic("published supertrait evidence was replaced") }
