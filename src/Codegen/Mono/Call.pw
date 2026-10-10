@@ -3957,7 +3957,7 @@ pub impl Comp {
         return self.instantiateStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
     }
 
-    inout fn instantiateDirectCallConstraints(template: CallTemplate) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
+    inout fn instantiateBodyCallConstraints(template: CallTemplate) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
         return self.instantiateSelectedCallConstraints(template: template, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
     }
 
@@ -4007,7 +4007,7 @@ pub impl Comp {
                 if storedCallee < self.arena.functionCount() {
                     val selection: CallSiteSelection = (try self.selectDirectTemplateCall(exprId: exprId, callee: storedCallee, receiver: receiver, arguments: self.callTemplateArguments(range: arguments), proof: self.thawStaticConformanceProof(id: proofId)))
                     try self.recordSelectedBodyCallee(selection: selection)
-                    val constraints = try self.instantiateDirectCallConstraints(template: template)
+                    val constraints = try self.instantiateBodyCallConstraints(template: template)
                     try self.enqueueSelectedCallee(selection: selection, constraints: constraints)
                     return <Result.Ok value=storedCallee />
                 }
@@ -4020,7 +4020,14 @@ pub impl Comp {
             CallTemplateKind.StaticMethod(receiver: val receiver, args: val arguments, resolution: val resolution, methodTypeArgs: val methodTypeArgs, resultTerm: val resultTerm) => {
                 val selection: CallSiteSelection = (try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: self.callTemplateTypeArgs(range: methodTypeArgs), receiver: receiver, arguments: self.callTemplateArguments(range: arguments), resolution: resolution, resultTerm: resultTerm))
                 try self.recordSelectedBodyCallee(selection: selection)
-                try self.enqueueSelectedCallee(selection: selection)
+                // A provided declaration owns both this selected public plan
+                // and the lexical body's bound identities. Requirement calls
+                // need their separate requirement-to-witness mapping.
+                val constraints = match resolution {
+                    StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => { give try self.instantiateBodyCallConstraints(template: template) }
+                    _ => { give <CallableConstraintEvidence.Declaration /> }
+                }
+                try self.enqueueSelectedCallee(selection: selection, constraints: constraints)
                 return <Result.Ok value=selection.callee />
             }
             _ => {}

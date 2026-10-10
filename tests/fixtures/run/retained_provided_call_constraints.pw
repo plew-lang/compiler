@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+trait Marker { fn value() -> I64 }
+trait Root { fn root() -> I64 }
+pub impl Root {
+    fn forward[T](value: T) -> I64 where T: Marker { return accept(value: value) }
+}
+struct Item {}
+pub impl Item { factory }
+impl Item as Marker { fn value() -> I64 { return 42I64 } }
+impl Item as Root { fn root() -> I64 { return 0I64 } }
+fn accept[T](value: T) -> I64 where T: Marker { return value.value() }
+fn caller[R, T](receiver: R, value: T) -> I64 where R: Root, T: Marker { return receiver.forward(value: value) }
+fn main() {
+    if caller(receiver: <Item />, value: <Item />) != 42I64 { panic("lost provided call constraints") }
+    print("retained-provided-call-constraints")
+}
