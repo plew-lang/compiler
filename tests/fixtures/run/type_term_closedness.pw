@@ -38,7 +38,8 @@ fn check(arena: Arena) {
     }
 }
 fn main() {
-    mut val arena = <Arena bytes="SelfLeaf".bytes() />
+    mut val arena: Arena = <Arena />
+    arena.bytes = "SelfLeaf".bytes()
     arena.reserveTypeSentinel()
     val leaf = arena.registerType(t: <TypeRef nameStart=4U64 nameLen=4U64 args=[] />, nameCount: 0U64)
     val parameter = arena.registerType(t: <TypeRef nameStart=4U64 nameLen=4U64 paramId=3U64 args=[] />, nameCount: 0U64)
