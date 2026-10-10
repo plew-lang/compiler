@@ -1,0 +1,4 @@
+use /Ir only { FinalCallArguments }
+fn main() {
+    val arguments: FinalCallArguments = <FinalCallArguments start=0U64 len=0U64 />
+}

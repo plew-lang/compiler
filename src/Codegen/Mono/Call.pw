@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-use ../../Ir only { ExistentialRequirementSignature, ExistentialWitnessPlan, ExistentialBoxEvidence, DeclarationBoundRef, SelectedCallableSubstitution, BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalAwaitResolution, FinalForResolution, ValueConversionBoundary, EnumPayloadConversion, ValueConversionProof, BodySignature, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
+use ../../Ir only { ExistentialRequirementSignature, ExistentialWitnessPlan, ExistentialBoxEvidence, DeclarationBoundRef, SelectedCallableSubstitution, BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalAwaitResolution, FinalForResolution, ValueConversionBoundary, EnumPayloadConversion, ValueConversionProof, BodySignature, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, FinalCallArguments, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
 use ../../Diag only { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -1512,9 +1512,9 @@ pub impl Comp {
         return out
     }
 
-    inout fn prepareFinalCalleeArguments(arguments: Array[CallTemplateArgument], parameterTypes: Array[U64], sourceTypes: Array[U64]) -> Array[CallEvaluationArgument] {
+    inout fn prepareFinalCalleeArguments(arguments: Array[CallTemplateArgument], parameterTypes: Array[U64], sourceTypes: Array[U64]) -> FinalCallArguments {
         if sourceTypes.count() != arguments.count() { panic "final call argument type count mismatch" }
-        mut val prepared: Array[CallEvaluationArgument] = []
+        mut val prepared = self.arena.beginFinalCallArguments()
         mut val i: U64 = 0U64
         while i < arguments.count() {
             val argument: CallTemplateArgument = arguments[i]
@@ -1522,7 +1522,7 @@ pub impl Comp {
             if i < parameterTypes.count() { expected = parameterTypes[i] }
             val sourceType = sourceTypes[i]
             val adaptsReceiverView = argument.isDispatchReceiver && sourceType != 0U64 && expected != 0U64 && !self.typeRefEq(a: sourceType, b: expected) && self.typeRefEq(a: self.runtimeTypeRef(ref: sourceType), b: self.runtimeTypeRef(ref: expected))
-            prepared.append(<CallEvaluationArgument adaptsReceiverView=adaptsReceiverView sourceTypeRef=sourceType exprId=self.callArgumentExprId(source: argument.source) isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
+            prepared = self.arena.appendFinalCallArgument(arguments: prepared, argument: <CallEvaluationArgument adaptsReceiverView=adaptsReceiverView sourceTypeRef=sourceType exprId=self.callArgumentExprId(source: argument.source) isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
             i += 1U64
         }
         return prepared
@@ -1547,7 +1547,7 @@ pub impl Comp {
         mut val siteKey: CallSiteKey = generatedSite
         if siteKey.originKind == 0U64 { siteKey = (try self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)) }
         val evaluationArguments = self.prepareFinalCalleeArguments(arguments: arguments, parameterTypes: parameterTypeRefs, sourceTypes: argumentSourceTypes)
-        if !self.arena.publishFinalCallee(row: <CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee receiverPassing=receiverPassing recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target />, typeArguments: calleeTypeArgs, parameterTypes: parameterTypeRefs, conversions: argumentConversions, passings: argumentPassings, arguments: evaluationArguments) {
+        if !self.arena.publishFinalCallee(row: <CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee receiverPassing=receiverPassing recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target />, typeArguments: calleeTypeArgs, parameterTypes: parameterTypeRefs, conversions: argumentConversions, passings: argumentPassings, arguments: <Optional.Some v=evaluationArguments />) {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "final call occurrence is already published") />
         }
         // A call's result recipe is part of the selected call contract, even

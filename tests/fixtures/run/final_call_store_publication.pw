@@ -1,13 +1,16 @@
 use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp }
-use /Ir only { Arena, CallResolution, CallSiteKey, CallResolutionParameterTypeRange, ValueConversionProof }
+use /Ir only { Arena, CallResolution, CallSiteKey, CallResolutionParameterTypeRange, ValueConversionProof, CallEvaluationArgument }
 fn main() {
     mut val arena: Arena = <Arena />
     val site = <CallSiteKey ownerFnIdx=3U64 originKind=1U64 originSerial=7U64 />
     val row = <CallResolution bodyId=1U64 siteKey=site exprId=8U64 callee=9U64 parameterTypeRefs=<CallResolutionParameterTypeRange start=999U64 len=999U64 /> resultTypeRef=11U64 />
-    assert(arena.publishFinalCallee(row: row, parameterTypes: [13U64], conversions: [<ValueConversionProof.Identity />]))
+    mut val inputs = arena.beginFinalCallArguments()
+    inputs = arena.appendFinalCallArgument(arguments: inputs, argument: <CallEvaluationArgument exprId=17U64 isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />)
+    assert(arena.publishFinalCallee(row: row, parameterTypes: [13U64], conversions: [<ValueConversionProof.Identity />], arguments: <Optional.Some v=inputs />))
     val saved = arena.finalCalleeAt(index: 0U64)
+    assert(saved.arguments.len == 1U64 && arena.finalCalleeArgumentAt(arguments: saved.arguments, index: 0U64).exprId == 17U64)
     assert(saved.parameterTypeRefs.start == 0U64 && saved.parameterTypeRefs.len == 1U64)
     assert(arena.finalCalleeParameterTypeAt(types: saved.parameterTypeRefs, index: 0U64) == 13U64)
     assert(arena.conversionProofIsIdentity(id: arena.finalCalleeConversionAt(conversions: saved.argumentConversions, index: 0U64)))

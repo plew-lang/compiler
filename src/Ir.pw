@@ -2078,6 +2078,12 @@ pub impl CallEvaluationArgument { factory }
 // instances, so the enclosing function, its substitution arguments, and its
 // receiver instance are also part of the decision context.  Mono owns these
 // records; backend only consumes them.
+// Construction-only argument range. Only Arena can create or extend it.
+pub struct FinalCallArguments {
+    val start: U64
+    val len: U64
+}
+
 pub struct CallResolution {
     // 1-based index into Arena.bodyInstances.  A final call belongs to one
     // canonical semantic body instance; duplicating its function/environment

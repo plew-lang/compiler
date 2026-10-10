@@ -161,17 +161,32 @@ pub impl Arena {
         return self.finalCalleeArgumentPool[arguments.start + index]
     }
 
+    fn beginFinalCallArguments() -> FinalCallArguments {
+        return <FinalCallArguments start=self.finalCalleeArgumentPool.count() len=0U64 />
+    }
+
+    inout fn appendFinalCallArgument(arguments: FinalCallArguments, argument: CallEvaluationArgument) -> FinalCallArguments {
+        if arguments.start + arguments.len != self.finalCalleeArgumentPool.count() { panic "final call argument builder is not at its construction frontier" }
+        self.finalCalleeArgumentPool.append(argument)
+        return <FinalCallArguments start=arguments.start len=arguments.len + 1U64 />
+    }
+
     // Ranges supplied in row are never trusted; this store owns every payload.
-    inout fn publishFinalCallee(row: CallResolution, typeArguments: Array[U64] = [], parameterTypes: Array[U64] = [], conversions: Array[ValueConversionProof] = [], passings: Array[CallArgumentPassing] = [], arguments: Array[CallEvaluationArgument] = []) -> Bool {
+    inout fn publishFinalCallee(row: CallResolution, typeArguments: Array[U64] = [], parameterTypes: Array[U64] = [], conversions: Array[ValueConversionProof] = [], passings: Array[CallArgumentPassing] = [], arguments: Optional[FinalCallArguments] = <Optional.None />) -> Bool {
         if self.finalCalleeIndexForKey(bodyId: row.bodyId, siteKey: row.siteKey) < self.finalCalleeCount() { return false }
         self.ensureFinalCalleeIndex(nextCount: self.finalCalleeCount() + 1U64)
         val types = self.pushFinalCalleeTypeArgs(args: typeArguments)
         val parameters = self.pushFinalCalleeParameterTypes(types: parameterTypes)
         val conversionRange = self.pushFinalCalleeConversions(conversions: conversions)
         val passingRange = self.pushFinalCalleeArgumentPassings(passings: passings)
-        val start = self.finalCalleeArgumentPool.count()
-        for argument in arguments { self.finalCalleeArgumentPool.append(argument) }
-        val argumentRange = <CallResolutionArgumentRange start=start len=arguments.count() />
+        mut val argumentRange = <CallResolutionArgumentRange start=0U64 len=0U64 />
+        match arguments {
+            Optional.Some(v: val prepared) => {
+                if prepared.start > self.finalCalleeArgumentPool.count() || prepared.len > self.finalCalleeArgumentPool.count() - prepared.start { panic "final call argument builder range is not owned by this store" }
+                argumentRange = <CallResolutionArgumentRange start=prepared.start len=prepared.len />
+            }
+            Optional.None => {}
+        }
         self.finalCallees.append(<CallResolution bodyId=row.bodyId calleeBodyId=row.calleeBodyId siteKey=row.siteKey exprId=row.exprId siteIsStmt=row.siteIsStmt slot=row.slot callee=row.callee receiverPassing=row.receiverPassing recvTypeRef=row.recvTypeRef resultTypeRef=row.resultTypeRef resultProjection=row.resultProjection target=row.target calleeTypeArgs=types parameterTypeRefs=parameters argumentConversions=conversionRange argumentPassings=passingRange arguments=argumentRange />)
         val capacity = self.finalCalleeIndexSlots.count()
         mut val slot = self.finalCalleeHash(bodyId: row.bodyId, siteKey: row.siteKey) % capacity
