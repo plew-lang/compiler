@@ -3,13 +3,16 @@ use /SourceAccess only { SourceAccess }
 use @Std/Io only { print }
 fn main() {
     mut val compiler = <Comp />
-    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait Marker {{ fn value() -> I64 }}\ntrait Root {{ fn root() -> I64 }}\npub impl Root {{\n    fn forward[T](value: T) -> I64 where T: Marker {{ return accept(value: value) }}\n}}\nstruct Item {{}}\npub impl Item {{ factory }}\nimpl Item as Marker {{ fn value() -> I64 {{ return 42I64 }} }}\nimpl Item as Root {{ fn root() -> I64 {{ return 0I64 }} }}\nfn accept[T](value: T) -> I64 where T: Marker {{ return value.value() }}\nfn caller[R, T](receiver: R, value: T) -> I64 where R: Root, T: Marker {{ return receiver.forward(value: value) }}\nfn main() {{\n    if caller(receiver: <Item />, value: <Item />) != 42I64 {{ panic(\"lost provided call constraints\") }}\n}}\n" path="provided-constraints.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait Marker {{ fn value() -> I64 }}\ntrait Root {{ fn root() -> I64 }}\npub impl Root {{\n    fn forward[T](value: T) -> I64 where T: Marker {{ return accept(value: value) }}\n}}\nstruct Item {{}}\npub impl Item {{ factory }}\nimpl Item as Marker {{ fn value() -> I64 {{ return 42I64 }} }}\nimpl Item as Root {{ fn root() -> I64 {{ return 0I64 }} }}\nfn accept[T](value: T) -> I64 where T: Marker {{ return value.value() }}\nfn caller[R, T](receiver: R, value: T) -> I64 where R: Root, T: Marker {{ return receiver.forward(value: value) }}\nfn main() {{\n    val result = caller(receiver: <Item />, value: <Item />)\n}}\n" path="provided-constraints.pw" />, sources: <SourceAccess stdRoot=[] />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
     val name = compiler.internBytes(s: "forward").nameId
     mut val found = false
     mut val index = 0U64
     while index < compiler.arena.bodyInstanceCount() {
         val body = compiler.arena.bodyInstanceAt(index: index)
-        if compiler.arena.functionAt(index: body.fnIdx).nameId == name {
+        if body.fnIdx < compiler.arena.functionCount() && compiler.arena.functionAt(index: body.fnIdx).nameId == name {
             val constraints = body.environment.constraints.unwrap()
             if compiler.arena.callableConstraintCount(evidence: constraints) != 1U64 { panic("provided body lost constraint evidence") }
             found = true
