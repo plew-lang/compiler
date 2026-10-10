@@ -1,21 +1,38 @@
-use /Frontend only { Comp }
+// An implicit Unit result comes from the selected callable's recorded signature,
+// not from treating a missing term or unrelated expression as Unit.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
 use /Ir only { Expr, TypeRef }
 use @Std/Io only { print }
 
 fn main() {
     mut val compiler = <Comp />
-    compiler.arena.reserveTypeSentinel()
-    val name = compiler.internBytes(s: "I64")
-    val integer = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
-    val unit = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[] recordFieldTerms=[] />)
-    val expression = compiler.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="unit-probe.pw" text="fn unit() {{}} fn probe() {{ val result = unit() val number = 2I64 }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    mut val expression = compiler.arena.exprs.count()
+    mut val valueExpression = compiler.arena.exprs.count()
+    mut val index = 0U64
+    while index < compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Call(nameStart: _, nameLen: _, args: _) => { expression = index }
+            Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { valueExpression = index }
+            _ => {}
+        }
+        index += 1U64
+    }
+    if expression >= compiler.arena.exprs.count() || valueExpression >= compiler.arena.exprs.count() { panic "missing probe expressions" }
     if compiler.recordedExpressionHasUnitResult(exprId: expression) { panic "unrecorded result was Unit" }
-    compiler.recordKnownExpressionResult(exprId: expression, resultTerm: 0U64).unwrap()
+    compiler.prepareLexicalBody(fnIdx: 1U64).unwrap()
+    compiler.cur.checkFn = 1U64
+    val integer = compiler.inferType(id: valueExpression).unwrap()
+    if integer == 0U64 { panic "recorded integer type was missing" }
+    val unit = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[] recordFieldTerms=[] />)
     if !compiler.recordedExpressionHasUnitResult(exprId: expression) { panic "known Unit result was lost" }
     compiler.tcCheckValue(expectedRef: unit, valueExpr: expression, pos: "unit-probe").unwrap()
     if compiler.tcCheckValue(expectedRef: integer, valueExpr: expression, pos: "unit-probe").isOk() { panic "Unit matched an integer" }
-    val valueExpression = compiler.pushExpr(e: <Expr.Int value=2U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
-    compiler.recordSemanticExprTerm(exprId: valueExpression, term: integer)
     if compiler.recordedExpressionHasUnitResult(exprId: valueExpression) { panic "value result was Unit" }
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: 1U64).unwrap()
+    if !facts.expression(exprId: expression).isSome() { panic "prepared owner lost Unit result" }
     print("recorded-unit")
 }
