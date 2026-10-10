@@ -19,6 +19,10 @@ fn main() {
     compiler.prepareLexicalBody(fnIdx: other).unwrap()
     val facts = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
     val binding = facts.binding(stmtId: statement).unwrap()
+    match compiler.recordStmt(stmtId: statement) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("completed binding owner recorded again") }
+    }
     if binding.typeTerm == 0U64 { panic("binding type lost") }
     if binding.endedBinding != 0U64 { panic("unexpected shadow end") }
     val foreign = compiler.preparedFunctionSemanticFacts(fnIdx: other).unwrap()
@@ -54,5 +58,6 @@ fn main() {
         _ => { panic("missing shadow declaration") }
     }
     if ended != declaration { panic("shadow end lost declaration identity") }
+    if facts.binding(stmtId: statement).unwrap().typeTerm != binding.typeTerm { panic("published binding snapshot changed") }
     print("ok")
 }
