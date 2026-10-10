@@ -1240,9 +1240,9 @@ pub impl Comp {
         return self.groundTraitRequirementType(ref: reified, traitIdx: traitIndex, receiverRef: conformance.subjectTy, params: self.copyTraitBinds(binds: declaration.typeParams), args: arguments)
     }
 
-    inout fn checkAssociatedBounds(conformance: Conform, traitIndex: U64, assumptions: Array[DeclarationBoundRef]) -> Result[(), CompileDiagnostic] {
+    inout fn checkAssociatedBounds(conformIndex: U64, conformance: Conform, traitIndex: U64, assumptions: Array[DeclarationBoundRef]) -> Result[(), CompileDiagnostic] {
         val declaration = self.decls.traitAt(index: traitIndex)
-        if declaration.assocBounds.len == 0U64 { return <Result.Ok value=() /> }
+        mut val evidence: Array[ConformanceAssociatedEvidence] = []
         mut val outputs: Array[TraitAssocPredicate] = []
         mut val index = 0U64
         while index < conformance.assocBindingIds.count() {
@@ -1273,11 +1273,14 @@ pub impl Comp {
                 predicates.append(<TraitAssocPredicate member=predicate.member value=term span=predicate.span />)
             }
             val constraint = <TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates />
-            if !(try self.viewedTypeConformsTraitConstraint(ref: subject, constraint: constraint, assumptions: assumptions)) {
+            val proof = try self.viewedTraitConstraintProof(ref: subject, constraint: constraint, assumptions: assumptions)
+            if self.proofIsMissing(proof: proof) {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated type does not satisfy its declared trait constraint") />
             }
+            evidence.append(<ConformanceAssociatedEvidence clause=declaration.assocBounds.start + index proof=self.freezeStaticConformanceProof(proof: proof) />)
             index += 1U64
         }
+        if !self.arena.publishConformanceAssociatedEvidence(conformance: conformIndex, evidence: evidence) { return <Result.Err error=self.diagnosticAt(offset: conformance.defOffset, msg: "associated constraint evidence could not be published") /> }
         return <Result.Ok value=() />
     }
 
@@ -1406,7 +1409,7 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: cf.typeStart, msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)") />
                 }
                 try self.checkConformanceMethodBounds(conformIndex: ci, traitIndex: ti)
-                try self.checkAssociatedBounds(conformance: cf, traitIndex: ti, assumptions: self.conformanceDeclarationAssumptions(conformIndex: ci))
+                try self.checkAssociatedBounds(conformIndex: ci, conformance: cf, traitIndex: ti, assumptions: self.conformanceDeclarationAssumptions(conformIndex: ci))
                 try self.prepareConformanceSupertraits(conformIndex: ci, traitIndex: ti)
             } else {
                 return <Result.Err error=self.diagnosticAt(offset: cf.traitStart, msg: "conformance to an unknown trait (is it declared / imported?)") />

@@ -3876,6 +3876,36 @@ pub impl Comp {
         return <Result.Ok value=state />
     }
 
+    inout fn instantiateAssociatedConstraint(index: U64, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+        val evidence = self.arena.associatedBoundEvidence[index]
+        val projection = self.arena.typeAt(index: evidence.projection)
+        val root = try self.groundTermForBody(ref: self.typeTermProjectionReceiver(t: projection), environment: environment, selfRef: selfRef, itemRef: itemRef)
+        val prerequisite = try self.instantiateConstraintProof(proof: evidence.prerequisite, receiverRef: root, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        match prerequisite {
+            StaticProofInstantiation.Ready(proof: val selected) => {
+                val witness = match self.selectedConstraintWitness(proof: selected) {
+                    Optional.Some(v: val witness) => { give witness }
+                    Optional.None => { return <Result.Err error=self.diagnosticAt(offset: evidence.bound.offset, msg: "associated constraint prerequisite has no selected conformance") /> }
+                }
+                val saved = match self.arena.conformanceAssociatedProof(conformance: witness.conformIdx - 1U64, clause: evidence.clause) {
+                    Optional.Some(v: val saved) => { give saved }
+                    Optional.None => { return <Result.Err error=self.diagnosticAt(offset: evidence.bound.offset, msg: "associated constraint has no retained declaration evidence") /> }
+                }
+                val selectedEnvironment = try self.selectedConstraintEnvironment(witness: witness, proof: selected)
+                val state = try self.instantiateConstraintProof(proof: self.thawStaticConformanceProof(id: saved), receiverRef: receiverRef, environment: selectedEnvironment, selfRef: witness.selfRef, itemRef: 0U64)
+                match state {
+                    StaticProofInstantiation.Ready(proof: val proof) => {
+                        val expected = try self.groundCallableBound(bound: evidence.bound, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                        try self.checkSelectedCallConstraintBoundary(proof: proof, expected: expected, offset: evidence.bound.offset)
+                    }
+                    _ => {}
+                }
+                return <Result.Ok value=state />
+            }
+            _ => { return <Result.Ok value=prerequisite /> }
+        }
+    }
+
     inout fn instantiateConstraintProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         if receiverRef == 0U64 || !self.arena.typeIsClosed(ref: receiverRef) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
         match proof {
@@ -3910,6 +3940,7 @@ pub impl Comp {
                         return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has no retained declaration binding") />
                     }
                     DeclarationBoundRef.Conformance(index: val declared) => { return self.retainedConformanceConstraint(declared: declared, environment: environment) }
+                    DeclarationBoundRef.AssociatedType(index: val index) => { return self.instantiateAssociatedConstraint(index: index, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
                     DeclarationBoundRef.MethodReceiver(index: _) | DeclarationBoundRef.TraitSubject(index: _) => { return self.instantiateReceiverConstraint(bound: bound, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
                     _ => {}
                 }

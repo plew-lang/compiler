@@ -1573,6 +1573,12 @@ pub enum TraitProjectionEquality {
 
 // A projected declaration constraint keeps both the exact clause and the
 // receiver evidence that makes its use valid. Rows are interned per arena.
+pub struct ConformanceAssociatedEvidence {
+    pub val clause: U64
+    pub val proof: U64
+}
+pub impl ConformanceAssociatedEvidence { factory }
+
 pub struct AssociatedBoundEvidence {
     pub val projection: U64
     pub val clause: U64
@@ -2845,6 +2851,8 @@ pub struct Arena {
     // proof values with owning Array payloads.
     mut val witnessConditionPlans: Array[WitnessConditionPlan] = []
     mut val callableConstraintBindings: Array[CallableConstraintBindings] = []
+    mut val conformanceAssociatedHeads: Dictionary[U64, U64] = [:]
+    mut val conformanceAssociatedProofs: Array[Array[ConformanceAssociatedEvidence]] = []
     mut val conformanceSupertraitHeads: Dictionary[U64, U64] = [:]
     mut val conformanceSupertraitProofs: Array[Array[U64]] = []
     mut val staticProofs: Array[StaticProofNode]
