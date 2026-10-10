@@ -1,0 +1,4 @@
+use /Frontend only { SourceBodySignature }
+fn main() {
+    val signature = <SourceBodySignature hasReceiver=false receiverTerm=0U64 selfInout=false selfMove=false isAsync=false hasReturnValue=false resultTerm=0U64 block=0U64 parameters=[] />
+}
