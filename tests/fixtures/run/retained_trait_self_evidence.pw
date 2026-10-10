@@ -4,7 +4,7 @@ use /Ir only { StaticConformanceProof, StaticProofInstantiation, InstanceEnviron
 use @Std/Io only { print }
 fn main() {
     mut val compiler = <Comp />
-    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait Required {{ fn provided() {{}} }} trait Foreign {{}} struct Item {{}} impl Item as Required {{}} impl Item as Foreign {{}} fn context(value: Item) {{}}" path="trait-self-proof.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait Required {{}} pub impl Required {{ fn provided() {{}} }} trait Foreign {{}} struct Item {{}} impl Item as Required {{}} impl Item as Foreign {{}} fn context(value: Item) {{}}" path="trait-self-proof.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val context = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "context").nameId)
     val receiver = compiler.funcParamAt(params: compiler.arena.functionAt(index: context).params, index: 0U64).ty
     val trait = compiler.decls.traitAt(index: 0U64)
