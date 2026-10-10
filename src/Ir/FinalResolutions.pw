@@ -173,8 +173,13 @@ pub impl Arena {
 
     // Ranges supplied in row are never trusted; this store owns every payload.
     inout fn publishFinalCallee(row: CallResolution, typeArguments: Array[U64] = [], parameterTypes: Array[U64] = [], conversions: Array[ValueConversionProof] = [], passings: Array[CallArgumentPassing] = [], arguments: Optional[FinalCallArguments] = <Optional.None />) -> Bool {
-        if self.finalCalleeIndexForKey(bodyId: row.bodyId, siteKey: row.siteKey) < self.finalCalleeCount() { return false }
         self.ensureFinalCalleeIndex(nextCount: self.finalCalleeCount() + 1U64)
+        val capacity = self.finalCalleeIndexSlots.count()
+        mut val slot = self.finalCalleeHash(bodyId: row.bodyId, siteKey: row.siteKey) % capacity
+        while self.finalCalleeIndexSlots[slot] != 0U64 {
+            if self.finalCalleeKeyEqual(entry: self.finalCalleeIndexSlots[slot] - 1U64, bodyId: row.bodyId, siteKey: row.siteKey) { return false }
+            slot = (slot + 1U64) % capacity
+        }
         val types = self.pushFinalCalleeTypeArgs(args: typeArguments)
         val parameters = self.pushFinalCalleeParameterTypes(types: parameterTypes)
         val conversionRange = self.pushFinalCalleeConversions(conversions: conversions)
@@ -188,9 +193,6 @@ pub impl Arena {
             Optional.None => {}
         }
         self.finalCallees.append(<CallResolution bodyId=row.bodyId calleeBodyId=row.calleeBodyId siteKey=row.siteKey exprId=row.exprId siteIsStmt=row.siteIsStmt slot=row.slot callee=row.callee receiverPassing=row.receiverPassing recvTypeRef=row.recvTypeRef resultTypeRef=row.resultTypeRef resultProjection=row.resultProjection target=row.target calleeTypeArgs=types parameterTypeRefs=parameters argumentConversions=conversionRange argumentPassings=passingRange arguments=argumentRange />)
-        val capacity = self.finalCalleeIndexSlots.count()
-        mut val slot = self.finalCalleeHash(bodyId: row.bodyId, siteKey: row.siteKey) % capacity
-        while self.finalCalleeIndexSlots[slot] != 0U64 { slot = (slot + 1U64) % capacity }
         self.finalCalleeIndexSlots.set(i: slot, value: self.finalCalleeCount())
         return true
     }
