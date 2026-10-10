@@ -3896,7 +3896,7 @@ pub impl Comp {
                 match state {
                     StaticProofInstantiation.Ready(proof: val proof) => {
                         val expected = try self.groundCallableBound(bound: evidence.bound, environment: environment, selfRef: selfRef, itemRef: itemRef)
-                        try self.checkSelectedCallConstraintBoundary(proof: proof, expected: expected, offset: evidence.bound.offset)
+                        try self.checkSelectedCallConstraintBoundary(expected: expected, proof: proof, offset: evidence.bound.offset)
                     }
                     _ => {}
                 }
