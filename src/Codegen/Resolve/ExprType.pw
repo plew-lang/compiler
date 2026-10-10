@@ -585,7 +585,23 @@ pub impl Comp {
         return <Result.Ok value=<Optional.Some v=info /> />
     }
 
+    // A recorded value owns its type independently of its syntax. Project that
+    // fact under the caller's explicit instance environment; only unfinished
+    // construction queries may enter the syntax-based producer below.
     inout fn exprTypeWithChainHole(id: U64, chainHoleRef: U64) -> Result[TypeInfo, CompileDiagnostic] {
+        if id < self.arena.semanticExprTypes.count() {
+            match self.arena.semanticExprTypes[id].typeState {
+                SemanticExpressionTypeState.Value | SemanticExpressionTypeState.Unit => {
+                    val environment = <InstanceEnvironment params=self.cur.typeParams args=self.cur.typeArgs receiverRef=self.cur.recvInstRef proof=self.cur.bodyEnvironment.proof />
+                    return self.groundSemanticExprTypeInfo(exprId: id, environment: environment, selfRef: self.cur.selfRef, itemRef: self.cur.itemRef)
+                }
+                _ => {}
+            }
+        }
+        return self.constructExprTypeWithChainHole(id: id, chainHoleRef: chainHoleRef)
+    }
+
+    inout fn constructExprTypeWithChainHole(id: U64, chainHoleRef: U64) -> Result[TypeInfo, CompileDiagnostic] {
         val e: Expr = self.arena.exprs[id]
         match e {
             Expr.Int(value: _, offset: _, val isBool, val tyStart, val tyLen, isNeg: _) => {
@@ -621,13 +637,6 @@ pub impl Comp {
                 return <Result.Ok value=<TypeInfo kind=2 nameStart=ss.nameStart nameLen=ss.nameLen ref=0 /> />
             }
             Expr.Ident(val start, val len) => {
-                // A recorded identifier belongs to its lexical binding. Re-querying
-                // it after the block closes must not resolve a same-named outer local.
-                // Ground the recorded template under the active instance instead.
-                if self.semanticExprTerm(exprId: id) != 0U64 {
-                    val environment = <InstanceEnvironment params=self.cur.typeParams args=self.cur.typeArgs receiverRef=self.cur.recvInstRef proof=self.cur.bodyEnvironment.proof />
-                    return self.groundSemanticExprTypeInfo(exprId: id, environment: environment, selfRef: self.cur.selfRef, itemRef: self.cur.itemRef)
-                }
                 if self.isSelfRef(start: start, len: len) {
                     // the grounded Self instance ref. At backend emission `cur.recvInstRef` is
                     // NOT set (it drives front-end mono only); the per-instance Self is carried

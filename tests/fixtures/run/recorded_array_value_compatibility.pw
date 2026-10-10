@@ -27,5 +27,7 @@ fn main() {
     if compiler.checkGenericTypeMatch(expectedRef: actual, valueExpr: expression).isErr() { panic "generic check rejected matching recorded array" }
     if compiler.checkGenericTypeMatch(expectedRef: expected, valueExpr: expression).isOk() { panic "empty array children were treated as whole-type compatibility" }
     if !compiler.typeRefEq(a: compiler.inferType(id: expression).unwrap(), b: actual) { panic "recorded array type was lost" }
+    val recovered = compiler.exprType(id: expression).unwrap()
+    if !compiler.typeRefEq(a: compiler.typedIrRefOfInfo(ti: recovered), b: actual) { panic "legacy reader reopened empty array syntax" }
     print("recorded-array")
 }
