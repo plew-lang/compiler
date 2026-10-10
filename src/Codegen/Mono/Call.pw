@@ -5018,73 +5018,81 @@ pub impl Comp {
         h = ((h + exprId % modulus) * 65537U64) % modulus
         return h
     }
+}
 
+impl Comp {
     inout fn rebuildSemanticClosureIndex(capacity: U64) {
-        self.decls.semanticClosureIndexSlots = []
+        self.semanticClosureIndexSlots = []
         mut val zeroI: U64 = 0U64
         while zeroI < capacity {
-            self.decls.semanticClosureIndexSlots.append(0U64)
+            self.semanticClosureIndexSlots.append(0U64)
             zeroI += 1U64
         }
         mut val entry: U64 = 0U64
-        while entry < self.decls.semanticClosures.count() {
-            val closure: SemanticClosure = self.decls.semanticClosures[entry]
+        while entry < self.semanticClosures.count() {
+            val closure: SemanticClosure = self.semanticClosures[entry]
             mut val slot: U64 = self.semanticClosureHash(ownerFnIdx: closure.ownerFnIdx, exprId: closure.exprId) % capacity
-            while self.decls.semanticClosureIndexSlots[slot] != 0U64 {
+            while self.semanticClosureIndexSlots[slot] != 0U64 {
                 slot = (slot + 1U64) % capacity
             }
-            self.decls.semanticClosureIndexSlots.set(i: slot, value: entry + 1U64)
+            self.semanticClosureIndexSlots.set(i: slot, value: entry + 1U64)
             entry += 1U64
         }
     }
 
     inout fn ensureSemanticClosureIndex(nextCount: U64) {
-        if self.decls.semanticClosureIndexSlots.count() == 0U64 {
+        if self.semanticClosureIndexSlots.count() == 0U64 {
             self.rebuildSemanticClosureIndex(capacity: 16U64)
         }
-        if nextCount * 10U64 >= self.decls.semanticClosureIndexSlots.count() * 7U64 {
-            self.rebuildSemanticClosureIndex(capacity: self.decls.semanticClosureIndexSlots.count() * 2U64)
+        if nextCount * 10U64 >= self.semanticClosureIndexSlots.count() * 7U64 {
+            self.rebuildSemanticClosureIndex(capacity: self.semanticClosureIndexSlots.count() * 2U64)
         }
     }
+}
 
+pub impl Comp {
     // Return the canonical array index, or count() when absent.  The table is
     // keyed by the lexical source body because one ExprId is only meaningful
     // in that body; closure `bodyKey` deliberately identifies the body it
     // creates, not the body which owns the literal.
     inout fn semanticClosureIndex(ownerFnIdx: U64, exprId: U64) -> Result[U64, CompileDiagnostic] {
         val sourceOwner: U64 = (try self.semanticBodyOwner(fnIdx: ownerFnIdx))
-        val capacity: U64 = self.decls.semanticClosureIndexSlots.count()
-        if capacity == 0U64 { return <Result.Ok value=self.decls.semanticClosures.count() />}
+        val capacity: U64 = self.semanticClosureIndexSlots.count()
+        if capacity == 0U64 { return <Result.Ok value=self.semanticClosures.count() />}
         mut val slot: U64 = self.semanticClosureHash(ownerFnIdx: sourceOwner, exprId: exprId) % capacity
-        while self.decls.semanticClosureIndexSlots[slot] != 0U64 {
-            val entry: U64 = self.decls.semanticClosureIndexSlots[slot] - 1U64
-            val prior: SemanticClosure = self.decls.semanticClosures[entry]
+        while self.semanticClosureIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.semanticClosureIndexSlots[slot] - 1U64
+            val prior: SemanticClosure = self.semanticClosures[entry]
             if prior.ownerFnIdx == sourceOwner && prior.exprId == exprId { return <Result.Ok value=entry />}
             slot = (slot + 1U64) % capacity
         }
-        return <Result.Ok value=self.decls.semanticClosures.count() />
+        return <Result.Ok value=self.semanticClosures.count() />
     }
+}
 
+impl Comp {
     inout fn putSemanticClosure(closure: SemanticClosure) -> Result[(), CompileDiagnostic] {
         val prior: U64 = (try self.semanticClosureIndex(ownerFnIdx: closure.ownerFnIdx, exprId: closure.exprId))
-        if prior < self.decls.semanticClosures.count() {
-            self.decls.semanticClosures.set(i: prior, value: closure)
+        if prior < self.semanticClosures.count() {
+            self.semanticClosures.set(i: prior, value: closure)
             return <Result.Ok value=() />
         }
-        self.ensureSemanticClosureIndex(nextCount: self.decls.semanticClosures.count() + 1U64)
-        self.decls.semanticClosures.append(closure)
+        self.ensureSemanticClosureIndex(nextCount: self.semanticClosures.count() + 1U64)
         if !self.registerCallTemplateLexicalRoot(owner: closure.bodyKey, root: self.callTemplateLexicalRoots.getOr(key: closure.ownerFnIdx, fallback: closure.ownerFnIdx)) {
             return <Result.Err error=self.diagnosticAt(offset: closure.exprId, msg: "internal error: closure call template owner changed its lexical root") />
         }
-        val capacity: U64 = self.decls.semanticClosureIndexSlots.count()
+        self.semanticClosures.append(closure)
+        val capacity: U64 = self.semanticClosureIndexSlots.count()
         mut val slot: U64 = self.semanticClosureHash(ownerFnIdx: closure.ownerFnIdx, exprId: closure.exprId) % capacity
-        while self.decls.semanticClosureIndexSlots[slot] != 0U64 {
+        while self.semanticClosureIndexSlots[slot] != 0U64 {
             slot = (slot + 1U64) % capacity
         }
-        self.decls.semanticClosureIndexSlots.set(i: slot, value: self.decls.semanticClosures.count())
+        self.semanticClosureIndexSlots.set(i: slot, value: self.semanticClosures.count())
         return <Result.Ok value=() />
     }
+}
 
+pub impl Comp {
     // Complete only omitted annotations from the consumer's function type.
     // Authored labels and explicit types remain evidence for normal matching.
     inout fn resolveClosureFunctionType(exprId: U64, parameters: Array[Param], hasReturn: Bool, returnType: U64, expectedTerm: U64, isDiverging: Bool = false) -> Result[U64, CompileDiagnostic] {
@@ -5122,7 +5130,9 @@ pub impl Comp {
         val name = self.kwSpan(kw: "fn", kwLen: 2U64)
         return <Result.Ok value=self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=types argLabels=labels isDiverging=isDiverging />) />
     }
+}
 
+impl Comp {
     inout fn publishSemanticClosure(ownerFnIdx: U64, closureId: U64, parameters: Array[Param], hasReturn: Bool, returnTypeTerm: U64, bodyBlock: U64) -> Result[(), CompileDiagnostic] {
         val captures: Array[SemanticClosureCapture] = []
         val signature = self.arena.typeAt(index: self.semanticExprTerm(exprId: closureId))
@@ -5142,7 +5152,7 @@ pub impl Comp {
         val local = try self.typedLocal(index: localIndex)
         if local.isGlobal { return <Result.Ok value=() /> }
         val index = self.cur.recordClosureIndex - 1U64
-        val closure = self.decls.semanticClosures[index]
+        val closure = self.semanticClosures[index]
         mut val captures = closure.captures
         mut val i = 0U64
         while i < captures.count() {
@@ -5152,16 +5162,18 @@ pub impl Comp {
         val boxed = try self.checkedCaptureCell(lo: local)
         val mode = if boxed { give <SemanticClosureCaptureMode.CellBorrow /> } else { give <SemanticClosureCaptureMode.ValueCopy /> }
         captures.append(<SemanticClosureCapture bindingTarget=local.nameStart nameLen=local.nameLen typeTerm=local.ty mode=mode />)
-        self.decls.semanticClosures.set(i: index, value: <SemanticClosure ownerFnIdx=closure.ownerFnIdx exprId=closure.exprId bodyKey=closure.bodyKey functionTypeTerm=closure.functionTypeTerm bodyBlock=closure.bodyBlock parameters=closure.parameters hasReturn=closure.hasReturn returnTypeTerm=closure.returnTypeTerm captures=captures />)
+        self.semanticClosures.set(i: index, value: <SemanticClosure ownerFnIdx=closure.ownerFnIdx exprId=closure.exprId bodyKey=closure.bodyKey functionTypeTerm=closure.functionTypeTerm bodyBlock=closure.bodyBlock parameters=closure.parameters hasReturn=closure.hasReturn returnTypeTerm=closure.returnTypeTerm captures=captures />)
         return <Result.Ok value=() />
     }
+}
 
+pub impl Comp {
     // Finalization freezes the closure ABI under the same lexical instance
     // as its return/call descriptors. Abstract scans do not publish an ABI.
     inout fn finalizeClosureSignature(ownerFnIdx: U64, closureId: U64) -> Result[(), CompileDiagnostic] {
         val index = (try self.semanticClosureIndex(ownerFnIdx: ownerFnIdx, exprId: closureId))
-        if index >= self.decls.semanticClosures.count() { return <Result.Ok value=() /> }
-        val closure = self.decls.semanticClosures[index]
+        if index >= self.semanticClosures.count() { return <Result.Ok value=() /> }
+        val closure = self.semanticClosures[index]
         val environment = self.cur.bodyEnvironment
         val functionType = (try self.groundAndRecordBodyType(ref: closure.functionTypeTerm, environment: environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
         if functionType == 0U64 || functionType >= self.arena.typeCount() { return <Result.Ok value=() /> }
@@ -5227,10 +5239,10 @@ pub impl Comp {
     // and checked capture metadata, never from a suspended enclosing Cursor.
     inout fn scanFinalClosureBody(bodyId: U64) -> Result[(), CompileDiagnostic] {
         val abi = self.arena.closureSignature(bodyId: bodyId)
-        if abi.declarationIndex == 0U64 || abi.declarationIndex > self.decls.semanticClosures.count() {
+        if abi.declarationIndex == 0U64 || abi.declarationIndex > self.semanticClosures.count() {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: closure request has no lexical declaration") />
         }
-        val closure = self.decls.semanticClosures[abi.declarationIndex - 1U64]
+        val closure = self.semanticClosures[abi.declarationIndex - 1U64]
         if !abi.templatesClosed {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure finalization requires closed lexical call templates") />
         }

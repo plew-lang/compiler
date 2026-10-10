@@ -3541,8 +3541,6 @@ pub struct Decls {
     // Closure facts are published once by Mono, where capture mode (value
     // copy versus mutable capture cell) is known.  As with aggregates, the
     // index is a rebuildable reader and never another semantic source.
-    pub mut val semanticClosures: Array[SemanticClosure] = []
-    pub mut val semanticClosureIndexSlots: Array[U64] = []
     // Parametric enum-match facts, keyed by (ownerFnIdx, source Stmt).
     // Declaration-body receiver terms produced by Record, indexed by owner.
     // These retain lexical views; Func.recvTy is the dispatch namespace and

@@ -65,13 +65,13 @@ impl MidExecutableRequests {
         val signature = c.arena.bodySignature(bodyId: bodyId)
         val built: MidBodyBuild = if signature.closureSignatureId != 0U64 {
             // Lexical requests can append closure metadata. Index new rows only.
-            while self.closureFrontier < c.decls.semanticClosures.count() {
-                self.closureByKey[c.decls.semanticClosures[self.closureFrontier].bodyKey] = self.closureFrontier + 1U64
+            while self.closureFrontier < c.semanticClosureCount() {
+                self.closureByKey[c.semanticClosureAt(index: self.closureFrontier).bodyKey] = self.closureFrontier + 1U64
                 self.closureFrontier += 1U64
             }
             val closure = self.closureByKey.getOr(key: instance.fnIdx, fallback: 0U64)
             if closure == 0U64 { return <Result.Err error=<MidProgramError.MissingClosure bodyId=bodyId /> /> }
-            give ensureParametricMidClosureBody(c: inout c, closure: c.decls.semanticClosures[closure - 1U64])
+            give ensureParametricMidClosureBody(c: inout c, closure: c.semanticClosureAt(index: closure - 1U64))
         } else if instance.fnIdx == 18446744073709551615U64 {
             give templates.globalInitializer(c: inout c)
         } else {

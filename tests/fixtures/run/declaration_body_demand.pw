@@ -32,8 +32,8 @@ fn main() {
     val repeated = requests.function(c: inout c, templates: inout templates, function: good).unwrap()
     if repeated.canonical.body != checked.canonical.body || c.mid.bodies.count() != bodies { panic "request rebuilt its body" }
     requests.function(c: inout c, templates: inout templates, function: closure).unwrap()
-    if c.decls.semanticClosures.count() != 1U64 { panic "closure metadata missing" }
-    requests.closure(c: inout c, closure: c.decls.semanticClosures[0U64]).unwrap()
+    if c.semanticClosureCount() != 1U64 { panic "closure metadata missing" }
+    requests.closure(c: inout c, closure: c.semanticClosureAt(index: 0U64)).unwrap()
     mut val iteration = 0U64
     while iteration < 2U64 {
         match requests.function(c: inout c, templates: inout templates, function: conflict) {

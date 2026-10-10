@@ -550,11 +550,11 @@ fn instantiateCanonicalMakeClosure(c: inout Comp, bodyId: U64, rvalueId: U64, en
             return 0U64
         }
     })
-    if closureIndex >= c.decls.semanticClosures.count() {
+    if closureIndex >= c.semanticClosureCount() {
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingSemanticClosure /> }
         return 0U64
     }
-    val closure: SemanticClosure = c.decls.semanticClosures[closureIndex]
+    val closure: SemanticClosure = c.semanticClosureAt(index: closureIndex)
     val closureBodyId = c.findBodyInstance(fnIdx: closure.bodyKey, environment: environment.environment)
     if closureBodyId == 0U64 {
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingSemanticClosure /> }

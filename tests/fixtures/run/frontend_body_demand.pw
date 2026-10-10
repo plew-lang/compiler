@@ -32,7 +32,7 @@ fn main() {
     if compiler.callTemplateCount() != templates { panic "request repeated recording" }
     compiler.prepareLexicalBody(fnIdx: identity).unwrap()
     compiler.prepareLexicalBody(fnIdx: closure).unwrap()
-    if compiler.decls.semanticClosures.count() != 1U64 { panic "requested closure not recorded" }
+    if compiler.semanticClosureCount() != 1U64 { panic "requested closure not recorded" }
     match compiler.prepareLexicalBody(fnIdx: broken) {
         Result.Ok(value: _) => { panic "requested invalid source body accepted" }
         Result.Err(error: val diagnostic) => {

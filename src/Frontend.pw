@@ -1,3 +1,4 @@
+use ./Ir only { SemanticClosure }
 use ./Ir only { CallableConstraintEvidence, ProjectionNormalizationStep, SelectedCallConstraints, SourceCallSignature, SelectedWitnessInstantiation, WitnessConditionPlan, ExistentialBoxEvidence, DeclarationTypeScope, DeclarationObligationState, CallConstraintInstance, DeclarationConversion, ExistentialImplementation }
 use ./Ir only { ProtocolSelection, OperatorSelection, InvocationCompletion, SemanticExpressionTypeState, SemanticCompletionOwner, SemanticExpressionCompletion, TypeCompatibility, TypeArgumentMatch, ConditionClause, ConditionClauseRange }
 use @Plew/Syntax only { CondClause, syntaxConditionClause }
@@ -236,6 +237,8 @@ enum CallConstraintPlanState {
 }
 
 pub struct Comp {
+    mut val semanticClosures: Array[SemanticClosure] = []
+    mut val semanticClosureIndexSlots: Array[U64] = []
     mut val globalCallTemplateOwners: Dictionary[U64, Array[U64]] = [:]
     mut val callTemplateLexicalRoots: Dictionary[U64, U64] = [:]
     mut val callTemplateBodyHeads: Dictionary[U64, U64] = [:]
@@ -2260,4 +2263,10 @@ fn sourceCallConstraintPlan(states: Dictionary[U64, CallConstraintPlanState], in
             }
             Optional.None => { return <Optional.None /> }
         }
+}
+
+pub impl Comp {
+    fn semanticClosureCount() -> U64 { return self.semanticClosures.count() }
+    fn semanticClosureAt(index: U64) -> SemanticClosure { return self.semanticClosures[index] }
+    fn semanticClosureSnapshot() -> Array[SemanticClosure] { return self.semanticClosures }
 }

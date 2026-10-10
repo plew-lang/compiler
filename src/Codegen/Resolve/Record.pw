@@ -2249,8 +2249,8 @@ pub impl Comp {
                 // diagnostic, not a side effect of executable discovery.
                 if self.cur.checkFn >= self.arena.functionCount() {
                     mut val enclosing = 0U64
-                    while enclosing < self.decls.semanticClosures.count() {
-                        if self.decls.semanticClosures[enclosing].bodyKey == self.cur.checkFn {
+                    while enclosing < self.semanticClosures.count() {
+                        if self.semanticClosures[enclosing].bodyKey == self.cur.checkFn {
                             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "v1 rejects nested closure literals; use a named helper or a single closure boundary") />
                         }
                         enclosing += 1U64

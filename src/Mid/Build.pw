@@ -1113,7 +1113,7 @@ fn midSemanticAggregateForSourceBody(c: inout Comp, sourceFunction: U64, exprId:
 // no nested-body scan or source-name recovery is permitted below this point.
 fn midSemanticClosureForSourceBody(c: inout Comp, sourceFunction: U64, exprId: U64) -> Result[MidClosureLookup, CompileDiagnostic] {
     val index: U64 = (try c.semanticClosureIndex(ownerFnIdx: sourceFunction, exprId: exprId))
-    if index < c.decls.semanticClosures.count() { return <Result.Ok value=<MidClosureLookup found=true closure=c.decls.semanticClosures[index] /> /> }
+    if index < c.semanticClosureCount() { return <Result.Ok value=<MidClosureLookup found=true closure=c.semanticClosureAt(index: index) /> /> }
     return <Result.Ok value=<MidClosureLookup /> />
 }
 
@@ -2364,7 +2364,7 @@ pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64, compl
             // type only after the initializer's normal continuation exists.
             mut val destinationLocal = state.locals.count()
             if term != 0U64 {
-                destinationLocal = addMidLocal(state: inout state, declarationTarget: nameStart, typeTerm: term, isUnique: isUnique, isParameter: false, ownsAtEntry: false, isCaptureCell: midBindingNeedsCaptureCell(closures: c.decls.semanticClosures, sourceFunction: state.sourceFunction, bindingTarget: nameStart))
+                destinationLocal = addMidLocal(state: inout state, declarationTarget: nameStart, typeTerm: term, isUnique: isUnique, isParameter: false, ownsAtEntry: false, isCaptureCell: midBindingNeedsCaptureCell(closures: c.semanticClosureSnapshot(), sourceFunction: state.sourceFunction, bindingTarget: nameStart))
             }
             val destination: MidPlace = <MidPlace local=destinationLocal typeTerm=term />
             // The named destination belongs to the enclosing lexical scope;
@@ -2675,7 +2675,7 @@ fn traceMidUnsupportedMatch(c: Comp, state: MidBuildState, stmtId: U64, reason: 
 // overwritten inside the arm. Ordinary Copy/Drop owns those snapshots.
 fn buildMidPatternBindings(c: inout Comp, state: inout MidBuildState, semantic: SemanticMatch, arm: SemanticMatchArm, scrutinee: MidPlace, traceId: U64) -> MidBuildError {
     if arm.hasCapture {
-        val captured = midBindingNeedsCaptureCell(closures: c.decls.semanticClosures, sourceFunction: state.sourceFunction, bindingTarget: arm.captureTarget)
+        val captured = midBindingNeedsCaptureCell(closures: c.semanticClosureSnapshot(), sourceFunction: state.sourceFunction, bindingTarget: arm.captureTarget)
         val local = addMidLocal(state: inout state, declarationTarget: arm.captureTarget, typeTerm: semantic.scrutineeTerm, isUnique: midTermIsUnique(c: inout c, term: semantic.scrutineeTerm), isParameter: false, ownsAtEntry: false, isBorrowed: false, isCaptureCell: captured)
         val operand = if semantic.isConsuming { give <MidOperand.Move place=scrutinee /> } else { give <MidOperand.Copy place=scrutinee /> }
         val destination = <MidPlace local=local typeTerm=semantic.scrutineeTerm />
@@ -2700,7 +2700,7 @@ fn buildMidPatternBindings(c: inout Comp, state: inout MidBuildState, semantic: 
                     // Pattern bindings are independent values. The original
                     // enum can be overwritten while the arm still uses them.
                     // Borrow elision requires a separate owner-lifetime proof.
-                    val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: false, isParameter: false, ownsAtEntry: false, isBorrowed: false, isCaptureCell: midBindingNeedsCaptureCell(closures: c.decls.semanticClosures, sourceFunction: state.sourceFunction, bindingTarget: payload.bindTarget))
+                    val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: false, isParameter: false, ownsAtEntry: false, isBorrowed: false, isCaptureCell: midBindingNeedsCaptureCell(closures: c.semanticClosureSnapshot(), sourceFunction: state.sourceFunction, bindingTarget: payload.bindTarget))
                     val destination: MidPlace = <MidPlace local=local typeTerm=payload.fieldTerm />
                     if payload.isBoxed {
                         midInitializeBinding(state: inout state, destination: destination, value: <MidRvalue.EnumPayloadBoxedCopy place=scrutinee enumIndex=enumIndex variantIndex=arm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=semantic.matchSource resultTerm=payload.fieldTerm />)
@@ -2722,7 +2722,7 @@ fn buildMidPatternBindings(c: inout Comp, state: inout MidBuildState, semantic: 
     mut val payloadIndex: U64 = 0U64
     while payloadIndex < arm.payloads.count() {
         val payload: SemanticMatchPayload = arm.payloads[payloadIndex]
-        val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: midTermIsUnique(c: inout c, term: payload.fieldTerm), isParameter: false, ownsAtEntry: false, isBorrowed: false, isCaptureCell: midBindingNeedsCaptureCell(closures: c.decls.semanticClosures, sourceFunction: state.sourceFunction, bindingTarget: payload.bindTarget))
+        val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: midTermIsUnique(c: inout c, term: payload.fieldTerm), isParameter: false, ownsAtEntry: false, isBorrowed: false, isCaptureCell: midBindingNeedsCaptureCell(closures: c.semanticClosureSnapshot(), sourceFunction: state.sourceFunction, bindingTarget: payload.bindTarget))
         mut val projections: Array[MidProjection] = scrutinee.projections
         projections.append(<MidProjection.Field index=payload.fieldIndex typeTerm=payload.fieldTerm isBoxed=payload.isBoxed />)
         val field: MidPlace = <MidPlace rootTag=scrutinee.rootTag local=scrutinee.local globalTarget=scrutinee.globalTarget globalMutable=scrutinee.globalMutable projections=projections typeTerm=payload.fieldTerm />
@@ -2771,7 +2771,7 @@ fn buildMidConsumingEnumArm(c: inout Comp, state: inout MidBuildState, semantic:
         if field.isDiscard {
             midAppendStatement(state: inout state, statement: <MidStatement.Drop place=payload />)
         } else {
-            val captured = midBindingNeedsCaptureCell(closures: c.decls.semanticClosures, sourceFunction: state.sourceFunction, bindingTarget: field.bindTarget)
+            val captured = midBindingNeedsCaptureCell(closures: c.semanticClosureSnapshot(), sourceFunction: state.sourceFunction, bindingTarget: field.bindTarget)
             val local = addMidLocal(state: inout state, declarationTarget: field.bindTarget, typeTerm: field.fieldTerm, isUnique: midTermIsUnique(c: inout c, term: field.fieldTerm), isParameter: false, ownsAtEntry: false, isBorrowed: false, isCaptureCell: captured)
             val destination = <MidPlace local=local typeTerm=field.fieldTerm />
             val value = <MidRvalue.Use operand=<MidOperand.Move place=payload /> />
@@ -3307,7 +3307,7 @@ pub fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
         // place supplied by the caller, not a copied value or a special LLVM
         // side channel.  `midPrepareLocals` binds this declaration directly to
         // ABI parameter zero when `isInout` is true.
-        val receiverLocal: U64 = addMidLocal(state: inout state, declarationTarget: identSelfTarget(), typeTerm: receiverTerm, isUnique: midTermIsUnique(c: inout c, term: receiverTerm), isParameter: true, ownsAtEntry: f.isAsync || f.selfMove, isInout: f.selfInout, isCaptureCell: midBindingNeedsCaptureCell(closures: c.decls.semanticClosures, sourceFunction: fnIdx, bindingTarget: identSelfTarget()))
+        val receiverLocal: U64 = addMidLocal(state: inout state, declarationTarget: identSelfTarget(), typeTerm: receiverTerm, isUnique: midTermIsUnique(c: inout c, term: receiverTerm), isParameter: true, ownsAtEntry: f.isAsync || f.selfMove, isInout: f.selfInout, isCaptureCell: midBindingNeedsCaptureCell(closures: c.semanticClosureSnapshot(), sourceFunction: fnIdx, bindingTarget: identSelfTarget()))
     }
     mut val paramI: U64 = 0U64
     while paramI < f.params.count() {
@@ -3316,7 +3316,7 @@ pub fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
             Result.Ok(value: val term) => { give term }
             Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
         }
-        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: param.nameStart, typeTerm: parameterTerm, isUnique: midTermIsUnique(c: inout c, term: parameterTerm), isParameter: true, ownsAtEntry: f.isAsync || param.isMove, isInout: param.isInout, isCaptureCell: midBindingNeedsCaptureCell(closures: c.decls.semanticClosures, sourceFunction: fnIdx, bindingTarget: param.nameStart))
+        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: param.nameStart, typeTerm: parameterTerm, isUnique: midTermIsUnique(c: inout c, term: parameterTerm), isParameter: true, ownsAtEntry: f.isAsync || param.isMove, isInout: param.isInout, isCaptureCell: midBindingNeedsCaptureCell(closures: c.semanticClosureSnapshot(), sourceFunction: fnIdx, bindingTarget: param.nameStart))
         paramI += 1U64
     }
     // Async activations own their argument snapshots across suspension. Entry

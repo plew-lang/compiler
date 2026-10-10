@@ -216,15 +216,15 @@ impl DeclarationAccessState {
                 DeclarationAccessNode.Closure(bodyKey: val key) => {
                     // Lexical requests may have registered new closures since
                     // the previous root. Index each metadata row only once.
-                    while closureFrontier < c.decls.semanticClosures.count() {
-                        closureIndices[c.decls.semanticClosures[closureFrontier].bodyKey] = closureFrontier + 1U64
+                    while closureFrontier < c.semanticClosureCount() {
+                        closureIndices[c.semanticClosureAt(index: closureFrontier).bodyKey] = closureFrontier + 1U64
                         closureFrontier += 1U64
                     }
                     val row = closureIndices.getOr(key: key, fallback: 0U64)
                     if row == 0U64 {
                         return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=c.diagnosticAt(offset: 0U64, msg: "internal error: effect request has no lexical closure") /> />
                     }
-                    val built = ensureParametricMidClosureBody(c: inout c, closure: c.decls.semanticClosures[row - 1U64])
+                    val built = ensureParametricMidClosureBody(c: inout c, closure: c.semanticClosureAt(index: row - 1U64))
                     try self.body(c: inout c, index: index, built: built, requests: inout requests)
                 }
                 DeclarationAccessNode.GlobalInitializer => {
@@ -269,8 +269,8 @@ pub fn analyzeDeclarationGlobalAccessWithRequests(c: inout Comp, templates: inou
     // Closure creation is not execution: closures are separate roots, never
     // implicit effect edges from the containing function.
     index = 0U64
-    while index < c.decls.semanticClosures.count() {
-        roots.append(<DeclarationAccessNode.Closure bodyKey=c.decls.semanticClosures[index].bodyKey />)
+    while index < c.semanticClosureCount() {
+        roots.append(<DeclarationAccessNode.Closure bodyKey=c.semanticClosureAt(index: index).bodyKey />)
         index += 1U64
     }
     if c.arena.globals.count() != 0U64 { roots.append(<DeclarationAccessNode.GlobalInitializer />) }
@@ -369,8 +369,8 @@ pub fn checkDeclarationLocalAccess(c: inout Comp, templates: inout MidFunctionTe
         index += 1U64
     }
     index = 0U64
-    while index < c.decls.semanticClosures.count() {
-        val closure = c.decls.semanticClosures[index]
+    while index < c.semanticClosureCount() {
+        val closure = c.semanticClosureAt(index: index)
         val built = ensureParametricMidClosureBody(c: inout c, closure: closure)
         try checkDeclarationBodyAccess(c: inout c, owner: <DeclarationAccessNode.Closure bodyKey=closure.bodyKey />, built: built)
         index += 1U64

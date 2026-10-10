@@ -90,10 +90,10 @@ pub impl Comp {
             Expr.Str(start: val start, len: val len) => { try self.prepareStringLiteral(start: start, len: len) }
             Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => {
                 val closureIndex = try self.semanticClosureIndex(ownerFnIdx: self.cur.checkFn, exprId: id)
-                if closureIndex >= self.decls.semanticClosures.count() {
+                if closureIndex >= self.semanticClosures.count() {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "internal error: missing semantic closure signature") />
                 }
-                val closure = self.decls.semanticClosures[closureIndex]
+                val closure = self.semanticClosures[closureIndex]
                 val hasRet = closure.hasReturn
                 val retTy = closure.returnTypeTerm
                 val returnInfo = self.typeInfoOfRef(ref: retTy)

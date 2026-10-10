@@ -154,9 +154,9 @@ fn checkDeclarationRootBody(c: inout Comp, templates: inout MidFunctionTemplates
         }
         DeclarationAccessNode.Closure(bodyKey: val key) => {
             mut val index = 0U64
-            while index < c.decls.semanticClosures.count() {
-                if c.decls.semanticClosures[index].bodyKey == key {
-                    try requests.closure(c: inout c, closure: c.decls.semanticClosures[index])
+            while index < c.semanticClosureCount() {
+                if c.semanticClosureAt(index: index).bodyKey == key {
+                    try requests.closure(c: inout c, closure: c.semanticClosureAt(index: index))
                     return <Result.Ok value=() />
                 }
                 index += 1U64
@@ -179,10 +179,10 @@ fn checkDeclarationBodies(c: inout Comp, templates: inout MidFunctionTemplates, 
         }
         index += 1U64
     }
-    val closures = c.decls.semanticClosures.count()
+    val closures = c.semanticClosureCount()
     index = 0U64
     while index < closures {
-        try requests.closure(c: inout c, closure: c.decls.semanticClosures[index])
+        try requests.closure(c: inout c, closure: c.semanticClosureAt(index: index))
         index += 1U64
     }
     if c.arena.globals.count() != 0U64 {
@@ -196,8 +196,8 @@ fn declarationAccessOffset(c: inout Comp, owner: DeclarationAccessNode) -> U64 {
         DeclarationAccessNode.Function(function: val function) => { if function < c.arena.functionCount() { return c.arena.functionAt(index: function).defOffset } }
         DeclarationAccessNode.Closure(bodyKey: val key) => {
             mut val index = 0U64
-            while index < c.decls.semanticClosures.count() {
-                val closure = c.decls.semanticClosures[index]
+            while index < c.semanticClosureCount() {
+                val closure = c.semanticClosureAt(index: index)
                 if closure.bodyKey == key { return c.exprOffset(id: closure.exprId) }
                 index += 1U64
             }

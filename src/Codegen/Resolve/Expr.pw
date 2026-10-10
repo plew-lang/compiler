@@ -713,8 +713,8 @@ pub impl Comp {
             return function.retTy
         }
         mut val index: U64 = 0U64
-        while index < self.decls.semanticClosures.count() {
-            val closure: SemanticClosure = self.decls.semanticClosures[index]
+        while index < self.semanticClosures.count() {
+            val closure: SemanticClosure = self.semanticClosures[index]
             if closure.bodyKey == fnIdx { return closure.returnTypeTerm }
             index += 1U64
         }

@@ -43,7 +43,7 @@ pub impl LlvmCtx {
         val closure = self.closures[closureSlot]
         val bodyId = c.arena.closureSignature(bodyId: closure.bodyId).environmentDropBodyId
         if bodyId == 0U64 {
-            return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: c.decls.semanticClosures[closure.semanticIndex].exprId), msg: "internal error: closure environment has no finalized drop body") />
+            return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: c.semanticClosureAt(index: closure.semanticIndex).exprId), msg: "internal error: closure environment has no finalized drop body") />
         }
         mut val index = 0U64
         while index < self.closureEnvironmentDrops.count() {
@@ -67,7 +67,7 @@ pub impl LlvmCtx {
             if !self.admitBody(bodyId: queued.bodyId) { self.closureEnvironmentDropsEmitted += 1U64 continue }
             val closure = self.closures[queued.closureSlot]
             val body = c.arena.bodyInstanceAt(index: queued.bodyId - 1U64)
-            val offset = c.exprOffset(id: c.decls.semanticClosures[closure.semanticIndex].exprId)
+            val offset = c.exprOffset(id: c.semanticClosureAt(index: closure.semanticIndex).exprId)
             self.curFn = queued.function
             self.curIsMain = false
             self.curRetVoid = true
@@ -150,11 +150,11 @@ pub impl LlvmCtx {
     inout fn declareClosure(c: inout Comp, bodyId: U64) -> Result[(), CompileDiagnostic] {
         if self.closureSlot(bodyId: bodyId) < self.closures.count() { return <Result.Ok value=() /> }
         val frozen = c.arena.closureSignature(bodyId: bodyId)
-        if frozen.declarationIndex == 0U64 || frozen.declarationIndex > c.decls.semanticClosures.count() {
+        if frozen.declarationIndex == 0U64 || frozen.declarationIndex > c.semanticClosureCount() {
             return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: closure signature has no lexical declaration") />
         }
         val semanticIndex = frozen.declarationIndex - 1U64
-        val closure = c.decls.semanticClosures[semanticIndex]
+        val closure = c.semanticClosureAt(index: semanticIndex)
         val functionType: U64 = frozen.functionTypeTerm
         if functionType == 0U64 || functionType >= c.arena.typeCount() || frozen.captures.count() != closure.captures.count() {
             return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: reachable closure has no finalized signature") />
@@ -201,7 +201,7 @@ pub impl LlvmCtx {
     }
 
     inout fn prepareClosureMidBody(c: inout Comp, closure: LlvmClosure) -> Result[MidLlvmPrepared, CompileDiagnostic] {
-        val fact: SemanticClosure = c.decls.semanticClosures[closure.semanticIndex]
+        val fact: SemanticClosure = c.semanticClosureAt(index: closure.semanticIndex)
         return self.prepareCanonicalForLlvm(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, parameterCount: fact.parameters.count())
     }
 
@@ -211,7 +211,7 @@ pub impl LlvmCtx {
         val slot: U64 = self.closureSlot(bodyId: bodyId)
         if slot >= self.closures.count() { return <Result.Ok value=false /> }
         val closure: LlvmClosure = self.closures[slot]
-        val parameterCount: U64 = c.decls.semanticClosures[closure.semanticIndex].parameters.count()
+        val parameterCount: U64 = c.semanticClosureAt(index: closure.semanticIndex).parameters.count()
         if parameterCount > body.locals.len || closure.captures.count() > body.locals.len - parameterCount { return <Result.Ok value=false /> }
         if closure.captures.count() == 0U64 { return <Result.Ok value=true /> }
         val environmentType: LLVMTypeRef = (try self.closureEnvTy(c: inout c, caps: closure.captures))
@@ -235,7 +235,7 @@ pub impl LlvmCtx {
         while slot < self.closures.count() {
             val closure: LlvmClosure = self.closures[slot]
             if !self.admitBody(bodyId: closure.bodyId) { slot += 1U64 continue }
-            val fact: SemanticClosure = c.decls.semanticClosures[closure.semanticIndex]
+            val fact: SemanticClosure = c.semanticClosureAt(index: closure.semanticIndex)
             val signature: TypeRef = c.arena.typeAt(index: closure.functionTypeTerm)
             self.curFn = closure.function
             self.curIsMain = false

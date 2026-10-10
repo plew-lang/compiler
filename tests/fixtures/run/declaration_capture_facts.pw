@@ -7,8 +7,8 @@ fn main() {
     mut val c = <Comp />
     val source = "fn unused() {{ mut val value: I64 = 1I64 val closure = fn() -> I64 {{ value = 2I64 return value }} }}\n"
     analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=source path="capture.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
-    assert(c.decls.semanticClosures.count() == 1U64)
-    val closure = c.decls.semanticClosures[0U64]
+    assert(c.semanticClosureCount() == 1U64)
+    val closure = c.semanticClosureAt(index: 0U64)
     assert(closure.captures.count() == 1U64)
     val capture = closure.captures[0U64]
     assert(capture.bindingTarget != 0U64)
