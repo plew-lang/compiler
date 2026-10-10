@@ -6,6 +6,7 @@ part ./Ir/Modules
 part ./Ir/AccessCandidates
 part ./Ir/Callables
 part ./Ir/PatternInputs
+part ./Ir/ConversionProofs
 part ./Ir/StaticProofs
 part ./Ir/CallConstraints
 part ./Ir/CallTemplates
@@ -2828,9 +2829,9 @@ pub struct Arena {
     pub mut val associatedBoundEvidence: Array[AssociatedBoundEvidence] = []
     mut val staticProofSupertraitPool: Array[SupertraitRef] = []
     mut val staticProofWitnessPool: Array[FrozenWitnessMatch] = []
-    pub mut val conversionProofs: Array[ConversionProofNode] = []
-    pub mut val conversionPayloadPool: Array[FrozenEnumPayloadConversion] = []
-    pub mut val conversionArgumentProofPool: Array[U64] = []
+    mut val conversionProofs: Array[ConversionProofNode] = []
+    mut val conversionPayloadPool: Array[FrozenEnumPayloadConversion] = []
+    mut val conversionArgumentProofPool: Array[U64] = []
     // Source byte offset of each expr (parallel to `exprs`; 0 = unknown). Lower
     // records the parsed ExprAst's span start (the AST carries a span on every
     // node); backend-synthesized exprs keep 0. THE diagnostic-position store:

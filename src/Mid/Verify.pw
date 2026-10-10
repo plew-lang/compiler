@@ -632,8 +632,8 @@ fn canonicalMidOwnershipContractIsReady(c: inout Comp, typeTerm: U64) -> Bool {
 // Freeze publishes children before parents, so every edge must point backward;
 // malformed cycles are rejected without recursive searches of semantic types.
 fn canonicalMidConversionContractsAreReady(c: inout Comp, proofId: U64) -> Bool {
-    if proofId == 0U64 || proofId > c.arena.conversionProofs.count() { return false }
-    val proof = c.arena.conversionProofs[proofId - 1U64]
+    if proofId == 0U64 || proofId > c.arena.conversionProofCount() { return false }
+    val proof = c.arena.conversionProofAt(index: proofId - 1U64)
     if proof.tag == 0U64 { return true }
     if proof.tag < 2U64 || proof.tag > 5U64 || proof.sourceRef == 0U64 || proof.targetRef == 0U64 { return false }
     if !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: proof.sourceRef) || !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: proof.targetRef) { return false }
@@ -646,10 +646,10 @@ fn canonicalMidConversionContractsAreReady(c: inout Comp, proofId: U64) -> Bool 
         if !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: source.args[0U64]) || !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: target.args[0U64]) { return false }
         return canonicalMidConversionContractsAreReady(c: inout c, proofId: proof.element)
     }
-    if proof.payloads > c.arena.conversionPayloadPool.count() || proof.payloadCount > c.arena.conversionPayloadPool.count() - proof.payloads { return false }
+    if proof.payloads > c.arena.conversionPayloadCount() || proof.payloadCount > c.arena.conversionPayloadCount() - proof.payloads { return false }
     mut val index = 0U64
     while index < proof.payloadCount {
-        val payload = c.arena.conversionPayloadPool[proof.payloads + index]
+        val payload = c.arena.conversionPayloadAt(index: proof.payloads + index)
         if payload.conversion >= proofId || !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: payload.sourceRef) || !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: payload.targetRef) { return false }
         if !canonicalMidConversionContractsAreReady(c: inout c, proofId: payload.conversion) { return false }
         index += 1U64

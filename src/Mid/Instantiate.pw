@@ -1462,11 +1462,11 @@ fn midArgumentPassingMatches(parameter: Param, passing: CallArgumentPassing) -> 
 }
 
 fn midConversionSourceRef(c: Comp, conversion: U64) -> U64 {
-    if conversion == 0U64 || conversion > c.arena.conversionProofs.count() { return 0U64 }
-    return c.arena.conversionProofs[conversion - 1U64].sourceRef
+    if conversion == 0U64 || conversion > c.arena.conversionProofCount() { return 0U64 }
+    return c.arena.conversionProofAt(index: conversion - 1U64).sourceRef
 }
 
 fn midConversionTargetRef(c: Comp, conversion: U64) -> U64 {
-    if conversion == 0U64 || conversion > c.arena.conversionProofs.count() { return 0U64 }
-    return c.arena.conversionProofs[conversion - 1U64].targetRef
+    if conversion == 0U64 || conversion > c.arena.conversionProofCount() { return 0U64 }
+    return c.arena.conversionProofAt(index: conversion - 1U64).targetRef
 }

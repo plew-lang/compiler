@@ -141,8 +141,8 @@ fn midOperandTypesAreValid(c: inout Comp, body: MidBodyNode, operandId: U64) -> 
 }
 
 fn midConversionTypesMatch(c: inout Comp, proofId: U64, source: U64, target: U64) -> Bool {
-    if proofId == 0U64 || proofId > c.arena.conversionProofs.count() { return false }
-    val proof = c.arena.conversionProofs[proofId - 1U64]
+    if proofId == 0U64 || proofId > c.arena.conversionProofCount() { return false }
+    val proof = c.arena.conversionProofAt(index: proofId - 1U64)
     if proof.tag == 0U64 { return midTypesEqual(c: inout c, left: source, right: target) }
     return midTypesEqual(c: inout c, left: source, right: proof.sourceRef) && midTypesEqual(c: inout c, left: target, right: proof.targetRef)
 }

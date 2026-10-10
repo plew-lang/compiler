@@ -1,0 +1,5 @@
+use /Ir only { Arena, FrozenEnumPayloadConversion }
+fn main() {
+    mut val arena: Arena = <Arena />
+    val rows = arena.conversionProofs
+}

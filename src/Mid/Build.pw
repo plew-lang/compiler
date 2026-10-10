@@ -3651,7 +3651,7 @@ fn buildMidExistentialWitness(c: inout Comp, bodyId: U64, resolutionIndex: U64, 
             // the container and gains shares for each copied payload; Drop
             // elaboration ends the original result's lifetime after Convert.
             mut val operand: MidOperand = <MidOperand.Copy place=result />
-            if c.arena.conversionProofs[member.resultConversion - 1U64].tag == 2U64 { operand = <MidOperand.Move place=result /> }
+            if c.arena.conversionProofAt(index: member.resultConversion - 1U64).tag == 2U64 { operand = <MidOperand.Move place=result /> }
             statements.append(<MidStatement.Assign destination=returned value=<MidRvalue.Convert operand=operand conversion=member.resultConversion /> />)
             cleanupCount += 1U64
         }

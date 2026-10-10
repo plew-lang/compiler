@@ -1,0 +1,85 @@
+// Children are published before parents; existing nodes and ranges are immutable.
+pub impl Arena {
+    inout fn appendValueConversionProof(proof: ValueConversionProof) -> U64 {
+        // Freeze children first. Their recursive appends must not claim the
+        // parent's ID or interleave the parent's contiguous payload range.
+        mut val node: ConversionProofNode = <ConversionProofNode tag=1U64 />
+        match proof {
+            ValueConversionProof.Identity => { node = <ConversionProofNode tag=0U64 /> }
+            ValueConversionProof.ExistentialRetag(sourceRef: val source, targetRef: val target) => {
+                node = <ConversionProofNode tag=5U64 sourceRef=source targetRef=target />
+            }
+            ValueConversionProof.Missing => { node = <ConversionProofNode tag=1U64 /> }
+            ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val traitIdx, proof: val staticProof) => {
+                node = <ConversionProofNode tag=2U64 sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx staticProof=self.appendStaticConformanceProof(proof: staticProof) />
+            }
+            ValueConversionProof.ArrayRepack(sourceRef: val sourceRef, targetRef: val targetRef, element: val element) => {
+                node = <ConversionProofNode tag=3U64 sourceRef=sourceRef targetRef=targetRef element=self.appendValueConversionProof(proof: element) />
+            }
+            ValueConversionProof.EnumRepack(sourceRef: val sourceRef, targetRef: val targetRef, enumIdx: val enumIdx, argumentProofs: val argumentProofs, payloads: val payloads) => {
+                mut val frozenArguments: Array[U64] = []
+                for argument in argumentProofs { frozenArguments.append(self.appendValueConversionProof(proof: argument)) }
+                mut val frozen: Array[FrozenEnumPayloadConversion] = []
+                mut val i: U64 = 0U64
+                while i < payloads.count() {
+                    val payload: EnumPayloadConversion = payloads[i]
+                    frozen.append(<FrozenEnumPayloadConversion sourceRef=payload.sourceRef targetRef=payload.targetRef conversion=self.appendValueConversionProof(proof: payload.conversion) />)
+                    i += 1U64
+                }
+                val start: U64 = self.conversionPayloadPool.count()
+                i = 0U64
+                while i < frozen.count() {
+                    self.conversionPayloadPool.append(frozen[i])
+                    i += 1U64
+                }
+                val argumentStart = self.conversionArgumentProofPool.count()
+                for argument in frozenArguments { self.conversionArgumentProofPool.append(argument) }
+                node = <ConversionProofNode tag=4U64 sourceRef=sourceRef targetRef=targetRef enumIdx=enumIdx payloads=start payloadCount=frozen.count() argumentProofs=argumentStart argumentProofCount=frozenArguments.count() />
+            }
+        }
+        self.conversionProofs.append(node)
+        return self.conversionProofs.count()
+    }
+
+    fn valueConversionProof(id: U64) -> ValueConversionProof {
+        if id == 0U64 || id > self.conversionProofs.count() { return <ValueConversionProof.Missing /> }
+        val node: ConversionProofNode = self.conversionProofs[id - 1U64]
+        if node.tag == 0U64 { return <ValueConversionProof.Identity /> }
+        if node.tag == 1U64 { return <ValueConversionProof.Missing /> }
+        if node.tag == 5U64 { return <ValueConversionProof.ExistentialRetag sourceRef=node.sourceRef targetRef=node.targetRef /> }
+        if node.tag == 2U64 { return <ValueConversionProof.ExistentialBox sourceRef=node.sourceRef targetRef=node.targetRef traitIdx=node.traitIdx proof=self.staticConformanceProof(id: node.staticProof) /> }
+        if node.tag == 3U64 { return <ValueConversionProof.ArrayRepack sourceRef=node.sourceRef targetRef=node.targetRef element=self.valueConversionProof(id: node.element) /> }
+        if node.tag == 4U64 {
+            if node.argumentProofs > self.conversionArgumentProofPool.count() || node.argumentProofCount > self.conversionArgumentProofPool.count() - node.argumentProofs { return <ValueConversionProof.Missing /> }
+            if node.payloads > self.conversionPayloadPool.count() || node.payloadCount > self.conversionPayloadPool.count() - node.payloads { return <ValueConversionProof.Missing /> }
+            mut val argumentProofs: Array[ValueConversionProof] = []
+            mut val argumentIndex = 0U64
+            while argumentIndex < node.argumentProofCount {
+                argumentProofs.append(self.valueConversionProof(id: self.conversionArgumentProofPool[node.argumentProofs + argumentIndex]))
+                argumentIndex += 1U64
+            }
+            mut val payloads: Array[EnumPayloadConversion] = []
+            mut val i: U64 = 0U64
+            while i < node.payloadCount {
+                val payload: FrozenEnumPayloadConversion = self.conversionPayloadPool[node.payloads + i]
+                payloads.append(<EnumPayloadConversion sourceRef=payload.sourceRef targetRef=payload.targetRef conversion=self.valueConversionProof(id: payload.conversion) />)
+                i += 1U64
+            }
+            return <ValueConversionProof.EnumRepack sourceRef=node.sourceRef targetRef=node.targetRef enumIdx=node.enumIdx argumentProofs=argumentProofs payloads=payloads />
+        }
+        return <ValueConversionProof.Missing />
+    }
+
+    fn conversionProofIsIdentity(id: U64) -> Bool {
+        return id != 0U64 && id <= self.conversionProofs.count() && self.conversionProofs[id - 1U64].tag == 0U64
+    }
+
+    fn conversionProofIsMissing(id: U64) -> Bool {
+        return id == 0U64 || id > self.conversionProofs.count() || self.conversionProofs[id - 1U64].tag == 1U64
+    }
+
+    fn conversionProofCount() -> U64 { return self.conversionProofs.count() }
+    fn conversionProofAt(index: U64) -> ConversionProofNode { return self.conversionProofs[index] }
+    fn conversionPayloadCount() -> U64 { return self.conversionPayloadPool.count() }
+    fn conversionPayloadAt(index: U64) -> FrozenEnumPayloadConversion { return self.conversionPayloadPool[index] }
+}

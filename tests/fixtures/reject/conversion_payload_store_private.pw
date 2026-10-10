@@ -1,0 +1,5 @@
+use /Ir only { Arena, FrozenEnumPayloadConversion }
+fn main() {
+    mut val arena: Arena = <Arena />
+    arena.conversionPayloadPool[0U64] = <FrozenEnumPayloadConversion sourceRef=0U64 targetRef=0U64 conversion=1U64 />
+}

@@ -1,7 +1,7 @@
 use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp }
-use /Ir only { FieldDef, EnumDef, Variant, ValueConversionProof, EnumPayloadConversion, FinalDestruction, FrozenEnumPayloadConversion }
+use /Ir only { FieldDef, EnumDef, Variant, ValueConversionProof, EnumPayloadConversion, FinalDestruction }
 use /Mid only { MidBody, MidBlock, MidStatement, MidRvalue, MidOperand, MidTerminator, MidPlace, MidLocalDecl, MidVerifyError, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
 
 fn envelope(compiler: inout Comp, name: String, payload: U64) -> U64 {
@@ -37,8 +37,14 @@ fn main() {
     match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.MissingOwnershipContract => {} _ => { assert(false) } }
     compiler.arena.finalDestructions[identity - 1U64] = saved
     match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.None => {} _ => { assert(false) } }
-    val root = compiler.arena.conversionProofs[conversion - 1U64]
-    compiler.arena.conversionPayloadPool[root.payloads] = <FrozenEnumPayloadConversion sourceRef=inner targetRef=inner conversion=conversion />
-    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.MissingOwnershipContract => {} _ => { assert(false) } }
+    // A back-edge cannot be injected into the private append-only store.
+    // Recursive publication must keep every child before its owning parent.
+    val root = compiler.arena.conversionProofAt(index: conversion - 1U64)
+    val childId = compiler.arena.conversionPayloadAt(index: root.payloads).conversion
+    assert(childId != 0U64 && childId < conversion)
+    val childNode = compiler.arena.conversionProofAt(index: childId - 1U64)
+    val leafId = compiler.arena.conversionPayloadAt(index: childNode.payloads).conversion
+    assert(leafId != 0U64 && leafId < childId)
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.None => {} _ => { assert(false) } }
     print("ok")
 }

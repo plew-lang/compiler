@@ -456,8 +456,8 @@ pub impl LlvmCtx {
     // The first direct slice is an existential box; structural repacks join
     // this same reader once their owned loops are represented canonically.
     inout fn midCanonicalConversionProofSupported(c: inout Comp, proofId: U64) -> Result[Bool, CompileDiagnostic] {
-        if proofId == 0U64 || proofId > c.arena.conversionProofs.count() { return <Result.Ok value=false /> }
-        val node: ConversionProofNode = c.arena.conversionProofs[proofId - 1U64]
+        if proofId == 0U64 || proofId > c.arena.conversionProofCount() { return <Result.Ok value=false /> }
+        val node: ConversionProofNode = c.arena.conversionProofAt(index: proofId - 1U64)
         if node.tag == 0U64 { return <Result.Ok value=true /> }
         if node.tag == 5U64 { return <Result.Ok value=c.existentialTypesCompatible(sourceRef: node.sourceRef, targetRef: node.targetRef) /> }
         if node.tag == 2U64 {
@@ -476,8 +476,8 @@ pub impl LlvmCtx {
     // expected source/target terms are carried by its parent proof row, so a
     // malformed child cannot silently become a compatible conversion.
     inout fn midCanonicalBorrowedConversionSupported(c: inout Comp, sourceRef: U64, targetRef: U64, proofId: U64) -> Result[Bool, CompileDiagnostic] {
-        if sourceRef == 0U64 || sourceRef >= c.arena.typeCount() || targetRef == 0U64 || targetRef >= c.arena.typeCount() || proofId == 0U64 || proofId > c.arena.conversionProofs.count() { return <Result.Ok value=false /> }
-        val node: ConversionProofNode = c.arena.conversionProofs[proofId - 1U64]
+        if sourceRef == 0U64 || sourceRef >= c.arena.typeCount() || targetRef == 0U64 || targetRef >= c.arena.typeCount() || proofId == 0U64 || proofId > c.arena.conversionProofCount() { return <Result.Ok value=false /> }
+        val node: ConversionProofNode = c.arena.conversionProofAt(index: proofId - 1U64)
         if node.tag == 0U64 { return <Result.Ok value=c.typeRefEq(a: sourceRef, b: targetRef) /> }
         if node.tag == 2U64 || node.tag == 5U64 { return <Result.Ok value=c.typeRefEq(a: sourceRef, b: node.sourceRef) && c.typeRefEq(a: targetRef, b: node.targetRef) && (try self.midCanonicalConversionProofSupported(c: inout c, proofId: proofId)) /> }
         if node.tag == 3U64 {
@@ -491,7 +491,7 @@ pub impl LlvmCtx {
             if !c.typeRefEq(a: sourceRef, b: node.sourceRef) || !c.typeRefEq(a: targetRef, b: node.targetRef) || node.enumIdx >= c.arena.enumCount() { return <Result.Ok value=false /> }
             val source: TypeRef = c.arena.typeAt(index: sourceRef)
             val target: TypeRef = c.arena.typeAt(index: targetRef)
-            if source.args.count() != target.args.count() || node.payloads > c.arena.conversionPayloadPool.count() || node.payloadCount > c.arena.conversionPayloadPool.count() - node.payloads { return <Result.Ok value=false /> }
+            if source.args.count() != target.args.count() || node.payloads > c.arena.conversionPayloadCount() || node.payloadCount > c.arena.conversionPayloadCount() - node.payloads { return <Result.Ok value=false /> }
             mut val expected: U64 = 0U64
             mut val variant: U64 = 0U64
             while variant < c.arena.enumAt(index: node.enumIdx).variants.count() {
@@ -501,7 +501,7 @@ pub impl LlvmCtx {
             if expected != node.payloadCount { return <Result.Ok value=false /> }
             mut val i: U64 = 0U64
             while i < node.payloadCount {
-                val payload: FrozenEnumPayloadConversion = c.arena.conversionPayloadPool[node.payloads + i]
+                val payload: FrozenEnumPayloadConversion = c.arena.conversionPayloadAt(index: node.payloads + i)
                 if !(try self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: payload.sourceRef, targetRef: payload.targetRef, proofId: payload.conversion)) { return <Result.Ok value=false /> }
                 i += 1U64
             }
@@ -517,7 +517,7 @@ pub impl LlvmCtx {
     inout fn midCanonicalEmitValueConversion(c: inout Comp, body: MidBodyNode, operandId: U64, proofId: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         if !(try self.midCanonicalConversionProofSupported(c: inout c, proofId: proofId)) || operandId == 0U64 || operandId > c.mid.operands.count() { return <Result.Ok value=LLVMConstNull(self.anyTy) /> }
         val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
-        val node: ConversionProofNode = c.arena.conversionProofs[proofId - 1U64]
+        val node: ConversionProofNode = c.arena.conversionProofAt(index: proofId - 1U64)
         if node.tag == 0U64 { return self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId) }
         if node.tag == 5U64 {
             if operand.tag != 1U64 && operand.tag != 2U64 { return <Result.Ok value=LLVMConstNull(self.anyTy) /> }
@@ -547,7 +547,7 @@ pub impl LlvmCtx {
     // nested repack creates its own owned representation.
     inout fn midCanonicalEmitBorrowedConversion(c: inout Comp, value: LLVMValueRef, sourceRef: U64, targetRef: U64, proofId: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         if !(try self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: sourceRef, targetRef: targetRef, proofId: proofId)) { return <Result.Ok value=LLVMConstNull(self.ptrty) /> }
-        val node: ConversionProofNode = c.arena.conversionProofs[proofId - 1U64]
+        val node: ConversionProofNode = c.arena.conversionProofAt(index: proofId - 1U64)
         if node.tag == 0U64 || node.tag == 5U64 {
             try self.valueArc(c: inout c, v: value, typeRef: sourceRef, retain: true)
             return <Result.Ok value=value />
@@ -605,7 +605,7 @@ pub impl LlvmCtx {
     // declaration variant/field order, so this emitter uses enum metadata
     // only for layout and never infers a conversion from generic arguments.
     inout fn midCanonicalEmitEnumRepack(c: inout Comp, source: LLVMValueRef, sourceRef: U64, targetRef: U64, enumIdx: U64, payloadStart: U64, payloadCount: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
-        if sourceRef == 0U64 || sourceRef >= c.arena.typeCount() || targetRef == 0U64 || targetRef >= c.arena.typeCount() || enumIdx >= c.arena.enumCount() || payloadStart > c.arena.conversionPayloadPool.count() || payloadCount > c.arena.conversionPayloadPool.count() - payloadStart { return <Result.Ok value=LLVMConstNull(self.ptrty) /> }
+        if sourceRef == 0U64 || sourceRef >= c.arena.typeCount() || targetRef == 0U64 || targetRef >= c.arena.typeCount() || enumIdx >= c.arena.enumCount() || payloadStart > c.arena.conversionPayloadCount() || payloadCount > c.arena.conversionPayloadCount() - payloadStart { return <Result.Ok value=LLVMConstNull(self.ptrty) /> }
         val sourceSlot: U64 = (try self.requireEnumLayoutSlot(c: inout c, typeRef: sourceRef))
         val targetSlot: U64 = (try self.requireEnumLayoutSlot(c: inout c, typeRef: targetRef))
         if sourceSlot >= self.genEnumRefs.count() || targetSlot >= self.genEnumRefs.count() || self.genEnumDefs[sourceSlot] != enumIdx || self.genEnumDefs[targetSlot] != enumIdx { return <Result.Ok value=LLVMConstNull(self.ptrty) /> }
@@ -638,7 +638,7 @@ pub impl LlvmCtx {
                 mut val field: U64 = 0U64
                 while field < fields.count() {
                     if payloadIndex >= payloadCount { return <Result.Ok value=LLVMConstNull(targetLlvmType) /> }
-                    val plan: FrozenEnumPayloadConversion = c.arena.conversionPayloadPool[payloadStart + payloadIndex]
+                    val plan: FrozenEnumPayloadConversion = c.arena.conversionPayloadAt(index: payloadStart + payloadIndex)
                     values.append((try self.midCanonicalEmitBorrowedConversion(c: inout c, value: LLVMBuildExtractValue(self.b, payload, field, anon()), sourceRef: plan.sourceRef, targetRef: plan.targetRef, proofId: plan.conversion)))
                     payloadIndex += 1U64
                     field += 1U64
@@ -787,7 +787,7 @@ pub impl LlvmCtx {
                 if !c.conversionProofIsIdentity(id: element.conversion) {
                     if !(try self.midCanonicalConversionProofSupported(c: inout c, proofId: element.conversion)) || element.operand == 0U64 || element.operand > c.mid.operands.count() { return <Result.Ok value=false /> }
                     val operand: MidOperandNode = c.mid.operands[element.operand - 1U64]
-                    val proof: ConversionProofNode = c.arena.conversionProofs[element.conversion - 1U64]
+                    val proof: ConversionProofNode = c.arena.conversionProofAt(index: element.conversion - 1U64)
                     if (proof.tag == 2U64 || proof.tag == 5U64) && operand.tag != 1U64 && operand.tag != 2U64 { return <Result.Ok value=false /> }
                     if (proof.tag == 3U64 || proof.tag == 4U64) && operand.tag != 1U64 { return <Result.Ok value=false /> }
                 }
@@ -798,7 +798,7 @@ pub impl LlvmCtx {
         if value.tag == 6U64 {
             if !(try self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand)) || !(try self.midCanonicalConversionProofSupported(c: inout c, proofId: value.conversion)) || value.operand == 0U64 || value.operand > c.mid.operands.count() { return <Result.Ok value=false /> }
             val operand: MidOperandNode = c.mid.operands[value.operand - 1U64]
-            val proof: ConversionProofNode = c.arena.conversionProofs[value.conversion - 1U64]
+            val proof: ConversionProofNode = c.arena.conversionProofAt(index: value.conversion - 1U64)
             if proof.tag == 0U64 { return <Result.Ok value=true /> }
             if proof.tag == 3U64 || proof.tag == 4U64 { return <Result.Ok value=operand.tag == 1U64 /> }
             return <Result.Ok value=operand.tag == 1U64 || operand.tag == 2U64 />
