@@ -602,7 +602,7 @@ pub impl Comp {
             val rawSubject = try self.groundWitnessTypeTerm(ref: clause.subject, params: <PatternBindInput.Conformance range=declaration.typeParams />, matchResult: grounded)
             val subject = try self.replayProjectionNormalizations(ref: rawSubject, normalizations: normalizations, offset: clause.offset)
             val original = self.thawStaticConformanceProof(id: plan.proofs[index])
-            match (try self.instantiateStaticMemberProof(proof: original, receiverRef: subject, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
+            match (try self.instantiateConstraintProof(proof: original, receiverRef: subject, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
                 StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: clause.offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
                 StaticProofInstantiation.Deferred => { return <Result.Ok value=<SelectedWitnessInstantiation.Deferred /> /> }
                 StaticProofInstantiation.Ready(proof: val proof) => {
@@ -3726,12 +3726,12 @@ pub impl Comp {
     // recovery, and LLVM emission).
     // A forwarded function-bound obligation consumes its caller's admitted
     // substitution. This is presence evidence, not member uniqueness evidence.
-    inout fn instantiateCallConstraintProof(proof: StaticConformanceProof, receiverRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+    inout fn instantiateConstraintProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         match proof {
             StaticConformanceProof.AssumedBound(source: val source) => {
                 match source {
                     DeclarationBoundRef.Function(index: val declared) => {
-                        match self.cur.bodyEnvironment.constraints {
+                        match environment.constraints {
                             Optional.Some(v: val evidence) => {
                                 mut val index = 0U64
                                 while index < self.arena.callableConstraintCount(evidence: evidence) {
@@ -3750,7 +3750,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        return self.instantiateStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        return self.instantiateStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
     }
 
     inout fn instantiateDirectCallConstraints(template: CallTemplate) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
@@ -3770,7 +3770,7 @@ pub impl Comp {
                     val source = plan.bounds[position]
                     val subject = try self.groundTermForBody(ref: source.subject, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
                     val proof = self.thawStaticConformanceProof(id: plan.proofs[position])
-                    val state = try self.instantiateCallConstraintProof(proof: proof, receiverRef: subject)
+                    val state = try self.instantiateConstraintProof(proof: proof, receiverRef: subject, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
                     match state {
                         StaticProofInstantiation.Ready(proof: val concrete) => {
                             // Preserve the selected obligation, including its

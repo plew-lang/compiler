@@ -43,14 +43,14 @@ fn main() {
                             compiler.enterBodyInstance(fnIdx: callee, environment: retained)
                             if compiler.cur.bodyId != body { panic("callee context selected another body identity") }
                             val assumed = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=declared /> />
-                            match compiler.instantiateCallConstraintProof(proof: assumed, receiverRef: bounds[0U64].subject).unwrap() {
+                            match compiler.instantiateConstraintProof(proof: assumed, receiverRef: bounds[0U64].subject, environment: compiler.cur.bodyEnvironment, selfRef: compiler.cur.bodySelfRef, itemRef: compiler.cur.bodyItemRef).unwrap() {
                                 StaticProofInstantiation.Ready(proof: val forwarded) => {
                                     if !compiler.sameStaticConformanceProof(a: forwarded, b: proofs[0U64]) { panic("forwarded call selected a different proof") }
                                 }
                                 _ => { panic("retained call constraint did not instantiate") }
                             }
                             compiler.cur.bodyEnvironment = <InstanceEnvironment />
-                            if compiler.instantiateCallConstraintProof(proof: assumed, receiverRef: bounds[0U64].subject).isOk() { panic("missing binding was repaired by conformance lookup") }
+                            if compiler.instantiateConstraintProof(proof: assumed, receiverRef: bounds[0U64].subject, environment: compiler.cur.bodyEnvironment, selfRef: compiler.cur.bodySelfRef, itemRef: compiler.cur.bodyItemRef).isOk() { panic("missing binding was repaired by conformance lookup") }
                             compiler.cur = savedContext
                             val broken = <CallableConstraintEvidence.Recorded bounds=bounds proofs=[<StaticConformanceProof.Missing />] />
                             if compiler.enqueueFinalBody(fnIdx: callee, args: arguments, recvInstRef: 0U64, constraints: broken).isOk() {
