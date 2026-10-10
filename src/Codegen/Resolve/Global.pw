@@ -73,7 +73,7 @@ pub impl Comp {
     }
 
     fn globalInitializerConstructionClosed(target: U64) -> Bool {
-        return self.globalInitializerPreparations.get(key: target).isSome()
+        return self.globalInitializerPreparations.contains(key: target)
     }
 
     inout fn selectReferencedGlobal(exprId: U64) {

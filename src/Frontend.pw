@@ -111,6 +111,12 @@ pub impl LexicalBodyPreparations {
     }
 }
 impl LexicalBodyPreparations {
+    // Membership closes construction after either success or failure; it does
+    // not expose or copy the stored preparation result.
+    fn contains(key: U64) -> Bool {
+        if key >= self.outcomes.count() { return false }
+        return self.outcomes[key].isSome()
+    }
     inout fn record(owner: U64, result: Result[(), CompileDiagnostic]) {
         while self.outcomes.count() <= owner { self.outcomes.append(<Optional.None />) }
         match self.outcomes[owner] {

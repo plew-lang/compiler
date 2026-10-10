@@ -2,7 +2,7 @@
 impl Comp {
     fn sourceOwnerConstructionClosed(owner: SemanticCompletionOwner) -> Bool {
         match owner {
-            SemanticCompletionOwner.Function(index: val index) => { return self.lexicalBodyPreparations.get(key: index).isSome() }
+            SemanticCompletionOwner.Function(index: val index) => { return self.lexicalBodyPreparations.contains(key: index) }
             SemanticCompletionOwner.Global(target: val target) => { return self.globalInitializerConstructionClosed(target: target) }
         }
     }
