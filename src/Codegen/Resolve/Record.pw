@@ -402,8 +402,8 @@ pub impl Comp {
     inout fn recordedCallIsSelected(exprId: U64) -> Result[Bool, CompileDiagnostic] {
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
         val index = self.callTemplateIndex(siteKey: site)
-        if index >= self.callTemplateCount() { return <Result.Ok value=false /> }
-        match self.callTemplateAt(index: index).kind {
+        if index >= self.callTemplates.count() { return <Result.Ok value=false /> }
+        match self.callTemplates[index].kind {
             CallTemplateKind.Pending => { return <Result.Ok value=false /> }
             CallTemplateKind.ExpectedValue => { return <Result.Ok value=false /> }
             _ => { return <Result.Ok value=true /> }

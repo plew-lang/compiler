@@ -1168,7 +1168,7 @@ pub impl Comp {
     // existing plan; it cannot repair a missing or inconsistent selected proof.
     inout fn prepareCallTemplateConstraints(templateIndex: U64) -> Result[(), CompileDiagnostic] {
         try self.checkCallTemplateSelection(templateIndex: templateIndex)
-        val template = self.callTemplateAt(index: templateIndex)
+        val template = self.callTemplates[templateIndex]
         val bounds = try self.sourceSelectedCallBounds(template: template)
         match self.selectedCallConstraintPlan(index: templateIndex) {
             Optional.Some(v: val plan) => { return self.checkSelectedCallConstraintPlan(template: template, expected: bounds, plan: plan) }
@@ -1196,7 +1196,7 @@ pub impl Comp {
     }
 
     inout fn checkRecordedCallConstraintEvidence(templateIndex: U64) -> Result[(), CompileDiagnostic] {
-        val template = self.callTemplateAt(index: templateIndex)
+        val template = self.callTemplates[templateIndex]
         val bounds = try self.sourceSelectedCallBounds(template: template)
         match self.selectedCallConstraintPlan(index: templateIndex) {
             Optional.Some(v: val plan) => { return self.checkSelectedCallConstraintPlan(template: template, expected: bounds, plan: plan) }
@@ -1322,14 +1322,14 @@ pub impl Comp {
         tracePhase(c: inout self, label: "member-obligations:roots:start")
         mut val requests: Array[CallConstraintInstance] = []
         mut val heads: Dictionary[U64, U64] = [:]
-        val limit = self.callTemplateCount()
+        val limit = self.callTemplates.count()
         mut val index = 0U64
         mut val deferred = 0U64
         // Every source call is a root, including unused functions. Generic
         // calls become closed when reached through a caller's substitution.
         while index < limit {
-            if (try self.checkCallConstraintTemplate(template: self.callTemplateAt(index: index), environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() {
-                try self.checkDeferredCallDependency(template: self.callTemplateAt(index: index))
+            if (try self.checkCallConstraintTemplate(template: self.callTemplates[index], environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() {
+                try self.checkDeferredCallDependency(template: self.callTemplates[index])
                 deferred += 1U64
             }
             index += 1U64
@@ -1356,7 +1356,7 @@ pub impl Comp {
             }
             mut val row = self.firstLexicalCallTemplate(owner: request.function)
             while row != 0U64 {
-                val template = self.callTemplateAt(index: row - 1U64)
+                val template = self.callTemplates[row - 1U64]
                 if (try self.checkCallConstraintTemplate(template: template, environment: request.environment, depth: request.depth + 1U64, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() {
                     return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "concrete declaration call retains an unresolved obligation") />
                 }
