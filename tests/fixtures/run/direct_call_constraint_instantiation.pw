@@ -39,8 +39,9 @@ fn main() {
                             val bindings = retained.constraints.unwrap()
                             if compiler.arena.callableConstraintCount(evidence: bindings) != 1U64 { panic("callee discarded constraint evidence") }
                             val declared = compiler.arena.callableConstraintSourceAt(evidence: bindings, index: 0U64)
-                            val savedEnvironment = compiler.cur.bodyEnvironment
-                            compiler.cur.bodyEnvironment = retained
+                            val savedContext = compiler.cur
+                            compiler.enterBodyInstance(fnIdx: callee, environment: retained)
+                            if compiler.cur.bodyId != body { panic("callee context selected another body identity") }
                             val assumed = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=declared /> />
                             match compiler.instantiateCallConstraintProof(proof: assumed, receiverRef: bounds[0U64].subject).unwrap() {
                                 StaticProofInstantiation.Ready(proof: val forwarded) => {
@@ -50,7 +51,7 @@ fn main() {
                             }
                             compiler.cur.bodyEnvironment = <InstanceEnvironment />
                             if compiler.instantiateCallConstraintProof(proof: assumed, receiverRef: bounds[0U64].subject).isOk() { panic("missing binding was repaired by conformance lookup") }
-                            compiler.cur.bodyEnvironment = savedEnvironment
+                            compiler.cur = savedContext
                             val broken = <CallableConstraintEvidence.Recorded bounds=bounds proofs=[<StaticConformanceProof.Missing />] />
                             if compiler.enqueueFinalBody(fnIdx: callee, args: arguments, recvInstRef: 0U64, constraints: broken).isOk() {
                                 panic("final body gate replaced missing retained proof with a fresh conformance")
