@@ -5096,41 +5096,7 @@ impl Comp {
 pub impl Comp {
     // Complete only omitted annotations from the consumer's function type.
     // Authored labels and explicit types remain evidence for normal matching.
-    inout fn resolveClosureFunctionType(exprId: U64, parameters: Array[Param], hasReturn: Bool, returnType: U64, expectedTerm: U64, isDiverging: Bool = false) -> Result[U64, CompileDiagnostic] {
-        val recorded = self.semanticExprTerm(exprId: exprId)
-        if recorded != 0U64 { return <Result.Ok value=recorded /> }
-        if isDiverging && hasReturn {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a diverging closure cannot declare a return type (spec/04)") />
-        }
-        val contextual = self.isFnType(ref: expectedTerm)
-        if contextual && self.arena.typeAt(index: expectedTerm).isDiverging != isDiverging {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "closure completion contract does not match the expected function type (spec/04)") />
-        }
-        mut val expected: Array[U64] = []
-        if contextual { expected = self.arena.typeAt(index: expectedTerm).args }
-        if contextual && expected.count() != parameters.count() + 1U64 {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "closure parameter count does not match the expected function type") />
-        }
-        mut val result = returnType
-        if !hasReturn && !isDiverging && contextual { result = expected[0U64] }
-        if !isDiverging { result = self.semanticSourceResultTerm(ref: result) }
-        mut val types: Array[U64] = [result]
-        mut val labels: Array[U64] = [0U64]
-        mut val index = 0U64
-        while index < parameters.count() {
-            val parameter = parameters[index]
-            mut val type = parameter.ty
-            if type == 0U64 && contextual { type = expected[index + 1U64] }
-            if type == 0U64 {
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "cannot infer closure parameter type; provide a function type context or an explicit annotation") />
-            }
-            types.append(type)
-            labels.append(if parameter.noLabel { give 0U64 } else { give parameter.nameId })
-            index += 1U64
-        }
-        val name = self.kwSpan(kw: "fn", kwLen: 2U64)
-        return <Result.Ok value=self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=types argLabels=labels isDiverging=isDiverging />) />
-    }
+
 }
 
 impl Comp {

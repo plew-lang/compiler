@@ -2275,7 +2275,14 @@ pub impl Comp {
                 // Recording it here lets a concrete generic-call inference
                 // consume the same parametric producer as every other
                 // expression instead of reconstructing it through exprType.
-                val signature = try self.resolveClosureFunctionType(exprId: exprId, parameters: params, hasReturn: hasRet, returnType: retTy, expectedTerm: normalizedContext, isDiverging: diverging)
+                // Record owns reuse of the expression's construction fact.
+                // The signature constructor never reads a source-result cache.
+                val recordedSignature = self.semanticExprTerm(exprId: exprId)
+                val signature = if recordedSignature != 0U64 {
+                    give recordedSignature
+                } else {
+                    give try self.resolveClosureFunctionType(exprId: exprId, parameters: params, hasReturn: hasRet, returnType: retTy, expectedTerm: normalizedContext, isDiverging: diverging)
+                }
                 self.recordSemanticExprTerm(exprId: exprId, term: signature)
                 try self.publishSemanticClosure(ownerFnIdx: self.cur.checkFn, closureId: exprId, parameters: params, functionTypeTerm: signature, bodyBlock: body)
                 val mark: U64 = self.scopeMark()
@@ -2769,5 +2776,43 @@ impl Comp {
         while self.sourceBodySignatures.count() <= fnIdx { self.sourceBodySignatures.append(<Optional.None />) }
         self.sourceBodySignatures.set(i: fnIdx, value: <Optional.Some v=signature />)
         return <Result.Ok value=() />
+    }
+}
+
+// Construct a closure signature from declared inputs and explicit context.
+// Reuse of a previously recorded expression belongs to Record, not here.
+pub impl Comp {
+    inout fn resolveClosureFunctionType(exprId: U64, parameters: Array[Param], hasReturn: Bool, returnType: U64, expectedTerm: U64, isDiverging: Bool = false) -> Result[U64, CompileDiagnostic] {
+        if isDiverging && hasReturn {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a diverging closure cannot declare a return type (spec/04)") />
+        }
+        val contextual = self.isFnType(ref: expectedTerm)
+        if contextual && self.arena.typeAt(index: expectedTerm).isDiverging != isDiverging {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "closure completion contract does not match the expected function type (spec/04)") />
+        }
+        mut val expected: Array[U64] = []
+        if contextual { expected = self.arena.typeAt(index: expectedTerm).args }
+        if contextual && expected.count() != parameters.count() + 1U64 {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "closure parameter count does not match the expected function type") />
+        }
+        mut val result = returnType
+        if !hasReturn && !isDiverging && contextual { result = expected[0U64] }
+        if !isDiverging { result = self.semanticSourceResultTerm(ref: result) }
+        mut val types: Array[U64] = [result]
+        mut val labels: Array[U64] = [0U64]
+        mut val index = 0U64
+        while index < parameters.count() {
+            val parameter = parameters[index]
+            mut val type = parameter.ty
+            if type == 0U64 && contextual { type = expected[index + 1U64] }
+            if type == 0U64 {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "cannot infer closure parameter type; provide a function type context or an explicit annotation") />
+            }
+            types.append(type)
+            labels.append(if parameter.noLabel { give 0U64 } else { give parameter.nameId })
+            index += 1U64
+        }
+        val name = self.kwSpan(kw: "fn", kwLen: 2U64)
+        return <Result.Ok value=self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=types argLabels=labels isDiverging=isDiverging />) />
     }
 }
