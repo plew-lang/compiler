@@ -1576,21 +1576,57 @@ pub impl Comp {
     // its substitutions came from arguments, a receiver, or an expected result.
     // The same closed callable constraint is checked whether selected during
     // declaration analysis or demanded later by executable discovery.
-    inout fn checkSelectedCallableBounds(fnIdx: U64, environment: InstanceEnvironment, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
+    inout fn groundCallableBound(bound: TraitBound, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[TraitBound, CompileDiagnostic] {
+        val subject = try self.groundTermForBody(ref: bound.subject, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        mut val arguments: Array[U64] = []
+        for argument in bound.constraint.key.positionalArgs {
+            arguments.append((try self.groundTermForBody(ref: argument, environment: environment, selfRef: selfRef, itemRef: itemRef)))
+        }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        for predicate in bound.constraint.assocPredicates {
+            predicates.append(<TraitAssocPredicate member=predicate.member value=(try self.groundTermForBody(ref: predicate.value, environment: environment, selfRef: selfRef, itemRef: itemRef)) span=predicate.span />)
+        }
+        return <Result.Ok value=<TraitBound subject=subject constraint=<TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates /> offset=bound.offset /> />
+    }
+
+    inout fn groundCallableSignatureBounds(fnIdx: U64, environment: InstanceEnvironment) -> Result[Array[TraitBound], CompileDiagnostic] {
+        mut val bounds: Array[TraitBound] = []
         for index in self.sourceDeclarationCallBoundIndices(functionIndex: fnIdx) {
             val bound = self.decls.funcBounds.at(index: index)
-            val subject = try self.groundTermForBody(ref: bound.paramTy, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
-            mut val arguments: Array[U64] = []
-            for val argument in bound.constraint.key.positionalArgs {
-                arguments.append((try self.groundTermForBody(ref: argument, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)))
+            bounds.append((try self.groundCallableBound(bound: <TraitBound subject=bound.paramTy constraint=bound.constraint offset=bound.paramStart />, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)))
+        }
+        return <Result.Ok value=bounds />
+    }
+
+    inout fn checkSelectedCallableBounds(fnIdx: U64, environment: InstanceEnvironment, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
+        for bound in (try self.groundCallableSignatureBounds(fnIdx: fnIdx, environment: environment)) {
+            if !(try self.viewedTypeConformsTraitConstraint(ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)) {
+                return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "type argument does not conform to the trait required by `where`") />
             }
-            mut val predicates: Array[TraitAssocPredicate] = []
-            for val predicate in bound.constraint.assocPredicates {
-                predicates.append(<TraitAssocPredicate member=predicate.member value=(try self.groundTermForBody(ref: predicate.value, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)) span=predicate.span />)
-            }
-            val constraint = <TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates />
-            if !(try self.viewedTypeConformsTraitConstraint(ref: subject, constraint: constraint, assumptions: assumptions)) {
-                return <Result.Err error=self.diagnosticAt(offset: bound.paramStart, msg: "type argument does not conform to the trait required by `where`") />
+        }
+        return <Result.Ok value=() />
+    }
+
+    // An instantiated source plan is checked against the body signature by
+    // equality and retained proof admission, never by conformance selection.
+    inout fn checkCallableConstraintEvidence(fnIdx: U64, environment: InstanceEnvironment, evidence: CallableConstraintEvidence) -> Result[(), CompileDiagnostic] {
+        match evidence {
+            CallableConstraintEvidence.Declaration => { return self.checkSelectedCallableBounds(fnIdx: fnIdx, environment: environment) }
+            CallableConstraintEvidence.Recorded(val bounds, val proofs) => {
+                val expected = try self.groundCallableSignatureBounds(fnIdx: fnIdx, environment: environment)
+                if bounds.count() != expected.count() || proofs.count() != expected.count() {
+                    return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "instantiated call has incomplete constraint evidence") />
+                }
+                mut val index = 0U64
+                while index < expected.count() {
+                    val bound = expected[index]
+                    if !self.typeRefEq(a: bounds[index].subject, b: bound.subject) || !self.sameTraitConstraint(a: bounds[index].constraint, b: bound.constraint) {
+                        return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "instantiated call constraint evidence has a different substitution") />
+                    }
+                    try self.checkStaticProofEvidence(proof: proofs[index], offset: bound.offset)
+                    try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proofs[index], offset: bound.offset)
+                    index += 1U64
+                }
             }
         }
         return <Result.Ok value=() />

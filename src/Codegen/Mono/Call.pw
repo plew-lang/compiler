@@ -1072,7 +1072,7 @@ pub impl Comp {
     // separate from FnInst: FnInst is a code-generation/mangling detail, while
     // this list is the semantic reachability closure whose bodies must have all
     // final call selections recorded.
-    inout fn enqueueFinalBody(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[U64, CompileDiagnostic] {
+    inout fn enqueueFinalBody(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />, constraints: CallableConstraintEvidence = <CallableConstraintEvidence.Declaration />) -> Result[U64, CompileDiagnostic] {
         if fnIdx >= self.arena.functionCount() { return <Result.Ok value=0U64 />}
         val f: Func = self.arena.functionAt(index: fnIdx)
         if f.isExtern || f.body == 0U64 {
@@ -1090,7 +1090,7 @@ pub impl Comp {
         // here, before the instance becomes reachable by LLVM.
         val environment: InstanceEnvironment = (try self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, selectedProof: selectedProof))
         val declaration: Func = (try self.lexicalFunction(f: f))
-        try self.checkSelectedCallableBounds(fnIdx: fnIdx, environment: environment)
+        try self.checkCallableConstraintEvidence(fnIdx: fnIdx, environment: environment, evidence: constraints)
         // A provided copy has no standalone semantic body: its `Self`,
         // associated outputs and nested requirements are defined by the
         // conformance that selected it.  Never materialize one with Missing
@@ -1301,7 +1301,7 @@ pub impl Comp {
         return <Result.Ok value=<Optional.Some v=<SelectedCallableSubstitution receiverRef=recvInst args=[] proof=calleeProof /> /> />
     }
 
-    inout fn enqueueSelectedCallee(selection: CallSiteSelection) -> Result[(), CompileDiagnostic] {
+    inout fn enqueueSelectedCallee(selection: CallSiteSelection, constraints: CallableConstraintEvidence = <CallableConstraintEvidence.Declaration />) -> Result[(), CompileDiagnostic] {
         val substitution = match (try self.selectedCallableSubstitution(selection: selection)) {
             Optional.Some(v: val value) => { give value }
             Optional.None => { return <Result.Ok value=() /> }
@@ -1314,7 +1314,7 @@ pub impl Comp {
         val finalArgs = substitution.args
         val recvInst = substitution.receiverRef
         val calleeProof = substitution.proof
-        val calleeBodyId: U64 = (try self.enqueueFinalBody(fnIdx: callee, args: finalArgs, recvInstRef: recvInst, selectedProof: calleeProof))
+        val calleeBodyId: U64 = (try self.enqueueFinalBody(fnIdx: callee, args: finalArgs, recvInstRef: recvInst, selectedProof: calleeProof, constraints: constraints))
         try self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: finalArgs, argumentSources: selection.argumentSources, resultRef: selection.resultRef, resultProjection: selection.resultProjection, siteIsStmt: siteIsStmt, slot: slot, calleeBodyId: calleeBodyId)
         val finalResult: U64 = (try self.bodyCalleeResultRef(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
         self.traceProvidedFinalCallee(f: f, args: finalArgs, recvRef: recvInst, resultRef: finalResult)
@@ -3985,6 +3985,40 @@ pub impl Comp {
     // Resolve once under Mono's concrete body environment, then retain that
     // decision for every downstream consumer (instance registration, type
     // recovery, and LLVM emission).
+    inout fn instantiateDirectCallConstraints(template: CallTemplate) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
+        val index = self.decls.callTemplateIndex(siteKey: template.siteKey)
+        if index >= self.decls.callTemplates.count() {
+            return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has no source constraint owner") />
+        }
+        try self.checkRecordedCallConstraintEvidence(templateIndex: index)
+        match self.decls.selectedCallConstraints.get(key: index) {
+            Optional.None => { return <Result.Ok value=<CallableConstraintEvidence.Recorded bounds=[] proofs=[] /> /> }
+            Optional.Some(v: val plan) => {
+                mut val bounds: Array[TraitBound] = []
+                mut val proofs: Array[StaticConformanceProof] = []
+                mut val position = 0U64
+                while position < plan.bounds.count() {
+                    val source = plan.bounds[position]
+                    val subject = try self.groundTermForBody(ref: source.subject, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                    val proof = self.thawStaticConformanceProof(id: plan.proofs[position])
+                    val state = try self.instantiateStaticMemberProof(proof: proof, receiverRef: subject, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                    match state {
+                        StaticProofInstantiation.Ready(proof: val concrete) => {
+                            // Preserve the selected obligation, including its
+                            // associated predicates and view boundary. The proof
+                            // satisfies that obligation; it does not redefine it.
+                            bounds.append((try self.groundCallableBound(bound: source, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)))
+                            proofs.append(concrete)
+                        }
+                        _ => { return <Result.Err error=self.diagnosticAt(offset: source.offset, msg: "executable call retains an unresolved conformance obligation") /> }
+                    }
+                    position += 1U64
+                }
+                return <Result.Ok value=<CallableConstraintEvidence.Recorded bounds=bounds proofs=proofs /> />
+            }
+        }
+    }
+
     inout fn resolveBodyCallee(exprId: U64) -> Result[U64, CompileDiagnostic] {
         val template: CallTemplate = (try self.callTemplateForCurrentBody(exprId: exprId))
         // Record selects written and synthesized calls alike. Their Direct
@@ -3996,7 +4030,8 @@ pub impl Comp {
                 if storedCallee < self.arena.functionCount() {
                     val selection: CallSiteSelection = (try self.selectDirectTemplateCall(exprId: exprId, callee: storedCallee, receiver: receiver, arguments: self.callTemplateArguments(range: arguments), proof: self.thawStaticConformanceProof(id: proofId)))
                     try self.recordSelectedBodyCallee(selection: selection)
-                    try self.enqueueSelectedCallee(selection: selection)
+                    val constraints = try self.instantiateDirectCallConstraints(template: template)
+                    try self.enqueueSelectedCallee(selection: selection, constraints: constraints)
                     return <Result.Ok value=storedCallee />
                 }
             }

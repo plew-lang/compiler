@@ -1,0 +1,43 @@
+// The final body gate consumes retained evidence even when a fresh lookup
+// could prove the same trait. Missing evidence must not be silently repaired.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplateKind, CallableConstraintEvidence, StaticConformanceProof }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="trait Q {{}} struct Item {{}} impl Item as Q {{}} fn free[Value](value: Value) where Value: Q {{}} fn probe() {{ free(value: <Item />) }}" path="direct-constraints.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "free").nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    mut val found = false
+    for template in compiler.decls.callTemplates {
+        match template.kind {
+            CallTemplateKind.Direct(callee: val function, receiver: _, args: _, calleeTypeArgs: val types, proofId: _) => {
+                if function == callee && template.siteKey.ownerFnIdx == owner {
+                    val evidence = compiler.instantiateDirectCallConstraints(template: template).unwrap()
+                    val arguments = compiler.callTemplateTypeArgs(range: types)
+                    val environment = compiler.bodyInstanceEnvironment(fnIdx: callee, args: arguments, recvInstRef: 0U64).unwrap()
+                    compiler.checkCallableConstraintEvidence(fnIdx: callee, environment: environment, evidence: evidence).unwrap()
+                    match evidence {
+                        CallableConstraintEvidence.Recorded(val bounds, val proofs) => {
+                            if bounds.count() != 1U64 || proofs.count() != 1U64 { panic("missing concrete call evidence") }
+                            val broken = <CallableConstraintEvidence.Recorded bounds=bounds proofs=[<StaticConformanceProof.Missing />] />
+                            if compiler.enqueueFinalBody(fnIdx: callee, args: arguments, recvInstRef: 0U64, constraints: broken).isOk() {
+                                panic("final body gate replaced missing retained proof with a fresh conformance")
+                            }
+                        }
+                        _ => { panic("direct call used declaration-time reselection") }
+                    }
+                    found = true
+                }
+            }
+            _ => {}
+        }
+    }
+    if !found { panic("missing direct source call") }
+    print("direct-constraint-instantiation")
+}

@@ -1769,6 +1769,14 @@ pub struct SelectedCallConstraints {
 }
 pub impl SelectedCallConstraints { factory }
 
+// Source-selected obligations instantiated in the caller environment. Readers
+// compare them with the selected body's signature before publishing reachability.
+pub enum CallableConstraintEvidence {
+    Declaration
+    Recorded(bounds: Array[TraitBound], proofs: Array[StaticConformanceProof])
+}
+
+
 // A runtime ABI operation selected from a finalized plewIntrinsic declaration.
 // It is deliberately separate from a source spelling: after frontend selection
 // neither Mid nor LLVM needs to inspect a function name to decide the ABI.
