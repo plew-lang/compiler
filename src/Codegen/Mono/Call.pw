@@ -3837,7 +3837,7 @@ pub impl Comp {
                 for edge in edges {
                     prefix.append(edge)
                     val candidate = <StaticConformanceProof.ConcreteWitness witness=edge />
-                    if self.checkSelectedCallConstraintBoundary(expected: expected, proof: candidate, offset: expected.offset).isOk() {
+                    if try self.selectedCallConstraintMatches(expected: expected, proof: candidate) {
                         if prefix.count() == 1U64 { return <Result.Ok value=candidate /> }
                         return <Result.Ok value=<StaticConformanceProof.TraitPath edges=prefix terminalConformIdx=edge.conformIdx /> />
                     }

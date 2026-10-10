@@ -1123,16 +1123,23 @@ pub impl Comp {
 
     // Admission precedes this boundary reader: a malformed child must never
     // participate in proof-dependent projection or associated-type lookup.
-    inout fn checkSelectedCallConstraintBoundary(expected: TraitBound, proof: StaticConformanceProof, offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn selectedCallConstraintMatches(expected: TraitBound, proof: StaticConformanceProof) -> Result[Bool, CompileDiagnostic] {
         val traitIndex = self.decls.traitIndexByOffset(offset: expected.constraint.key.owner)
         val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
         if bound.subject == 0U64 || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: expected.subject), b: self.typeRefWithoutOuterViews(ref: bound.subject)) || bound.constraint.key.owner != expected.constraint.key.owner || (!expected.constraint.positionalArgsOpen && !self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: expected.constraint.key.positionalArgs)) {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected call constraint evidence does not satisfy its signature") />
+            return <Result.Ok value=false />
         }
         mut val names: Array[U64] = []
         mut val values: Array[U64] = []
         for predicate in expected.constraint.assocPredicates { names.append(predicate.member) values.append(predicate.value) }
         if !(try self.selectedProofAssociatedTypesMatch(proof: proof, traitOwner: expected.constraint.key.owner, names: names, values: values)) {
+            return <Result.Ok value=false />
+        }
+        return <Result.Ok value=true />
+    }
+
+    inout fn checkSelectedCallConstraintBoundary(expected: TraitBound, proof: StaticConformanceProof, offset: U64) -> Result[(), CompileDiagnostic] {
+        if !(try self.selectedCallConstraintMatches(expected: expected, proof: proof)) {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected call constraint evidence does not satisfy its signature") />
         }
         return <Result.Ok value=() />
