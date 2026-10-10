@@ -962,15 +962,20 @@ pub impl Comp {
 
     inout fn appendCallTemplate(template: CallTemplate, resultExpression: Optional[U64] = <Optional.None />) -> Bool {
         val root = self.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
-        if self.lexicalBodyPreparations.get(key: root).isSome() { return false }
-        match self.cur.globalInitializerTarget {
-            Optional.Some(v: val target) => { if self.globalInitializerConstructionClosed(target: target) { return false } }
-            Optional.None => { if template.siteKey.ownerFnIdx == 18446744073709551615U64 { return false } }
+        val owner = if root != 18446744073709551615U64 {
+            give <SemanticCompletionOwner.Function index=root />
+        } else {
+            match self.cur.globalInitializerTarget {
+                Optional.Some(v: val target) => { give <SemanticCompletionOwner.Global target=target /> }
+                Optional.None => { return false }
+            }
         }
+        if self.sourceOwnerConstructionClosed(owner: owner) { return false }
         if findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: template.siteKey) < self.callTemplates.count() { return false }
         self.ensureCallTemplateIndex(nextCount: self.callTemplates.count() + 1U64)
         val resultRecipe = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 callSite=template.siteKey sourceExpression=resultExpression />)
         self.callTemplates.append(<CallTemplate siteKey=template.siteKey resultTypeRecipe=resultRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm />)
+        self.callTemplateSourceOwners.append(owner)
         val capacity: U64 = self.callTemplateIndexSlots.count()
         mut val slot: U64 = template.siteKey.lookupHash() % capacity
         while self.callTemplateIndexSlots[slot] != 0U64 {

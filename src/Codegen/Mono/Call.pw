@@ -5071,7 +5071,7 @@ pub impl Comp {
 }
 
 impl Comp {
-    fn closureSourceOwnerClosed(owner: SemanticCompletionOwner) -> Bool {
+    fn sourceOwnerConstructionClosed(owner: SemanticCompletionOwner) -> Bool {
         match owner {
             SemanticCompletionOwner.Function(index: val index) => { return self.lexicalBodyPreparations.get(key: index).isSome() }
             SemanticCompletionOwner.Global(target: val target) => { return self.globalInitializerConstructionClosed(target: target) }
@@ -5079,7 +5079,7 @@ impl Comp {
     }
 
     inout fn requireBuildingClosureOwner(owner: SemanticCompletionOwner, offset: U64) -> Result[(), CompileDiagnostic] {
-        if self.closureSourceOwnerClosed(owner: owner) {
+        if self.sourceOwnerConstructionClosed(owner: owner) {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: completed source owner cannot change a closure declaration") />
         }
         return <Result.Ok value=() />

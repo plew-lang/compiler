@@ -91,7 +91,8 @@ pub impl Comp {
     fn callTemplateSnapshot() -> Array[CallTemplate] { return self.callTemplates }
     // Construction API; successful source publication removes write authority.
     inout fn replaceBuildingCallTemplate(index: U64, template: CallTemplate) -> Bool {
-        if index >= self.callTemplates.count() { return false }
+        if index >= self.callTemplates.count() || index >= self.callTemplateSourceOwners.count() { return false }
+        if self.sourceOwnerConstructionClosed(owner: self.callTemplateSourceOwners[index]) { return false }
         // Construction needs the publication state, not a copied prepared plan.
         match self.selectedCallConstraints.get(key: index) {
             Optional.Some(v: val state) => {
@@ -161,17 +162,15 @@ impl Comp {
 
 impl Comp {
     inout fn recordGlobalCallTemplateOwner(templateIndex: U64) {
-        val owner = self.callTemplates[templateIndex].siteKey.ownerFnIdx
-        if self.callTemplateLexicalRoots.getOr(key: owner, fallback: owner) != 18446744073709551615U64 { return }
-        match self.cur.globalInitializerTarget {
-            Optional.Some(v: val target) => {
+        match self.callTemplateSourceOwners[templateIndex] {
+            SemanticCompletionOwner.Global(target: val target) => {
                 mut val indices = self.globalCallTemplateOwners.getOr(key: target, fallback: [])
                 mut val present = false
                 for index in indices { if index == templateIndex { present = true } }
                 if !present { indices.append(templateIndex) }
                 self.globalCallTemplateOwners[target] = indices
             }
-            Optional.None => {}
+            SemanticCompletionOwner.Function(index: _) => {}
         }
     }
 

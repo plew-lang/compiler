@@ -29,6 +29,15 @@ fn main() {
     // expression so the request must reject without publishing readiness.
     val missing = compiler.internBytes(s: "missingInitializer")
     compiler.arena.exprs.set(i: initializer, value: <Expr.Ident start=missing.nameStart len=missing.nameLen />)
+    val site = <CallSiteKey ownerFnIdx=18446744073709551615U64 originSerial=901U64 />
+    compiler.cur.checkFn = 18446744073709551615U64
+    compiler.cur.globalInitializerTarget = <Optional.Some v=broken.nameStart />
+    if !compiler.appendCallTemplate(template: <CallTemplate siteKey=site kind=<CallTemplateKind.Pending /> />) {
+        panic("building global rejected its call row")
+    }
+    if !compiler.replaceBuildingCallTemplate(index: 0U64, template: <CallTemplate siteKey=site kind=<CallTemplateKind.Pending /> />) {
+        panic("building global rejected its call update")
+    }
     compiler.cur.checkFn = 70001U64
     compiler.cur.bodyFnIdx = 70002U64
     compiler.cur.bodyId = 70003U64
@@ -45,6 +54,9 @@ fn main() {
         Result.Ok(value: _) => { panic("retry accepted invalid initializer") }
     }
     assertCursor(compiler: inout compiler)
+    if compiler.replaceBuildingCallTemplate(index: 0U64, template: <CallTemplate siteKey=site kind=<CallTemplateKind.Pending /> />) {
+        panic("failed global call row reopened through an unrelated cursor")
+    }
     if compiler.globalInitializerPreparationCount() != 1U64 { panic("failed request was not cached once") }
     match compiler.semanticCompletionOwnerPrepared(owner: <SemanticCompletionOwner.Global target=broken.nameStart />) {
         Result.Err(error: val failure) => { if failure.message != diagnostic.message { panic("final reader lost failed owner diagnostic") } }

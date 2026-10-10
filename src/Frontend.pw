@@ -251,6 +251,7 @@ pub struct Comp {
     mut val callTemplateViewPool: Array[ResolvedViewSource] = []
     mut val callTemplateIndexSlots: Array[U64] = []
     mut val callTemplates: Array[CallTemplate] = []
+    mut val callTemplateSourceOwners: Array[SemanticCompletionOwner] = []
     mut val selectedCallConstraints: Dictionary[U64, CallConstraintPlanState]
     // Nonfatal diagnostics remain owned by the compilation/session. Only the
     // driver decides how to display them; requesting a body emits no process IO.
