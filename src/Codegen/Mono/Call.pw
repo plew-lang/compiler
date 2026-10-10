@@ -1183,11 +1183,10 @@ pub impl Comp {
     // `from` factory from the two Result spellings.
     inout fn registerTryConversion(exprId: U64, operand: U64) -> Result[(), CompileDiagnostic] {
         if !(try self.callTemplatesClosedForBody(fnIdx: self.cur.bodyFnIdx)) { return <Result.Ok value=() /> }
-        val semanticIndex = try self.semanticTryIndex(ownerFnIdx: self.cur.bodyFnIdx, exprId: exprId)
-        if semanticIndex >= self.decls.semanticTries.count() {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: try expression has no recorded decomposition") />
+        val semantic = match (try self.preparedBodyTry(bodyId: self.cur.bodyId, exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)) {
+            Optional.Some(v: val fact) => { give fact }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: try expression has no recorded decomposition") /> }
         }
-        val semantic = self.decls.semanticTries[semanticIndex]
         val operandRef = try self.groundAndRecordBodyType(ref: semantic.operandTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
         val returnRef = try self.groundAndRecordBodyType(ref: semantic.returnTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
         val operandErr = try self.groundAndRecordBodyType(ref: semantic.sourceErrorTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
@@ -6186,5 +6185,14 @@ pub impl Comp {
         val owner = try self.sourceFunctionOwner(fnIdx: sourceFunction, globalInitializerTarget: target)
         val facts = try self.preparedSemanticFacts(owner: owner)
         return <Result.Ok value=facts.pattern(ownerFnIdx: source, matchSource: matchSource) />
+    }
+}
+
+pub impl Comp {
+    inout fn preparedBodyTry(bodyId: U64, exprId: U64, globalInitializerTarget: Optional[U64] = <Optional.None />) -> Result[Optional[SemanticTry], CompileDiagnostic] {
+        val owner = try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: globalInitializerTarget)
+        val facts = try self.preparedSemanticFacts(owner: owner)
+        val body = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        return <Result.Ok value=facts.tryDecomposition(ownerFnIdx: (try self.semanticBodyOwner(fnIdx: body.fnIdx)), exprId: exprId) />
     }
 }

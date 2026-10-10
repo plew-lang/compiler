@@ -1449,12 +1449,19 @@ fn materializeMidAwait(c: inout Comp, state: inout MidBuildState, exprId: U64, o
 }
 
 fn materializeMidTry(c: inout Comp, state: inout MidBuildState, exprId: U64, operandExpr: U64, resultTerm: U64) -> MidOperandBuild {
-    val index = match c.semanticTryIndex(ownerFnIdx: state.sourceFunction, exprId: exprId) {
-        Result.Ok(value: val value) => { give value }
+    val owner = match c.semanticBodyOwner(fnIdx: state.sourceFunction) {
+        Result.Ok(value: val owner) => { give owner }
         Result.Err(error: val diagnostic) => { return <MidOperandBuild.Error error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
     }
-    if index >= c.decls.semanticTries.count() { return <MidOperandBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
-    val fact = c.decls.semanticTries[index]
+    val fact = match state.sourceFacts {
+        Optional.Some(v: val facts) => {
+            give match facts.tryDecomposition(ownerFnIdx: owner, exprId: exprId) {
+                Optional.Some(v: val fact) => fact
+                Optional.None => { return <MidOperandBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
+            }
+        }
+        Optional.None => { return <MidOperandBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
+    }
     val operandResultTerm = fact.operandTerm
     val returnResultTerm = state.returnTypeTerm
     if operandResultTerm == 0U64 || operandResultTerm >= c.arena.typeCount() || resultTerm == 0U64 { return <MidOperandBuild.Error error=<MidBuildError.MissingSemanticType /> /> }

@@ -976,31 +976,34 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+}
+
+impl Comp {
     inout fn rebuildSemanticTryIndex(capacity: U64) {
-        self.decls.semanticTryIndexSlots = []
+        self.semanticTryIndexSlots = []
         mut val zeroI: U64 = 0U64
         while zeroI < capacity {
-            self.decls.semanticTryIndexSlots.append(0U64)
+            self.semanticTryIndexSlots.append(0U64)
             zeroI += 1U64
         }
         mut val entry: U64 = 0U64
-        while entry < self.decls.semanticTries.count() {
-            val fact: SemanticTry = self.decls.semanticTries[entry]
+        while entry < self.semanticTries.count() {
+            val fact: SemanticTry = self.semanticTries[entry].fact
             mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: fact.ownerFnIdx, exprId: fact.exprId) % capacity
-            while self.decls.semanticTryIndexSlots[slot] != 0U64 {
+            while self.semanticTryIndexSlots[slot] != 0U64 {
                 slot = (slot + 1U64) % capacity
             }
-            self.decls.semanticTryIndexSlots.set(i: slot, value: entry + 1U64)
+            self.semanticTryIndexSlots.set(i: slot, value: entry + 1U64)
             entry += 1U64
         }
     }
 
     inout fn ensureSemanticTryIndex(nextCount: U64) {
-        if self.decls.semanticTryIndexSlots.count() == 0U64 {
+        if self.semanticTryIndexSlots.count() == 0U64 {
             self.rebuildSemanticTryIndex(capacity: 16U64)
         }
-        if nextCount * 10U64 >= self.decls.semanticTryIndexSlots.count() * 7U64 {
-            self.rebuildSemanticTryIndex(capacity: self.decls.semanticTryIndexSlots.count() * 2U64)
+        if nextCount * 10U64 >= self.semanticTryIndexSlots.count() * 7U64 {
+            self.rebuildSemanticTryIndex(capacity: self.semanticTryIndexSlots.count() * 2U64)
         }
     }
 
@@ -1008,32 +1011,38 @@ pub impl Comp {
     // the semantic source; slots are a rebuildable reader for Record and Mid.
     inout fn semanticTryIndex(ownerFnIdx: U64, exprId: U64) -> Result[U64, CompileDiagnostic] {
         val sourceOwner: U64 = (try self.semanticBodyOwner(fnIdx: ownerFnIdx))
-        val capacity: U64 = self.decls.semanticTryIndexSlots.count()
-        if capacity == 0U64 { return <Result.Ok value=self.decls.semanticTries.count() />}
+        val capacity: U64 = self.semanticTryIndexSlots.count()
+        if capacity == 0U64 { return <Result.Ok value=self.semanticTries.count() />}
         mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: sourceOwner, exprId: exprId) % capacity
-        while self.decls.semanticTryIndexSlots[slot] != 0U64 {
-            val entry: U64 = self.decls.semanticTryIndexSlots[slot] - 1U64
-            val prior: SemanticTry = self.decls.semanticTries[entry]
+        while self.semanticTryIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.semanticTryIndexSlots[slot] - 1U64
+            val prior: SemanticTry = self.semanticTries[entry].fact
             if prior.ownerFnIdx == sourceOwner && prior.exprId == exprId { return <Result.Ok value=entry />}
             slot = (slot + 1U64) % capacity
         }
-        return <Result.Ok value=self.decls.semanticTries.count() />
+        return <Result.Ok value=self.semanticTries.count() />
     }
 
     inout fn putSemanticTry(fact: SemanticTry) -> Result[(), CompileDiagnostic] {
+        val owner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => { give owner }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: try has no source owner") /> }
+        }
+        if self.sourceOwnerConstructionClosed(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: completed source owner cannot replace a try fact") /> }
         val prior: U64 = (try self.semanticTryIndex(ownerFnIdx: fact.ownerFnIdx, exprId: fact.exprId))
-        if prior < self.decls.semanticTries.count() {
-            self.decls.semanticTries.set(i: prior, value: fact)
+        if prior < self.semanticTries.count() {
+            if !semanticCompletionOwnersEqual(recorded: self.semanticTries[prior].owner, prepared: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: try changed its source owner") /> }
+            self.semanticTries.set(i: prior, value: <SourceSemanticTry owner=owner fact=fact />)
             return <Result.Ok value=() />
         }
-        self.ensureSemanticTryIndex(nextCount: self.decls.semanticTries.count() + 1U64)
-        self.decls.semanticTries.append(fact)
-        val capacity: U64 = self.decls.semanticTryIndexSlots.count()
+        self.ensureSemanticTryIndex(nextCount: self.semanticTries.count() + 1U64)
+        self.semanticTries.append(<SourceSemanticTry owner=owner fact=fact />)
+        val capacity: U64 = self.semanticTryIndexSlots.count()
         mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: fact.ownerFnIdx, exprId: fact.exprId) % capacity
-        while self.decls.semanticTryIndexSlots[slot] != 0U64 {
+        while self.semanticTryIndexSlots[slot] != 0U64 {
             slot = (slot + 1U64) % capacity
         }
-        self.decls.semanticTryIndexSlots.set(i: slot, value: self.decls.semanticTries.count())
+        self.semanticTryIndexSlots.set(i: slot, value: self.semanticTries.count())
         return <Result.Ok value=() />
     }
 

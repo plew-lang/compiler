@@ -238,6 +238,8 @@ enum CallConstraintPlanState {
 pub struct Comp {
     mut val semanticClosures: Array[SemanticClosure] = []
     mut val semanticExprRecords: Array[SourceSemanticExpressionRecord] = []
+    mut val semanticTries: Array[SourceSemanticTry] = []
+    mut val semanticTryIndexSlots: Array[U64] = []
     mut val semanticMatches: Array[SourceSemanticMatch] = []
     mut val semanticMatchIndexSlots: Array[U64] = []
     mut val semanticBindings: Array[Optional[SourceBindingFact]] = []
@@ -2333,6 +2335,16 @@ fn sameSourceMatch(a: MatchSource, b: MatchSource) -> Bool {
         }
 }
 
+fn sourceSemanticExpressionHash(ownerFnIdx: U64, exprId: U64) -> U64 {
+    val modulus: U64 = 4294967291U64
+    return ((ownerFnIdx % modulus + exprId % modulus) * 65537U64) % modulus
+}
+struct SourceSemanticTry {
+    val owner: SemanticCompletionOwner
+    val fact: SemanticTry
+}
+impl SourceSemanticTry { factory }
+
 struct SourceSemanticMatch {
     val owner: SemanticCompletionOwner
     val fact: SemanticMatch
@@ -2342,6 +2354,8 @@ impl SourceSemanticMatch { factory }
 pub struct PreparedSemanticFacts {
     val owner: SemanticCompletionOwner
     val expressions: Array[SourceSemanticExpressionRecord]
+    val tries: Array[SourceSemanticTry]
+    val trySlots: Array[U64]
     val matches: Array[SourceSemanticMatch]
     val matchSlots: Array[U64]
     val bindings: Array[Optional[SourceBindingFact]]
@@ -2350,6 +2364,21 @@ pub struct PreparedSemanticFacts {
 }
 impl PreparedSemanticFacts { factory }
 pub impl PreparedSemanticFacts {
+    fn tryDecomposition(ownerFnIdx: U64, exprId: U64) -> Optional[SemanticTry] {
+        val capacity = self.trySlots.count()
+        if capacity == 0U64 { return <Optional.None /> }
+        mut val slot = sourceSemanticExpressionHash(ownerFnIdx: ownerFnIdx, exprId: exprId) % capacity
+        while self.trySlots[slot] != 0U64 {
+            val record = self.tries[self.trySlots[slot] - 1U64]
+            if record.fact.ownerFnIdx == ownerFnIdx && record.fact.exprId == exprId {
+                if semanticCompletionOwnersEqual(recorded: record.owner, prepared: self.owner) { return <Optional.Some v=record.fact /> }
+                return <Optional.None />
+            }
+            slot = (slot + 1U64) % capacity
+        }
+        return <Optional.None />
+    }
+
     fn pattern(ownerFnIdx: U64, matchSource: MatchSource) -> Optional[SemanticMatch] {
         val capacity = self.matchSlots.count()
         if capacity == 0U64 { return <Optional.None /> }
@@ -2432,7 +2461,7 @@ pub impl Comp {
             }
             SemanticCompletionOwner.Global(target: _) => {}
         }
-        return <Result.Ok value=<PreparedSemanticFacts owner=owner expressions=self.semanticExprRecords matches=self.semanticMatches matchSlots=self.semanticMatchIndexSlots bindings=self.semanticBindings statements=self.semanticStatementCompletions signature=signature /> />
+        return <Result.Ok value=<PreparedSemanticFacts owner=owner expressions=self.semanticExprRecords tries=self.semanticTries trySlots=self.semanticTryIndexSlots matches=self.semanticMatches matchSlots=self.semanticMatchIndexSlots bindings=self.semanticBindings statements=self.semanticStatementCompletions signature=signature /> />
     }
     inout fn preparedFunctionSemanticFacts(fnIdx: U64) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
         return self.preparedSemanticFacts(owner: <SemanticCompletionOwner.Function index=(try self.semanticBodyOwner(fnIdx: fnIdx)) />)
