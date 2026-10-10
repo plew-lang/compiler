@@ -1,6 +1,6 @@
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { StaticConformanceProof, StaticProofInstantiation, InstanceEnvironment, TraitConstraint, TraitInstanceKey }
+use /Ir only { StaticConformanceProof, StaticProofInstantiation, InstanceEnvironment, TraitConstraint, TraitInstanceKey, DeclarationBoundRef }
 use @Std/Io only { print }
 fn main() {
     mut val compiler = <Comp />
@@ -12,16 +12,19 @@ fn main() {
     val symbolic = <StaticConformanceProof.TraitSelf traitIdx=0U64 receiverRef=compiler.existentialSelfTerm(traitIndex: 0U64).unwrap() traitArgs=[] />
     val provided = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "provided").nameId)
     val environment = compiler.bodyInstanceEnvironment(fnIdx: provided, args: [], recvInstRef: receiver, selectedProof: selected).unwrap()
-    val instantiated = match compiler.instantiateConstraintProof(proof: symbolic, receiverRef: receiver, environment: environment, selfRef: receiver, itemRef: 0U64) {
-        Result.Ok(value: val state) => { give state }
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
-    }
-    match instantiated {
-        StaticProofInstantiation.Ready(proof: val actual) => { if !compiler.sameStaticConformanceProof(a: actual, b: selected) { panic("trait Self evidence was reselected") } }
-        _ => { panic("trait Self evidence was not retained") }
-    }
-    if compiler.instantiateConstraintProof(proof: symbolic, receiverRef: receiver, environment: <InstanceEnvironment params=environment.params args=environment.args receiverRef=receiver />, selfRef: receiver, itemRef: 0U64).isOk() { panic("missing trait Self evidence was repaired by search") }
     val foreign = compiler.viewedTraitConstraintProof(ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 1U64).nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
-    if compiler.instantiateConstraintProof(proof: symbolic, receiverRef: receiver, environment: <InstanceEnvironment params=environment.params args=environment.args receiverRef=receiver proof=foreign />, selfRef: receiver, itemRef: 0U64).isOk() { panic("foreign trait Self evidence was accepted") }
+    val receiverAssumption = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.MethodReceiver index=provided /> />
+    for assumption in [symbolic, receiverAssumption] {
+        val instantiated = match compiler.instantiateConstraintProof(proof: assumption, receiverRef: receiver, environment: environment, selfRef: receiver, itemRef: 0U64) {
+            Result.Ok(value: val state) => { give state }
+            Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        }
+        match instantiated {
+            StaticProofInstantiation.Ready(proof: val actual) => { if !compiler.sameStaticConformanceProof(a: actual, b: selected) { panic("trait Self evidence was reselected") } }
+            _ => { panic("trait Self evidence was not retained") }
+        }
+        if compiler.instantiateConstraintProof(proof: assumption, receiverRef: receiver, environment: <InstanceEnvironment params=environment.params args=environment.args receiverRef=receiver />, selfRef: receiver, itemRef: 0U64).isOk() { panic("missing trait Self evidence was repaired by search") }
+        if compiler.instantiateConstraintProof(proof: assumption, receiverRef: receiver, environment: <InstanceEnvironment params=environment.params args=environment.args receiverRef=receiver proof=foreign />, selfRef: receiver, itemRef: 0U64).isOk() { panic("foreign trait Self evidence was accepted") }
+    }
     print("retained-trait-self-evidence")
 }

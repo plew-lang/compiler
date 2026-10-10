@@ -3813,18 +3813,25 @@ pub impl Comp {
         return <Result.Ok value=<StaticProofInstantiation.Ready proof=current /> />
     }
 
-    // A provided body's Self is witnessed by its selected enclosing conformance.
-    // This presence obligation consumes that evidence; it never selects a member.
-    inout fn instantiateTraitSelfConstraint(proof: StaticConformanceProof, traitIndex: U64, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+    // Receiver assumptions share the enclosing body's selected conformance.
+    // Presence consumes that evidence; it never selects an implementation.
+    inout fn instantiateReceiverConstraint(bound: TraitBound, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+        val expected = try self.groundCallableBound(bound: bound, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        if expected.subject == 0U64 || !self.arena.typeIsClosed(ref: expected.subject) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+        for argument in expected.constraint.key.positionalArgs {
+            if argument == 0U64 || !self.arena.typeIsClosed(ref: argument) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+        }
+        for predicate in expected.constraint.assocPredicates {
+            if predicate.value == 0U64 || !self.arena.typeIsClosed(ref: predicate.value) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+        }
         match environment.proof {
             StaticConformanceProof.ConcreteWitness(witness: _) | StaticConformanceProof.TraitPath(edges: _, terminalConformIdx: _) => {}
-            _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "trait Self constraint has no retained conformance environment") /> }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "receiver constraint has no retained conformance environment") /> }
         }
-        val bound = try self.groundCallableBound(bound: (try self.staticProofBound(proof: proof, traitIdx: traitIndex)), environment: environment, selfRef: selfRef, itemRef: itemRef)
         val state = try self.instantiateStaticMemberProof(proof: environment.proof, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
         match state {
             StaticProofInstantiation.Ready(proof: val selected) => {
-                try self.checkSelectedCallConstraintBoundary(expected: bound, proof: selected, offset: bound.offset)
+                try self.checkSelectedCallConstraintBoundary(expected: expected, proof: selected, offset: expected.offset)
             }
             _ => {}
         }
@@ -3835,7 +3842,7 @@ pub impl Comp {
         if receiverRef == 0U64 || !self.arena.typeIsClosed(ref: receiverRef) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
         match proof {
             StaticConformanceProof.TraitSelf(traitIdx: val owner, receiverRef: _, traitArgs: _) => {
-                return self.instantiateTraitSelfConstraint(proof: proof, traitIndex: owner, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                return self.instantiateReceiverConstraint(bound: (try self.staticProofBound(proof: proof, traitIdx: owner)), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
             }
             StaticConformanceProof.AssumedBound(source: val source) => {
                 if !self.declarationBoundIsValid(source: source) { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
@@ -3865,6 +3872,7 @@ pub impl Comp {
                         return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has no retained declaration binding") />
                     }
                     DeclarationBoundRef.Conformance(index: val declared) => { return self.retainedConformanceConstraint(declared: declared, environment: environment) }
+                    DeclarationBoundRef.MethodReceiver(index: _) => { return self.instantiateReceiverConstraint(bound: bound, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
                     _ => {}
                 }
             }
