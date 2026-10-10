@@ -3763,17 +3763,19 @@ fn midSourceSemanticTerm(c: inout Comp, state: MidBuildState, exprId: U64) -> Re
 
 // Source value categories survive the snapshot boundary. A deferred callable
 // result names its already selected recipe; it is not an absent type term.
+// NoNormalValue suppresses a continuation, not the saved ABI type annotation.
+// Calls in terminating bodies still require that annotation for Mid verification.
 enum MidSourceExpressionType {
     Value(term: U64)
     Unit(term: U64)
-    NoNormalValue
+    NoNormalValue(term: U64)
     CallResult(recipe: U64)
 }
 impl MidSourceExpressionType {
     fn typeTerm() -> U64 {
         match self {
-            MidSourceExpressionType.Value(term: val term) | MidSourceExpressionType.Unit(term: val term) => { return term }
-            MidSourceExpressionType.NoNormalValue | MidSourceExpressionType.CallResult(recipe: _) => { return 0U64 }
+            MidSourceExpressionType.Value(term: val term) | MidSourceExpressionType.Unit(term: val term) | MidSourceExpressionType.NoNormalValue(term: val term) => { return term }
+            MidSourceExpressionType.CallResult(recipe: _) => { return 0U64 }
         }
     }
     fn resultRecipe() -> U64 {
@@ -3797,7 +3799,7 @@ fn midSourceSemanticType(c: inout Comp, state: MidBuildState, exprId: U64) -> Re
             if fact.term == 0U64 { return <Result.Err error=<MidBuildError.MissingSemanticType /> /> }
             return <Result.Ok value=<MidSourceExpressionType.Unit term=fact.term /> />
         }
-        SemanticExpressionTypeState.NoNormalValue => { return <Result.Ok value=<MidSourceExpressionType.NoNormalValue /> /> }
+        SemanticExpressionTypeState.NoNormalValue => { return <Result.Ok value=<MidSourceExpressionType.NoNormalValue term=fact.term /> /> }
         SemanticExpressionTypeState.Pending => {
             val template = match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) {
                 Result.Ok(value: val template) => template
