@@ -6,6 +6,8 @@ pub impl Comp {
     }
 
     inout fn recordBuildingCallConstraints(index: U64, plan: SelectedCallConstraints) -> Bool {
+        if index >= self.callTemplateSourceOwners.count() { return false }
+        if self.sourceOwnerConstructionClosed(owner: self.callTemplateSourceOwners[index]) { return false }
         match self.selectedCallConstraints.get(key: index) {
             Optional.Some(v: val state) => {
                 match state {

@@ -1,5 +1,13 @@
 // Source owner success is published only by these checked preparation phases.
 impl Comp {
+    fn sourceOwnerConstructionClosed(owner: SemanticCompletionOwner) -> Bool {
+        match owner {
+            SemanticCompletionOwner.Function(index: val index) => { return self.lexicalBodyPreparations.get(key: index).isSome() }
+            SemanticCompletionOwner.Global(target: val target) => { return self.globalInitializerConstructionClosed(target: target) }
+        }
+    }
+
+
     inout fn prepareLexicalBodyUncached(owner: U64) -> Result[(), CompileDiagnostic] {
         self.cur.bodyFnIdx = owner
         self.cur.bodyEnvironment = <InstanceEnvironment />

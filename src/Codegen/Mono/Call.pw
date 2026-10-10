@@ -3966,6 +3966,9 @@ pub impl Comp {
         if index >= self.callTemplates.count() {
             return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has no source constraint owner") />
         }
+        if index >= self.callTemplateSourceOwners.count() || !(try self.semanticCompletionOwnerPrepared(owner: self.callTemplateSourceOwners[index])) {
+            return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call source owner is not prepared") />
+        }
         match self.preparedCallConstraints(index: index) {
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call constraint owner is not prepared") /> }
             Optional.Some(v: val snapshot) => {
@@ -5071,13 +5074,6 @@ pub impl Comp {
 }
 
 impl Comp {
-    fn sourceOwnerConstructionClosed(owner: SemanticCompletionOwner) -> Bool {
-        match owner {
-            SemanticCompletionOwner.Function(index: val index) => { return self.lexicalBodyPreparations.get(key: index).isSome() }
-            SemanticCompletionOwner.Global(target: val target) => { return self.globalInitializerConstructionClosed(target: target) }
-        }
-    }
-
     inout fn requireBuildingClosureOwner(owner: SemanticCompletionOwner, offset: U64) -> Result[(), CompileDiagnostic] {
         if self.sourceOwnerConstructionClosed(owner: owner) {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: completed source owner cannot change a closure declaration") />
