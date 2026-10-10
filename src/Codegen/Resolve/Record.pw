@@ -1339,19 +1339,26 @@ pub impl Comp {
     // from the selected declaration rather than a Lower-time name heuristic.
     inout fn recordAccessUse(parentExpr: U64, readExpr: U64, role: U64, argIndex: U64, parameterIndex: U64, modeKnown: Bool, write: Bool) -> Result[(), CompileDiagnostic] {
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
+        val owner = match self.sourceRecordingOwner() {
+            Optional.Some(v: val owner) => owner
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: parentExpr), msg: "internal error: access use has no source owner") /> }
+        }
+        if self.sourceOwnerConstructionClosed(owner: owner) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: parentExpr), msg: "internal error: completed source owner cannot replace access provenance") />
+        }
         val candidateIndex: U64 = self.accessCandidateIndex(readExpr: readExpr)
         if candidateIndex >= self.decls.accessCandidateCount() { return <Result.Ok value=() /> }
         val parent: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: parentExpr))
         mut val i: U64 = 0U64
-        while i < self.decls.accessUses.count() {
-            val prior: AccessUse = self.decls.accessUses[i]
+        while i < self.accessUses.count() {
+            val prior: AccessUse = self.accessUses[i]
             if prior.candidateIndex == candidateIndex && prior.role == role && prior.argIndex == argIndex && self.sameCallSiteKey(a: prior.parent, b: parent) {
-                self.decls.accessUses.set(i: i, value: <AccessUse candidateIndex=candidateIndex accessExpr=readExpr parent=parent role=role argIndex=argIndex parameterIndex=parameterIndex modeKnown=modeKnown write=write />)
+                self.accessUses.set(i: i, value: <AccessUse sourceOwner=owner candidateIndex=candidateIndex accessExpr=readExpr parent=parent role=role argIndex=argIndex parameterIndex=parameterIndex modeKnown=modeKnown write=write />)
                 return <Result.Ok value=() />
             }
             i += 1U64
         }
-        self.decls.accessUses.append(<AccessUse candidateIndex=candidateIndex accessExpr=readExpr parent=parent role=role argIndex=argIndex parameterIndex=parameterIndex modeKnown=modeKnown write=write />)
+        self.accessUses.append(<AccessUse sourceOwner=owner candidateIndex=candidateIndex accessExpr=readExpr parent=parent role=role argIndex=argIndex parameterIndex=parameterIndex modeKnown=modeKnown write=write />)
         return <Result.Ok value=() />
     }
 

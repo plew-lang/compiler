@@ -1,0 +1,24 @@
+use /CheckedProgram only { CompilerSession, CompilerSessionResult }
+use /Frontend only { FrontendInput }
+use /SourceAccess only { SourceAccess }
+use @Std/Io only { print }
+
+fn main() {
+    val source = "trait Index[Key] {{ type Output fn index(key: Key) -> Output }} trait IndexSet[Key] {{ type Value inout fn indexSet(key: Key, value~: Value) }} struct Shelf {{ mut val item: I64 }} impl Shelf as Index[U64] {{ type Output = I64 fn index(key: U64) -> I64 {{ return self.item }} }} impl Shelf as IndexSet[U64] {{ type Value = I64 inout fn indexSet(key: U64, value~: I64) {{ self.item = value }} }} fn touch(item: inout I64) -> I64 {{ return item }} mut val shelf = <Shelf item=1I64 /> val ready = touch(item: inout shelf[0U64]) val warm = initialize() fn initialize() -> I64 {{ mut val local = <Shelf item=2I64 /> return touch(item: inout local[0U64]) }} fn main() {{ mut val local = <Shelf item=2I64 /> val result = touch(item: inout local[0U64]) }}"
+    match CompilerSession.open(input: <FrontendInput.Text path="access-owners.pw" text=source />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            val initializers = session.prepareInitializers().unwrap().unwrap()
+            if initializers.body.executable.canonical.body == 0U64 { panic("missing global Mid") }
+            val repeated = session.prepareInitializers().unwrap().unwrap()
+            if repeated.body.executable.canonical.body != initializers.body.executable.canonical.body { panic("global access rebuilt") }
+            mut val index = 0U64
+            while index < session.registeredBodies().count() {
+                session.prepareMidBody(bodyId: session.registeredBodies()[index]).unwrap()
+                index += 1U64
+            }
+            print("ok")
+        }
+    }
+}

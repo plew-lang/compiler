@@ -369,6 +369,7 @@ pub struct Comp {
     pub mut val globalCallTemplatesClosed: Bool = false
     pub mut val selectedGlobalTargets: Array[U64] = []
     mut val sourceBodySignatures: Array[Optional[SourceBodySignature]] = []
+    mut val accessUses: Array[AccessUse] = []
     mut val globalInitializerPreparations: Dictionary[U64, Result[(), CompileDiagnostic]] = [:]
     pub mut val resolvingGlobalTypes: Array[U64] = []
     // ASan mode (`plewc --asan <file>`): the backend tags the module with the host target

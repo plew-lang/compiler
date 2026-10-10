@@ -4064,8 +4064,8 @@ pub impl Comp {
     inout fn finalizeAccessWriteFacets(parentExpr: U64) -> Result[(), CompileDiagnostic] {
         val parent: CallSiteKey = (try self.currentCallSiteKey(exprId: parentExpr, siteIsStmt: false, slot: 0U64))
         mut val useIndex: U64 = 0U64
-        while useIndex < self.decls.accessUses.count() {
-            val use: AccessUse = self.decls.accessUses[useIndex]
+        while useIndex < self.accessUses.count() {
+            val use: AccessUse = self.accessUses[useIndex]
             if use.write && self.sameCallSiteKey(a: parent, b: use.parent) {
                 if use.candidateIndex < self.decls.accessCandidateCount() {
                     val writeExpr: U64 = self.decls.accessCandidateAt(index: use.candidateIndex).writeExpr
@@ -4496,15 +4496,15 @@ pub impl Comp {
     // Values are evaluated by Mid Build through its ordinary expression
     // lowering. Access only connects that occurrence's saved local to the
     // finalized key/owner type; it does not interpret value-expression syntax.
-    inout fn freezeFinalAccessValue(exprId: U64) -> U64 {
-        if exprId >= self.arena.exprs.count() { return 0U64 }
-        self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=8U64 sourceExpr=exprId typeTerm=self.semanticExprTerm(exprId: exprId) />)
-        return self.arena.semanticAccessInputs.count()
+    inout fn freezeFinalAccessValue(facts: PreparedSemanticFacts, exprId: U64) -> Result[U64, CompileDiagnostic] {
+        if exprId >= self.arena.exprs.count() { return <Result.Ok value=0U64 /> }
+        self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=8U64 sourceExpr=exprId typeTerm=(try self.requiredAccessExpression(facts: facts, exprId: exprId)).term />)
+        return <Result.Ok value=self.arena.semanticAccessInputs.count() />
     }
 
-    inout fn freezeFinalAccessInput(bodyId: U64, parent: CallResolution, exprId: U64) -> Result[U64, CompileDiagnostic] {
+    inout fn freezeFinalAccessInput(bodyId: U64, parent: CallResolution, facts: PreparedSemanticFacts, exprId: U64) -> Result[U64, CompileDiagnostic] {
         if exprId >= self.arena.exprs.count() { return <Result.Ok value=0U64 />}
-        val term: U64 = self.semanticExprTerm(exprId: exprId)
+        val term: U64 = (try self.requiredAccessExpression(facts: facts, exprId: exprId)).term
         // A lowered Index.index call is the value result of the candidate,
         // never a raw place.  Freeze its selected read call and both input
         // recipes here.  The candidate's detached setter is deliberately not
@@ -4518,8 +4518,8 @@ pub impl Comp {
                 if readResolution >= self.arena.finalCalleeCount() { return <Result.Ok value=0U64 />}
                 match self.arena.exprs[candidate.placeExpr] {
                     Expr.Index(base: val baseExpr, index: val keyExpr) => {
-                        val baseInput: U64 = (try self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, exprId: baseExpr))
-                        val keyInput: U64 = self.freezeFinalAccessValue(exprId: keyExpr)
+                        val baseInput: U64 = (try self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, facts: facts, exprId: baseExpr))
+                        val keyInput: U64 = (try self.freezeFinalAccessValue(facts: facts, exprId: keyExpr))
                         if baseInput == 0U64 || keyInput == 0U64 { return <Result.Ok value=0U64 />}
                         self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=6U64 base=baseInput key=keyInput readResolution=readResolution candidateIndex=candidateI typeTerm=term />)
                         return <Result.Ok value=self.arena.semanticAccessInputs.count() />
@@ -4531,7 +4531,7 @@ pub impl Comp {
         }
         match self.arena.exprs[exprId] {
             Expr.ExtView(recv: val base, source: _, strip: _) => {
-                return <Result.Ok value=(try self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, exprId: base)) />
+                return <Result.Ok value=(try self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, facts: facts, exprId: base)) />
             }
             Expr.Ident(start: _, len: _) => {
                 if exprId >= self.typeCache.identTarget.count() { return <Result.Ok value=0U64 />}
@@ -4548,27 +4548,25 @@ pub impl Comp {
                 self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=2U64 integerValue=value integerNegative=isNegative integerBool=isBool typeTerm=term />)
             }
             Expr.Field(base: val base, nameStart: _, nameLen: _) => {
-                if exprId >= self.semanticExprRecords.count() { return <Result.Ok value=0U64 />}
-                val semantic: SemanticExprType = self.semanticExprRecords[exprId].expression
+                val semantic = try self.requiredAccessExpression(facts: facts, exprId: exprId)
                 if !semantic.hasFieldProjection { return <Result.Ok value=0U64 />}
-                val baseInput: U64 = (try self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, exprId: base))
+                val baseInput: U64 = (try self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, facts: facts, exprId: base))
                 if baseInput == 0U64 { return <Result.Ok value=0U64 />}
                 self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=3U64 base=baseInput fieldIndex=semantic.fieldProjectionIndex fieldIsBoxed=semantic.fieldProjectionIsBoxed typeTerm=term />)
             }
             Expr.Deref(base: val base) => {
-                val referenceTerm: U64 = self.semanticExprTerm(exprId: base)
+                val referenceTerm: U64 = (try self.requiredAccessExpression(facts: facts, exprId: base)).term
                 if referenceTerm == 0U64 || !self.isStrongRefInst(ref: referenceTerm) { return <Result.Ok value=0U64 />}
-                val baseInput: U64 = self.freezeFinalAccessValue(exprId: base)
+                val baseInput: U64 = (try self.freezeFinalAccessValue(facts: facts, exprId: base))
                 if baseInput == 0U64 { return <Result.Ok value=0U64 />}
                 self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=7U64 base=baseInput typeTerm=term />)
             }
             Expr.Arrow(base: val base, nameStart: _, nameLen: _) => {
-                if exprId >= self.semanticExprRecords.count() { return <Result.Ok value=0U64 />}
-                val semantic: SemanticExprType = self.semanticExprRecords[exprId].expression
+                val semantic = try self.requiredAccessExpression(facts: facts, exprId: exprId)
                 if !semantic.hasFieldProjection { return <Result.Ok value=0U64 />}
-                val referenceTerm: U64 = self.semanticExprTerm(exprId: base)
+                val referenceTerm: U64 = (try self.requiredAccessExpression(facts: facts, exprId: base)).term
                 if referenceTerm == 0U64 || !self.isStrongRefInst(ref: referenceTerm) { return <Result.Ok value=0U64 />}
-                val baseInput: U64 = self.freezeFinalAccessValue(exprId: base)
+                val baseInput: U64 = (try self.freezeFinalAccessValue(facts: facts, exprId: base))
                 if baseInput == 0U64 { return <Result.Ok value=0U64 />}
                 self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=7U64 base=baseInput typeTerm=self.arena.typeAt(index: referenceTerm).args[0U64] />)
                 val dereference: U64 = self.arena.semanticAccessInputs.count()
@@ -4582,26 +4580,26 @@ pub impl Comp {
     // The parent can consume a selected field of the getter's complete value.
     // Root is represented explicitly so Mid does not need the candidate's
     // read Expr as an ambient convention.
-    inout fn freezeFinalAccessProjection(rootExpr: U64, exprId: U64) -> U64 {
+    inout fn freezeFinalAccessProjection(facts: PreparedSemanticFacts, rootExpr: U64, exprId: U64) -> Result[U64, CompileDiagnostic] {
         if exprId == rootExpr {
-            self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=4U64 typeTerm=self.semanticExprTerm(exprId: rootExpr) />)
-            return self.arena.semanticAccessInputs.count()
+            self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=4U64 typeTerm=(try self.requiredAccessExpression(facts: facts, exprId: rootExpr)).term />)
+            return <Result.Ok value=self.arena.semanticAccessInputs.count() />
         }
-        if exprId >= self.arena.exprs.count() || exprId >= self.semanticExprRecords.count() { return 0U64 }
+        if exprId >= self.arena.exprs.count() { return <Result.Ok value=0U64 /> }
         match self.arena.exprs[exprId] {
             // Views select a callable, but do not add a storage projection.
             Expr.ExtView(recv: val base, source: _, strip: _) => {
-                return self.freezeFinalAccessProjection(rootExpr: rootExpr, exprId: base)
+                return <Result.Ok value=(try self.freezeFinalAccessProjection(facts: facts, rootExpr: rootExpr, exprId: base)) />
             }
             Expr.Field(base: val base, nameStart: _, nameLen: _) => {
-                val semantic: SemanticExprType = self.semanticExprRecords[exprId].expression
-                if !semantic.hasFieldProjection { return 0U64 }
-                val baseInput: U64 = self.freezeFinalAccessProjection(rootExpr: rootExpr, exprId: base)
-                if baseInput == 0U64 { return 0U64 }
+                val semantic = try self.requiredAccessExpression(facts: facts, exprId: exprId)
+                if !semantic.hasFieldProjection { return <Result.Ok value=0U64 /> }
+                val baseInput: U64 = (try self.freezeFinalAccessProjection(facts: facts, rootExpr: rootExpr, exprId: base))
+                if baseInput == 0U64 { return <Result.Ok value=0U64 /> }
                 self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=3U64 base=baseInput fieldIndex=semantic.fieldProjectionIndex fieldIsBoxed=semantic.fieldProjectionIsBoxed typeTerm=semantic.term />)
-                return self.arena.semanticAccessInputs.count()
+                return <Result.Ok value=self.arena.semanticAccessInputs.count() />
             }
-            _ => { return 0U64 }
+            _ => { return <Result.Ok value=0U64 /> }
         }
     }
 
@@ -4623,9 +4621,10 @@ pub impl Comp {
         while parentIndex < self.arena.finalCalleeCount() {
             val parent: CallResolution = self.arena.finalCalleeAt(index: parentIndex)
             mut val useIndex: U64 = 0U64
-            while useIndex < self.decls.accessUses.count() {
-                val use = self.decls.accessUses[useIndex]
+            while useIndex < self.accessUses.count() {
+                val use = self.accessUses[useIndex]
                 if self.sameCallSiteKey(a: parent.siteKey, b: use.parent) {
+                    val facts = try self.preparedAccessUseFacts(use: use, parent: parent)
                     val readResolution: U64 = (try self.finalAccessReadResolution(bodyId: parent.bodyId, candidateIndex: use.candidateIndex, parent: parent))
                     if readResolution >= self.arena.finalCalleeCount() {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: parent.exprId), msg: "internal error: access candidate read has no final CallResolution") />
@@ -4640,10 +4639,10 @@ pub impl Comp {
                         val candidate = self.decls.accessCandidateAt(index: use.candidateIndex)
                         match self.arena.exprs[candidate.placeExpr] {
                             Expr.Index(base: val baseExpr, index: val keyExpr) => {
-                                val baseTerm: U64 = self.semanticExprTerm(exprId: baseExpr)
-                                val keyTerm: U64 = self.semanticExprTerm(exprId: keyExpr)
-                                val valueTerm: U64 = self.semanticExprTerm(exprId: candidate.readExpr)
-                                val accessTerm: U64 = self.semanticExprTerm(exprId: use.accessExpr)
+                                val baseTerm: U64 = (try self.requiredAccessExpression(facts: facts, exprId: baseExpr)).term
+                                val keyTerm: U64 = (try self.requiredAccessExpression(facts: facts, exprId: keyExpr)).term
+                                val valueTerm: U64 = (try self.requiredAccessExpression(facts: facts, exprId: candidate.readExpr)).term
+                                val accessTerm: U64 = (try self.requiredAccessExpression(facts: facts, exprId: use.accessExpr)).term
                                 val nestedCandidate: U64 = self.finalAccessCandidateForExpr(exprId: baseExpr)
                                 // Read-only uses evaluate the getter through the ordinary
                                 // Mid call path. Only get-modify-set needs closed input
@@ -4656,10 +4655,10 @@ pub impl Comp {
                                         self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=4U64 typeTerm=baseTerm />)
                                         baseInput = self.arena.semanticAccessInputs.count()
                                     } else {
-                                        baseInput = (try self.freezeFinalAccessInput(bodyId: parent.bodyId, parent: parent, exprId: baseExpr))
+                                        baseInput = (try self.freezeFinalAccessInput(bodyId: parent.bodyId, parent: parent, facts: facts, exprId: baseExpr))
                                     }
-                                    keyInput = self.freezeFinalAccessValue(exprId: keyExpr)
-                                    accessInput = self.freezeFinalAccessProjection(rootExpr: candidate.readExpr, exprId: use.accessExpr)
+                                    keyInput = (try self.freezeFinalAccessValue(facts: facts, exprId: keyExpr))
+                                    accessInput = (try self.freezeFinalAccessProjection(facts: facts, rootExpr: candidate.readExpr, exprId: use.accessExpr))
                                 }
                                 if use.write && (baseInput == 0U64 || keyInput == 0U64 || accessInput == 0U64) {
                                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: parent.exprId), msg: "internal error: access candidate has no frozen Mid input recipe") />
@@ -6163,5 +6162,36 @@ pub impl Comp {
             }
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: global expression has no initializer owner") /> }
         }
+    }
+}
+
+impl Comp {
+    inout fn requiredAccessExpression(facts: PreparedSemanticFacts, exprId: U64) -> Result[SemanticExprType, CompileDiagnostic] {
+        match facts.expression(exprId: exprId) {
+            Optional.Some(v: val expression) => {
+                match expression.typeState {
+                    SemanticExpressionTypeState.Unrecorded => {}
+                    _ => { return <Result.Ok value=expression /> }
+                }
+            }
+            Optional.None => {}
+        }
+        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: access input has no prepared source expression") />
+    }
+    inout fn preparedAccessUseFacts(use: AccessUse, parent: CallResolution) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
+        if parent.bodyId == 0U64 || parent.bodyId > self.arena.bodyInstanceCount() {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: parent.exprId), msg: "internal error: access use has no executable body") />
+        }
+        val body = self.arena.bodyInstanceAt(index: parent.bodyId - 1U64)
+        val source = try self.semanticBodyOwner(fnIdx: body.fnIdx)
+        val root = self.callTemplateLexicalRoots.getOr(key: source, fallback: source)
+        val matches = match use.sourceOwner {
+            SemanticCompletionOwner.Function(index: val owner) => owner == root && root != 18446744073709551615U64
+            SemanticCompletionOwner.Global(target: _) => root == 18446744073709551615U64
+        }
+        if !matches {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: parent.exprId), msg: "internal error: access use belongs to another source body") />
+        }
+        return self.preparedSemanticFacts(owner: use.sourceOwner)
     }
 }

@@ -3134,6 +3134,7 @@ pub impl AccessCandidate { factory }
 // 2=explicit argument. `write` is decided only when Record has a selected ABI
 // mode; it is never inferred from spelling in Lower.
 pub struct AccessUse {
+    pub val sourceOwner: SemanticCompletionOwner
     pub val candidateIndex: U64
     // The value expression consumed by the parent call. This can be a field
     // projection of the candidate's synthetic Index.index result (for
@@ -3528,7 +3529,6 @@ pub struct Decls {
     mut val accessCandidateRows: Array[AccessCandidate] = []
     mut val accessCandidateByExpr: Array[U64] = []
     mut val placeSourceByExpr: Array[U64] = []
-    pub mut val accessUses: Array[AccessUse] = []
     // Parametric aggregate facts selected by Record. Unlike AST MakeField,
     // these carry physical layout identity and no field/variant spelling.
     pub mut val semanticAggregates: Array[SemanticAggregate] = []
