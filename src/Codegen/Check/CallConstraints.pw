@@ -96,7 +96,17 @@ pub impl Comp {
     fn callTemplateSnapshot() -> Array[CallTemplate] { return self.callTemplates }
     // Construction API; successful source publication removes write authority.
     inout fn replaceBuildingCallTemplate(index: U64, template: CallTemplate) -> Bool {
-        if index >= self.callTemplates.count() || self.preparedCallConstraints(index: index).isSome() { return false }
+        if index >= self.callTemplates.count() { return false }
+        // Construction needs the publication state, not a copied prepared plan.
+        match self.selectedCallConstraints.get(key: index) {
+            Optional.Some(v: val state) => {
+                match state {
+                    CallConstraintPlanState.Prepared(snapshot: _) => { return false }
+                    CallConstraintPlanState.Building(plan: _) => {}
+                }
+            }
+            Optional.None => {}
+        }
         if !self.callTemplates[index].siteKey.sameKey(other: template.siteKey) { return false }
         self.callTemplates.set(i: index, value: template)
         return true
