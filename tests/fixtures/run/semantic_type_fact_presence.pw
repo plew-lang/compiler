@@ -1,59 +1,76 @@
+// Construction-time queries distinguish missing, pending and value facts;
+// callable result producers establish Unit and absence of a normal value.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, TypeRef, SemanticExpressionTypeState }
 use @Std/Io only { print }
-use /Frontend only { Comp }
-use /Ir only { Expr, TypeInfo, TypeRef, SemanticExpressionTypeState }
 
 fn main() {
     mut val compiler = <Comp />
-    compiler.arena.reserveTypeSentinel()
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="fact-probe.pw" text="struct Array[T] {{}} fn probe() {{}}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    compiler.cur.checkFn = 0U64
     val integerName = compiler.internBytes(s: "I64")
     val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen nameId=integerName.nameId args=[] />)
-    val literal = compiler.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=integerName.nameStart tyLen=integerName.nameLen isNeg=false />)
-    compiler.ensureSemanticExprType(exprId: literal)
+    val literal = compiler.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
     if compiler.hasSemanticExprTypeFact(exprId: literal) { panic "allocation is not a type fact" }
-    if !compiler.typeRefEq(a: compiler.inferenceArgumentType(exprId: literal).unwrap(), b: integer) { panic "unrecorded declaration query lost its source type" }
-    compiler.recordSemanticExprInfo(exprId: literal, ti: <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />)
+    compiler.recordExpr(exprId: literal).unwrap()
     if !compiler.hasSemanticExprTypeFact(exprId: literal) { panic "recorded unknown was mistaken for missing" }
-    if compiler.inferenceArgumentType(exprId: literal).unwrap() != 0U64 { panic "recorded unknown was re-inferred from syntax" }
-    compiler.recordInvocationCompletion(exprId: literal, diverging: false)
-    if !compiler.hasSemanticExprTypeFact(exprId: literal) { panic "invocation update erased the type fact" }
-    compiler.recordSemanticExprTerm(exprId: literal, term: integer)
+    match compiler.sourceSemanticExprTypeAt(index: literal).typeState {
+        SemanticExpressionTypeState.Pending => {}
+        _ => { panic "untyped literal is not pending" }
+    }
+    if compiler.inferenceArgumentType(exprId: literal).unwrap() != 0U64 { panic "pending literal acquired an inferred type" }
+    compiler.recordExpr(exprId: literal, expectedTerm: integer).unwrap()
     if !compiler.typeRefEq(a: compiler.inferenceArgumentType(exprId: literal).unwrap(), b: integer) { panic "explicit refinement was not retained" }
-    match compiler.arena.semanticExprTypes[literal].typeState {
+    compiler.recordExpr(exprId: literal).unwrap()
+    match compiler.sourceSemanticExprTypeAt(index: literal).typeState {
         SemanticExpressionTypeState.Value => {}
-        _ => { panic "integer fact has no value state" }
+        _ => { panic "context-free rerecord erased a value fact" }
     }
-    compiler.recordSemanticExprInfo(exprId: literal, ti: <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />)
-    if !compiler.typeRefEq(a: compiler.inferenceArgumentType(exprId: literal).unwrap(), b: integer) { panic "unknown adapter erased a value fact" }
-    match compiler.arena.semanticExprTypes[literal].typeState {
-        SemanticExpressionTypeState.Value => {}
-        _ => { panic "unknown adapter made a value pending" }
-    }
-    val array = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    val typeCount = compiler.arena.typeCount()
+    if !compiler.typeRefEq(a: compiler.semanticExprTerm(exprId: literal), b: integer) || compiler.arena.typeCount() != typeCount { panic "reader materialized or changed a type" }
+    val elements = compiler.pushExprs(exprs: [])
+    val array = compiler.pushExpr(e: <Expr.Array elems=elements />)
+    compiler.recordExpr(exprId: array).unwrap()
+    if compiler.inferenceArgumentType(exprId: array).unwrap() != 0U64 { panic "untyped array acquired an element type" }
     val arrayType = compiler.arrayRefOfElem(elemRef: integer)
-    compiler.recordSemanticExprTerm(exprId: array, term: arrayType)
-    val arrayShape = compiler.arena.semanticExprTypes[array].shape
-    val arrayInfo = compiler.semanticExprTypeInfo(exprId: array)
-    compiler.recordSemanticExprInfo(exprId: array, ti: <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />)
-    if compiler.semanticExprTerm(exprId: array) != arrayType || compiler.arena.semanticExprTypes[array].shape != arrayShape { panic "unknown adapter erased an aggregate fact" }
-    if compiler.semanticExprTypeInfo(exprId: array).kind != arrayInfo.kind { panic "unknown adapter erased an aggregate projection" }
-    for val kind in [1I64, 2I64, 3I64] {
-        compiler.recordSemanticExprInfo(exprId: array, ti: <TypeInfo kind=kind nameStart=0U64 nameLen=0U64 ref=0U64 />)
-        if compiler.semanticExprTerm(exprId: array) != arrayType || compiler.arena.semanticExprTypes[array].shape != arrayShape { panic "pending structural adapter erased a value fact" }
-        if compiler.semanticExprTypeInfo(exprId: array).kind != arrayInfo.kind { panic "pending structural adapter erased the canonical projection" }
+    compiler.recordExpr(exprId: array, expectedTerm: arrayType).unwrap()
+    val arrayShape = compiler.sourceSemanticExprTypeAt(index: array).shape
+    compiler.recordExpr(exprId: array).unwrap()
+    if !compiler.typeRefEq(a: compiler.semanticExprTerm(exprId: array), b: arrayType) || compiler.sourceSemanticExprTypeAt(index: array).shape != arrayShape { panic "context-free rerecord erased an aggregate fact" }
+
+    mut val calls = <Comp />
+    analyzeFrontendForRequests(c: inout calls,
+        input: <FrontendInput.Text path="result-facts.pw" text="fn unit() {{}} diverge fn stop() {{ panic(\"stop\") }} fn probe() {{ val result = unit() stop() }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val unitName = calls.internBytes(s: "unit")
+    val stopName = calls.internBytes(s: "stop")
+    mut val unit = calls.arena.exprs.count()
+    mut val stopped = calls.arena.exprs.count()
+    mut val index = 0U64
+    while index < calls.arena.exprs.count() {
+        match calls.arena.exprs[index] {
+            Expr.Call(val nameStart, val nameLen, args: _) => {
+                if spansEqual(c: inout calls, aStart: nameStart, aLen: nameLen, bStart: unitName.nameStart, bLen: unitName.nameLen) { unit = index }
+                if spansEqual(c: inout calls, aStart: nameStart, aLen: nameLen, bStart: stopName.nameStart, bLen: stopName.nameLen) { stopped = index }
+            }
+            _ => {}
+        }
+        index += 1U64
     }
-    compiler.recordInvocationCompletion(exprId: literal, diverging: true)
-    compiler.recordSemanticExprTerm(exprId: literal, term: integer)
-    match compiler.arena.semanticExprTypes[literal].typeState {
-        SemanticExpressionTypeState.NoNormalValue => {}
-        _ => { panic "diagnostic refinement erased divergence" }
-    }
-    if compiler.inferenceArgumentType(exprId: literal).unwrap() != 0U64 { panic "diagnostic type became an inference value" }
-    val unit = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
-    compiler.recordInvocationCompletion(exprId: unit, diverging: false, returnsUnit: true)
-    compiler.recordSemanticExprInfo(exprId: unit, ti: <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />)
-    match compiler.arena.semanticExprTypes[unit].typeState {
+    if unit >= calls.arena.exprs.count() || stopped >= calls.arena.exprs.count() { panic "missing callable probes" }
+    val owner = calls.arena.firstFunctionNamed(nameId: calls.internBytes(s: "probe").nameId)
+    calls.prepareLexicalBody(fnIdx: owner).unwrap()
+    match calls.sourceSemanticExprTypeAt(index: unit).typeState {
         SemanticExpressionTypeState.Unit => {}
         _ => { panic "selected Unit result became pending" }
     }
+    match calls.sourceSemanticExprTypeAt(index: stopped).typeState {
+        SemanticExpressionTypeState.NoNormalValue => {}
+        _ => { panic "diverging callable acquired a normal value" }
+    }
+    if calls.inferenceArgumentType(exprId: stopped).unwrap() != 0U64 { panic "diagnostic type became an inference value" }
     print("semantic-type-fact-presence")
 }
