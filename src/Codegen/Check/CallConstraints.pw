@@ -1,5 +1,8 @@
-// The store owns the stage transition. CoW snapshots exposed to readers
-// cannot mutate its private rows, and construction cannot replace Prepared.
+// The source owner owns construction authority. Prepared snapshots are only
+// published by its private successful preparation tail, which performs no
+// further fallible work or callbacks before recording the owner's result.
+// A completed owner therefore protects every row without reading/copying its
+// retained constraint evidence merely to decide whether writing is allowed.
 pub impl Comp {
     fn selectedCallConstraintPlan(index: U64) -> Optional[SelectedCallConstraints] {
         return sourceCallConstraintPlan(states: self.selectedCallConstraints, index: index)
@@ -8,15 +11,6 @@ pub impl Comp {
     inout fn recordBuildingCallConstraints(index: U64, plan: SelectedCallConstraints) -> Bool {
         if index >= self.callTemplateSourceOwners.count() { return false }
         if self.sourceOwnerConstructionClosed(owner: self.callTemplateSourceOwners[index]) { return false }
-        match self.selectedCallConstraints.get(key: index) {
-            Optional.Some(v: val state) => {
-                match state {
-                    CallConstraintPlanState.Prepared(snapshot: _) => { return false }
-                    CallConstraintPlanState.Building(plan: _) => {}
-                }
-            }
-            Optional.None => {}
-        }
         self.selectedCallConstraints[index] = <CallConstraintPlanState.Building plan=plan />
         return true
     }
@@ -95,16 +89,6 @@ pub impl Comp {
     inout fn replaceBuildingCallTemplate(index: U64, template: CallTemplate) -> Bool {
         if index >= self.callTemplates.count() || index >= self.callTemplateSourceOwners.count() { return false }
         if self.sourceOwnerConstructionClosed(owner: self.callTemplateSourceOwners[index]) { return false }
-        // Construction needs the publication state, not a copied prepared plan.
-        match self.selectedCallConstraints.get(key: index) {
-            Optional.Some(v: val state) => {
-                match state {
-                    CallConstraintPlanState.Prepared(snapshot: _) => { return false }
-                    CallConstraintPlanState.Building(plan: _) => {}
-                }
-            }
-            Optional.None => {}
-        }
         if !self.callTemplates[index].siteKey.sameKey(other: template.siteKey) { return false }
         self.callTemplates.set(i: index, value: template)
         return true
