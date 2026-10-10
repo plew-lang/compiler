@@ -44,7 +44,18 @@ fn main() {
     if c.cur.checkFn != 70001U64 || c.cur.bodyFnIdx != 70002U64 || c.cur.bodyId != 70003U64 || !c.cur.recordCallTemplates { panic("successful request leaked its cursor") }
     val complete = c.callTemplateCount()
     c.prepareLexicalBody(fnIdx: good).unwrap()
-    if c.callTemplateCount() != complete || c.lexicalBodyPreparations.count() != 2U64 { panic("owner requests were not cached separately") }
+    if c.callTemplateCount() != complete || c.lexicalBodyPreparationCount() != 2U64 { panic("owner requests were not cached separately") }
+
+    // Completed success and failure both close construction authority.
+    for completedOwner in [good, broken] {
+        if c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=completedOwner originSerial=999U64 /> kind=<CallTemplateKind.Pending /> />) {
+            panic("completed owner accepted a new call")
+        }
+        if c.registerCallTemplateLexicalRoot(owner: completedOwner, root: 999999U64) {
+            panic("completed owner changed its membership root")
+        }
+    }
+    if c.callTemplateCount() != complete { panic("refused append changed source membership") }
 
     // A preclosed selection is not proof of constraints. Supply an invalid
     // protocol row for another owner and require its diagnostic on every demand.

@@ -14,3 +14,4 @@ part ./Resolve/Operator
 part ./Resolve/ExprType
 part ./Resolve/MatchBind
 part ./Resolve/Record
+part ./Resolve/Preparation

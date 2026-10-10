@@ -62,14 +62,14 @@ impl Comp {
             try self.checkCallTemplateSelection(templateIndex: index)
             admitted.append((try self.admitSelectedCallConstraints(templateIndex: index)))
             try self.checkClosedIterationProtocol(templateIndex: index)
-            row = self.decls.callTemplateBodyNext[index]
+            row = self.callTemplateBodyNext[index]
         }
         return <Result.Ok value=admitted />
     }
 
     inout fn admitGlobalCallConstraints(target: U64) -> Result[Array[AdmittedCallConstraints], CompileDiagnostic] {
         mut val admitted: Array[AdmittedCallConstraints] = []
-        for index in self.decls.globalCallTemplateOwners.getOr(key: target, fallback: []) {
+        for index in self.globalCallTemplateOwners.getOr(key: target, fallback: []) {
             admitted.append((try self.admitSelectedCallConstraints(templateIndex: index)))
         }
         return <Result.Ok value=admitted />
@@ -126,4 +126,61 @@ pub impl Comp {
 pub impl Comp {
     fn callTemplateOperandCount() -> U64 { return self.callTemplateOperandPool.count() }
     fn callTemplateOperandAt(index: U64) -> CallArgumentSource { return self.callTemplateOperandPool[index] }
+}
+
+pub impl Comp {
+    fn nextLexicalCallTemplate(index: U64) -> U64 { return self.callTemplateBodyNext[index] }
+    fn globalCallTemplates(target: U64) -> Array[U64] { return self.globalCallTemplateOwners.getOr(key: target, fallback: []) }
+    // A closure/provided owner receives one immutable lexical root identity.
+    inout fn registerCallTemplateLexicalRoot(owner: U64, root: U64) -> Bool {
+        match self.callTemplateLexicalRoots.get(key: owner) {
+            Optional.Some(v: val saved) => { return saved == root }
+            Optional.None => {}
+        }
+        if self.lexicalBodyPreparations.get(key: owner).isSome() || self.callTemplateBodyHeads.getOr(key: owner, fallback: 0U64) != 0U64 { return false }
+        self.callTemplateLexicalRoots[owner] = root
+        return true
+    }
+}
+
+pub impl Comp {
+    fn lexicalBodyPreparationCount() -> U64 { return self.lexicalBodyPreparations.count() }
+}
+
+impl Comp {
+    inout fn appendSourceCallTemplate(template: CallTemplate, resultExpression: Optional[U64] = <Optional.None />) {
+        if !self.appendCallTemplate(template: template, resultExpression: resultExpression) {
+            panic("internal error: cannot append to a completed source call owner")
+        }
+    }
+}
+
+impl Comp {
+    inout fn recordGlobalCallTemplateOwner(templateIndex: U64) {
+        if self.callTemplates[templateIndex].siteKey.ownerFnIdx != 18446744073709551615U64 { return }
+        match self.cur.globalInitializerTarget {
+            Optional.Some(v: val target) => {
+                mut val indices = self.globalCallTemplateOwners.getOr(key: target, fallback: [])
+                mut val present = false
+                for index in indices { if index == templateIndex { present = true } }
+                if !present { indices.append(templateIndex) }
+                self.globalCallTemplateOwners[target] = indices
+            }
+            Optional.None => {}
+        }
+    }
+
+    inout fn indexLexicalCallTemplate(templateIndex: U64) {
+        val owner = self.callTemplates[templateIndex].siteKey.ownerFnIdx
+        val root = self.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
+        val tail = self.callTemplateBodyTails.getOr(key: root, fallback: 0U64)
+        self.callTemplateBodyNext.append(0U64)
+        if tail == 0U64 {
+            self.callTemplateBodyHeads[root] = templateIndex + 1U64
+        } else {
+            self.callTemplateBodyNext.set(i: tail - 1U64, value: templateIndex + 1U64)
+        }
+        self.callTemplateBodyTails[root] = templateIndex + 1U64
+    }
+
 }

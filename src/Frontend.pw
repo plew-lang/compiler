@@ -115,6 +115,8 @@ pub impl LexicalBodyPreparations {
         if key >= self.outcomes.count() { return <Optional.None /> }
         return self.outcomes[key]
     }
+}
+impl LexicalBodyPreparations {
     inout fn record(owner: U64, result: Result[(), CompileDiagnostic]) {
         while self.outcomes.count() <= owner { self.outcomes.append(<Optional.None />) }
         match self.outcomes[owner] {
@@ -234,6 +236,11 @@ enum CallConstraintPlanState {
 }
 
 pub struct Comp {
+    mut val globalCallTemplateOwners: Dictionary[U64, Array[U64]] = [:]
+    mut val callTemplateLexicalRoots: Dictionary[U64, U64] = [:]
+    mut val callTemplateBodyHeads: Dictionary[U64, U64] = [:]
+    mut val callTemplateBodyTails: Dictionary[U64, U64] = [:]
+    mut val callTemplateBodyNext: Array[U64] = []
     mut val callTemplateArgumentPool: Array[CallTemplateArgument] = []
     mut val callTemplateTypeArgumentPool: Array[U64] = []
     mut val callTemplateOperandPool: Array[CallArgumentSource] = []
@@ -339,7 +346,7 @@ pub struct Comp {
     pub mut val closedCallTemplateBodies: Array[Bool] = []
     // Session-local outcomes of lexical preparation, not whole-body ownership
     // or effect proofs. Failure must remain failure even after template closure.
-    pub mut val lexicalBodyPreparations: LexicalBodyPreparations = <LexicalBodyPreparations />
+    mut val lexicalBodyPreparations: LexicalBodyPreparations = <LexicalBodyPreparations />
     mut val sourceTypingObligations: SourceTypingObligations = <SourceTypingObligations />
     // Lowering assigns authored type uses to their declaration, expression or
     // block. Record requests local uses; declaration loading checks only the
@@ -355,7 +362,7 @@ pub struct Comp {
     pub mut val sourceExpressionLimit: U64 = 0U64
     pub mut val globalCallTemplatesClosed: Bool = false
     pub mut val selectedGlobalTargets: Array[U64] = []
-    pub mut val preparedGlobalTargets: Array[U64] = []
+    mut val preparedGlobalTargets: Array[U64] = []
     pub mut val resolvingGlobalTypes: Array[U64] = []
     // ASan mode (`plewc --asan <file>`): the backend tags the module with the host target
     // triple and marks every DEFINED function `sanitize_address`, so a downstream

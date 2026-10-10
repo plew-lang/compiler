@@ -27,7 +27,7 @@ fn main() {
     val conflict = owner(c: inout c, name: "conflict")
     val closure = owner(c: inout c, name: "closure")
     val checked = requests.function(c: inout c, templates: inout templates, function: good).unwrap()
-    if c.lexicalBodyPreparations.count() != 1U64 || checked.canonical.body == 0U64 { panic "unrelated body requested" }
+    if c.lexicalBodyPreparationCount() != 1U64 || checked.canonical.body == 0U64 { panic "unrelated body requested" }
     val bodies = c.mid.bodies.count()
     val repeated = requests.function(c: inout c, templates: inout templates, function: good).unwrap()
     if repeated.canonical.body != checked.canonical.body || c.mid.bodies.count() != bodies { panic "request rebuilt its body" }
@@ -49,7 +49,7 @@ fn main() {
         }
         iteration += 1U64
     }
-    if c.lexicalBodyPreparations.count() != 3U64 { panic "request inspected unused callee or broken body" }
+    if c.lexicalBodyPreparationCount() != 3U64 { panic "request inspected unused callee or broken body" }
     if c.monoWork.bodyCount() != 0U64 || c.arena.finalDestructions.count() != 0U64 { panic "declaration request discovered executable code" }
     print("ok")
 }

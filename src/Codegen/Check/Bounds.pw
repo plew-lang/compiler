@@ -25,7 +25,7 @@ pub impl Comp {
         // A closure owns its call/body identity, but its generic assumptions
         // are declared by its lexical function. This mapping is published
         // before recording the closure body and preserves ParamId identity.
-        val owner = self.decls.callTemplateLexicalRoots.getOr(key: fnIdx, fallback: fnIdx)
+        val owner = self.callTemplateLexicalRoots.getOr(key: fnIdx, fallback: fnIdx)
         mut val result: Array[DeclarationBoundRef] = []
         for index in self.decls.funcBounds.indices(owner: owner) {
             result.append(<DeclarationBoundRef.Function index=index />)
@@ -1852,7 +1852,7 @@ pub impl Comp {
             val index = row - 1U64
             try self.checkRecordedCallTemplateBound(templateIndex: index)
             try self.checkClosedIterationProtocol(templateIndex: index)
-            row = self.decls.callTemplateBodyNext[index]
+            row = self.callTemplateBodyNext[index]
         }
         return <Result.Ok value=() />
     }

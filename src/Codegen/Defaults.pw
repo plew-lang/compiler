@@ -33,7 +33,7 @@ pub impl Comp {
             val index = row - 1U64
             val template = self.callTemplates[index]
             if !(try self.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm)) { incomplete += 1U64 }
-            row = self.decls.callTemplateBodyNext[index]
+            row = self.callTemplateBodyNext[index]
         }
         return <Result.Ok value=incomplete />
     }

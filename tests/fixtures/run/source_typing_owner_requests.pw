@@ -34,9 +34,9 @@ fn main() {
     expectTypeFailure(result: compiler.prepareLexicalBody(fnIdx: broken))
     expectTypeFailure(result: compiler.prepareLexicalBody(fnIdx: broken))
     if compiler.cur.checkFn != 70001U64 || compiler.cur.bodyId != 70002U64 { panic("failed owner leaked cursor") }
-    if compiler.lexicalBodyPreparations.count() != 1U64 { panic("retry duplicated owner") }
+    if compiler.lexicalBodyPreparationCount() != 1U64 { panic("retry duplicated owner") }
     compiler.prepareLexicalBody(fnIdx: good).unwrap()
-    print(compiler.lexicalBodyPreparations.count())
+    print(compiler.lexicalBodyPreparationCount())
     // Deferring contextual typing records an obligation, not a checked flow.
     mut val deferred = <Comp />
     analyzeFrontendDeclarations(c: inout deferred,
@@ -60,7 +60,7 @@ fn main() {
         Optional.None => {}
     }
     expectTypeFailure(result: deferred.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Function index=pending />))
-    print(deferred.lexicalBodyPreparations.count())
+    print(deferred.lexicalBodyPreparationCount())
     mut val globals = <Comp />
     analyzeFrontendForRequests(c: inout globals,
         input: <FrontendInput.Text path="global-type-owner.pw" text="val broken = [] val good: I64 = 2I64 fn main() {{}}" />,
