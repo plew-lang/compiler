@@ -799,8 +799,8 @@ pub impl Comp {
     inout fn checkRecordedDirectCallArguments(exprId: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
         val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: site)
-        if index >= self.callTemplateCount() { return <Result.Ok value=() /> }
-        val template = self.callTemplateAt(index: index)
+        if index >= self.callTemplates.count() { return <Result.Ok value=() /> }
+        val template = self.callTemplates[index]
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: _, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
                 if callee >= self.arena.functionCount() { return <Result.Ok value=() /> }
