@@ -1,0 +1,5 @@
+use /Ir only { Arena }
+fn main() {
+    val arena: Arena = <Arena />
+    val rows = arena.conformanceSupertraitProofs
+}

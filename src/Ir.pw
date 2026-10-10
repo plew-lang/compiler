@@ -15,6 +15,7 @@ part ./Ir/Types
 part ./Ir/Conformances
 part ./Ir/DeclarationNames
 part ./Ir/InstanceConstraints
+part ./Ir/ConformanceSupertraits
 part ./Ir/BodyInstances
 part ./Ir/MonoWork
 
@@ -2843,6 +2844,8 @@ pub struct Arena {
     // proof values with owning Array payloads.
     pub mut val witnessConditionPlans: Array[WitnessConditionPlan] = []
     mut val callableConstraintBindings: Array[CallableConstraintBindings] = []
+    mut val conformanceSupertraitHeads: Dictionary[U64, U64] = [:]
+    mut val conformanceSupertraitProofs: Array[Array[U64]] = []
     mut val staticProofs: Array[StaticProofNode]
     mut val staticProofWitnessBindPool: Array[WitnessBind] = []
     mut val staticProofU64Pool: Array[U64] = []

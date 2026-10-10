@@ -1,0 +1,17 @@
+use @Std/Io only { print }
+trait Parent[Argument] {}
+trait Middle[Argument]: Parent[Argument] {}
+trait Child[Argument]: Middle[Argument] {}
+struct Box[Value] {}
+pub impl[Value] Box[Value] { factory }
+impl[Value] Box[Value] as Parent[Value] {}
+impl[Value] Box[Value] as Middle[Value] {}
+impl[Value] Box[Value] as Child[Value] where Box[Value]: Middle[Value] {}
+fn accept[Value, Argument](value: Value, argument: Argument) where Value: Parent[Argument] {}
+fn forward[Value, Argument](value: Value, argument: Argument) where Value: Child[Argument] {
+    accept(value: value, argument: argument)
+}
+fn main() {
+    forward(value: <Box[I64] />, argument: 1I64)
+    print("retained-supertraits")
+}

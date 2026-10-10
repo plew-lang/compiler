@@ -667,6 +667,32 @@ pub impl Comp {
         return <Result.Ok value=<StaticProofInstantiation.Ready proof=proof /> />
     }
 
+    inout fn groundSelectedTraitPath(rootState: StaticProofInstantiation, edges: Array[WitnessMatch], receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+        mut val root = <StaticConformanceProof.Missing />
+        match rootState {
+            StaticProofInstantiation.Missing => { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
+            StaticProofInstantiation.Deferred => { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+            StaticProofInstantiation.Ready(proof: val proof) => { root = proof }
+        }
+        mut val grounded: Array[WitnessMatch] = []
+        match root {
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => { grounded.append(witness) }
+            StaticConformanceProof.TraitPath(edges: val prefix, terminalConformIdx: _) => { grounded = prefix }
+            _ => { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
+        }
+        for val edge in edges {
+            match (try self.groundSelectedWitness(witness: edge, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
+                SelectedWitnessInstantiation.Deferred => { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+                SelectedWitnessInstantiation.Ready(witness: val witness) => {
+                    if !self.selectedWitnessTypesAreClosed(witness: witness) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+                    grounded.append(witness)
+                }
+            }
+        }
+        if grounded.count() == 0U64 { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
+        return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.TraitPath edges=grounded terminalConformIdx=grounded[grounded.count() - 1U64].conformIdx /> /> />
+    }
+
     inout fn instantiateStaticMemberProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         if receiverRef == 0U64 || !self.arena.typeIsClosed(ref: receiverRef) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
         match proof {
@@ -694,29 +720,7 @@ pub impl Comp {
             }
             StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
                 val rootState = try self.instantiateBoundProof(bound: self.assumedSupertraitBound(source: source, steps: steps), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
-                mut val root = <StaticConformanceProof.Missing />
-                match rootState {
-                    StaticProofInstantiation.Missing => { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
-                    StaticProofInstantiation.Deferred => { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
-                    StaticProofInstantiation.Ready(proof: val proof) => { root = proof }
-                }
-                mut val grounded: Array[WitnessMatch] = []
-                match root {
-                    StaticConformanceProof.ConcreteWitness(witness: val witness) => { grounded.append(witness) }
-                    StaticConformanceProof.TraitPath(edges: val prefix, terminalConformIdx: _) => { grounded = prefix }
-                    _ => { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
-                }
-                for val edge in edges {
-                    match (try self.groundSelectedWitness(witness: edge, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
-                        SelectedWitnessInstantiation.Deferred => { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
-                        SelectedWitnessInstantiation.Ready(witness: val witness) => {
-                            if !self.selectedWitnessTypesAreClosed(witness: witness) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
-                            grounded.append(witness)
-                        }
-                    }
-                }
-                if grounded.count() == 0U64 { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
-                return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.TraitPath edges=grounded terminalConformIdx=grounded[grounded.count() - 1U64].conformIdx /> /> />
+                return self.groundSelectedTraitPath(rootState: rootState, edges: edges, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
             }
             StaticConformanceProof.Missing => { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
             StaticConformanceProof.AssumedBound(source: val source) => {
@@ -3726,7 +3730,82 @@ pub impl Comp {
     // recovery, and LLVM emission).
     // A forwarded function-bound obligation consumes its caller's admitted
     // substitution. This is presence evidence, not member uniqueness evidence.
+    fn selectedConstraintWitness(proof: StaticConformanceProof) -> Optional[WitnessMatch] {
+        match proof {
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => { return <Optional.Some v=witness /> }
+            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
+                if edges.count() != 0U64 { return <Optional.Some v=edges[edges.count() - 1U64] /> }
+            }
+            _ => {}
+        }
+        return <Optional.None />
+    }
+
+    inout fn selectedConstraintEnvironment(witness: WitnessMatch) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "constraint has no selected conformance") /> }
+        val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
+        mut val params: Array[Bind] = []
+        mut val values: Array[U64] = []
+        mut val index = 0U64
+        while index < declaration.typeParams.len {
+            val parameter = self.conformBindAt(binds: declaration.typeParams, index: index)
+            val binding = self.witnessBindIndex(binds: witness.binds, binder: index)
+            if binding >= witness.binds.count() || witness.binds[binding].paramId != parameter.paramId { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint has an unbound implementation parameter") /> }
+            params.append(parameter)
+            values.append(witness.binds[binding].term)
+            index += 1U64
+        }
+        return <Result.Ok value=<InstanceEnvironment params=params args=values receiverRef=witness.selfRef proof=<StaticConformanceProof.ConcreteWitness witness=witness /> /> />
+    }
+
+    inout fn retainedConformanceConstraint(declared: U64, environment: InstanceEnvironment) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+        val witness = match self.selectedConstraintWitness(proof: environment.proof) {
+            Optional.Some(v: val witness) => { give witness }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "conformance constraint has no retained witness environment") /> }
+        }
+        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "conformance constraint has an invalid owner") /> }
+        val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
+        if declared < declaration.bounds.start || declared - declaration.bounds.start >= declaration.bounds.len { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "conformance constraint belongs to another declaration") /> }
+        if witness.conditions == 0U64 || witness.conditions > self.arena.witnessConditionPlans.count() { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "conformance constraint has no retained condition plan") /> }
+        val plan = self.arena.witnessConditionPlans[witness.conditions - 1U64]
+        if !self.sameWitnessSubstitution(a: witness, b: plan.witness) || plan.proofs.count() != declaration.bounds.len { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "conformance constraint has a different substitution") /> }
+        val proof = plan.proofs[declared - declaration.bounds.start]
+        if !self.arena.hasStaticConformanceProof(id: proof) { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "conformance constraint has no retained child evidence") /> }
+        return <Result.Ok value=<StaticProofInstantiation.Ready proof=self.thawStaticConformanceProof(id: proof) /> />
+    }
+
+    // Follow authored supertrait edges from the retained root witness. No
+    // trait candidate query is permitted while consuming these selections.
+    inout fn instantiateSupertraitConstraint(source: DeclarationBoundRef, steps: Array[SupertraitRef], receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+        val root = try self.instantiateConstraintProof(proof: <StaticConformanceProof.AssumedBound source=source />, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        mut val current = match root {
+            StaticProofInstantiation.Ready(proof: val proof) => { give proof }
+            _ => { return <Result.Ok value=root /> }
+        }
+        for step in steps {
+            val witness = match self.selectedConstraintWitness(proof: current) {
+                Optional.Some(v: val witness) => { give witness }
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "supertrait root has no retained concrete witness") /> }
+            }
+            if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "supertrait root has an invalid conformance") /> }
+            val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
+            if self.resolveTraitDef(cf: declaration) != step.traitIndex { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "supertrait edge belongs to another trait") /> }
+            val saved = match self.arena.conformanceSupertraitProof(conformance: witness.conformIdx - 1U64, clause: step.boundIndex) {
+                Optional.Some(v: val proof) => { give proof }
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "supertrait edge has no retained declaration evidence") /> }
+            }
+            val selectedEnvironment = try self.selectedConstraintEnvironment(witness: witness)
+            val state = try self.instantiateConstraintProof(proof: self.thawStaticConformanceProof(id: saved), receiverRef: receiverRef, environment: selectedEnvironment, selfRef: witness.selfRef, itemRef: 0U64)
+            match state {
+                StaticProofInstantiation.Ready(proof: val proof) => { current = proof }
+                _ => { return <Result.Ok value=state /> }
+            }
+        }
+        return <Result.Ok value=<StaticProofInstantiation.Ready proof=current /> />
+    }
+
     inout fn instantiateConstraintProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+        if receiverRef == 0U64 || !self.arena.typeIsClosed(ref: receiverRef) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
         match proof {
             StaticConformanceProof.AssumedBound(source: val source) => {
                 match source {
@@ -3745,8 +3824,16 @@ pub impl Comp {
                         }
                         return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has no retained declaration binding") />
                     }
+                    DeclarationBoundRef.Conformance(index: val declared) => { return self.retainedConformanceConstraint(declared: declared, environment: environment) }
                     _ => {}
                 }
+            }
+            StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
+                val rootState = try self.instantiateSupertraitConstraint(source: source, steps: steps, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                return self.groundSelectedTraitPath(rootState: rootState, edges: edges, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+            }
+            StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => {
+                return self.instantiateSupertraitConstraint(source: source, steps: steps, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
             }
             _ => {}
         }
@@ -3754,6 +3841,10 @@ pub impl Comp {
     }
 
     inout fn instantiateDirectCallConstraints(template: CallTemplate) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
+        return self.instantiateSelectedCallConstraints(template: template, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+    }
+
+    inout fn instantiateSelectedCallConstraints(template: CallTemplate, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
         val index = self.decls.callTemplateIndex(siteKey: template.siteKey)
         if index >= self.decls.callTemplates.count() {
             return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has no source constraint owner") />
@@ -3768,15 +3859,15 @@ pub impl Comp {
                 mut val position = 0U64
                 while position < plan.bounds.count() {
                     val source = plan.bounds[position]
-                    val subject = try self.groundTermForBody(ref: source.subject, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                    val subject = try self.groundTermForBody(ref: source.subject, environment: environment, selfRef: selfRef, itemRef: itemRef)
                     val proof = self.thawStaticConformanceProof(id: plan.proofs[position])
-                    val state = try self.instantiateConstraintProof(proof: proof, receiverRef: subject, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                    val state = try self.instantiateConstraintProof(proof: proof, receiverRef: subject, environment: environment, selfRef: selfRef, itemRef: itemRef)
                     match state {
                         StaticProofInstantiation.Ready(proof: val concrete) => {
                             // Preserve the selected obligation, including its
                             // associated predicates and view boundary. The proof
                             // satisfies that obligation; it does not redefine it.
-                            bounds.append((try self.groundCallableBound(bound: source, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)))
+                            bounds.append((try self.groundCallableBound(bound: source, environment: environment, selfRef: selfRef, itemRef: itemRef)))
                             proofs.append(concrete)
                         }
                         _ => { return <Result.Err error=self.diagnosticAt(offset: source.offset, msg: "executable call retains an unresolved conformance obligation") /> }

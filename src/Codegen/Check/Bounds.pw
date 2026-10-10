@@ -1364,11 +1364,33 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Retain the declaration's chosen parent evidence, including its impl
+    // assumptions. Instantiation follows this edge rather than searching anew.
+    inout fn prepareConformanceSupertraits(conformIndex: U64, traitIndex: U64) -> Result[(), CompileDiagnostic] {
+        if self.arena.hasConformanceSupertraits(conformance: conformIndex) { return <Result.Ok value=() /> }
+        val conformance = self.decls.conformAt(index: conformIndex)
+        val traitDef = self.decls.traitAt(index: traitIndex)
+        mut val proofs: Array[U64] = []
+        mut val clause = 0U64
+        while clause < traitDef.supertraits.count() {
+            val required = self.traitConstraintAt(constraints: traitDef.supertraits, index: clause)
+            val constraint = self.traitConstraintInBound(constraint: required, bound: self.conformanceTraitBound(conformance: conformance), traitIndex: traitIndex)
+            val proof = try self.viewedTraitConstraintProof(ref: conformance.subjectTy, constraint: constraint, assumptions: self.conformanceDeclarationAssumptions(conformIndex: conformIndex))
+            if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: conformance.typeStart, msg: "supertrait not satisfied: this type must also conform to the trait's supertrait") /> }
+            proofs.append(self.freezeStaticConformanceProof(proof: proof))
+            clause += 1U64
+        }
+        if !self.arena.publishConformanceSupertraits(conformance: conformIndex, proofs: proofs) { return <Result.Err error=self.diagnosticAt(offset: conformance.typeStart, msg: "conformance supertrait evidence could not be published") /> }
+        return <Result.Ok value=() />
+    }
+
     inout fn checkConformances() -> Result[(), CompileDiagnostic] {
         mut val ci: U64 = 0
         while ci < self.decls.conformCount() {
             val cf: Conform = self.decls.conformAt(index: ci)
             if cf.derived {
+                val derivedTrait = self.resolveTraitDef(cf: cf)
+                if derivedTrait < self.decls.traitCount() { try self.prepareConformanceSupertraits(conformIndex: ci, traitIndex: derivedTrait) }
                 // compiler-synthesized (`@[Eq]`/`@[Ord]`): trivially complete, and its
                 // trait is compiler-known — exempt from unknown-trait/completeness.
                 ci += 1
@@ -1384,17 +1406,7 @@ pub impl Comp {
                 }
                 try self.checkConformanceMethodBounds(conformIndex: ci, traitIndex: ti)
                 try self.checkAssociatedBounds(conformance: cf, traitIndex: ti, assumptions: self.conformanceDeclarationAssumptions(conformIndex: ci))
-                // supertraits (spec/08): conforming to Sub requires conforming to
-                // each Super (a constraint, not auto-implemented).
-                mut val sti: U64 = 0
-                while sti < t.supertraits.count() {
-                    val required = self.traitConstraintAt(constraints: t.supertraits, index: sti)
-                    val constraint = self.traitConstraintInBound(constraint: required, bound: self.conformanceTraitBound(conformance: cf), traitIndex: ti)
-                    if !(try self.viewedTypeConformsTraitConstraint(ref: cf.subjectTy, constraint: constraint, assumptions: self.conformanceDeclarationAssumptions(conformIndex: ci))) {
-                        return <Result.Err error=self.diagnosticAt(offset: cf.typeStart, msg: "supertrait not satisfied: this type must also conform to the trait's supertrait") />
-                    }
-                    sti += 1
-                }
+                try self.prepareConformanceSupertraits(conformIndex: ci, traitIndex: ti)
             } else {
                 return <Result.Err error=self.diagnosticAt(offset: cf.traitStart, msg: "conformance to an unknown trait (is it declared / imported?)") />
             }

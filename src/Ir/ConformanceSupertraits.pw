@@ -1,0 +1,21 @@
+// Declaration-owned evidence is published once; readers cannot replace it.
+pub impl Arena {
+    fn hasConformanceSupertraits(conformance: U64) -> Bool {
+        return self.conformanceSupertraitHeads.getOr(key: conformance, fallback: 0U64) != 0U64
+    }
+    inout fn publishConformanceSupertraits(conformance: U64, proofs: Array[U64]) -> Bool {
+        if self.hasConformanceSupertraits(conformance: conformance) { return false }
+        for proof in proofs {
+            if !self.hasStaticConformanceProof(id: proof) { return false }
+        }
+        self.conformanceSupertraitProofs.append(proofs)
+        self.conformanceSupertraitHeads[conformance] = self.conformanceSupertraitProofs.count()
+        return true
+    }
+    fn conformanceSupertraitProof(conformance: U64, clause: U64) -> Optional[U64] {
+        val row = self.conformanceSupertraitHeads.getOr(key: conformance, fallback: 0U64)
+        if row == 0U64 { return <Optional.None /> }
+        if clause >= self.conformanceSupertraitProofs[row - 1U64].count() { return <Optional.None /> }
+        return <Optional.Some v=self.conformanceSupertraitProofs[row - 1U64][clause] />
+    }
+}
