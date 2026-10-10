@@ -965,8 +965,8 @@ pub impl Comp {
         val owner = if root != 18446744073709551615U64 {
             give <SemanticCompletionOwner.Function index=root />
         } else {
-            match self.cur.globalInitializerTarget {
-                Optional.Some(v: val target) => { give <SemanticCompletionOwner.Global target=target /> }
+            give match self.cur.globalInitializerTarget {
+                Optional.Some(v: val target) => <SemanticCompletionOwner.Global target=target />
                 Optional.None => { return false }
             }
         }
