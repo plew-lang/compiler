@@ -2376,11 +2376,17 @@ pub impl Comp {
         return self.preparedSemanticFacts(owner: <SemanticCompletionOwner.Function index=(try self.semanticBodyOwner(fnIdx: fnIdx)) />)
     }
     inout fn preparedFunctionBodySignature(fnIdx: U64) -> Result[SourceBodySignature, CompileDiagnostic] {
-        val facts = try self.preparedFunctionSemanticFacts(fnIdx: fnIdx)
-        match facts.functionSignature() {
-            Optional.Some(v: val signature) => { return <Result.Ok value=signature /> }
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: source body signature requires a prepared lexical body") /> }
+        val owner = try self.semanticBodyOwner(fnIdx: fnIdx)
+        if !(try self.semanticCompletionOwnerPrepared(owner: <SemanticCompletionOwner.Function index=owner />)) {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: semantic facts require a prepared source owner") />
         }
+        if owner < self.sourceBodySignatures.count() {
+            match self.sourceBodySignatures[owner] {
+                Optional.Some(v: val signature) => { return <Result.Ok value=signature /> }
+                Optional.None => {}
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: source body signature requires a prepared lexical body") />
     }
     inout fn preparedGlobalSemanticFacts(target: U64) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
         return self.preparedSemanticFacts(owner: <SemanticCompletionOwner.Global target=target />)
