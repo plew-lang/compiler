@@ -238,6 +238,7 @@ enum CallConstraintPlanState {
 pub struct Comp {
     mut val semanticClosures: Array[SemanticClosure] = []
     mut val semanticExprRecords: Array[SourceSemanticExpressionRecord] = []
+    mut val semanticBindings: Array[Optional[SourceBindingFact]] = []
     mut val semanticStatementCompletions: Array[Optional[SemanticExpressionCompletion]] = []
     mut val semanticClosureOwners: Array[SemanticCompletionOwner] = []
     mut val semanticClosureIndexSlots: Array[U64] = []
@@ -2308,14 +2309,36 @@ pub struct SourceBodySignature {
 }
 impl SourceBodySignature { factory }
 
+// One lexical binding decision, published with its successful source owner.
+pub struct SourceBindingFact {
+    val owner: SemanticCompletionOwner
+    pub val typeTerm: U64
+    pub val endedBinding: U64
+}
+impl SourceBindingFact { factory }
+
 pub struct PreparedSemanticFacts {
     val owner: SemanticCompletionOwner
     val expressions: Array[SourceSemanticExpressionRecord]
+    val bindings: Array[Optional[SourceBindingFact]]
     val statements: Array[Optional[SemanticExpressionCompletion]]
     val signature: Optional[SourceBodySignature]
 }
 impl PreparedSemanticFacts { factory }
 pub impl PreparedSemanticFacts {
+    fn binding(stmtId: U64) -> Optional[SourceBindingFact] {
+        if stmtId < self.bindings.count() {
+            match self.bindings[stmtId] {
+                Optional.Some(v: val fact) => {
+                    if semanticCompletionOwnersEqual(recorded: fact.owner, prepared: self.owner) {
+                        return <Optional.Some v=fact />
+                    }
+                }
+                Optional.None => {}
+            }
+        }
+        return <Optional.None />
+    }
     fn functionSignature() -> Optional[SourceBodySignature] { return self.signature }
     fn statementCompletion(stmtId: U64) -> Optional[SourceCompletion] {
         if stmtId < self.statements.count() {
@@ -2371,7 +2394,7 @@ pub impl Comp {
             }
             SemanticCompletionOwner.Global(target: _) => {}
         }
-        return <Result.Ok value=<PreparedSemanticFacts owner=owner expressions=self.semanticExprRecords statements=self.semanticStatementCompletions signature=signature /> />
+        return <Result.Ok value=<PreparedSemanticFacts owner=owner expressions=self.semanticExprRecords bindings=self.semanticBindings statements=self.semanticStatementCompletions signature=signature /> />
     }
     inout fn preparedFunctionSemanticFacts(fnIdx: U64) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
         return self.preparedSemanticFacts(owner: <SemanticCompletionOwner.Function index=(try self.semanticBodyOwner(fnIdx: fnIdx)) />)
@@ -2455,6 +2478,21 @@ impl Comp {
             Optional.Some(v: val fact) => { return self.sourceOwnerConstructionClosed(owner: fact.owner) }
             Optional.None => { return false }
         }
+    }
+    inout fn storeBuildingSemanticBinding(stmtId: U64, typeTerm: U64, endedBinding: U64) {
+        val owner = match self.sourceRecordingOwner() {
+            Optional.Some(v: val owner) => { give owner }
+            Optional.None => { return }
+        }
+        if self.sourceOwnerConstructionClosed(owner: owner) { panic("internal error: completed source owner cannot replace a binding fact") }
+        while self.semanticBindings.count() <= stmtId { self.semanticBindings.append(<Optional.None />) }
+        match self.semanticBindings[stmtId] {
+            Optional.Some(v: val prior) => {
+                if !semanticCompletionOwnersEqual(recorded: prior.owner, prepared: owner) { panic("internal error: binding fact changed its source owner") }
+            }
+            Optional.None => {}
+        }
+        self.semanticBindings.set(i: stmtId, value: <Optional.Some v=<SourceBindingFact owner=owner typeTerm=typeTerm endedBinding=endedBinding /> />)
     }
     inout fn storeBuildingSemanticStmtCompletion(stmtId: U64, fact: SemanticExpressionCompletion) {
         if self.semanticStmtConstructionClosed(stmtId: stmtId) { panic("internal error: completed source owner cannot replace a statement fact") }

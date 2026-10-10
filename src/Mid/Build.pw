@@ -2400,7 +2400,15 @@ pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64, compl
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.Let(mutable: val mutable, nameStart: val nameStart, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => {
-            val term = c.decls.semanticLetTerms.getOr(key: stmtId, fallback: 0U64)
+            val facts = match state.sourceFacts {
+                Optional.Some(v: val facts) => { give facts }
+                Optional.None => { return <MidBuildError.MissingSemanticType /> }
+            }
+            val binding = match facts.binding(stmtId: stmtId) {
+                Optional.Some(v: val binding) => { give binding }
+                Optional.None => { return <MidBuildError.MissingSemanticType /> }
+            }
+            val term = binding.typeTerm
             val isUnique = c.arena.typeTermIsUnique(ref: term)
             // A binding is created only if its initializer produces a value.
             // Keep known destinations in the lexical scope, but require their
@@ -2434,7 +2442,7 @@ pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64, compl
             if term == 0U64 { return <MidBuildError.MissingSemanticType /> }
             midInitializeBinding(state: inout state, destination: destination, value: <MidRvalue.StorageBoundary stmtId=stmtId targetTerm=term operand=midReturnOperand(c: inout c, operand: operandValue, typeTerm: (match midSourceSemanticTerm(c: inout c, state: state, exprId: init) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return error } })) />)
             if completeEvaluation { midFinishEvaluationScope(state: inout state, scope: evaluation) }
-            val ended = c.decls.semanticBindingEnds.getOr(key: stmtId, fallback: 0U64)
+            val ended = binding.endedBinding
             if ended != 0U64 {
                 val prior = midLocalForBinding(state: state, declarationTarget: ended)
                 if !prior.found { return <MidBuildError.InvalidStatement /> }

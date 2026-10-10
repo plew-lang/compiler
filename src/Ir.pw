@@ -3542,10 +3542,6 @@ pub struct Decls {
     // copy versus mutable capture cell) is known.  As with aggregates, the
     // index is a rebuildable reader and never another semantic source.
     // Parametric enum-match facts, keyed by (ownerFnIdx, source Stmt).
-    // Lexical unique-binding lifetime ends are independent of instantiation.
-    pub mut val semanticBindingEnds: Dictionary[U64, U64] = [:]
-    // Let statement -> type resolved in its lexical Self/associated-type scope.
-    pub mut val semanticLetTerms: Dictionary[U64, U64] = [:]
     pub mut val semanticTries: Array[SemanticTry] = []
     pub mut val semanticTryIndexSlots: Array[U64] = []
     pub mut val semanticMatches: Array[SemanticMatch] = []

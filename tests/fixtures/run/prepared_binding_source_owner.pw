@@ -1,0 +1,45 @@
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="binding.pw" text="val global: I64 = 3I64\nfn probe() {{ val local: I64 = 1I64 }} fn other() {{}}" />,
+        sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "other").nameId)
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: owner).body, index: 0U64)
+    match compiler.preparedFunctionSemanticFacts(fnIdx: owner) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("unprepared binding owner admitted") }
+    }
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    compiler.prepareLexicalBody(fnIdx: other).unwrap()
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    val binding = facts.binding(stmtId: statement).unwrap()
+    if binding.typeTerm == 0U64 { panic("binding type lost") }
+    if binding.endedBinding != 0U64 { panic("unexpected shadow end") }
+    val foreign = compiler.preparedFunctionSemanticFacts(fnIdx: other).unwrap()
+    match foreign.binding(stmtId: statement) {
+        Optional.None => {}
+        Optional.Some(v: _) => { panic("foreign binding admitted") }
+    }
+    match facts.binding(stmtId: 18446744073709551615U64) {
+        Optional.None => {}
+        Optional.Some(v: _) => { panic("missing binding admitted") }
+    }
+    val global = compiler.arena.globals[0U64]
+    compiler.prepareGlobalInitializer(target: global.nameStart).unwrap()
+    val globals = compiler.preparedGlobalSemanticFacts(target: global.nameStart).unwrap()
+    if globals.binding(stmtId: global.letStmt).unwrap().typeTerm == 0U64 { panic("global binding type lost") }
+    match facts.binding(stmtId: global.letStmt) {
+        Optional.None => {}
+        Optional.Some(v: _) => { panic("global binding admitted by function owner") }
+    }
+    match globals.binding(stmtId: statement) {
+        Optional.None => {}
+        Optional.Some(v: _) => { panic("function binding admitted by global owner") }
+    }
+    print("ok")
+}
