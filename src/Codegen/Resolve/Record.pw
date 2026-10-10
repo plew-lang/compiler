@@ -2062,6 +2062,8 @@ pub impl Comp {
                             self.recordSemanticExprTerm(exprId: exprId, term: self.arrayRefOfElem(elemRef: eRef))
                         }
                     }
+                } else if elementContext != 0U64 {
+                    self.recordSemanticExprTerm(exprId: exprId, term: self.arrayRefOfElem(elemRef: elementContext))
                 }
                 try self.recordSemanticAggregate(exprId: exprId)
             }

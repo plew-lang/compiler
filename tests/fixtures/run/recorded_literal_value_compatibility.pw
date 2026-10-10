@@ -13,7 +13,7 @@ fn main() {
     val floating = compiler.pushType(t: <TypeRef nameStart=floatName.nameStart nameLen=floatName.nameLen args=[] />)
     val expression = compiler.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
     compiler.tcCheckValue(expectedRef: floating, valueExpr: expression, pos: "unresolved-literal-probe").unwrap()
-    compiler.recordSemanticExprTerm(exprId: expression, term: integer)
+    compiler.recordExpr(exprId: expression, expectedTerm: integer).unwrap()
     compiler.tcCheckValue(expectedRef: integer, valueExpr: expression, pos: "literal-probe").unwrap()
     if compiler.tcCheckValue(expectedRef: floating, valueExpr: expression, pos: "literal-probe").isOk() { panic "recorded integer was reinterpreted as floating" }
     if !compiler.typeRefEq(a: compiler.inferType(id: expression).unwrap(), b: integer) { panic "recorded literal type was lost" }
