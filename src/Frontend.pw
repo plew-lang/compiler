@@ -2407,7 +2407,10 @@ pub impl Comp {
             match row.owner {
                 Optional.Some(v: val recorded) => {
                     if semanticCompletionOwnersEqual(recorded: recorded, prepared: owner) {
-                        return <Result.Ok value=row.expression />
+                        match row.expression.typeState {
+                            SemanticExpressionTypeState.Unrecorded => {}
+                            _ => { return <Result.Ok value=row.expression /> }
+                        }
                     }
                 }
                 Optional.None => {}

@@ -2893,7 +2893,7 @@ pub impl Comp {
         // The completed operand type carries the instantiated Promise payload;
         // a parametric await expression may still refer to its source binder.
         val promiseType = self.arena.typeAt(index: promise)
-        mut val result = (try self.groundAndRecordBodyType(ref: self.semanticExprTerm(exprId: exprId), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
+        mut val result = (try self.groundAndRecordBodyType(ref: (try self.preparedBodyExpression(bodyId: self.currentBodyInstanceId(), exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)).term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
         if promiseType.args.count() == 1U64 { result = promiseType.args[0U64] }
         try self.enqueueFinalDestruction(typeRef: promise)
         try self.enqueueFinalDestruction(typeRef: result)
@@ -5757,7 +5757,7 @@ pub impl Comp {
                 // The declaration records the construction's nominal type and
                 // substitution. Mono instantiates that fact; field values do
                 // not select another instance or rewrite the shared source AST.
-                val gty = try self.groundAndRecordBodyType(ref: self.semanticExprTerm(exprId: exprId), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+                val gty = try self.groundAndRecordBodyType(ref: (try self.preparedBodyExpression(bodyId: self.currentBodyInstanceId(), exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)).term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
                 if gty != 0U64 {
                     try self.scanType(ref: gty)
                 }
@@ -6029,7 +6029,7 @@ pub impl Comp {
             Stmt.Assign(val target, val value) => {
                 try self.scanPlaceInsts(exprId: target)
                 try self.scanExprInsts(exprId: value)
-                try self.finalizeStorageConversion(stmtId: stmtId, exprId: value, targetTerm: self.semanticExprTerm(exprId: target))
+                try self.finalizeStorageConversion(stmtId: stmtId, exprId: value, targetTerm: (try self.preparedBodyExpression(bodyId: self.currentBodyInstanceId(), exprId: target, globalInitializerTarget: self.cur.globalInitializerTarget)).term)
             }
             Stmt.ExprStmt(val expr) => { try self.scanExprInsts(exprId: expr) }
             Stmt.Return(val value, val hasValue, offset: _) => {

@@ -6,7 +6,7 @@ use /Ir only { InstanceEnvironment, Stmt }
 fn main() {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler,
-        input: <FrontendInput.Text path="body-expression.pw" text="fn probe() -> I64 {{ return 1I64 }} fn unrelated() {{}}" />,
+        input: <FrontendInput.Text path="body-expression.pw" text="val first: I64 = 3I64\nval second: I64 = 4I64\nfn probe() -> I64 {{ return 1I64 }} fn unrelated() {{}}" />,
         sources: <SourceAccess />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "unrelated").nameId)
@@ -32,6 +32,24 @@ fn main() {
     match compiler.preparedBodyExpression(bodyId: 0U64, exprId: expression) {
         Result.Err(error: _) => {}
         Result.Ok(value: _) => { panic("missing body admitted") }
+    }
+    val global = compiler.arena.globals[0U64]
+    val unrelatedGlobal = compiler.arena.globals[1U64]
+    val initializer = match compiler.arena.stmts[global.letStmt] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val initializer) => initializer
+        _ => { panic("missing global initializer") }
+    }
+    val globalBody = compiler.internBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />)
+    compiler.prepareGlobalInitializer(target: global.nameStart).unwrap()
+    compiler.prepareGlobalInitializer(target: unrelatedGlobal.nameStart).unwrap()
+    if compiler.preparedBodyExpression(bodyId: globalBody, exprId: initializer, globalInitializerTarget: <Optional.Some v=global.nameStart />).unwrap().term == 0U64 { panic("global saved type missing") }
+    match compiler.preparedBodyExpression(bodyId: globalBody, exprId: initializer) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("anonymous global body admitted without owner") }
+    }
+    match compiler.preparedBodyExpression(bodyId: globalBody, exprId: initializer, globalInitializerTarget: <Optional.Some v=unrelatedGlobal.nameStart />) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("foreign global expression admitted") }
     }
     print("ok")
 }
