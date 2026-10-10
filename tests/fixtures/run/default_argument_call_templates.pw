@@ -3,7 +3,7 @@
 // is covered by default_eval_order.pw and default_eval_order_generic_method.pw.
 use @Std/Io only { write }
 use /Frontend only { Comp }
-use /Ir only { Bind, CallArgumentSource, CallTemplateArgument, CallTemplateKind, ProtocolSelection, CallTemplateReceiver, Expr, Func, Param, CallTemplate, CallSiteKey, SemanticClosure }
+use /Ir only { Bind, CallArgumentSource, CallTemplateArgument, CallTemplateKind, ProtocolSelection, CallTemplateReceiver, Expr, Func, Param, CallTemplate, CallSiteKey }
 
 fn main() {
     mut val c: Comp = <Comp />
@@ -99,8 +99,12 @@ fn main() {
     }
     // Request-local completion includes closure sites and excludes unrelated
     // owners, even when the rows interleave and completion appends new calls.
-    val closureKey = c.closureBodyKey(closureId: expression)
-    c.putSemanticClosure(closure: <SemanticClosure ownerFnIdx=0U64 exprId=expression bodyKey=closureKey />).unwrap()
+    // Use the ordinary source recorder to establish closure membership.
+    // A fabricated declaration must not grant lexical construction authority.
+    c.internBytes(s: "fn")
+    val closureExpression = c.pushExpr(e: <Expr.Closure params=[] hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=c.pushBlock(stmts: []) isDiverging=false />)
+    c.recordExpr(exprId: closureExpression).unwrap()
+    val closureKey = c.semanticClosureAt(index: 0U64).bodyKey
     val emptyArguments = c.publishCallTemplateArguments(args: [])
     val selectedTypes = c.publishCallTemplateTypeArgs(args: [term])
     val missingIndex = c.callTemplateCount()
