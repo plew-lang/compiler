@@ -21,6 +21,19 @@ pub impl Comp {
     // still apply). The fold works in a signed magnitude bounded by 2^63-1; a leaf
     // or intermediate beyond that yields non-const (the per-leaf range check still
     // applies), so the fold never needs an unrepresentable bound.
+    // Constant evaluation validates the selected result width independently
+    // of whether operand typing came from spelling or contextual recording.
+    inout fn checkConstantIntegerRange(id: U64, context: IntTy) -> Result[(), CompileDiagnostic] {
+        val constant = self.foldConst(id: id)
+        if !constant.isConst { return <Result.Ok value=() /> }
+        mut val selected = try self.exprIntTy(id: id)
+        if !selected.known { selected = context }
+        if selected.known && !litFitsBits(value: constant.value, neg: constant.neg, bits: selected.bits, sgn: selected.sgn) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "constant expression is out of range for its type") />
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn foldConst(id: U64) -> ConstInt {
         val e: Expr = self.arena.exprs[id]
         match e {
@@ -172,6 +185,7 @@ pub impl Comp {
                         // with no O it is ambiguous → error). The context never overrides a
                         // concretely-typed operand, so `val r: U64 = money + 200` checks 200 against
                         // the witness's Rhs (I8), not U64.
+                        try self.checkConstantIntegerRange(id: id, context: <IntTy known=eKind == 1 bits=eBits sgn=eSgn />)
                         mut val handled: Bool = false
                         // (1) a float operand on either side makes the op float (homogeneous).
                         if (try self.exprIsFloat(id: lhs)) || (try self.exprIsFloat(id: rhs)) {
@@ -203,12 +217,6 @@ pub impl Comp {
                         // present (eKind 1), else it is genuinely untyped → checkArithNoCtx errors.
                         if !handled {
                             if eKind == 1 {
-                                val cf: ConstInt = self.foldConst(id: id)
-                                if cf.isConst {
-                                    if !(litFitsBits(value: cf.value, neg: cf.neg, bits: eBits, sgn: eSgn)) {
-                                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "constant expression is out of range for its type") />
-                                    }
-                                }
                                 try self.checkLitCtx(id: lhs, eKind: 1, eBits: eBits, eSgn: eSgn)
                                 try self.checkLitCtx(id: rhs, eKind: 1, eBits: eBits, eSgn: eSgn)
                             } else {
