@@ -27,7 +27,7 @@ fn main() {
                     if compiler.decls.preparedCallConstraints(index: index).unwrap().constraints().proofs.count() != plan.proofs.count() {
                         panic("prepared snapshot changed after a rejected construction write")
                     }
-                    val evidence = compiler.instantiateDirectCallConstraints(template: template).unwrap()
+                    val evidence = compiler.instantiateBodyCallConstraints(template: template).unwrap()
                     val arguments = compiler.callTemplateTypeArgs(range: types)
                     val environment = compiler.bodyInstanceEnvironment(fnIdx: callee, args: arguments, recvInstRef: 0U64).unwrap()
                     compiler.checkCallableConstraintEvidence(fnIdx: callee, environment: environment, evidence: evidence).unwrap()
