@@ -2082,7 +2082,7 @@ pub fn finalizeFrontendExecutableRequests(c: inout Comp, requests: inout FinalBo
     tracePhaseCount(c: inout c, label: "finalize-callables:scan-exprs", count: c.traceExprInstScans)
     tracePhaseCount(c: inout c, label: "finalize-callables:body-scans", count: c.traceFinalBodyScans)
     tracePhaseCount(c: inout c, label: "finalize-callables:body-identities", count: c.arena.bodyInstanceCount())
-    tracePhaseCount(c: inout c, label: "finalize-callables:descriptors", count: c.arena.finalCallees.count())
+    tracePhaseCount(c: inout c, label: "finalize-callables:descriptors", count: c.arena.finalCalleeCount())
     c.traceFinalBodyInstanceSummary()
     tracePhase(c: inout c, label: "finalize-callables:done")
     return <Result.Ok value=() />

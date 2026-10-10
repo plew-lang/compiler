@@ -23,7 +23,8 @@ fn main() {
     if abi.captures.count() != 1U64 || !abi.templatesClosed { panic "closure lost checked capture metadata" }
     val expected = c.arena.bodySignature(bodyId: maker).parameterTypes[0U64]
     if !c.typeRefEq(a: abi.captures[0U64].typeTerm, b: expected) || !c.typeRefEq(a: c.arena.bodySignature(bodyId: closure).resultType, b: expected) { panic "closure lost generic environment" }
-    for call in c.arena.finalCallees {
+    for val callIndex in 0U64..<c.arena.finalCalleeCount() {
+        val call = c.arena.finalCalleeAt(index: callIndex)
         if call.bodyId == closure { panic "closure creation requested body descriptors" }
     }
     c.closeFinalDependencies(state: inout dependencies).unwrap()
@@ -37,7 +38,8 @@ fn main() {
     }
     if c.cur.checkFn != 77U64 || c.cur.bodyId != 88U64 || c.inCollection { panic "closure request leaked context" }
     mut val calls = 0U64
-    for call in c.arena.finalCallees {
+    for val callIndex in 0U64..<c.arena.finalCalleeCount() {
+        val call = c.arena.finalCalleeAt(index: callIndex)
         if call.bodyId == closure { calls += 1U64 }
     }
     if calls != 1U64 { panic "closure request did not prepare its call" }

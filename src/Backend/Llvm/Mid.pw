@@ -980,8 +980,8 @@ pub impl LlvmCtx {
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCalleeCount() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         match selected.target { CallTarget.Direct => {} _ => { return <Result.Ok value=<MidCallPreflight.Target /> /> } }
         if selected.callee >= c.arena.functionCount() { return <Result.Ok value=<MidCallPreflight.Callee /> /> }
         val callee: Func = c.arena.functionAt(index: selected.callee)
@@ -1021,7 +1021,7 @@ pub impl LlvmCtx {
         } else if !(try self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.None />)) { return <Result.Ok value=<MidCallPreflight.Receiver /> /> }
         if callee.isExtern && !(try self.resolvedCCallSupported(c: inout c, selected: selected)) { return <Result.Ok value=<MidCallPreflight.Extern /> /> }
         if callee.typeParams.count() != selected.calleeTypeArgs.len { return <Result.Ok value=<MidCallPreflight.GenericArguments /> /> }
-        if selected.calleeTypeArgs.start > c.arena.finalCalleeTypeArgPool.count() || selected.calleeTypeArgs.len > c.arena.finalCalleeTypeArgPool.count() - selected.calleeTypeArgs.start { return <Result.Ok value=<MidCallPreflight.GenericArguments /> /> }
+        if selected.calleeTypeArgs.start > c.arena.finalCalleeTypeArgumentCount() || selected.calleeTypeArgs.len > c.arena.finalCalleeTypeArgumentCount() - selected.calleeTypeArgs.start { return <Result.Ok value=<MidCallPreflight.GenericArguments /> /> }
         mut val typeArgument = 0U64
         while typeArgument < selected.calleeTypeArgs.len {
             val term = c.finalCalleeTypeArgAt(args: selected.calleeTypeArgs, index: typeArgument)
@@ -1066,8 +1066,8 @@ pub impl LlvmCtx {
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCalleeCount() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         match selected.target { CallTarget.RuntimeIntrinsic(intrinsic: _) => {} _ => { return <Result.Ok value=<MidCallPreflight.Target /> /> } }
         if selected.callee >= c.arena.functionCount() { return <Result.Ok value=<MidCallPreflight.Callee /> /> }
         val callee: Func = c.arena.functionAt(index: selected.callee)
@@ -1115,7 +1115,7 @@ pub impl LlvmCtx {
         match (try self.midCanonicalRuntimeSystemPreflight(c: inout c, body: body, terminatorId: terminatorId)) { MidCallPreflight.None => {} _ => { return <Result.Ok value=false /> } }
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         val callee: Func = c.arena.functionAt(index: selected.callee)
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
@@ -1192,8 +1192,8 @@ pub impl LlvmCtx {
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCalleeCount() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         match selected.target { CallTarget.RuntimeIntrinsic(intrinsic: _) => {} _ => { return <Result.Ok value=<MidCallPreflight.Target /> /> } }
         if selected.callee >= c.arena.functionCount() { return <Result.Ok value=<MidCallPreflight.Callee /> /> }
         val callee: Func = c.arena.functionAt(index: selected.callee)
@@ -1223,7 +1223,7 @@ pub impl LlvmCtx {
         match (try self.midCanonicalRuntimeCoreStringFfiPreflight(c: inout c, body: body, terminatorId: terminatorId)) { MidCallPreflight.None => {} _ => { return <Result.Ok value=false /> } }
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         val argument: U64 = self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
@@ -1293,8 +1293,8 @@ pub impl LlvmCtx {
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCalleeCount() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                 match intrinsic {
@@ -1320,7 +1320,7 @@ pub impl LlvmCtx {
         match (try self.midCanonicalRuntimeNumericPreflight(c: inout c, body: body, terminatorId: terminatorId)) { MidCallPreflight.None => {} _ => { return <Result.Ok value=false /> } }
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                 match intrinsic {
@@ -1365,8 +1365,8 @@ pub impl LlvmCtx {
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCalleeCount() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                 match intrinsic { RuntimeIntrinsic.Buffer(intrinsic: _) => {} _ => { return <Result.Ok value=<MidCallPreflight.Target /> /> } }
@@ -1487,7 +1487,7 @@ pub impl LlvmCtx {
         match (try self.midCanonicalRuntimeBufferPreflight(c: inout c, body: body, terminatorId: terminatorId)) { MidCallPreflight.None => {} _ => { return <Result.Ok value=false /> } }
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         mut val destination: LLVMValueRef = LLVMConstNull(self.ptrty)
         if term.destination != 0U64 { destination = self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local) }
         match selected.target {
@@ -1691,8 +1691,8 @@ pub impl LlvmCtx {
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCalleeCount() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         mut val functionType: U64 = 0U64
         match selected.target {
             CallTarget.ClosureLocal(bindingDeclStart: val binding, fnTypeRef: val ref) => {
@@ -1729,7 +1729,7 @@ pub impl LlvmCtx {
         match (try self.midCanonicalClosureCallPreflight(c: inout c, body: body, terminatorId: terminatorId)) { MidCallPreflight.None => {} _ => { return <Result.Ok value=false /> } }
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         mut val functionType: U64 = 0U64
         mut val closure: LLVMValueRef = LLVMConstNull(self.ptrty)
         match selected.target {
@@ -1773,8 +1773,8 @@ pub impl LlvmCtx {
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCalleeCount() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         match selected.target {
             CallTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => {
                 if traitIndex >= c.decls.traitCount() || slot == 0U64 || slot > c.decls.traitAt(index: traitIndex).reqs.count() { return <Result.Ok value=<MidCallPreflight.Callee /> /> }
@@ -1827,7 +1827,7 @@ pub impl LlvmCtx {
     inout fn midCanonicalEmitExistentialCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Result[Bool, CompileDiagnostic] {
         match (try self.midCanonicalExistentialCallPreflight(c: inout c, body: body, terminatorId: terminatorId)) { MidCallPreflight.None => {} _ => { return <Result.Ok value=false /> } }
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
-        val selected: CallResolution = c.arena.finalCallees[c.mid.callTargets[term.callTarget - 1U64].resolution]
+        val selected: CallResolution = c.arena.finalCalleeAt(index: c.mid.callTargets[term.callTarget - 1U64].resolution)
         match selected.target {
             CallTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => {
                 val requirement: Func = c.traitReqAt(reqs: c.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
@@ -1890,8 +1890,8 @@ pub impl LlvmCtx {
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <Result.Ok value=<MidCallPreflight.Target /> /> }
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCalleeCount() { return <Result.Ok value=<MidCallPreflight.Target /> /> }
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         mut val strongInput: Bool = false
         mut val weakResult: Bool = false
         mut val aliveResult: Bool = false
@@ -1944,7 +1944,7 @@ pub impl LlvmCtx {
         match (try self.midCanonicalCellControlPreflight(c: inout c, body: body, terminatorId: terminatorId)) { MidCallPreflight.None => {} _ => { return <Result.Ok value=false /> } }
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         val cell: LLVMValueRef = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)))
         mut val result: LLVMValueRef = LLVMConstNull(self.ptrty)
         match selected.target {
@@ -1968,8 +1968,8 @@ pub impl LlvmCtx {
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <Result.Ok value=<MidCallPreflight.Target /> /> }
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCalleeCount() { return <Result.Ok value=<MidCallPreflight.Target /> /> }
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => { match intrinsic { RuntimeIntrinsic.StrongCellNew => {} _ => { return <Result.Ok value=<MidCallPreflight.Target /> /> } } }
             _ => { return <Result.Ok value=<MidCallPreflight.Target /> /> }
@@ -2078,7 +2078,7 @@ pub impl LlvmCtx {
         match (try self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: terminatorId)) { MidCallPreflight.None => {} _ => { return <Result.Ok value=false /> } }
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         val callee: Func = c.arena.functionAt(index: selected.callee)
         mut val externalSlot: U64 = self.declId.count()
         if callee.isExtern { externalSlot = (try self.declareResolvedCFunction(c: inout c, selected: selected)) }
@@ -2621,8 +2621,8 @@ impl LlvmCtx {
                             self.traceCodegenU64(n: self.midCallPreflightCoverageDetail(reason: call))
                             if term.callTarget != 0U64 && term.callTarget <= c.mid.callTargets.count() {
                                 val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-                                if target.tag == 2U64 && target.resolution < c.arena.finalCallees.count() {
-                                    val selected: CallResolution = c.arena.finalCallees[target.resolution]
+                                if target.tag == 2U64 && target.resolution < c.arena.finalCalleeCount() {
+                                    val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
                                     eprint(text: " callee=")
                                     if selected.callee < c.arena.functionCount() { self.traceCodegenName(c: inout c, start: c.arena.functionAt(index: selected.callee).nameStart, len: c.arena.functionAt(index: selected.callee).nameLen) }
                                     else { eprint(text: "<invalid>") }

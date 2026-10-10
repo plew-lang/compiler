@@ -69,7 +69,7 @@ pub impl Comp {
         }
         if kind == 2U64 {
             val index: U64 = self.arena.finalCalleeIndexForKey(bodyId: bodyId, siteKey: self.arena.semanticTypeRecipes[recipeId - 1U64].callSite)
-            if index < self.finalCalleeCount() { return <Result.Ok value=self.arena.finalCallees[index].resultTypeRef />}
+            if index < self.finalCalleeCount() { return <Result.Ok value=self.arena.finalCalleeAt(index: index).resultTypeRef />}
             return <Result.Ok value=0U64 />
         }
         val input: U64 = self.arena.semanticTypeRecipes[recipeId - 1U64].input
@@ -330,7 +330,7 @@ pub impl Comp {
         // ExprId is only a diagnostic anchor, just as for other indexed readers.
         val index: U64 = self.arena.finalCalleeIndexForKey(bodyId: bodyId, siteKey: siteKey)
         if index < self.finalCalleeCount() {
-            return <Result.Ok value=self.arena.finalCallees[index].resultTypeRef />
+            return <Result.Ok value=self.arena.finalCalleeAt(index: index).resultTypeRef />
         }
         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: implicit protocol call dependency was not finalized") />
     }
@@ -1171,7 +1171,7 @@ pub impl Comp {
             try self.recordSelectedBodyCallee(selection: selection)
             try self.enqueueSelectedCallee(selection: selection)
             conversionResolution = (try self.bodyCalleeIndex(exprId: exprId, slot: 1U64))
-            if conversionResolution >= self.arena.finalCallees.count() {
+            if conversionResolution >= self.arena.finalCalleeCount() {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: recorded try conversion was not finalized") />
             }
         }
@@ -1185,10 +1185,10 @@ pub impl Comp {
         val iteratorIndex: U64 = (try self.bodyCalleeIndex(exprId: stmtId, siteIsStmt: true, slot: 1U64))
         val nextIndex: U64 = (try self.bodyCalleeIndex(exprId: stmtId, siteIsStmt: true, slot: 2U64))
         if iteratorIndex >= self.finalCalleeCount() || nextIndex >= self.finalCalleeCount() || itemRef == 0U64 { return <Result.Ok value=false />}
-        val iteratorRef: U64 = self.arena.finalCallees[iteratorIndex].resultTypeRef
-        val nextRef: U64 = self.arena.finalCallees[nextIndex].resultTypeRef
+        val iteratorRef: U64 = self.arena.finalCalleeAt(index: iteratorIndex).resultTypeRef
+        val nextRef: U64 = self.arena.finalCalleeAt(index: nextIndex).resultTypeRef
         if iteratorRef == 0U64 || nextRef == 0U64 || nextRef >= self.arena.typeCount() { return <Result.Ok value=false />}
-        if !self.typeRefEq(a: iteratorRef, b: self.arena.finalCallees[nextIndex].recvTypeRef) { return <Result.Ok value=false />}
+        if !self.typeRefEq(a: iteratorRef, b: self.arena.finalCalleeAt(index: nextIndex).recvTypeRef) { return <Result.Ok value=false />}
         val optional: TypeRef = self.arena.typeAt(index: nextRef)
         if !rangeEquals(bytes: self.arena.bytes, start: optional.nameStart, len: optional.nameLen, kw: "Optional") || optional.args.count() != 1U64 { return <Result.Ok value=false />}
         if !self.typeRefEq(a: optional.args[0U64], b: itemRef) { return <Result.Ok value=false />}
@@ -1202,11 +1202,11 @@ pub impl Comp {
         if some >= declaration.variants.count() || none >= declaration.variants.count() || some == none { return <Result.Ok value=false />}
         if declaration.variants[some].fields.count() != 1U64 || declaration.variants[none].fields.count() != 0U64 { return <Result.Ok value=false />}
         mut val identity = false
-        match self.arena.finalCallees[iteratorIndex].target {
+        match self.arena.finalCalleeAt(index: iteratorIndex).target {
             CallTarget.NoCallable => { identity = true }
             _ => {}
         }
-        if identity && !self.typeRefEq(a: iteratorRef, b: self.arena.finalCallees[iteratorIndex].recvTypeRef) { return <Result.Ok value=false />}
+        if identity && !self.typeRefEq(a: iteratorRef, b: self.arena.finalCalleeAt(index: iteratorIndex).recvTypeRef) { return <Result.Ok value=false />}
         self.putFinalFor(fact: <FinalForResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId iteratorResolution=iteratorIndex nextResolution=nextIndex identityIterator=identity iteratorTypeRef=iteratorRef nextTypeRef=nextRef itemTypeRef=itemRef optionalEnumIndex=enumIndex someVariantIndex=some noneVariantIndex=none />)
         return <Result.Ok value=true />
     }
@@ -1412,11 +1412,21 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    fn finalCalleeTypeArgAt(args: CallResolutionTypeArgRange, index: U64) -> U64 { return self.arena.finalCalleeTypeArgAt(args: args, index: index) }
+
+    fn finalCalleeParameterTypeAt(types: CallResolutionParameterTypeRange, index: U64) -> U64 { return self.arena.finalCalleeParameterTypeAt(types: types, index: index) }
+
+    fn finalCalleeConversionAt(conversions: CallResolutionConversionRange, index: U64) -> U64 { return self.arena.finalCalleeConversionAt(conversions: conversions, index: index) }
+
+    fn finalCalleeArgumentPassingAt(passings: CallResolutionArgumentPassingRange, index: U64) -> CallArgumentPassing { return self.arena.finalCalleeArgumentPassingAt(passings: passings, index: index) }
+
+    fn finalCalleeArgumentAt(arguments: CallResolutionArgumentRange, index: U64) -> CallEvaluationArgument { return self.arena.finalCalleeArgumentAt(arguments: arguments, index: index) }
+
     // Record the one final callable selected for `exprId` in the concrete body
     // currently being scanned.  Generic templates share their AST, so this
     // cannot live in the AST-global TypeCache (which is intentionally only for
     // instance-invariant decisions).
-    fn finalCalleeCount() -> U64 { return self.arena.finalCallees.count() }
+    fn finalCalleeCount() -> U64 { return self.arena.finalCalleeCount() }
 
     inout fn currentBodyInstanceId() -> U64 {
         if self.cur.bodyId != 0U64 { return self.cur.bodyId }
@@ -1459,51 +1469,9 @@ pub impl Comp {
 
 
 
-    inout fn rebuildFinalCalleeIndex(capacity: U64) {
-        self.arena.finalCalleeIndexSlots = []
-        mut val zeroI: U64 = 0U64
-        while zeroI < capacity {
-            self.arena.finalCalleeIndexSlots.append(0U64)
-            zeroI += 1U64
-        }
-        mut val entry: U64 = 0U64
-        while entry < self.finalCalleeCount() {
-            val e: CallResolution = self.arena.finalCallees[entry]
-            mut val slot: U64 = self.arena.finalCalleeHash(bodyId: e.bodyId, siteKey: e.siteKey) % capacity
-            while self.arena.finalCalleeIndexSlots[slot] != 0U64 {
-                slot = (slot + 1U64) % capacity
-            }
-            self.arena.finalCalleeIndexSlots.set(i: slot, value: entry + 1U64)
-            entry += 1U64
-        }
-    }
-
-    inout fn ensureFinalCalleeIndex(nextCount: U64) {
-        if self.arena.finalCalleeIndexSlots.count() == 0U64 {
-            self.rebuildFinalCalleeIndex(capacity: 16U64)
-        }
-        if nextCount * 10U64 >= self.arena.finalCalleeIndexSlots.count() * 7U64 {
-            self.rebuildFinalCalleeIndex(capacity: self.arena.finalCalleeIndexSlots.count() * 2U64)
-        }
-    }
-
     // A final callable row is deliberately scalar.  These are the only
     // owner-aware gateways for its variable-sized semantic payloads; callers
     // that truly need a transient Array must ask for an explicit copy.
-    inout fn pushFinalCalleeTypeArgs(args: Array[U64]) -> CallResolutionTypeArgRange {
-        val start: U64 = self.arena.finalCalleeTypeArgPool.count()
-        mut val i: U64 = 0U64
-        while i < args.count() {
-            self.arena.finalCalleeTypeArgPool.append(args[i])
-            i += 1U64
-        }
-        return <CallResolutionTypeArgRange start=start len=args.count() />
-    }
-
-    fn finalCalleeTypeArgAt(args: CallResolutionTypeArgRange, index: U64) -> U64 {
-        return self.arena.finalCalleeTypeArgPool[args.start + index]
-    }
-
     inout fn copyFinalCalleeTypeArgs(args: CallResolutionTypeArgRange) -> Array[U64] {
         mut val out: Array[U64] = []
         mut val i: U64 = 0U64
@@ -1512,20 +1480,6 @@ pub impl Comp {
             i += 1U64
         }
         return out
-    }
-
-    inout fn pushFinalCalleeParameterTypes(types: Array[U64]) -> CallResolutionParameterTypeRange {
-        val start: U64 = self.arena.finalCalleeParameterTypePool.count()
-        mut val i: U64 = 0U64
-        while i < types.count() {
-            self.arena.finalCalleeParameterTypePool.append(types[i])
-            i += 1U64
-        }
-        return <CallResolutionParameterTypeRange start=start len=types.count() />
-    }
-
-    fn finalCalleeParameterTypeAt(types: CallResolutionParameterTypeRange, index: U64) -> U64 {
-        return self.arena.finalCalleeParameterTypePool[types.start + index]
     }
 
     inout fn copyFinalCalleeParameterTypes(types: CallResolutionParameterTypeRange) -> Array[U64] {
@@ -1538,20 +1492,6 @@ pub impl Comp {
         return out
     }
 
-    inout fn pushFinalCalleeConversions(conversions: Array[ValueConversionProof]) -> CallResolutionConversionRange {
-        val start: U64 = self.arena.finalCalleeConversionPool.count()
-        mut val i: U64 = 0U64
-        while i < conversions.count() {
-            self.arena.finalCalleeConversionPool.append(self.freezeValueConversionProof(proof: conversions[i]))
-            i += 1U64
-        }
-        return <CallResolutionConversionRange start=start len=conversions.count() />
-    }
-
-    fn finalCalleeConversionAt(conversions: CallResolutionConversionRange, index: U64) -> U64 {
-        return self.arena.finalCalleeConversionPool[conversions.start + index]
-    }
-
     inout fn copyFinalCalleeConversions(conversions: CallResolutionConversionRange) -> Array[U64] {
         mut val out: Array[U64] = []
         mut val i: U64 = 0U64
@@ -1560,20 +1500,6 @@ pub impl Comp {
             i += 1U64
         }
         return out
-    }
-
-    inout fn pushFinalCalleeArgumentPassings(passings: Array[CallArgumentPassing]) -> CallResolutionArgumentPassingRange {
-        val start: U64 = self.arena.finalCalleeArgumentPassingPool.count()
-        mut val i: U64 = 0U64
-        while i < passings.count() {
-            self.arena.finalCalleeArgumentPassingPool.append(passings[i])
-            i += 1U64
-        }
-        return <CallResolutionArgumentPassingRange start=start len=passings.count() />
-    }
-
-    fn finalCalleeArgumentPassingAt(passings: CallResolutionArgumentPassingRange, index: U64) -> CallArgumentPassing {
-        return self.arena.finalCalleeArgumentPassingPool[passings.start + index]
     }
 
     inout fn copyFinalCalleeArgumentPassings(passings: CallResolutionArgumentPassingRange) -> Array[CallArgumentPassing] {
@@ -1586,9 +1512,9 @@ pub impl Comp {
         return out
     }
 
-    inout fn pushFinalCalleeArguments(arguments: Array[CallTemplateArgument], parameterTypes: Array[U64], sourceTypes: Array[U64]) -> CallResolutionArgumentRange {
+    inout fn prepareFinalCalleeArguments(arguments: Array[CallTemplateArgument], parameterTypes: Array[U64], sourceTypes: Array[U64]) -> Array[CallEvaluationArgument] {
         if sourceTypes.count() != arguments.count() { panic "final call argument type count mismatch" }
-        val start: U64 = self.arena.finalCalleeArgumentPool.count()
+        mut val prepared: Array[CallEvaluationArgument] = []
         mut val i: U64 = 0U64
         while i < arguments.count() {
             val argument: CallTemplateArgument = arguments[i]
@@ -1596,14 +1522,10 @@ pub impl Comp {
             if i < parameterTypes.count() { expected = parameterTypes[i] }
             val sourceType = sourceTypes[i]
             val adaptsReceiverView = argument.isDispatchReceiver && sourceType != 0U64 && expected != 0U64 && !self.typeRefEq(a: sourceType, b: expected) && self.typeRefEq(a: self.runtimeTypeRef(ref: sourceType), b: self.runtimeTypeRef(ref: expected))
-            self.arena.finalCalleeArgumentPool.append(<CallEvaluationArgument adaptsReceiverView=adaptsReceiverView sourceTypeRef=sourceType exprId=self.callArgumentExprId(source: argument.source) isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
+            prepared.append(<CallEvaluationArgument adaptsReceiverView=adaptsReceiverView sourceTypeRef=sourceType exprId=self.callArgumentExprId(source: argument.source) isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
             i += 1U64
         }
-        return <CallResolutionArgumentRange start=start len=arguments.count() />
-    }
-
-    fn finalCalleeArgumentAt(arguments: CallResolutionArgumentRange, index: U64) -> CallEvaluationArgument {
-        return self.arena.finalCalleeArgumentPool[arguments.start + index]
+        return prepared
     }
 
     inout fn sameFinalCalleeArguments(arguments: CallResolutionArgumentRange, sources: Array[CallTemplateArgument]) -> Bool {
@@ -1624,19 +1546,10 @@ pub impl Comp {
         val bodyId: U64 = self.currentBodyInstanceId()
         mut val siteKey: CallSiteKey = generatedSite
         if siteKey.originKind == 0U64 { siteKey = (try self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)) }
-        self.ensureFinalCalleeIndex(nextCount: self.finalCalleeCount() + 1U64)
-        val typeArgs: CallResolutionTypeArgRange = self.pushFinalCalleeTypeArgs(args: calleeTypeArgs)
-        val parameterTypes: CallResolutionParameterTypeRange = self.pushFinalCalleeParameterTypes(types: parameterTypeRefs)
-        val conversions: CallResolutionConversionRange = self.pushFinalCalleeConversions(conversions: argumentConversions)
-        val passings: CallResolutionArgumentPassingRange = self.pushFinalCalleeArgumentPassings(passings: argumentPassings)
-        val evaluationArguments: CallResolutionArgumentRange = self.pushFinalCalleeArguments(arguments: arguments, parameterTypes: parameterTypeRefs, sourceTypes: argumentSourceTypes)
-        self.arena.finalCallees.append(<CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee calleeTypeArgs=typeArgs parameterTypeRefs=parameterTypes argumentConversions=conversions receiverPassing=receiverPassing argumentPassings=passings arguments=evaluationArguments recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target />)
-        val capacity: U64 = self.arena.finalCalleeIndexSlots.count()
-        mut val indexSlot: U64 = self.arena.finalCalleeHash(bodyId: bodyId, siteKey: siteKey) % capacity
-        while self.arena.finalCalleeIndexSlots[indexSlot] != 0U64 {
-            indexSlot = (indexSlot + 1U64) % capacity
+        val evaluationArguments = self.prepareFinalCalleeArguments(arguments: arguments, parameterTypes: parameterTypeRefs, sourceTypes: argumentSourceTypes)
+        if !self.arena.publishFinalCallee(row: <CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee receiverPassing=receiverPassing recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target />, typeArguments: calleeTypeArgs, parameterTypes: parameterTypeRefs, conversions: argumentConversions, passings: argumentPassings, arguments: evaluationArguments) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "final call occurrence is already published") />
         }
-        self.arena.finalCalleeIndexSlots.set(i: indexSlot, value: self.finalCalleeCount())
         // A call's result recipe is part of the selected call contract, even
         // when no surrounding frontend expression asks for its concrete type.
         val templateIndex = self.decls.callTemplateIndex(siteKey: siteKey)
@@ -1734,7 +1647,7 @@ pub impl Comp {
         val conversions: Array[ValueConversionProof] = (try self.callArgumentConversions(sources: selection.argumentSources, parameterTypeRefs: parameterTypes, sourceTypes: sourceTypes))
         val priorIdx: U64 = (try self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
         if priorIdx < self.finalCalleeCount() {
-            val prior: CallResolution = self.arena.finalCallees[priorIdx]
+            val prior: CallResolution = self.arena.finalCalleeAt(index: priorIdx)
             if !(self.samePublishedNonStaticSelection(prior: prior, selection: selection)) || !self.sameResolvedTypeRefs(a: self.copyFinalCalleeParameterTypes(types: prior.parameterTypeRefs), b: parameterTypes) || !self.sameCallReceiverPassing(a: prior.receiverPassing, b: receiverPassing) || !self.sameCallArgumentPassings(a: self.copyFinalCalleeArgumentPassings(passings: prior.argumentPassings), b: passings) || !self.sameFrozenValueConversionProofs(a: self.copyFinalCalleeConversions(conversions: prior.argumentConversions), b: conversions) {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: conflicting CallResolution republish") />
             }
@@ -2048,7 +1961,7 @@ pub impl Comp {
     // read, never a backend type-recovery query.
     inout fn bodyCalleeReceiverRef(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         val i: U64 = (try self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
-        if i < self.finalCalleeCount() { return <Result.Ok value=self.arena.finalCallees[i].recvTypeRef />}
+        if i < self.finalCalleeCount() { return <Result.Ok value=self.arena.finalCalleeAt(index: i).recvTypeRef />}
         return <Result.Ok value=0U64 />
     }
 
@@ -2060,7 +1973,7 @@ pub impl Comp {
         if index >= self.finalCalleeCount() {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: selected call receiver was not recorded") />
         }
-        val selected = self.arena.finalCallees[index]
+        val selected = self.arena.finalCalleeAt(index: index)
         if selected.callee != callee {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: selected call receiver belongs to another callee") />
         }
@@ -2072,19 +1985,19 @@ pub impl Comp {
 
     inout fn bodyCalleeResultRef(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         val i: U64 = (try self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
-        if i < self.finalCalleeCount() { return <Result.Ok value=self.arena.finalCallees[i].resultTypeRef />}
+        if i < self.finalCalleeCount() { return <Result.Ok value=self.arena.finalCalleeAt(index: i).resultTypeRef />}
         return <Result.Ok value=0U64 />
     }
 
     inout fn bodyCalleeTypeArgs(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> Result[Array[U64], CompileDiagnostic] {
         val i: U64 = (try self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
-        if i < self.finalCalleeCount() { return <Result.Ok value=self.copyFinalCalleeTypeArgs(args: self.arena.finalCallees[i].calleeTypeArgs) />}
+        if i < self.finalCalleeCount() { return <Result.Ok value=self.copyFinalCalleeTypeArgs(args: self.arena.finalCalleeAt(index: i).calleeTypeArgs) />}
         return <Result.Ok value=[] />
     }
 
     inout fn bodyCalleeParameterTypeRefs(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> Result[Array[U64], CompileDiagnostic] {
         val i: U64 = (try self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
-        if i < self.finalCalleeCount() { return <Result.Ok value=self.copyFinalCalleeParameterTypes(types: self.arena.finalCallees[i].parameterTypeRefs) />}
+        if i < self.finalCalleeCount() { return <Result.Ok value=self.copyFinalCalleeParameterTypes(types: self.arena.finalCalleeAt(index: i).parameterTypeRefs) />}
         return <Result.Ok value=[] />
     }
 
@@ -3374,7 +3287,7 @@ pub impl Comp {
         }
         val target: CallTarget = self.runtimeIntrinsicTarget(callee: callee)
         if i < self.finalCalleeCount() {
-            val prior: CallResolution = self.arena.finalCallees[i]
+            val prior: CallResolution = self.arena.finalCalleeAt(index: i)
             if !(self.sameStaticCallResolution(e: prior, callee: callee, recvRef: recvRef, calleeArgs: calleeArgs, arguments: argumentSources, parameterTypeRefs: params, argumentConversions: conversions, receiverPassing: receiverPassing, argumentPassings: argumentPassings, resultRef: result, resultProjection: resultProjection, target: target)) {
                 if siteIsStmt {
                     return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: conflicting static CallResolution publish") />
@@ -3436,14 +3349,14 @@ pub impl Comp {
 
     inout fn bodyCalleeBodyId(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         val i: U64 = (try self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
-        if i < self.finalCalleeCount() { return <Result.Ok value=self.arena.finalCallees[i].calleeBodyId />}
+        if i < self.finalCalleeCount() { return <Result.Ok value=self.arena.finalCalleeAt(index: i).calleeBodyId />}
         return <Result.Ok value=0U64 />
     }
 
     inout fn bodyCalleeTargetBindingDeclStart(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         val i: U64 = (try self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
         if i < self.finalCalleeCount() {
-            match self.arena.finalCallees[i].target {
+            match self.arena.finalCalleeAt(index: i).target {
                 CallTarget.ClosureLocal(val bindingDeclStart, fnTypeRef: _) => { return <Result.Ok value=bindingDeclStart />}
                 _ => {}
             }
@@ -3454,7 +3367,7 @@ pub impl Comp {
     inout fn bodyCalleeTargetPart(exprId: U64, part: U64, siteIsStmt: Bool, slot: U64) -> Result[U64, CompileDiagnostic] {
         val i: U64 = (try self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
         if i < self.finalCalleeCount() {
-            val e: CallResolution = self.arena.finalCallees[i]
+            val e: CallResolution = self.arena.finalCalleeAt(index: i)
             match e.target {
                 CallTarget.Direct => { if part == 0U64 { return <Result.Ok value=0U64 />} }
                 CallTarget.RuntimeIntrinsic(intrinsic: _) => { if part == 0U64 { return <Result.Ok value=0U64 />} }
@@ -4259,7 +4172,7 @@ pub impl Comp {
     inout fn verifyFinalCallResolutions(start: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = start
         while i < self.finalCalleeCount() {
-            val e: CallResolution = self.arena.finalCallees[i]
+            val e: CallResolution = self.arena.finalCalleeAt(index: i)
             if !((try self.finalStaticCalleeIsComplete(e: e))) {
                 self.traceIncompletePublishedStaticCallee(e: e)
                 if e.siteIsStmt {
@@ -4283,7 +4196,7 @@ pub impl Comp {
         val readKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: parent.siteKey.ownerFnIdx, exprId: candidate.readExpr))
         mut val i: U64 = 0U64
         while i < self.finalCalleeCount() {
-            val resolved: CallResolution = self.arena.finalCallees[i]
+            val resolved: CallResolution = self.arena.finalCalleeAt(index: i)
             if resolved.bodyId == bodyId && self.sameCallSiteKey(a: resolved.siteKey, b: readKey) {
                 return <Result.Ok value=i />
             }
@@ -4298,7 +4211,7 @@ pub impl Comp {
         val writeKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: parent.siteKey.ownerFnIdx, exprId: candidate.writeExpr))
         mut val i: U64 = 0U64
         while i < self.finalCalleeCount() {
-            val resolved: CallResolution = self.arena.finalCallees[i]
+            val resolved: CallResolution = self.arena.finalCalleeAt(index: i)
             if resolved.bodyId == bodyId && self.sameCallSiteKey(a: resolved.siteKey, b: writeKey) {
                 return <Result.Ok value=i />
             }
@@ -4435,7 +4348,7 @@ pub impl Comp {
     inout fn freezeFinalAccesses(start: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         mut val parentIndex: U64 = start
         while parentIndex < self.finalCalleeCount() {
-            val parent: CallResolution = self.arena.finalCallees[parentIndex]
+            val parent: CallResolution = self.arena.finalCalleeAt(index: parentIndex)
             mut val useIndex: U64 = 0U64
             while useIndex < self.decls.accessUses.count() {
                 val use = self.decls.accessUses[useIndex]
@@ -4505,6 +4418,9 @@ pub impl Comp {
     }
 
     inout fn initializeFinalCallablesInContext() -> Result[(), CompileDiagnostic] {
+        if self.finalCalleeCount() != 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "cannot reinitialize published final calls") />
+        }
         self.arena.finalDestructions = []
         self.arena.finalDestructionIds = []
         val noDestructionHeads: Dictionary[U64, U64] = [:]
@@ -4513,8 +4429,6 @@ pub impl Comp {
         self.arena.finalDestructionNominalNext = []
         self.arena.finalDestructionNext = []
         self.arena.clearBodyTypeResults()
-        self.arena.finalCallees = []
-        self.arena.finalCalleeIndexSlots = []
         self.arena.finalAggregates = []
         self.arena.finalAggregateIndexSlots = []
         self.arena.finalExistentials = []
@@ -4683,7 +4597,7 @@ pub impl Comp {
             state.aggregates += 1U64
         }
         while state.calls < self.finalCalleeCount() {
-            val call = self.arena.finalCallees[state.calls]
+            val call = self.arena.finalCalleeAt(index: state.calls)
             try self.enqueueFinalDestruction(typeRef: call.resultTypeRef)
             try self.enqueueFinalDestruction(typeRef: call.recvTypeRef)
             mut val parameter = 0U64

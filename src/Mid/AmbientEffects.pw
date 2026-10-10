@@ -42,7 +42,7 @@ pub impl MidAmbientEffects {
         }
     }
     fn callMayAccess(c: Comp, term: MidTerminatorNode) -> Bool {
-        val target = c.arena.finalCallees[c.mid.callTargets[term.callTarget - 1U64].resolution]
+        val target = c.arena.finalCalleeAt(index: c.mid.callTargets[term.callTarget - 1U64].resolution)
         match target.target {
             CallTarget.Direct => {
                 // Later body IDs can overlap this snapshot's destruction nodes.
@@ -119,7 +119,7 @@ pub impl MidAmbientEffects {
                         }
                         val term = c.mid.terminators[block.terminator - 1U64]
                         if term.tag == 4U64 {
-                            val target = c.arena.finalCallees[c.mid.callTargets[term.callTarget - 1U64].resolution]
+                            val target = c.arena.finalCalleeAt(index: c.mid.callTargets[term.callTarget - 1U64].resolution)
                             match target.target {
                                 CallTarget.Direct => {
                                     if target.calleeBodyId != 0U64 { graph.edge(owner: bodyId, dependency: target.calleeBodyId) }

@@ -64,3 +64,119 @@ pub impl Arena {
         return self.finalFors.count()
     }
 }
+
+impl Arena {
+    inout fn rebuildFinalCalleeIndex(capacity: U64) {
+        self.finalCalleeIndexSlots = []
+        mut val zeroI: U64 = 0U64
+        while zeroI < capacity {
+            self.finalCalleeIndexSlots.append(0U64)
+            zeroI += 1U64
+        }
+        mut val entry: U64 = 0U64
+        while entry < self.finalCalleeCount() {
+            val e: CallResolution = self.finalCallees[entry]
+            mut val slot: U64 = self.finalCalleeHash(bodyId: e.bodyId, siteKey: e.siteKey) % capacity
+            while self.finalCalleeIndexSlots[slot] != 0U64 {
+                slot = (slot + 1U64) % capacity
+            }
+            self.finalCalleeIndexSlots.set(i: slot, value: entry + 1U64)
+            entry += 1U64
+        }
+    }
+
+    inout fn ensureFinalCalleeIndex(nextCount: U64) {
+        if self.finalCalleeIndexSlots.count() == 0U64 {
+            self.rebuildFinalCalleeIndex(capacity: 16U64)
+        }
+        if nextCount * 10U64 >= self.finalCalleeIndexSlots.count() * 7U64 {
+            self.rebuildFinalCalleeIndex(capacity: self.finalCalleeIndexSlots.count() * 2U64)
+        }
+    }
+
+    inout fn pushFinalCalleeTypeArgs(args: Array[U64]) -> CallResolutionTypeArgRange {
+        val start: U64 = self.finalCalleeTypeArgPool.count()
+        mut val i: U64 = 0U64
+        while i < args.count() {
+            self.finalCalleeTypeArgPool.append(args[i])
+            i += 1U64
+        }
+        return <CallResolutionTypeArgRange start=start len=args.count() />
+    }
+
+    inout fn pushFinalCalleeParameterTypes(types: Array[U64]) -> CallResolutionParameterTypeRange {
+        val start: U64 = self.finalCalleeParameterTypePool.count()
+        mut val i: U64 = 0U64
+        while i < types.count() {
+            self.finalCalleeParameterTypePool.append(types[i])
+            i += 1U64
+        }
+        return <CallResolutionParameterTypeRange start=start len=types.count() />
+    }
+
+    inout fn pushFinalCalleeConversions(conversions: Array[ValueConversionProof]) -> CallResolutionConversionRange {
+        val start: U64 = self.finalCalleeConversionPool.count()
+        mut val i: U64 = 0U64
+        while i < conversions.count() {
+            self.finalCalleeConversionPool.append(self.appendValueConversionProof(proof: conversions[i]))
+            i += 1U64
+        }
+        return <CallResolutionConversionRange start=start len=conversions.count() />
+    }
+
+    inout fn pushFinalCalleeArgumentPassings(passings: Array[CallArgumentPassing]) -> CallResolutionArgumentPassingRange {
+        val start: U64 = self.finalCalleeArgumentPassingPool.count()
+        mut val i: U64 = 0U64
+        while i < passings.count() {
+            self.finalCalleeArgumentPassingPool.append(passings[i])
+            i += 1U64
+        }
+        return <CallResolutionArgumentPassingRange start=start len=passings.count() />
+    }
+
+}
+
+pub impl Arena {
+    fn finalCalleeCount() -> U64 { return self.finalCallees.count() }
+    fn finalCalleeAt(index: U64) -> CallResolution { return self.finalCallees[index] }
+    fn finalCalleeTypeArgumentCount() -> U64 { return self.finalCalleeTypeArgPool.count() }
+    fn finalCalleeParameterCount() -> U64 { return self.finalCalleeParameterTypePool.count() }
+    fn finalCalleeTypeArgAt(args: CallResolutionTypeArgRange, index: U64) -> U64 {
+        return self.finalCalleeTypeArgPool[args.start + index]
+    }
+
+    fn finalCalleeParameterTypeAt(types: CallResolutionParameterTypeRange, index: U64) -> U64 {
+        return self.finalCalleeParameterTypePool[types.start + index]
+    }
+
+    fn finalCalleeConversionAt(conversions: CallResolutionConversionRange, index: U64) -> U64 {
+        return self.finalCalleeConversionPool[conversions.start + index]
+    }
+
+    fn finalCalleeArgumentPassingAt(passings: CallResolutionArgumentPassingRange, index: U64) -> CallArgumentPassing {
+        return self.finalCalleeArgumentPassingPool[passings.start + index]
+    }
+
+    fn finalCalleeArgumentAt(arguments: CallResolutionArgumentRange, index: U64) -> CallEvaluationArgument {
+        return self.finalCalleeArgumentPool[arguments.start + index]
+    }
+
+    // Ranges supplied in row are never trusted; this store owns every payload.
+    inout fn publishFinalCallee(row: CallResolution, typeArguments: Array[U64] = [], parameterTypes: Array[U64] = [], conversions: Array[ValueConversionProof] = [], passings: Array[CallArgumentPassing] = [], arguments: Array[CallEvaluationArgument] = []) -> Bool {
+        if self.finalCalleeIndexForKey(bodyId: row.bodyId, siteKey: row.siteKey) < self.finalCalleeCount() { return false }
+        self.ensureFinalCalleeIndex(nextCount: self.finalCalleeCount() + 1U64)
+        val types = self.pushFinalCalleeTypeArgs(args: typeArguments)
+        val parameters = self.pushFinalCalleeParameterTypes(types: parameterTypes)
+        val conversionRange = self.pushFinalCalleeConversions(conversions: conversions)
+        val passingRange = self.pushFinalCalleeArgumentPassings(passings: passings)
+        val start = self.finalCalleeArgumentPool.count()
+        for argument in arguments { self.finalCalleeArgumentPool.append(argument) }
+        val argumentRange = <CallResolutionArgumentRange start=start len=arguments.count() />
+        self.finalCallees.append(<CallResolution bodyId=row.bodyId calleeBodyId=row.calleeBodyId siteKey=row.siteKey exprId=row.exprId siteIsStmt=row.siteIsStmt slot=row.slot callee=row.callee receiverPassing=row.receiverPassing recvTypeRef=row.recvTypeRef resultTypeRef=row.resultTypeRef resultProjection=row.resultProjection target=row.target calleeTypeArgs=types parameterTypeRefs=parameters argumentConversions=conversionRange argumentPassings=passingRange arguments=argumentRange />)
+        val capacity = self.finalCalleeIndexSlots.count()
+        mut val slot = self.finalCalleeHash(bodyId: row.bodyId, siteKey: row.siteKey) % capacity
+        while self.finalCalleeIndexSlots[slot] != 0U64 { slot = (slot + 1U64) % capacity }
+        self.finalCalleeIndexSlots.set(i: slot, value: self.finalCalleeCount())
+        return true
+    }
+}

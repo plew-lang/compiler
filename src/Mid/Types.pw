@@ -212,9 +212,9 @@ pub fn canonicalMidTerminatorTypesMatch(c: inout Comp, body: MidBodyNode, term: 
     if term.tag == 4U64 {
         if term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return false }
         val target = c.mid.callTargets[term.callTarget - 1U64]
-        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return false }
-        val call = c.arena.finalCallees[target.resolution]
-        if term.args.len != call.parameterTypeRefs.len || call.parameterTypeRefs.start > c.arena.finalCalleeParameterTypePool.count() || call.parameterTypeRefs.len > c.arena.finalCalleeParameterTypePool.count() - call.parameterTypeRefs.start { return false }
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCalleeCount() { return false }
+        val call = c.arena.finalCalleeAt(index: target.resolution)
+        if term.args.len != call.parameterTypeRefs.len || call.parameterTypeRefs.start > c.arena.finalCalleeParameterCount() || call.parameterTypeRefs.len > c.arena.finalCalleeParameterCount() - call.parameterTypeRefs.start { return false }
         index = 0U64
         while index < term.args.len {
             // Read scalar facts before invoking the semantic comparison. The

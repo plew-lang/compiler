@@ -30,7 +30,7 @@ fn main() {
     val signature = c.arena.bodySignature(bodyId: body)
     if !signature.ready || signature.parameterTypes.count() != 1U64 || !c.typeRefEq(a: signature.parameterTypes[0U64], b: term) || !c.typeRefEq(a: signature.resultType, b: term) { panic "signature did not ground its declaration" }
     if c.cur.checkFn != 77U64 || c.cur.bodyId != 88U64 || c.cur.selfRef != term || c.inCollection { panic "signature leaked its context" }
-    if c.lexicalBodyPreparations.count() != 0U64 || c.monoWork.bodyCount() != 0U64 || c.arena.finalCallees.count() != 0U64 || c.mid.bodies.count() != 0U64 { panic "signature requested executable body work" }
+    if c.lexicalBodyPreparations.count() != 0U64 || c.monoWork.bodyCount() != 0U64 || c.arena.finalCalleeCount() != 0U64 || c.mid.bodies.count() != 0U64 { panic "signature requested executable body work" }
     val types = c.arena.bodyTypeTermResult(bodyId: body, typeTerm: c.arena.functionAt(index: declaration).retTy)
     if types.bodyId != body || !c.typeRefEq(a: types.resultType, b: term) { panic "signature lost its instance type facts" }
     c.prepareFinalCallableSignature(bodyId: body).unwrap()

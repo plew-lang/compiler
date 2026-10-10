@@ -27,7 +27,7 @@ fn check(mode: U64) {
     if mode == 4U64 { blocks = [<MidBlock terminator=<MidTerminator.Unreachable /> />] }
     if mode == 5U64 {
         // Supply a typed call so the test isolates live-owner initialization.
-        c.arena.finalCallees.append(<CallResolution bodyId=0U64 exprId=0U64 callee=0U64 resultTypeRef=t />)
+        assert(c.arena.publishFinalCallee(row: <CallResolution bodyId=0U64 exprId=0U64 callee=0U64 resultTypeRef=t />))
         blocks = [<MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> receiver=<MidCallReceiver.None /> args=[] destination=p target=1U64 /> />,
             <MidBlock statements=[<MidStatement.Drop place=p />] terminator=<MidTerminator.Return /> />]
     }

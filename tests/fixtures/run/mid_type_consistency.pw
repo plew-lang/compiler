@@ -53,8 +53,7 @@ fn callAndReturn(mode: U64) {
     if mode < 3U64 {
         val parameter = if mode == 1U64 { give boolean } else { give integer }
         val result = if mode == 2U64 { give boolean } else { give integer }
-        c.arena.finalCalleeParameterTypePool.append(parameter)
-        c.arena.finalCallees.append(<CallResolution bodyId=0U64 exprId=0U64 callee=0U64 parameterTypeRefs=<CallResolutionParameterTypeRange start=0U64 len=1U64 /> resultTypeRef=result />)
+        assert(c.arena.publishFinalCallee(row: <CallResolution bodyId=0U64 exprId=0U64 callee=0U64 resultTypeRef=result />, parameterTypes: [parameter]))
         locals = [<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false />]
         blocks = [<MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> receiver=<MidCallReceiver.None /> args=[value] destination=destination target=1U64 /> />, <MidBlock statements=[<MidStatement.Drop place=destination />] terminator=<MidTerminator.Return /> />]
     } else {

@@ -28,7 +28,7 @@ fn main() {
     c.inCollection = false
     c.requestFinalBody(bodyId: member.adapterBodyId, requests: inout requests).unwrap()
     val prepared = c.arena.finalExistentials[0U64].members[0U64]
-    if prepared.callResolution == 0U64 || c.arena.finalCallees[prepared.callResolution - 1U64].calleeBodyId != member.bodyId { panic "witness request lost selected target" }
+    if prepared.callResolution == 0U64 || c.arena.finalCalleeAt(index: prepared.callResolution - 1U64).calleeBodyId != member.bodyId { panic "witness request lost selected target" }
     if c.lexicalBodyPreparations.count() != declarations { panic "adapter requested target source body" }
     val calls = c.finalCalleeCount()
     c.requestFinalBody(bodyId: member.adapterBodyId, requests: inout requests).unwrap()

@@ -124,7 +124,7 @@ pub fn analyzeMidGlobalAccess(c: inout Comp) -> Result[MidGlobalAccessAnalysis, 
                 graph.terminatorOperands(arena: c.mid, body: index, term: term)
                 if term.tag == 4U64 {
                     val target = c.mid.callTargets[term.callTarget - 1U64]
-                    val selected = c.arena.finalCallees[target.resolution]
+                    val selected = c.arena.finalCalleeAt(index: target.resolution)
                     match selected.target {
                         CallTarget.Direct => {
                             // Foreign boundaries are accepted, never labelled

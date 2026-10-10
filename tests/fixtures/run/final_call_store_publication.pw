@@ -1,0 +1,31 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Arena, CallResolution, CallSiteKey, CallResolutionParameterTypeRange, ValueConversionProof }
+fn main() {
+    mut val arena: Arena = <Arena />
+    val site = <CallSiteKey ownerFnIdx=3U64 originKind=1U64 originSerial=7U64 />
+    val row = <CallResolution bodyId=1U64 siteKey=site exprId=8U64 callee=9U64 parameterTypeRefs=<CallResolutionParameterTypeRange start=999U64 len=999U64 /> resultTypeRef=11U64 />
+    assert(arena.publishFinalCallee(row: row, parameterTypes: [13U64], conversions: [<ValueConversionProof.Identity />]))
+    val saved = arena.finalCalleeAt(index: 0U64)
+    assert(saved.parameterTypeRefs.start == 0U64 && saved.parameterTypeRefs.len == 1U64)
+    assert(arena.finalCalleeParameterTypeAt(types: saved.parameterTypeRefs, index: 0U64) == 13U64)
+    assert(arena.conversionProofIsIdentity(id: arena.finalCalleeConversionAt(conversions: saved.argumentConversions, index: 0U64)))
+    assert(!arena.publishFinalCallee(row: <CallResolution bodyId=1U64 siteKey=site exprId=8U64 callee=99U64 />, parameterTypes: [99U64]))
+    assert(arena.finalCalleeCount() == 1U64 && arena.finalCalleeParameterCount() == 1U64 && arena.finalCalleeAt(index: 0U64).callee == 9U64)
+    val snapshot = arena
+    mut val index = 0U64
+    while index < 100U64 {
+        assert(arena.publishFinalCallee(row: <CallResolution bodyId=2U64 siteKey=<CallSiteKey originKind=2U64 originSerial=index + 1U64 /> exprId=index callee=index />))
+        index += 1U64
+    }
+    assert(arena.finalCalleeIndexForKey(bodyId: 1U64, siteKey: site) == 0U64)
+    assert(snapshot.finalCalleeCount() == 1U64 && snapshot.finalCalleeAt(index: 0U64).callee == 9U64)
+    mut val compiler: Comp = <Comp arena=arena />
+    match compiler.initializeFinalCallables() {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic "reinitialized published calls" }
+    }
+    assert(compiler.arena.finalCalleeCount() == 101U64)
+    print("ok")
+}

@@ -112,7 +112,7 @@ fn instantiateMidType(c: inout Comp, typeTerm: U64, typeRecipe: U64, bodyId: U64
                 return 0U64
             }
             val call = c.arena.finalCalleeIndexForKey(bodyId: bodyId, siteKey: recipe.callSite)
-            if call >= c.arena.finalCallees.count() || c.arena.finalCallees[call].resultTypeRef != 0U64 {
+            if call >= c.arena.finalCalleeCount() || c.arena.finalCalleeAt(index: call).resultTypeRef != 0U64 {
                 error = <MidInstantiateError.InvalidLocalResultType />
                 return 0U64
             }
@@ -777,7 +777,7 @@ fn instantiateCanonicalCallTarget(c: inout Comp, targetId: U64, bodyId: U64, err
                 return 0U64
             }
             val fact: FinalTryResolution = c.arena.finalTries[tryIndex]
-            if !fact.hasErrorConversion || fact.errorConversionResolution >= c.arena.finalCallees.count() {
+            if !fact.hasErrorConversion || fact.errorConversionResolution >= c.arena.finalCalleeCount() {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidTryResolution /> }
                 return 0U64
             }
@@ -890,8 +890,8 @@ fn canonicalForCallResolution(arena: Arena, bodyId: U64, stmtId: U64, slot: U64)
     val index: U64 = arena.finalForIndex(bodyId: bodyId, stmtId: stmtId)
     if index >= arena.finalFors.count() { return 0U64 }
     val fact: FinalForResolution = arena.finalFors[index]
-    if slot == 1U64 && fact.iteratorResolution < arena.finalCallees.count() { return fact.iteratorResolution + 1U64 }
-    if slot == 2U64 && fact.nextResolution < arena.finalCallees.count() { return fact.nextResolution + 1U64 }
+    if slot == 1U64 && fact.iteratorResolution < arena.finalCalleeCount() { return fact.iteratorResolution + 1U64 }
+    if slot == 2U64 && fact.nextResolution < arena.finalCalleeCount() { return fact.nextResolution + 1U64 }
     return 0U64
 }
 
@@ -901,20 +901,20 @@ fn canonicalCallResolution(arena: Arena, mid: MidCanonicalArena, terminator: Mid
     match target.tag {
         4U64 => { return canonicalForCallResolution(arena: arena, bodyId: bodyId, stmtId: target.exprId, slot: target.slot) }
         2U64 => {
-            if target.resolution >= arena.finalCallees.count() { return 0U64 }
+            if target.resolution >= arena.finalCalleeCount() { return 0U64 }
             return target.resolution + 1U64
         }
         1U64 => {
             val site: CallSiteKey = <CallSiteKey ownerFnIdx=target.ownerFnIdx originKind=target.originKind originStart=target.originStart originEnd=target.originEnd originSerial=target.originSerial slot=target.slot />
             val resolution: U64 = arena.finalCalleeIndexForKey(bodyId: bodyId, siteKey: site)
-            if resolution >= arena.finalCallees.count() { return 0U64 }
+            if resolution >= arena.finalCalleeCount() { return 0U64 }
             return resolution + 1U64
         }
         3U64 => {
             val tryIndex: U64 = arena.finalTryIndex(bodyId: bodyId, exprId: target.exprId)
             if tryIndex >= arena.finalTries.count() { return 0U64 }
             val fact: FinalTryResolution = arena.finalTries[tryIndex]
-            if !fact.hasErrorConversion || fact.errorConversionResolution >= arena.finalCallees.count() { return 0U64 }
+            if !fact.hasErrorConversion || fact.errorConversionResolution >= arena.finalCalleeCount() { return 0U64 }
             return fact.errorConversionResolution + 1U64
         }
         _ => { return 0U64 }
@@ -935,7 +935,7 @@ fn canonicalBlockTargets(c: Comp, source: MidBodyNode, bodyId: U64) -> Array[U64
             if terminator.tag == 4U64 {
                 val resolution: U64 = canonicalCallResolution(arena: c.arena, mid: c.mid, terminator: terminator, bodyId: bodyId)
                 if resolution != 0U64 {
-                    val selected: CallResolution = c.arena.finalCallees[resolution - 1U64]
+                    val selected: CallResolution = c.arena.finalCalleeAt(index: resolution - 1U64)
                     mut val argumentI: U64 = 0U64
                     while argumentI < selected.argumentConversions.len {
                         mut val receiverCleanup = false
@@ -1154,7 +1154,7 @@ pub fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, local
     val resolutionId: U64 = canonicalCallResolution(arena: c.arena, mid: c.mid, terminator: term, bodyId: bodyId)
     if resolutionId == 0U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.MissingCallResolution /> /> }
     val resolution: U64 = resolutionId - 1U64
-    val selected: CallResolution = c.arena.finalCallees[resolution]
+    val selected: CallResolution = c.arena.finalCalleeAt(index: resolution)
     if selected.argumentConversions.len != term.args.len || selected.parameterTypeRefs.len != term.args.len || selected.argumentPassings.len != term.args.len {
         if c.traceCodegen {
             eprint(text: "[trace-codegen] Mid call arity body=")

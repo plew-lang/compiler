@@ -42,7 +42,8 @@ fn complete() {
                         ExecutableCompilationResult.Success(compilation: val compilation) => {
                             if compilation.compiler.arena.bodyInstanceAt(index: root.bodyId - 1U64).fnIdx != 0U64 || compilation.compiler.arena.bodyInstanceAt(index: callee.bodyId - 1U64).fnIdx != 1U64 { panic "whole preparation reset identities" }
                             mut val calls = 0U64
-                            for call in compilation.compiler.arena.finalCallees {
+                            for val callIndex in 0U64..<compilation.compiler.arena.finalCalleeCount() {
+                                val call = compilation.compiler.arena.finalCalleeAt(index: callIndex)
                                 if call.bodyId == root.bodyId { calls += 1U64 }
                             }
                             if calls != 1U64 { panic "whole preparation rescanned requested body" }

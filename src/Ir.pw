@@ -2900,18 +2900,18 @@ pub struct Arena {
     // Final static call selections belong to the analyzed program, not to
     // MonoWork's transient discovery queues.  LLVM consumes this immutable
     // semantic result after frontend finalization.
-    pub mut val finalCallees: Array[CallResolution] = []
+    mut val finalCallees: Array[CallResolution] = []
     // Payload pools for the scalar CallResolution table.  They are semantic
     // output, not backend caches: a descriptor range is immutable after its
     // single publication and backend consumers may only read it through the
     // owner-aware APIs on Comp.
-    pub mut val finalCalleeTypeArgPool: Array[U64] = []
-    pub mut val finalCalleeParameterTypePool: Array[U64] = []
+    mut val finalCalleeTypeArgPool: Array[U64] = []
+    mut val finalCalleeParameterTypePool: Array[U64] = []
     // One-based ConversionProofNode IDs.  Keeping recursive proof values in a
     // final-call row/pool made an ordinary descriptor read an ARC operation.
-    pub mut val finalCalleeConversionPool: Array[U64] = []
-    pub mut val finalCalleeArgumentPassingPool: Array[CallArgumentPassing] = []
-    pub mut val finalCalleeArgumentPool: Array[CallEvaluationArgument] = []
+    mut val finalCalleeConversionPool: Array[U64] = []
+    mut val finalCalleeArgumentPassingPool: Array[CallArgumentPassing] = []
+    mut val finalCalleeArgumentPool: Array[CallEvaluationArgument] = []
     // Concrete aggregate conversions, keyed by (BodyInstance, source ExprId).
     // This is semantic output alongside finalCallees, not a backend cache.
     pub mut val finalAggregates: Array[FinalAggregateResolution] = []
@@ -2951,7 +2951,7 @@ pub struct Arena {
     mut val bodyFunctionNext: Array[U64] = []
     // Derived open-addressed index for finalCallees. Slots hold a 1-based
     // finalCallees index and are rebuilt from CallResolution's semantic key only.
-    pub mut val finalCalleeIndexSlots: Array[U64] = []
+    mut val finalCalleeIndexSlots: Array[U64] = []
     // Derived open-addressed index for finalAggregates. Slots hold one-based
     // table positions and can always be rebuilt from the immutable key.
     pub mut val finalAggregateIndexSlots: Array[U64] = []

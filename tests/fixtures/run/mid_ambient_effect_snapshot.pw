@@ -21,7 +21,7 @@ fn main() {
     mut val tested = false
     for term in compiler.mid.terminators {
         if term.tag == 4U64 {
-            val target = compiler.arena.finalCallees[compiler.mid.callTargets[term.callTarget - 1U64].resolution]
+            val target = compiler.arena.finalCalleeAt(index: compiler.mid.callTargets[term.callTarget - 1U64].resolution)
             match target.target {
                 CallTarget.Direct => {
                     if target.calleeBodyId != 0U64 {

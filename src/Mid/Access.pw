@@ -286,7 +286,7 @@ fn canonicalAccessRecipeLocal(plan: MidCanonicalAccessPlan, inputId: U64, localB
 fn canonicalAccessSiteAt(c: Comp, body: MidBodyNode, term: MidTerminatorNode, ordinal: U64) -> MidCanonicalAccessSite {
     if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <MidCanonicalAccessSite /> }
     val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-    if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <MidCanonicalAccessSite /> }
+    if target.tag != 2U64 || target.resolution >= c.arena.finalCalleeCount() { return <MidCanonicalAccessSite /> }
     mut val inputs: MidRange = <MidRange start=0U64 len=0U64 />
     mut val candidate: U64 = 0U64
     mut val role: U64 = 0U64
@@ -540,7 +540,7 @@ fn canonicalAccessAppendLocals(c: inout Comp, body: MidBodyNode, layout: MidCano
                     val accessId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: stage)
                     if accessId == 0U64 { return <MidAccessError.InvalidAccessChain /> }
                     val access: SemanticAccess = c.arena.semanticAccesses[accessId - 1U64]
-                    if !access.write || access.readResolution >= c.arena.finalCallees.count() || access.writeResolution >= c.arena.finalCallees.count() { return <MidAccessError.UnresolvedAccessCall /> }
+                    if !access.write || access.readResolution >= c.arena.finalCalleeCount() || access.writeResolution >= c.arena.finalCalleeCount() { return <MidAccessError.UnresolvedAccessCall /> }
                     c.mid.locals.append(<MidLocalDecl typeTerm=access.valueTerm sourceScope=0U64 isUnique=false isParameter=false />)
                     stage = stage + 1U64
                 }
@@ -550,7 +550,7 @@ fn canonicalAccessAppendLocals(c: inout Comp, body: MidBodyNode, layout: MidCano
                     val access: SemanticAccess = c.arena.semanticAccesses[accessId - 1U64]
                     // Even a Unit-returning call has its own result local.
                     // Never alias a still-live getter value as a call result.
-                    val setter: CallResolution = c.arena.finalCallees[access.writeResolution]
+                    val setter: CallResolution = c.arena.finalCalleeAt(index: access.writeResolution)
                     c.mid.locals.append(<MidLocalDecl typeTerm=setter.resultTypeRef sourceScope=0U64 isUnique=false isParameter=false />)
                     stage = stage + 1U64
                 }
@@ -570,7 +570,7 @@ fn canonicalAccessAppendLocals(c: inout Comp, body: MidBodyNode, layout: MidCano
                     if input.base == 0U64 || input.base > c.arena.semanticAccessInputs.count() { return <MidAccessError.InvalidAccessChain /> }
                     localTerm = c.arena.semanticAccessInputs[input.base - 1U64].typeTerm
                     if !c.isStrongRefInst(ref: localTerm) || !c.typeRefEq(a: c.arena.typeAt(index: localTerm).args[0U64], b: input.typeTerm) { return <MidAccessError.InvalidAccessChain /> }
-                } else if input.tag != 6U64 || input.readResolution >= c.arena.finalCallees.count() { return <MidAccessError.UnresolvedAccessCall /> }
+                } else if input.tag != 6U64 || input.readResolution >= c.arena.finalCalleeCount() { return <MidAccessError.UnresolvedAccessCall /> }
                 c.mid.locals.append(<MidLocalDecl typeTerm=localTerm sourceScope=0U64 isUnique=false isParameter=false />)
                 recipeI += 1U64
             }
@@ -613,7 +613,7 @@ fn canonicalAccessKeyOperand(c: inout Comp, body: MidBodyNode, access: SemanticA
 }
 
 fn canonicalAccessAppendResolvedTarget(c: inout Comp, resolution: U64) -> U64 {
-    if resolution >= c.arena.finalCallees.count() { return 0U64 }
+    if resolution >= c.arena.finalCalleeCount() { return 0U64 }
     c.mid.callTargets.append(<MidCallTargetNode tag=2U64 resolution=resolution />)
     return c.mid.callTargets.count()
 }
@@ -631,8 +631,8 @@ fn canonicalAccessAppendValueReceiver(c: inout Comp, operand: U64) -> U64 {
 // call closed over Mid facts and makes `fn index` (read borrow) distinct from
 // `inout fn indexSet` (mutable borrow).
 fn canonicalAccessAppendSelectedReceiver(c: inout Comp, operandId: U64, resolution: U64) -> U64 {
-    if resolution >= c.arena.finalCallees.count() || operandId == 0U64 || operandId > c.mid.operands.count() { return 0U64 }
-    val selected: CallResolution = c.arena.finalCallees[resolution]
+    if resolution >= c.arena.finalCalleeCount() || operandId == 0U64 || operandId > c.mid.operands.count() { return 0U64 }
+    val selected: CallResolution = c.arena.finalCalleeAt(index: resolution)
     val source: MidOperandNode = c.mid.operands[operandId - 1U64]
     mut val operand: U64 = operandId
     match selected.receiverPassing {
@@ -659,8 +659,8 @@ fn canonicalAccessAppendSelectedReceiver(c: inout Comp, operandId: U64, resoluti
 // parameter independently.  The access rewrite has no special calling
 // convention of its own.
 fn canonicalAccessAppendSelectedArgument(c: inout Comp, operandId: U64, resolution: U64, index: U64) -> U64 {
-    if resolution >= c.arena.finalCallees.count() || operandId == 0U64 || operandId > c.mid.operands.count() { return 0U64 }
-    val selected: CallResolution = c.arena.finalCallees[resolution]
+    if resolution >= c.arena.finalCalleeCount() || operandId == 0U64 || operandId > c.mid.operands.count() { return 0U64 }
+    val selected: CallResolution = c.arena.finalCalleeAt(index: resolution)
     if index >= selected.argumentPassings.len { return 0U64 }
     val passing = c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index)
     val source: MidOperandNode = c.mid.operands[operandId - 1U64]
@@ -740,7 +740,7 @@ fn canonicalAccessParentBorrow(c: inout Comp, body: MidBodyNode, site: MidCanoni
 fn canonicalAccessAppendParentTerminator(c: inout Comp, body: MidBodyNode, term: MidTerminatorNode, blockStart: U64, localBase: U64, plan: MidCanonicalAccessPlan, mutableLocalCount: U64) -> MidAccessError {
     if term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <MidAccessError.UnresolvedAccessCall /> }
     val sourceTarget: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
-    if sourceTarget.tag != 2U64 || sourceTarget.resolution >= c.arena.finalCallees.count() { return <MidAccessError.UnresolvedAccessCall /> }
+    if sourceTarget.tag != 2U64 || sourceTarget.resolution >= c.arena.finalCalleeCount() { return <MidAccessError.UnresolvedAccessCall /> }
     val argumentStart: U64 = c.mid.callArguments.count()
     mut val markerI: U64 = 0U64
     mut val receiverId: U64 = 0U64
@@ -823,7 +823,7 @@ fn canonicalAccessAppendRecipeGetter(c: inout Comp, body: MidBodyNode, blockStar
     val operation: MidCanonicalAccessOperation = plan.operations[operationIndex]
     if operation.tag != 1U64 || operation.inputId == 0U64 || operation.inputId > c.arena.semanticAccessInputs.count() { return <MidAccessError.InvalidAccessChain /> }
     val input: SemanticAccessInput = c.arena.semanticAccessInputs[operation.inputId - 1U64]
-    if input.tag != 6U64 || input.readResolution >= c.arena.finalCallees.count() { return <MidAccessError.UnresolvedAccessCall /> }
+    if input.tag != 6U64 || input.readResolution >= c.arena.finalCalleeCount() { return <MidAccessError.UnresolvedAccessCall /> }
     val local: U64 = canonicalAccessRecipeLocal(plan: plan, inputId: operation.inputId, localBase: localBase, mutableLocalCount: mutableLocalCount)
     if local == 0U64 { return <MidAccessError.InvalidAccessChain /> }
     val destination: U64 = canonicalAccessAppendPlace(c: inout c, local: local, typeTerm: input.typeTerm)
@@ -891,8 +891,8 @@ fn canonicalAccessAppendSetter(c: inout Comp, body: MidBodyNode, layout: MidCano
     val rawKey: U64 = canonicalAccessKeyOperand(c: inout c, body: body, access: access, plan: plan, recipeLocalBase: localBase, mutableLocalCount: mutableLocalCount)
     if base == 0U64 { return <MidAccessError.UnsupportedAccessBase /> }
     if rawKey == 0U64 { return <MidAccessError.UnsupportedAccessKey /> }
-    if access.writeResolution >= c.arena.finalCallees.count() { return <MidAccessError.UnresolvedAccessCall /> }
-    val setter: CallResolution = c.arena.finalCallees[access.writeResolution]
+    if access.writeResolution >= c.arena.finalCalleeCount() { return <MidAccessError.UnresolvedAccessCall /> }
+    val setter: CallResolution = c.arena.finalCalleeAt(index: access.writeResolution)
     if setter.callee >= c.arena.functionCount() { return <MidAccessError.UnresolvedAccessCall /> }
     val receiver: U64 = canonicalAccessAppendSelectedReceiver(c: inout c, operandId: base, resolution: access.writeResolution)
     val target: U64 = canonicalAccessAppendResolvedTarget(c: inout c, resolution: access.writeResolution)
