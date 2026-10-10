@@ -1,6 +1,6 @@
 use @Std/Io only { write }
-use /Frontend only { Comp }
-use /Ir only { Func, SemanticExprType, Arg, ArgRange, Block, CallArgumentSource, CallTemplate, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, StaticConformanceProof, Stmt, identValueCode }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
 use /Mid only { MidBuildError, MidBuildState, MidTerminator, addMidLocal, buildMidBlock }
 
 // A CallTemplate carries whether a selected argument is `inout`. Mid must turn
@@ -8,26 +8,18 @@ use /Mid only { MidBuildError, MidBuildState, MidTerminator, addMidLocal, buildM
 // Copy operand for a later backend to reinterpret.
 fn main() {
     mut val c: Comp = <Comp />
-    c.arena.reserveTypeSentinel()
-    // The call belongs to a real source owner, not the no-function sentinel.
-    c.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 params=c.pushFuncParams(params: []) hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
-    val typeName = c.internBytes(s: "I64")
-    val valueTerm = c.simpleTypeRef(nameStart: typeName.nameStart, nameLen: typeName.nameLen)
-    c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
-    c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
-    c.arena.exprs.append(<Expr.Ident start=90U64 len=4U64 />)
-    c.arena.exprs.append(<Expr.Call nameStart=0U64 nameLen=0U64 args=<ArgRange start=0U64 len=1U64 /> />)
-    c.arena.argPool.append(<Arg labelStart=0U64 labelLen=0U64 expr=0U64 isInout=true hasLabel=false />)
-    c.typeCache.identBind.append(identValueCode())
-    c.typeCache.identTarget.append(90U64)
-    val key = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: 1U64).unwrap().siteKey
-    c.appendCallTemplate(template: <CallTemplate siteKey=key kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=c.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=0U64 term=valueTerm /> isInout=true labelStart=0U64 labelLen=0U64 hasLabel=false />]) calleeTypeArgs=c.publishCallTemplateTypeArgs(args: []) proofId=c.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />) /> />)
-    c.arena.stmts.append(<Stmt.ExprStmt expr=1U64 />)
-    c.arena.blockStmtPool.append(0U64)
-    c.arena.blocks.append(<Block stmtStart=0U64 stmtLen=1U64 />)
-    mut val state: MidBuildState = <MidBuildState.initial sourceFunction=0U64 />
-    addMidLocal(state: inout state, declarationTarget: 90U64, typeTerm: valueTerm, isUnique: false, isParameter: false, ownsAtEntry: true)
-    val result = buildMidBlock(c: inout c, state: inout state, blockId: 0U64)
+    analyzeFrontendForRequests(c: inout c,
+        input: <FrontendInput.Text path="inout-call-cfg.pw" text="fn sink(value: inout I64) {{}} fn probe(value: inout I64) {{ sink(value: inout value) }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = c.arena.firstFunctionNamed(nameId: c.internBytes(s: "probe").nameId)
+    val function = c.arena.functionAt(index: owner)
+    val parameter = c.funcParamAt(params: function.params, index: 0U64)
+    val valueTerm = parameter.ty
+    c.prepareLexicalBody(fnIdx: owner).unwrap()
+    val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    mut val state = <MidBuildState.initial sourceFunction=owner sourceFacts=<Optional.Some v=facts /> />
+    addMidLocal(state: inout state, declarationTarget: parameter.nameStart, typeTerm: valueTerm, isUnique: false, isParameter: true, ownsAtEntry: false, isInout: true)
+    val result = buildMidBlock(c: inout c, state: inout state, blockId: function.body)
     mut val isInoutBorrow: Bool = false
     match state.blocks[0U64].terminator {
         MidTerminator.NormalizedCall(callee: _, receiver: _, args: val args, destination: _, target: val target) => {
