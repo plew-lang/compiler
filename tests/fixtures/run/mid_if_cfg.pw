@@ -1,50 +1,37 @@
 use @Std/Io only { write }
-use /Frontend only { Comp }
-use /Ir only { Block, Expr, SemanticExprType, StructDef, Stmt, Func, InstanceEnvironment, FinalStorageResolution, ValueConversionProof, identValueCode }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Stmt, InstanceEnvironment, FinalStorageResolution, ValueConversionProof }
 use /Mid only { MidInstantiateError, MidBuildError, MidBuildState, MidBody, MidOwnership, MidStatement, MidTerminator, MidVerifyError, addMidLocal, analyzeCanonicalMidOwnership, buildMidBlock, buildMidIf, elaborateCanonicalMidDrops, instantiateCanonicalMidBody, verifyCanonicalMidBody }
 
 fn main() {
     mut val c: Comp = <Comp />
-    c.arena.reserveTypeSentinel()
-    val fileName = c.internBytes(s: "File")
-    c.arena.registerStruct(<StructDef nameStart=fileName.nameStart nameLen=fileName.nameLen nameId=fileName.nameId typeParams=[] fields=[] isUnique=true isExtern=false />)
-    val fileTerm = c.simpleTypeRef(nameStart: fileName.nameStart, nameLen: fileName.nameLen)
-    val boolName = c.internBytes(s: "Bool")
-    val boolTerm = c.simpleTypeRef(nameStart: boolName.nameStart, nameLen: boolName.nameLen)
-    c.arena.semanticExprTypes.append(<SemanticExprType term=boolTerm />)
-    c.arena.semanticExprTypes.append(<SemanticExprType term=fileTerm />)
-    c.arena.semanticExprTypes.append(<SemanticExprType term=fileTerm />)
-    // if true { val transferred = move file } else {}
-    c.arena.exprs.append(<Expr.Int value=1U64 offset=0U64 isBool=true tyStart=0U64 tyLen=0U64 isNeg=false />)
-    c.arena.exprs.append(<Expr.Ident start=60U64 len=4U64 />)
-    c.arena.exprs.append(<Expr.Move operand=1U64 isBorrow=false />)
-    c.typeCache.identBind.append(0I64)
-    c.typeCache.identTarget.append(0U64)
-    c.typeCache.identBind.append(identValueCode())
-    c.typeCache.identTarget.append(60U64)
-    c.arena.stmts.append(<Stmt.Let mutable=false nameStart=70U64 nameLen=11U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=fileTerm init=2U64 />)
-    // The builder consumes the lexical type recorded by the frontend.
-    c.decls.semanticLetTerms[0U64] = fileTerm
-    c.arena.blockStmtPool.append(0U64)
-    c.arena.blocks.append(<Block stmtStart=0U64 stmtLen=1U64 />)
-    c.arena.blocks.append(<Block stmtStart=1U64 stmtLen=0U64 />)
-    c.arena.stmts.append(<Stmt.If cond=0U64 thenBlk=0U64 elseBlk=1U64 hasElse=true />)
-    mut val state: MidBuildState = <MidBuildState.initial sourceFunction=0U64 />
-    val fileLocal = addMidLocal(state: inout state, declarationTarget: 60U64, typeTerm: fileTerm, isUnique: true, isParameter: false, ownsAtEntry: true)
-    val result = buildMidIf(c: inout c, state: inout state, stmtId: 1U64)
+    analyzeFrontendForRequests(c: inout c,
+        input: <FrontendInput.Text path="if-cfg.pw" text="unique struct File {{}} fn probe(file: move File) {{ if true {{ val transferred = move file }} else {{}} }} fn returning() {{ return }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = c.arena.firstFunctionNamed(nameId: c.internBytes(s: "probe").nameId)
+    val function = c.arena.functionAt(index: owner)
+    val parameter = c.funcParamAt(params: function.params, index: 0U64)
+    val fileTerm = parameter.ty
+    val ifStatement = c.blockStmtAt(blkId: function.body, index: 0U64)
+    val bindingStatement = match c.arena.stmts[ifStatement] {
+        Stmt.If(cond: _, thenBlk: val thenBlock, elseBlk: _, hasElse: _) => { give c.blockStmtAt(blkId: thenBlock, index: 0U64) }
+        _ => { panic "missing if probe" }
+    }
+    c.prepareLexicalBody(fnIdx: owner).unwrap()
+    val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    mut val state = <MidBuildState.initial sourceFunction=owner sourceFacts=<Optional.Some v=facts /> />
+    val fileLocal = addMidLocal(state: inout state, declarationTarget: parameter.nameStart, typeTerm: fileTerm, isUnique: true, isParameter: true, ownsAtEntry: true)
+    val result = buildMidIf(c: inout c, state: inout state, stmtId: ifStatement)
     val body: MidBody = <MidBody locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 />
     val frozen = c.mid.store(body: body)
     val ownership = analyzeCanonicalMidOwnership(arena: c.mid, canonical: frozen)
     val joinState: MidOwnership = ownership[3U64][0U64]
     // The builder yields parametric storage boundaries. Publish the concrete
     // frontend fact and instantiate before drop elaboration and verification.
-    c.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 params=c.pushFuncParams(params: [])
-        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64
-        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false
-        isAssoc=false isAsync=false isExtern=false />)
-    val instance = c.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment />)
+    val instance = c.internBodyInstance(fnIdx: owner, environment: <InstanceEnvironment />)
     val identity = c.freezeValueConversionProof(proof: <ValueConversionProof.Identity />)
-    c.putFinalStorage(fact: <FinalStorageResolution bodyId=instance stmtId=0U64 sourceTypeRef=fileTerm targetTypeRef=fileTerm conversion=identity />)
+    c.putFinalStorage(fact: <FinalStorageResolution bodyId=instance stmtId=bindingStatement sourceTypeRef=fileTerm targetTypeRef=fileTerm conversion=identity />)
     val concrete = instantiateCanonicalMidBody(c: inout c, body: c.mid.store(body: body), bodyId: instance)
     mut val instantiated: Bool = false
     match concrete.error { MidInstantiateError.None => { instantiated = true } _ => {} }
@@ -58,11 +45,11 @@ fn main() {
         MidVerifyError.None => { elaboratedValid = true }
         _ => {}
     }
-    c.arena.stmts.append(<Stmt.Return value=0U64 hasValue=false offset=0U64 />)
-    c.arena.blockStmtPool.append(2U64)
-    c.arena.blocks.append(<Block stmtStart=1U64 stmtLen=1U64 />)
-    mut val returnState: MidBuildState = <MidBuildState.initial sourceFunction=0U64 />
-    val returnResult = buildMidBlock(c: inout c, state: inout returnState, blockId: 2U64)
+    val returnOwner = c.arena.firstFunctionNamed(nameId: c.internBytes(s: "returning").nameId)
+    c.prepareLexicalBody(fnIdx: returnOwner).unwrap()
+    val returnFacts = c.preparedFunctionSemanticFacts(fnIdx: returnOwner).unwrap()
+    mut val returnState = <MidBuildState.initial sourceFunction=returnOwner sourceFacts=<Optional.Some v=returnFacts /> />
+    val returnResult = buildMidBlock(c: inout c, state: inout returnState, blockId: c.arena.functionAt(index: returnOwner).body)
     mut val returned: Bool = false
     match returnResult { MidBuildError.None => { match returnState.blocks[0U64].terminator { MidTerminator.Return => { returned = true } _ => {} } } _ => {} }
     mut val built: Bool = false
