@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+trait Q {}
+struct Item {}
+pub impl Item { factory }
+impl Item as Q {}
+struct Box[T] {}
+pub impl[T] Box[T] { factory }
+impl[T] Box[T] as Q where T: Q {}
+fn free[T](value: T) where T: Q {}
+fn probe[T](value: T) where T: Q {
+    free(value: <Box[T] />)
+}
+fn main() {
+    probe(value: <Item />)
+    print("condition-forwarded")
+}

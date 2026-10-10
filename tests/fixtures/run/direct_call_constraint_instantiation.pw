@@ -2,13 +2,13 @@
 // could prove the same trait. Missing evidence must not be silently repaired.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { CallTemplateKind, CallableConstraintEvidence, StaticConformanceProof, StaticProofInstantiation, DeclarationBoundRef, InstanceEnvironment, SelectedCallConstraints }
+use /Ir only { CallTemplateKind, CallableConstraintEvidence, StaticConformanceProof, StaticProofInstantiation, DeclarationBoundRef, InstanceEnvironment, SelectedCallConstraints, WitnessMatch, WitnessConditionPlan, SelectedWitnessInstantiation }
 use @Std/Io only { print }
 
 fn main() {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler,
-        input: <FrontendInput.Text text="trait Q {{}} struct Item {{}} impl Item as Q {{}} fn free[Value](value: Value) where Value: Q {{}} extern(c) {{ fn foreign() }} fn probe() {{ free(value: <Item />) }}" path="direct-constraints.pw" />,
+        input: <FrontendInput.Text text="trait Q {{}} struct Item {{}} impl Item as Q {{}} struct Box[Value] {{}} impl[Value] Box[Value] as Q where Value: Q {{}} fn boxed(value: Box[Item]) {{}} fn free[Value](value: Value) where Value: Q {{}} extern(c) {{ fn foreign() }} fn probe() {{ free(value: <Item />) }}" path="direct-constraints.pw" />,
         sources: <SourceAccess stdRoot=[] />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "free").nameId)
@@ -49,6 +49,24 @@ fn main() {
                                 }
                                 _ => { panic("retained call constraint did not instantiate") }
                             }
+                            val boxed = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "boxed").nameId)
+                            val boxedType = compiler.funcParamAt(params: compiler.arena.functionAt(index: boxed).params, index: 0U64).ty
+                            val selected = compiler.viewedTraitConstraintProof(ref: boxedType, constraint: bounds[0U64].constraint).unwrap()
+                            val conditional = match selected {
+                                StaticConformanceProof.ConcreteWitness(witness: val witness) => { give witness }
+                                _ => { panic("missing conditional witness") }
+                            }
+                            val substitution = <WitnessMatch selfRef=conditional.selfRef conformIdx=conditional.conformIdx binds=conditional.binds />
+                            compiler.arena.witnessConditionPlans.append(<WitnessConditionPlan witness=substitution proofs=[compiler.freezeStaticConformanceProof(proof: assumed)] />)
+                            val dependent = <WitnessMatch selfRef=substitution.selfRef conformIdx=substitution.conformIdx binds=substitution.binds conditions=compiler.arena.witnessConditionPlans.count() />
+                            match compiler.groundSelectedWitness(witness: dependent, receiverRef: boxedType, environment: retained, selfRef: 0U64, itemRef: 0U64).unwrap() {
+                                SelectedWitnessInstantiation.Ready(witness: val concrete) => {
+                                    val child = compiler.thawStaticConformanceProof(id: compiler.arena.witnessConditionPlans[concrete.conditions - 1U64].proofs[0U64])
+                                    if !compiler.sameStaticConformanceProof(a: child, b: proofs[0U64]) { panic("condition replaced retained presence proof") }
+                                }
+                                _ => { panic("condition did not consume retained evidence") }
+                            }
+                            if compiler.groundSelectedWitness(witness: dependent, receiverRef: boxedType, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64).isOk() { panic("condition repaired missing binding by searching") }
                             compiler.cur.bodyEnvironment = <InstanceEnvironment />
                             if compiler.instantiateConstraintProof(proof: assumed, receiverRef: bounds[0U64].subject, environment: compiler.cur.bodyEnvironment, selfRef: compiler.cur.bodySelfRef, itemRef: compiler.cur.bodyItemRef).isOk() { panic("missing binding was repaired by conformance lookup") }
                             compiler.cur = savedContext
