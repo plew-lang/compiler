@@ -161,7 +161,8 @@ impl Comp {
 
 impl Comp {
     inout fn recordGlobalCallTemplateOwner(templateIndex: U64) {
-        if self.callTemplates[templateIndex].siteKey.ownerFnIdx != 18446744073709551615U64 { return }
+        val owner = self.callTemplates[templateIndex].siteKey.ownerFnIdx
+        if self.callTemplateLexicalRoots.getOr(key: owner, fallback: owner) != 18446744073709551615U64 { return }
         match self.cur.globalInitializerTarget {
             Optional.Some(v: val target) => {
                 mut val indices = self.globalCallTemplateOwners.getOr(key: target, fallback: [])

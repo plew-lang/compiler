@@ -1,0 +1,16 @@
+// A global preparation includes calls in its lexically owned closure body.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="fn helper() -> I64 {{ return 1I64 }} val callback = fn() -> I64 {{ return helper() }} fn main() {{}}" path="global-closure.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val target = compiler.arena.globals[0U64].nameStart
+    compiler.prepareGlobalInitializer(target: target).unwrap()
+    if compiler.semanticClosureCount() != 1U64 { panic("closure metadata count") }
+    val closure = compiler.preparedSemanticClosureAt(index: 0U64).unwrap()
+    val calls = compiler.globalCallTemplates(target: target)
+    if calls.count() != 1U64 { panic("global owner omitted closure call membership") }
+    if !compiler.preparedCallConstraints(index: calls[0U64]).isSome() { panic("global owner omitted closure call constraints") }
+    print("ok")
+}
