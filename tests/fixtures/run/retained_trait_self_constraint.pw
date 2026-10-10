@@ -1,0 +1,13 @@
+use @Std/Io only { print }
+trait Value {
+    fn value() -> I64
+    fn forward() -> I64 { return accept(value: self) }
+}
+struct Item {}
+pub impl Item { factory }
+impl Item as Value { fn value() -> I64 { return 42I64 } }
+fn accept[T](value: T) -> I64 where T: Value { return value.value() }
+fn main() {
+    if <Item />.forward() != 42I64 { panic("trait Self forwarding changed implementation") }
+    print("retained-trait-self")
+}

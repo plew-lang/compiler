@@ -1,0 +1,22 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { StaticConformanceProof, StaticProofInstantiation, InstanceEnvironment, TraitConstraint, TraitInstanceKey }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait Required {{}} trait Foreign {{}} struct Item {{}} impl Item as Required {{}} impl Item as Foreign {{}} fn context(value: Item) {{}}" path="trait-self-proof.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val context = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "context").nameId)
+    val receiver = compiler.funcParamAt(params: compiler.arena.functionAt(index: context).params, index: 0U64).ty
+    val trait = compiler.decls.traitAt(index: 0U64)
+    val selected = compiler.viewedTraitConstraintProof(ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=trait.nameStart positionalArgs=[] /> />).unwrap()
+    val symbolic = <StaticConformanceProof.TraitSelf traitIdx=0U64 receiverRef=compiler.existentialSelfTerm(traitIndex: 0U64).unwrap() traitArgs=[] />
+    val environment = <InstanceEnvironment receiverRef=receiver proof=selected />
+    match compiler.instantiateConstraintProof(proof: symbolic, receiverRef: receiver, environment: environment, selfRef: receiver, itemRef: 0U64).unwrap() {
+        StaticProofInstantiation.Ready(proof: val actual) => { if !compiler.sameStaticConformanceProof(a: actual, b: selected) { panic("trait Self evidence was reselected") } }
+        _ => { panic("trait Self evidence was not retained") }
+    }
+    if compiler.instantiateConstraintProof(proof: symbolic, receiverRef: receiver, environment: <InstanceEnvironment receiverRef=receiver />, selfRef: receiver, itemRef: 0U64).isOk() { panic("missing trait Self evidence was repaired by search") }
+    val foreign = compiler.viewedTraitConstraintProof(ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 1U64).nameStart positionalArgs=[] /> />).unwrap()
+    if compiler.instantiateConstraintProof(proof: symbolic, receiverRef: receiver, environment: <InstanceEnvironment receiverRef=receiver proof=foreign />, selfRef: receiver, itemRef: 0U64).isOk() { panic("foreign trait Self evidence was accepted") }
+    print("retained-trait-self-evidence")
+}

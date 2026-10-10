@@ -3813,9 +3813,30 @@ pub impl Comp {
         return <Result.Ok value=<StaticProofInstantiation.Ready proof=current /> />
     }
 
+    // A provided body's Self is witnessed by its selected enclosing conformance.
+    // This presence obligation consumes that evidence; it never selects a member.
+    inout fn instantiateTraitSelfConstraint(proof: StaticConformanceProof, traitIndex: U64, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+        match environment.proof {
+            StaticConformanceProof.ConcreteWitness(witness: _) | StaticConformanceProof.TraitPath(edges: _, terminalConformIdx: _) => {}
+            _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "trait Self constraint has no retained conformance environment") /> }
+        }
+        val bound = try self.groundCallableBound(bound: (try self.staticProofBound(proof: proof, traitIdx: traitIndex)), environment: environment, selfRef: selfRef, itemRef: itemRef)
+        val state = try self.instantiateStaticMemberProof(proof: environment.proof, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        match state {
+            StaticProofInstantiation.Ready(proof: val selected) => {
+                try self.checkSelectedCallConstraintBoundary(expected: bound, proof: selected, offset: bound.offset)
+            }
+            _ => {}
+        }
+        return <Result.Ok value=state />
+    }
+
     inout fn instantiateConstraintProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         if receiverRef == 0U64 || !self.arena.typeIsClosed(ref: receiverRef) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
         match proof {
+            StaticConformanceProof.TraitSelf(traitIdx: val owner, receiverRef: _, traitArgs: _) => {
+                return self.instantiateTraitSelfConstraint(proof: proof, traitIndex: owner, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+            }
             StaticConformanceProof.AssumedBound(source: val source) => {
                 if !self.declarationBoundIsValid(source: source) { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
                 val bound = self.declarationBound(source: source)
