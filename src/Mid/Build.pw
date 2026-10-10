@@ -1130,10 +1130,16 @@ fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U6
 
 // Fetch only the frozen Record-time carrier for this lexical body. ExprId is
 // not a semantic key here: it selects one already-verified construction fact.
-fn midSemanticAggregateForSourceBody(c: inout Comp, sourceFunction: U64, exprId: U64) -> Result[MidAggregateLookup, CompileDiagnostic] {
-    val index: U64 = (try c.semanticAggregateIndex(ownerFnIdx: sourceFunction, exprId: exprId))
-    if index < c.decls.semanticAggregates.count() {
-        return <Result.Ok value=<MidAggregateLookup found=true aggregate=c.decls.semanticAggregates[index] /> />
+fn midSemanticAggregateForSourceBody(c: inout Comp, sourceFunction: U64, sourceFacts: Optional[PreparedSemanticFacts], exprId: U64) -> Result[MidAggregateLookup, CompileDiagnostic] {
+    val source = try c.semanticBodyOwner(fnIdx: sourceFunction)
+    match sourceFacts {
+        Optional.Some(v: val facts) => {
+            match facts.aggregate(ownerFnIdx: source, exprId: exprId) {
+                Optional.Some(v: val aggregate) => { return <Result.Ok value=<MidAggregateLookup found=true aggregate=aggregate /> /> }
+                Optional.None => {}
+            }
+        }
+        Optional.None => { return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: exprId), msg: "internal error: aggregate reader requires prepared source facts") /> }
     }
     return <Result.Ok value=<MidAggregateLookup /> />
 }
@@ -1319,7 +1325,7 @@ fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggreg
     mut val i: U64 = 0U64
     while i < aggregate.elements.count() {
         val element: SemanticAggregateElement = aggregate.elements[i]
-        val nested: MidAggregateLookup = (match midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: element.exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
+        val nested: MidAggregateLookup = (match midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, sourceFacts: state.sourceFacts, exprId: element.exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
         val operand: MidOperandBuild = if nested.found {
             give materializeMidAggregateValue(c: inout c, state: inout state, aggregate: nested.aggregate)
         } else if midExprIsCall(c: c, state: state, exprId: element.exprId) {
@@ -1579,7 +1585,7 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
         val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: readExpr) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
         return materializeMidCallValue(c: inout c, state: inout state, exprId: readExpr, siteKey: template.siteKey)
     }
-    val aggregate: MidAggregateLookup = (match midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
+    val aggregate: MidAggregateLookup = (match midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, sourceFacts: state.sourceFacts, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
     if aggregate.found {
         return materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate)
     }
@@ -2429,7 +2435,7 @@ pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64, compl
             // only its initializer dependencies belong to this full expression.
             mut val evaluation = state.currentScope
             if completeEvaluation { evaluation = midOpenScope(state: inout state) }
-            val aggregate: MidAggregateLookup = (match midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: init) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return <MidBuildError.Frontend diagnostic=diagnostic /> } })
+            val aggregate: MidAggregateLookup = (match midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, sourceFacts: state.sourceFacts, exprId: init) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return <MidBuildError.Frontend diagnostic=diagnostic /> } })
             val operandResult: MidOperandBuild = if aggregate.found {
                 give materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate)
             } else {
@@ -3560,7 +3566,7 @@ pub fn buildParametricMidGlobalInit(c: inout Comp) -> MidBodyBuild {
                 val temporary: MidPlace = <MidPlace local=temporaryLocal typeTerm=term />
                 // Apply the same frozen storage conversion as a local Let,
                 // then transfer the converted owner to process-lifetime storage.
-                val aggregate: MidAggregateLookup = (match midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: init) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: 18446744073709551615U64) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> } })
+                val aggregate: MidAggregateLookup = (match midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, sourceFacts: state.sourceFacts, exprId: init) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: 18446744073709551615U64) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> } })
                 val operand: MidOperandBuild = if aggregate.found { give materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate) }
                 else { give midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: init, allowAccessMarker: false) }
                 match operand {

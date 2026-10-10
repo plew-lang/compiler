@@ -3531,13 +3531,6 @@ pub struct Decls {
     mut val accessCandidateRows: Array[AccessCandidate] = []
     mut val accessCandidateByExpr: Array[U64] = []
     mut val placeSourceByExpr: Array[U64] = []
-    // Parametric aggregate facts selected by Record. Unlike AST MakeField,
-    // these carry physical layout identity and no field/variant spelling.
-    pub mut val semanticAggregates: Array[SemanticAggregate] = []
-    // Derived open-addressed index for SemanticAggregate. Slots hold one-based
-    // semanticAggregates indices and are rebuilt solely from (ownerFnIdx,
-    // exprId); this is lookup structure, never a second semantic source.
-    pub mut val semanticAggregateIndexSlots: Array[U64] = []
     // Closure facts are published once by Mono, where capture mode (value
     // copy versus mutable capture cell) is known.  As with aggregates, the
     // index is a rebuildable reader and never another semantic source.

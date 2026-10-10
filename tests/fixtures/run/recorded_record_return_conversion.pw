@@ -2,7 +2,7 @@ use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, FinalBodyRequests, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { DeclarationConversion }
+use /Ir only { DeclarationConversion, Stmt }
 
 // The return-layout adaptation must consume the same field conversion as
 // aggregate preparation, rather than reselecting it without a source site.
@@ -14,8 +14,12 @@ fn main() {
     val body = compiler.enqueueFinalBody(fnIdx: 0U64, args: [], recvInstRef: 0U64).unwrap()
     mut val requests = <FinalBodyRequests />
     compiler.requestFinalBody(bodyId: body, requests: inout requests).unwrap()
-    assert(compiler.decls.semanticAggregates.count() == 1U64)
-    val aggregate = compiler.decls.semanticAggregates[0U64]
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: 0U64).body, index: 0U64)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Return(value: val expression, hasValue: _, offset: _) => expression
+        _ => { panic("missing return aggregate") }
+    }
+    val aggregate = compiler.preparedBodyAggregate(bodyId: body, exprId: expression).unwrap().unwrap()
     val element = aggregate.elements[0U64]
     val function = compiler.arena.functionAt(index: 0U64)
     val other = compiler.funcParamAt(params: function.params, index: 1U64).ty

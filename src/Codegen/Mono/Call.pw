@@ -2987,9 +2987,10 @@ pub impl Comp {
     inout fn finalizeCurrentBodyAggregate(exprId: U64) -> Result[(), CompileDiagnostic] {
         val bodyId: U64 = self.currentBodyInstanceId()
         if bodyId == 0U64 { return <Result.Ok value=() /> }
-        val sourceIndex: U64 = (try self.semanticAggregateIndex(ownerFnIdx: self.cur.bodyFnIdx, exprId: exprId))
-        if sourceIndex >= self.decls.semanticAggregates.count() { return <Result.Ok value=() /> }
-        val aggregate: SemanticAggregate = self.decls.semanticAggregates[sourceIndex]
+        val aggregate = match (try self.preparedBodyAggregate(bodyId: bodyId, exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)) {
+            Optional.Some(v: val aggregate) => { give aggregate }
+            Optional.None => { return <Result.Ok value=() /> }
+        }
         match aggregate.kind {
             SemanticAggregateKind.EvaluationOnly => { return <Result.Ok value=() /> }
             _ => {}
@@ -3132,11 +3133,11 @@ pub impl Comp {
         // an identity return can still preserve a declaration-time synthetic
         // record layout that is structurally equal but LLVM-nominally distinct
         // from the ABI result type.
-        val semanticIndex: U64 = (try self.semanticAggregateIndex(ownerFnIdx: self.cur.bodyFnIdx, exprId: exprId))
+        val sourceAggregate = try self.preparedBodyAggregate(bodyId: bodyId, exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)
         val finalIndex: U64 = self.finalAggregateIndex(bodyId: bodyId, exprId: exprId)
-        if semanticIndex < self.decls.semanticAggregates.count() && finalIndex < self.arena.finalAggregates.count() && targetRef < self.arena.typeCount() {
+        if sourceAggregate.isSome() && finalIndex < self.arena.finalAggregates.count() && targetRef < self.arena.typeCount() {
             val target: TypeRef = self.arena.typeAt(index: targetRef)
-            val aggregate: SemanticAggregate = self.decls.semanticAggregates[semanticIndex]
+            val aggregate = sourceAggregate.unwrap()
             if target.isRecord && target.recordFieldTerms.count() == aggregate.elements.count() {
                 mut val targets: Array[U64] = []
                 mut val conversions: Array[ValueConversionProof] = []
@@ -6189,6 +6190,12 @@ pub impl Comp {
 }
 
 pub impl Comp {
+    inout fn preparedBodyAggregate(bodyId: U64, exprId: U64, globalInitializerTarget: Optional[U64] = <Optional.None />) -> Result[Optional[SemanticAggregate], CompileDiagnostic] {
+        val owner = try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: globalInitializerTarget)
+        val facts = try self.preparedSemanticFacts(owner: owner)
+        val body = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        return <Result.Ok value=facts.aggregate(ownerFnIdx: (try self.semanticBodyOwner(fnIdx: body.fnIdx)), exprId: exprId) />
+    }
     inout fn preparedBodyTry(bodyId: U64, exprId: U64, globalInitializerTarget: Optional[U64] = <Optional.None />) -> Result[Optional[SemanticTry], CompileDiagnostic] {
         val owner = try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: globalInitializerTarget)
         val facts = try self.preparedSemanticFacts(owner: owner)

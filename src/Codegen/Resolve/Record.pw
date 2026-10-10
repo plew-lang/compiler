@@ -915,31 +915,34 @@ pub impl Comp {
         return h
     }
 
+}
+
+impl Comp {
     inout fn rebuildSemanticAggregateIndex(capacity: U64) {
-        self.decls.semanticAggregateIndexSlots = []
+        self.semanticAggregateIndexSlots = []
         mut val zeroI: U64 = 0U64
         while zeroI < capacity {
-            self.decls.semanticAggregateIndexSlots.append(0U64)
+            self.semanticAggregateIndexSlots.append(0U64)
             zeroI += 1U64
         }
         mut val entry: U64 = 0U64
-        while entry < self.decls.semanticAggregates.count() {
-            val aggregate: SemanticAggregate = self.decls.semanticAggregates[entry]
+        while entry < self.semanticAggregates.count() {
+            val aggregate: SemanticAggregate = self.semanticAggregates[entry].fact
             mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: aggregate.ownerFnIdx, exprId: aggregate.exprId) % capacity
-            while self.decls.semanticAggregateIndexSlots[slot] != 0U64 {
+            while self.semanticAggregateIndexSlots[slot] != 0U64 {
                 slot = (slot + 1U64) % capacity
             }
-            self.decls.semanticAggregateIndexSlots.set(i: slot, value: entry + 1U64)
+            self.semanticAggregateIndexSlots.set(i: slot, value: entry + 1U64)
             entry += 1U64
         }
     }
 
     inout fn ensureSemanticAggregateIndex(nextCount: U64) {
-        if self.decls.semanticAggregateIndexSlots.count() == 0U64 {
+        if self.semanticAggregateIndexSlots.count() == 0U64 {
             self.rebuildSemanticAggregateIndex(capacity: 16U64)
         }
-        if nextCount * 10U64 >= self.decls.semanticAggregateIndexSlots.count() * 7U64 {
-            self.rebuildSemanticAggregateIndex(capacity: self.decls.semanticAggregateIndexSlots.count() * 2U64)
+        if nextCount * 10U64 >= self.semanticAggregateIndexSlots.count() * 7U64 {
+            self.rebuildSemanticAggregateIndex(capacity: self.semanticAggregateIndexSlots.count() * 2U64)
         }
     }
 
@@ -947,32 +950,39 @@ pub impl Comp {
     // the semantic source; slots are a rebuildable reader for Record and Mid.
     inout fn semanticAggregateIndex(ownerFnIdx: U64, exprId: U64) -> Result[U64, CompileDiagnostic] {
         val sourceOwner: U64 = (try self.semanticBodyOwner(fnIdx: ownerFnIdx))
-        val capacity: U64 = self.decls.semanticAggregateIndexSlots.count()
-        if capacity == 0U64 { return <Result.Ok value=self.decls.semanticAggregates.count() />}
+        val capacity: U64 = self.semanticAggregateIndexSlots.count()
+        if capacity == 0U64 { return <Result.Ok value=self.semanticAggregates.count() />}
         mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: sourceOwner, exprId: exprId) % capacity
-        while self.decls.semanticAggregateIndexSlots[slot] != 0U64 {
-            val entry: U64 = self.decls.semanticAggregateIndexSlots[slot] - 1U64
-            val prior: SemanticAggregate = self.decls.semanticAggregates[entry]
+        while self.semanticAggregateIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.semanticAggregateIndexSlots[slot] - 1U64
+            val prior: SemanticAggregate = self.semanticAggregates[entry].fact
             if prior.ownerFnIdx == sourceOwner && prior.exprId == exprId { return <Result.Ok value=entry />}
             slot = (slot + 1U64) % capacity
         }
-        return <Result.Ok value=self.decls.semanticAggregates.count() />
+        return <Result.Ok value=self.semanticAggregates.count() />
     }
 
     inout fn putSemanticAggregate(aggregate: SemanticAggregate) -> Result[(), CompileDiagnostic] {
+        val owner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => { give owner }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: aggregate has no source owner") /> }
+        }
+        if self.sourceOwnerConstructionClosed(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: completed source owner cannot replace an aggregate fact") /> }
+
         val prior: U64 = (try self.semanticAggregateIndex(ownerFnIdx: aggregate.ownerFnIdx, exprId: aggregate.exprId))
-        if prior < self.decls.semanticAggregates.count() {
-            self.decls.semanticAggregates.set(i: prior, value: aggregate)
+        if prior < self.semanticAggregates.count() {
+            if !semanticCompletionOwnersEqual(recorded: self.semanticAggregates[prior].owner, prepared: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: aggregate changed its source owner") /> }
+            self.semanticAggregates.set(i: prior, value: <SourceSemanticAggregate owner=owner fact=aggregate />)
             return <Result.Ok value=() />
         }
-        self.ensureSemanticAggregateIndex(nextCount: self.decls.semanticAggregates.count() + 1U64)
-        self.decls.semanticAggregates.append(aggregate)
-        val capacity: U64 = self.decls.semanticAggregateIndexSlots.count()
+        self.ensureSemanticAggregateIndex(nextCount: self.semanticAggregates.count() + 1U64)
+        self.semanticAggregates.append(<SourceSemanticAggregate owner=owner fact=aggregate />)
+        val capacity: U64 = self.semanticAggregateIndexSlots.count()
         mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: aggregate.ownerFnIdx, exprId: aggregate.exprId) % capacity
-        while self.decls.semanticAggregateIndexSlots[slot] != 0U64 {
+        while self.semanticAggregateIndexSlots[slot] != 0U64 {
             slot = (slot + 1U64) % capacity
         }
-        self.decls.semanticAggregateIndexSlots.set(i: slot, value: self.decls.semanticAggregates.count())
+        self.semanticAggregateIndexSlots.set(i: slot, value: self.semanticAggregates.count())
         return <Result.Ok value=() />
     }
 

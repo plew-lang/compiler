@@ -2122,8 +2122,8 @@ pub impl Comp {
                 // no AST TypeRef. Its selected aggregate declaration
                 // supplies identity; do not recover it by head spelling.
                 val aggregateIndex = (try self.semanticAggregateIndex(ownerFnIdx: self.cur.checkFn, exprId: exprId))
-                if aggregateIndex < self.decls.semanticAggregates.count() {
-                    match self.decls.semanticAggregates[aggregateIndex].kind {
+                if aggregateIndex < self.semanticAggregates.count() {
+                    match self.semanticAggregates[aggregateIndex].fact.kind {
                         SemanticAggregateKind.Enum(enumIdx: val enumIndex, variantIndex: _) => {
                             if enumIndex < self.arena.enumCount() {
                                 val declaration = self.arena.enumAt(index: enumIndex)
