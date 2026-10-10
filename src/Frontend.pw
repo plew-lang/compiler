@@ -2267,7 +2267,7 @@ fn sourceCallConstraintPlan(states: Dictionary[U64, CallConstraintPlanState], in
 }
 
 pub impl Comp {
-    fn semanticClosureCount() -> U64 { return self.semanticClosures.count() }
-    fn semanticClosureAt(index: U64) -> SemanticClosure { return self.semanticClosures[index] }
-    fn semanticClosureSnapshot() -> Array[SemanticClosure] { return self.semanticClosures }
+    inout fn semanticClosureCount() -> U64 { return self.semanticClosures.count() }
+    inout fn semanticClosureAt(index: U64) -> SemanticClosure { return self.semanticClosures[index] }
+    inout fn semanticClosureSnapshot() -> Array[SemanticClosure] { return self.semanticClosures }
 }
