@@ -1,0 +1,7 @@
+use @Std/Io only { print }
+fn answer() -> I64 { return 42I64 }
+val callback = fn() -> I64 { return answer() }
+fn main() {
+    val local = callback
+    print(local())
+}
