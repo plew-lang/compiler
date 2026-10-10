@@ -3080,9 +3080,10 @@ pub impl Comp {
     inout fn finalizeCurrentBodyMatch(matchSource: MatchSource) -> Result[(), CompileDiagnostic] {
         val bodyId: U64 = self.currentBodyInstanceId()
         if bodyId == 0U64 { return <Result.Ok value=() /> }
-        val sourceIndex: U64 = (try self.semanticMatchIndex(ownerFnIdx: self.cur.bodyFnIdx, matchSource: matchSource))
-        if sourceIndex >= self.decls.semanticMatches.count() { return <Result.Ok value=() /> }
-        val source: SemanticMatch = self.decls.semanticMatches[sourceIndex]
+        val source = match (try self.preparedBodyMatch(bodyId: bodyId, matchSource: matchSource, globalInitializerTarget: self.cur.globalInitializerTarget)) {
+            Optional.Some(v: val source) => { give source }
+            Optional.None => { return <Result.Ok value=() /> }
+        }
         mut val kind: SemanticMatchKind = source.kind
         match source.kind {
             SemanticMatchKind.Value => {}
@@ -6136,10 +6137,13 @@ impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: expression has no executable body instance") />
         }
         val body = self.arena.bodyInstanceAt(index: bodyId - 1U64)
-        val source = try self.semanticBodyOwner(fnIdx: body.fnIdx)
+        return self.sourceFunctionOwner(fnIdx: body.fnIdx, globalInitializerTarget: globalInitializerTarget)
+    }
+    inout fn sourceFunctionOwner(fnIdx: U64, globalInitializerTarget: Optional[U64]) -> Result[SemanticCompletionOwner, CompileDiagnostic] {
+        val source = try self.semanticBodyOwner(fnIdx: fnIdx)
         val root = self.callTemplateLexicalRoots.getOr(key: source, fallback: source)
-        if body.fnIdx >= 9223372036854775808U64 && body.fnIdx != 18446744073709551615U64 {
-            val expression = body.fnIdx - 9223372036854775808U64
+        if fnIdx >= 9223372036854775808U64 && fnIdx != 18446744073709551615U64 {
+            val expression = fnIdx - 9223372036854775808U64
             val index = try self.semanticClosureIndex(ownerFnIdx: root, exprId: expression)
             if index >= self.semanticClosureOwners.count() {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "internal error: closure body has no source owner") />
@@ -6153,5 +6157,34 @@ impl Comp {
             Optional.Some(v: val target) => { return <Result.Ok value=<SemanticCompletionOwner.Global target=target /> /> }
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: global expression has no initializer owner") /> }
         }
+    }
+}
+
+pub impl Comp {
+    inout fn preparedBodyMatch(bodyId: U64, matchSource: MatchSource, globalInitializerTarget: Optional[U64] = <Optional.None />) -> Result[Optional[SemanticMatch], CompileDiagnostic] {
+        val owner = try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: globalInitializerTarget)
+        val facts = try self.preparedSemanticFacts(owner: owner)
+        val body = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        return <Result.Ok value=facts.pattern(ownerFnIdx: (try self.semanticBodyOwner(fnIdx: body.fnIdx)), matchSource: matchSource) />
+    }
+    // The synthetic declaration body contains every global initializer. This
+    // reader is only for that composite source body, never a single RHS.
+    inout fn preparedDeclarationMatch(sourceFunction: U64, matchSource: MatchSource) -> Result[Optional[SemanticMatch], CompileDiagnostic] {
+        val source = try self.semanticBodyOwner(fnIdx: sourceFunction)
+        val index = try self.semanticMatchIndex(ownerFnIdx: source, matchSource: matchSource)
+        if index >= self.semanticMatches.count() { return <Result.Ok value=<Optional.None /> /> }
+        mut val target: Optional[U64] = <Optional.None />
+        if sourceFunction == 18446744073709551615U64 {
+            match self.semanticMatches[index].owner {
+                SemanticCompletionOwner.Global(target: val declared) => {
+                    if self.globalIndexForDeclarationTarget(target: declared) >= self.arena.globals.count() { return <Result.Ok value=<Optional.None /> /> }
+                    target = <Optional.Some v=declared />
+                }
+                _ => { return <Result.Ok value=<Optional.None /> /> }
+            }
+        }
+        val owner = try self.sourceFunctionOwner(fnIdx: sourceFunction, globalInitializerTarget: target)
+        val facts = try self.preparedSemanticFacts(owner: owner)
+        return <Result.Ok value=facts.pattern(ownerFnIdx: source, matchSource: matchSource) />
     }
 }

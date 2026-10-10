@@ -3544,8 +3544,6 @@ pub struct Decls {
     // Parametric enum-match facts, keyed by (ownerFnIdx, source Stmt).
     pub mut val semanticTries: Array[SemanticTry] = []
     pub mut val semanticTryIndexSlots: Array[U64] = []
-    pub mut val semanticMatches: Array[SemanticMatch] = []
-    pub mut val semanticMatchIndexSlots: Array[U64] = []
     pub mut val declarationConversions: Array[DeclarationConversion] = []
     pub mut val declarationConversionOwners: Dictionary[U64, Array[U64]] = [:]
     // Global source owners are initializer targets, not the shared no-function

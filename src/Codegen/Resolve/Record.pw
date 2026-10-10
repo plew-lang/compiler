@@ -1037,79 +1037,80 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    fn semanticMatchHash(ownerFnIdx: U64, matchSource: MatchSource) -> U64 {
-        val modulus: U64 = 4294967291U64
-        val encoded: U64 = match matchSource { MatchSource.Statement(stmtId: val id) => { give id * 3U64 } MatchSource.Expression(exprId: val id) => { give id * 3U64 + 1U64 } MatchSource.Condition(clauseIndex: val id) => { give id * 3U64 + 2U64 } }
-        return (((ownerFnIdx % modulus + encoded % modulus) * 65537U64) + 29U64) % modulus
-    }
+}
 
-    fn sameMatchSource(a: MatchSource, b: MatchSource) -> Bool {
-        match a {
-            MatchSource.Statement(stmtId: val left) => { match b { MatchSource.Statement(stmtId: val right) => { return left == right } _ => { return false } } }
-            MatchSource.Expression(exprId: val left) => { match b { MatchSource.Expression(exprId: val right) => { return left == right } _ => { return false } } }
-            MatchSource.Condition(clauseIndex: val left) => { match b { MatchSource.Condition(clauseIndex: val right) => { return left == right } _ => { return false } } }
-        }
-    }
+impl Comp {
+    fn semanticMatchHash(ownerFnIdx: U64, matchSource: MatchSource) -> U64 { return sourceSemanticMatchHash(ownerFnIdx: ownerFnIdx, matchSource: matchSource) }
+    fn sameMatchSource(a: MatchSource, b: MatchSource) -> Bool { return sameSourceMatch(a: a, b: b) }
 
     inout fn rebuildSemanticMatchIndex(capacity: U64) {
-        self.decls.semanticMatchIndexSlots = []
+        self.semanticMatchIndexSlots = []
         mut val zero: U64 = 0U64
         while zero < capacity {
-            self.decls.semanticMatchIndexSlots.append(0U64)
+            self.semanticMatchIndexSlots.append(0U64)
             zero += 1U64
         }
         mut val entry: U64 = 0U64
-        while entry < self.decls.semanticMatches.count() {
-            val fact: SemanticMatch = self.decls.semanticMatches[entry]
+        while entry < self.semanticMatches.count() {
+            val fact: SemanticMatch = self.semanticMatches[entry].fact
             mut val slot: U64 = self.semanticMatchHash(ownerFnIdx: fact.ownerFnIdx, matchSource: fact.matchSource) % capacity
-            while self.decls.semanticMatchIndexSlots[slot] != 0U64 {
+            while self.semanticMatchIndexSlots[slot] != 0U64 {
                 slot = (slot + 1U64) % capacity
             }
-            self.decls.semanticMatchIndexSlots.set(i: slot, value: entry + 1U64)
+            self.semanticMatchIndexSlots.set(i: slot, value: entry + 1U64)
             entry += 1U64
         }
     }
 
     inout fn ensureSemanticMatchIndex(nextCount: U64) {
-        if self.decls.semanticMatchIndexSlots.count() == 0U64 {
+        if self.semanticMatchIndexSlots.count() == 0U64 {
             self.rebuildSemanticMatchIndex(capacity: 16U64)
         }
-        if nextCount * 10U64 >= self.decls.semanticMatchIndexSlots.count() * 7U64 {
-            self.rebuildSemanticMatchIndex(capacity: self.decls.semanticMatchIndexSlots.count() * 2U64)
+        if nextCount * 10U64 >= self.semanticMatchIndexSlots.count() * 7U64 {
+            self.rebuildSemanticMatchIndex(capacity: self.semanticMatchIndexSlots.count() * 2U64)
         }
     }
 
     inout fn semanticMatchIndex(ownerFnIdx: U64, matchSource: MatchSource) -> Result[U64, CompileDiagnostic] {
         val sourceOwner: U64 = (try self.semanticBodyOwner(fnIdx: ownerFnIdx))
-        val capacity: U64 = self.decls.semanticMatchIndexSlots.count()
-        if capacity == 0U64 { return <Result.Ok value=self.decls.semanticMatches.count() />}
+        val capacity: U64 = self.semanticMatchIndexSlots.count()
+        if capacity == 0U64 { return <Result.Ok value=self.semanticMatches.count() />}
         mut val slot: U64 = self.semanticMatchHash(ownerFnIdx: sourceOwner, matchSource: matchSource) % capacity
-        while self.decls.semanticMatchIndexSlots[slot] != 0U64 {
-            val entry: U64 = self.decls.semanticMatchIndexSlots[slot] - 1U64
-            val fact: SemanticMatch = self.decls.semanticMatches[entry]
+        while self.semanticMatchIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.semanticMatchIndexSlots[slot] - 1U64
+            val fact: SemanticMatch = self.semanticMatches[entry].fact
             if fact.ownerFnIdx == sourceOwner && self.sameMatchSource(a: fact.matchSource, b: matchSource) { return <Result.Ok value=entry />}
             slot = (slot + 1U64) % capacity
         }
-        return <Result.Ok value=self.decls.semanticMatches.count() />
+        return <Result.Ok value=self.semanticMatches.count() />
     }
 
     inout fn putSemanticMatch(fact: SemanticMatch) -> Result[(), CompileDiagnostic] {
+        val owner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => { give owner }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: match has no source owner") /> }
+        }
+        if self.sourceOwnerConstructionClosed(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: completed source owner cannot replace a match fact") /> }
         val prior: U64 = (try self.semanticMatchIndex(ownerFnIdx: fact.ownerFnIdx, matchSource: fact.matchSource))
-        if prior < self.decls.semanticMatches.count() {
-            self.decls.semanticMatches.set(i: prior, value: fact)
+        if prior < self.semanticMatches.count() {
+            if !semanticCompletionOwnersEqual(recorded: self.semanticMatches[prior].owner, prepared: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: match changed its source owner") /> }
+            self.semanticMatches.set(i: prior, value: <SourceSemanticMatch owner=owner fact=fact />)
             return <Result.Ok value=() />
         }
-        self.ensureSemanticMatchIndex(nextCount: self.decls.semanticMatches.count() + 1U64)
-        self.decls.semanticMatches.append(fact)
-        val capacity: U64 = self.decls.semanticMatchIndexSlots.count()
+        self.ensureSemanticMatchIndex(nextCount: self.semanticMatches.count() + 1U64)
+        self.semanticMatches.append(<SourceSemanticMatch owner=owner fact=fact />)
+        val capacity: U64 = self.semanticMatchIndexSlots.count()
         mut val slot: U64 = self.semanticMatchHash(ownerFnIdx: fact.ownerFnIdx, matchSource: fact.matchSource) % capacity
-        while self.decls.semanticMatchIndexSlots[slot] != 0U64 {
+        while self.semanticMatchIndexSlots[slot] != 0U64 {
             slot = (slot + 1U64) % capacity
         }
-        self.decls.semanticMatchIndexSlots.set(i: slot, value: self.decls.semanticMatches.count())
+        self.semanticMatchIndexSlots.set(i: slot, value: self.semanticMatches.count())
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     // Freeze struct field bindings while Record owns name-to-layout work.
     // Missing or invalid terms leave no fact; Mid must not reconstruct them.
     inout fn recordSemanticMatch(matchSource: MatchSource, scrut: U64, arms: MatchArmRange) -> Result[(), CompileDiagnostic] {
@@ -1135,8 +1136,8 @@ pub impl Comp {
         }
         try self.recordMatchCoverage(scrut: scrut, arms: arms)
         val semanticIndex = try self.semanticMatchIndex(ownerFnIdx: self.cur.checkFn, matchSource: matchSource)
-        if semanticIndex < self.decls.semanticMatches.count() {
-            val fact = self.decls.semanticMatches[semanticIndex]
+        if semanticIndex < self.semanticMatches.count() {
+            val fact = self.semanticMatches[semanticIndex].fact
             mut val selectedArms = fact.arms
             index = 0U64
             while index < selectedArms.count() {

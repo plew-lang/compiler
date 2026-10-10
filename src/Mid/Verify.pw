@@ -518,12 +518,12 @@ fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: M
     mut val finalPayloadStart = 0U64
     mut val symbolicPayloads: Array[SemanticMatchPayload] = []
     if stage.isDeclaration() {
-        val factIndex = match c.semanticMatchIndex(ownerFnIdx: body.sourceFunction, matchSource: key) {
-            Result.Ok(value: val index) => { give index }
+        val fact = match c.preparedDeclarationMatch(sourceFunction: body.sourceFunction, matchSource: key) {
+            Result.Ok(value: val result) => {
+                give match result { Optional.Some(v: val fact) => fact Optional.None => { return invalid } }
+            }
             Result.Err(error: _) => { return invalid }
         }
-        if factIndex >= c.decls.semanticMatches.count() { return invalid }
-        val fact = c.decls.semanticMatches[factIndex]
         if !fact.isConsuming || !c.typeRefEq(a: fact.scrutineeTerm, b: source.typeTerm) { return invalid }
         match fact.kind { SemanticMatchKind.Enum(enumIndex: val selected) => { if selected != statement.enumIndex { return invalid } } _ => { return invalid } }
         mut val armIndex = 0U64

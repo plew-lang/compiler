@@ -51,13 +51,19 @@ fn checkSource() {
     val sameGlobals = templates.globalInitializer(c: inout c)
     if globals.canonical.body != sameGlobals.canonical.body || c.mid.bodies.count() != globalCount { panic("global initializer was rebuilt") }
     requests.request(c: inout c, body: <MidParametricBody.input canonical=globals.canonical />).unwrap()
-    if c.decls.semanticMatches.count() == 0U64 { panic("missing consuming match fixture") }
-    val owner = c.decls.semanticMatches[0U64].ownerFnIdx
+    val owner = c.arena.firstFunctionNamed(nameId: c.internBytes(s: "consume").nameId)
     val consuming = templates.body(c: inout c, function: owner)
     val checked = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: consuming.canonical)
-    c.decls.semanticMatches = []
-    c.decls.semanticMatchIndexSlots = []
     match verifyDeclarationMidOwnership(c: inout c, canonical: checked).error {
+        MidVerifyError.None => {}
+        _ => { panic("valid consuming match rejected") }
+    }
+    // The same canonical Mid without its prepared source evidence must fail.
+    mut val missingSource = <Comp />
+    missingSource.arena = c.arena
+    missingSource.decls = c.decls
+    missingSource.mid = c.mid
+    match verifyDeclarationMidOwnership(c: inout missingSource, canonical: checked).error {
         MidVerifyError.MoveUnavailable => {}
         _ => { panic("enum transfer admitted without semantic pattern evidence") }
     }

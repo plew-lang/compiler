@@ -2897,16 +2897,22 @@ fn buildMidOrderedPatternMatch(c: inout Comp, state: inout MidBuildState, semant
 }
 
 fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: MatchSource, scrut: U64, continuation: MidPatternContinuation, blockResult: MidBlockResult, traceId: U64) -> MidBuildError {
-            val semanticIndex: U64 = (match c.semanticMatchIndex(ownerFnIdx: state.sourceFunction, matchSource: matchSource) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return <MidBuildError.Frontend diagnostic=diagnostic /> } })
-            mut val subjectTerm = (match midSourceSemanticTerm(c: inout c, state: state, exprId: scrut) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return error } })
-            if semanticIndex < c.decls.semanticMatches.count() {
-                subjectTerm = c.decls.semanticMatches[semanticIndex].scrutineeTerm
+            val sourceOwner = match c.semanticBodyOwner(fnIdx: state.sourceFunction) {
+                Result.Ok(value: val owner) => { give owner }
+                Result.Err(error: val diagnostic) => { return <MidBuildError.Frontend diagnostic=diagnostic /> }
             }
+            val pattern = match state.sourceFacts {
+                Optional.Some(v: val facts) => { give facts.pattern(ownerFnIdx: sourceOwner, matchSource: matchSource) }
+                Optional.None => { give <Optional.None /> }
+            }
+            mut val subjectTerm = (match midSourceSemanticTerm(c: inout c, state: state, exprId: scrut) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return error } })
             mut val hasValueTests = false
-            if semanticIndex < c.decls.semanticMatches.count() {
-                for val arm in c.decls.semanticMatches[semanticIndex].arms {
-                    if arm.hasValueTest { hasValueTests = true }
+            match pattern {
+                Optional.Some(v: val semantic) => {
+                    subjectTerm = semantic.scrutineeTerm
+                    for val arm in semantic.arms { if arm.hasValueTest { hasValueTests = true } }
                 }
+                Optional.None => {}
             }
             mut val scrutinee: MidPlaceLookup = match midPlaceForSourceExpr(c: inout c, state: inout state, exprId: scrut, typeTerm: subjectTerm) {
                 MidPlaceBuild.Value(lookup: val lookup) => { give lookup }
@@ -2954,11 +2960,13 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
             }
             // Pattern materialization is a normal-continuation obligation.
             // Scrutinee evaluation above can instead terminate the CFG.
-            if semanticIndex >= c.decls.semanticMatches.count() {
-                traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "missing-semantic-match")
-                return <MidBuildError.UnsupportedMatch />
+            val semantic = match pattern {
+                Optional.Some(v: val semantic) => { give semantic }
+                Optional.None => {
+                    traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "missing-semantic-match")
+                    return <MidBuildError.UnsupportedMatch />
+                }
             }
-            val semantic = c.decls.semanticMatches[semanticIndex]
             if semantic.arms.count() != midPatternArmCount(continuation: continuation) {
                 traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "arm-count")
                 return <MidBuildError.UnsupportedMatch />
