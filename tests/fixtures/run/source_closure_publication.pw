@@ -15,11 +15,22 @@ fn main() {
         Result.Err(error: _) => {}
         Result.Ok(value: _) => { panic("construction descriptor was accepted as prepared") }
     }
+    match compiler.preparedFunctionSemanticFacts(fnIdx: 0U64) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("unprepared owner published expression facts") }
+    }
     compiler.prepareLexicalBody(fnIdx: 0U64).unwrap()
     val saved = compiler.preparedSemanticClosureAt(index: 0U64).unwrap()
     assert(saved.captures.count() == 1U64)
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: 0U64).unwrap()
+    assert(facts.expression(exprId: saved.exprId).isSome())
+    match compiler.recordExpr(exprId: saved.exprId) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("completed owner reopened expression construction") }
+    }
+    assert(facts.expression(exprId: saved.exprId).isSome())
     match compiler.recordParametricFunction(fnIdx: 0U64, recordCallTemplates: false) {
-        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "internal error: completed source owner cannot change a closure declaration") }
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "internal error: completed source owner cannot record its body again") }
         Result.Ok(value: _) => { panic("completed source owner reopened closure construction") }
     }
     // A navigation descriptor cannot replace the prepared meaning at the Mid boundary.
@@ -41,5 +52,11 @@ fn main() {
         Result.Err(error: _) => {}
         Result.Ok(value: _) => { panic("failed owner published its closure") }
     }
+    match compiler.preparedFunctionSemanticFacts(fnIdx: 1U64) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("failed owner published expression facts") }
+    }
+    val failedClosure = compiler.semanticClosureAt(index: 1U64)
+    assert(!facts.expression(exprId: failedClosure.exprId).isSome())
     print("ok")
 }

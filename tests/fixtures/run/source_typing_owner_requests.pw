@@ -55,7 +55,7 @@ fn main() {
     deferred.cur.checkFn = pending
     deferred.cur.recordCallTemplates = true
     deferred.recordExpr(exprId: expression, deferContext: true).unwrap()
-    match deferred.arena.semanticExprTypes[expression].completion {
+    match deferred.sourceSemanticExprTypeAt(index: expression).completion {
         Optional.Some(v: _) => { panic("deferred expression published unchecked flow") }
         Optional.None => {}
     }
