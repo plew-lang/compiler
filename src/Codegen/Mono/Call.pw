@@ -5071,9 +5071,32 @@ pub impl Comp {
 }
 
 impl Comp {
+    fn closureSourceOwnerClosed(owner: SemanticCompletionOwner) -> Bool {
+        match owner {
+            SemanticCompletionOwner.Function(index: val index) => { return self.lexicalBodyPreparations.get(key: index).isSome() }
+            SemanticCompletionOwner.Global(target: val target) => { return self.globalInitializerPrepared(target: target) }
+        }
+    }
+
+    inout fn requireBuildingClosureOwner(owner: SemanticCompletionOwner, offset: U64) -> Result[(), CompileDiagnostic] {
+        if self.closureSourceOwnerClosed(owner: owner) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: completed source owner cannot change a closure declaration") />
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn putSemanticClosure(closure: SemanticClosure) -> Result[(), CompileDiagnostic] {
+        val owner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => { give owner }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: closure.exprId, msg: "internal error: closure declaration has no source preparation owner") /> }
+        }
+        try self.requireBuildingClosureOwner(owner: owner, offset: self.exprOffset(id: closure.exprId))
         val prior: U64 = (try self.semanticClosureIndex(ownerFnIdx: closure.ownerFnIdx, exprId: closure.exprId))
         if prior < self.semanticClosures.count() {
+            try self.requireBuildingClosureOwner(owner: self.semanticClosureOwners[prior], offset: self.exprOffset(id: closure.exprId))
+            if !semanticCompletionOwnersEqual(recorded: self.semanticClosureOwners[prior], prepared: owner) {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure declaration changed its source owner") />
+            }
             self.semanticClosures.set(i: prior, value: closure)
             return <Result.Ok value=() />
         }
@@ -5082,6 +5105,7 @@ impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: closure.exprId, msg: "internal error: closure call template owner changed its lexical root") />
         }
         self.semanticClosures.append(closure)
+        self.semanticClosureOwners.append(owner)
         val capacity: U64 = self.semanticClosureIndexSlots.count()
         mut val slot: U64 = self.semanticClosureHash(ownerFnIdx: closure.ownerFnIdx, exprId: closure.exprId) % capacity
         while self.semanticClosureIndexSlots[slot] != 0U64 {
@@ -5153,6 +5177,7 @@ impl Comp {
         if local.isGlobal { return <Result.Ok value=() /> }
         val index = self.cur.recordClosureIndex - 1U64
         val closure = self.semanticClosures[index]
+        try self.requireBuildingClosureOwner(owner: self.semanticClosureOwners[index], offset: self.exprOffset(id: closure.exprId))
         mut val captures = closure.captures
         mut val i = 0U64
         while i < captures.count() {
@@ -5168,12 +5193,23 @@ impl Comp {
 }
 
 pub impl Comp {
+    inout fn preparedSemanticClosureAt(index: U64) -> Result[SemanticClosure, CompileDiagnostic] {
+        if index >= self.semanticClosures.count() || index >= self.semanticClosureOwners.count() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: closure declaration has no source preparation owner") />
+        }
+        val closure = self.semanticClosures[index]
+        if !(try self.semanticCompletionOwnerPrepared(owner: self.semanticClosureOwners[index])) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure source owner is not prepared") />
+        }
+        return <Result.Ok value=closure />
+    }
+
     // Finalization freezes the closure ABI under the same lexical instance
     // as its return/call descriptors. Abstract scans do not publish an ABI.
     inout fn finalizeClosureSignature(ownerFnIdx: U64, closureId: U64) -> Result[(), CompileDiagnostic] {
         val index = (try self.semanticClosureIndex(ownerFnIdx: ownerFnIdx, exprId: closureId))
         if index >= self.semanticClosures.count() { return <Result.Ok value=() /> }
-        val closure = self.semanticClosures[index]
+        val closure = try self.preparedSemanticClosureAt(index: index)
         val environment = self.cur.bodyEnvironment
         val functionType = (try self.groundAndRecordBodyType(ref: closure.functionTypeTerm, environment: environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
         if functionType == 0U64 || functionType >= self.arena.typeCount() { return <Result.Ok value=() /> }
@@ -5242,7 +5278,7 @@ pub impl Comp {
         if abi.declarationIndex == 0U64 || abi.declarationIndex > self.semanticClosures.count() {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: closure request has no lexical declaration") />
         }
-        val closure = self.semanticClosures[abi.declarationIndex - 1U64]
+        val closure = try self.preparedSemanticClosureAt(index: abi.declarationIndex - 1U64)
         if !abi.templatesClosed {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure finalization requires closed lexical call templates") />
         }

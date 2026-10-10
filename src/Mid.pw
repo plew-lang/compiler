@@ -7,7 +7,7 @@ use ./Mid/Ir only { MidEnumDestination, MidEnumDestinationNode, MidRange, MidBod
 use ./Mid/DataflowState only { MidOwnershipStates, MidAccessibilityStates }
 use ./Mid/Drop only { analyzeCanonicalMidOwnership, analyzeCanonicalMidAccessibility, elaborateCanonicalMidDrops }
 use ./Mid/Verify only { MidVerifyError, MidVerification, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
-use ./Mid/Build only { MidSourceBinding, MidBindingLookup, MidPlaceLookup, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidCallValue, MidAggregateValue, MidBuildState, emptyMidBody, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildMidReturn, buildMidBlock, buildMidIf, buildParametricMidBody, buildMidBodyForInstance, buildParametricMidClosureBody, ensureParametricMidClosureBody, buildParametricMidGlobalInit }
+use ./Mid/Build only { MidSourceBinding, MidBindingLookup, MidPlaceLookup, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidCallValue, MidAggregateValue, MidBuildState, emptyMidBody, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildMidReturn, buildMidBlock, buildMidIf, buildParametricMidBody, buildMidBodyForInstance, ensureParametricMidClosureBody, buildParametricMidGlobalInit }
 use ./Mid/Instantiate only { MidInstantiateError, MidCanonicalInstantiation, instantiateCanonicalMidBody }
 use ./Mid/Access only { MidAccessError, MidCanonicalAccessElaboration, elaborateCanonicalMidAccesses }
 
@@ -15,7 +15,7 @@ pub use ./Mid/Ir only { MidEnumDestination, MidEnumDestinationNode, MidRange, Mi
 pub use ./Mid/DataflowState only { MidOwnershipStates, MidAccessibilityStates }
 pub use ./Mid/Drop only { analyzeCanonicalMidOwnership, analyzeCanonicalMidAccessibility, elaborateCanonicalMidDrops }
 pub use ./Mid/Verify only { MidVerifyError, MidVerification, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
-pub use ./Mid/Build only { MidSourceBinding, MidBindingLookup, MidPlaceLookup, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidCallValue, MidAggregateValue, MidBuildState, emptyMidBody, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildMidReturn, buildMidBlock, buildMidIf, buildParametricMidBody, buildMidBodyForInstance, buildParametricMidClosureBody, ensureParametricMidClosureBody, buildParametricMidGlobalInit }
+pub use ./Mid/Build only { MidSourceBinding, MidBindingLookup, MidPlaceLookup, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidCallValue, MidAggregateValue, MidBuildState, emptyMidBody, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildMidReturn, buildMidBlock, buildMidIf, buildParametricMidBody, buildMidBodyForInstance, ensureParametricMidClosureBody, buildParametricMidGlobalInit }
 pub use ./Mid/Instantiate only { MidInstantiateError, MidCanonicalInstantiation, instantiateCanonicalMidBody }
 pub use ./Mid/Access only { MidAccessError, MidCanonicalAccessElaboration, elaborateCanonicalMidAccesses }
 

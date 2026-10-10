@@ -238,6 +238,7 @@ enum CallConstraintPlanState {
 
 pub struct Comp {
     mut val semanticClosures: Array[SemanticClosure] = []
+    mut val semanticClosureOwners: Array[SemanticCompletionOwner] = []
     mut val semanticClosureIndexSlots: Array[U64] = []
     mut val globalCallTemplateOwners: Dictionary[U64, Array[U64]] = [:]
     mut val callTemplateLexicalRoots: Dictionary[U64, U64] = [:]

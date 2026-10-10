@@ -1113,7 +1113,7 @@ fn midSemanticAggregateForSourceBody(c: inout Comp, sourceFunction: U64, exprId:
 // no nested-body scan or source-name recovery is permitted below this point.
 fn midSemanticClosureForSourceBody(c: inout Comp, sourceFunction: U64, exprId: U64) -> Result[MidClosureLookup, CompileDiagnostic] {
     val index: U64 = (try c.semanticClosureIndex(ownerFnIdx: sourceFunction, exprId: exprId))
-    if index < c.semanticClosureCount() { return <Result.Ok value=<MidClosureLookup found=true closure=c.semanticClosureAt(index: index) /> /> }
+    if index < c.semanticClosureCount() { return <Result.Ok value=<MidClosureLookup found=true closure=(try c.preparedSemanticClosureAt(index: index)) /> /> }
     return <Result.Ok value=<MidClosureLookup /> />
 }
 
@@ -3362,7 +3362,7 @@ pub fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
 // frozen capture range. Consequently this builder creates only the source
 // parameter prefix and capture locals, all from SemanticClosure; it never
 // re-matches Expr.Closure to recover a signature or body.
-pub fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -> MidBodyBuild {
+fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -> MidBodyBuild {
     if closure.bodyKey == 0U64 || closure.bodyBlock >= c.arena.blocks.count() || closure.functionTypeTerm == 0U64 {
         return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) error=<MidBuildError.InvalidFunction /> />
     }
@@ -3432,6 +3432,18 @@ pub fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) ->
 // Returning an empty draft for a cached entry is intentional: consumers must
 // use its canonical ID and cannot accidentally reopen a mutable body.
 pub fn ensureParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -> MidBodyBuild {
+    val index = match c.semanticClosureIndex(ownerFnIdx: closure.ownerFnIdx, exprId: closure.exprId) {
+        Result.Ok(value: val index) => { give index }
+        Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
+    }
+    val prepared = match c.preparedSemanticClosureAt(index: index) {
+        Result.Ok(value: val closure) => { give closure }
+        Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
+    }
+    return ensurePreparedParametricMidClosureBody(c: inout c, closure: prepared)
+}
+
+fn ensurePreparedParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -> MidBodyBuild {
     mut val i: U64 = 0U64
     while i < c.mid.closureBodies.count() {
         val prior: MidClosureBody = c.mid.closureBodies[i]

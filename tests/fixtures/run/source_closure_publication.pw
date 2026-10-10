@@ -1,0 +1,45 @@
+use /Mid only { ensureParametricMidClosureBody, MidBuildError }
+use /Ir only { SemanticClosure }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "fn good() {{ mut val value: I64 = 1I64 val callback = fn() -> I64 {{ value = 2I64 return value }} }}\nfn bad() {{ val callback = fn() {{}} val unresolved = [] }}\n"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="closure-publication.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    compiler.recordParametricFunction(fnIdx: 0U64, recordCallTemplates: false).unwrap()
+    assert(compiler.semanticClosureCount() == 1U64)
+    match compiler.preparedSemanticClosureAt(index: 0U64) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("construction descriptor was accepted as prepared") }
+    }
+    compiler.prepareLexicalBody(fnIdx: 0U64).unwrap()
+    val saved = compiler.preparedSemanticClosureAt(index: 0U64).unwrap()
+    assert(saved.captures.count() == 1U64)
+    match compiler.recordParametricFunction(fnIdx: 0U64, recordCallTemplates: false) {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "internal error: completed source owner cannot change a closure declaration") }
+        Result.Ok(value: _) => { panic("completed source owner reopened closure construction") }
+    }
+    // A navigation descriptor cannot replace the prepared meaning at the Mid boundary.
+    val requested = <SemanticClosure ownerFnIdx=saved.ownerFnIdx exprId=saved.exprId bodyKey=999999U64 />
+    val built = ensureParametricMidClosureBody(c: inout compiler, closure: requested)
+    match built.error {
+        MidBuildError.None => {}
+        _ => { panic("Mid did not consume the canonical prepared closure") }
+    }
+    assert(built.canonical.body != 0U64)
+    val retained = compiler.preparedSemanticClosureAt(index: 0U64).unwrap()
+    assert(retained.functionTypeTerm == saved.functionTypeTerm)
+    assert(retained.captures.count() == saved.captures.count())
+    match compiler.prepareLexicalBody(fnIdx: 1U64) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("unresolved owner was accepted") }
+    }
+    match compiler.preparedSemanticClosureAt(index: 1U64) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("failed owner published its closure") }
+    }
+    print("ok")
+}

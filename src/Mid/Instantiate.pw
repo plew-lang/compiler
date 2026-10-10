@@ -554,7 +554,13 @@ fn instantiateCanonicalMakeClosure(c: inout Comp, bodyId: U64, rvalueId: U64, en
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingSemanticClosure /> }
         return 0U64
     }
-    val closure: SemanticClosure = c.semanticClosureAt(index: closureIndex)
+    val closure: SemanticClosure = match c.preparedSemanticClosureAt(index: closureIndex) {
+        Result.Ok(value: val closure) => { give closure }
+        Result.Err(error: val diagnostic) => {
+            if !midInstantiateHasError(error: error) { error = <MidInstantiateError.Frontend diagnostic=diagnostic /> }
+            return 0U64
+        }
+    }
     val closureBodyId = c.findBodyInstance(fnIdx: closure.bodyKey, environment: environment.environment)
     if closureBodyId == 0U64 {
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingSemanticClosure /> }

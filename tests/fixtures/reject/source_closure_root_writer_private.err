@@ -1,1 +1,1 @@
-not visible here
+method is private (callable only in its defining module; put it in a `pub impl`)
