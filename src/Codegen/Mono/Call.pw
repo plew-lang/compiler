@@ -5134,9 +5134,11 @@ pub impl Comp {
 }
 
 impl Comp {
-    inout fn publishSemanticClosure(ownerFnIdx: U64, closureId: U64, parameters: Array[Param], hasReturn: Bool, returnTypeTerm: U64, bodyBlock: U64) -> Result[(), CompileDiagnostic] {
+    inout fn publishSemanticClosure(ownerFnIdx: U64, closureId: U64, parameters: Array[Param], functionTypeTerm: U64, bodyBlock: U64) -> Result[(), CompileDiagnostic] {
         val captures: Array[SemanticClosureCapture] = []
-        val signature = self.arena.typeAt(index: self.semanticExprTerm(exprId: closureId))
+        val signature = self.arena.typeAt(index: functionTypeTerm)
+        val result = signature.args[0U64]
+        val hasReturn = !self.callableResultIsUnit(ref: result)
         mut val frozenParameters: Array[SemanticClosureParameter] = []
         mut val parameterI: U64 = 0U64
         while parameterI < parameters.count() {
@@ -5144,7 +5146,7 @@ impl Comp {
             frozenParameters.append(<SemanticClosureParameter bindingTarget=parameter.nameStart nameLen=parameter.nameLen typeTerm=signature.args[parameterI + 1U64] isInout=parameter.isInout isMove=parameter.isMove isBorrow=parameter.isBorrow />)
             parameterI += 1U64
         }
-        try self.putSemanticClosure(closure: <SemanticClosure ownerFnIdx=(try self.semanticBodyOwner(fnIdx: ownerFnIdx)) exprId=closureId bodyKey=self.closureBodyKey(closureId: closureId) functionTypeTerm=self.semanticExprTerm(exprId: closureId) bodyBlock=bodyBlock parameters=frozenParameters hasReturn=hasReturn returnTypeTerm=returnTypeTerm captures=captures />)
+        try self.putSemanticClosure(closure: <SemanticClosure ownerFnIdx=(try self.semanticBodyOwner(fnIdx: ownerFnIdx)) exprId=closureId bodyKey=self.closureBodyKey(closureId: closureId) functionTypeTerm=functionTypeTerm bodyBlock=bodyBlock parameters=frozenParameters hasReturn=hasReturn returnTypeTerm=result captures=captures />)
         return <Result.Ok value=() />
     }
 

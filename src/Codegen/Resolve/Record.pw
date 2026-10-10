@@ -2277,8 +2277,7 @@ pub impl Comp {
                 // expression instead of reconstructing it through exprType.
                 val signature = try self.resolveClosureFunctionType(exprId: exprId, parameters: params, hasReturn: hasRet, returnType: retTy, expectedTerm: normalizedContext, isDiverging: diverging)
                 self.recordSemanticExprTerm(exprId: exprId, term: signature)
-                val result = self.arena.typeAt(index: signature).args[0U64]
-                try self.publishSemanticClosure(ownerFnIdx: self.cur.checkFn, closureId: exprId, parameters: params, hasReturn: !self.callableResultIsUnit(ref: result), returnTypeTerm: result, bodyBlock: body)
+                try self.publishSemanticClosure(ownerFnIdx: self.cur.checkFn, closureId: exprId, parameters: params, functionTypeTerm: signature, bodyBlock: body)
                 val mark: U64 = self.scopeMark()
                 val savedClosureIndex = self.cur.recordClosureIndex
                 val savedCaptureMark = self.cur.recordCaptureMark

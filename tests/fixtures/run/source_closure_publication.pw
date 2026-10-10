@@ -23,7 +23,11 @@ fn main() {
     val saved = compiler.preparedSemanticClosureAt(index: 0U64).unwrap()
     assert(saved.captures.count() == 1U64)
     val facts = compiler.preparedFunctionSemanticFacts(fnIdx: 0U64).unwrap()
-    assert(facts.expression(exprId: saved.exprId).isSome())
+    val expression = facts.expression(exprId: saved.exprId).unwrap()
+    assert(expression.term == saved.functionTypeTerm)
+    val signature = compiler.arena.typeAt(index: expression.term)
+    assert(saved.returnTypeTerm == signature.args[0U64])
+    assert(saved.parameters.count() + 1U64 == signature.args.count())
     match compiler.recordExpr(exprId: saved.exprId) {
         Result.Err(error: _) => {}
         Result.Ok(value: _) => { panic("completed owner reopened expression construction") }
