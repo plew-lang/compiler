@@ -6,6 +6,7 @@ part ./Ir/Modules
 part ./Ir/AccessCandidates
 part ./Ir/Callables
 part ./Ir/PatternInputs
+part ./Ir/CallConstraints
 part ./Ir/CallTemplates
 part ./Ir/TraitOwners
 part ./Ir/Types
@@ -1769,6 +1770,20 @@ pub struct SelectedCallConstraints {
 }
 pub impl SelectedCallConstraints { factory }
 
+// Readers receive a value snapshot, with no factory or writable storage.
+pub struct PreparedCallConstraints {
+    val plan: SelectedCallConstraints
+}
+impl PreparedCallConstraints { factory }
+pub impl PreparedCallConstraints {
+    fn constraints() -> SelectedCallConstraints { return self.plan }
+}
+
+enum CallConstraintPlanState {
+    Building(plan: SelectedCallConstraints)
+    Prepared(snapshot: PreparedCallConstraints)
+}
+
 // Source-selected obligations instantiated in the caller environment. Readers
 // compare them with the selected body's signature before publishing reachability.
 pub enum CallableConstraintEvidence {
@@ -3500,7 +3515,7 @@ pub struct Decls {
     // sentinel used by call sites. This is an index into declarationConversions.
     pub mut val globalDeclarationConversionOwners: Dictionary[U64, Array[U64]] = [:]
     pub mut val callTemplates: Array[CallTemplate] = []
-    pub mut val selectedCallConstraints: Dictionary[U64, SelectedCallConstraints] = [:]
+    mut val selectedCallConstraints: Dictionary[U64, CallConstraintPlanState]
     pub mut val globalCallTemplateOwners: Dictionary[U64, Array[U64]] = [:]
     pub mut val callTemplateArgumentPool: Array[CallTemplateArgument] = []
     pub mut val callTemplateTypeArgumentPool: Array[U64] = []
@@ -3524,7 +3539,9 @@ pub struct Decls {
     // path-insensitive AST emitter while Mid migration is incremental.
     pub mut val ownershipCfgFunctions: Array[U64] = []
 }
-pub impl Decls { factory }
+pub impl Decls {
+    factory() { return <Decls selectedCallConstraints=[:] /> }
+}
 
 // Module identity + cross-module visibility tables (spec/15). `files` owns
 // ordered, disjoint source spans and their paths. Its common position lookup

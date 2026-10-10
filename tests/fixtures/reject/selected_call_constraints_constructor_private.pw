@@ -1,0 +1,4 @@
+use /Ir only { Decls }
+fn main() {
+    val declarations: Decls = <Decls selectedCallConstraints=[:] />
+}

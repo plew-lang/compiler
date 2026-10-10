@@ -2,7 +2,7 @@
 // could prove the same trait. Missing evidence must not be silently repaired.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { CallTemplateKind, CallableConstraintEvidence, StaticConformanceProof }
+use /Ir only { CallTemplateKind, CallableConstraintEvidence, StaticConformanceProof, SelectedCallConstraints }
 use @Std/Io only { print }
 
 fn main() {
@@ -18,6 +18,15 @@ fn main() {
         match template.kind {
             CallTemplateKind.Direct(callee: val function, receiver: _, args: _, calleeTypeArgs: val types, proofId: _) => {
                 if function == callee && template.siteKey.ownerFnIdx == owner {
+                    val index = compiler.decls.callTemplateIndex(siteKey: template.siteKey)
+                    val snapshot = compiler.decls.preparedCallConstraints(index: index).unwrap()
+                    val plan = snapshot.constraints()
+                    if compiler.decls.recordBuildingCallConstraints(index: index, plan: <SelectedCallConstraints owner=plan.owner bounds=plan.bounds proofs=[] />) {
+                        panic("construction writer replaced a prepared call plan")
+                    }
+                    if compiler.decls.preparedCallConstraints(index: index).unwrap().constraints().proofs.count() != plan.proofs.count() {
+                        panic("prepared snapshot changed after a rejected construction write")
+                    }
                     val evidence = compiler.instantiateDirectCallConstraints(template: template).unwrap()
                     val arguments = compiler.callTemplateTypeArgs(range: types)
                     val environment = compiler.bodyInstanceEnvironment(fnIdx: callee, args: arguments, recvInstRef: 0U64).unwrap()

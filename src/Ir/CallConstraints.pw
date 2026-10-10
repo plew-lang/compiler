@@ -1,0 +1,57 @@
+// The store owns the stage transition. CoW snapshots exposed to readers
+// cannot mutate its private rows, and construction cannot replace Prepared.
+pub impl Decls {
+    fn selectedCallConstraintPlan(index: U64) -> Optional[SelectedCallConstraints] {
+        match self.selectedCallConstraints.get(key: index) {
+            Optional.Some(v: val state) => {
+                match state {
+                    CallConstraintPlanState.Building(plan: val plan) => { return <Optional.Some v=plan /> }
+                    CallConstraintPlanState.Prepared(snapshot: val snapshot) => { return <Optional.Some v=snapshot.constraints() /> }
+                }
+            }
+            Optional.None => { return <Optional.None /> }
+        }
+    }
+
+    inout fn recordBuildingCallConstraints(index: U64, plan: SelectedCallConstraints) -> Bool {
+        match self.selectedCallConstraints.get(key: index) {
+            Optional.Some(v: val state) => {
+                match state {
+                    CallConstraintPlanState.Prepared(snapshot: _) => { return false }
+                    CallConstraintPlanState.Building(plan: _) => {}
+                }
+            }
+            Optional.None => {}
+        }
+        self.selectedCallConstraints[index] = <CallConstraintPlanState.Building plan=plan />
+        return true
+    }
+
+    // Called only after all source-owner obligations have succeeded. Missing
+    // rows represent the exact signature's already-checked empty plan.
+    inout fn sealSelectedCallConstraints(index: U64) {
+        mut val plan = <SelectedCallConstraints owner=self.callTemplates[index].siteKey.ownerFnIdx bounds=[] proofs=[] />
+        match self.selectedCallConstraints.get(key: index) {
+            Optional.Some(v: val state) => {
+                match state {
+                    CallConstraintPlanState.Prepared(snapshot: _) => { return }
+                    CallConstraintPlanState.Building(plan: val building) => { plan = building }
+                }
+            }
+            Optional.None => {}
+        }
+        self.selectedCallConstraints[index] = <CallConstraintPlanState.Prepared snapshot=<PreparedCallConstraints plan=plan /> />
+    }
+
+    fn preparedCallConstraints(index: U64) -> Optional[PreparedCallConstraints] {
+        match self.selectedCallConstraints.get(key: index) {
+            Optional.Some(v: val state) => {
+                match state {
+                    CallConstraintPlanState.Prepared(snapshot: val snapshot) => { return <Optional.Some v=snapshot /> }
+                    CallConstraintPlanState.Building(plan: _) => { return <Optional.None /> }
+                }
+            }
+            Optional.None => { return <Optional.None /> }
+        }
+    }
+}

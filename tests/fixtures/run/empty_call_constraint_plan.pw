@@ -1,0 +1,26 @@
+// An empty signature does not authorize unrelated retained evidence. Both
+// construction and the owner-admission reader must reject the extra proof.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, SelectedCallConstraints }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="fn plain() {{}} fn probe() {{}}" path="empty-call-plan.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "plain").nameId)
+    val index = compiler.decls.callTemplates.count()
+    compiler.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=900U64 />
+        kind=<CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=compiler.publishCallTemplateArguments(args: []) calleeTypeArgs=compiler.publishCallTemplateTypeArgs(args: []) proofId=0U64 /> />)
+    compiler.prepareCallTemplateConstraints(templateIndex: index).unwrap()
+    if !compiler.decls.recordBuildingCallConstraints(index: index, plan: <SelectedCallConstraints owner=owner bounds=[] proofs=[0U64] />) {
+        panic("empty plan was unexpectedly prepared")
+    }
+    if compiler.prepareCallTemplateConstraints(templateIndex: index).isOk() { panic("construction ignored an extra retained proof") }
+    if compiler.checkRecordedCallTemplateBound(templateIndex: index).isOk() { panic("owner admission ignored an extra retained proof") }
+    if compiler.decls.preparedCallConstraints(index: index).isSome() { panic("failed construction published a prepared snapshot") }
+    print("empty-call-constraint-plan")
+}

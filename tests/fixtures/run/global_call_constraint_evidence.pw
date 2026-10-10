@@ -21,8 +21,8 @@ fn main() {
         }
     }
     if selected == compiler.decls.callTemplates.count() { panic("missing global call membership") }
-    val plan = compiler.decls.selectedCallConstraints.get(key: selected).unwrap()
-    compiler.decls.selectedCallConstraints[selected] = <SelectedCallConstraints owner=plan.owner bounds=plan.bounds proofs=[] />
+    val plan = compiler.decls.selectedCallConstraintPlan(index: selected).unwrap()
+    if !compiler.decls.recordBuildingCallConstraints(index: selected, plan: <SelectedCallConstraints owner=plan.owner bounds=plan.bounds proofs=[] />) { panic("construction plan was already prepared") }
     compiler.cur.checkFn = 70001U64
     compiler.cur.bodyFnIdx = 70002U64
     compiler.cur.globalInitializerTarget = <Optional.Some v=70003U64 />

@@ -3993,9 +3993,10 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has no source constraint owner") />
         }
         try self.checkRecordedCallConstraintEvidence(templateIndex: index)
-        match self.decls.selectedCallConstraints.get(key: index) {
-            Optional.None => { return <Result.Ok value=<CallableConstraintEvidence.Recorded bounds=[] proofs=[] /> /> }
-            Optional.Some(v: val plan) => {
+        match self.decls.preparedCallConstraints(index: index) {
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call constraint owner is not prepared") /> }
+            Optional.Some(v: val snapshot) => {
+                val plan = snapshot.constraints()
                 mut val bounds: Array[TraitBound] = []
                 mut val proofs: Array[StaticConformanceProof] = []
                 mut val position = 0U64
