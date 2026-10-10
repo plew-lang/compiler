@@ -19,69 +19,8 @@ pub impl Comp {
     // Freeze semantic evidence once before it crosses a long-lived table
     // boundary. IDs are one-based: zero remains the explicit "not present"
     // sentinel in scalar descriptor rows.
-    inout fn freezeWitnessMatch(witness: WitnessMatch) -> FrozenWitnessMatch {
-        val start: U64 = self.arena.staticProofWitnessBindPool.count()
-        mut val i: U64 = 0U64
-        while i < witness.binds.count() {
-            self.arena.staticProofWitnessBindPool.append(witness.binds[i])
-            i += 1U64
-        }
-        return <FrozenWitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=start bindCount=witness.binds.count() conditions=witness.conditions />
-    }
-
     inout fn freezeStaticConformanceProof(proof: StaticConformanceProof) -> U64 {
-        val id: U64 = self.arena.staticProofs.count() + 1U64
-        match proof {
-            StaticConformanceProof.Missing => {
-                self.arena.staticProofs.append(<StaticProofNode tag=0U64 />)
-            }
-            StaticConformanceProof.ConcreteWitness(witness: val witness) => {
-                val frozen: FrozenWitnessMatch = self.freezeWitnessMatch(witness: witness)
-                self.arena.staticProofs.append(<StaticProofNode tag=1U64 conformIdx=frozen.conformIdx witnessBinds=frozen.binds witnessBindCount=frozen.bindCount witnessSelfRef=frozen.selfRef witnessConditions=frozen.conditions />)
-            }
-            StaticConformanceProof.AssumedBound(source: val boundRef) => {
-                self.arena.staticProofs.append(<StaticProofNode tag=2U64 boundKind=self.declarationBoundKind(source: boundRef) boundIdx=self.declarationBoundIndex(source: boundRef) />)
-            }
-            StaticConformanceProof.AssumedTraitPath(source: val boundRef, steps: val steps, edges: val edges) => {
-                val start: U64 = self.arena.staticProofWitnessPool.count()
-                mut val i: U64 = 0U64
-                while i < edges.count() {
-                    self.arena.staticProofWitnessPool.append(self.freezeWitnessMatch(witness: edges[i]))
-                    i += 1U64
-                }
-                val supertraits = self.arena.staticProofSupertraitPool.count()
-                for val step in steps { self.arena.staticProofSupertraitPool.append(step) }
-                self.arena.staticProofs.append(<StaticProofNode supertraits=supertraits supertraitCount=steps.count() tag=3U64 boundKind=self.declarationBoundKind(source: boundRef) boundIdx=self.declarationBoundIndex(source: boundRef) path=start pathCount=edges.count() />)
-            }
-            StaticConformanceProof.AssumedSupertraitPath(source: val boundRef, steps: val steps) => {
-                val start: U64 = self.arena.staticProofSupertraitPool.count()
-                mut val i: U64 = 0U64
-                while i < steps.count() {
-                    self.arena.staticProofSupertraitPool.append(steps[i])
-                    i += 1U64
-                }
-                self.arena.staticProofs.append(<StaticProofNode tag=4U64 boundKind=self.declarationBoundKind(source: boundRef) boundIdx=self.declarationBoundIndex(source: boundRef) path=start pathCount=steps.count() />)
-            }
-            StaticConformanceProof.TraitSelf(traitIdx: val traitIdx, receiverRef: val receiverRef, traitArgs: val traitArgs) => {
-                val start: U64 = self.arena.staticProofU64Pool.count()
-                mut val i: U64 = 0U64
-                while i < traitArgs.count() {
-                    self.arena.staticProofU64Pool.append(traitArgs[i])
-                    i += 1U64
-                }
-                self.arena.staticProofs.append(<StaticProofNode tag=5U64 traitIdx=traitIdx receiverRef=receiverRef path=start pathCount=traitArgs.count() />)
-            }
-            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: val terminalConformIdx) => {
-                val start: U64 = self.arena.staticProofWitnessPool.count()
-                mut val i: U64 = 0U64
-                while i < edges.count() {
-                    self.arena.staticProofWitnessPool.append(self.freezeWitnessMatch(witness: edges[i]))
-                    i += 1U64
-                }
-                self.arena.staticProofs.append(<StaticProofNode tag=6U64 path=start pathCount=edges.count() terminalConformIdx=terminalConformIdx />)
-            }
-        }
-        return id
+        return self.arena.appendStaticConformanceProof(proof: proof)
     }
 
     inout fn freezeValueConversionProof(proof: ValueConversionProof) -> U64 {
@@ -125,72 +64,8 @@ pub impl Comp {
         return self.arena.conversionProofs.count()
     }
 
-    fn frozenWitnessMatchAt(index: U64) -> FrozenWitnessMatch {
-        return self.arena.staticProofWitnessPool[index]
-    }
-
-    fn thawFrozenWitnessMatch(witness: FrozenWitnessMatch) -> WitnessMatch {
-        mut val binds: Array[WitnessBind] = []
-        mut val i: U64 = 0U64
-        while i < witness.bindCount {
-            binds.append(self.arena.staticProofWitnessBindPool[witness.binds + i])
-            i += 1U64
-        }
-        return <WitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=binds conditions=witness.conditions />
-    }
-
-    // Transitional compatibility reader. It is used only while Mid's draft
-    // vocabulary still carries legacy proof values; canonical tables retain
-    // IDs, and Mid's canonical freeze removes this reconstruction entirely.
     fn thawStaticConformanceProof(id: U64) -> StaticConformanceProof {
-        if id == 0U64 || id > self.arena.staticProofs.count() { return <StaticConformanceProof.Missing /> }
-        val node: StaticProofNode = self.arena.staticProofs[id - 1U64]
-        if node.tag == 0U64 { return <StaticConformanceProof.Missing /> }
-        if node.tag == 1U64 {
-            return <StaticConformanceProof.ConcreteWitness witness=self.thawFrozenWitnessMatch(witness: <FrozenWitnessMatch selfRef=node.witnessSelfRef conformIdx=node.conformIdx binds=node.witnessBinds bindCount=node.witnessBindCount conditions=node.witnessConditions />) />
-        }
-        if node.tag >= 2U64 && node.tag <= 4U64 && node.boundKind > 4U64 { return <StaticConformanceProof.Missing /> }
-        if node.tag == 2U64 { return <StaticConformanceProof.AssumedBound source=self.thawDeclarationBound(kind: node.boundKind, index: node.boundIdx) /> }
-        if node.tag == 3U64 {
-            mut val edges: Array[WitnessMatch] = []
-            mut val i: U64 = 0U64
-            while i < node.pathCount {
-                edges.append(self.thawFrozenWitnessMatch(witness: self.arena.staticProofWitnessPool[node.path + i]))
-                i += 1U64
-            }
-            mut val steps: Array[SupertraitRef] = []
-            i = 0U64
-            while i < node.supertraitCount { steps.append(self.arena.staticProofSupertraitPool[node.supertraits + i]) i += 1U64 }
-            return <StaticConformanceProof.AssumedTraitPath source=self.thawDeclarationBound(kind: node.boundKind, index: node.boundIdx) steps=steps edges=edges />
-        }
-        if node.tag == 4U64 {
-            mut val steps: Array[SupertraitRef] = []
-            mut val i: U64 = 0U64
-            while i < node.pathCount {
-                steps.append(self.arena.staticProofSupertraitPool[node.path + i])
-                i += 1U64
-            }
-            return <StaticConformanceProof.AssumedSupertraitPath source=self.thawDeclarationBound(kind: node.boundKind, index: node.boundIdx) steps=steps />
-        }
-        if node.tag == 5U64 {
-            mut val traitArgs: Array[U64] = []
-            mut val i: U64 = 0U64
-            while i < node.pathCount {
-                traitArgs.append(self.arena.staticProofU64Pool[node.path + i])
-                i += 1U64
-            }
-            return <StaticConformanceProof.TraitSelf traitIdx=node.traitIdx receiverRef=node.receiverRef traitArgs=traitArgs />
-        }
-        if node.tag == 6U64 {
-            mut val edges: Array[WitnessMatch] = []
-            mut val i: U64 = 0U64
-            while i < node.pathCount {
-                edges.append(self.thawFrozenWitnessMatch(witness: self.frozenWitnessMatchAt(index: node.path + i)))
-                i += 1U64
-            }
-            return <StaticConformanceProof.TraitPath edges=edges terminalConformIdx=node.terminalConformIdx />
-        }
-        return <StaticConformanceProof.Missing />
+        return self.arena.staticConformanceProof(id: id)
     }
 
     fn thawValueConversionProof(id: U64) -> ValueConversionProof {

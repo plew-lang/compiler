@@ -1,0 +1,4 @@
+use /Ir only { Arena }
+fn main() {
+    val arena: Arena = <Arena staticProofs=[] />
+}

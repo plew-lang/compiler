@@ -6,6 +6,7 @@ part ./Ir/Modules
 part ./Ir/AccessCandidates
 part ./Ir/Callables
 part ./Ir/PatternInputs
+part ./Ir/StaticProofs
 part ./Ir/CallConstraints
 part ./Ir/CallTemplates
 part ./Ir/TraitOwners
@@ -2821,12 +2822,12 @@ pub struct Arena {
     // and typed ranges; final calls and Mid bodies must not embed recursive
     // proof values with owning Array payloads.
     pub mut val witnessConditionPlans: Array[WitnessConditionPlan] = []
-    pub mut val staticProofs: Array[StaticProofNode] = []
-    pub mut val staticProofWitnessBindPool: Array[WitnessBind] = []
-    pub mut val staticProofU64Pool: Array[U64] = []
+    mut val staticProofs: Array[StaticProofNode]
+    mut val staticProofWitnessBindPool: Array[WitnessBind] = []
+    mut val staticProofU64Pool: Array[U64] = []
     pub mut val associatedBoundEvidence: Array[AssociatedBoundEvidence] = []
-    pub mut val staticProofSupertraitPool: Array[SupertraitRef] = []
-    pub mut val staticProofWitnessPool: Array[FrozenWitnessMatch] = []
+    mut val staticProofSupertraitPool: Array[SupertraitRef] = []
+    mut val staticProofWitnessPool: Array[FrozenWitnessMatch] = []
     pub mut val conversionProofs: Array[ConversionProofNode] = []
     pub mut val conversionPayloadPool: Array[FrozenEnumPayloadConversion] = []
     pub mut val conversionArgumentProofPool: Array[U64] = []
@@ -2975,7 +2976,9 @@ pub struct Arena {
     // parallel array so a plain free call does not depend on a body worklist.
     pub mut val finalExprCallee: Array[CachedCallee] = []
 }
-pub impl Arena { factory }
+pub impl Arena {
+    factory() { return <Arena staticProofs=[] /> }
+}
 
 // The ARC ownership class of a grounded TypeRef — THE single classification that
 // every ARC decision reads (needs-heap gates, retain/release/deep-copy walkers,

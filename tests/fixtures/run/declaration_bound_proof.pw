@@ -32,8 +32,7 @@ fn main() {
         if index % 2U64 == 0U64 && compiler.sameStaticConformanceProof(a: restored, b: proofs[index + 1U64]) { panic "different declaration tables alias" }
         index += 1U64
     }
-    compiler.arena.staticProofs.append(<StaticProofNode tag=2U64 boundKind=99U64 boundIdx=0U64 />)
-    match compiler.thawStaticConformanceProof(id: compiler.arena.staticProofs.count()) {
+    match compiler.arena.decodeStaticConformanceProof(node: <StaticProofNode tag=2U64 boundKind=99U64 boundIdx=0U64 />) {
         StaticConformanceProof.Missing => {}
         _ => { panic "corrupt bound kind accepted" }
     }

@@ -466,7 +466,7 @@ pub impl LlvmCtx {
             // StaticProofNode.tag=0 is the frozen Missing sentinel.  The
             // backend does not interpret the witness path, but must not erase
             // a value through an absent proof.
-            return <Result.Ok value=node.staticProof != 0U64 && node.staticProof <= c.arena.staticProofs.count() && c.arena.staticProofs[node.staticProof - 1U64].tag != 0U64 />
+            return <Result.Ok value=c.arena.hasStaticConformanceProof(id: node.staticProof) />
         }
         if node.tag == 3U64 || node.tag == 4U64 { return self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: node.sourceRef, targetRef: node.targetRef, proofId: proofId) }
         return <Result.Ok value=false />

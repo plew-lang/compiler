@@ -99,35 +99,6 @@ pub impl Comp {
         }
     }
 
-    fn declarationBoundKind(source: DeclarationBoundRef) -> U64 {
-        match source {
-            DeclarationBoundRef.Function(index: _) => { return 0U64 }
-            DeclarationBoundRef.Conformance(index: _) => { return 1U64 }
-            DeclarationBoundRef.TraitSubject(index: _) => { return 2U64 }
-            DeclarationBoundRef.AssociatedType(index: _) => { return 3U64 }
-            DeclarationBoundRef.MethodReceiver(index: _) => { return 4U64 }
-        }
-    }
-
-    fn declarationBoundIndex(source: DeclarationBoundRef) -> U64 {
-        match source {
-            DeclarationBoundRef.Function(val index) => { return index }
-            DeclarationBoundRef.Conformance(val index) => { return index }
-            DeclarationBoundRef.TraitSubject(val index) => { return index }
-            DeclarationBoundRef.AssociatedType(val index) => { return index }
-            DeclarationBoundRef.MethodReceiver(val index) => { return index }
-        }
-    }
-
-    // The scalar proof reader validates kind before reconstructing evidence.
-    fn thawDeclarationBound(kind: U64, index: U64) -> DeclarationBoundRef {
-        if kind == 0U64 { return <DeclarationBoundRef.Function index=index /> }
-        if kind == 1U64 { return <DeclarationBoundRef.Conformance index=index /> }
-        if kind == 2U64 { return <DeclarationBoundRef.TraitSubject index=index /> }
-        if kind == 3U64 { return <DeclarationBoundRef.AssociatedType index=index /> }
-        return <DeclarationBoundRef.MethodReceiver index=index />
-    }
-
     // Form the semantic constraint carried by an existential once, at the
     // boundary from a lowered TypeRef.  `any Alias` must retain the resolved
     // declaration selected at the authored use site: the spelling alone is
