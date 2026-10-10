@@ -1,7 +1,7 @@
 // Internal preparation boundary: failure and success restore the caller cursor.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { Expr, Stmt, Local, SemanticCompletionOwner, CallTemplate, CallTemplateKind, CallSiteKey }
+use /Ir only { Expr, Stmt, Local, SemanticCompletionOwner, CallTemplate, CallTemplateKind, CallSiteKey, SelectedCallConstraints }
 use @Std/Io only { print }
 
 fn assertCursor(compiler: inout Comp) {
@@ -38,6 +38,8 @@ fn main() {
     if !compiler.replaceBuildingCallTemplate(index: 0U64, template: <CallTemplate siteKey=site kind=<CallTemplateKind.Pending /> />) {
         panic("building global rejected its call update")
     }
+    val plan = <SelectedCallConstraints owner=18446744073709551615U64 bounds=[] proofs=[] />
+    if !compiler.recordBuildingCallConstraints(index: 0U64, plan: plan) { panic("building global rejected its constraint plan") }
     compiler.cur.checkFn = 70001U64
     compiler.cur.bodyFnIdx = 70002U64
     compiler.cur.bodyId = 70003U64
@@ -57,6 +59,7 @@ fn main() {
     if compiler.replaceBuildingCallTemplate(index: 0U64, template: <CallTemplate siteKey=site kind=<CallTemplateKind.Pending /> />) {
         panic("failed global call row reopened through an unrelated cursor")
     }
+    if compiler.recordBuildingCallConstraints(index: 0U64, plan: plan) { panic("failed global reopened its constraint plan") }
     if compiler.globalInitializerPreparationCount() != 1U64 { panic("failed request was not cached once") }
     match compiler.semanticCompletionOwnerPrepared(owner: <SemanticCompletionOwner.Global target=broken.nameStart />) {
         Result.Err(error: val failure) => { if failure.message != diagnostic.message { panic("final reader lost failed owner diagnostic") } }
