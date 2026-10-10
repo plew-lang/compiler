@@ -423,13 +423,12 @@ pub impl Comp {
 
     inout fn registerAssociatedBoundEvidence(evidence: AssociatedBoundEvidence) -> DeclarationBoundRef {
         mut val index = 0U64
-        while index < self.arena.associatedBoundEvidence.count() {
-            val existing = self.arena.associatedBoundEvidence[index]
+        while index < self.arena.associatedBoundEvidenceCount() {
+            val existing = self.arena.associatedBoundEvidenceAt(index: index)
             if existing.clause == evidence.clause && self.typeRefEq(a: existing.projection, b: evidence.projection) && self.sameStaticConformanceProof(a: existing.prerequisite, b: evidence.prerequisite) { return <DeclarationBoundRef.AssociatedType index=index /> }
             index += 1U64
         }
-        self.arena.associatedBoundEvidence.append(evidence)
-        return <DeclarationBoundRef.AssociatedType index=index />
+        return <DeclarationBoundRef.AssociatedType index=self.arena.publishAssociatedBoundEvidence(evidence: evidence) />
     }
 
     inout fn traitPatternProofFromFacts(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = [], sourceOwners: Array[U64] = [], requireUniqueWitness: Bool = false, includeConcrete: Bool = true) -> Result[StaticConformanceProof, CompileDiagnostic] {

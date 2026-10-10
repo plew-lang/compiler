@@ -16,7 +16,7 @@ fn main() {
         StaticConformanceProof.AssumedBound(source: val sourceRef) => {
             match sourceRef {
                 DeclarationBoundRef.AssociatedType(val index) => {
-                    val evidence = compiler.arena.associatedBoundEvidence[index]
+                    val evidence = compiler.arena.associatedBoundEvidenceAt(index: index)
                     assert(compiler.typeRefEq(a: evidence.projection, b: binding.ty))
                     assert(compiler.typeRefEq(a: evidence.bound.subject, b: binding.ty))
                     match evidence.prerequisite {
@@ -29,11 +29,11 @@ fn main() {
         }
         _ => { panic "missing associated evidence" }
     }
-    val count = compiler.arena.associatedBoundEvidence.count()
+    val count = compiler.arena.associatedBoundEvidenceCount()
     assert(count == 1U64)
     val repeated = compiler.traitPatternProof(baseRef: binding.ty, traitId: 0U64, traitOwner: target.constraint.key.owner, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions).unwrap()
     assert(compiler.sameStaticConformanceProof(a: proof, b: repeated))
-    assert(compiler.arena.associatedBoundEvidence.count() == count)
+    assert(compiler.arena.associatedBoundEvidenceCount() == count)
     val restored = compiler.thawStaticConformanceProof(id: compiler.freezeStaticConformanceProof(proof: proof))
     assert(compiler.sameStaticConformanceProof(a: proof, b: restored))
     assert(!compiler.viewedTypeConformsTraitConstraint(ref: binding.ty, constraint: target.constraint).unwrap())

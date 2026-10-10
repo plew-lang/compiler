@@ -3877,7 +3877,7 @@ pub impl Comp {
     }
 
     inout fn instantiateAssociatedConstraint(index: U64, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
-        val evidence = self.arena.associatedBoundEvidence[index]
+        val evidence = self.arena.associatedBoundEvidenceAt(index: index)
         val projection = self.arena.typeAt(index: evidence.projection)
         val root = try self.groundTermForBody(ref: self.typeTermProjectionReceiver(t: projection), environment: environment, selfRef: selfRef, itemRef: itemRef)
         val prerequisite = try self.instantiateConstraintProof(proof: evidence.prerequisite, receiverRef: root, environment: environment, selfRef: selfRef, itemRef: itemRef)
@@ -3942,7 +3942,6 @@ pub impl Comp {
                     DeclarationBoundRef.Conformance(index: val declared) => { return self.retainedConformanceConstraint(declared: declared, environment: environment) }
                     DeclarationBoundRef.AssociatedType(index: val index) => { return self.instantiateAssociatedConstraint(index: index, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
                     DeclarationBoundRef.MethodReceiver(index: _) | DeclarationBoundRef.TraitSubject(index: _) => { return self.instantiateReceiverConstraint(bound: bound, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
-                    _ => {}
                 }
             }
             StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {

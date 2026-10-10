@@ -49,7 +49,7 @@ pub impl Comp {
             DeclarationBoundRef.Function(val index) => { return index < self.decls.funcBounds.count() }
             DeclarationBoundRef.Conformance(val index) => { return index < self.decls.conformBoundPool.count() }
             DeclarationBoundRef.TraitSubject(val index) => { return index < self.decls.conformCount() }
-            DeclarationBoundRef.AssociatedType(val index) => { return index < self.arena.associatedBoundEvidence.count() }
+            DeclarationBoundRef.AssociatedType(val index) => { return index < self.arena.associatedBoundEvidenceCount() }
             DeclarationBoundRef.MethodReceiver(val index) => { return functionHasTraitReceiver(self.arena, self.decls, fnIdx: index) }
         }
     }
@@ -71,7 +71,7 @@ pub impl Comp {
                 val owner = conformance.subjectTraitOwner
                 return <TraitBound subject=self.receiverSubjectTerm(receiver: conformance.subjectTy, traitOwner: owner) constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=self.copyConformTypes(types: conformance.subjectArgs) /> positionalArgsOpen=false assocPredicates=[] /> offset=conformance.defOffset />
             }
-            DeclarationBoundRef.AssociatedType(val index) => { return self.arena.associatedBoundEvidence[index].bound }
+            DeclarationBoundRef.AssociatedType(val index) => { return self.arena.associatedBoundEvidenceAt(index: index).bound }
             DeclarationBoundRef.MethodReceiver(val index) => {
                 val function = self.arena.functionAt(index: index)
                 return <TraitBound subject=function.recvTy constraint=<TraitConstraint key=<TraitInstanceKey owner=function.recvStart positionalArgs=self.copyFuncTypes(types: function.recvTraitArgs) /> positionalArgsOpen=false assocPredicates=[] /> offset=function.defOffset />

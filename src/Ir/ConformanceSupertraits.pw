@@ -1,5 +1,12 @@
 // Declaration-owned evidence is published once; readers cannot replace it.
 pub impl Arena {
+    fn associatedBoundEvidenceCount() -> U64 { return self.associatedBoundEvidence.count() }
+    fn associatedBoundEvidenceAt(index: U64) -> AssociatedBoundEvidence { return self.associatedBoundEvidence[index] }
+    inout fn publishAssociatedBoundEvidence(evidence: AssociatedBoundEvidence) -> U64 {
+        val index = self.associatedBoundEvidence.count()
+        self.associatedBoundEvidence.append(evidence)
+        return index
+    }
     inout fn publishConformanceAssociatedEvidence(conformance: U64, evidence: Array[ConformanceAssociatedEvidence]) -> Bool {
         if self.conformanceAssociatedHeads.getOr(key: conformance, fallback: 0U64) != 0U64 { return false }
         for entry in evidence {

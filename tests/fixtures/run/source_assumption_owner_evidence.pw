@@ -33,8 +33,8 @@ fn checkCycle() {
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait P {{}} fn probe[T](source: T) where T: P {{}}" path="assumption-cycle.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     val root = compiler.functionBoundAssumptions(fnIdx: owner)[0U64]
-    val source = <DeclarationBoundRef.AssociatedType index=compiler.arena.associatedBoundEvidence.count() />
-    compiler.arena.associatedBoundEvidence.append(<AssociatedBoundEvidence projection=compiler.declarationBound(source: root).subject clause=0U64 prerequisite=<StaticConformanceProof.AssumedBound source=source /> bound=compiler.declarationBound(source: root) />)
+    val source = <DeclarationBoundRef.AssociatedType index=compiler.arena.associatedBoundEvidenceCount() />
+    compiler.arena.publishAssociatedBoundEvidence(evidence: <AssociatedBoundEvidence projection=compiler.declarationBound(source: root).subject clause=0U64 prerequisite=<StaticConformanceProof.AssumedBound source=source /> bound=compiler.declarationBound(source: root) />)
     val scope = compiler.declarationTypeScope(owner: owner).unwrap()
     mut val attempt = 0U64
     while attempt < 2U64 {

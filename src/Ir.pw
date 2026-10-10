@@ -2858,7 +2858,7 @@ pub struct Arena {
     mut val staticProofs: Array[StaticProofNode]
     mut val staticProofWitnessBindPool: Array[WitnessBind] = []
     mut val staticProofU64Pool: Array[U64] = []
-    pub mut val associatedBoundEvidence: Array[AssociatedBoundEvidence] = []
+    mut val associatedBoundEvidence: Array[AssociatedBoundEvidence] = []
     mut val staticProofSupertraitPool: Array[SupertraitRef] = []
     mut val staticProofWitnessPool: Array[FrozenWitnessMatch] = []
     mut val conversionProofs: Array[ConversionProofNode] = []

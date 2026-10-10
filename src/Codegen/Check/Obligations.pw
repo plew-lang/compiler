@@ -826,10 +826,10 @@ pub impl Comp {
                     if active == index { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration assumption prerequisite is cyclic") /> }
                 }
                 self.activeAssumptionAdmission.append(index)
-                val result = self.declarationProofDependency(proof: self.arena.associatedBoundEvidence[index].prerequisite, scope: scope, offset: offset)
+                val result = self.declarationProofDependency(proof: self.arena.associatedBoundEvidenceAt(index: index).prerequisite, scope: scope, offset: offset)
                 self.activeAssumptionAdmission.removeLast()
                 try result
-                val evidence = self.arena.associatedBoundEvidence[index]
+                val evidence = self.arena.associatedBoundEvidenceAt(index: index)
                 val expected = try self.associatedClauseBound(projectionRef: evidence.projection, clauseIndex: evidence.clause, prerequisite: evidence.prerequisite, offset: offset)
                 if !self.typeRefEq(a: evidence.bound.subject, b: expected.subject) || !self.sameTraitConstraint(a: evidence.bound.constraint, b: expected.constraint) {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption does not match its declaration clause") />

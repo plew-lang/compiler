@@ -29,8 +29,8 @@ fn check(kind: U64, message: String = "") {
         compiler.decls.conformBoundPool.append(<ConformBound subject=source constraint=compiler.existentialTraitConstraint(ref: target) offset=0U64 />)
         replacement = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Conformance index=index /> />
     } else if kind == 2U64 {
-        val index = compiler.arena.associatedBoundEvidence.count()
-        compiler.arena.associatedBoundEvidence.append(<AssociatedBoundEvidence projection=source clause=0U64 prerequisite=<StaticConformanceProof.AssumedBound source=compiler.functionBoundAssumptions(fnIdx: owner)[0U64] /> bound=<TraitBound subject=source constraint=compiler.existentialTraitConstraint(ref: target) offset=0U64 /> />)
+        val index = compiler.arena.associatedBoundEvidenceCount()
+        compiler.arena.publishAssociatedBoundEvidence(evidence: <AssociatedBoundEvidence projection=source clause=0U64 prerequisite=<StaticConformanceProof.AssumedBound source=compiler.functionBoundAssumptions(fnIdx: owner)[0U64] /> bound=<TraitBound subject=source constraint=compiler.existentialTraitConstraint(ref: target) offset=0U64 /> />)
         replacement = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.AssociatedType index=index /> />
     } else if kind >= 3U64 && kind != 4U64 {
         val index = match compiler.thawValueConversionProof(id: original.proof) {
@@ -44,7 +44,7 @@ fn check(kind: U64, message: String = "") {
             }
             _ => { panic("missing box proof") }
         }
-        val evidence = compiler.arena.associatedBoundEvidence[index]
+        val evidence = compiler.arena.associatedBoundEvidenceAt(index: index)
         mut val bound = evidence.bound
         mut val clause = evidence.clause
         mut val prerequisite = evidence.prerequisite
@@ -56,8 +56,8 @@ fn check(kind: U64, message: String = "") {
         } else {
             prerequisite = <StaticConformanceProof.AssumedBound source=compiler.functionBoundAssumptions(fnIdx: owner)[1U64] />
         }
-        compiler.arena.associatedBoundEvidence[index] = <AssociatedBoundEvidence projection=evidence.projection clause=clause prerequisite=prerequisite bound=bound />
-        replacement = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.AssociatedType index=index /> />
+        val replacementIndex = compiler.arena.publishAssociatedBoundEvidence(evidence: <AssociatedBoundEvidence projection=evidence.projection clause=clause prerequisite=prerequisite bound=bound />)
+        replacement = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.AssociatedType index=replacementIndex /> />
     }
     if kind != 0U64 && kind != 4U64 {
         val proof = compiler.freezeValueConversionProof(proof: <ValueConversionProof.ExistentialBox sourceRef=source targetRef=target traitIdx=compiler.recordAnyTraitIndex(anyRef: target) proof=replacement />)

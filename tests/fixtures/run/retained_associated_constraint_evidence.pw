@@ -1,0 +1,35 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { TraitConstraint, TraitInstanceKey, StaticConformanceProof, StaticProofInstantiation, DeclarationBoundRef, PatternTypeInput, PatternBindInput, AssociatedBoundEvidence }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    val text = "trait Required {{}} trait Source {{ type Item: Required }} trait Container {{ type Item }} struct Box[T] {{}} impl[T] Box[T] as Container where T: Source {{ type Item=T#Source.Item }} struct Leaf {{}} impl Leaf as Required {{}} struct Input {{}} impl Input as Source {{ type Item=Leaf }} fn context(value: Box[Input], item: Leaf) {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=text path="associated-retained.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "context").nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val item = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val conformance = compiler.decls.conformAt(index: 0U64)
+    val binding = compiler.decls.assocBindings[compiler.conformFuncIdAt(ids: conformance.assocBindingIds, index: 0U64)]
+    val required = compiler.traitAssociatedBoundAt(bounds: compiler.decls.traitAt(index: 1U64).assocBounds, index: 0U64)
+    val abstract = compiler.traitPatternProof(baseRef: binding.ty, traitId: 0U64, traitOwner: required.constraint.key.owner, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assumptions: compiler.conformanceDeclarationAssumptions(conformIndex: 0U64)).unwrap()
+    val selected = compiler.viewedTraitConstraintProof(ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 2U64).nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+    val environment = compiler.selectedConstraintEnvironment(witness: compiler.selectedConstraintWitness(proof: selected).unwrap(), proof: selected).unwrap()
+    match compiler.instantiateConstraintProof(proof: abstract, receiverRef: item, environment: environment, selfRef: receiver, itemRef: 0U64).unwrap() {
+        StaticProofInstantiation.Ready(proof: val proof) => {
+            if compiler.selectedConstraintWitness(proof: proof).isNone() { panic("lost associated witness") }
+        }
+        _ => { panic("associated constraint was not ready") }
+    }
+    val index = match abstract {
+        StaticConformanceProof.AssumedBound(source: val source) => {
+            give match source { DeclarationBoundRef.AssociatedType(index: val index) => { give index } _ => { panic("wrong associated source") } }
+        }
+        _ => { panic("missing associated assumption") }
+    }
+    val original = compiler.arena.associatedBoundEvidenceAt(index: index)
+    val foreign = compiler.arena.publishAssociatedBoundEvidence(evidence: <AssociatedBoundEvidence projection=original.projection clause=original.clause + 100U64 prerequisite=original.prerequisite bound=original.bound />)
+    if compiler.instantiateConstraintProof(proof: <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.AssociatedType index=foreign /> />, receiverRef: item, environment: environment, selfRef: receiver, itemRef: 0U64).isOk() { panic("missing clause was repaired by search") }
+    print("retained-associated-constraint")
+}
