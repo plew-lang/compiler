@@ -6,7 +6,8 @@
 set -eu
 cd "$(dirname "$0")/../../.."
 
-source='../syntax/src/_.pw'
+syntax_root=$(python3 -B scripts/support/dependency_inputs.py --git https://github.com/plew-lang/syntax.git)
+source="$syntax_root/src/_.pw"
 
 for required in parseSyntaxMethodAfterFn parseSyntaxAssocValMember parseSyntaxImplDecl; do
     if ! rg -q "^inout fn $required\(" "$source"; then

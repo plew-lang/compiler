@@ -9,7 +9,6 @@ def dependency_inputs(compiler, env, allow_missing=False):
     inputs = []
     pending = [compiler]
     seen = set()
-    cache = Path(env.get('PLEW_CACHE', str(Path.home() / '.plew/cache')))
     while pending:
         directory = pending.pop().resolve()
         if directory in seen:
@@ -34,8 +33,7 @@ def dependency_inputs(compiler, env, allow_missing=False):
             for package in tomllib.loads(lock.read_text()).get('package', []):
                 if 'git' not in package:
                     continue
-                safe = re.sub(r'[^A-Za-z0-9._-]', '_', package['git'])
-                path = cache / 'src' / safe / package['commit']
+                path = locked_package_source(package, env)
                 if not path.is_dir() and not allow_missing:
                     raise ValueError(f'locked dependency missing: {path}; run the resolver first')
                 inputs.append(path)
@@ -43,3 +41,30 @@ def dependency_inputs(compiler, env, allow_missing=False):
     return inputs
 
 
+
+def locked_git_source(compiler, env, git):
+    """Return the exact locked source root for one git dependency."""
+    lock = tomllib.loads((compiler / 'Plew.lock').read_text())
+    packages = [p for p in lock.get('package', []) if p.get('git') == git]
+    if len(packages) != 1:
+        raise ValueError(f'expected one locked dependency: {git}')
+    path = locked_package_source(packages[0], env)
+    if not path.is_dir():
+        raise ValueError(f'locked dependency missing: {path}; run the resolver first')
+    return path
+
+
+def locked_package_source(package, env):
+    cache = Path(env.get('PLEW_CACHE', str(Path.home() / '.plew/cache')))
+    safe = re.sub(r'[^A-Za-z0-9._-]', '_', package['git'])
+    path = cache / 'src' / safe / package['commit']
+    return path
+
+
+if __name__ == '__main__':
+    import argparse
+    import os
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--git', required=True)
+    args = parser.parse_args()
+    print(locked_git_source(Path.cwd(), os.environ, args.git))
