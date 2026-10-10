@@ -192,7 +192,7 @@ pub impl Comp {
         try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Global target=target />)
         try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Global target=target />)
         for templateIndex in self.decls.globalCallTemplateOwners.getOr(key: target, fallback: []) {
-            self.decls.sealSelectedCallConstraints(index: templateIndex)
+            try self.publishPreparedCallConstraints(templateIndex: templateIndex)
         }
         self.preparedGlobalTargets.append(target)
         return <Result.Ok value=() />

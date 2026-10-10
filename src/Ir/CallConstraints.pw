@@ -29,8 +29,8 @@ pub impl Decls {
 
     // Called only after all source-owner obligations have succeeded. Missing
     // rows represent the exact signature's already-checked empty plan.
-    inout fn sealSelectedCallConstraints(index: U64) {
-        mut val plan = <SelectedCallConstraints owner=self.callTemplates[index].siteKey.ownerFnIdx bounds=[] proofs=[] />
+    inout fn sealSelectedCallConstraints(index: U64, owner: U64) {
+        mut val plan = <SelectedCallConstraints owner=owner bounds=[] proofs=[] />
         match self.selectedCallConstraints.get(key: index) {
             Optional.Some(v: val state) => {
                 match state {

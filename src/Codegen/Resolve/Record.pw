@@ -2740,7 +2740,7 @@ pub impl Comp {
         mut val row = self.firstLexicalCallTemplate(owner: owner)
         while row != 0U64 {
             val index = row - 1U64
-            self.decls.sealSelectedCallConstraints(index: index)
+            try self.publishPreparedCallConstraints(templateIndex: index)
             row = self.decls.callTemplateBodyNext[index]
         }
         return <Result.Ok value=() />

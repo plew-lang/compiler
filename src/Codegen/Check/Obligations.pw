@@ -1184,6 +1184,15 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Publication uses the same lexical authority as plan construction and
+    // admission, including closure and provided-body owner normalization.
+    inout fn publishPreparedCallConstraints(templateIndex: U64) -> Result[(), CompileDiagnostic] {
+        val template = self.decls.callTemplates[templateIndex]
+        val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
+        self.decls.sealSelectedCallConstraints(index: templateIndex, owner: scope.owner)
+        return <Result.Ok value=() />
+    }
+
     inout fn checkRecordedCallConstraintEvidence(templateIndex: U64) -> Result[(), CompileDiagnostic] {
         val template = self.decls.callTemplates[templateIndex]
         val bounds = try self.sourceSelectedCallBounds(template: template)
