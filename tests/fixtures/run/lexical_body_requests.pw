@@ -2,7 +2,7 @@
 // is restored, and an unrelated owner remains independently preparable.
 use /Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendDeclarations, spansEqual }
 use /SourceAccess only { SourceAccess }
-use /Ir only { CallSiteKey, CallTemplate, CallTemplateKind, ProtocolSelection, CallTemplateReceiver }
+use /Ir only { CallSiteKey, CallTemplate, CallTemplateKind, ProtocolSelection, CallTemplateReceiver, SelectedCallConstraints }
 use @Std/Io only { print }
 
 fn owner(c: inout Comp, name: String) -> U64 {
@@ -60,6 +60,7 @@ fn main() {
     c.closeCallTemplatesForBody(fnIdx: closed).unwrap()
     val integer = c.internBytes(s: "I64")
     val term = c.simpleTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)
+    val failedCallIndex = c.callTemplateCount()
     c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=closed originKind=3U64 originSerial=1U64 slot=1U64 />
         kind=<CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=term /> selection=<ProtocolSelection.Pending /> resultTerm=0U64 /> />)
     for attempt in [0U64, 1U64] {
@@ -67,6 +68,12 @@ fn main() {
             Result.Ok(value: _) => { panic("template closure bypassed constraints") }
             Result.Err(error: _) => {}
         }
+    }
+    if c.replaceBuildingCallTemplate(index: failedCallIndex, template: c.callTemplateAt(index: failedCallIndex)) {
+        panic("failed lexical owner reopened a call row")
+    }
+    if c.recordBuildingCallConstraints(index: failedCallIndex, plan: <SelectedCallConstraints owner=closed bounds=[] proofs=[] />) {
+        panic("failed lexical owner reopened its constraints")
     }
     print("ok")
 }
