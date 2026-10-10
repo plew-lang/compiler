@@ -1,16 +1,16 @@
 // Reuse only an immutable declaration template within one preparation.
 use @Std/Core only { assert }
 use @Std/Io only { print }
-use /Frontend only { Comp }
-use /Ir only { Block, Func }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
 use /Mid/Build only { MidFunctionTemplates, MidBuildError }
 fn main() {
     mut val compiler: Comp = <Comp />
-    compiler.arena.blocks.append(<Block stmtStart=0U64 stmtLen=0U64 />)
-    val parameters = compiler.pushFuncParams(params: [])
-    val function = <Func nameStart=0U64 nameLen=0U64 params=parameters hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />
-    compiler.arena.registerFunction(function)
-    compiler.arena.registerFunction(function)
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="templates.pw" text="fn first() {{}} fn second() {{}}" />,
+        sources: <SourceAccess />).unwrap()
+    compiler.prepareLexicalBody(fnIdx: 0U64).unwrap()
+    compiler.prepareLexicalBody(fnIdx: 1U64).unwrap()
     mut val templates: MidFunctionTemplates = <MidFunctionTemplates />
     val first = templates.body(c: inout compiler, function: 0U64)
     match first.error { MidBuildError.None => {} _ => { assert(false) } }
