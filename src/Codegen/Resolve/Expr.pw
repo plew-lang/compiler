@@ -376,11 +376,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn ensureSemanticExprType(exprId: U64) {
-        while self.semanticExprTypes.count() <= exprId {
-            self.semanticExprTypes.append(<SemanticExprType />)
-        }
-    }
+
 
     // Only a direct polymorphic literal takes its type from an explicit cast.
     // A newtype boundary supplies its declared immediate underlying type;
@@ -1126,33 +1122,9 @@ pub impl Comp {
     // Unit; an unresolved expression still uses recordSemanticExprTerm(0).
     // Convert a completed no-payload result into the ordinary source Unit
     // type. Presence is never inferred from an unrecorded zero term.
-    inout fn recordKnownExpressionResult(exprId: U64, resultTerm: U64) -> Result[(), CompileDiagnostic] {
-        self.recordSemanticExprTerm(exprId: exprId, term: self.semanticSourceResultTerm(ref: resultTerm))
-        if self.callableResultIsUnit(ref: resultTerm) {
-            self.ensureSemanticExprType(exprId: exprId)
-            val prior = self.semanticExprTypes[exprId]
-            val state = match prior.typeState {
-                SemanticExpressionTypeState.NoNormalValue => <SemanticExpressionTypeState.NoNormalValue />,
-                _ => <SemanticExpressionTypeState.Unit />,
-            }
-            self.storeBuildingSemanticExprType(i: exprId, value: <SemanticExprType typeState=state completion=prior.completion invocation=prior.invocation term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />)
-        }
-        return <Result.Ok value=() />
-    }
 
-    inout fn recordInvocationCompletion(exprId: U64, diverging: Bool, returnsUnit: Bool = false) {
-        self.ensureSemanticExprType(exprId: exprId)
-        val prior = self.semanticExprTypes[exprId]
-        val contract = if diverging { give <InvocationCompletion.Diverges /> } else { give <InvocationCompletion.Returns /> }
-        val state = if diverging { give <SemanticExpressionTypeState.NoNormalValue /> } else if returnsUnit { give <SemanticExpressionTypeState.Unit /> } else { give prior.typeState }
 
-        self.storeBuildingSemanticExprType(i: exprId, value: <SemanticExprType
-            typeState=state completion=prior.completion invocation=contract term=prior.term shape=prior.shape
-            legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen
-            legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext
-            hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed
-        />)
-    }
+
 
     // A source site's owner exists before its type and completion are checked.
     // Sharing this identity rule does not publish a completed semantic fact.
@@ -1176,43 +1148,11 @@ pub impl Comp {
 
     // Publish only after the expression's operands and branches have been
     // checked and composed. A single arm's exit is not its parent's exit.
-    inout fn recordedCompletionFact(completion: SourceCompletion) -> Optional[SemanticExpressionCompletion] {
-        match self.sourceRecordingOwner() {
-            Optional.Some(v: val owner) => { return <Optional.Some v=<SemanticExpressionCompletion owner=owner flow=completion /> /> }
-            Optional.None => { return <Optional.None /> }
-        }
-    }
 
-    inout fn recordSemanticExprCompletion(exprId: U64, completion: SourceCompletion) {
-        if completion.source.normal() && !self.cur.recordCallTemplates { return }
-        self.ensureSemanticExprType(exprId: exprId)
-        val prior = self.semanticExprTypes[exprId]
-        mut val fact = prior.completion
-        match self.recordedCompletionFact(completion: completion) {
-            Optional.Some(v: val recorded) => { fact = <Optional.Some v=recorded /> }
-            Optional.None => {}
-        }
-        val state = if completion.source.normal() { give prior.typeState } else { give <SemanticExpressionTypeState.NoNormalValue /> }
-        self.storeBuildingSemanticExprType(i: exprId, value: <SemanticExprType
-            typeState=state completion=fact invocation=prior.invocation term=prior.term shape=prior.shape
-            legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen
-            legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext
-            hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed
-        />)
-    }
 
-    inout fn recordStaticInvocationCompletion(exprId: U64, resolution: StaticMemberResolution) {
-        match resolution {
-            StaticMemberResolution.Requirement(proof: _, traitIdx: val trait, reqIdx: val requirement) => {
-                val declaration = self.traitReqAt(reqs: self.decls.traitAt(index: trait).reqs, index: requirement)
-                self.recordInvocationCompletion(exprId: exprId, diverging: declaration.isDiverging, returnsUnit: self.callableResultIsUnit(ref: self.semanticCallableReturnTerm(function: declaration)))
-            }
-            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => {
-                self.recordInvocationCompletion(exprId: exprId, diverging: self.arena.functionAt(index: callee).isDiverging, returnsUnit: self.callableResultIsUnit(ref: self.semanticCallableReturnTerm(function: self.arena.functionAt(index: callee))))
-            }
-            StaticMemberResolution.Missing => {}
-        }
-    }
+
+
+
 
     inout fn recordDynamicCallTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, target: DynamicCallTemplateTarget, receiverTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         mut val functionType: U64 = 0U64
@@ -2143,108 +2083,25 @@ pub impl Comp {
     }
 
 
-    inout fn recordSemanticExprInfo(exprId: U64, ti: TypeInfo) {
-        self.ensureSemanticExprType(exprId: exprId)
-        val prior: SemanticExprType = self.semanticExprTypes[exprId]
-        val term: U64 = self.typedIrRefOfInfo(ti: ti)
-        // An unresolved adapter cannot invalidate a published semantic term
-        // or its canonical projection. A partial structural shape supplies no
-        // replacement type, just as an unknown scalar supplies none.
-        if term == 0U64 && prior.term != 0U64 { return }
-        self.storeBuildingSemanticExprType(i: exprId, value: <SemanticExprType typeState=self.refinedSemanticTypeState(prior: prior.typeState, term: term) completion=prior.completion invocation=prior.invocation term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />)
-    }
+
 
     // A context or synthetic lowering can refine an already-recorded type term.
     // Derive its legacy shape from the term at this single boundary instead of
     // leaving array/chain/operator-specific caches behind.
-    inout fn recordSemanticExprTerm(exprId: U64, term: U64) {
-        if term == 0U64 || term >= self.arena.typeCount() { return }
-        self.ensureSemanticExprType(exprId: exprId)
-        val prior: SemanticExprType = self.semanticExprTypes[exprId]
-        val ti: TypeInfo = self.typeInfoOfRef(ref: term)
-        self.storeBuildingSemanticExprType(i: exprId, value: <SemanticExprType typeState=self.refinedSemanticTypeState(prior: prior.typeState, term: term) completion=prior.completion invocation=prior.invocation term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />)
-    }
 
-    inout fn recordSemanticExprLiteralContext(exprId: U64, context: U64) {
-        if context == 0U64 { return }
-        self.ensureSemanticExprType(exprId: exprId)
-        val prior: SemanticExprType = self.semanticExprTypes[exprId]
-        if prior.literalContext == context && prior.term != 0U64 { return }
-        mut val term = prior.term
-        if term == 0U64 && prior.shape == 0U64 {
-            match prior.typeState {
-                SemanticExpressionTypeState.Unrecorded | SemanticExpressionTypeState.Pending => {
-                    val name = self.internBytes(s: intCtxKw(code: context))
-                    term = self.findOrAddTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
-                }
-                _ => {}
-            }
-        }
-        self.storeBuildingSemanticExprType(i: exprId, value: <SemanticExprType typeState=self.refinedSemanticTypeState(prior: prior.typeState, term: term) completion=prior.completion invocation=prior.invocation term=term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=context hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />)
-    }
+
+
 
     // The frontend resolves a field name once, while the receiver's complete
     // TypeTerm still identifies its nominal layout.  Mid uses this selected
     // slot together with the expression's recorded result term; it never
     // re-runs a spelling-to-field lookup during code generation.
-    inout fn recordSemanticExprFieldProjection(exprId: U64, index: U64, isBoxed: Bool) {
-        self.ensureSemanticExprType(exprId: exprId)
-        val prior: SemanticExprType = self.semanticExprTypes[exprId]
-        self.storeBuildingSemanticExprType(i: exprId, value: <SemanticExprType typeState=prior.typeState completion=prior.completion invocation=prior.invocation term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext hasFieldProjection=true fieldProjectionIndex=index fieldProjectionIsBoxed=isBoxed />)
-    }
+
 
     // Record selection evidence independently from the expression result
     // TypeTerm.  A later body-instance ground reads the term for type equality
     // and the provenance for CallResolution; neither reader needs AST recovery.
-    inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], resultTerm: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
-        self.ensureSemanticExprType(exprId: exprId)
-        val prior: SemanticExprType = self.semanticExprTypes[exprId]
-        mut val contract = prior.invocation
-        if callee < self.arena.functionCount() {
-            contract = if self.arena.functionAt(index: callee).isDiverging { give <InvocationCompletion.Diverges /> } else { give <InvocationCompletion.Returns /> }
-        }
-        mut val state = prior.typeState
-        mut val returnsUnit = false
-        if callee < self.arena.functionCount() {
-            val declaration = self.arena.functionAt(index: callee)
-            returnsUnit = self.callableResultIsUnit(ref: self.semanticCallableReturnTerm(function: declaration))
-            if declaration.isDiverging { state = <SemanticExpressionTypeState.NoNormalValue /> }
-            else if returnsUnit { state = <SemanticExpressionTypeState.Unit /> }
-        }
-        mut val next: SemanticExprType = <SemanticExprType typeState=state completion=prior.completion invocation=contract term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />
-        if resultTerm != 0U64 && resultTerm < self.arena.typeCount() {
-            val ti: TypeInfo = self.typeInfoOfRef(ref: resultTerm)
-            next = <SemanticExprType typeState=self.refinedSemanticTypeState(prior: next.typeState, term: resultTerm) completion=prior.completion invocation=contract term=resultTerm shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />
-        }
-        self.storeBuildingSemanticExprType(i: exprId, value: next)
-        if returnsUnit {
-            try self.recordKnownExpressionResult(exprId: exprId, resultTerm: resultTerm)
-        }
-        // Every Direct producer (including one whose callee was cached by
-        // verification) crosses this single semantic boundary.  If the
-        // selected declaration is a provided copy, attach its static proof
-        // here from the already-recorded receiver term; Mono must never infer
-        // it from syntax again.
-        mut val selectedProof: StaticConformanceProof = proof
-        if self.proofIsMissing(proof: selectedProof) && callee < self.arena.functionCount() {
-            val f: Func = self.arena.functionAt(index: callee)
-            if f.isProvided {
-                match receiver {
-                    CallTemplateReceiver.Term(term: val receiverTerm) => {
-                        val resolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args))
-                        match resolution {
-                            StaticMemberResolution.Requirement(proof: val resolved, traitIdx: _, reqIdx: _) => { selectedProof = resolved }
-                            StaticMemberResolution.Provided(proof: val resolved, traitIdx: _, callee: _) => { selectedProof = resolved }
-                            _ => {}
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-        try self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof, receiverTypeTerm: receiverTypeTerm)
-        return <Result.Ok value=() />
-    }
+
 
     // Select bidirectional construction context without recording its children.
     // Callers can establish the instance before visiting declaration defaults;
@@ -2789,5 +2646,172 @@ pub impl Comp {
             index += 1U64
         }
         return <Result.Ok value=0U64 />
+    }
+}
+
+impl Comp {
+    inout fn ensureSemanticExprType(exprId: U64) {
+        while self.semanticExprTypes.count() <= exprId {
+            self.semanticExprTypes.append(<SemanticExprType />)
+        }
+    }
+
+    inout fn recordKnownExpressionResult(exprId: U64, resultTerm: U64) -> Result[(), CompileDiagnostic] {
+        self.recordSemanticExprTerm(exprId: exprId, term: self.semanticSourceResultTerm(ref: resultTerm))
+        if self.callableResultIsUnit(ref: resultTerm) {
+            self.ensureSemanticExprType(exprId: exprId)
+            val prior = self.semanticExprTypes[exprId]
+            val state = match prior.typeState {
+                SemanticExpressionTypeState.NoNormalValue => <SemanticExpressionTypeState.NoNormalValue />,
+                _ => <SemanticExpressionTypeState.Unit />,
+            }
+            self.storeBuildingSemanticExprType(i: exprId, value: <SemanticExprType typeState=state completion=prior.completion invocation=prior.invocation term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />)
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn recordInvocationCompletion(exprId: U64, diverging: Bool, returnsUnit: Bool = false) {
+        self.ensureSemanticExprType(exprId: exprId)
+        val prior = self.semanticExprTypes[exprId]
+        val contract = if diverging { give <InvocationCompletion.Diverges /> } else { give <InvocationCompletion.Returns /> }
+        val state = if diverging { give <SemanticExpressionTypeState.NoNormalValue /> } else if returnsUnit { give <SemanticExpressionTypeState.Unit /> } else { give prior.typeState }
+
+        self.storeBuildingSemanticExprType(i: exprId, value: <SemanticExprType
+            typeState=state completion=prior.completion invocation=contract term=prior.term shape=prior.shape
+            legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen
+            legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext
+            hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed
+        />)
+    }
+
+    inout fn recordedCompletionFact(completion: SourceCompletion) -> Optional[SemanticExpressionCompletion] {
+        match self.sourceRecordingOwner() {
+            Optional.Some(v: val owner) => { return <Optional.Some v=<SemanticExpressionCompletion owner=owner flow=completion /> /> }
+            Optional.None => { return <Optional.None /> }
+        }
+    }
+
+    inout fn recordSemanticExprCompletion(exprId: U64, completion: SourceCompletion) {
+        if completion.source.normal() && !self.cur.recordCallTemplates { return }
+        self.ensureSemanticExprType(exprId: exprId)
+        val prior = self.semanticExprTypes[exprId]
+        mut val fact = prior.completion
+        match self.recordedCompletionFact(completion: completion) {
+            Optional.Some(v: val recorded) => { fact = <Optional.Some v=recorded /> }
+            Optional.None => {}
+        }
+        val state = if completion.source.normal() { give prior.typeState } else { give <SemanticExpressionTypeState.NoNormalValue /> }
+        self.storeBuildingSemanticExprType(i: exprId, value: <SemanticExprType
+            typeState=state completion=fact invocation=prior.invocation term=prior.term shape=prior.shape
+            legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen
+            legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext
+            hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed
+        />)
+    }
+
+    inout fn recordStaticInvocationCompletion(exprId: U64, resolution: StaticMemberResolution) {
+        match resolution {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: val trait, reqIdx: val requirement) => {
+                val declaration = self.traitReqAt(reqs: self.decls.traitAt(index: trait).reqs, index: requirement)
+                self.recordInvocationCompletion(exprId: exprId, diverging: declaration.isDiverging, returnsUnit: self.callableResultIsUnit(ref: self.semanticCallableReturnTerm(function: declaration)))
+            }
+            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => {
+                self.recordInvocationCompletion(exprId: exprId, diverging: self.arena.functionAt(index: callee).isDiverging, returnsUnit: self.callableResultIsUnit(ref: self.semanticCallableReturnTerm(function: self.arena.functionAt(index: callee))))
+            }
+            StaticMemberResolution.Missing => {}
+        }
+    }
+
+    inout fn recordSemanticExprInfo(exprId: U64, ti: TypeInfo) {
+        self.ensureSemanticExprType(exprId: exprId)
+        val prior: SemanticExprType = self.semanticExprTypes[exprId]
+        val term: U64 = self.typedIrRefOfInfo(ti: ti)
+        // An unresolved adapter cannot invalidate a published semantic term
+        // or its canonical projection. A partial structural shape supplies no
+        // replacement type, just as an unknown scalar supplies none.
+        if term == 0U64 && prior.term != 0U64 { return }
+        self.storeBuildingSemanticExprType(i: exprId, value: <SemanticExprType typeState=self.refinedSemanticTypeState(prior: prior.typeState, term: term) completion=prior.completion invocation=prior.invocation term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />)
+    }
+
+    inout fn recordSemanticExprTerm(exprId: U64, term: U64) {
+        if term == 0U64 || term >= self.arena.typeCount() { return }
+        self.ensureSemanticExprType(exprId: exprId)
+        val prior: SemanticExprType = self.semanticExprTypes[exprId]
+        val ti: TypeInfo = self.typeInfoOfRef(ref: term)
+        self.storeBuildingSemanticExprType(i: exprId, value: <SemanticExprType typeState=self.refinedSemanticTypeState(prior: prior.typeState, term: term) completion=prior.completion invocation=prior.invocation term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />)
+    }
+
+    inout fn recordSemanticExprLiteralContext(exprId: U64, context: U64) {
+        if context == 0U64 { return }
+        self.ensureSemanticExprType(exprId: exprId)
+        val prior: SemanticExprType = self.semanticExprTypes[exprId]
+        if prior.literalContext == context && prior.term != 0U64 { return }
+        mut val term = prior.term
+        if term == 0U64 && prior.shape == 0U64 {
+            match prior.typeState {
+                SemanticExpressionTypeState.Unrecorded | SemanticExpressionTypeState.Pending => {
+                    val name = self.internBytes(s: intCtxKw(code: context))
+                    term = self.findOrAddTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+                }
+                _ => {}
+            }
+        }
+        self.storeBuildingSemanticExprType(i: exprId, value: <SemanticExprType typeState=self.refinedSemanticTypeState(prior: prior.typeState, term: term) completion=prior.completion invocation=prior.invocation term=term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=context hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />)
+    }
+
+    inout fn recordSemanticExprFieldProjection(exprId: U64, index: U64, isBoxed: Bool) {
+        self.ensureSemanticExprType(exprId: exprId)
+        val prior: SemanticExprType = self.semanticExprTypes[exprId]
+        self.storeBuildingSemanticExprType(i: exprId, value: <SemanticExprType typeState=prior.typeState completion=prior.completion invocation=prior.invocation term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext hasFieldProjection=true fieldProjectionIndex=index fieldProjectionIsBoxed=isBoxed />)
+    }
+
+    inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], resultTerm: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        self.ensureSemanticExprType(exprId: exprId)
+        val prior: SemanticExprType = self.semanticExprTypes[exprId]
+        mut val contract = prior.invocation
+        if callee < self.arena.functionCount() {
+            contract = if self.arena.functionAt(index: callee).isDiverging { give <InvocationCompletion.Diverges /> } else { give <InvocationCompletion.Returns /> }
+        }
+        mut val state = prior.typeState
+        mut val returnsUnit = false
+        if callee < self.arena.functionCount() {
+            val declaration = self.arena.functionAt(index: callee)
+            returnsUnit = self.callableResultIsUnit(ref: self.semanticCallableReturnTerm(function: declaration))
+            if declaration.isDiverging { state = <SemanticExpressionTypeState.NoNormalValue /> }
+            else if returnsUnit { state = <SemanticExpressionTypeState.Unit /> }
+        }
+        mut val next: SemanticExprType = <SemanticExprType typeState=state completion=prior.completion invocation=contract term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />
+        if resultTerm != 0U64 && resultTerm < self.arena.typeCount() {
+            val ti: TypeInfo = self.typeInfoOfRef(ref: resultTerm)
+            next = <SemanticExprType typeState=self.refinedSemanticTypeState(prior: next.typeState, term: resultTerm) completion=prior.completion invocation=contract term=resultTerm shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />
+        }
+        self.storeBuildingSemanticExprType(i: exprId, value: next)
+        if returnsUnit {
+            try self.recordKnownExpressionResult(exprId: exprId, resultTerm: resultTerm)
+        }
+        // Every Direct producer (including one whose callee was cached by
+        // verification) crosses this single semantic boundary.  If the
+        // selected declaration is a provided copy, attach its static proof
+        // here from the already-recorded receiver term; Mono must never infer
+        // it from syntax again.
+        mut val selectedProof: StaticConformanceProof = proof
+        if self.proofIsMissing(proof: selectedProof) && callee < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: callee)
+            if f.isProvided {
+                match receiver {
+                    CallTemplateReceiver.Term(term: val receiverTerm) => {
+                        val resolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args))
+                        match resolution {
+                            StaticMemberResolution.Requirement(proof: val resolved, traitIdx: _, reqIdx: _) => { selectedProof = resolved }
+                            StaticMemberResolution.Provided(proof: val resolved, traitIdx: _, callee: _) => { selectedProof = resolved }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        try self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof, receiverTypeTerm: receiverTypeTerm)
+        return <Result.Ok value=() />
     }
 }

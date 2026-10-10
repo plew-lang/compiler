@@ -2346,3 +2346,24 @@ impl Comp {
         self.semanticExprTypes.set(i: i, value: value)
     }
 }
+
+impl Comp {
+    fn semanticStmtConstructionClosed(stmtId: U64) -> Bool {
+        if stmtId >= self.semanticStatementCompletions.count() { return false }
+        match self.semanticStatementCompletions[stmtId] {
+            Optional.Some(v: val fact) => { return self.sourceOwnerConstructionClosed(owner: fact.owner) }
+            Optional.None => { return false }
+        }
+    }
+    inout fn storeBuildingSemanticStmtCompletion(stmtId: U64, fact: SemanticExpressionCompletion) {
+        if self.semanticStmtConstructionClosed(stmtId: stmtId) { panic("internal error: completed source owner cannot replace a statement fact") }
+        while self.semanticStatementCompletions.count() <= stmtId { self.semanticStatementCompletions.append(<Optional.None />) }
+        match self.semanticStatementCompletions[stmtId] {
+            Optional.Some(v: val prior) => {
+                if !semanticCompletionOwnersEqual(recorded: prior.owner, prepared: fact.owner) { panic("internal error: statement fact changed its source owner") }
+            }
+            Optional.None => {}
+        }
+        self.semanticStatementCompletions.set(i: stmtId, value: <Optional.Some v=fact />)
+    }
+}

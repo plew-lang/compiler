@@ -2392,6 +2392,9 @@ pub impl Comp {
     // its checks — the local env drives typeOf, so it must match what the backend's
     // own local table will hold at emission.
     inout fn recordStmt(stmtId: U64, expectedTerm: U64 = 0U64, explicitResult: Bool = true) -> Result[SourceCompletion, CompileDiagnostic] {
+        if self.semanticStmtConstructionClosed(stmtId: stmtId) {
+            return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: completed source owner cannot record a statement") />
+        }
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                 try self.collectRecordedType(ref: ty)
@@ -2521,10 +2524,7 @@ pub impl Comp {
         if self.cur.recordCallTemplates {
             match self.recordedCompletionFact(completion: completion) {
                 Optional.Some(v: val fact) => {
-                    while self.semanticStatementCompletions.count() <= stmtId {
-                        self.semanticStatementCompletions.append(<Optional.None />)
-                    }
-                    self.semanticStatementCompletions.set(i: stmtId, value: <Optional.Some v=fact />)
+                    self.storeBuildingSemanticStmtCompletion(stmtId: stmtId, fact: fact)
                 }
                 Optional.None => {}
             }
