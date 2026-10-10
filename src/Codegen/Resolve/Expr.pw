@@ -868,7 +868,7 @@ pub impl Comp {
             CallArgumentSource.Term(exprId: val exprId, term: _) => { return self.sourceArgumentUsesStorage(exprId: exprId) }
             CallArgumentSource.Local(exprId: val exprId, declarationTarget: _, term: _) => { return self.sourceArgumentUsesStorage(exprId: exprId) }
             CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: _) => { return self.sourceArgumentUsesStorage(exprId: exprId) }
-            CallArgumentSource.Legacy(exprId: _, info: _) => { return true }
+            CallArgumentSource.Expression(exprId: _) => { return true }
         }
     }
 
@@ -1416,12 +1416,10 @@ pub impl Comp {
         }
         val term: U64 = self.parametricExprTerm(exprId: exprId)
         if term != 0U64 { return <Result.Ok value=<CallArgumentSource.Term exprId=exprId term=term /> />}
-        // Record's post-order fallback has already captured every remaining
-        // context-sensitive shape in SemanticExprType.  Do not reopen the AST
-        // here: a missing TypeTerm is specifically the intentional legacy
-        // adapter case (notably an unsuffixed integer), not a request for a
-        // second declaration-time type recovery.
-        return <Result.Ok value=<CallArgumentSource.Legacy exprId=exprId info=self.semanticExprTypeInfo(exprId: exprId) /> />
+        // Record owns remaining context-sensitive shapes (notably an
+        // unsuffixed integer). Keep a reference to that expression fact;
+        // completing its context must not leave a stale copied type here.
+        return <Result.Ok value=<CallArgumentSource.Expression exprId=exprId /> />
     }
 
     inout fn staticOperatorTemplateResolution(op: I64, receiverTerm: U64, isUnary: Bool) -> Result[StaticMemberResolution, CompileDiagnostic] {

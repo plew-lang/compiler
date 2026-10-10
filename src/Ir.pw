@@ -3318,7 +3318,9 @@ pub enum CallArgumentSource {
     // fallback for synthetic/incomplete scopes.
     Local(exprId: U64, declarationTarget: U64, term: U64)
     PriorCallResult(exprId: U64, siteKey: CallSiteKey)
-    Legacy(exprId: U64, info: TypeInfo)
+    // Context can complete after template creation. Read the owning source
+    // expression fact rather than copying a second type representation.
+    Expression(exprId: U64)
 }
 
 // The call-site ABI shape is source provenance too: labels and `inout` belong

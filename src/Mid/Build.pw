@@ -688,7 +688,7 @@ fn midTemplateInoutCallArgument(c: inout Comp, state: inout MidBuildState, argum
     match argument.source {
         CallArgumentSource.Term(exprId: val exprId, term: val term) => { return midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term) }
         CallArgumentSource.Local(exprId: val exprId, declarationTarget: _, term: val term) => { return midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term) }
-        CallArgumentSource.Legacy(exprId: val exprId, info: _) => { return midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: (match midSourceSemanticTerm(c: inout c, state: state, exprId: exprId) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return <MidNormalizedCallArgumentBuild.Error error=error /> } })) }
+        CallArgumentSource.Expression(exprId: val exprId) => { return midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: (match midSourceSemanticTerm(c: inout c, state: state, exprId: exprId) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return <MidNormalizedCallArgumentBuild.Error error=error /> } })) }
         CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: _) => {
             val candidate: U64 = c.decls.accessCandidateForExpr(exprId: exprId)
             if candidate < c.decls.accessCandidateCount() {
@@ -1888,7 +1888,7 @@ fn midImmediateTemplateArgument(expressions: Array[Expr], argument: CallTemplate
     match argument.source {
         CallArgumentSource.Term(exprId: val exprId, term: _) => { return midImmediateValueExpression(expressions: expressions, exprId: exprId) }
         CallArgumentSource.Local(exprId: val exprId, declarationTarget: _, term: _) => { return midImmediateValueExpression(expressions: expressions, exprId: exprId) }
-        CallArgumentSource.Legacy(exprId: val exprId, info: _) => { return midImmediateValueExpression(expressions: expressions, exprId: exprId) }
+        CallArgumentSource.Expression(exprId: val exprId) => { return midImmediateValueExpression(expressions: expressions, exprId: exprId) }
         _ => { return false }
     }
 }
@@ -1955,7 +1955,7 @@ fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argumen
         CallArgumentSource.Local(exprId: val exprId, declarationTarget: _, term: val term) => {
             give midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, allowAccessMarker: argument.isInout)
         }
-        CallArgumentSource.Legacy(exprId: val exprId, info: _) => {
+        CallArgumentSource.Expression(exprId: val exprId) => {
             give midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, allowAccessMarker: argument.isInout)
         }
         CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {

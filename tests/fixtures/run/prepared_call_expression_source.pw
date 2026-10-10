@@ -1,0 +1,31 @@
+use /CheckedProgram only { CompilerSession, CompilerSessionResult, checkCompilerSession, ProgramCheckResult, prepareCheckedProgram, ExecutableCompilationResult }
+use /Frontend only { FrontendInput }
+use /SourceAccess only { SourceAccess }
+use @Std/Io only { print }
+
+fn main() {
+    val source = "val start = take(value: 4) fn take(value: I64) -> I64 {{ return value }} fn identity[Element](value: Element) -> Element {{ return value }} fn main() {{ val direct = take(value: 1) val wrapped = take(value: {{ give 2 }}) val conditional = take(value: if true {{ give 3 }} else {{ give 4 }}) val generic = identity(value: direct) }}"
+    match CompilerSession.open(input: <FrontendInput.Text path="call-expression.pw" text=source />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val session) => {
+            val bodies = session.registeredBodies()
+            match checkCompilerSession(session: move session) {
+                ProgramCheckResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+                ProgramCheckResult.Success(program: val checked) => {
+                    match prepareCheckedProgram(checked: move checked) {
+                        ExecutableCompilationResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+                        ExecutableCompilationResult.Success(compilation: val compilation) => {
+                            for body in bodies {
+                                match compilation.prepared.executable.body(bodyId: body) {
+                                    Optional.Some(v: _) => {}
+                                    Optional.None => { panic "missing call body" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    print("ok")
+}

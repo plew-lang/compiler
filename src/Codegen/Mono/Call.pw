@@ -1273,15 +1273,12 @@ pub impl Comp {
             CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
                 return <Result.Ok value=(try self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: siteKey)) />
             }
-            CallArgumentSource.Legacy(exprId: val exprId, val info) => {
-                // Literal context can be checked after the template captured
-                // its unknown adapter. Consume that recorded semantic fact,
-                // without reopening syntax or inferring from the callee ABI.
-                val term: U64 = self.semanticExprTerm(exprId: exprId)
-                if term != 0U64 {
-                    return <Result.Ok value=(try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)) />
-                }
-                return <Result.Ok value=self.typedIrRefOfInfo(ti: info) />
+            CallArgumentSource.Expression(exprId: val exprId) => {
+                // Record can complete literal context after creating the call
+                // template. Its successful owner fact remains authoritative;
+                // no copied TypeInfo may recover a different type here.
+                val fact = try self.preparedBodyExpression(bodyId: self.currentBodyInstanceId(), exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)
+                return <Result.Ok value=(try self.groundAndRecordBodyType(ref: fact.term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)) />
             }
         }
     }
@@ -1291,7 +1288,7 @@ pub impl Comp {
             CallArgumentSource.Term(val exprId, term: _) => { return exprId }
             CallArgumentSource.Local(val exprId, declarationTarget: _, term: _) => { return exprId }
             CallArgumentSource.PriorCallResult(val exprId, siteKey: _) => { return exprId }
-            CallArgumentSource.Legacy(val exprId, info: _) => { return exprId }
+            CallArgumentSource.Expression(val exprId) => { return exprId }
         }
     }
 
