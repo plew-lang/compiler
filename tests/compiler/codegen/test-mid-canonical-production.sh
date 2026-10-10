@@ -183,7 +183,12 @@ whole = declarations.split('pub fn prepareDeclarationProgram(', 1)[1]
 assert whole.index('checkDeclarationBodies(') < whole.index('analyzeDeclarationGlobalAccessWithRequests(')
 assert 'analyzeDeclarationGlobalAccessWithRequests(c: inout c, templates: inout templates, requests: inout requests.ownership)' in whole
 assert 'requests.function(c: inout c, templates: inout templates, function: index)' in declarations
-assert 'requests.closure(c: inout c, closure: c.decls.semanticClosures[index])' in declarations
+assert 'requests.closure(c: inout c, closure: c.semanticClosureAt(index: index))' in declarations
+assert 'c.decls.semanticClosures' not in declarations, 'declaration requests must not read a mutable closure table'
+builder = Path('src/Mid/Build.pw').read_text()
+closure_entry = builder.split('pub fn ensureParametricMidClosureBody(', 1)[1].split('fn ensurePreparedParametricMidClosureBody(', 1)[0]
+assert closure_entry.index('preparedSemanticClosureAt(') < closure_entry.index('ensurePreparedParametricMidClosureBody('), 'closure cache must consume a prepared source declaration'
+assert 'pub fn buildParametricMidClosureBody(' not in builder, 'raw closure lowering must not bypass source preparation'
 assert 'requests.globalInitializer(c: inout c, templates: inout templates)' in declarations
 for forbidden in ['MidExecutableProgram', 'MidAmbientProgram', 'LLVMContextCreate(', 'use ./Backend', 'exit(', 'c.errorAt(']:
     assert forbidden not in declarations, f'declaration preparation crosses execution boundary: {forbidden}'
