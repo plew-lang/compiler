@@ -36,11 +36,14 @@ pub impl Comp {
 impl Comp {
     inout fn admitSelectedCallConstraints(templateIndex: U64) -> Result[AdmittedCallConstraints, CompileDiagnostic] {
         try self.checkRecordedCallConstraintEvidence(templateIndex: templateIndex)
-        val template = self.callTemplates[templateIndex]
-        val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
         val plan = match sourceCallConstraintPlan(states: self.selectedCallConstraints, index: templateIndex) {
+            // Admission already checked this plan against its declaration scope.
             Optional.Some(v: val selected) => selected
-            Optional.None => <SelectedCallConstraints owner=scope.owner bounds=[] proofs=[] />
+            Optional.None => {
+                val template = self.callTemplates[templateIndex]
+                val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
+                give <SelectedCallConstraints owner=scope.owner bounds=[] proofs=[] />
+            }
         }
         return <Result.Ok value=<AdmittedCallConstraints templateIndex=templateIndex plan=plan /> />
     }
