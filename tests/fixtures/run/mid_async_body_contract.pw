@@ -37,9 +37,22 @@ fn main() {
         MidBuildError.Frontend(diagnostic: _) => {}
         _ => { assert(false) }
     }
+    match compiler.preparedFunctionBodySignature(fnIdx: 0U64) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("unprepared signature published") }
+    }
     compiler.prepareLexicalBody(fnIdx: 0U64).unwrap()
+    val firstSnapshot = compiler.preparedFunctionBodySignature(fnIdx: 0U64).unwrap()
     compiler.prepareLexicalBody(fnIdx: 1U64).unwrap()
     compiler.prepareLexicalBody(fnIdx: 2U64).unwrap()
+    assert(firstSnapshot.isAsync)
+    assert(firstSnapshot.hasReturnValue)
+    assert(!firstSnapshot.hasReceiver)
+    assert(firstSnapshot.parameters.count() == 1U64)
+    assert(compiler.typeRefEq(a: firstSnapshot.parameters[0U64].typeTerm, b: firstSnapshot.resultTerm))
+    mut val copiedParameters = firstSnapshot.parameters
+    copiedParameters.set(i: 0U64, value: compiler.preparedFunctionBodySignature(fnIdx: 1U64).unwrap().parameters[0U64])
+    assert(compiler.typeRefEq(a: compiler.preparedFunctionBodySignature(fnIdx: 0U64).unwrap().parameters[0U64].typeTerm, b: firstSnapshot.resultTerm))
     val integer = compiler.preparedFunctionBodySignature(fnIdx: 0U64).unwrap().resultTerm
     val promise = compiler.preparedFunctionBodySignature(fnIdx: 1U64).unwrap().resultTerm
     assert(compiler.typeRefEq(a: compiler.arena.functionAt(index: 0U64).retTy, b: promise))
