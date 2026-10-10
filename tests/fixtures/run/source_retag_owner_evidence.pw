@@ -12,9 +12,11 @@ fn check(text: String, compatible: Bool, identity: Bool = false, mismatched: Boo
     val function = compiler.arena.functionAt(index: 0U64)
     val source = compiler.funcParamAt(params: function.params, index: 0U64).ty
     val target = compiler.funcParamAt(params: function.params, index: 1U64).ty
-    val expression = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
-    compiler.recordSemanticExprTerm(exprId: expression, term: source)
+    val sourceParameter = compiler.funcParamAt(params: function.params, index: 0U64)
+    val expression = compiler.pushExpr(e: <Expr.Ident start=sourceParameter.nameStart len=sourceParameter.nameLen />)
     compiler.cur.checkFn = 0U64
+    compiler.addLocalCn(nameStart: sourceParameter.nameStart, nameLen: sourceParameter.nameLen, tyStart: sourceParameter.tyStart, tyLen: sourceParameter.tyLen, isArray: sourceParameter.tyIsArray, ty: source, isInout: false, isMut: false, owned: false, cnum: 0U64)
+    compiler.recordExpr(exprId: expression).unwrap()
     compiler.cur.recordCallTemplates = true
     compiler.recordDeclarationConversion(exprId: expression, target: target).unwrap()
     val original = compiler.decls.declarationConversions[0U64]

@@ -43,9 +43,11 @@ fn check(mode: U64, text: String = "trait P[V] {{}} trait Q {{}} trait R[V] {{}}
         _ => { panic("not path") }
     }
     val actual = if mode == 2U64 { give foreign } else { give source }
-    val expression = compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
-    compiler.recordSemanticExprTerm(exprId: expression, term: actual)
+    val sourceParameter = compiler.funcParamAt(params: function.params, index: if mode == 2U64 { give 2U64 } else { give 0U64 })
+    val expression = compiler.pushExpr(e: <Expr.Ident start=sourceParameter.nameStart len=sourceParameter.nameLen />)
     compiler.cur.checkFn = 0U64
+    compiler.addLocalCn(nameStart: sourceParameter.nameStart, nameLen: sourceParameter.nameLen, tyStart: sourceParameter.tyStart, tyLen: sourceParameter.tyLen, isArray: sourceParameter.tyIsArray, ty: actual, isInout: false, isMut: false, owned: false, cnum: 0U64)
+    compiler.recordExpr(exprId: expression).unwrap()
     compiler.cur.recordCallTemplates = true
     compiler.recordDeclarationConversion(exprId: expression, target: target).unwrap()
     val original = compiler.decls.declarationConversions[0U64]
