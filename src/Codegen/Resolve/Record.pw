@@ -401,7 +401,7 @@ pub impl Comp {
     // families use this boundary once their lexical candidates are exhausted.
     inout fn recordedCallIsSelected(exprId: U64) -> Result[Bool, CompileDiagnostic] {
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
-        val index = self.callTemplateIndex(siteKey: site)
+        val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: site)
         if index >= self.callTemplateCount() { return <Result.Ok value=false /> }
         match self.callTemplateAt(index: index).kind {
             CallTemplateKind.Pending => { return <Result.Ok value=false /> }

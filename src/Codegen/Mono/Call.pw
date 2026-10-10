@@ -211,7 +211,7 @@ pub impl Comp {
     // substitution is instance-specific; no member-name lookup is permitted.
     inout fn selectedProtocolTemplateCall(stmtId: U64, slot: U64, receiverRef: U64) -> Result[CallSiteSelection, CompileDiagnostic] {
         val key = try self.currentCallSiteKey(exprId: stmtId, siteIsStmt: true, slot: slot)
-        val index = self.callTemplateIndex(siteKey: key)
+        val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: key)
         if index >= self.callTemplateCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "implicit protocol selection was not recorded") /> }
         match self.callTemplateAt(index: index).kind {
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: val resultTerm) => {
@@ -251,7 +251,7 @@ pub impl Comp {
 
     inout fn groundedProtocolTemplateReceiver(stmtId: U64, slot: U64) -> Result[U64, CompileDiagnostic] {
         val key: CallSiteKey = (try self.currentCallSiteKey(exprId: stmtId, siteIsStmt: true, slot: slot))
-        val index: U64 = self.callTemplateIndex(siteKey: key)
+        val index: U64 = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: key)
         if index >= self.callTemplateCount() {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate was not recorded") />
         }
@@ -1583,7 +1583,7 @@ pub impl Comp {
         }
         // A call's result recipe is part of the selected call contract, even
         // when no surrounding frontend expression asks for its concrete type.
-        val templateIndex = self.callTemplateIndex(siteKey: siteKey)
+        val templateIndex = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: siteKey)
         if templateIndex < self.callTemplateCount() {
             self.arena.setBodyTypeRecipeResult(bodyId: bodyId, recipeId: self.callTemplateAt(index: templateIndex).resultTypeRecipe, resultType: resultTypeRef)
         }
@@ -3962,7 +3962,7 @@ pub impl Comp {
     }
 
     inout fn instantiateSelectedCallConstraints(template: CallTemplate, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
-        val index = self.callTemplateIndex(siteKey: template.siteKey)
+        val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: template.siteKey)
         if index >= self.callTemplateCount() {
             return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has no source constraint owner") />
         }

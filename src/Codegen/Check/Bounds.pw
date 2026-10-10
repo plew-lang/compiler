@@ -1737,7 +1737,7 @@ pub impl Comp {
     // is only a reference to the canonical source type fact. Never recover
     // a call result by rechecking the callee declaration or its bounds.
     inout fn sourceSelectedCallResult(siteKey: CallSiteKey) -> U64 {
-        val index = self.callTemplateIndex(siteKey: siteKey)
+        val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: siteKey)
         if index >= self.callTemplateCount() { return 0U64 }
         val template = self.callTemplateAt(index: index)
         val recipeId = template.resultTypeRecipe

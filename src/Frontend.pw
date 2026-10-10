@@ -2228,3 +2228,17 @@ fn patternDiagOffset(c: inout Comp, a: PatInfo) -> U64 {
     }
     return a.enumStart
 }
+
+// Index lookup depends only on source call rows and their collision table.
+// Keep the whole compilation session out of this read-only operation.
+fn findSourceCallTemplateIndex(templates: Array[CallTemplate], indexSlots: Array[U64], siteKey: CallSiteKey) -> U64 {
+    val capacity: U64 = indexSlots.count()
+    if capacity == 0U64 { return templates.count() }
+    mut val slot: U64 = siteKey.lookupHash() % capacity
+    while indexSlots[slot] != 0U64 {
+        val entry: U64 = indexSlots[slot] - 1U64
+        if templates[entry].siteKey.sameKey(other: siteKey) { return entry }
+        slot = (slot + 1U64) % capacity
+    }
+    return templates.count()
+}

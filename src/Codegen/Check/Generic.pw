@@ -798,7 +798,7 @@ pub impl Comp {
     // opaque type and used to require a permissive foreign-binder wildcard.
     inout fn checkRecordedDirectCallArguments(exprId: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
-        val index = self.callTemplateIndex(siteKey: site)
+        val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: site)
         if index >= self.callTemplateCount() { return <Result.Ok value=() /> }
         val template = self.callTemplateAt(index: index)
         match template.kind {
