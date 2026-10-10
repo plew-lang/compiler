@@ -1170,7 +1170,7 @@ pub impl Comp {
         try self.checkCallTemplateSelection(templateIndex: templateIndex)
         val template = self.decls.callTemplates[templateIndex]
         val bounds = try self.sourceSelectedCallBounds(template: template)
-        match self.decls.selectedCallConstraintPlan(index: templateIndex) {
+        match self.selectedCallConstraintPlan(index: templateIndex) {
             Optional.Some(v: val plan) => { return self.checkSelectedCallConstraintPlan(template: template, expected: bounds, plan: plan) }
             Optional.None => {}
         }
@@ -1189,25 +1189,16 @@ pub impl Comp {
             try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: template.siteKey.originStart)
             proofs.append(self.freezeStaticConformanceProof(proof: proof))
         }
-        if !self.decls.recordBuildingCallConstraints(index: templateIndex, plan: <SelectedCallConstraints owner=scope.owner bounds=bounds proofs=proofs />) {
+        if !self.recordBuildingCallConstraints(index: templateIndex, plan: <SelectedCallConstraints owner=scope.owner bounds=bounds proofs=proofs />) {
             return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "cannot replace prepared call constraint evidence") />
         }
-        return <Result.Ok value=() />
-    }
-
-    // Publication uses the same lexical authority as plan construction and
-    // admission, including closure and provided-body owner normalization.
-    inout fn publishPreparedCallConstraints(templateIndex: U64) -> Result[(), CompileDiagnostic] {
-        val template = self.decls.callTemplates[templateIndex]
-        val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
-        self.decls.sealSelectedCallConstraints(index: templateIndex, owner: scope.owner)
         return <Result.Ok value=() />
     }
 
     inout fn checkRecordedCallConstraintEvidence(templateIndex: U64) -> Result[(), CompileDiagnostic] {
         val template = self.decls.callTemplates[templateIndex]
         val bounds = try self.sourceSelectedCallBounds(template: template)
-        match self.decls.selectedCallConstraintPlan(index: templateIndex) {
+        match self.selectedCallConstraintPlan(index: templateIndex) {
             Optional.Some(v: val plan) => { return self.checkSelectedCallConstraintPlan(template: template, expected: bounds, plan: plan) }
             Optional.None => {
                 if bounds.count() == 0U64 { return <Result.Ok value=() /> }

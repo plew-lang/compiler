@@ -212,7 +212,22 @@ pub struct SourceDiagnosticFailure {
 }
 pub impl SourceDiagnosticFailure { factory }
 
+// Readers receive a value snapshot, with no factory or writable storage.
+pub struct PreparedCallConstraints {
+    val plan: SelectedCallConstraints
+}
+impl PreparedCallConstraints { factory }
+pub impl PreparedCallConstraints {
+    fn constraints() -> SelectedCallConstraints { return self.plan }
+}
+
+enum CallConstraintPlanState {
+    Building(plan: SelectedCallConstraints)
+    Prepared(snapshot: PreparedCallConstraints)
+}
+
 pub struct Comp {
+    mut val selectedCallConstraints: Dictionary[U64, CallConstraintPlanState]
     // Nonfatal diagnostics remain owned by the compilation/session. Only the
     // driver decides how to display them; requesting a body emits no process IO.
     pub mut val pendingDiagnostics: Array[CompileDiagnostic] = []
@@ -403,9 +418,8 @@ pub impl IntTy { factory }
 // synthesis.)
 
 pub impl Comp {
-    // memberwise factory: `<Comp />` default-constructs the shared IR; the frontend
-    // driver builds it in another module, so the factory must be public.
-    factory
+    // External construction starts a fresh session, never an injected success store.
+    factory(arena: Arena = <Arena />) { return <Comp arena=arena selectedCallConstraints=[:] /> }
     // Append a file's source bytes onto the arena's combined byte buffer (the loader
     // builds it incrementally: each file's bytes are appended before its items are
     // lowered, so original-offset name spans resolve into it).

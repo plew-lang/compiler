@@ -35,7 +35,7 @@ fn check(family: U64, mode: U64) {
     if mode != 1U64 {
         compiler.prepareCallTemplateConstraints(templateIndex: index).unwrap()
         compiler.prepareCallTemplateConstraints(templateIndex: index).unwrap()
-        val plan = compiler.decls.selectedCallConstraintPlan(index: index).unwrap()
+        val plan = compiler.selectedCallConstraintPlan(index: index).unwrap()
         val saved = plan.bounds[0U64]
         val requiredTrait = compiler.decls.traitAt(index: compiler.decls.traitIndexByOffset(offset: saved.constraint.key.owner))
         val otherProof = compiler.traitPatternProof(baseRef: foreign, traitId: requiredTrait.nameId, traitOwner: requiredTrait.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assumptions: compiler.functionBoundAssumptions(fnIdx: owner)).unwrap()
@@ -44,7 +44,7 @@ fn check(family: U64, mode: U64) {
         val foreignScope = compiler.traitPatternProof(baseRef: otherTerm, traitId: requiredTrait.nameId, traitOwner: requiredTrait.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assumptions: compiler.functionBoundAssumptions(fnIdx: otherOwner)).unwrap()
         val proofs: Array[U64] = if mode == 2U64 { give [] } else if mode == 3U64 { give [compiler.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />)] } else if mode == 4U64 { give [compiler.freezeStaticConformanceProof(proof: otherProof)] } else if mode == 5U64 { give [compiler.freezeStaticConformanceProof(proof: proof)] } else if mode == 8U64 { give [compiler.freezeStaticConformanceProof(proof: foreignScope)] } else { give plan.proofs }
         val bounds: Array[TraitBound] = if mode == 6U64 { give [<TraitBound subject=foreign constraint=saved.constraint offset=saved.offset />] } else { give plan.bounds }
-        if !compiler.decls.recordBuildingCallConstraints(index: index, plan: <SelectedCallConstraints owner=(if mode == 7U64 { give otherOwner } else { give plan.owner }) bounds=bounds proofs=proofs />) { panic("construction plan was already prepared") }
+        if !compiler.recordBuildingCallConstraints(index: index, plan: <SelectedCallConstraints owner=(if mode == 7U64 { give otherOwner } else { give plan.owner }) bounds=bounds proofs=proofs />) { panic("construction plan was already prepared") }
     }
     val message = if mode == 0U64 { give "" } else if mode == 1U64 { give "selected call has no retained constraint evidence" } else if mode == 2U64 || mode == 7U64 { give "selected call has incomplete constraint evidence" } else if mode == 6U64 { give "selected call constraint evidence has a different substitution" } else if mode == 8U64 { give "declaration assumption is not available in its lexical scope" } else { give "selected call constraint evidence does not satisfy its signature" }
     match compiler.checkRecordedCallTemplateBound(templateIndex: index) {

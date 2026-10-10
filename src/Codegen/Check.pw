@@ -21,3 +21,4 @@ part ./Check/Visibility
 part ./Check/Return
 
 part ./Check/Obligations
+part ./Check/CallConstraints

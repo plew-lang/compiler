@@ -1,6 +1,6 @@
 // The store owns the stage transition. CoW snapshots exposed to readers
 // cannot mutate its private rows, and construction cannot replace Prepared.
-pub impl Decls {
+pub impl Comp {
     fn selectedCallConstraintPlan(index: U64) -> Optional[SelectedCallConstraints] {
         match self.selectedCallConstraints.get(key: index) {
             Optional.Some(v: val state) => {
@@ -27,22 +27,6 @@ pub impl Decls {
         return true
     }
 
-    // Called only after all source-owner obligations have succeeded. Missing
-    // rows represent the exact signature's already-checked empty plan.
-    inout fn sealSelectedCallConstraints(index: U64, owner: U64) {
-        mut val plan = <SelectedCallConstraints owner=owner bounds=[] proofs=[] />
-        match self.selectedCallConstraints.get(key: index) {
-            Optional.Some(v: val state) => {
-                match state {
-                    CallConstraintPlanState.Prepared(snapshot: _) => { return }
-                    CallConstraintPlanState.Building(plan: val building) => { plan = building }
-                }
-            }
-            Optional.None => {}
-        }
-        self.selectedCallConstraints[index] = <CallConstraintPlanState.Prepared snapshot=<PreparedCallConstraints plan=plan /> />
-    }
-
     fn preparedCallConstraints(index: U64) -> Optional[PreparedCallConstraints] {
         match self.selectedCallConstraints.get(key: index) {
             Optional.Some(v: val state) => {
@@ -53,5 +37,26 @@ pub impl Decls {
             }
             Optional.None => { return <Optional.None /> }
         }
+    }
+}
+
+// Only frontend admission can publish a successful source snapshot.
+impl Comp {
+    inout fn publishPreparedCallConstraints(templateIndex: U64) -> Result[(), CompileDiagnostic] {
+        try self.checkRecordedCallConstraintEvidence(templateIndex: templateIndex)
+        val template = self.decls.callTemplates[templateIndex]
+        val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
+        mut val plan = <SelectedCallConstraints owner=scope.owner bounds=[] proofs=[] />
+        match self.selectedCallConstraints.get(key: templateIndex) {
+            Optional.Some(v: val state) => {
+                match state {
+                    CallConstraintPlanState.Prepared(snapshot: _) => { return <Result.Ok value=() /> }
+                    CallConstraintPlanState.Building(plan: val building) => { plan = building }
+                }
+            }
+            Optional.None => {}
+        }
+        self.selectedCallConstraints[templateIndex] = <CallConstraintPlanState.Prepared snapshot=<PreparedCallConstraints plan=plan /> />
+        return <Result.Ok value=() />
     }
 }

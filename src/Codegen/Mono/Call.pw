@@ -3966,8 +3966,7 @@ pub impl Comp {
         if index >= self.decls.callTemplates.count() {
             return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has no source constraint owner") />
         }
-        try self.checkRecordedCallConstraintEvidence(templateIndex: index)
-        match self.decls.preparedCallConstraints(index: index) {
+        match self.preparedCallConstraints(index: index) {
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call constraint owner is not prepared") /> }
             Optional.Some(v: val snapshot) => {
                 val plan = snapshot.constraints()
