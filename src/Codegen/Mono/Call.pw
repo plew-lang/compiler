@@ -3771,7 +3771,7 @@ pub impl Comp {
             }
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint environment has no concrete path terminal") /> }
         }
-        return <Result.Ok value=<InstanceEnvironment params=params args=values receiverRef=witness.selfRef proof=selected /> /> />
+        return <Result.Ok value=<InstanceEnvironment params=params args=values receiverRef=witness.selfRef proof=selected /> />
     }
 
     inout fn retainedConformanceConstraint(declared: U64, environment: InstanceEnvironment) -> Result[StaticProofInstantiation, CompileDiagnostic] {
