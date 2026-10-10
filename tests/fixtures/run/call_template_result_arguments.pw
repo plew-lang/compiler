@@ -147,9 +147,11 @@ fn main() {
     val unresolvedCount = c.callTemplateCount()
     if !c.completeRecordedCallableDefaults(templateIndex: unresolvedIndex, receiverTerm: 0U64).unwrap() && c.callTemplateCount() == unresolvedCount { write(s: "unresolved-no-publication\n") }
     val method = c.pushExpr(e: <Expr.Method recv=expression nameStart=name.nameStart nameLen=name.nameLen args=args />)
-    c.recordSemanticExprCall(exprId: method, callee: 1U64,
+    // This is a template-construction unit test, not a checked expression.
+    // Publish no semantic expression fact for the synthetic method site.
+    c.recordCallTemplate(exprId: method, callee: 1U64,
         receiver: <CallTemplateReceiver.PriorCallResult exprId=expression siteKey=c.templateCallSiteKey(fnIdx: 0U64, exprId: expression).unwrap() />,
-        args: args, calleeTypeArgs: [callerTerm], resultTerm: expectedTerm, receiverTypeTerm: expectedTerm).unwrap()
+        args: args, calleeTypeArgs: [callerTerm], receiverTypeTerm: expectedTerm).unwrap()
     c.recordCallTemplateExpectedResult(exprId: method, expectedTerm: expectedTerm).unwrap()
     if c.callTemplateForSourceBody(fnIdx: 0U64, exprId: method).unwrap().receiverTypeTerm == expectedTerm { write(s: "receiver-context-preserved\n") }
     c.cur.recordCallTemplates = false
