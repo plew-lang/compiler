@@ -18,7 +18,7 @@ pub impl Comp {
             _ => {}
         }
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
-        val owner = self.decls.callTemplateLexicalRoots.getOr(key: site.ownerFnIdx, fallback: site.ownerFnIdx)
+        val owner = self.callTemplateLexicalRoots.getOr(key: site.ownerFnIdx, fallback: site.ownerFnIdx)
         mut val indices = self.decls.declarationConversionOwners.getOr(key: owner, fallback: [])
         for index in indices {
             val prior = self.decls.declarationConversions[index]
@@ -689,14 +689,14 @@ pub impl Comp {
             function += 1U64
         }
         for conversion in self.decls.declarationConversions {
-            val owner = self.decls.callTemplateLexicalRoots.getOr(key: conversion.site.ownerFnIdx, fallback: conversion.site.ownerFnIdx)
+            val owner = self.callTemplateLexicalRoots.getOr(key: conversion.site.ownerFnIdx, fallback: conversion.site.ownerFnIdx)
             if owner < relevant.count() { relevant[owner] = true }
         }
         mut val changed = true
         while changed {
             changed = false
             for template in self.callTemplateSnapshot() {
-                val owner = self.decls.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
+                val owner = self.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
                 if owner < relevant.count() && !relevant[owner] {
                     mut val needed = false
                     match template.kind {
@@ -738,7 +738,7 @@ pub impl Comp {
     }
 
     inout fn declarationTypeScope(owner: U64) -> Result[DeclarationTypeScope, CompileDiagnostic] {
-        val root = self.decls.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
+        val root = self.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
         val canonical = try self.semanticBodyOwner(fnIdx: root)
         if canonical >= self.arena.functionCount() {
             return <Result.Ok value=<DeclarationTypeScope owner=canonical parameters=<FuncBindRange start=0U64 len=0U64 /> /> />
@@ -841,7 +841,7 @@ pub impl Comp {
             // authority, even when the subjects happen to match.
             _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration assumption is not available in its lexical scope") /> }
         }
-        val lexical = self.decls.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
+        val lexical = self.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
         if owner >= self.arena.functionCount() || (try self.semanticBodyOwner(fnIdx: lexical)) != scope.owner {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration assumption is not available in its lexical scope") />
         }
@@ -968,7 +968,7 @@ pub impl Comp {
         val normalizedExpected = try self.normalizedValueType(ref: expected)
         if self.typeRefEq(a: normalizedSource, b: normalizedExpected) { return <Result.Ok value=() /> }
         val site = try self.templateCallSiteKey(fnIdx: owner, exprId: self.callArgumentExprId(source: argument.source))
-        val lexical = self.decls.callTemplateLexicalRoots.getOr(key: site.ownerFnIdx, fallback: site.ownerFnIdx)
+        val lexical = self.callTemplateLexicalRoots.getOr(key: site.ownerFnIdx, fallback: site.ownerFnIdx)
         for index in self.decls.declarationConversionOwners.getOr(key: lexical, fallback: []) {
             val conversion = self.decls.declarationConversions[index]
             if self.sameCallSiteKey(a: conversion.site, b: site) && self.typeRefEq(a: conversion.source, b: normalizedSource) && self.typeRefEq(a: conversion.target, b: normalizedExpected) {
@@ -1360,7 +1360,7 @@ pub impl Comp {
                 if (try self.checkCallConstraintTemplate(template: template, environment: request.environment, depth: request.depth + 1U64, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() {
                     return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "concrete declaration call retains an unresolved obligation") />
                 }
-                row = self.decls.callTemplateBodyNext[row - 1U64]
+                row = self.callTemplateBodyNext[row - 1U64]
             }
             index += 1U64
         }

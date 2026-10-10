@@ -29,7 +29,7 @@ fn main() {
     val kind = <CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=arguments calleeTypeArgs=typeArguments proofId=0U64 />
     compiler.checkDeferredCallDependency(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=0U64 /> kind=kind />).unwrap()
     // Closure identities explicitly inherit their lexical binder scope.
-    compiler.decls.callTemplateLexicalRoots[1000000U64] = 0U64
+    compiler.registerCallTemplateLexicalRoot(owner: 1000000U64, root: 0U64)
     compiler.checkDeferredCallDependency(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=1000000U64 /> kind=kind />).unwrap()
     match compiler.checkDeferredCallDependency(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=1U64 /> kind=kind />) {
         Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation refers to a type parameter outside its lexical scope") }

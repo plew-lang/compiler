@@ -12,7 +12,7 @@ fn main() {
     val good = compiler.arena.globals[1U64].nameStart
     val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "free").nameId)
     mut val selected = compiler.callTemplateCount()
-    for index in compiler.decls.globalCallTemplateOwners.get(key: broken).unwrap() {
+    for index in compiler.globalCallTemplates(target: broken) {
         match compiler.callTemplateAt(index: index).kind {
             CallTemplateKind.Direct(callee: val function, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                 if function == callee { selected = index }

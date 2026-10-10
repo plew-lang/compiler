@@ -227,6 +227,11 @@ enum CallConstraintPlanState {
 }
 
 pub struct Comp {
+    mut val globalCallTemplateOwners: Dictionary[U64, Array[U64]] = [:]
+    mut val callTemplateLexicalRoots: Dictionary[U64, U64] = [:]
+    mut val callTemplateBodyHeads: Dictionary[U64, U64] = [:]
+    mut val callTemplateBodyTails: Dictionary[U64, U64] = [:]
+    mut val callTemplateBodyNext: Array[U64] = []
     mut val callTemplateArgumentPool: Array[CallTemplateArgument] = []
     mut val callTemplateTypeArgumentPool: Array[U64] = []
     mut val callTemplateOperandPool: Array[CallArgumentSource] = []
@@ -348,7 +353,7 @@ pub struct Comp {
     pub mut val sourceExpressionLimit: U64 = 0U64
     pub mut val globalCallTemplatesClosed: Bool = false
     pub mut val selectedGlobalTargets: Array[U64] = []
-    pub mut val preparedGlobalTargets: Array[U64] = []
+    mut val preparedGlobalTargets: Array[U64] = []
     pub mut val resolvingGlobalTypes: Array[U64] = []
     // ASan mode (`plewc --asan <file>`): the backend tags the module with the host target
     // triple and marks every DEFINED function `sanitize_address`, so a downstream

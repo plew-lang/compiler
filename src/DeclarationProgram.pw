@@ -82,7 +82,7 @@ impl DeclarationBodyRequests {
                 while row != 0U64 {
                     if c.callTemplateAt(index: row - 1U64).mayHaveStorageArguments { needsAccess = true
                         break }
-                    row = c.decls.callTemplateBodyNext[row - 1U64]
+                    row = c.nextLexicalCallTemplate(index: row - 1U64)
                 }
             }
             _ => {}

@@ -3565,16 +3565,11 @@ pub struct Decls {
     // Global source owners are initializer targets, not the shared no-function
     // sentinel used by call sites. This is an index into declarationConversions.
     pub mut val globalDeclarationConversionOwners: Dictionary[U64, Array[U64]] = [:]
-    pub mut val globalCallTemplateOwners: Dictionary[U64, Array[U64]] = [:]
     // Derived open-addressed index for CallTemplate. Slots hold one-based
     // callTemplates indices and are rebuilt solely from CallSiteKey; this is
     // lookup structure, never a second semantic source.
     // Source-request membership, including nested closure bodies. Site keys
     // retain their exact owner; these derived lists only select request work.
-    pub mut val callTemplateLexicalRoots: Dictionary[U64, U64] = [:]
-    pub mut val callTemplateBodyHeads: Dictionary[U64, U64] = [:]
-    pub mut val callTemplateBodyTails: Dictionary[U64, U64] = [:]
-    pub mut val callTemplateBodyNext: Array[U64] = []
     pub mut val destructureSites: Array[DestructureSite] = []
     mut val forTypeRecipes: Array[ForTypeRecipe] = []
     mut val forTypeRecipeRows: Dictionary[U64, U64] = [:]

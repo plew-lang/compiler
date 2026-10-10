@@ -2741,7 +2741,7 @@ pub impl Comp {
         while row != 0U64 {
             val index = row - 1U64
             try self.publishPreparedCallConstraints(templateIndex: index)
-            row = self.decls.callTemplateBodyNext[index]
+            row = self.callTemplateBodyNext[index]
         }
         return <Result.Ok value=() />
     }

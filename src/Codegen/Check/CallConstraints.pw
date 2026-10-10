@@ -108,3 +108,18 @@ pub impl Comp {
     fn callTemplateOperandCount() -> U64 { return self.callTemplateOperandPool.count() }
     fn callTemplateOperandAt(index: U64) -> CallArgumentSource { return self.callTemplateOperandPool[index] }
 }
+
+pub impl Comp {
+    fn nextLexicalCallTemplate(index: U64) -> U64 { return self.callTemplateBodyNext[index] }
+    fn globalCallTemplates(target: U64) -> Array[U64] { return self.globalCallTemplateOwners.getOr(key: target, fallback: []) }
+    // A closure/provided owner receives one immutable lexical root identity.
+    inout fn registerCallTemplateLexicalRoot(owner: U64, root: U64) -> Bool {
+        match self.callTemplateLexicalRoots.get(key: owner) {
+            Optional.Some(v: val saved) => { return saved == root }
+            Optional.None => {}
+        }
+        if self.callTemplateBodyHeads.getOr(key: owner, fallback: 0U64) != 0U64 { return false }
+        self.callTemplateLexicalRoots[owner] = root
+        return true
+    }
+}

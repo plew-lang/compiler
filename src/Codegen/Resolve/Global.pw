@@ -191,7 +191,7 @@ pub impl Comp {
         try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Global target=target />)
         try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Global target=target />)
         try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Global target=target />)
-        for templateIndex in self.decls.globalCallTemplateOwners.getOr(key: target, fallback: []) {
+        for templateIndex in self.globalCallTemplateOwners.getOr(key: target, fallback: []) {
             try self.publishPreparedCallConstraints(templateIndex: templateIndex)
         }
         self.preparedGlobalTargets.append(target)

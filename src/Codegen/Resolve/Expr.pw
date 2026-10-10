@@ -610,7 +610,7 @@ pub impl Comp {
         while row != 0U64 {
             val index = row - 1U64
             try self.prepareCallTemplateConstraints(templateIndex: index)
-            row = self.decls.callTemplateBodyNext[index]
+            row = self.callTemplateBodyNext[index]
         }
         return <Result.Ok value=() />
     }
@@ -845,9 +845,9 @@ pub impl Comp {
     inout fn rebuildCallTemplateIndex(capacity: U64) {
         self.callTemplateIndexSlots = []
         val emptyOwners: Dictionary[U64, U64] = [:]
-        self.decls.callTemplateBodyHeads = emptyOwners
-        self.decls.callTemplateBodyTails = emptyOwners
-        self.decls.callTemplateBodyNext = []
+        self.callTemplateBodyHeads = emptyOwners
+        self.callTemplateBodyTails = emptyOwners
+        self.callTemplateBodyNext = []
         mut val zeroI: U64 = 0U64
         while zeroI < capacity {
             self.callTemplateIndexSlots.append(0U64)
@@ -980,18 +980,18 @@ pub impl Comp {
         if self.callTemplateAt(index: templateIndex).siteKey.ownerFnIdx != 18446744073709551615U64 { return }
         match self.cur.globalInitializerTarget {
             Optional.Some(v: val target) => {
-                mut val indices = self.decls.globalCallTemplateOwners.getOr(key: target, fallback: [])
+                mut val indices = self.globalCallTemplateOwners.getOr(key: target, fallback: [])
                 mut val present = false
                 for index in indices { if index == templateIndex { present = true } }
                 if !present { indices.append(templateIndex) }
-                self.decls.globalCallTemplateOwners[target] = indices
+                self.globalCallTemplateOwners[target] = indices
             }
             Optional.None => {}
         }
     }
 
     inout fn prepareGlobalCallTemplateConstraints(target: U64) -> Result[(), CompileDiagnostic] {
-        for index in self.decls.globalCallTemplateOwners.getOr(key: target, fallback: []) {
+        for index in self.globalCallTemplateOwners.getOr(key: target, fallback: []) {
             try self.prepareCallTemplateConstraints(templateIndex: index)
         }
         return <Result.Ok value=() />
@@ -1001,20 +1001,20 @@ pub impl Comp {
     // are published before their calls, so grouping never depends on Cursor.
     inout fn indexLexicalCallTemplate(templateIndex: U64) {
         val owner = self.callTemplateAt(index: templateIndex).siteKey.ownerFnIdx
-        val root = self.decls.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
-        val tail = self.decls.callTemplateBodyTails.getOr(key: root, fallback: 0U64)
-        self.decls.callTemplateBodyNext.append(0U64)
+        val root = self.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
+        val tail = self.callTemplateBodyTails.getOr(key: root, fallback: 0U64)
+        self.callTemplateBodyNext.append(0U64)
         if tail == 0U64 {
-            self.decls.callTemplateBodyHeads[root] = templateIndex + 1U64
+            self.callTemplateBodyHeads[root] = templateIndex + 1U64
         } else {
-            self.decls.callTemplateBodyNext.set(i: tail - 1U64, value: templateIndex + 1U64)
+            self.callTemplateBodyNext.set(i: tail - 1U64, value: templateIndex + 1U64)
         }
-        self.decls.callTemplateBodyTails[root] = templateIndex + 1U64
+        self.callTemplateBodyTails[root] = templateIndex + 1U64
     }
 
     fn firstLexicalCallTemplate(owner: U64) -> U64 {
-        val root = self.decls.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
-        return self.decls.callTemplateBodyHeads.getOr(key: root, fallback: 0U64)
+        val root = self.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
+        return self.callTemplateBodyHeads.getOr(key: root, fallback: 0U64)
     }
 
 
@@ -1178,7 +1178,7 @@ pub impl Comp {
     // Checking and diagnostic continuation also need lexical identity, without
     // authorizing publication of a completed expression fact.
     inout fn currentSourceOwner() -> Optional[SemanticCompletionOwner] {
-        val owner = self.decls.callTemplateLexicalRoots.getOr(key: self.cur.checkFn, fallback: self.cur.checkFn)
+        val owner = self.callTemplateLexicalRoots.getOr(key: self.cur.checkFn, fallback: self.cur.checkFn)
         if owner != 18446744073709551615U64 {
             return <Optional.Some v=<SemanticCompletionOwner.Function index=owner /> />
         }
