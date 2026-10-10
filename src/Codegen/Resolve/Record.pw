@@ -2733,16 +2733,11 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: owner).defOffset, msg: "internal error: lexical body has incomplete default argument plans") />
         }
         try self.closeCallTemplatesForBody(fnIdx: owner)
-        try self.checkRecordedBodyCallConstraints(owner: owner)
+        val admitted = try self.admitRecordedBodyCallConstraints(owner: owner)
         try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Function index=owner />)
         try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Function index=owner />)
         try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Function index=owner />)
-        mut val row = self.firstLexicalCallTemplate(owner: owner)
-        while row != 0U64 {
-            val index = row - 1U64
-            try self.publishPreparedCallConstraints(templateIndex: index)
-            row = self.decls.callTemplateBodyNext[index]
-        }
+        for token in admitted { self.publishPreparedCallConstraints(admitted: token) }
         return <Result.Ok value=() />
     }
 

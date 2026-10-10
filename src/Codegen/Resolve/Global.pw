@@ -188,12 +188,11 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: target, msg: "internal error: global default argument plans are incomplete") />
         }
         try self.prepareGlobalCallTemplateConstraints(target: target)
+        val admitted = try self.admitGlobalCallConstraints(target: target)
         try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Global target=target />)
         try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Global target=target />)
         try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Global target=target />)
-        for templateIndex in self.decls.globalCallTemplateOwners.getOr(key: target, fallback: []) {
-            try self.publishPreparedCallConstraints(templateIndex: templateIndex)
-        }
+        for token in admitted { self.publishPreparedCallConstraints(admitted: token) }
         self.preparedGlobalTargets.append(target)
         return <Result.Ok value=() />
     }

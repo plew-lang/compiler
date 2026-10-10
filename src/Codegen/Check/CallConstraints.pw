@@ -42,23 +42,44 @@ pub impl Comp {
 
 // Only frontend admission can publish a successful source snapshot.
 impl Comp {
-    inout fn publishPreparedCallConstraints(templateIndex: U64) -> Result[(), CompileDiagnostic] {
+    inout fn admitSelectedCallConstraints(templateIndex: U64) -> Result[AdmittedCallConstraints, CompileDiagnostic] {
         try self.checkRecordedCallConstraintEvidence(templateIndex: templateIndex)
         val template = self.callTemplates[templateIndex]
         val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
-        mut val plan = <SelectedCallConstraints owner=scope.owner bounds=[] proofs=[] />
-        match self.selectedCallConstraints.get(key: templateIndex) {
-            Optional.Some(v: val state) => {
-                match state {
-                    CallConstraintPlanState.Prepared(snapshot: _) => { return <Result.Ok value=() /> }
-                    CallConstraintPlanState.Building(plan: val building) => { plan = building }
-                }
-            }
-            Optional.None => {}
+        val plan = match self.selectedCallConstraintPlan(index: templateIndex) {
+            Optional.Some(v: val selected) => selected
+            Optional.None => <SelectedCallConstraints owner=scope.owner bounds=[] proofs=[] />
         }
-        self.selectedCallConstraints[templateIndex] = <CallConstraintPlanState.Prepared snapshot=<PreparedCallConstraints plan=plan /> />
-        return <Result.Ok value=() />
+        return <Result.Ok value=<AdmittedCallConstraints templateIndex=templateIndex plan=plan /> />
     }
+
+    inout fn publishPreparedCallConstraints(admitted: AdmittedCallConstraints) {
+        // The capability owns the exact admitted value; construction changes
+        // cannot replace it between admission and whole-owner success.
+        self.selectedCallConstraints[admitted.templateIndex] = <CallConstraintPlanState.Prepared snapshot=<PreparedCallConstraints plan=admitted.plan /> />
+    }
+
+    inout fn admitRecordedBodyCallConstraints(owner: U64) -> Result[Array[AdmittedCallConstraints], CompileDiagnostic] {
+        mut val admitted: Array[AdmittedCallConstraints] = []
+        mut val row = self.firstLexicalCallTemplate(owner: owner)
+        while row != 0U64 && row <= self.callTemplates.count() {
+            val index = row - 1U64
+            try self.checkCallTemplateSelection(templateIndex: index)
+            admitted.append((try self.admitSelectedCallConstraints(templateIndex: index)))
+            try self.checkClosedIterationProtocol(templateIndex: index)
+            row = self.decls.callTemplateBodyNext[index]
+        }
+        return <Result.Ok value=admitted />
+    }
+
+    inout fn admitGlobalCallConstraints(target: U64) -> Result[Array[AdmittedCallConstraints], CompileDiagnostic] {
+        mut val admitted: Array[AdmittedCallConstraints] = []
+        for index in self.decls.globalCallTemplateOwners.getOr(key: target, fallback: []) {
+            admitted.append((try self.admitSelectedCallConstraints(templateIndex: index)))
+        }
+        return <Result.Ok value=admitted />
+    }
+
 }
 
 pub impl Comp {

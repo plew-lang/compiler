@@ -1,0 +1,5 @@
+use /Frontend only { AdmittedCallConstraints }
+use /Ir only { SelectedCallConstraints }
+fn main() {
+    val token = <AdmittedCallConstraints templateIndex=0U64 plan=<SelectedCallConstraints owner=0U64 bounds=[] proofs=[] /> />
+}

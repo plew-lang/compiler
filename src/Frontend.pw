@@ -212,6 +212,13 @@ pub struct SourceDiagnosticFailure {
 }
 pub impl SourceDiagnosticFailure { factory }
 
+// Admission is an immutable capability, not whole-owner preparation.
+pub struct AdmittedCallConstraints {
+    val templateIndex: U64
+    val plan: SelectedCallConstraints
+}
+impl AdmittedCallConstraints { factory }
+
 // Readers receive a value snapshot, with no factory or writable storage.
 pub struct PreparedCallConstraints {
     val plan: SelectedCallConstraints
