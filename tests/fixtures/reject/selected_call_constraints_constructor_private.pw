@@ -1,4 +1,4 @@
-use /Ir only { Decls }
+use /Frontend only { Comp }
 fn main() {
-    val declarations: Decls = <Decls selectedCallConstraints=[:] />
+    val compiler: Comp = <Comp selectedCallConstraints=[:] />
 }

@@ -1,5 +1,5 @@
-use /Ir only { Decls }
+use /Frontend only { Comp }
 fn main() {
-    val declarations: Decls = <Decls />
-    val plans = declarations.selectedCallConstraints
+    val compiler: Comp = <Comp />
+    val plans = compiler.selectedCallConstraints
 }
