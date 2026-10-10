@@ -827,22 +827,29 @@ pub impl Comp {
     inout fn withLexicalSelfBinding(f: Func, environment: InstanceEnvironment) -> Result[InstanceEnvironment, CompileDiagnostic] {
         val declaration: Func = (try self.lexicalFunction(f: f))
         if !(declaration.isProvided || self.methodRecvIsTrait(f: declaration)) || declaration.provTraitOwner == 0U64 { return <Result.Ok value=environment />}
-        val index = self.decls.traitIndexByOffset(offset: declaration.provTraitOwner)
-        if index >= self.decls.traitCount() { return <Result.Ok value=environment />}
+        return self.withTraitSelfBinding(traitOwner: declaration.provTraitOwner, environment: environment, offset: declaration.defOffset)
+    }
+
+    // Bind lexical Self by declaration identity for both provided bodies and
+    // selected trait-subject conformance environments.
+    inout fn withTraitSelfBinding(traitOwner: U64, environment: InstanceEnvironment, offset: U64) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        if traitOwner == 0U64 { return <Result.Ok value=environment /> }
+        val index = self.decls.traitIndexByOffset(offset: traitOwner)
+        if index >= self.decls.traitCount() { return <Result.Ok value=environment /> }
         val traitDef = self.decls.traitAt(index: index)
         if traitDef.selfParamId == 0U64 { return <Result.Ok value=environment />}
         mut val i: U64 = 0U64
         while i < environment.params.count() {
             if environment.params[i].paramId == traitDef.selfParamId {
                 if i >= environment.args.count() || !self.typeRefEq(a: environment.args[i], b: environment.receiverRef) {
-                    return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "internal error: lexical Self binding conflicts with selected receiver") />
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: lexical Self binding conflicts with selected receiver") />
                 }
                 return <Result.Ok value=environment />
             }
             i += 1U64
         }
-        val name = self.kwSpan(kw: "Self", kwLen: 4U64)
-        mut val params: Array[Bind] = [<Bind nameStart=name.nameStart nameLen=name.nameLen nameId=intern(c: inout self, start: name.nameStart, len: name.nameLen) paramId=traitDef.selfParamId fieldStart=name.fieldStart fieldLen=name.fieldLen />]
+        val name = self.internBytes(s: "Self")
+        mut val params: Array[Bind] = [<Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=traitDef.selfParamId fieldStart=name.fieldStart fieldLen=name.fieldLen />]
         mut val values: Array[U64] = [environment.receiverRef]
         i = 0U64
         while i < environment.params.count() && i < environment.args.count() {
@@ -3771,7 +3778,8 @@ pub impl Comp {
             }
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint environment has no concrete path terminal") /> }
         }
-        return <Result.Ok value=<InstanceEnvironment params=params args=values receiverRef=witness.selfRef proof=selected /> />
+        val environment = <InstanceEnvironment params=params args=values receiverRef=witness.selfRef proof=selected />
+        return self.withTraitSelfBinding(traitOwner: declaration.subjectTraitOwner, environment: environment, offset: declaration.defOffset)
     }
 
     inout fn retainedConformanceConstraint(declared: U64, environment: InstanceEnvironment) -> Result[StaticProofInstantiation, CompileDiagnostic] {
