@@ -667,7 +667,7 @@ pub impl Comp {
 
     // The source annotation may be absent while the callable still returns a
     // value: an async declaration without an annotation returns a value-less
-    // Promise. Keep this separate from semanticBodyReturnTerm's Unit result.
+    // Promise. Keep this separate from declaredBodyReturnTerm's Unit result.
     // Only a completed callable result slot may interpret zero as Unit.
     // Source values always retain an ordinary type term, including Unit.
     inout fn semanticSourceResultTerm(ref: U64) -> U64 {
@@ -696,31 +696,11 @@ pub impl Comp {
     // Source bodies expose their logical result, distinct from the async
     // callable boundary. Promise wrapping belongs to entry/completion lowering.
     // Closure facts are published before walking the nested body in Record.
-    inout fn semanticBodyReturnTerm(fnIdx: U64) -> U64 {
-        if fnIdx < self.arena.functionCount() {
-            val function: Func = self.arena.functionAt(index: fnIdx)
-            if !function.hasRet { return 0U64 }
-            if function.isAsync && function.retTy != 0U64 && function.retTy < self.arena.typeCount() {
-                val result: TypeRef = self.arena.typeAt(index: function.retTy)
-                if rangeEquals(bytes: self.arena.bytes, start: result.nameStart, len: result.nameLen, kw: "Promise") && result.args.count() == 1U64 {
-                    return result.args[0U64]
-                }
-            }
-            return function.retTy
-        }
-        mut val index: U64 = 0U64
-        while index < self.semanticClosures.count() {
-            val closure: SemanticClosure = self.semanticClosures[index]
-            if closure.bodyKey == fnIdx { return closure.returnTypeTerm }
-            index += 1U64
-        }
-        return 0U64
-    }
 
     // Signature Self remains abstract at the public boundary. Context inside
     // the declaration uses its lexical receiver, including its own binders.
     inout fn semanticBodyReturnContext(fnIdx: U64) -> U64 {
-        val term = self.semanticBodyReturnTerm(fnIdx: fnIdx)
+        val term = self.declaredBodyReturnTerm(fnIdx: fnIdx)
         if fnIdx >= self.arena.functionCount() { return term }
         return self.groundTermInEnvironment(ref: term, params: [], values: [], selfRef: self.parametricSelfRef(f: self.arena.functionAt(index: fnIdx)))
     }
@@ -1298,7 +1278,7 @@ pub impl Comp {
     // a fabricated expression/local. Ordinary static-call obligations and
     // finalization consume this same template under each body environment.
     inout fn recordTryExpression(exprId: U64, operand: U64) -> Result[(), CompileDiagnostic] {
-        val returnTerm = try self.normalizedValueType(ref: self.semanticBodyReturnTerm(fnIdx: self.cur.checkFn))
+        val returnTerm = try self.normalizedValueType(ref: self.declaredBodyReturnTerm(fnIdx: self.cur.checkFn))
         if self.resultEnumIndex(ref: returnTerm) >= self.arena.enumCount() {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`try` is only valid in a function that returns a Result (spec/13)") />
         }
@@ -2814,4 +2794,28 @@ impl Comp {
         try self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof, receiverTypeTerm: receiverTypeTerm)
         return <Result.Ok value=() />
     }
+}
+
+impl Comp {
+    inout fn declaredBodyReturnTerm(fnIdx: U64) -> U64 {
+        if fnIdx < self.arena.functionCount() {
+            val function: Func = self.arena.functionAt(index: fnIdx)
+            if !function.hasRet { return 0U64 }
+            if function.isAsync && function.retTy != 0U64 && function.retTy < self.arena.typeCount() {
+                val result: TypeRef = self.arena.typeAt(index: function.retTy)
+                if rangeEquals(bytes: self.arena.bytes, start: result.nameStart, len: result.nameLen, kw: "Promise") && result.args.count() == 1U64 {
+                    return result.args[0U64]
+                }
+            }
+            return function.retTy
+        }
+        mut val index: U64 = 0U64
+        while index < self.semanticClosures.count() {
+            val closure: SemanticClosure = self.semanticClosures[index]
+            if closure.bodyKey == fnIdx { return closure.returnTypeTerm }
+            index += 1U64
+        }
+        return 0U64
+    }
+
 }

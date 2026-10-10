@@ -3332,42 +3332,30 @@ pub fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
     if fnIdx >= c.arena.functionCount() {
         return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> />
     }
-    val f: Func = c.arena.functionAt(index: fnIdx)
-    // Record owns the lexical body receiver, including extension views.
-    // Func.recvTy selects the declaration/dispatch namespace and can differ
-    // from the type of self inside that body. Provided copies share the
-    // original body's fact; BodyInstance supplies their substitutions later.
-    val receiverTerm: U64 = (match c.semanticBodyReceiverTerm(fnIdx: fnIdx) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> } })
-    // All receivers, including synthetic methods, require a frontend-resolved
-    // TypeTerm. The zero sentinel is never a scalar or a spelling-based type.
-    if f.hasRecv && receiverTerm == 0U64 {
-        return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> />
-    }
-    val resultTerm: U64 = c.semanticBodyReturnTerm(fnIdx: fnIdx)
-    if f.hasRet && resultTerm == 0U64 {
-        return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.MissingSemanticType /> />
-    }
     val facts = match c.preparedFunctionSemanticFacts(fnIdx: fnIdx) {
         Result.Ok(value: val facts) => facts
         Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
     }
+    val signature = match facts.functionSignature() {
+        Optional.Some(v: val signature) => signature
+        Optional.None => { return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.MissingSemanticType /> /> }
+    }
+    val receiverTerm = signature.receiverTerm
+    val resultTerm = signature.resultTerm
     mut val state: MidBuildState = <MidBuildState.initial sourceFunction=fnIdx sourceFacts=<Optional.Some v=facts /> />
-    if f.hasRecv {
+    if signature.hasReceiver {
         // `self` is the first ABI parameter exactly like an ordinary source
         // parameter.  An `inout fn` receiver is therefore a capability-bearing
         // place supplied by the caller, not a copied value or a special LLVM
         // side channel.  `midPrepareLocals` binds this declaration directly to
         // ABI parameter zero when `isInout` is true.
-        val receiverLocal: U64 = addMidLocal(state: inout state, declarationTarget: identSelfTarget(), typeTerm: receiverTerm, isUnique: midTermIsUnique(c: inout c, term: receiverTerm), isParameter: true, ownsAtEntry: f.isAsync || f.selfMove, isInout: f.selfInout, isCaptureCell: midBindingNeedsCaptureCell(closures: c.semanticClosureSnapshot(), sourceFunction: fnIdx, bindingTarget: identSelfTarget()))
+        val receiverLocal: U64 = addMidLocal(state: inout state, declarationTarget: identSelfTarget(), typeTerm: receiverTerm, isUnique: midTermIsUnique(c: inout c, term: receiverTerm), isParameter: true, ownsAtEntry: signature.isAsync || signature.selfMove, isInout: signature.selfInout, isCaptureCell: midBindingNeedsCaptureCell(closures: c.semanticClosureSnapshot(), sourceFunction: fnIdx, bindingTarget: identSelfTarget()))
     }
     mut val paramI: U64 = 0U64
-    while paramI < f.params.count() {
-        val param: Param = c.funcParamAt(params: f.params, index: paramI)
-        val parameterTerm = match c.semanticBodyParameterTerm(fnIdx: fnIdx, index: paramI) {
-            Result.Ok(value: val term) => { give term }
-            Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
-        }
-        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: param.nameStart, typeTerm: parameterTerm, isUnique: midTermIsUnique(c: inout c, term: parameterTerm), isParameter: true, ownsAtEntry: f.isAsync || param.isMove, isInout: param.isInout, isCaptureCell: midBindingNeedsCaptureCell(closures: c.semanticClosureSnapshot(), sourceFunction: fnIdx, bindingTarget: param.nameStart))
+    while paramI < signature.parameters.count() {
+        val param = signature.parameters[paramI]
+        val parameterTerm = param.typeTerm
+        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: param.declarationTarget, typeTerm: parameterTerm, isUnique: midTermIsUnique(c: inout c, term: parameterTerm), isParameter: true, ownsAtEntry: signature.isAsync || param.isMove, isInout: param.isInout, isCaptureCell: midBindingNeedsCaptureCell(closures: c.semanticClosureSnapshot(), sourceFunction: fnIdx, bindingTarget: param.declarationTarget))
         paramI += 1U64
     }
     // Async activations own their argument snapshots across suspension. Entry
@@ -3380,20 +3368,20 @@ pub fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
     state.scopes.set(i: 0U64, value: <MidScope parent=root.parent firstLocal=root.firstLocal localCount=state.locals.count() - root.firstLocal />)
     // Do not put ABI result storage in root scope. It must survive all source
     // cleanup until the ReturnValue terminator transfers ownership to caller.
-    if f.hasRet {
+    if signature.hasReturnValue {
         val resultLocal: U64 = state.locals.count()
         state.locals.append(<MidLocalDecl typeTerm=resultTerm sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: resultTerm) isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=true sourceNameStart=0U64 />)
         state.hasReturnPlace = true
         state.returnPlace = resultLocal
         state.returnTypeTerm = resultTerm
     }
-    val result: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: f.body)
+    val result: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: signature.block)
     match result {
         MidBuildError.None => {}
         _ => { return <MidBodyBuild body=<MidBody sourceFunction=fnIdx locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=result /> }
     }
     if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
-        if f.hasRet { return <MidBodyBuild body=<MidBody sourceFunction=fnIdx locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=<MidBuildError.MissingTerminator /> /> }
+        if signature.hasReturnValue { return <MidBodyBuild body=<MidBody sourceFunction=fnIdx locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=<MidBuildError.MissingTerminator /> /> }
         midEmitScopeExit(state: inout state, scope: 0U64)
         midSetTerminator(state: inout state, terminator: <MidTerminator.Return />)
     }

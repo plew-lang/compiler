@@ -3140,7 +3140,7 @@ pub impl Comp {
     inout fn finalizeCurrentBodyReturn(exprId: U64) -> Result[(), CompileDiagnostic] {
         val bodyId: U64 = self.currentBodyInstanceId()
         if bodyId == 0U64 { return <Result.Ok value=() /> }
-        val targetTerm: U64 = self.semanticBodyReturnTerm(fnIdx: self.cur.bodyFnIdx)
+        val targetTerm: U64 = (try self.preparedBodyReturnTerm(fnIdx: self.cur.bodyFnIdx))
         val targetRef: U64 = (try self.groundAndRecordBodyType(ref: targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
         mut val sourceRef: U64 = (try self.groundRecordedValueTypeForBody(bodyId: self.currentBodyInstanceId(), exprId: exprId, term: self.semanticExprTerm(exprId: exprId), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         // A direct record aggregate in return position has one ABI authority:
@@ -4209,7 +4209,7 @@ pub impl Comp {
             signatureResult = (try self.groundAndRecordBodyType(ref: self.semanticCallableReturnTerm(function: f), environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId))
             try self.scanType(ref: signatureResult)
         }
-        val bodyResult = if f.isAsync { give (try self.groundAndRecordBodyType(ref: self.semanticBodyReturnTerm(fnIdx: instance.fnIdx), environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)) } else { give signatureResult }
+        val bodyResult = if f.isAsync { give (try self.groundAndRecordBodyType(ref: self.declaredBodyReturnTerm(fnIdx: instance.fnIdx), environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)) } else { give signatureResult }
         self.arena.setBodySignature(bodyId: bodyId, parameters: signatureParameters, passings: self.selectedArgumentPassings(callee: instance.fnIdx), result: signatureResult, receiverType: if f.hasRecv { give instance.environment.receiverRef } else { give 0U64 }, receiverPassing: self.selectedReceiverPassing(callee: instance.fnIdx), bodyResult: bodyResult)
         return <Result.Ok value=() />
     }
@@ -6125,4 +6125,20 @@ pub impl Comp {
     }
 
 
+}
+
+pub impl Comp {
+    inout fn preparedBodyReturnTerm(fnIdx: U64) -> Result[U64, CompileDiagnostic] {
+        if fnIdx < self.arena.functionCount() {
+            return <Result.Ok value=(try self.preparedFunctionBodySignature(fnIdx: fnIdx)).resultTerm />
+        }
+        mut val index = 0U64
+        while index < self.semanticClosures.count() {
+            if self.semanticClosures[index].bodyKey == fnIdx {
+                return <Result.Ok value=(try self.preparedSemanticClosureAt(index: index)).returnTypeTerm />
+            }
+            index += 1U64
+        }
+        return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: return boundary has no prepared source body") />
+    }
 }

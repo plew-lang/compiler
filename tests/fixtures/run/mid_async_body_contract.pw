@@ -40,8 +40,8 @@ fn main() {
     compiler.prepareLexicalBody(fnIdx: 0U64).unwrap()
     compiler.prepareLexicalBody(fnIdx: 1U64).unwrap()
     compiler.prepareLexicalBody(fnIdx: 2U64).unwrap()
-    val integer = compiler.semanticBodyReturnTerm(fnIdx: 0U64)
-    val promise = compiler.semanticBodyReturnTerm(fnIdx: 1U64)
+    val integer = compiler.preparedFunctionBodySignature(fnIdx: 0U64).unwrap().resultTerm
+    val promise = compiler.preparedFunctionBodySignature(fnIdx: 1U64).unwrap().resultTerm
     assert(compiler.typeRefEq(a: compiler.arena.functionAt(index: 0U64).retTy, b: promise))
     val asynchronous = buildParametricMidBody(c: inout compiler, fnIdx: 0U64)
     match asynchronous.error { MidBuildError.None => {} _ => { assert(false) } }

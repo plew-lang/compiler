@@ -368,6 +368,7 @@ pub struct Comp {
     pub mut val sourceExpressionLimit: U64 = 0U64
     pub mut val globalCallTemplatesClosed: Bool = false
     pub mut val selectedGlobalTargets: Array[U64] = []
+    mut val sourceBodySignatures: Array[Optional[SourceBodySignature]] = []
     mut val globalInitializerPreparations: Dictionary[U64, Result[(), CompileDiagnostic]] = [:]
     pub mut val resolvingGlobalTypes: Array[U64] = []
     // ASan mode (`plewc --asan <file>`): the backend tags the module with the host target
@@ -2282,13 +2283,39 @@ struct SourceSemanticExpressionRecord {
 }
 impl SourceSemanticExpressionRecord { factory }
 
+pub struct SourceBodyParameter {
+    pub val declarationTarget: U64
+    pub val typeTerm: U64
+    pub val isInout: Bool
+    pub val isMove: Bool
+    pub val isBorrow: Bool
+}
+impl SourceBodyParameter { factory }
+
+// Logical source-body inputs, distinct from callable registration and its ABI.
+// Only Record constructs these rows; successful owner snapshots expose them.
+pub struct SourceBodySignature {
+    pub val hasReceiver: Bool
+    pub val receiverTerm: U64
+    pub val selfInout: Bool
+    pub val selfMove: Bool
+    pub val isAsync: Bool
+    pub val hasReturnValue: Bool
+    pub val resultTerm: U64
+    pub val block: U64
+    pub val parameters: Array[SourceBodyParameter]
+}
+impl SourceBodySignature { factory }
+
 pub struct PreparedSemanticFacts {
     val owner: SemanticCompletionOwner
     val expressions: Array[SourceSemanticExpressionRecord]
     val statements: Array[Optional[SemanticExpressionCompletion]]
+    val signature: Optional[SourceBodySignature]
 }
 impl PreparedSemanticFacts { factory }
 pub impl PreparedSemanticFacts {
+    fn functionSignature() -> Optional[SourceBodySignature] { return self.signature }
     fn statementCompletion(stmtId: U64) -> Optional[SourceCompletion] {
         if stmtId < self.statements.count() {
             match self.statements[stmtId] {
@@ -2336,10 +2363,24 @@ pub impl Comp {
         if !(try self.semanticCompletionOwnerPrepared(owner: owner)) {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: semantic facts require a prepared source owner") />
         }
-        return <Result.Ok value=<PreparedSemanticFacts owner=owner expressions=self.semanticExprRecords statements=self.semanticStatementCompletions /> />
+        mut val signature: Optional[SourceBodySignature] = <Optional.None />
+        match owner {
+            SemanticCompletionOwner.Function(index: val index) => {
+                if index < self.sourceBodySignatures.count() { signature = self.sourceBodySignatures[index] }
+            }
+            SemanticCompletionOwner.Global(target: _) => {}
+        }
+        return <Result.Ok value=<PreparedSemanticFacts owner=owner expressions=self.semanticExprRecords statements=self.semanticStatementCompletions signature=signature /> />
     }
     inout fn preparedFunctionSemanticFacts(fnIdx: U64) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
         return self.preparedSemanticFacts(owner: <SemanticCompletionOwner.Function index=(try self.semanticBodyOwner(fnIdx: fnIdx)) />)
+    }
+    inout fn preparedFunctionBodySignature(fnIdx: U64) -> Result[SourceBodySignature, CompileDiagnostic] {
+        val facts = try self.preparedFunctionSemanticFacts(fnIdx: fnIdx)
+        match facts.functionSignature() {
+            Optional.Some(v: val signature) => { return <Result.Ok value=signature /> }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: source body signature requires a prepared lexical body") /> }
+        }
     }
     inout fn preparedGlobalSemanticFacts(target: U64) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
         return self.preparedSemanticFacts(owner: <SemanticCompletionOwner.Global target=target />)

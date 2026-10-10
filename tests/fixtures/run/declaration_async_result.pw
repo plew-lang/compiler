@@ -20,7 +20,7 @@ fn main() {
     assert(unit.isRecord)
     assert(unit.recordFieldTerms.count() == 0U64)
     assert(c.callableResultIsUnit(ref: payload))
-    assert(c.semanticBodyReturnTerm(fnIdx: 0U64) == 0U64)
+    assert(c.preparedFunctionBodySignature(fnIdx: 0U64).unwrap().resultTerm == 0U64)
     match c.arcClassOfRef(ref: result).unwrap() {
         ArcClass.PromiseCell(inst: _) => {}
         _ => { assert(false) }
