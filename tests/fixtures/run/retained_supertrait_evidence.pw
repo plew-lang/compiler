@@ -1,0 +1,62 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplateKind, CallableConstraintEvidence, StaticConformanceProof, StaticProofInstantiation, DeclarationBoundRef, SupertraitRef, InstanceEnvironment }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="trait Parent[A] {{}} trait Child[A]: Parent[A] {{}} struct Box[V] {{}} impl[V] Box[V] as Parent[V] {{}} impl[V] Box[V] as Child[V] where Box[V]: Parent[V] {{}} fn accept[V](value: V) where V: Parent[I64] {{}} fn forward[V](value: V) where V: Child[I64] {{ accept(value: value) }} fn context(value: Box[I64]) {{}}" path="retained-supertraits.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val forward = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "forward").nameId)
+    val context = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "context").nameId)
+    val receiver = compiler.funcParamAt(params: compiler.arena.functionAt(index: context).params, index: 0U64).ty
+    compiler.prepareLexicalBody(fnIdx: forward).unwrap()
+    val substitution = compiler.bodyInstanceEnvironment(fnIdx: forward, args: [receiver], recvInstRef: 0U64).unwrap()
+    val environment = compiler.environmentWithCallableConstraints(fnIdx: forward, environment: substitution, evidence: <CallableConstraintEvidence.Declaration />).unwrap()
+    val bindings = environment.constraints.unwrap()
+    val root = compiler.thawStaticConformanceProof(id: compiler.arena.callableConstraintProofAt(evidence: bindings, index: 0U64))
+    val witness = compiler.selectedConstraintWitness(proof: root).unwrap()
+    val selectedEnvironment = compiler.selectedConstraintEnvironment(witness: witness).unwrap()
+    val declaration = compiler.decls.conformAt(index: witness.conformIdx - 1U64)
+    val condition = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Conformance index=declaration.bounds.start /> />
+    val expected = match compiler.instantiateConstraintProof(proof: condition, receiverRef: receiver, environment: selectedEnvironment, selfRef: receiver, itemRef: 0U64).unwrap() {
+        StaticProofInstantiation.Ready(proof: val proof) => { give proof }
+        _ => { panic("missing retained conformance condition") }
+    }
+    if compiler.instantiateConstraintProof(proof: condition, receiverRef: receiver, environment: <InstanceEnvironment />, selfRef: receiver, itemRef: 0U64).isOk() { panic("missing witness environment was repaired by search") }
+    val foreign = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Conformance index=declaration.bounds.start + declaration.bounds.len /> />
+    if compiler.instantiateConstraintProof(proof: foreign, receiverRef: receiver, environment: selectedEnvironment, selfRef: receiver, itemRef: 0U64).isOk() { panic("foreign conformance condition was accepted") }
+    if compiler.arena.publishConformanceSupertraits(conformance: witness.conformIdx - 1U64, proofs: []) { panic("published supertrait evidence was replaced") }
+    mut val found = false
+    for template in compiler.decls.callTemplates {
+        if template.siteKey.ownerFnIdx == forward {
+            match template.kind {
+                CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                    val index = compiler.decls.callTemplateIndex(siteKey: template.siteKey)
+                    val plan = compiler.decls.preparedCallConstraints(index: index).unwrap().constraints()
+                    val proof = compiler.thawStaticConformanceProof(id: plan.proofs[0U64])
+                    match proof {
+                        StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => {
+                            match compiler.instantiateConstraintProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: 0U64, itemRef: 0U64).unwrap() {
+                                StaticProofInstantiation.Ready(proof: val actual) => {
+                                    if !compiler.sameStaticConformanceProof(a: actual, b: expected) { panic("supertrait selected another condition witness") }
+                                }
+                                _ => { panic("missing retained supertrait") }
+                            }
+                            val invalid = [<SupertraitRef traitIndex=steps[0U64].traitIndex boundIndex=steps[0U64].boundIndex + 1U64 />]
+                            if compiler.instantiateSupertraitConstraint(source: source, steps: invalid, receiverRef: receiver, environment: environment, selfRef: 0U64, itemRef: 0U64).isOk() { panic("missing declaration edge was repaired by search") }
+                            val foreignSteps = [<SupertraitRef traitIndex=compiler.decls.traitCount() boundIndex=0U64 />]
+                            if compiler.instantiateSupertraitConstraint(source: source, steps: foreignSteps, receiverRef: receiver, environment: environment, selfRef: 0U64, itemRef: 0U64).isOk() { panic("foreign trait edge was accepted") }
+                            found = true
+                        }
+                        _ => { panic("source did not retain its inherited bound path") }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if !found { panic("missing inherited call constraint") }
+    print("retained-supertrait-evidence")
+}
