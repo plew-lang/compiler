@@ -1,5 +1,5 @@
 use /Frontend only { Comp }
 fn main() {
     val compiler = <Comp />
-    val rows = compiler.callTemplateTypeArgumentPool
+    val rows = compiler.sourceCalls.callTemplateTypeArgumentPool
 }

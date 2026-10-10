@@ -93,7 +93,7 @@ pub impl Comp {
                 return self.argMatchesParamLabel(param: param, arg: self.argAt(args: range, index: index))
             }
             CallableArgumentInput.Templates(val range) => {
-                val argument = self.callTemplateArgumentPool[range.start + index]
+                val argument = self.sourceCalls.callTemplateArgumentPool[range.start + index]
                 return self.callableLabelMatchesParameter(param: param, hasLabel: argument.hasLabel, labelStart: argument.labelStart, labelLen: argument.labelLen)
             }
             CallableArgumentInput.Parameters(val range) => {

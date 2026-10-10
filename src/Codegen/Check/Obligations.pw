@@ -1025,7 +1025,7 @@ pub impl Comp {
         while index < arguments.len {
             position = self.callableNextParameter(params: function.params, input: input, index: index, start: position)
             val parameter = self.funcParamAt(params: function.params, index: position)
-            val argument = self.callTemplateArgumentPool[arguments.start + index]
+            val argument = self.sourceCalls.callTemplateArgumentPool[arguments.start + index]
             if argument.isInout != parameter.isInout {
                 return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call argument does not match its parameter access mode") />
             }

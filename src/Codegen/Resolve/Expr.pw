@@ -364,12 +364,12 @@ pub impl Comp {
     }
 
     inout fn checkCallTemplateTypeArguments(arguments: CallTemplateTypeArgumentRange, parameterCount: U64, offset: U64) -> Result[(), CompileDiagnostic] {
-        if arguments.len != parameterCount || arguments.start > self.callTemplateTypeArgumentPool.count() || arguments.len > self.callTemplateTypeArgumentPool.count() - arguments.start {
+        if arguments.len != parameterCount || arguments.start > self.sourceCalls.callTemplateTypeArgumentPool.count() || arguments.len > self.sourceCalls.callTemplateTypeArgumentPool.count() - arguments.start {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot infer all type arguments for this call") />
         }
         mut val index = 0U64
         while index < arguments.len {
-            val term = self.callTemplateTypeArgumentPool[arguments.start + index]
+            val term = self.sourceCalls.callTemplateTypeArgumentPool[arguments.start + index]
             if term == 0U64 || term >= self.arena.typeCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot infer all type arguments for this call") /> }
             index += 1U64
         }
@@ -513,7 +513,7 @@ pub impl Comp {
                 return <Result.Ok value=() />
             }
             CallTemplateKind.Operator(op: _, operands: val operands, resolution: val selection, resultTerm: _) => {
-                if operands.len == 0U64 || operands.len > 2U64 || operands.start > self.callTemplateOperandPool.count() || operands.len > self.callTemplateOperandPool.count() - operands.start {
+                if operands.len == 0U64 || operands.len > 2U64 || operands.start > self.sourceCalls.callTemplateOperandPool.count() || operands.len > self.sourceCalls.callTemplateOperandPool.count() - operands.start {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected operator has an incomplete operand plan") />
                 }
                 mut val parameterCount = operands.len
@@ -575,7 +575,7 @@ pub impl Comp {
 
     // Every selected call family uses the same frozen parameter-order plan.
     inout fn checkCallTemplateArguments(args: CallTemplateArgumentRange, parameterCount: U64, offset: U64) -> Result[(), CompileDiagnostic] {
-        if args.len != parameterCount || args.start > self.callTemplateArgumentPool.count() || args.len > self.callTemplateArgumentPool.count() - args.start {
+        if args.len != parameterCount || args.start > self.sourceCalls.callTemplateArgumentPool.count() || args.len > self.sourceCalls.callTemplateArgumentPool.count() - args.start {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected call has an incomplete argument plan") />
         }
         return <Result.Ok value=() />
@@ -648,7 +648,7 @@ pub impl Comp {
                 if self.recordedCallHasStorageArguments(kind: template.kind) {
                     required[template.siteKey.ownerFnIdx] = true
                 } else {
-                    self.callTemplates.set(i: index, value: <CallTemplate siteKey=template.siteKey resultTypeRecipe=template.resultTypeRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm mayHaveStorageArguments=false />)
+                    self.sourceCalls.callTemplates.set(i: index, value: <CallTemplate siteKey=template.siteKey resultTypeRecipe=template.resultTypeRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm mayHaveStorageArguments=false />)
                 }
             }
             // Unexamined sites retain the conservative true default. Once an
@@ -843,35 +843,35 @@ pub impl Comp {
 
 
     inout fn rebuildCallTemplateIndex(capacity: U64) {
-        self.callTemplateIndexSlots = []
+        self.sourceCalls.callTemplateIndexSlots = []
         val emptyOwners: Dictionary[U64, U64] = [:]
         self.decls.callTemplateBodyHeads = emptyOwners
         self.decls.callTemplateBodyTails = emptyOwners
         self.decls.callTemplateBodyNext = []
         mut val zeroI: U64 = 0U64
         while zeroI < capacity {
-            self.callTemplateIndexSlots.append(0U64)
+            self.sourceCalls.callTemplateIndexSlots.append(0U64)
             zeroI += 1U64
         }
         mut val entry: U64 = 0U64
         while entry < self.callTemplateCount() {
             val siteKey: CallSiteKey = self.callTemplateAt(index: entry).siteKey
             mut val slot: U64 = siteKey.lookupHash() % capacity
-            while self.callTemplateIndexSlots[slot] != 0U64 {
+            while self.sourceCalls.callTemplateIndexSlots[slot] != 0U64 {
                 slot = (slot + 1U64) % capacity
             }
-            self.callTemplateIndexSlots.set(i: slot, value: entry + 1U64)
+            self.sourceCalls.callTemplateIndexSlots.set(i: slot, value: entry + 1U64)
             self.indexLexicalCallTemplate(templateIndex: entry)
             entry += 1U64
         }
     }
 
     inout fn ensureCallTemplateIndex(nextCount: U64) {
-        if self.callTemplateIndexSlots.count() == 0U64 {
+        if self.sourceCalls.callTemplateIndexSlots.count() == 0U64 {
             self.rebuildCallTemplateIndex(capacity: 16U64)
         }
-        if nextCount * 10U64 >= self.callTemplateIndexSlots.count() * 7U64 {
-            self.rebuildCallTemplateIndex(capacity: self.callTemplateIndexSlots.count() * 2U64)
+        if nextCount * 10U64 >= self.sourceCalls.callTemplateIndexSlots.count() * 7U64 {
+            self.rebuildCallTemplateIndex(capacity: self.sourceCalls.callTemplateIndexSlots.count() * 2U64)
         }
     }
 
@@ -940,20 +940,20 @@ pub impl Comp {
                 // introduce a language storage borrow/move at this stage;
                 // a missing static witness is not itself a storage argument.
                 // Concrete passing and ownership are still verified later.
-                if operands.start + operands.len > self.callTemplateOperandPool.count() { return true }
+                if operands.start + operands.len > self.sourceCalls.callTemplateOperandPool.count() { return true }
                 mut val index = 0U64
                 while index < operands.len {
-                    if self.callSourceUsesStorage(source: self.callTemplateOperandPool[operands.start + index]) { return true }
+                    if self.callSourceUsesStorage(source: self.sourceCalls.callTemplateOperandPool[operands.start + index]) { return true }
                     index += 1U64
                 }
                 return false
             }
             _ => { return true }
         }
-        if arguments.start + arguments.len > self.callTemplateArgumentPool.count() { return true }
+        if arguments.start + arguments.len > self.sourceCalls.callTemplateArgumentPool.count() { return true }
         mut val index = 0U64
         while index < arguments.len {
-            val argument = self.callTemplateArgumentPool[arguments.start + index]
+            val argument = self.sourceCalls.callTemplateArgumentPool[arguments.start + index]
             if argument.isInout || argument.isDispatchReceiver || self.callSourceUsesStorage(source: argument.source) { return true }
             index += 1U64
         }
@@ -963,13 +963,13 @@ pub impl Comp {
     inout fn appendCallTemplate(template: CallTemplate, resultExpression: Optional[U64] = <Optional.None />) {
         self.ensureCallTemplateIndex(nextCount: self.callTemplateCount() + 1U64)
         val resultRecipe = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 callSite=template.siteKey sourceExpression=resultExpression />)
-        self.callTemplates.append(<CallTemplate siteKey=template.siteKey resultTypeRecipe=resultRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm />)
-        val capacity: U64 = self.callTemplateIndexSlots.count()
+        self.sourceCalls.callTemplates.append(<CallTemplate siteKey=template.siteKey resultTypeRecipe=resultRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm />)
+        val capacity: U64 = self.sourceCalls.callTemplateIndexSlots.count()
         mut val slot: U64 = template.siteKey.lookupHash() % capacity
-        while self.callTemplateIndexSlots[slot] != 0U64 {
+        while self.sourceCalls.callTemplateIndexSlots[slot] != 0U64 {
             slot = (slot + 1U64) % capacity
         }
-        self.callTemplateIndexSlots.set(i: slot, value: self.callTemplateCount())
+        self.sourceCalls.callTemplateIndexSlots.set(i: slot, value: self.callTemplateCount())
         self.indexLexicalCallTemplate(templateIndex: self.callTemplateCount() - 1U64)
         self.recordGlobalCallTemplateOwner(templateIndex: self.callTemplateCount() - 1U64)
     }
@@ -1024,42 +1024,42 @@ pub impl Comp {
     // template and must not inspect a shared Expr to rediscover labels, inout,
     // or an argument's parametric type.
     inout fn directCallTemplateArgs(args: ArgRange) -> Result[CallTemplateArgumentRange, CompileDiagnostic] {
-        val start: U64 = self.callTemplateArgumentPool.count()
+        val start: U64 = self.sourceCalls.callTemplateArgumentPool.count()
         mut val i: U64 = 0U64
         while i < args.len {
             val arg: Arg = self.argAt(args: args, index: i)
-            self.callTemplateArgumentPool.append(<CallTemplateArgument source=(try self.callArgumentSource(exprId: arg.expr)) isInout=arg.isInout labelStart=arg.labelStart labelLen=arg.labelLen hasLabel=arg.hasLabel />)
+            self.sourceCalls.callTemplateArgumentPool.append(<CallTemplateArgument source=(try self.callArgumentSource(exprId: arg.expr)) isInout=arg.isInout labelStart=arg.labelStart labelLen=arg.labelLen hasLabel=arg.hasLabel />)
             i += 1U64
         }
-        return <Result.Ok value=<CallTemplateArgumentRange start=start len=self.callTemplateArgumentPool.count() - start /> />
+        return <Result.Ok value=<CallTemplateArgumentRange start=start len=self.sourceCalls.callTemplateArgumentPool.count() - start /> />
     }
 
     inout fn publishCallTemplateArguments(args: Array[CallTemplateArgument]) -> CallTemplateArgumentRange {
-        val start: U64 = self.callTemplateArgumentPool.count()
+        val start: U64 = self.sourceCalls.callTemplateArgumentPool.count()
         mut val i: U64 = 0U64
         while i < args.count() {
-            self.callTemplateArgumentPool.append(args[i])
+            self.sourceCalls.callTemplateArgumentPool.append(args[i])
             i += 1U64
         }
-        return <CallTemplateArgumentRange start=start len=self.callTemplateArgumentPool.count() - start />
+        return <CallTemplateArgumentRange start=start len=self.sourceCalls.callTemplateArgumentPool.count() - start />
     }
 
     inout fn publishCallTemplateTypeArgs(args: Array[U64]) -> CallTemplateTypeArgumentRange {
-        val start: U64 = self.callTemplateTypeArgumentPool.count()
+        val start: U64 = self.sourceCalls.callTemplateTypeArgumentPool.count()
         mut val i: U64 = 0U64
         while i < args.count() {
-            self.callTemplateTypeArgumentPool.append(args[i])
+            self.sourceCalls.callTemplateTypeArgumentPool.append(args[i])
             i += 1U64
         }
-        return <CallTemplateTypeArgumentRange start=start len=self.callTemplateTypeArgumentPool.count() - start />
+        return <CallTemplateTypeArgumentRange start=start len=self.sourceCalls.callTemplateTypeArgumentPool.count() - start />
     }
 
     fn callTemplateTypeArgs(range: CallTemplateTypeArgumentRange) -> Array[U64] {
         mut val out: Array[U64] = []
         mut val i: U64 = 0U64
         while i < range.len {
-            if range.start + i >= self.callTemplateTypeArgumentPool.count() { return [] }
-            out.append(self.callTemplateTypeArgumentPool[range.start + i])
+            if range.start + i >= self.sourceCalls.callTemplateTypeArgumentPool.count() { return [] }
+            out.append(self.sourceCalls.callTemplateTypeArgumentPool[range.start + i])
             i += 1U64
         }
         return out
@@ -1069,39 +1069,39 @@ pub impl Comp {
         mut val out: Array[CallTemplateArgument] = []
         mut val i: U64 = 0U64
         while i < range.len {
-            if range.start + i >= self.callTemplateArgumentPool.count() { return [] }
-            out.append(self.callTemplateArgumentPool[range.start + i])
+            if range.start + i >= self.sourceCalls.callTemplateArgumentPool.count() { return [] }
+            out.append(self.sourceCalls.callTemplateArgumentPool[range.start + i])
             i += 1U64
         }
         return out
     }
 
     inout fn publishCallTemplateOperands(operands: Array[CallArgumentSource]) -> CallTemplateOperandRange {
-        val start: U64 = self.callTemplateOperandPool.count()
+        val start: U64 = self.sourceCalls.callTemplateOperandPool.count()
         mut val i: U64 = 0U64
         while i < operands.count() {
-            self.callTemplateOperandPool.append(operands[i])
+            self.sourceCalls.callTemplateOperandPool.append(operands[i])
             i += 1U64
         }
-        return <CallTemplateOperandRange start=start len=self.callTemplateOperandPool.count() - start />
+        return <CallTemplateOperandRange start=start len=self.sourceCalls.callTemplateOperandPool.count() - start />
     }
 
     inout fn publishCallTemplateViews(views: Array[ResolvedViewSource]) -> CallTemplateViewRange {
-        val start: U64 = self.callTemplateViewPool.count()
+        val start: U64 = self.sourceCalls.callTemplateViewPool.count()
         mut val i: U64 = 0U64
         while i < views.count() {
-            self.callTemplateViewPool.append(views[i])
+            self.sourceCalls.callTemplateViewPool.append(views[i])
             i += 1U64
         }
-        return <CallTemplateViewRange start=start len=self.callTemplateViewPool.count() - start />
+        return <CallTemplateViewRange start=start len=self.sourceCalls.callTemplateViewPool.count() - start />
     }
 
     fn callTemplateViews(range: CallTemplateViewRange) -> Array[ResolvedViewSource] {
         mut val out: Array[ResolvedViewSource] = []
         mut val i: U64 = 0U64
         while i < range.len {
-            if range.start + i >= self.callTemplateViewPool.count() { return [] }
-            out.append(self.callTemplateViewPool[range.start + i])
+            if range.start + i >= self.sourceCalls.callTemplateViewPool.count() { return [] }
+            out.append(self.sourceCalls.callTemplateViewPool[range.start + i])
             i += 1U64
         }
         return out

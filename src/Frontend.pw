@@ -226,14 +226,20 @@ enum CallConstraintPlanState {
     Prepared(snapshot: PreparedCallConstraints)
 }
 
-pub struct Comp {
+// One frontend-owned store keeps selection, payloads and admission at one boundary.
+struct SourceCallStore {
     mut val callTemplateArgumentPool: Array[CallTemplateArgument] = []
     mut val callTemplateTypeArgumentPool: Array[U64] = []
     mut val callTemplateOperandPool: Array[CallArgumentSource] = []
     mut val callTemplateViewPool: Array[ResolvedViewSource] = []
     mut val callTemplateIndexSlots: Array[U64] = []
     mut val callTemplates: Array[CallTemplate] = []
-    mut val selectedCallConstraints: Dictionary[U64, CallConstraintPlanState]
+    mut val selectedCallConstraints: Dictionary[U64, CallConstraintPlanState] = [:]
+}
+impl SourceCallStore { factory }
+
+pub struct Comp {
+    mut val sourceCalls: SourceCallStore
     // Nonfatal diagnostics remain owned by the compilation/session. Only the
     // driver decides how to display them; requesting a body emits no process IO.
     pub mut val pendingDiagnostics: Array[CompileDiagnostic] = []
@@ -425,7 +431,7 @@ pub impl IntTy { factory }
 
 pub impl Comp {
     // External construction starts a fresh session, never an injected success store.
-    factory(arena: Arena = <Arena />) { return <Comp arena=arena selectedCallConstraints=[:] /> }
+    factory(arena: Arena = <Arena />) { return <Comp arena=arena sourceCalls=<SourceCallStore /> /> }
     // Append a file's source bytes onto the arena's combined byte buffer (the loader
     // builds it incrementally: each file's bytes are appended before its items are
     // lowered, so original-offset name spans resolve into it).

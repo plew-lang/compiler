@@ -1316,8 +1316,8 @@ pub impl Comp {
         mut val args: Array[Arg] = []
         mut val i: U64 = 0U64
         while i < arguments.len {
-            if arguments.start + i >= self.callTemplateArgumentPool.count() { return self.pushArgs(args: []) }
-            val argument: CallTemplateArgument = self.callTemplateArgumentPool[arguments.start + i]
+            if arguments.start + i >= self.sourceCalls.callTemplateArgumentPool.count() { return self.pushArgs(args: []) }
+            val argument: CallTemplateArgument = self.sourceCalls.callTemplateArgumentPool[arguments.start + i]
             args.append(<Arg expr=self.callArgumentExprId(source: argument.source) isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
             i += 1U64
         }
@@ -1364,8 +1364,8 @@ pub impl Comp {
                 resolution = storedResolution
                 mut val operandIndex: U64 = 0U64
                 while operandIndex < storedOperands.len {
-                    if storedOperands.start + operandIndex >= self.callTemplateOperandPool.count() { return <Result.Ok value=() /> }
-                    operands.append(self.callTemplateOperandPool[storedOperands.start + operandIndex])
+                    if storedOperands.start + operandIndex >= self.sourceCalls.callTemplateOperandPool.count() { return <Result.Ok value=() /> }
+                    operands.append(self.sourceCalls.callTemplateOperandPool[storedOperands.start + operandIndex])
                     operandIndex += 1U64
                 }
                 resultTerm = storedResult

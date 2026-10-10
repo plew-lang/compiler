@@ -1,5 +1,5 @@
 use /Frontend only { Comp }
 fn main() {
     val compiler: Comp = <Comp />
-    val plans = compiler.selectedCallConstraints
+    val plans = compiler.sourceCalls.selectedCallConstraints
 }

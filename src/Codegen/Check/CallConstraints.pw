@@ -2,7 +2,7 @@
 // cannot mutate its private rows, and construction cannot replace Prepared.
 pub impl Comp {
     fn selectedCallConstraintPlan(index: U64) -> Optional[SelectedCallConstraints] {
-        match self.selectedCallConstraints.get(key: index) {
+        match self.sourceCalls.selectedCallConstraints.get(key: index) {
             Optional.Some(v: val state) => {
                 match state {
                     CallConstraintPlanState.Building(plan: val plan) => { return <Optional.Some v=plan /> }
@@ -14,7 +14,7 @@ pub impl Comp {
     }
 
     inout fn recordBuildingCallConstraints(index: U64, plan: SelectedCallConstraints) -> Bool {
-        match self.selectedCallConstraints.get(key: index) {
+        match self.sourceCalls.selectedCallConstraints.get(key: index) {
             Optional.Some(v: val state) => {
                 match state {
                     CallConstraintPlanState.Prepared(snapshot: _) => { return false }
@@ -23,12 +23,12 @@ pub impl Comp {
             }
             Optional.None => {}
         }
-        self.selectedCallConstraints[index] = <CallConstraintPlanState.Building plan=plan />
+        self.sourceCalls.selectedCallConstraints[index] = <CallConstraintPlanState.Building plan=plan />
         return true
     }
 
     fn preparedCallConstraints(index: U64) -> Optional[PreparedCallConstraints] {
-        match self.selectedCallConstraints.get(key: index) {
+        match self.sourceCalls.selectedCallConstraints.get(key: index) {
             Optional.Some(v: val state) => {
                 match state {
                     CallConstraintPlanState.Prepared(snapshot: val snapshot) => { return <Optional.Some v=snapshot /> }
@@ -44,10 +44,10 @@ pub impl Comp {
 impl Comp {
     inout fn publishPreparedCallConstraints(templateIndex: U64) -> Result[(), CompileDiagnostic] {
         try self.checkRecordedCallConstraintEvidence(templateIndex: templateIndex)
-        val template = self.callTemplates[templateIndex]
+        val template = self.sourceCalls.callTemplates[templateIndex]
         val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
         mut val plan = <SelectedCallConstraints owner=scope.owner bounds=[] proofs=[] />
-        match self.selectedCallConstraints.get(key: templateIndex) {
+        match self.sourceCalls.selectedCallConstraints.get(key: templateIndex) {
             Optional.Some(v: val state) => {
                 match state {
                     CallConstraintPlanState.Prepared(snapshot: _) => { return <Result.Ok value=() /> }
@@ -56,35 +56,35 @@ impl Comp {
             }
             Optional.None => {}
         }
-        self.selectedCallConstraints[templateIndex] = <CallConstraintPlanState.Prepared snapshot=<PreparedCallConstraints plan=plan /> />
+        self.sourceCalls.selectedCallConstraints[templateIndex] = <CallConstraintPlanState.Prepared snapshot=<PreparedCallConstraints plan=plan /> />
         return <Result.Ok value=() />
     }
 }
 
 pub impl Comp {
     fn callTemplateIndex(siteKey: CallSiteKey) -> U64 {
-        val capacity: U64 = self.callTemplateIndexSlots.count()
-        if capacity == 0U64 { return self.callTemplates.count() }
+        val capacity: U64 = self.sourceCalls.callTemplateIndexSlots.count()
+        if capacity == 0U64 { return self.sourceCalls.callTemplates.count() }
         mut val slot: U64 = siteKey.lookupHash() % capacity
-        while self.callTemplateIndexSlots[slot] != 0U64 {
-            val entry: U64 = self.callTemplateIndexSlots[slot] - 1U64
-            if self.callTemplates[entry].siteKey.sameKey(other: siteKey) { return entry }
+        while self.sourceCalls.callTemplateIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.sourceCalls.callTemplateIndexSlots[slot] - 1U64
+            if self.sourceCalls.callTemplates[entry].siteKey.sameKey(other: siteKey) { return entry }
             slot = (slot + 1U64) % capacity
         }
-        return self.callTemplates.count()
+        return self.sourceCalls.callTemplates.count()
     }
 }
 
 
 pub impl Comp {
-    fn callTemplateCount() -> U64 { return self.callTemplates.count() }
-    fn callTemplateAt(index: U64) -> CallTemplate { return self.callTemplates[index] }
-    fn callTemplateSnapshot() -> Array[CallTemplate] { return self.callTemplates }
+    fn callTemplateCount() -> U64 { return self.sourceCalls.callTemplates.count() }
+    fn callTemplateAt(index: U64) -> CallTemplate { return self.sourceCalls.callTemplates[index] }
+    fn callTemplateSnapshot() -> Array[CallTemplate] { return self.sourceCalls.callTemplates }
     // Construction API; successful source publication removes write authority.
     inout fn replaceBuildingCallTemplate(index: U64, template: CallTemplate) -> Bool {
-        if index >= self.callTemplates.count() || self.preparedCallConstraints(index: index).isSome() { return false }
-        if !self.callTemplates[index].siteKey.sameKey(other: template.siteKey) { return false }
-        self.callTemplates.set(i: index, value: template)
+        if index >= self.sourceCalls.callTemplates.count() || self.preparedCallConstraints(index: index).isSome() { return false }
+        if !self.sourceCalls.callTemplates[index].siteKey.sameKey(other: template.siteKey) { return false }
+        self.sourceCalls.callTemplates.set(i: index, value: template)
         return true
     }
 }
@@ -99,12 +99,12 @@ impl Comp {
 
 pub impl Comp {
     inout fn requireCallTemplateStorage(index: U64) {
-        val template = self.callTemplates[index]
-        self.callTemplates.set(i: index, value: <CallTemplate siteKey=template.siteKey resultTypeRecipe=template.resultTypeRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm mayHaveStorageArguments=true />)
+        val template = self.sourceCalls.callTemplates[index]
+        self.sourceCalls.callTemplates.set(i: index, value: <CallTemplate siteKey=template.siteKey resultTypeRecipe=template.resultTypeRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm mayHaveStorageArguments=true />)
     }
 }
 
 pub impl Comp {
-    fn callTemplateOperandCount() -> U64 { return self.callTemplateOperandPool.count() }
-    fn callTemplateOperandAt(index: U64) -> CallArgumentSource { return self.callTemplateOperandPool[index] }
+    fn callTemplateOperandCount() -> U64 { return self.sourceCalls.callTemplateOperandPool.count() }
+    fn callTemplateOperandAt(index: U64) -> CallArgumentSource { return self.sourceCalls.callTemplateOperandPool[index] }
 }

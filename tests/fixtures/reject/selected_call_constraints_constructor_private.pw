@@ -1,4 +1,4 @@
 use /Frontend only { Comp }
 fn main() {
-    val compiler: Comp = <Comp selectedCallConstraints=[:] />
+    val compiler: Comp = <Comp sourceCalls=[:] />
 }
