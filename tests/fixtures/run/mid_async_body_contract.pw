@@ -1,49 +1,62 @@
 use @Std/Io only { print }
 use @Std/Core only { assert }
-use /Frontend only { Comp }
-use /Ir only { Block, Func, Param, TypeRef }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
 use /Mid only { buildParametricMidBody, MidBuildError }
+
+// A prepared source owner does not remove Mid's missing-terminator check.
+// Both async logical and sync public value results need a return terminator.
+fn missingReturnRejected(source: String) {
+    mut val compiler: Comp = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="missing-return.pw" text=source />,
+        sources: <SourceAccess />).unwrap()
+    match compiler.prepareLexicalBody(fnIdx: 0U64) {
+        Result.Err(error: _) => {
+            match buildParametricMidBody(c: inout compiler, fnIdx: 0U64).error {
+                MidBuildError.Frontend(diagnostic: _) => {}
+                _ => { panic("failed owner admitted to Mid") }
+            }
+        }
+        Result.Ok(value: _) => {
+            match buildParametricMidBody(c: inout compiler, fnIdx: 0U64).error {
+                MidBuildError.MissingTerminator => {}
+                _ => { panic("missing return accepted by Mid") }
+            }
+        }
+    }
+}
 
 fn main() {
     mut val compiler: Comp = <Comp />
-    compiler.arena.reserveTypeSentinel()
-    val integerName = compiler.internBytes(s: "I64")
-    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
-    val promiseName = compiler.internBytes(s: "Promise")
-    val promise = compiler.pushType(t: <TypeRef nameStart=promiseName.nameStart nameLen=promiseName.nameLen args=[integer] />)
-    val parameterName = compiler.internBytes(s: "value")
-    val parameters = compiler.pushFuncParams(params: [<Param nameStart=parameterName.nameStart nameLen=parameterName.nameLen tyStart=integerName.nameStart tyLen=integerName.nameLen tyIsArray=false ty=integer isInout=false isMove=false isBorrow=false noLabel=false hasDefault=false defaultExpr=0U64 />])
-    compiler.arena.blocks.append(<Block stmtStart=0U64 stmtLen=0U64 />)
-    // Identical public results have different logical body results. Empty
-    // value-returning bodies deliberately exercise the missing-return path.
-    compiler.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 params=parameters hasRet=true retStart=promiseName.nameStart retLen=promiseName.nameLen retIsArray=false retTy=promise body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=true isExtern=false />)
-    compiler.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 params=parameters hasRet=true retStart=promiseName.nameStart retLen=promiseName.nameLen retIsArray=false retTy=promise body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
-    compiler.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 params=parameters hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=true isExtern=false />)
-    assert(compiler.semanticBodyReturnTerm(fnIdx: 0U64) == integer)
-    assert(compiler.semanticBodyReturnTerm(fnIdx: 1U64) == promise)
-    assert(compiler.semanticBodyReturnTerm(fnIdx: 2U64) == 0U64)
-    assert(compiler.arena.functionAt(index: 0U64).retTy == promise)
-    // Mid consumes declaration-body facts, not the authored public signature.
-    // Missing parameter recording must fail before building a typed body.
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="async-contract.pw" text="struct Promise[T] {{}} async fn asynchronous(value: I64) -> Promise[I64] {{ return value }} fn synchronous(value: Promise[I64]) -> Promise[I64] {{ return value }} async fn completion(value: I64) {{}}" />,
+        sources: <SourceAccess />).unwrap()
+    // Mid must not turn declaration metadata into proof of a checked body.
     match buildParametricMidBody(c: inout compiler, fnIdx: 0U64).error {
         MidBuildError.Frontend(diagnostic: _) => {}
         _ => { assert(false) }
     }
-    compiler.recordBodyParameterTerms(fnIdx: 0U64, terms: [integer])
-    compiler.recordBodyParameterTerms(fnIdx: 1U64, terms: [integer])
-    compiler.recordBodyParameterTerms(fnIdx: 2U64, terms: [integer])
+    compiler.prepareLexicalBody(fnIdx: 0U64).unwrap()
+    compiler.prepareLexicalBody(fnIdx: 1U64).unwrap()
+    compiler.prepareLexicalBody(fnIdx: 2U64).unwrap()
+    val integer = compiler.semanticBodyReturnTerm(fnIdx: 0U64)
+    val promise = compiler.semanticBodyReturnTerm(fnIdx: 1U64)
+    assert(compiler.typeRefEq(a: compiler.arena.functionAt(index: 0U64).retTy, b: promise))
     val asynchronous = buildParametricMidBody(c: inout compiler, fnIdx: 0U64)
-    match asynchronous.error { MidBuildError.MissingTerminator => {} _ => { assert(false) } }
+    match asynchronous.error { MidBuildError.None => {} _ => { assert(false) } }
     assert(asynchronous.body.locals[0U64].ownsAtEntry)
     assert(asynchronous.body.locals[1U64].isReturnPlace)
-    assert(asynchronous.body.locals[1U64].typeTerm == integer)
+    assert(compiler.typeRefEq(a: asynchronous.body.locals[1U64].typeTerm, b: integer))
     val synchronous = buildParametricMidBody(c: inout compiler, fnIdx: 1U64)
-    match synchronous.error { MidBuildError.MissingTerminator => {} _ => { assert(false) } }
+    match synchronous.error { MidBuildError.None => {} _ => { assert(false) } }
     assert(!synchronous.body.locals[0U64].ownsAtEntry)
-    assert(synchronous.body.locals[1U64].typeTerm == promise)
+    assert(compiler.typeRefEq(a: synchronous.body.locals[1U64].typeTerm, b: promise))
     val completion = buildParametricMidBody(c: inout compiler, fnIdx: 2U64)
     match completion.error { MidBuildError.None => {} _ => { assert(false) } }
     assert(completion.body.locals.count() == 1U64)
     assert(completion.body.locals[0U64].ownsAtEntry)
+    missingReturnRejected(source: "struct Promise[T] {{}} async fn probe(value: I64) -> Promise[I64] {{}}")
+    missingReturnRejected(source: "struct Promise[T] {{}} fn probe(value: I64) -> Promise[I64] {{}}")
     print("ok")
 }
