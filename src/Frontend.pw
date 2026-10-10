@@ -2360,7 +2360,8 @@ impl Comp {
     }
     inout fn storeBuildingSemanticExprType(i: U64, value: SemanticExprType) {
         if self.semanticExprConstructionClosed(exprId: i) { panic("internal error: completed source owner cannot replace an expression fact") }
-        while self.semanticExprOwners.count() <= i { self.semanticExprOwners.append(<Optional.None />) }
+        // All construction producers allocate the type row and its owner slot
+        // together through ensureSemanticExprType before updating either.
         match self.sourceRecordingOwner() {
             Optional.Some(v: val owner) => {
                 match self.semanticExprOwners[i] {

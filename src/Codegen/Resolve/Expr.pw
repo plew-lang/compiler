@@ -2654,6 +2654,9 @@ impl Comp {
         while self.semanticExprTypes.count() <= exprId {
             self.semanticExprTypes.append(<SemanticExprType />)
         }
+        while self.semanticExprOwners.count() <= exprId {
+            self.semanticExprOwners.append(<Optional.None />)
+        }
     }
 
     inout fn recordKnownExpressionResult(exprId: U64, resultTerm: U64) -> Result[(), CompileDiagnostic] {
