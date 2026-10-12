@@ -42,13 +42,14 @@ These arrows describe dependencies and handoffs, not source-module imports or ow
 | Path-sensitive validity | Mandatory analyses | Validate the chosen meaning, including ownership/access obligations; do not reinterpret source syntax |
 | Representation | Instantiation, Mid, ABI, LLVM in their respective domains | Make only the decisions delegated to that boundary |
 | Runtime operations | Common runtime | Execute compiler-generated operations according to a shared protocol |
+| Diagnostic representation and rendering | Diagnostics infrastructure | Preserve domain-produced causes and provenance; formatting does not decide source acceptance |
 | Scheduling and process integration | Driver and external host | Request work, report diagnostics, manage execution; do not provide independent semantic rules |
 
 Library code is normally checked through the same machinery as application code. Compiler-known operations require an explicit compiler/library/runtime contract; a familiar name or compiler-specific special case is not sufficient justification for bypassing checking.
 
 ## 3. Compilation Model and Handoffs
 
-Compilation is dependency-driven, even when a command requests whole-target checking. It is not necessarily one eager traversal through a sequence of mutable tables.
+Compilation is dependency-driven, even when a command requests whole-target checking. It is not necessarily one eager traversal through a sequence of mutable tables. The following graph shows the execution-preparation path.
 
 ```mermaid
 flowchart LR
@@ -73,6 +74,8 @@ The following names are conceptual artifacts, not requirements to introduce corr
 | Prepared Mid | Mid preparation: valid operations, ownership/access analysis, required elaboration | Required static analyses succeed; remaining dynamic checks have an enforcement plan | Choose physical representation and emit operations | ABI and LLVM lowering |
 | Physical calling/layout decisions | ABI lowering: target representation and calling contracts | Physical signatures and layouts preserve semantic identity and ownership contracts | Emit and optimize LLVM; resolve native symbols | LLVM backend and native integration |
 | LLVM module and native publication | Backend: LLVM translation; object/ORC boundary: executable publication | Owned module resources and valid emitted artifacts; code becomes callable only after required preparation and publication succeed | Link/load and execute according to runtime protocols | Linker, ORC, execution host, common runtime |
+
+Mid preparation must know the semantic ownership and access contract of each call. Target-specific ABI lowering chooses how that contract is represented physically; it does not establish that semantic contract for the first time.
 
 Publication is scoped. A checked body does not certify a whole target; a locally prepared body does not by itself certify interprocedural effects, global initialization, or callable publication. Each consumer must receive the level of preparation it needs. A type named `Prepared` or a read-only wrapper is not proof of those guarantees by itself.
 
@@ -170,7 +173,7 @@ These are responsibility maps, not implementation task lists. Migration issues m
 
 ## 7. Reading Paths and Implementation Mapping
 
-The remaining chapters are planned, not yet published. Until written, the following names indicate responsibility destinations rather than existing links.
+[Compiler State, Identity, and Computation](compiler-state.md) defines the shared session and publication contracts. Other detailed chapters are planned, not yet published; their names below indicate responsibility destinations rather than existing links.
 
 | Task | Primary reading path |
 |---|---|

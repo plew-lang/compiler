@@ -9,8 +9,9 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 ## Available Chapters
 
 1. [Architecture and Design Principles](architecture.md) — first draft for review.
+2. [Compiler State, Identity, and Computation](compiler-state.md) — reviewed draft; physical checked-body storage remains unresolved.
 
-The remaining chapters are not yet written. They will cover shared compiler state; sources and syntax; name lookup; types and evidence; body checking; generics; metaprogramming; Mid; ownership and access; passes; ABI; LLVM; runtime; the driver and demand-driven execution; diagnostics; and verification. Their absence does not make Chapter 1 a detailed specification for those areas.
+The remaining chapters are not yet written. They will cover sources and syntax; name lookup; types and evidence; body checking; generics; metaprogramming; Mid; ownership and access; passes; ABI; LLVM; runtime; the driver and demand-driven execution; diagnostics; and verification. Their absence does not make the available chapters detailed specifications for those areas.
 
 ## Reading and Maintenance
 
