@@ -15,8 +15,9 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 5. [Declarations, Scopes, and Name Lookup](name-lookup.md) — reviewed draft.
 6. [Types and Semantic Evidence](types-and-evidence.md) — reviewed draft.
 7. [Expression and Body Checking](body-checking.md) — reviewed draft; physical storage remains unresolved.
+8. [Generics and Body Instantiation](generics.md) — reviewed draft.
 
-The remaining chapters are not yet written. They will cover generics; metaprogramming; Mid; ownership and access; passes; ABI; LLVM; runtime; the driver and demand-driven execution; diagnostics; and verification. Their absence does not make the available chapters detailed specifications for those areas.
+The remaining chapters are not yet written. They will cover metaprogramming; Mid; ownership and access; passes; ABI; LLVM; runtime; the driver and demand-driven execution; diagnostics; and verification. Their absence does not make the available chapters detailed specifications for those areas.
 
 ## Reading and Maintenance
 
