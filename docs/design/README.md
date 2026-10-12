@@ -13,8 +13,9 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 3. [Sources, Packages, and Modules](sources-and-modules.md) — reviewed draft.
 4. [Syntax and Semantic Input](syntax.md) — reviewed draft.
 5. [Declarations, Scopes, and Name Lookup](name-lookup.md) — reviewed draft.
+6. [Types and Semantic Evidence](types-and-evidence.md) — reviewed draft.
 
-The remaining chapters are not yet written. They will cover types and evidence; body checking; generics; metaprogramming; Mid; ownership and access; passes; ABI; LLVM; runtime; the driver and demand-driven execution; diagnostics; and verification. Their absence does not make the available chapters detailed specifications for those areas.
+The remaining chapters are not yet written. They will cover body checking; generics; metaprogramming; Mid; ownership and access; passes; ABI; LLVM; runtime; the driver and demand-driven execution; diagnostics; and verification. Their absence does not make the available chapters detailed specifications for those areas.
 
 ## Reading and Maintenance
 
