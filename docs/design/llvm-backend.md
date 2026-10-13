@@ -20,11 +20,11 @@ Declarations precede body emission where recursive references require them. Name
 
 ## LLVM Resource Ownership
 
-One unique module owner holds its LLVM Module and Context together. Builders borrow the context and are disposed before the owner. Normal disposal destroys the module before its context. LLVM values, types, blocks, and metadata cannot outlive their context through a cached raw handle.
+One unique module owner holds its LLVM Module and the Context that actually owns that module together. The context has no independent competing owner. Arbitrary nonnull handles from different contexts are not a valid pair. Builders borrow the context and are disposed before the owner. Normal disposal destroys the module before its context. LLVM values, types, blocks, and metadata cannot outlive their context through a cached raw handle.
 
 Object emission borrows the module/context; it may mutate the module through optimization, so the raw module is not implicitly reusable as an unchanged diagnostic artifact afterward. Text printing borrows the module and copies the returned message into Plew storage before disposing the LLVM message. Native errors and output buffers also have explicit disposal obligations.
 
-ORC handoff consumes the module/context pair together, including failure. The Plew owner is marked transferred before it can be disposed. The native consumer immediately owns both handles, wraps them in a ThreadSafeModule, and either transfers that owner to ORC or releases it on error. A callback returning an output pair obeys this same consuming boundary; a failed callback cannot leak a half-owned module.
+ORC handoff consumes the module/context pair together, including failure. The Plew owner is marked transferred before it can be disposed. The native consumer immediately owns both handles, wraps them in a ThreadSafeModule, and either transfers that owner to ORC or releases it on error. A callback returning an output pair obeys this same consuming boundary. The output is either an empty pair or a complete matching pair with explicit consuming ownership; a half pair is invalid. A failed callback disposes its still-owned resources or transfers a complete pair for native cleanup, never leaving ambiguous ownership.
 
 A ThreadSafeModule provides LLVM context access coordination; it does not authorize application event processing during compilation. The adopted driver suspends application execution while compiling. Session ownership, callback lifetime, and callable publication belong to driver/runtime design; ThreadSafe ownership is not a substitute for those contracts.
 
@@ -58,7 +58,7 @@ LLVM tools, optimization, sanitizer passes, runtime support, and link drivers mu
 
 ## Verification, Artifacts, and Failure
 
-Mid verification proves compiler-level invariants; LLVM verification proves LLVM structural/type rules. Neither subsumes the other. Verification occurs at the relevant native consumer boundary, with post-transformation verification before successful object publication. Diagnostic text output must identify whether it is raw emission or transformed output; printing does not itself certify executable readiness.
+Mid verification proves compiler-level invariants; LLVM verification proves LLVM structural/type rules. Neither subsumes the other. Verification occurs at the relevant native consumer boundary. Every consumer that transforms LLVM IR must verify the final transformed module before machine code generation and publication, including any future ORC transform layer; this is not specific to object output. Diagnostic text output must identify whether it is raw emission or transformed output; printing does not itself certify executable readiness.
 
 Failed source preparation, failed Mid preflight, invalid LLVM, failed machine optimization, unsupported target, native emission failure, and ORC materialization failure retain their domain distinction. A no-continuation source operation is not backend failure. A terminal lazy failure cannot return a guessed value of an arbitrary callee ABI; the run contract terminates instead.
 
