@@ -1,0 +1,113 @@
+# Driver and Demand-Driven Execution
+
+**Status:** Draft for review. This chapter defines command orchestration and one-execution ownership. It does not adopt a stable embedding ABI, reusable in-process execution environments, or compiler-owned Hot Restart.
+
+## Responsibility
+
+The driver turns an explicit target/configuration into requests to compiler services, selects artifact consumers, reports results, and manages execution resources. It does not provide alternative checking, ownership, or overload rules. CLI parsing is an adapter to these requests, not the authority for language acceptance.
+
+The [source/module boundary](sources-and-modules.md) owns input discovery and provenance; the [session model](compiler-state.md) owns request identity and retained results. Checking, instantiation, Mid preparation, and the [LLVM backend](llvm-backend.md) own their respective publication guarantees. The driver combines those guarantees without promoting a weaker result into execution permission. [Runtime](runtime.md) owns the common execution protocol; this chapter owns when it can be entered and how long its code/state dependencies remain alive.
+
+A framework may eventually use the common compiler/execution services independently of the CLI. That intent does not promise that an arbitrary Plew stack can unwind into a surviving host after terminal failure. Window management, watching, installation, and Restart orchestration belong to external tools/frameworks.
+
+## Command Requests
+
+The [command specification](https://github.com/plew-lang/spec/blob/main/spec/04-execution/15-modules.md#runcheckbuild-の検査と実行) fixes the following distinctions:
+
+| Request | Required checking | Machine code and execution | Success means |
+|---|---|---|---|
+| check | Whole selected target, including unused and generic bodies under their bounds | No application execution or machine code generation | Static semantic rules have passed for that target/input |
+| build | The same whole-target static checking, followed by concrete executable preparation | LLVM optimization and native artifact generation; unreachable code may be omitted | Requested build artifact is complete, including the driver's required link step |
+| run | Requested bodies and the dependencies needed to validate execution | Demand preparation and ORC execution | This execution succeeded; unchecked unrelated bodies may remain |
+
+The scope is the selected target, dependency set, and configuration, not every file in a workspace. Check success does not promise that every concrete instance or target-specific implementation facility can be generated. Such failures remain implementation limitations, not permission to omit static semantic checking.
+
+Run checks an entire requested source body before entering it, including untaken branches. It is not line-by-line validation. Generic declarations are checked under their bounds; a favorable concrete instance cannot repair an invalid declaration. Closures, initializers, destruction helpers, and other generated bodies use the corresponding common checking/preparation contracts.
+
+Checking dependencies can be broader than machine-code dependencies. Visibility, coherence, layout, effects, and access obligations must close before execution, even if that requires preparing bodies whose machine code is never requested. Unknown effects are not harmless effects. Optimizing code reachability does not reduce check's source coverage.
+
+Generation is a separate target/request as described in [Metaprogramming](metaprogramming.md). Checking a synthesized generator harness cannot issue a whole-application check result. The CLI must carry that distinction explicitly.
+
+## Fixed Inputs and Session Authority
+
+One session owns admitted source bytes, dependency/configuration identity, source/instance facts, diagnostics, and request caches. A body ID is meaningful only with its session. Later demand cannot reload edited source into that execution or reuse a result from another session merely because IDs or filenames coincide.
+
+Input admission must establish a coherent version before granting its guarantees. Reading a DAG of files sequentially is not inherently an atomic filesystem snapshot. The loader/admission contract must account for changes during discovery; this chapter does not claim an operating-system snapshot facility exists. Persistent cache reuse requires the input/compiler/target/dependency validity conditions in the session chapter. A separate check process is not automatically a reusable certificate for run after edits.
+
+The execution host receives requests/results and owned LLVM resources, not permission to mutate compiler arenas or manufacture whole-target success. Partial declaration analysis can retain unresolved obligations. A concrete body can be locally prepared while still requiring interprocedural closure; neither result alone is a callable-publication token.
+
+AOT and demand execution use the same session preparation machinery. Extending a partially requested session to whole-target checking must preserve the same admitted inputs, reuse valid results, and retain prior failures. It must not bless partial rows left by a failed request. This is an internal capability, not a promise that a CLI command runs twice in the same process.
+
+## Startup and Global Storage
+
+Startup distinguishes entry registration, storage definition, initializer preparation, initializer execution, and main execution. Entry signatures can be registered without compiling their source bodies. Initializers are mandatory startup roots with their own checking/effect dependencies; required global values are initialized according to the specification before main. Delay in checking/code generation does not delay language-mandated evaluation.
+
+One execution owns one definition of program global storage. Requested body modules reference it. Static access analysis retains declaration identity, while dynamic global access uses execution-owned storage identity, including distinct identity storage for zero-sized globals. Source offsets or compiler-owned addresses cannot substitute for those identities.
+
+Immutable shared metadata such as generated tables likewise needs an explicit semantic/session identity and compatible physical definition. Repeated emission must reuse the same intended storage rather than create unrelated identity or silently accept conflicting contents. Physical byte-size agreement is a necessary check, not a complete proof of semantic equivalence.
+
+Installing storage does not run its initializer. Preparing an initializer does not run it either. The host and generated entry wrapper must agree on the single initialization path; calling both cannot initialize twice. Async initialization follows the language's memoization/dependency rules rather than an invented driver traversal order.
+
+## Demand Call and Publication
+
+The following states describe responsibilities, not a required new enum or general-purpose request framework:
+
+1. **Registered:** a session/body identity, calling contract, and public entry are known. A stable lazy entry can exist without its source body being prepared.
+2. **Preparing:** the synchronous bridge requests that exact body. Common checking, instantiation, dependency closure, and Mid preparation establish execution permission before LLVM emission.
+3. **Publishing:** the native consumer validates the returned module and its identity, registers dependencies, and supplies ORC definitions under the agreed target/ABI/resource contract.
+4. **Callable:** required ORC materialization/linking has succeeded. The entry forwards to the published implementation without repeating source preparation on ordinary subsequent calls.
+5. **Failed:** required preparation or publication failed. No fabricated result or unsafe callee execution follows through that execution.
+
+These states must not be collapsed into one `emitted` bit. LLVM module emission, ORC submission, symbol registration, and successfully materialized code are different guarantees. Native implementations may track several physical entries for one body, but the body identity remains independent of symbol spelling.
+
+The adopted ORC connection uses lazy reexports and call-through stubs. Entry lookup can produce the stub without preparing the body. Its first call synchronously requests preparation; ORC resolves the implementation and updates the forwarding target. The ABI mechanism preserves already evaluated arguments across preparation. It must not reevaluate source arguments, duplicate moves, or rebuild borrowed places. Existing caller-owned values and access scopes remain valid across this pause.
+
+One body request can define several physical entries, such as async entry/resume or an exposed wrapper. Self references and sibling-entry references use canonical public entries; implementation renaming must not leave alternate externally observed callable identities. Newly discovered dependencies can register entries without eagerly generating every dependent body. Recursive source graphs are permitted through registered identities; recursive compiler callback entry or symbol lookup during preparation is not an alternative cycle-resolution mechanism.
+
+The application is stopped during compilation, including event delivery and callback reentry. Compilation itself is synchronous on the adopted execution thread. Signals still need to reach process termination while compilation is busy. Future real-thread execution requires the quiescence protocol noted in the runtime chapter; ORC's own concurrent capabilities do not supply that Plew protocol.
+
+## Native Symbol Admission
+
+Plew source-body references, shared metadata, program storage, declared foreign/runtime imports, and backend-introduced native services have distinct admission paths. A missing Plew body cannot fall back to an identically named compiler function in the process symbol table.
+
+Source declarations carry frozen session-local body identities. Declared host imports carry explicit permission for host resolution and compatible physical signatures. Only those declared imports may be bound to existing process addresses. Selected backend-introduced memory services can use a restricted fallback library without exposing unrestricted process lookup to source modules. Explicit definitions retain precedence over fallback services.
+
+Host registration must preserve state ownership as well as function signature. Common runtime code does not permit an application service to bind accidentally to compiler-private state. The compiler callback itself is a named `expose fn` with its established C boundary; connecting it does not require named functions to become values, general closure capture conversion, or a new unsafe Ref pointer API.
+
+## Registry and Lifetime
+
+The adopted callback bridge passes a nonzero session ID, not a raw Plew object pointer, through C. The host registry stores Dictionary entries containing MutableRef-owned unique compiler sessions. A fresh value snapshot keeps the selected shared cell alive during a request. Older snapshots do not observe later registrations; IDs are not recycled or wrapped into a previously valid identity.
+
+A failed/unknown ID returns failure. A snapshot's continued ownership is not permission to execute after the execution owner has closed publication. Unregistration, quiescence, and executable-resource disposal must be ordered explicitly; self-unregistration from the session's destructor cannot solve registry ownership cycles.
+
+The one-execution process owner keeps ORC code/globals, program arguments, and registration alive through all permitted callbacks, including native exit callbacks. Main return alone does not end their lifetime. For any finite-lifetime owner, first prevent further entry and finish callbacks, then destroy ORC/executable resources before releasing callback/session ownership; borrowed argument views must be restored before their owned strings disappear. ORC's engine/generators must not outlive the trampoline resources they use.
+
+The current process-lifetime owner is not a reusable in-process Restart API. Process termination can let the OS reclaim resources without adding a guarantee to run every user deinit. A future reusable host must separately establish callback quiescence, pending-work disposal, global/state teardown, and resource reconstruction. Reusing the current global owner without that protocol is not an implementation shortcut.
+
+## Failure and OS Integration
+
+Compiler services return structured diagnostics or domain failures. CLI/process adapters render them and choose exit status. Native lazy materialization cannot recover by returning through an arbitrary function signature with a guessed value; terminal execution failure aborts/stops the execution process. Prior I/O is not rolled back, and user destruction is not guaranteed on that path.
+
+The one-shot worker isolates compiler/application execution from the outer command's process orchestration. The outer command owns spawning, signal forwarding, waiting, exit-status propagation, temporary files, and final artifact publication. Build output must not replace a previous good artifact until generation and linking succeed. A compiler object file alone is not a completed executable.
+
+A stable package-manager/tool installation strategy is separate from these runtime contracts. Single-binary distribution can embed standard resources and runtime objects while still using the permitted OS SDK/linker services. Development versus distribution linking must not change source checking or runtime meaning.
+
+## Reference Designs and Rationale
+
+[Rust's driver/interface separation](https://rustc-dev-guide.rust-lang.org/rustc-driver/intro.html) distinguishes phase orchestration from lower-level compiler services and notes that internal APIs are unstable. Plew uses that responsibility distinction without promising stable embedding interfaces or copying Rust's crate/query organization.
+
+[Swift's driver design](https://github.com/swiftlang/swift/blob/main/docs/Driver.md) describes planning and executing frontend/link jobs. Plew similarly keeps OS work outside semantic checking. Swift's compilation-job structure does not imply that Plew needs file-per-job compilation, independent binary modules, or a general distributed build scheduler.
+
+[ORCv2 lazy reexports](https://llvm.org/docs/ORCv2.html#laziness) provide stable lazy entries and materialization. Plew supplies source demand, preparation permission, session lifetime, and terminal failure policy. ORC's concurrency guarantees for its own linking operations do not prove application reentry or runtime thread safety. Dart's [VM architecture](https://github.com/dart-lang/sdk/blob/main/runtime/docs/README.md) is a reference for separating compilation facilities from execution support; Plew's synchronous application pause and common runtime constraint are explicit differences.
+
+## Implementation Evidence and Open Boundaries
+
+Focused source inspection uses compiler revision `6fe09bc7c0e75260b3f773643921478b5020b94f`:
+
+- `Compiler.pw` adapts low-level run/check/object/text requests. `CheckedProgram.pw` owns CompilerSession, declaration/concrete/Mid request state, execution failure, partial-to-whole checking, and AOT preparation. Check and executable preparation are distinct consuming operations.
+- `CompilerExecution.pw` opens/registers a session, creates the process owner, registers declarations, installs global storage, and invokes main. Declaration lowering first prepares initializers; main/exposed entries can remain body-lazy. The global process owner rejects a second execution and remains retained after main return or post-publication failure. Field order is ORC, arguments, registration for eventual ordinary destruction; process teardown does not guarantee that destruction occurs.
+- `CompilerSessions.pw` uses monotonically increasing nonrecycled IDs and value snapshots of Dictionary-held MutableRef cells. `CompilerCallbacks.pw` retrieves a fresh snapshot, requests the body, emits diagnostics, and transfers the owned module/context pair through C.
+- `native/llvm_backend.cpp` uses synchronous LLJIT, prohibits lookup during preparation, distinguishes source/host metadata, registers multiple entries, checks shared metadata's session/identity/size, and rewrites uses to canonical stubs. Native `emitted` bookkeeping precedes successful IR-module submission and is therefore not by itself proof of callable success; failures are terminal. The DataLayout admission discrepancy remains recorded in the backend chapter.
+- `distribution/_.pw` dispatches check directly and run to the worker adapter. `native/tool.cpp` resolves dependencies for build/run, invokes the one-shot worker, forwards signals, waits for completion, and links through a pending output before committing it. This is selected-path inspection, not proof of complete command parity.
+
+This audit does not certify every source snapshot race, target selector, package command, dependency-resolution path, request cache, foreign signature, global initialization path, signal race, failure cleanup, or ABI trampoline. Check's dependency-resolution parity with build/run requires explicit audit; direct dispatch alone does not prove it. Whole-program atomic sharing with future spawn and demand checking remains open as noted in Runtime. A finite reusable embedding lifecycle and stable public API remain outside the adopted current execution scope. No compiler/test/performance run was performed for this chapter.
