@@ -18,6 +18,21 @@ Aliases and re-publication preserve the original declaration identity. An import
 
 Name indices accelerate candidate discovery. They must remain consistent with their owning declaration store through its registration API. A global spelling-presence query does not prove lexical binding, visibility, arity, conformance, or unique applicability. An index's iteration order is not a semantic priority.
 
+### Index and Query Cost Boundaries
+
+Name indices retain the owning store's registration order and all same-named
+candidates without turning that order into selection priority. Callable-only
+indices and all-function indices serve different queries: generated functions
+must remain visible to queries requiring the latter. Reading a narrow declaration
+store should not require retaining unrelated mutable compiler state or creating
+a new long-lived snapshot across later registration.
+
+Not every declaration loop is a name lookup. Registration, whole-declaration
+validation, and receiver/source-witness identity enumeration may need the entire
+domain. A spelling-based query must not mutate source/name storage solely to
+obtain an index key. Indexing is a cost improvement only when it preserves the
+query domain, identity, provenance and ambiguity rules.
+
 ## 3. Scope Inputs and Binding Results
 
 Each lookup is interpreted under explicit source context: module and file, lexical scope and source position, binder environment, and any explicit receiver/view qualification. A mutable cursor may be an implementation convenience but cannot be the hidden authority of a published result.

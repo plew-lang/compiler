@@ -26,7 +26,7 @@ These are semantic categories, not a requirement to introduce another IR or one 
 
 Two declarations named `T` introduce different parameters. A nominal type with the same printed name in another module is also different. Conversely, two source occurrences of the same resolved type need not create two semantic identities. Interning can make repeated structural comparisons cheap, but an interned ID is meaningful only in its owning compilation domain.
 
-Traversal, folding, equality, substitution, occurrence checks, and canonical-key construction must cover the same semantic children. A cached structural property must be derived from those children and remain valid after publication. Comparing only a head name or omitting projection/view children is not a permitted fast path.
+Traversal, folding, equality, substitution, occurrence checks, and canonical-key construction must cover the same semantic children. A cached structural property must be derived from those children and remain valid after publication. Comparing only a head name or omitting projection/view children is not a permitted fast path. Recursive newtype children, unresolved terms, and repeated view sources in an input representation must also remain visible to structural queries. A reader optimization cannot infer closedness, uniqueness, or identity by skipping them. Deduplication and canonicalization must follow the explicit normalization contract; they are not incidental consequences of an index or traversal shortcut.
 
 ## 3. Relations Are Explicit
 
