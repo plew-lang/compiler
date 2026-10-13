@@ -52,6 +52,10 @@ assumed existing collector. [Cycle management](../issues/com-2z5l.md) and
 [concurrency analysis](../issues/com-qzpm.md) retain these implementation
 boundaries separately.
 
+Collection-specific finite operations, initialized-extent invariants, reentrant
+commit-before-release and library-layer responsibilities are defined in the
+[Buffer floor supplement](collections-and-buffer.md).
+
 ## Dynamic Access Enforcement
 
 The runtime consumes normalized storage identity and path information from [Access elaboration](ownership-and-access.md). It checks executed accesses against active records, rather than executing a conservative interprocedural effect summary as if every possible branch occurred. Scope entry/exit, alias checks, and proven forwarding permissions must describe the same access lifetime.

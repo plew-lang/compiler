@@ -32,7 +32,13 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 
 18. [Verification and Validation](verification.md) — reviewed draft; evidence scope remains distinct from implementation completeness.
 
-All planned chapters have reviewed drafts. Cross-chapter review, existing-document consolidation, and implementation-gap migration remain in progress; this is not yet a confirmed first edition.
+All planned chapters have reviewed drafts, and the initial cross-chapter review corrections are incorporated. Existing-document consolidation and implementation-gap migration remain in progress. Final consistency review and first-edition confirmation are still required.
+
+## Detailed Contracts and Decisions
+
+- [Collections and the Safe Buffer Floor](collections-and-buffer.md) refines the runtime, ownership and representation contracts for safe collection storage.
+- [Explicit Divergence](decisions/divergence.md) retains the adopted completion policy and rejected alternatives.
+- [Hot Restart](decisions/hot-restart.md) separates the approved future host direction from current one-shot execution and historical feasibility evidence.
 
 ## Reading and Maintenance
 
