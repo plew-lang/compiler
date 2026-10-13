@@ -349,7 +349,7 @@ terms. Final storage resolution supplies the LLVM declaration; initialization
 transfers ownership once. Global-address facts retain declaration identity,
 mutability, and grounded target type. Address formation is not pointee ownership,
 and illegal moves remain rejected. Rust's [THIR](https://rustc-dev-guide.rust-lang.org/thir.html)
-StaticRef/Deref split and Swift's [SIL](https://github.com/swiftlang/swift/blob/main/docs/SIL.rst)
+StaticRef/Deref split and Swift's [SIL](https://github.com/swiftlang/swift/blob/main/docs/SIL/SIL.md#global-variables)
 `global_addr` are references for that distinction.
 
 Finalization publication closes added call/destruction dependencies before Access.
@@ -375,7 +375,7 @@ conversion, including fallible/nested results and inout writeback. Whole-owner
 newtype boundary equivalence follows same type, immediate underlying type, and
 recursive constructor/label structure, not arbitrary bitcast compatibility.
 LLVM additionally validates both physical layouts. Reinstantiating the original
-body with newtype `Self` is rejected because it changes meaning; Rust’s [newtype wrappers](https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#using-the-newtype-pattern-to-implement-external-traits) and
+body with newtype `Self` is rejected because it changes meaning; Rust’s [newtype wrappers](https://doc.rust-lang.org/book/ch20-02-advanced-traits.html#implementing-external-traits-with-the-newtype-pattern) and
 Swift’s [type aliases](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/declarations/#Type-Alias-Declaration) are comparison points, not equivalent Plew semantics.
 
 Final ownership classification follows nominal declaration identity, including

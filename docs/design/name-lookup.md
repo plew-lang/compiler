@@ -7,7 +7,7 @@ implementation observations are retained in [Frontend Handoffs](frontend-handoff
 
 ## 1. Responsibility
 
-Declaration registration establishes identities and declared interfaces. Scope construction determines which bindings are available at a source position. Lookup returns the applicable binding or candidate set with its provenance. Semantic checking determines call applicability and selects the source operation; concrete instantiation may later select the first concrete witness for an already chosen abstract requirement.
+Declaration registration establishes identities and declared interfaces. Scope construction determines which bindings are available at a source position. Lookup returns the applicable binding or candidate set with its provenance. Semantic checking determines call applicability and selects the source operation; concrete instantiation may later determine the concrete witness for an already chosen abstract requirement for the first time.
 
 The purpose is to prevent a name index, visibility helper, or downstream pass from becoming a competing selector. A contributor changing imports, overloads, or generic member access should be able to identify the owner of each decision and the result that later stages consume.
 
@@ -83,7 +83,7 @@ Lookup may filter by facts intrinsic to its domain, such as binding kind, visibi
 
 Preliminary context for an omitted type may use candidate information only under the same visible candidate rules. A contextual hint is not a selected callable. If type overloads remain ambiguous, lowering must not guess one to make a child expression type-check. Once checking selects an operation, it publishes its declaration/requirement identity, signature, environment, and evidence for instantiation and Mid consumers.
 
-Downstream readers cannot recover a missing required selection by rerunning name lookup with a different environment. Legitimate first concrete witness selection remains separate from source reselection. The [publication contract](compiler-state.md) distinguishes a missing required fact, an optional absent binding, a failed request, and a complete abstract result.
+Downstream readers cannot recover a missing required selection by rerunning name lookup with a different environment. Legitimate initial concrete witness determination remains separate from source reselection. The [publication contract](compiler-state.md) distinguishes a missing required fact, an optional absent binding, a failed request, and a complete abstract result.
 
 Declaration-time conflict checking and use-site ambiguity are also separate. Some duplicate definitions are invalid immediately; some independently qualified trait members may coexist and only a bare call is ambiguous. Neither registration order nor removing a candidate as a performance shortcut may change that distinction.
 
