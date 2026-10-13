@@ -20,4 +20,3 @@ Evidence scope: migrated from meta agents/optimization-candidates.md at meta rev
 ## Acceptance Criteria
 
 Compare dense and proposed analyses on large async inputs, demonstrate identical required frame ownership/liveness, and report compile-time and storage cost.
-

@@ -20,4 +20,3 @@ Evidence scope: migrated from meta agents/optimization-candidates.md at meta rev
 ## Acceptance Criteria
 
 Specify an equivalence condition and test conditional moves, flags, destruction order and exceptional/terminal exits applicable to the changed paths.
-

@@ -20,4 +20,3 @@ Evidence scope: migrated from meta agents/optimization-candidates.md at meta rev
 ## Acceptance Criteria
 
 Identify complete dependency keys and invalidation boundaries, compare independent analysis results, and measure savings on representative instances.
-

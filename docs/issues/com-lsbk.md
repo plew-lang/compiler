@@ -20,4 +20,3 @@ Evidence scope: migrated from meta agents/optimization-candidates.md at meta rev
 ## Acceptance Criteria
 
 Compare the same input with a fixed compiler/toolchain and inspect actual load/store changes while preserving snapshot, alias and ownership contracts.
-

@@ -20,4 +20,3 @@ Evidence scope: migrated from meta agents/optimization-candidates.md at meta rev
 ## Acceptance Criteria
 
 Define legal cases and fallback, prove producer-to-final-consumer result/ownership equivalence, and measure whether analysis plus rewriting pays.
-

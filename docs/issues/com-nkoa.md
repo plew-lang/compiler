@@ -20,4 +20,3 @@ Evidence scope: migrated from meta agents/optimization-candidates.md at meta rev
 ## Acceptance Criteria
 
 Define the proof that permits each removed check/copy, retain effect closure/publication validity, compare behavior and verification with optimization disabled, and measure total cost.
-

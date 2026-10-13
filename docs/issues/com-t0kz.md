@@ -20,4 +20,3 @@ Evidence scope: migrated from meta agents/optimization-candidates.md at meta rev
 ## Acceptance Criteria
 
 Specify content identity, invalidation and corruption handling, demonstrate cache-hit/miss equivalence and input recording, and measure benefit without skipping sanitizer coverage.
-

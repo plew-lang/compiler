@@ -20,4 +20,3 @@ Evidence scope: migrated from meta agents/optimization-candidates.md at meta rev
 ## Acceptance Criteria
 
 Establish a bounded legal subset with enabled/disabled behavior comparisons, malformed-input controls, structural effect checks, and analysis/snapshot cost measurements. Preserve complete-expression temporaries, named binding ends, guaranteed by-value ownership, and ReturnBoundary provenance.
-
