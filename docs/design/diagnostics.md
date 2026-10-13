@@ -1,6 +1,6 @@
 # Diagnostics
 
-**Status:** Draft for review. This chapter defines diagnostic responsibility and failure preservation, not a stable diagnostic serialization format or a general IDE recovery framework.
+**Status:** Reviewed draft. This chapter defines diagnostic responsibility and failure preservation, not a stable diagnostic serialization format or a general IDE recovery framework.
 
 ## Responsibility and Authority
 
@@ -20,7 +20,7 @@ Three concepts remain distinct:
 | Request result | Success, justified deferred obligations, or failure for the exact inputs | Controls publication and subsequent consumers |
 | Rendered diagnostic | Severity, location and explanatory text, plus any supported detail | Communicates the result; does not grant or revoke execution permission independently |
 
-An error-severity record cannot be buffered while the same required request publishes success. A failed request must carry or retain its failure even if presentation is postponed or deduplicated. Draining a warning queue, displaying an error, or suppressing a duplicate is not recovery. Pending obligations, missing facts, compiler invariant failures, and legitimate not-applicable results cannot all be represented as an empty diagnostic list.
+An error-severity record cannot be buffered while the same required request publishes success. A failed request must carry or retain its failure even if presentation is postponed or deduplicated. Draining a warning queue, displaying an error, or suppressing a duplicate is not recovery. A domain may choose precedence among concurrent findings for presentation; that choice must not erase retained owner failure or turn another failed request into success. Pending obligations, missing facts, compiler invariant failures, and legitimate not-applicable results cannot all be represented as an empty diagnostic list.
 
 A returning compiler service propagates failure to its caller. Terminal compatibility adapters may remain only where callers still rely on termination; making such an adapter return without converting its callers would continue with invalid state. The adopted service boundary returns results and leaves process termination to the execution/CLI adapter. This is an architectural requirement, not a claim that all old terminal sites have migrated.
 
@@ -56,7 +56,7 @@ Queue draining transfers presentation responsibility to the caller. If several l
 
 ## Change Paths and Verification
 
-For a new diagnostic, first identify the domain rule and authoritative result, then retain its location/context and transport it to the driver. For richer location display, change provenance and representation/rendering rather than searching source again in the renderer. For continuation changes, review failed-owner retention and every publication gate, not only the number of displayed messages.
+For a new diagnostic, first identify the domain rule and authoritative result, then retain its location/context and transport it to the driver. For richer location display, change provenance and representation/rendering rather than rediscovering semantic origins or decisions in the renderer. Rendering may read retained immutable source to display snippets or map coordinates. For continuation changes, review failed-owner retention and every publication gate, not only the number of displayed messages.
 
 Verification should cover acceptance/status as well as message content; original file-local locations after multi-file loading; direct versus synthesized origins; warning draining followed by repeated failed requests; duplicate requests; domain-conversion preservation; and returning service versus CLI termination. A golden string alone cannot prove that a failed request remains failed or that the final consumer refuses execution.
 

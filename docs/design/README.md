@@ -28,7 +28,9 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 
 16. [Driver and Demand-Driven Execution](driver-and-execution.md) — reviewed draft; reusable embedding and full command parity remain unaudited.
 
-The remaining chapters are not yet written. They will cover diagnostics and verification. Their absence does not make the available chapters detailed specifications for those areas.
+17. [Diagnostics](diagnostics.md) — reviewed draft; richer provenance and complete returning-service migration remain unaudited.
+
+The Verification chapter is not yet written. Its absence does not make the available chapters a complete validation design.
 
 ## Reading and Maintenance
 
