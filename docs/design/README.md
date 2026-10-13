@@ -24,7 +24,9 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 
 14. [LLVM Backend](llvm-backend.md) — reviewed draft; ORC DataLayout admission remains an implementation discrepancy.
 
-The remaining chapters are not yet written. They will cover runtime; the driver and demand-driven execution; diagnostics; and verification. Their absence does not make the available chapters detailed specifications for those areas.
+15. [Runtime](runtime.md) — reviewed draft; general concurrency and reusable embedding remain outside the audited subset.
+
+The remaining chapters are not yet written. They will cover the driver and demand-driven execution; diagnostics; and verification. Their absence does not make the available chapters detailed specifications for those areas.
 
 ## Reading and Maintenance
 
