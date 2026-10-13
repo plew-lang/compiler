@@ -18,9 +18,18 @@ Functions, methods, closures, synthetic adapters, global initializers, and async
 
 Declarations precede body emission where recursive references require them. Named layouts are registered before recursive layout bodies are filled. This registration breaks physical dependency cycles; it grants neither source-checking success nor callable publication. Each entry retains its semantic body identity independently of its generated name.
 
+Runtime declarations are indexed by the interned actual C symbol identity in the
+same external namespace as declared C imports. Reusing an entry requires a
+compatible LLVM function signature and applicable ABI attributes, not merely a
+matching name. Named struct-instance registration and its reverse index update
+through one registration boundary so readers cannot observe independently
+maintained identities. These physical indexes do not select source operations.
+
 ## LLVM Resource Ownership
 
 One unique module owner holds its LLVM Module and the Context that actually owns that module together. The context has no independent competing owner. Arbitrary nonnull handles from different contexts are not a valid pair. Builders borrow the context and are disposed before the owner. Normal disposal destroys the module before its context. LLVM values, types, blocks, and metadata cannot outlive their context through a cached raw handle.
+
+The object-lowering boundary releases no-longer-needed frontend arenas before LLVM optimization, avoiding overlap of their retained memory where the result no longer depends on them. Demand sessions retain the facts required for subsequent requests under their session lifetime; this is not permission to discard those facts at every emission.
 
 Object emission borrows the module/context; it may mutate the module through optimization, so the raw module is not implicitly reusable as an unchanged diagnostic artifact afterward. Text printing borrows the module and copies the returned message into Plew storage before disposing the LLVM message. Native errors and output buffers also have explicit disposal obligations.
 

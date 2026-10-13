@@ -47,6 +47,22 @@ These arrows describe dependencies and handoffs, not source-module imports or ow
 
 Library code is normally checked through the same machinery as application code. Compiler-known operations require an explicit compiler/library/runtime contract; a familiar name or compiler-specific special case is not sufficient justification for bypassing checking.
 
+### Compiler Source Modules
+
+Compiler source dependencies form a `use` DAG. Shared IR owns representations;
+frontend modules own source meaning; Mid owns explicit control/ownership
+operations; backend modules own LLVM realization. Shared Path, Ops, and Diag
+utilities are leaves and do not reach back into upper-layer mutable state. A
+helper's physical file location must not create a competing decision authority
+or a reverse dependency disguised as shared infrastructure.
+
+`part` places a type's impl methods in its defining module; it is not a substitute
+for module boundaries when splitting free functions, types, or top-level values.
+Mutually recursive methods can remain under one module-owned type instead of
+forcing cyclic use edges or excessive module fragmentation. These are compiler
+organization rules; [Sources and Modules](sources-and-modules.md) owns admission
+and source-language membership.
+
 ## 3. Compilation Model and Handoffs
 
 Compilation is dependency-driven, even when a command requests whole-target checking. It is not necessarily one eager traversal through a sequence of mutable tables. The following graph shows the execution-preparation path.

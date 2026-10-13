@@ -55,6 +55,14 @@ Read failures and empty source are distinct outcomes at the loader boundary. If 
 
 Source registration owns the mapping from stored bytes to file and module identity. Current storage uses ordered, disjoint ranges in a shared byte arena. This is a representation choice, not a rule that semantic identity is a byte offset. Gaps and synthetic suffixes must not be assigned to the preceding file by accident. Diagnostics and semantic ownership must use the same registered provenance rather than independently scanning paths or source text.
 
+Source-file range registration maintains ordered, nonoverlapping intervals through
+one update API. Membership lookup and diagnostic lookup share the containing-file
+binary search rather than independently scanning files. Syntax-root attributes
+needed for module identity are derived during registration and attached to the
+module identity; readers do not rescan file paths or source text to reconstruct
+them. These indexes accelerate explicit provenance, not replace it with spelling
+or offset guesses for synthetic bodies.
+
 ## 4. Discovery, Membership, and Graph Closure
 
 Discovery consumes the shared parser's structural directives. A second textual pre-scan for `use` or `part` would create a competing grammar and is not part of the design. Loading syntax and registering declarations are separate responsibilities: aliases and declaration identities must be interpreted after the relevant membership and dependency graph are known.
