@@ -3,6 +3,11 @@
 `dev-rebuild.sh` and `bootstrap.sh` remain the development and fixed-point
 entries, normally invoked through the meta repository's `validate` command.
 They do not publish the standalone distribution or change its resource bundle.
+Ordinary development continues to use the installed dynamic LLVM path; ASan/LSan
+uses its established LLVM22 path. Built static distribution archives are optional
+packaging inputs, not a second default development toolchain. The architectural
+[distribution boundary](../../docs/design/driver-and-execution.md#distribution-boundary)
+owns the adopted packaging and user-dependency contract.
 
 The tracked bootstrap inputs are `bootstrap/plewc.seed.ll` and
 `bootstrap/plewc.seed.runtime.c`; keep this pair together. The dependency
@@ -106,8 +111,8 @@ The executable can also be installed directly.
 
 - `plew build file.pw [-o output]`, or `plew file.pw`, builds a native executable.
 - `plew run file.pw [args...]` executes through the shared compiler session and LLVM ORC lazy JIT. Bodies are checked and generated on demand; a delayed diagnostic terminates the process with a nonzero status. AOT builds use the same runtime.
-  The separately planned lazy run/check/Hot Restart implementation is not supplied
-  by this packaging work.
+  Packaging does not supply compiler-owned Hot Restart or a reusable host lifecycle;
+  those remain outside the adopted one-execution scope.
 - `plew gen file.pw...` and `plew resolve [directory|file]` share the existing
   Plew macro compiler and resolver. Outputs are replaced only after success.
 - `plew --compiler --emit-object output.o [--target-cpu cpu] [options] file.pw`
@@ -126,7 +131,7 @@ The executable can also be installed directly.
 
 Compiler semantics and resolution remain in Plew modules. `distribution/_.pw`
 selects their worker entries; `native/tool.cpp` owns OS process, output, and linker
-operations. Workers are self-spawned from the same executable. Each worker lowers to an
+operations. Workers are self-spawned from the same executable. Each object-emission worker lowers to an
 owned `LlvmModule`, calls the native backend with the live module, then disposes
 the module and its context in that order. The parent receives an object file;
 there is no LLVM text serialization or parsing on this path. Native linkers see object files, not Plew LLVM IR.
