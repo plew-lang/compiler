@@ -52,6 +52,8 @@ Completion classification and sequential/branch composition have one owning impl
 
 Pattern checking consumes the saved scrutinee term, creates stable lexical binding identities with mutability and ownership mode, and checks guards/arms in those scopes. Captures refer to those binding identities. Coverage includes diverging arms; dead-arm warnings are not permission to omit their source checks. Record/enum patterns and their payload projections must preserve types and binding ownership through Mid, rather than rediscover them from a variant name.
 
+The [explicit-divergence decision](decisions/divergence.md) retains the motivation, rejected alternatives, function-value implications, and accepted development costs. It does not replace the specification or broaden this chapter's implementation audit.
+
 ## 5. Selected Operations and Evaluation
 
 A source call occurrence records the selected declaration or abstract requirement, receiver/view provenance, type substitution, parameter/result terms, argument mapping, conversions, passing modes, completion, and any instance obligations. Explicit and synthetic occurrences need stable identities; a single source expression can contain several protocol calls. An expression offset alone cannot distinguish those sites.
