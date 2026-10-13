@@ -62,6 +62,16 @@ Profitability is separate from legality. A frozen destruction classification can
 
 The backend's omission of physical no-op destruction is a different optimization boundary: Mid obligations and verification remain intact, and any required ambient check remains conditional on the actual cleanup path. Neither optimization is implemented by deleting arbitrary LLVM retain/release pairs without preserving their source ownership contract.
 
+## Proof Obligations for Broader Copy Elimination
+
+The local transfer subset is not a proof for general propagation. A definition dominating a use is insufficient when a value defined outside a loop would be consumed on repeated iterations. Each consuming execution needs a valid fresh ownership definition. Propagating a place instead of its copied value must prove that intervening writes, borrows, captures and aliases cannot change the required snapshot.
+
+Removing an owner must preserve the destruction boundary of complete-expression temporaries, named bindings and explicit binding ends. A destination destroyed sooner is not an equivalent owner merely because reference counts eventually balance. Guaranteed by-value parameters are not consuming parameters; converting every call Copy to Move violates this distinction. Destination integration must preserve ReturnBoundary type and source-site provenance as well as alias and lifetime constraints.
+
+Candidate extraction is not the proof: required whole-body use, escape and CFG checks still apply. The analysis and snapshot-construction cost must be measured against the actual benefit. Optional investigation candidates are tracked in local issues, not a second pass pipeline or a commitment to implement them.
+
+Rust's [SsaLocals](https://github.com/rust-lang/rust/blob/main/compiler/rustc_mir_transform/src/ssa.rs) and [CopyProp](https://github.com/rust-lang/rust/blob/main/compiler/rustc_mir_transform/src/copy_prop.rs) illustrate analyses layered over non-SSA MIR. Swift's [CopyPropagation](https://github.com/swiftlang/swift/blob/main/lib/SILOptimizer/Transforms/CopyPropagation.cpp) operates under ownership and lifetime constraints. These are references for proof structure; Rust Copy is not Plew's ARC/CoW copy, and retain/release count equality alone is insufficient.
+
 ## Verification and Diagnostics
 
 Structural validation guards intermediate boundaries appropriate to their stage. Executable verification always runs before LLVM lowering; optimization settings do not suppress it. Additional debug checking can inspect every intermediate snapshot but does not create a weaker release-mode validity rule.
