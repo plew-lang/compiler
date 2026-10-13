@@ -26,6 +26,8 @@ Operands distinguish reading a guaranteed value, creating an owned copy, and tra
 
 Nested expressions are lowered into ordered operations and temporaries. Source binding identity is retained across shadowing. An expression ID identifies a semantic source site, not a globally reusable runtime result. Repeated default-argument evaluation must remain repeated evaluation even when it shares the same source expression ID. Builder memoization is restricted to the current evaluation context and must not leak a temporary across sibling regions or invocations.
 
+An earlier child value must survive the effects of later children. When later evaluation can change the observed storage, construction captures the earlier Copy/Move value in an owned temporary at its evaluation point; it must not leave a recipe that reads the original place after those effects. Already materialized values can be reused under their lifetime contract. Borrow/inout operands remain capabilities rather than being silently converted into snapshots. Eliding a temporary requires proof that the later evaluation cannot change the value; unknown effects are not that proof. Aggregate children follow source evaluation order independently of their destination field indices.
+
 ## Control Flow and Expression Results
 
 A body consists of basic blocks with ordered statements and one terminator each. Only terminators introduce CFG successors. Builder-only open-block sentinels cannot reach a published executable body.
@@ -47,6 +49,8 @@ Flattening control flow does not erase lexical scopes, provenance, or destructio
 Call results live in the enclosing result home. Receiver/argument evaluation can use a child scope whose temporary obligations end on the normal continuation after required access completion. Default-argument adapters obey the same rules; they do not acquire a special lifetime extension merely because they are synthesized.
 
 Return values are transferred into a return home outside the exiting lexical scope before cleanup. The return terminator then transfers that result. The backend must not infer a magic local-index exception to avoid destroying the result.
+
+Drop is a statement: successful destruction continues to the following operation, while a panic during destruction aborts. It has no alternative unwind successor. Plew does not import Rust MIR’s unwind-capable Drop terminator.
 
 Initialization, copying, movement, replacement, and destruction remain distinct operations. Replacing an initialized mutable value cannot masquerade as fresh initialization. Drop elaboration converts abstract exit obligations into explicit destruction and any necessary conditional operations. An executable body has no unresolved scope-exit cleanup marker. Ownership dataflow, flag rules, and access conflicts belong to their detailed chapter rather than being independently specified by the builder.
 

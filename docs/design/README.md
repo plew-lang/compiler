@@ -17,8 +17,9 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 7. [Expression and Body Checking](body-checking.md) — reviewed draft; physical storage remains unresolved.
 8. [Generics and Body Instantiation](generics.md) — reviewed draft.
 9. [Metaprogramming and Generated Code](metaprogramming.md) — reviewed draft; isolation/freshness/runner protocols remain open.
+10. [Mid Representation and Lowering](mid.md) — reviewed draft; upstream checked-body storage remains unresolved.
 
-The remaining chapters are not yet written. They will cover Mid; ownership and access; passes; ABI; LLVM; runtime; the driver and demand-driven execution; diagnostics; and verification. Their absence does not make the available chapters detailed specifications for those areas.
+The remaining chapters are not yet written. They will cover ownership and access; passes; ABI; LLVM; runtime; the driver and demand-driven execution; diagnostics; and verification. Their absence does not make the available chapters detailed specifications for those areas.
 
 ## Reading and Maintenance
 
