@@ -20,8 +20,9 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 10. [Mid Representation and Lowering](mid.md) — reviewed draft; upstream checked-body storage remains unresolved.
 11. [Ownership, Access, and Lifetimes](ownership-and-access.md) — reviewed draft; whole-program enforcement coverage remains to be audited.
 12. [Passes and Optimization](passes-and-optimization.md) — reviewed draft; unique-copy input preservation needs implementation audit.
+13. [Representation and ABI](representation-and-abi.md) — reviewed draft; callback and external runtime boundaries remain open.
 
-The remaining chapters are not yet written. They will cover ABI; LLVM; runtime; the driver and demand-driven execution; diagnostics; and verification. Their absence does not make the available chapters detailed specifications for those areas.
+The remaining chapters are not yet written. They will cover LLVM; runtime; the driver and demand-driven execution; diagnostics; and verification. Their absence does not make the available chapters detailed specifications for those areas.
 
 ## Reading and Maintenance
 

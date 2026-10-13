@@ -40,7 +40,7 @@ Type finalization owns the destruction contract for a type under its instantiati
 
 The contract preserves type-level order separately from local cleanup order: run the type’s own deinit while all fields remain valid, then destroy fields in declaration order; an enum destroys only its active payload. Closure environment cleanup uses the frozen capture relationships/order rather than reconstructing captures from the source body. Shared references release their shares; referent destruction occurs only on the final applicable release.
 
-Drop elaboration chooses *where* an owner’s obligation ends. Effect closure consumes the contract’s callable/child destruction dependencies. Verification requires the applicable completed ownership contract. Backend destructor generation consumes that same contract to emit its physical operations. None may independently select a destructor or infer release freedom from layout. Representation-specific glue belongs to the ABI/backend chapters.
+Drop elaboration chooses *where* an owner’s obligation ends. Effect closure consumes the contract’s callable/child destruction dependencies. Verification requires the applicable completed ownership contract. Backend destructor generation consumes that same contract to emit its physical operations. None may independently select a destructor or infer release freedom from layout. Representation-specific glue belongs to [Representation and ABI](representation-and-abi.md) and the backend chapter.
 
 ## Places and Exclusivity
 
