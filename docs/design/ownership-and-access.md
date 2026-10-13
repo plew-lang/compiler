@@ -22,6 +22,14 @@ Ordinary value parameters may use a guaranteed physical ABI while retaining by-v
 
 Source-defined obligation-ending edges—including lexical exits, explicit binding ends, and conditional-move accessibility cliffs—are the cleanup authority. An owned unique binding shadowed by a new declaration ends at the frontend-selected shadowing commit, after RHS evaluation and its temporary cleanup. A shadowed copyable binding retains its ordinary scope lifetime. Mid consumes binding IDs rather than re-resolving names to reconstruct this distinction.
 
+EndBinding(local) is an independent binding-end operation, not a fabricated
+ScopeExit. Frontend binding-end identity selects the target after initializer
+cleanup. Drop elaboration maps Owned/MaybeOwned/Consumed to Drop/ConditionalDrop/
+no cleanup, then updates ownership, accessibility and flag state to ended. An
+already explicitly dropped local is not destroyed again. Declaration ownership
+checking interprets the marker directly, while executable admission rejects any
+unelaborated marker at its required stage.
+
 A conditional move can end accessibility before lexical scope exit. When one branch moves a named unique value and another retains it, the retaining edge destroys that owner before the common continuation: the join cannot uniformly name an owned value. Cleanup is not postponed until the surrounding scope ends. A borrow crossing this cliff is rejected rather than extending the owner’s lifetime.
 
 Forward ownership/accessibility dataflow reaches a fixed point over the CFG. At an obligation-ending boundary, an owned value requires Drop, a consumed value requires none, and a path-dependent owner requires conditional destruction. Locals sharing an exit are destroyed in reverse declaration order. Last-use information does not independently authorize earlier observable destruction.

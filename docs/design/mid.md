@@ -91,7 +91,7 @@ Tests should compare equivalent direct and wrapped expressions, sibling branches
 
 ## Implementation Audit and Remaining Scope
 
-Focused source inspection uses compiler revision `6fe09bc7c0e75260b3f773643921478b5020b94f`: `src/Mid/Ir.pw` for canonical rows/body IDs and draft vocabulary, `src/Mid/Prepare.pw` for stage wrappers and the preparation chain, and `src/Mid/Types.pw` for selected typed consistency checks. The existing meta Mid contracts supply the adopted lowering/cleanup boundaries pending their migration into the remaining detailed chapters.
+Focused source inspection uses compiler revision `6fe09bc7c0e75260b3f773643921478b5020b94f`: `src/Mid/Ir.pw` for canonical rows/body IDs and draft vocabulary, `src/Mid/Prepare.pw` for stage wrappers and the preparation chain, and `src/Mid/Types.pw` for selected typed consistency checks. The [operation and entry supplement](mid-entry-audit.md) retains detailed canonical, synthetic-body, async and execution-entry contracts. Its wider map is retained design/audit material, not an independently completed source audit.
 
 The implementation names its draft structure `MidBody`; this chapter's “draft” describes its role rather than prescribing a completed rename. The audited preparation entry establishes body-local executable verification and registers body access information; it does not alone prove a complete global access analysis.
 

@@ -36,6 +36,7 @@ All planned chapters have reviewed drafts, and the initial cross-chapter review 
 
 ## Detailed Contracts and Decisions
 
+- [Mid Operation Details and Execution-Entry Audit](mid-entry-audit.md) retains operation-level invariants and the scoped entry/probe map.
 - [Collections and the Safe Buffer Floor](collections-and-buffer.md) refines the runtime, ownership and representation contracts for safe collection storage.
 - [Explicit Divergence](decisions/divergence.md) retains the adopted completion policy and rejected alternatives.
 - [Hot Restart](decisions/hot-restart.md) separates the approved future host direction from current one-shot execution and historical feasibility evidence.
