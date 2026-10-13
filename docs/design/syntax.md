@@ -77,6 +77,12 @@ Compiler source base inspected: `6fe09bc7c0e75260b3f773643921478b5020b94f`. Focu
 
 At the pinned Syntax revision `00f740e1178e5b992cfdd30ddaa5a0612ce27b43`, inspected public entries `parseProgramSyntaxInto`, `parseProgramAst`, `parseItem`, `parseExprAst`, and `parseBlockAst` use direct SyntaxFile construction; value entries materialize their result. This supports the shared-grammar handoff for those entries. It does not prove every legacy helper is unreachable or that every grammar form and adapter is equivalent.
 
+Concrete handoff fields at these inspected revisions include `SyntaxNameSegment` spans and per-segment argument/label slices, separate root ranges from node pools, and parent IDs finalized after child append. Changes to these representations must trace direct construction, materialization, freeze, and compiler Lower together.
+
+`SyntaxBlock`/`BlockAst.guardElseOffset` uses zero for an ordinary block and otherwise the guard failure source offset plus one. Materialization and freeze retain it; Lower records the block ID and original offset in `blockExitRequirements`, and Record checks normal completion through common `SourceCompletion`. The value is provenance, not a parser-side divergence verdict.
+
+`SyntaxCondClause`/`CondClause.isWhileCondition` survives binding-while normalization, materialization, freeze, and translation into `ConditionClause`. Verify uses it to mask the outer loop target during condition evaluation. A nested loop body establishes its own target, while a closure establishes another control boundary. Bool-only while conditions use the same checking rule through `Stmt.While`. These field mappings describe selected inspected paths; they do not expand the audit to all grammar forms.
+
 Unverified scope includes complete grammar/materializer coverage, all normalized control metadata, all source-offset ownership dependencies, and downstream consumption of every synthetic operation. No parser suite, compiler execution, or performance measurement was run for this chapter. Local issue management is not initialized; these limits must not be read as a clean implementation audit.
 
 Chapter review found no blocking design problem. The distinction between executable interpolation synthesis and required static source checking was clarified in response to review. The implementation limits above remain unchanged.
