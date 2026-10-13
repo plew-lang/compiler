@@ -64,7 +64,7 @@ Node IDs and ranges have explicit domains and indexing conventions. Zero as an a
 
 ## Preparation Stages and Executable Admission
 
-The preparation chain is parametric construction and freezing, instantiation, access elaboration, optional ownership-preserving copy optimization, drop elaboration, and executable verification. Structural checks guard the applicable intermediate boundaries. Each transition publishes its stronger wrapper only after success; failure does not return a partially prepared success value.
+[Pass composition and optimization](passes-and-optimization.md) define traversal and analysis-validity responsibilities. The preparation chain is parametric construction and freezing, instantiation, access elaboration, optional ownership-preserving copy optimization, drop elaboration, and executable verification. Structural checks guard the applicable intermediate boundaries. Each transition publishes its stronger wrapper only after success; failure does not return a partially prepared success value.
 
 Declaration-level symbolic analysis is a separate product. It can inspect abstract alternatives and recipes to establish source obligations without materializing an executable instance. Its success does not discharge concrete conversions, access operations, or destruction obligations.
 
