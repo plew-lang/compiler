@@ -52,7 +52,7 @@ Return values are transferred into a return home outside the exiting lexical sco
 
 Drop is a statement: successful destruction continues to the following operation, while a panic during destruction aborts. It has no alternative unwind successor. Plew does not import Rust MIR’s unwind-capable Drop terminator.
 
-Initialization, copying, movement, replacement, and destruction remain distinct operations. Replacing an initialized mutable value cannot masquerade as fresh initialization. Drop elaboration converts abstract exit obligations into explicit destruction and any necessary conditional operations. An executable body has no unresolved scope-exit cleanup marker. Ownership dataflow, flag rules, and access conflicts belong to their detailed chapter rather than being independently specified by the builder.
+Initialization, copying, movement, replacement, and destruction remain distinct operations. Replacing an initialized mutable value cannot masquerade as fresh initialization. Drop elaboration converts abstract exit obligations into explicit destruction and any necessary conditional operations. An executable body has no unresolved scope-exit cleanup marker. Ownership dataflow, flag rules, and access conflicts belong to [Ownership, Access, and Lifetimes](ownership-and-access.md) rather than being independently specified by the builder.
 
 ## Draft Construction and Canonical Storage
 

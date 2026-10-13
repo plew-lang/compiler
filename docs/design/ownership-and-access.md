@@ -10,7 +10,7 @@ The frontend publishes binding identity, selected passing modes, conversions, ac
 
 ## Ownership State and Storage
 
-A local owner has an initialized/owned or consumed state, with a join state representing paths on which ownership differs. Accessibility is tracked separately: a value can still have a destruction obligation when its source binding becomes inaccessible. Caller-owned guaranteed parameters and inout storage are not local owners to destroy on return. Globals belong to their module lifetime rather than the local ownership vector.
+A local owner has an initialized/owned or consumed state, with a join state representing paths on which ownership differs. Accessibility is tracked separately: a value can still have a destruction obligation when its source binding becomes inaccessible. Caller-owned guaranteed parameters and inout storage are not local owners to destroy on return. Top-level/associated roots are outside the local ownership vector. Process exit or host teardown does not implicitly become a language destruction edge or guarantee user deinit for those roots.
 
 Copy acquires an independent owned value; Move transfers an existing owner; reading a guaranteed value does not acquire one. Assigning an owned operand into a fresh home transfers that operand's ownership without acquiring it again. Replacement destroys the previous initialized value and installs the new one. Borrowed contents and the storage holding them remain distinct: overwriting an inout referent changes its contents without creating or destroying ownership of the caller's storage.
 
@@ -20,7 +20,9 @@ Ordinary value parameters may use a guaranteed physical ABI while retaining by-v
 
 ## Lifetime Boundaries and Drop Elaboration
 
-Lexical exits and explicit binding-end operations are the cleanup authority. An owned unique binding shadowed by a new declaration ends at the frontend-selected shadowing commit, after RHS evaluation and its temporary cleanup. A shadowed copyable binding retains its ordinary scope lifetime. Mid consumes binding IDs rather than re-resolving names to reconstruct this distinction.
+Source-defined obligation-ending edges—including lexical exits, explicit binding ends, and conditional-move accessibility cliffs—are the cleanup authority. An owned unique binding shadowed by a new declaration ends at the frontend-selected shadowing commit, after RHS evaluation and its temporary cleanup. A shadowed copyable binding retains its ordinary scope lifetime. Mid consumes binding IDs rather than re-resolving names to reconstruct this distinction.
+
+A conditional move can end accessibility before lexical scope exit. When one branch moves a named unique value and another retains it, the retaining edge destroys that owner before the common continuation: the join cannot uniformly name an owned value. Cleanup is not postponed until the surrounding scope ends. A borrow crossing this cliff is rejected rather than extending the owner’s lifetime.
 
 Forward ownership/accessibility dataflow reaches a fixed point over the CFG. At an obligation-ending boundary, an owned value requires Drop, a consumed value requires none, and a path-dependent owner requires conditional destruction. Locals sharing an exit are destroyed in reverse declaration order. Last-use information does not independently authorize earlier observable destruction.
 
@@ -31,6 +33,14 @@ Conditional destruction uses compiler-generated flags only where needed. Initial
 Return transfers its value to the dedicated result home before exiting source scopes. Panic/abort has no cleanup continuation and does not run user destruction as if it were a normal return. Suspend preserves obligations across resumption; it is not an implicit cancellation or destruction operation. Async liveness must include later cleanup uses and owner dependencies of borrowed values, not only ordinary reads. A synchronous borrow/reservation cannot escape into an async frame.
 
 The drop producer and executable verifier have distinct roles. Verification checks all-path initialization, use-after-consume, legal reinitialization, owner/flag correlation, and exactly-once discharge on normal exits. It must not simply trust the producer's own plan as evidence. Physical release-free types still participate in ownership verification; omitting a machine destructor is not omitting the obligation.
+
+## Type Destruction Contracts
+
+Type finalization owns the destruction contract for a type under its instantiation environment: uniqueness, required release operations, selected user deinit, child destruction relationships, and their order. Recursive type relationships require explicit incomplete/ready states; a placeholder is not an executable contract. Instantiation supplies concrete children and selected operations without repeating name-based deinit selection.
+
+The contract preserves type-level order separately from local cleanup order: run the type’s own deinit while all fields remain valid, then destroy fields in declaration order; an enum destroys only its active payload. Closure environment cleanup uses the frozen capture relationships/order rather than reconstructing captures from the source body. Shared references release their shares; referent destruction occurs only on the final applicable release.
+
+Drop elaboration chooses *where* an owner’s obligation ends. Effect closure consumes the contract’s callable/child destruction dependencies. Verification requires the applicable completed ownership contract. Backend destructor generation consumes that same contract to emit its physical operations. None may independently select a destructor or infer release freedom from layout. Representation-specific glue belongs to the ABI/backend chapters.
 
 ## Places and Exclusivity
 
@@ -78,7 +88,7 @@ A newly materialized body or dependency must receive the same enforcement prepar
 
 For an inout indexed receiver through a MutableRef, the frontend selects the accessor/callee evidence and storage provenance. Construction evaluates and retains the cell/key once. Access elaboration builds getters, the parent call, and reverse setters under one interval. Analysis rejects known overlaps and selects dynamic cell/path comparisons where necessary. LLVM emits that plan; runtime checks occur on actual ambient accesses. Cleanup releases temporaries and the cell pin after writeback. Fixing this path in LLVM by recognizing the source method name would bypass all three authorities.
 
-For a branch that moves a unique owner on only one path, the join carries a path-dependent ownership state. Exit elaboration destroys the owner only on the path that retains it. Verification checks the flag/owner correlation independently. Adding a loop or a shadowing boundary changes the dataflow, not the type's destruction identity.
+For a branch that moves a unique owner on only one path, the join carries a path-dependent ownership state. Cliff elaboration destroys the owner on the retaining edge before the common continuation, not at a later lexical exit. Verification checks the flag/owner correlation independently. Adding a loop or a shadowing boundary changes the dataflow, not the type's destruction identity.
 
 ## Comparative Rationale and Cost
 
@@ -90,8 +100,8 @@ Ownership and effect dataflow operate over canonical rows without thawing bodies
 
 ## Implementation Audit and Open Boundaries
 
-Focused inspection uses compiler revision `6fe09bc7c0e75260b3f773643921478b5020b94f`: `src/Mid/Drop.pw` for root-local ownership transfer and canonical processing, and `src/Mid/Access.pw` for frozen-input elaboration, evaluation DAG/writeback separation, and original-container reservation. Existing meta ownership/ambient contracts supply the adopted effect, verifier, and enforcement boundaries; they have not all been independently source-audited here.
+Focused inspection uses compiler revision `6fe09bc7c0e75260b3f773643921478b5020b94f`: `src/Mid/Drop.pw` for root-local ownership transfer and canonical processing, and `src/Mid/Access.pw` for frozen-input elaboration, evaluation DAG/writeback separation, and original-container reservation. `Ir.pw`’s FinalDestruction and the checked accessor/collection boundary in `Codegen/Mono/Ownership.pw` were inspected for ready-state enforcement and recursive dependency handling. `CheckedProgram.pw`, `DeclarationProgram.pw`, and `Mid/DeclarationAccess.pw` were inspected for the declaration graph connection. Existing meta ownership/ambient contracts supply the remaining adopted effect, verifier, and enforcement boundaries; they have not all been independently source-audited here.
 
-The existing GlobalAccessGraph contract explicitly records that declaration-level whole-target checking is not fully connected to the shared global-effect graph. That is an implementation gap, not a design exemption. Whole-program or lazy-publication correctness is not proven by the focused inspection above. Demand-driven summary closure/invalidation and all-path runtime reservation emission require further audit in the driver, runtime, and verification chapters.
+An older meta note describes declaration-level global analysis as unconnected. Focused inspection of `CheckedProgram.pw`, `DeclarationProgram.pw`, and `Mid/DeclarationAccess.pw` instead shows whole-target checking calling declaration preparation, collecting roots/explicit obligations, and solving the shared graph. This supersedes that narrow stale note; it does not prove that every deferred obligation is discharged. Whole-program or lazy-publication correctness is not proven by the focused inspection above. Demand-driven summary closure/invalidation and all-path runtime reservation emission require further audit in the driver, runtime, and verification chapters.
 
 Upstream checked-body storage remains unresolved. Full lifetime-region inference, generalized partial moves, and finer dynamic-callee effect precision are not implied as implemented or adopted extensions. Current required borrow/exclusivity checks remain mandatory while those extensions are absent.
