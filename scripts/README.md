@@ -9,6 +9,7 @@ under the directories below.
 |---|---|---|
 | `scripts/build/` | Compiler bootstrap, rebuild and distribution | `bootstrap.sh`, `dev-rebuild.sh`; see [build guide](build/README.md) |
 | `scripts/diagnostics/` | Explicit performance, coverage and leak investigations | `measure-self-host.sh`, `measure-self-compile.sh`, `leak-survey.sh` |
+| `scripts/issues/` | Local development issue management | `tk`; see [issue guide](../docs/issues/README.md) |
 | `scripts/support/` | Shared linking, environment and process helpers | Used by build, diagnostics and test runners |
 | `tests/harness/` | Test suite orchestration | `test.sh`, `test-gen.sh`, `test-deps.sh`, `asan-gate.sh` |
 | `tests/compiler/` | Compiler architecture and generated-code checks | Invoked by harnesses or documented focused diagnostics |

@@ -4,7 +4,7 @@
 
 This reference describes the adopted architecture and the contracts that implementation should satisfy. It is not a claim that every contract is implemented. Chapters distinguish design, unresolved decisions, and audited implementation scope.
 
-The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SPEC.md) owns language semantics. This reference owns how the compiler realizes those semantics. Operational instructions, validation baselines, and current work remain in their existing documents; implementation gaps belong in local issues once issue management is established.
+The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SPEC.md) owns language semantics. This reference owns how the compiler realizes those semantics. Operational instructions, validation baselines, and current work remain in their existing documents; implementation gaps belong in [local issues](../issues/README.md); migration of existing records is in progress.
 
 ## Available Chapters
 
