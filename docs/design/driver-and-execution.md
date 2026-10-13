@@ -128,6 +128,37 @@ Changing startup or global storage requires tracing preparation, definition, ini
 
 [Rust installation requirements](https://doc.rust-lang.org/book/ch01-01-installation.html) are the reference for allowing platform linking tools while shipping the language compiler itself. Plew intentionally chooses a single distribution unit rather than adopting Cargo/rustc/rustup's separate executables and toolchain manager. [LLVM distribution guidance](https://llvm.org/docs/BuildingADistribution.html) and [CMake options](https://llvm.org/docs/CMake.html) guide component/dependency selection, but a Release label alone does not prove optimization of archives after downstream bitcode conversion. That property belongs to recorded recipe/tool inputs. [LLD embedding](https://lld.llvm.org/) is a future option, not an adopted user dependency or requirement.
 
+### Lazy Compilation Placement Comparisons
+
+Frontend placement, machine-code JIT placement, and runtime placement are separate
+axes. Source-body checking, machine-code laziness, and execution-frequency-based
+tiering are likewise separate choices. An in-process JIT does not imply deferring
+every required source check until the first call. The adopted Plew arrangement
+combines requested whole-body checking/generation with compiler, ORC, and
+application execution in one process; compilation pauses the application. AOT
+and run share runtime implementation, ABI, and semantic rules. If implementation
+requires splitting those runtimes, stop for a design decision rather than silently
+introducing a run-only executor. Shared implementation still has explicit state
+ownership and reentry restrictions.
+
+The following source accounts are comparison inputs, not claims of current CLI
+compatibility or Plew performance equivalence:
+
+| Reference design | Relevant distinction and Plew implication |
+|---|---|
+| [Dart VM / Flutter](https://github.com/dart-lang/sdk/blob/main/runtime/docs/README.md) | CFE produces Kernel; the VM can compile through first-call stubs. The described standalone kernel service isolate and Flutter's development-host frontend_server illustrate different frontend placements. An isolate is not an OS process. This is not Plew's adopted external frontend. |
+| [Julia JIT](https://docs.julialang.org/en/v1/devdocs/jit/), [compiler](https://docs.julialang.org/en/v1/devdocs/compiler/) | Inferred IR reaches LLVM/ORCv2 and is linked into the process. This is a close reference for requested compilation, reuse, and publication, without importing Julia's type semantics. |
+| [V8 preparser](https://v8.dev/blog/preparser), [Sparkplug](https://v8.dev/blog/sparkplug), [compile hints](https://v8.dev/blog/explicit-compile-hints) | Early syntax/scope work and deferred detailed parsing/bytecode differ from later machine-code tiers. These dated design accounts motivate distinguishing required checks, not adding a Plew interpreter or tier. |
+| [.NET execution](https://learn.microsoft.com/en-us/dotnet/standard/managed-execution-process) | Source-to-CIL compilation precedes first-method-call JIT and reuse. Lazy machine entry is not source-checking laziness; the account does not cover every modern tier/AOT mode. |
+| [Ruby YJIT](https://docs.ruby-lang.org/en/3.4/yjit/yjit_md.html), [Ruby 3.3 RJIT](https://www.ruby-lang.org/en/news/2023/12/25/ruby-3-3-0-released/) | In-process lazy block versioning and the historical experimental Ruby-written JIT illustrate compiler/executor coexistence. Neither implies duplicating Plew's runtime, and RJIT is not a production recommendation. |
+| [PyPy architecture](https://doc.pypy.org/architecture.html) | Meta-tracing generated for an RPython interpreter illustrates runtime/compiler cooperation, but is a different project from adding ORC to the existing LLVM backend. |
+| [OpenJ9 JITServer](https://eclipse.dev/openj9/docs/jitserver/) | Optional external JIT shifts CPU/memory costs under communication constraints. It is a valid alternative placement, not evidence that a local CLI must use it. |
+
+External frontends or JIT services remain future placement options requiring a
+new decision. Their existence neither overturns Plew's chosen synchronous bridge
+nor establishes a need for separate AOT/JIT runtimes. Plew validates its own common
+runtime and execution semantics instead of importing the other systems' timings.
+
 ## Implementation Evidence and Open Boundaries
 
 Focused source inspection uses compiler revision `6fe09bc7c0e75260b3f773643921478b5020b94f`:
