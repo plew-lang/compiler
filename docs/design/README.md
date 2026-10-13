@@ -30,7 +30,9 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 
 17. [Diagnostics](diagnostics.md) — reviewed draft; richer provenance and complete returning-service migration remain unaudited.
 
-The Verification chapter is not yet written. Its absence does not make the available chapters a complete validation design.
+18. [Verification and Validation](verification.md) — reviewed draft; evidence scope remains distinct from implementation completeness.
+
+All planned chapters have reviewed drafts. Cross-chapter review, existing-document consolidation, and implementation-gap migration remain in progress; this is not yet a confirmed first edition.
 
 ## Reading and Maintenance
 

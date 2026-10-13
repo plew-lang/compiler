@@ -1,6 +1,6 @@
 # Verification and Validation
 
-**Status:** Draft for review. This chapter defines evidence and admission responsibilities. It does not certify full specification coverage or prescribe the current operational baseline.
+**Status:** Reviewed draft. This chapter defines evidence and admission responsibilities. It does not certify full specification coverage or prescribe the current operational baseline.
 
 ## Responsibility
 
@@ -65,7 +65,7 @@ Optimization can erase an invalid access before instrumentation, so raw pre-opti
 
 Self-hosting checks a specific compiler workload. A fixed point compares the compiler's LLVM and runtime outputs across generations under fixed inputs/toolchain/configuration. It is valuable evidence of reproducibility and bootstrap stability, not proof against a stable miscompilation or proof of whole-language correctness. Native artifact determinism is a different question from comparing raw compiler output.
 
-The bounded measurement protocol starts from an explicitly identified carrier, builds successors, and compares adjacent outputs. If the first successor reproduces its input generation, measure that successor; otherwise allow the next comparison, and fail when the bounded generations do not stabilize. Repeated timing runs must reproduce the fixed-point outputs. Report which compiler produced the measured outputs, not the carrier's timing as if it were the stabilized compiler's performance.
+The bounded measurement protocol starts from an explicitly identified carrier C0. C0 produces output O1, from which C1 is built; C1 produces O2. If O1 and O2 match, measure C1. Otherwise build C2 from O2 and compare its O3 with O2; measure C2 if they match, and fail if they do not. Each output includes both LLVM and runtime material. Repeated timing runs must reproduce the fixed-point outputs. Report which compiler produced the measured outputs, not the carrier's timing as if it were the stabilized compiler's performance.
 
 A performance claim names the measured interval, source/std/dependency hashes, carrier and measured compiler, generations, optimizer/pipeline, runtime/native support, machine conditions, repetition count, and summary. Source-to-LLVM time is not end-to-end build/link time. Compare old/new compilers on the same source when attributing a regression; different sources, thermal conditions, instrumentation, or overlapping jobs can invalidate that inference. Reduced operation counts explain a mechanism but do not establish a net wall-time gain.
 
