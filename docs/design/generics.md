@@ -1,5 +1,8 @@
 # Generics and Body Instantiation
 
+Detailed producer-to-consumer obligations, saved-fact admission, and bounded
+implementation observations are retained in [Frontend Handoffs](frontend-handoffs.md).
+
 ## 1. Responsibility and Boundaries
 
 Generic source checking establishes a body's meaning under its declared parameters and bounds. Instantiation applies a particular environment to that saved meaning and closes the obligations required for the requested concrete operation. Monomorphization discovers and prepares concrete bodies for execution. These are distinct responsibilities even when existing code places them in the same module.
@@ -112,3 +115,7 @@ The inspected implementation exposes [`matchTypeArgumentConstraints`](../../src/
 The registry currently reserves signature rows during registration and exposes separate setters; registration is therefore visibly not signature completion. Adapter metadata can also be set after registration. Those construction mechanisms are not proof of an immutable successful execution artifact. Declaration-check module gates and chained calls on associated-type or type-parameter results remain unaudited; module exclusion or unknown-type fallback is not the intended abstract-checking contract. Complete environment-constructor coverage, all worklist cycle/failure paths, and every backend/mangling consumer remain unaudited. Retained type-checking candidates add further source-artifact contracts not all present at this base. No compiler execution or performance measurement was performed, and migration into [local issues](../issues/README.md) is in progress.
 
 Chapter review checked abstract/concrete selection, instance identity, recursion/readiness, existential dispatch, specification alignment, and the Rust/Swift comparisons. Concrete witness determination is explicitly unique, not selection of the first candidate encountered. No required correction remained in that scope; this was not a complete implementation audit.
+
+## Retained Follow-up Investigations
+
+[generic inference, projections and conformance audit](../issues/com-uutc.md). These scoped tasks retain implementation limits or uninspected combinations; their existence is not evidence of a current defect or completed coverage.

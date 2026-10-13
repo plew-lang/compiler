@@ -2,6 +2,9 @@
 
 **Status:** Reviewed draft. This chapter defines command orchestration and one-execution ownership. It does not adopt a stable embedding ABI, reusable in-process execution environments, or compiler-owned Hot Restart.
 
+Detailed producer-to-consumer obligations, saved-fact admission, and bounded
+implementation observations are retained in [Frontend Handoffs](frontend-handoffs.md).
+
 ## Responsibility
 
 The driver turns an explicit target/configuration into requests to compiler services, selects artifact consumers, reports results, and manages execution resources. It does not provide alternative checking, ownership, or overload rules. CLI parsing is an adapter to these requests, not the authority for language acceptance.
@@ -180,3 +183,14 @@ Focused source inspection uses compiler revision `6fe09bc7c0e75260b3f77364392147
 - `distribution/_.pw` dispatches check directly and run to the worker adapter. `native/tool.cpp` resolves dependencies for build/run, invokes the one-shot worker, forwards signals, waits for completion, and links through a pending output before committing it. This is selected-path inspection, not proof of complete command parity.
 
 This audit does not certify every source snapshot race, target selector, package command, dependency-resolution path, request cache, foreign signature, global initialization path, signal race, failure cleanup, or ABI trampoline. Check's dependency-resolution parity with build/run requires explicit audit; direct dispatch alone does not prove it. Whole-program atomic sharing with future spawn and demand checking remains open as noted in Runtime. A finite reusable embedding lifecycle and stable public API remain outside the adopted current execution scope. No compiler/test/performance run was performed for this chapter.
+
+## Demand Execution Integration Audit
+
+The [declaration/execution supplement](declaration-and-execution-audit.md)
+retains the abstract-versus-concrete obligation map, request/cache integration,
+and native probe boundaries. Historical evidence is indexed there; it does not
+certify the current implementation or broaden this chapter's publication guarantees.
+
+## Retained Follow-up Investigations
+
+[process entry and associated storage](../issues/com-8j0w.md), [additional target scope](../issues/com-ej0z.md). These scoped tasks retain implementation limits or uninspected combinations; their existence is not evidence of a current defect or completed coverage.

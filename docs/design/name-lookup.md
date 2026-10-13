@@ -2,6 +2,9 @@
 
 **Status:** Reviewed draft. This chapter defines decision boundaries and required information, not a completed audit of the current resolution passes.
 
+Detailed producer-to-consumer obligations, saved-fact admission, and bounded
+implementation observations are retained in [Frontend Handoffs](frontend-handoffs.md).
+
 ## 1. Responsibility
 
 Declaration registration establishes identities and declared interfaces. Scope construction determines which bindings are available at a source position. Lookup returns the applicable binding or candidate set with its provenance. Semantic checking determines call applicability and selects the source operation; concrete instantiation may later select the first concrete witness for an already chosen abstract requirement.

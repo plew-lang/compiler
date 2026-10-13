@@ -284,3 +284,7 @@ and sanitizer runs including self-hosted code generation where applicable.
 Functional behavior, sanitizer evidence, fixed-point correctness and performance
 are different gates. None was rerun for this document, and absence of an audited
 failure is not proof that every operation or composition is implemented correctly.
+
+## Retained Follow-up Investigations
+
+[place, reentrant commit and iteration ownership coverage](../issues/com-zgk9.md). These scoped tasks retain implementation limits or uninspected combinations; their existence is not evidence of a current defect or completed coverage.

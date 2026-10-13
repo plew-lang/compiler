@@ -1,5 +1,8 @@
 # Expression and Body Checking
 
+Detailed producer-to-consumer obligations, saved-fact admission, and bounded
+implementation observations are retained in [Frontend Handoffs](frontend-handoffs.md).
+
 ## 1. Responsibility and Boundaries
 
 Source body checking owns the meaning of expressions and statements under a declaration's lexical environment. It applies permitted contextual information, selects calls and members, checks complete type compatibility, and records source control transfer. Its successful result is the authority for instantiation and Mid construction. Neither a later verifier nor the backend is another source type checker.
@@ -167,3 +170,7 @@ Inspected source base: `6fe09bc7c0e75260b3f773643921478b5020b94f`. [Record.pw](.
 The paused type-checking review identifies incomplete producer-to-consumer closure, independent selectors, and expensive snapshot acquisition. Its retained implementation candidates are not all present in this inspected source base. This chapter describes the intended authority and publication contracts without claiming those candidates have completed them. Every expression form, synthetic path, storage cost, and final consumer has not been audited here. No compiler execution or performance measurement was performed; [local issue management](../issues/README.md) is available, with gap migration in progress.
 
 Chapter review checked source authority, inference/completion semantics, owner publication, final-consumer paths, and the primary-language comparisons. Receiver and logical result signature contents and forward-inference/completion examples were made explicit. No required semantic correction remained within that scope. The unresolved physical storage/API decision still blocks implementation restart; chapter review does not discharge it.
+
+## Retained Follow-up Investigations
+
+[retained acceptance-combination audit](../issues/com-uutc.md), [closure environment shapes](../issues/com-b1ro.md), [unique result and region boundaries](../issues/com-5n4i.md). These scoped tasks retain implementation limits or uninspected combinations; their existence is not evidence of a current defect or completed coverage.

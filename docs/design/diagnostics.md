@@ -79,3 +79,7 @@ Focused source inspection uses compiler revision `6fe09bc7c0e75260b3f77364392147
 - Compiler/execution adapters drain queued diagnostics and emit returned failures. Native LLVM/tool messages also have direct stderr paths outside CompileDiagnostic. Their presence does not establish a unified structured diagnostic transport or returning API migration.
 
 Full producer coverage, precise generated-origin chains, deduplication across all instances, every terminal call site, error recovery, and complete diagnostic ordering remain unaudited. The physical format for richer provenance is not fixed here. No compiler/test/performance run was performed for this documentation chapter.
+
+## Retained Follow-up Investigations
+
+[structured call failure coverage](../issues/com-lndr.md). These scoped tasks retain implementation limits or uninspected combinations; their existence is not evidence of a current defect or completed coverage.

@@ -86,3 +86,7 @@ Concrete handoff fields at these inspected revisions include `SyntaxNameSegment`
 Unverified scope includes complete grammar/materializer coverage, all normalized control metadata, all source-offset ownership dependencies, and downstream consumption of every synthetic operation. No parser suite, compiler execution, or performance measurement was run for this chapter. [Local issue management](../issues/README.md) is available, with gap migration in progress; these limits must not be read as a clean implementation audit.
 
 Chapter review found no blocking design problem. The distinction between executable interpolation synthesis and required static source checking was clarified in response to review. The implementation limits above remain unchanged.
+
+## Retained Follow-up Investigations
+
+[shared grammar/materialization coverage](../issues/com-2p9p.md). These scoped tasks retain implementation limits or uninspected combinations; their existence is not evidence of a current defect or completed coverage.

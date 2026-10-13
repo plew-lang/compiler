@@ -1,5 +1,8 @@
 # Types and Semantic Evidence
 
+Detailed producer-to-consumer obligations, saved-fact admission, and bounded
+implementation observations are retained in [Frontend Handoffs](frontend-handoffs.md).
+
 ## 1. Responsibility and Boundaries
 
 The semantic type subsystem represents what a type means, applies explicit substitutions, and answers structural relations. Conformance resolution establishes why an operation or conversion is permitted. These responsibilities share type terms but do not collapse into one equality predicate.
@@ -97,3 +100,7 @@ Inspected source base: `6fe09bc7c0e75260b3f773643921478b5020b94f`. Focused inspe
 The retained frontend contracts identify the intended simultaneous substitution, source-selection, and conversion-evidence boundaries. This chapter has not audited every structural visitor, cache key, projection grounding path, or backend witness consumer. No compiler execution or performance measurement was performed. Complete replacement of legacy `TypeRef` interpretation and independent selection remains unverified; absence of local issue links does not indicate resolution while migration into [local issues](../issues/README.md) is in progress.
 
 Chapter review checked responsibility boundaries, specification alignment, retained evidence, and the Rust/Swift comparisons. The clarification separating abstract requirement selection from concrete executable witness preparation was incorporated; no required correction remained in that scope. This review was not a complete implementation audit.
+
+## Retained Follow-up Investigations
+
+[semantic type and retained-evidence coverage](../issues/com-uutc.md). These scoped tasks retain implementation limits or uninspected combinations; their existence is not evidence of a current defect or completed coverage.

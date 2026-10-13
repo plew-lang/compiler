@@ -36,12 +36,16 @@ All planned chapters have reviewed drafts, and the initial cross-chapter review 
 
 ## Detailed Contracts and Decisions
 
+- [Frontend Handoffs and Admission](frontend-handoffs.md) refines saved semantic facts, publication and final-consumer admission.
+- [Declaration and Execution Audit](declaration-and-execution-audit.md) retains declaration obligations and scoped demand-execution audit details.
 - [Mid Operation Details and Execution-Entry Audit](mid-entry-audit.md) retains operation-level invariants and the scoped entry/probe map.
 - [Collections and the Safe Buffer Floor](collections-and-buffer.md) refines the runtime, ownership and representation contracts for safe collection storage.
 - [Explicit Divergence](decisions/divergence.md) retains the adopted completion policy and rejected alternatives.
 - [Hot Restart](decisions/hot-restart.md) separates the approved future host direction from current one-shot execution and historical feasibility evidence.
 
 ## Reading and Maintenance
+
+[Maintenance policy](maintenance.md) defines writing, review, adoption, decision retention and the boundary between design completion and implementation completion.
 
 Start with the architecture's responsibility map and follow the reading paths relevant to the change. Chapter boundaries describe conceptual ownership, not mandatory source modules.
 

@@ -125,3 +125,7 @@ The existing module split maps the remaining plan responsibilities as follows. `
 An older meta note describes declaration-level global analysis as unconnected. Focused inspection of `CheckedProgram.pw`, `DeclarationProgram.pw`, and `Mid/DeclarationAccess.pw` instead shows whole-target checking calling declaration preparation, collecting roots/explicit obligations, and solving the shared graph. This supersedes that narrow stale note; it does not prove that every deferred obligation is discharged. Whole-program or lazy-publication correctness is not proven by the focused inspection above. Demand-driven summary closure/invalidation and all-path runtime reservation emission require further audit in the driver, runtime, and verification chapters.
 
 Upstream checked-body storage remains unresolved. Full lifetime-region inference, generalized partial moves, and finer dynamic-callee effect precision are not implied as implemented or adopted extensions. Current required borrow/exclusivity checks remain mandatory while those extensions are absent.
+
+## Retained Follow-up Investigations
+
+[unique result and region boundaries](../issues/com-5n4i.md), [closure ownership shapes](../issues/com-b1ro.md), [deep destruction stack use](../issues/com-7g6i.md). These scoped tasks retain implementation limits or uninspected combinations; their existence is not evidence of a current defect or completed coverage.

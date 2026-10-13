@@ -1,5 +1,8 @@
 # Representation and ABI
 
+Detailed producer-to-consumer obligations, saved-fact admission, and bounded
+implementation observations are retained in [Frontend Handoffs](frontend-handoffs.md).
+
 ## Responsibility and Scope
 
 Representation lowering maps completed semantic types and ownership contracts to target storage and calling conventions. It owns physical field types, boxing boundaries, alignment/layout queries, parameter/result representation, implicit environment lanes, and boundary conversions. It does not infer source types, select trait witnesses, change access modes, or turn physical layout equality into semantic type equality.

@@ -108,3 +108,7 @@ The following is a source inspection at compiler revision `6fe09bc7c0e75260b3f77
 - `native/compiler_execution.cpp` owns copied argument strings and a pointer view, installs the application view, and restores the previous view on destruction. Its main-call boundary explicitly retains execution-lifetime obligations beyond main return. This does not establish a general multi-environment API. `native/llvm_backend.cpp` disables default process-symbol lookup for source modules and provides selected memory-service fallbacks separately; this inspected separation is not a complete runtime-symbol ownership audit.
 
 Compound Promise payload ownership, actual I/O waiting, spawn/channel execution and atomic allocation selection, collector support, allocation failure/overflow handling, full intrinsic coverage, and every reentrant/native callback path are not verified by this inspection. Existing known implementation restrictions remain restrictions rather than adopted language prohibitions. Compiler/application shared scheduling-state isolation and safe reusable embedding also need a separate lifecycle audit before stronger claims are made.
+
+## Retained Follow-up Investigations
+
+[deep destruction stack use](../issues/com-7g6i.md), [async payload/frame coverage](../issues/com-tn1m.md). These scoped tasks retain implementation limits or uninspected combinations; their existence is not evidence of a current defect or completed coverage.
