@@ -39,6 +39,12 @@ Resolution follows the specification's newest-compatible policy, with the top-le
 
 The resolver publishes direct dependency bindings per package. A transitive package's presence in the compilation does not grant a source-level `@Name` binding to its consumer. Explicit re-publication exposes the original declaration through the publishing package's API; it does not grant direct access to that dependency's package namespace.
 
+### Compiler-Known Declaration Contracts
+
+Dependency resolution selects the admitted package versions, including Std; declaration registration binds compiler-known language operations, protocol mappings, and intrinsics to declarations from those admitted inputs. Registration owns validating their required signatures and ownership contracts before publishing consumable semantic identities. Equal spelling in an unrelated module is not such a binding, and registration of an identity alone is not proof that its required contract passed.
+
+Checking uses these identities through ordinary applicability and conformance evidence. Syntax lowering, Mid, ABI, and runtime emission consume the validated operation contracts rather than rediscovering a privileged declaration by name or silently accepting a replacement signature. Changing a known operation therefore requires updating its registration contract and its consumers together. This assigns responsibility without adopting a new registry API or claiming that every existing intrinsic path already meets it.
+
 ## 3. Source Access and Admitted Inputs
 
 Filesystem sources and embedded standard resources implement a common source-access boundary. Embedded resources occupy a distinct logical namespace. A missing embedded source must not silently fall back to a neighboring checkout, because that changes the admitted implementation while concealing its origin.

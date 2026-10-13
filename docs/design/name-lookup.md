@@ -69,6 +69,14 @@ Downstream readers cannot recover a missing required selection by rerunning name
 
 Declaration-time conflict checking and use-site ambiguity are also separate. Some duplicate definitions are invalid immediately; some independently qualified trait members may coexist and only a bare call is ambiguous. Neither registration order nor removing a candidate as a performance shortcut may change that distinction.
 
+### Shared Callable Applicability
+
+Ordinary calls, trait satisfaction, and `via` delegation use the same callable applicability rules. Lookup supplies candidates; semantic applicability determines the operation each candidate can provide. Its retained plan identifies the declaration, explicit-argument mapping, omitted defaults and their declaration environment, substitutions and evidence, and any delegation path. Conformance checking proves that the entire required operation is available, rather than testing one favorable concrete argument value.
+
+An implementation `factory(count: I64 = 5)` can satisfy declared requirements for both `factory()` and `factory(count: I64)`, subject to the ordinary conformance declaration and compatibility rules. Trait requirements do not declare defaults. Concrete and generic calls use the selected implementation's defaults; there is no competing trait-default authority. Visibility, callable kind, result/failure types, ownership, and async compatibility remain mandatory.
+
+Body checking retains the selected plan. Lowering realizes it as ordinary expression evaluation and a complete argument call; witness or delegation entries are ordinary forwarding bodies derived from the same plan. Explicit arguments are evaluated in source order, then omitted defaults in parameter declaration order, before operands are arranged in parameter order. Plans may be shared; evaluated default values are not cached. This does not require enumerating every omission combination or adding default-specific Mid execution semantics. [Body checking](body-checking.md) owns the evaluation plan; Mid and ownership preparation realize its evaluation order, access completion, and temporary lifetime contracts. [Generics](generics.md) owns concrete evidence and adapters.
+
 ## 7. Change Impact and Verification
 
 Changing an import form affects binding construction and public-surface lookup before it affects applicability. Adding an overload affects declaration conflict checks, candidate-set construction, contextual hints, and selected-call publication. Adding a new member surface requires an explicit participation rule and evidence path; a new spelling scan in a later pass is insufficient.

@@ -8,7 +8,7 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 
 ## Available Chapters
 
-1. [Architecture and Design Principles](architecture.md) — first draft for review.
+1. [Architecture and Design Principles](architecture.md) — reviewed draft.
 2. [Compiler State, Identity, and Computation](compiler-state.md) — reviewed draft; physical checked-body storage remains unresolved.
 3. [Sources, Packages, and Modules](sources-and-modules.md) — reviewed draft.
 4. [Syntax and Semantic Input](syntax.md) — reviewed draft.

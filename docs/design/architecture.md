@@ -1,6 +1,6 @@
 # Architecture and Design Principles
 
-**Status:** First draft for review. The boundaries below describe the intended architecture based on adopted decisions. They do not certify that the current implementation satisfies every boundary. Unresolved details are identified explicitly.
+**Status:** Reviewed draft. The boundaries below describe the intended architecture based on adopted decisions. They do not certify that the current implementation satisfies every boundary. Unresolved details are identified explicitly.
 
 ## 1. Purpose, Scope, and Constraints
 
@@ -173,7 +173,7 @@ These are responsibility maps, not implementation task lists. Migration issues m
 
 ## 7. Reading Paths and Implementation Mapping
 
-[Compiler State, Identity, and Computation](compiler-state.md) defines the shared session and publication contracts. Other detailed chapters are planned, not yet published; their names below indicate responsibility destinations rather than existing links.
+[Compiler State, Identity, and Computation](compiler-state.md) defines the shared session and publication contracts. The remaining chapters listed in the [design index](README.md) define the detailed responsibility boundaries.
 
 | Task | Primary reading path |
 |---|---|
