@@ -22,4 +22,3 @@ Evidence: spec/04-execution/15-modules.md shared struct section; former meta C c
 ## Acceptance Criteria
 
 Audit shared Syntax, AST/semantic type representation, layout, construction/access, imported/exposed direct/indirect calls and diagnostics. Record confirmed gaps, then close accepted-spec support through all consumers with target-specific C comparisons, two-way calls, inout, stack/results, O0/O2 and applicable sanitizer checks. Unsupported targets must reject explicitly; reference Clang remains a development tool.
-

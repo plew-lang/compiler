@@ -22,4 +22,3 @@ Evidence: retained meta evidence/2026-10-01 compiler/static-llvm-performance and
 ## Acceptance Criteria
 
 Rebuild selected current sources with recorded compiler/tool/archive/resource/license hashes and target/minimum OS. Audit non-OS dynamic closure and run relocation with only allowed OS tools, then independently verify clean supported hosts and minimum OS. Exercise build/run/check/gen/resolve, diagnostics/output preservation, explicit checkout resource selection, and separate git/native dependency requirements. Complete applicable suites, sanitizer, fixed point/performance and promotion criteria; record signing/notarization and release identity. Do not equate local PATH hiding or historical gate success with release completion.
-

@@ -22,4 +22,3 @@ This is deferred design work and unimplemented general interoperability, not a c
 ## Acceptance Criteria
 
 Decide the unresolved public boundary with the user, then specify producer-to-consumer eligibility, ABI, ownership, failure, and lifetime checks. Implement/test accepted routes and rejected labeled/capturing/incompatible routes through variables, generic instances, returns and storage. Preserve the common runtime and ordinary demand compilation, without runtime ABI switching.
-

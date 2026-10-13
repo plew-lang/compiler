@@ -20,3 +20,9 @@ Evidence scope: migrated from meta agents/design-decisions.md at d2c317318126e99
 ## Acceptance Criteria
 
 Audit current implementation, preserve selected protocol from semantic roots through allocations and consumers, and obtain a design decision for any newly necessary lazy/concurrent interaction instead of silently guessing confinement.
+
+## Retained provisional audit scope
+
+Also audit sendable closure snapshot captures, sendable-to-ordinary function guarantee erasure, capture ownership/non-escaping use and read capabilities through Ref. The former grammar note reports shallow sendability/type carriers but loud rejection of sendable fn literals and spawn; do not equate accepted type syntax with execution support or turn this retained limitation into a new specification prohibition.
+
+Evidence scope: retained from meta agents/provisional.md at c539d7b96615a5c59c0165b0a5e3df90ec1f8dac; grammar-specific items additionally come from agents/grammar.md at that revision. These notes mix historical reproduction and uninspected combinations. No current compiler run or exhaustive implementation audit was performed during migration. Recheck current source and minimal run/reject inputs before claiming a defect; close resolved investigations with evidence rather than weakening the specification.

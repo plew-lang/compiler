@@ -22,4 +22,3 @@ Evidence: compiler source base 6fe09bc7c0e75260b3f773643921478b5020b94f; src/Mid
 ## Acceptance Criteria
 
 Prove and test that malformed unique Copy cannot become accepted through return transfer. Cover unknown/incomplete destruction information, valid eligible temporaries, and named/borrowed/special exclusions. Preserve full-body occurrence counting and final-consumer validity. Close with the actual proof or fix and its scoped verification.
-

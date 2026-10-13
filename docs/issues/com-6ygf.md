@@ -22,4 +22,3 @@ Evidence: compiler source base 6fe09bc7c0e75260b3f773643921478b5020b94f, recheck
 ## Acceptance Criteria
 
 Reject a nonempty incompatible ORC layout before publication; allow absent layout to be attached at the appropriate boundary. Test compatible/absent/incompatible layouts and failure ownership on object and ORC paths. Verify earlier layout-dependent emission uses the same target contract; update design audit scope.
-
