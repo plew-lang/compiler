@@ -35,6 +35,31 @@ Call arguments, expected-result refinement, and construction fields use one stru
 
 Matching distinguishes success, deferred obligations, structural mismatch, and conflicting bindings. Every occurrence of a binder must agree. Build tentative mappings separately so a failing candidate cannot partially modify published state. Independent candidates discovered while other constraints remain deferred may be retained, but are not conformance proof; signature checking must still close the obligations. Expected-result refinement commits only successful matches. Matching alone does not establish passing modes, bounds, views, conversions, or whole-call validity.
 
+### Declaration-bound Evidence Transport
+
+Callee environments retain evidence by declaration-bound identity, not only type
+arguments and one receiver/provided proof. Environment rebuilding and equality
+must preserve those bindings; a legitimate empty set differs from missing or
+unprepared evidence. Function, requirement, conformance and associated-clause
+identities cannot be interchanged merely because their bound arrays have the same
+length or order.
+
+Public requirement evidence and implementation-body assumptions have different
+owners. Conformance preparation retains the derivation from original requirement
+clauses, selected conformance and implementation declaration to each implementation
+bound. Instantiation applies that saved derivation in the explicit environment,
+including weaker/reordered implementation bounds and supertrait/where entailment.
+The final body receives implementation-bound identities; intermediate requirement
+bindings are not themselves proof that the body environment is complete.
+
+Presence obligations do not automatically demand unique member dispatch. A saved
+existence proof cannot silently choose a caller path as a shared callee's dispatch
+priority. Prepare the evidence actually demanded by saved member/conversion/
+protocol operations, preserve required uniqueness, and keep first concrete
+preparation distinct from reselection of an already committed witness. Declaration
+worklists and execution preparation use the same explicit evidence contract,
+without making ambient monomorphization cursor state authoritative.
+
 ## 4. Instance Identity and Registration
 
 An executable body identity includes its selected declaration/body origin and complete semantic environment. Different receiver terms, lexical mappings, or selected static evidence cannot collapse merely because their machine layouts or ABI signatures match. Closure, global-initializer, default-generator, and adapter origins must remain distinct where their bodies or obligations differ. A registry may represent them using synthetic function keys, provided those keys have explicit ownership and stable provenance.
@@ -119,3 +144,11 @@ Chapter review checked abstract/concrete selection, instance identity, recursion
 ## Retained Follow-up Investigations
 
 [generic inference, projections and conformance audit](../issues/com-uutc.md). These scoped tasks retain implementation limits or uninspected combinations; their existence is not evidence of a current defect or completed coverage.
+
+## Pending Representation Decision
+
+[Checked-body Storage](checked-body-storage.md) owns the unresolved physical
+representation and implementation restart checklist. [met-si6j](../issues/met-si6j.md)
+owns remediation completion; [met-ia09](../issues/met-ia09.md) tracks saved evidence
+through real callee environments. The contracts above do not certify that all
+current consumers implement them.

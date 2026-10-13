@@ -11,7 +11,7 @@ tags: [frontend, generics, verification]
 ---
 # Audit retained frontend acceptance combinations
 
-This is the checklist specifically retained from provisional notes, to be integrated with the broader type-checking remediation issue when created; it does not authorize restarting the paused implementation. Design: [body checking](../design/body-checking.md), [types](../design/types-and-evidence.md), [generics](../design/generics.md), [lookup](../design/name-lookup.md).
+This is the checklist specifically retained from provisional notes, linked to the broader [type-checking remediation parent](met-si6j.md); it does not authorize restarting the paused implementation. Design: [body checking](../design/body-checking.md), [types](../design/types-and-evidence.md), [generics](../design/generics.md), [lookup](../design/name-lookup.md).
 
 - Nested generic argument inference; explicit type-argument free calls, including historical `first[I64](values: [42])` lacking context and ExprAst.Call not retaining type arguments; distinguish R7-T2 where an earlier typed argument fixes T. Associated-result inference, projection chains, multiple conformances with trait arguments, and array invariance with views.
 - Abstract generic and generation-program checking scope; type-parameter name scope; public API closure, republication/name conflicts and part use ownership. Module gates are not assumed trustworthy boundaries.

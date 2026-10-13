@@ -114,3 +114,10 @@ Inspected source base: `6fe09bc7c0e75260b3f773643921478b5020b94f` (documentation
 These observations do not prove every request key, writer, cycle path, or final reader satisfies this chapter. The paused type-checking work includes unresolved physical publication/storage boundaries and source-selection duplication. No new runtime or performance experiment was performed for this chapter. [Owner publication and final-consumer closure](../issues/met-si6j.md) tracks the retained migration boundary; absence of additional issue links is not an implementation-completeness claim.
 
 Chapter review found no blocking design problem. Physical storage and domain-specific publication APIs still require resolution in their owning chapters; this review does not certify their implementation.
+
+## Unresolved Checked-body Storage
+
+The concrete ownership/storage choice and implementation restart requirements are
+in [Checked-body Storage](checked-body-storage.md); this chapter retains the logical
+session and publication contracts. [met-si6j](../issues/met-si6j.md) tracks whole-path
+completion, rather than equating private stores with a sealed successful owner.

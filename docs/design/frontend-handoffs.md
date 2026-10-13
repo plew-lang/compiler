@@ -497,3 +497,17 @@ Physical storage must be decided with concrete saved fields, acquisition/append
 cost, copying/retaining, indexing, and failure isolation before paused
 implementation resumes. A generic all-types layout-use table with no actual
 consumer is not adopted: it duplicates facts and can add quadratic work.
+
+## 12. Storage Decision and Remediation Boundaries
+
+[Checked-body Storage](checked-body-storage.md) owns concrete storage alternatives,
+worked producer-to-consumer paths, cost comparison and the five implementation
+restart requirements. It is unresolved design, not another logical authority.
+The [remediation parent](../issues/met-si6j.md) owns the eleven completion criteria;
+[selection](../issues/met-ucze.md), [source publication](../issues/met-acfl.md),
+[callee evidence](../issues/met-ia09.md) and [conversion/descriptor consumers](../issues/met-6e6k.md)
+retain responsibility-specific residual audits. Earlier bounded implementation
+observations in section 11 must be read with the
+[migration evidence](../../../evidence/typechecking-remediation/design-migration.md);
+later cumulative candidates supersede earlier next-step descriptions without
+transferring unperformed final gates.

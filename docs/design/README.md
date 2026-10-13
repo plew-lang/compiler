@@ -4,7 +4,7 @@
 
 This reference describes the adopted architecture and the contracts that implementation should satisfy. It is not a claim that every contract is implemented. Chapters distinguish design, unresolved decisions, and audited implementation scope.
 
-The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SPEC.md) owns language semantics. This reference owns how the compiler realizes those semantics. Operational instructions, validation baselines, and current work remain in their existing documents; implementation gaps belong in [local issues](../issues/README.md); migration of existing records is in progress.
+The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SPEC.md) owns language semantics. This reference owns how the compiler realizes those semantics. Operational instructions, validation baselines, and current work remain in their existing documents; implementation gaps belong in [local issues](../issues/README.md).
 
 ## Available Chapters
 
@@ -32,10 +32,11 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 
 18. [Verification and Validation](verification.md) — reviewed draft; evidence scope remains distinct from implementation completeness.
 
-All planned chapters have reviewed drafts, and the initial cross-chapter review corrections are incorporated. Existing-document consolidation and implementation-gap migration remain in progress. Final consistency review and first-edition confirmation are still required.
+All planned chapters have reviewed drafts, and the initial cross-chapter review corrections are incorporated. Prior contracts, rationale, implementation gaps and scoped evidence have been consolidated into their authoritative homes and independently checked against the original records. First-edition confirmation with the user remains required.
 
 ## Detailed Contracts and Decisions
 
+- [Checked-body Storage and Implementation Restart](checked-body-storage.md) records the unresolved physical storage/API decision and the gate before paused compiler work resumes.
 - [Frontend Handoffs and Admission](frontend-handoffs.md) refines saved semantic facts, publication and final-consumer admission.
 - [Declaration and Execution Audit](declaration-and-execution-audit.md) retains declaration obligations and scoped demand-execution audit details.
 - [Mid Operation Details and Execution-Entry Audit](mid-entry-audit.md) retains operation-level invariants and the scoped entry/probe map.

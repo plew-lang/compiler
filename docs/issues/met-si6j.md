@@ -9,23 +9,47 @@ priority: 1
 assignee: Koji Murata
 tags: [frontend, generics, verification]
 ---
-# Close checked frontend owner publication and saved-evidence consumers
+# Complete checked frontend authority from source to final consumers
 
+This is the parent for the paused type-resolution/type-checking remediation. The target is one body-checking authority for committed meaning and read-only downstream consumption under explicit environments, not one AST walk. Two mandatory rules apply to every increment: **close storage through final use** and **do not stop at adding checks**. Remove the replaced decision path and structurally close write authority.
 
-The retained frontend remediation candidate has private proof/call pools and some prepared readers, but this does not close owner-wide post-success append/replacement authority or every saved-evidence consumer. Physical checked-body storage remains undecided. This is incomplete migration/audit work, not a freshly reproduced current-tree bug.
+## Scope and Restart
 
-Design: [Frontend handoffs](../design/frontend-handoffs.md), [Compiler State](../design/compiler-state.md), [Body Checking](../design/body-checking.md), and [Types and Evidence](../design/types-and-evidence.md). The meta type-checking remediation plan/worklog owns paused work selection. Do not resume implementation before its checked-body physical storage decision is resolved.
+Scope is the compiler's currently provided type-checking surface and the already approved divergence/flow changes. This is not a requirement to implement every unsupported feature, broaden inference or implicit conversions, redesign runtime/backend, or add persistent incremental compilation. Declaration worklists interpret saved obligations; they must not become another AST-driven type checker.
 
-## Retained Scope
+Implementation is paused until [checked-body storage and the restart design](../design/checked-body-storage.md) are concrete and reviewed. Preserve existing successful increments; establish a fresh cumulative baseline before further changes. Worklog owns the selected candidate/carrier, active handles, verification and next step. Historical candidates and measurements in [migration evidence](https://github.com/plew-lang/meta/blob/main/evidence/typechecking-remediation/design-migration.md) do not establish current-tree readiness.
 
-- Choose immutable owner payload versus a shared store/prepared handle using concrete saved fields, acquisition/append/copy-retain cost, indexing, and failure isolation; do not treat current private arrays as that decision.
-- Seal all successful source facts, source-call membership/templates/pools, proof-bearing tables, and finalization writer authority. Ready rows and decoders cannot manufacture owner success. Preserve stable failure and same-session/snapshot authority.
-- Close Static/protocol/operator/implicit/entry body-request paths over recorded evidence, distinguishing requirement signature from implementation obligations. Written Direct's saved-child-proof path is bounded precedent, not whole coverage.
-- Close constructing and prepared readers, dynamic/descriptor dependencies, source result/signature/bound/conversion coverage, nominal/binder stamping, and Unit value-binding/conversion consumers. Uninspected coverage is not a new source prohibition.
-- Preserve typed proof endpoints, exact lexical assumption scope, path/Box/conversion admission and saved projection equations without witness reselection. Remove superseded AST/name/ambient-cursor fallbacks rather than adding another validation layer.
+Design authorities: [Body Checking](../design/body-checking.md), [Types and Evidence](../design/types-and-evidence.md), [Generics](../design/generics.md), [Compiler State](../design/compiler-state.md), [Frontend Handoffs](../design/frontend-handoffs.md). The storage supplement owns unresolved physical design and restart details; these chapters own logical contracts.
 
-Evidence: former meta agents/frontend-contracts.md at meta revision `c539d7b96615a5c59c0165b0a5e3df90ec1f8dac` and meta evidence/typechecking-remediation, especially call-bound-admission, source-typing-closure, diagnostic-continuation and proof-admission directories. Historical source-template slices cite ce6e87fd and 16f5af17. Their focused results do not certify the current whole compiler. Completion-flow migration is separately tracked by com-tijs; unsupported closure shapes by com-b1ro; broader acceptance combinations by com-uutc.
+## Completion Criteria
 
-## Acceptance Criteria
+Each item requires implementation locations and scoped verification records, not checkbox completion from wrappers or green tests alone.
 
-Resolve storage with explicit ownership/failure/cost reasoning; trace each saved fact from its producer and successful owner to its final consumers; remove competing selection authorities; exercise malformed/foreign/missing/pending evidence and positive controls through AOT/JIT. Complete applicable paused-work correctness, fixed-point, sanitizer and performance gates. Update canonical contracts and evidence scope without declaring completion from private stores or check additions alone.
+1. [ ] Expected types only fill permitted unknown information or check compatibility; they never overwrite expression shape, explicit or committed semantic type.
+2. [ ] Distinguish unrecorded facts, local inference variables, deferred obligations, incompatibility, Unit, rigid parameters and no normal value. No unresolved source typing obligation survives successful publication.
+3. [ ] One authority for types, calls, proofs and conversions connects source recording/success through explicit instantiation to final Mid/backend consumers; no AST reinference or name reselection by final readers.
+4. [ ] Functions, factories, adapters, operators and implicit calls check complete signature, labels, ownership modes and bounds; candidate existence is not final validity.
+5. [ ] Under the same available context, expression wrapping changes acceptance only where the adopted value/divergence rules require it. Block/if/match/short-circuit share normal results and exit targets; checked dead code cannot contaminate live joins.
+6. [ ] Integrate approved divergence: value-position rejection, following-code errors versus analytical-loop warnings, loop-following give, empty match, diverging function values versus invocation and forbidden normal-function conversion. Centralize semantic completion; keep diagnostic reachability distinct from execution/ownership flow.
+7. [ ] check/build/run/gen use the same semantics for requested bodies. Lazy run may omit unused bodies; it may not defer invalidity in a requested body.
+8. [ ] Remove migrated reinference fallbacks, partial acceptance and duplicate semantic state; structurally separate constructing writers from immutable readers. Retained adapters are one-way representation transforms. Demonstrate final consumers, removed decisions and post-completion write rejection.
+9. [ ] Close historical D1/D4/D5 controls and classify/address D2/D3/D6 risks. Uninspected coverage is not completion; preserve representative positive/reject combinations.
+10. [ ] Complete normal, generation, dependency, ASan/LSan, fixed-point and formal performance gates with matching source/carrier/artifacts. Satisfy the retained 5.7-second condition or obtain an explicit approved change; focused and old-driver checks do not substitute.
+11. [ ] Synchronize design contracts, issue state and worklog. Unresolved in-scope items preclude completion; main integration follows the normal integration criteria.
+
+## Work Units
+
+- [met-j9mv](met-j9mv.md)
+- [met-ucze](met-ucze.md)
+- [met-ia09](met-ia09.md)
+- [met-acfl](met-acfl.md)
+- [met-6e6k](met-6e6k.md)
+- [met-rzt4](met-rzt4.md)
+
+Completion-flow work also uses [com-tijs](com-tijs.md) and the existing control-flow audit [com-gyup](com-gyup.md). [com-uutc](com-uutc.md) is a retained adjacent acceptance audit, not an automatic expansion of this parent's required scope. Unsupported unique/capture shapes keep their separate tasks.
+
+## Stop Conditions
+
+Stop for an unapproved specification change; a language-specific design decision not derivable from adopted policy/Rust/Swift references; tooling/environment failure preventing necessary validation after diagnosis; or self-compilation at least 5.7 seconds when repair is judged difficult. A threshold crossing alone does not establish irreparable cost: investigate with matching-source comparisons. Do not weaken validators, checks, test expectations or performance conditions to continue.
+
+Stop for erroneous tests except authorized cases: tests broken by an approved specification change, internal non-language-surface tests, or newly written tests that have never passed may be repaired after preserving their original purpose. An unrelated known limitation need not block a bounded required fix. Keep unresolved design issues explicit rather than calling a compromise the final design.
