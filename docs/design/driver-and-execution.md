@@ -86,7 +86,7 @@ A failed/unknown ID returns failure. A snapshot's continued ownership is not per
 
 The one-execution process owner keeps ORC code/globals, program arguments, and registration alive through all permitted callbacks, including native exit callbacks. Main return alone does not end their lifetime. For any finite-lifetime owner, first prevent further entry and finish callbacks, then destroy ORC/executable resources before releasing callback/session ownership; borrowed argument views must be restored before their owned strings disappear. ORC's engine/generators must not outlive the trampoline resources they use.
 
-The current process-lifetime owner is not a reusable in-process Restart API. Process termination can let the OS reclaim resources without adding a guarantee to run every user deinit. A future reusable host must separately establish callback quiescence, pending-work disposal, global/state teardown, and resource reconstruction. Reusing the current global owner without that protocol is not an implementation shortcut.
+The current process-lifetime owner is not a reusable in-process Restart API. Process termination can let the OS reclaim resources without adding a guarantee to run every user deinit. A future reusable host must separately establish callback quiescence, pending-work disposal, global/state teardown, and resource reconstruction. Reusing the current global owner without that protocol is not an implementation shortcut. The [Hot Restart decision](decisions/hot-restart.md) retains the approved future host direction, rejected Hot Reload alternative, historical feasibility evidence, and limits without extending the current execution API.
 
 ## Failure and OS Integration
 
