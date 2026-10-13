@@ -8,6 +8,13 @@ Plew's compiler translates the language's explicit meaning into an executable re
 
 The [language specification](https://github.com/plew-lang/spec/blob/main/SPEC.md) defines observable behavior and source-level acceptance rules. Value semantics, explicit shared identity, unique ownership, and the event-loop execution model are language contracts. ARC and CoW realize those contracts without making their physical costs part of ordinary source reasoning. Compiler transformations may remove costs but must preserve meaning.
 
+The language targets stateful client applications and servers within one
+monorepo, including WASM web and native development. This reference does not
+establish an implementation priority between those targets. Target support
+must be demonstrated separately. Explicit meaning and provenance take
+priority over ambiguous convenience; hiding allocation or ARC mechanics is
+permission to remove cost without changing meaning, not to disregard cost.
+
 The current architectural choices are a self-hosted compiler, shared `@Plew/Syntax` infrastructure, a place-based non-SSA Mid, and an LLVM backend serving ahead-of-time compilation and ORC execution. These are adopted implementation choices, not claims that the language requires those particular mechanisms. Changing them requires an explicit design decision rather than a local fallback.
 
 This chapter defines major responsibilities and handoffs. It does not define every IR instruction, cache key, or runtime layout. Nor does it promise persistent incremental compilation, a stable binary embedding interface, additional backends, or compiler-owned Hot Restart orchestration.

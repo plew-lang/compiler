@@ -92,6 +92,14 @@ The visible `@[...]` directive is the auto-part trigger for the corresponding `.
 
 Host tools and target artifacts may need different target configuration and native dependencies. Their source universes and cache validity must be explicit even when they select the same package revision. A host-built generator's successful execution is not evidence that its output is valid for the target.
 
+Construction inputs and post-construction field access are independent
+permissions. Explicitly publishing a default memberwise factory does not require
+public fields; its exposed argument types still satisfy public API closure.
+Default factory visibility remains module-local. The [construction
+specification](https://github.com/plew-lang/spec/blob/main/spec/02-type-system/05-structs-enums.md)
+owns these rules; lookup supplies their declaration/module provenance rather
+than inferring access from a field's physical layout.
+
 ## 6. Example and Change Impact
 
 Suppose `Models/_.pw` defines a type and includes `part ./Impl`, while `App.pw` writes `use ./Models only { Item }`. Discovery resolves `Models` to its root and assigns `Impl.pw` to that module. Lookup sees `Item` through the root's public surface. Code in `Impl.pw` can see module-owned definitions, but must write its own use directive for an external helper. Attempting `use ./Models/Impl` is rejected as a part target, even if those bytes were already loaded.

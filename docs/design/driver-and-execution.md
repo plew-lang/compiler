@@ -48,6 +48,16 @@ Immutable shared metadata such as generated tables likewise needs an explicit se
 
 Installing storage does not run its initializer. Preparing an initializer does not run it either. The host and generated entry wrapper must agree on the single initialization path; calling both cannot initialize twice. Async initialization follows the language's memoization/dependency rules rather than an invented driver traversal order.
 
+Global initialization follows the specification's eager startup and
+force-on-read protocol: memoized uninitialized/initializing/initialized states
+follow even dependencies reached through function calls, and cycles fail at
+startup rather than exposing partial values. Async initialization has its own
+waiting-cycle rules. These are source requirements, not a claim that every
+current startup path implements them. Generic stored associated values are
+excluded in v1 because declaration-shared versus per-instantiation storage
+would otherwise be unclear; [associated values](https://github.com/plew-lang/spec/blob/main/spec/02-type-system/07-methods-impl.md)
+explain the distinction from computed associated functions.
+
 ## Demand Call and Publication
 
 The following states describe responsibilities, not a required new enum or general-purpose request framework:

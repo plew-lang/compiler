@@ -42,6 +42,16 @@ Ordinary event-loop-confined counts can be non-atomic. Allocations that can be s
 
 The exact raw-buffer header and immortal-storage encoding are private representation choices. Any change must update generated operations, native helpers, constants, and relevant validation together. It must not expose allocation identity as ordinary value equality.
 
+The [concurrency specification](https://github.com/plew-lang/spec/blob/main/spec/04-execution/14-concurrency.md)
+describes future additive cycle reporting/reclamation limited to the shared
+reference graph. Value trees do not require shared identity merely for recursive
+shape. Detected garbage cycles are reported and reclaimed without executing
+cyclic members' user deinit; ordinary ARC destruction remains deterministic.
+Per-thread idle collection requires a safe-point and sharing protocol, not an
+assumed existing collector. [Cycle management](../issues/com-2z5l.md) and
+[concurrency analysis](../issues/com-qzpm.md) retain these implementation
+boundaries separately.
+
 ## Dynamic Access Enforcement
 
 The runtime consumes normalized storage identity and path information from [Access elaboration](ownership-and-access.md). It checks executed accesses against active records, rather than executing a conservative interprocedural effect summary as if every possible branch occurred. Scope entry/exit, alias checks, and proven forwarding permissions must describe the same access lifetime.

@@ -61,6 +61,24 @@ The selected LLVM optimizer, instrumentation pass, link driver, and sanitizer ru
 
 Optimization can erase an invalid access before instrumentation, so raw pre-optimization ownership checks complement normal optimized tests. They cannot be replaced by disabling optimization everywhere or weakening the normal pipeline. Each profile reports its actual input set; partial ownership supplements are not the full corpus, and memory-safety evidence is not a proof of semantic equivalence or absence of all leaks.
 
+## Specified Language-Level Tests
+
+The [language test mechanism](https://github.com/plew-lang/spec/blob/main/spec/04-execution/15-modules.md#テスト)
+is separate from the current fixture runner. Test blocks are declarations,
+collected throughout the selected target independently of references, with
+ordinary module visibility and no macro/name-based discovery. Production
+linking excludes those declarations; ordinary code does not acquire a different
+meaning in a test mode. Tests of non-public members belong to their defining
+module, including its parts.
+
+The expect family uses explicit expected/actual values and a failure channel
+that lets the runner continue; production assert/panic retains its ordinary
+termination behavior. [Implementation and remaining runner
+protocols](../issues/com-8ec0.md) must not be inferred from fixture-suite success.
+Newtype language regressions should define their own types and explicitly
+exercise Self versus concrete positions; Std numeric API validation is a
+separate assertion rather than an incidental dependency of those regressions.
+
 ## Self-Hosting and Performance
 
 Self-hosting checks a specific compiler workload. A fixed point compares the compiler's LLVM and runtime outputs across generations under fixed inputs/toolchain/configuration. It is valuable evidence of reproducibility and bootstrap stability, not proof against a stable miscompilation or proof of whole-language correctness. Native artifact determinism is a different question from comparing raw compiler output.

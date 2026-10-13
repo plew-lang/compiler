@@ -69,6 +69,14 @@ An inherited or forwarding surface can require an adapter around the original bo
 
 A return reads the saved source result and destination contract, then its instance conversion. It does not derive a new source type from an ABI return slot. Provided bodies, closures, globals and ordinary functions all obey the same distinction.
 
+A library's use of Self is intentional: I64 same-kind operations describe their
+applicable parameters, results, associated outputs and trait arguments with
+Self; heterogeneous operands and quantities such as U64 distances retain their
+concrete types. The compiler must not treat a concrete type name as implicit
+Self. [Newtype inheritance](https://github.com/plew-lang/spec/blob/main/spec/02-type-system/10-newtype.md)
+therefore changes only the positions the declaration actually marked. The
+original body remains typed for its original type behind the boundary adapter.
+
 ## 7. Discovery, Recursion, and Execution Readiness
 
 The preparation worklist starts from the command's requested roots and follows selected executable dependencies, including calls, closures when required, destruction, adapters, and runtime/protocol operations. Demand-driven execution may prepare a later target on demand through the common checked boundary; it does not authorize executing an unchecked target or bypassing its instance obligations.

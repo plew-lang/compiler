@@ -99,3 +99,6 @@ Authoring templates/quote/unparser APIs and any future raw-token or DSL macro bo
 Provider Syntax-version isolation, complete freshness receipts, host/runtime dependency splitting, and runner failure/publication protocol are unresolved or unverified. Exact implementation coverage of macrointerface roles, selected-program checking, host dependency discovery and ordinary output rejection has not been fully audited. Retained frontend summaries describing a gen “whole-input check” must be read as selected generation-program checking; inspecting AST input must not require all application bodies to succeed. No compiler execution, generation gate or performance measurement was performed for this chapter. [Local issue management](../issues/README.md) is available; migration of the retained gaps is in progress.
 
 Chapter review checked macro-role identity, syntax versus host-program checking, initialization selection, source/runner boundaries, open protocols and the primary-language comparisons. No required correction remained in that scope. This is not certification of the inspected generation implementation or generation-gate success.
+
+Retained follow-up work on provider-version isolation, host dependencies and
+generated-source freshness is tracked in the [metaprogramming audit](../issues/com-vy62.md).

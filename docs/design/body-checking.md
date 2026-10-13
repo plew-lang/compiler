@@ -36,6 +36,21 @@ For a closure, complete omitted parameter/result annotations from the permitted 
 
 An operator's result expectation is not automatically an operand expectation: receiver `Self`, right-hand type, and associated `Output` can differ. Likewise, a block result's expectation belongs at its yields, not at the value of a nested `return` to another function contract. Optional-chain payload holes receive an explicit child term; they do not make one saved expression arbitrarily change type with each reader's context.
 
+Fixed-width numeric literals are resolved from permitted local context, with
+no default numeric type or later-use global inference. This keeps decisions
+readable in source order and avoids turning an overload ambiguity into a costly
+whole-body search. [Basic types](https://github.com/plew-lang/spec/blob/main/spec/01-basics/02-basic-types.md)
+owns literal ranges and inference rules. The [conversion
+specification](https://github.com/plew-lang/spec/blob/main/spec/03-expressions/12-operators.md)
+distinguishes total From conversions from fallible factory construction; cost
+or physical representation cannot erase that distinction.
+
+Function labels are part of the semantic signature, with argument names or
+explicit suppression rather than separate external/internal aliases. Argument
+reordering and implicit relabeling do not repair incompatibility; an explicit
+closure can express the intended adaptation. Construction syntax likewise
+makes creation visible instead of inferring a conversion from convenience.
+
 ## 4. Blocks, Branches, Patterns, and Completion
 
 A shared value-region operation checks a sequence under an optional result expectation and explicit exit targets. A single block uses it directly; each block-bodied `if` branch and `match` arm uses it with the corresponding region. A bare match arm is an expression-result adapter into the same branch aggregation. Match adds scrutinee/pattern checking, binding construction, arm order, and coverage; it does not own another value-block type checker.
