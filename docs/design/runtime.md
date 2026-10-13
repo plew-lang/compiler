@@ -1,6 +1,6 @@
 # Runtime
 
-**Status:** Draft for review. This chapter defines the common execution protocol and identifies the inspected implementation subset. It does not claim that all concurrency or embedding facilities in the language specification are implemented.
+**Status:** Reviewed draft. This chapter defines the common execution protocol and identifies the inspected implementation subset. It does not claim that all concurrency or embedding facilities in the language specification are implemented.
 
 ## Responsibility and Boundary
 
@@ -66,7 +66,7 @@ An event-loop scheduler is an execution service, not a VM or a compiler. It can 
 
 Loop completion depends on owned pending work, not simply whether main returned or the ready queue is momentarily empty. Timer, I/O, worker completion, and detached-result disposal need explicit registration, completion, and release rules as those facilities are implemented. The specification's spawn/join semantics include worker-loop completion and processing at the registered destination; queue exhaustion in the current timer-only runtime does not implement that contract.
 
-Code, global storage, callback contexts, process-argument views, and runtime support must outlive every permitted callback, including native process-exit callbacks. Returning from a main invocation alone is not permission to unload JIT code. The driver chapter owns the execution-resource lifecycle; this chapter defines what execution participants require from that owner.
+Code, global storage, callback contexts, process-argument views, and runtime support must outlive every permitted callback, including native process-exit callbacks. Returning from a main invocation alone is not permission to unload JIT code. The [driver chapter](driver-and-execution.md) owns the execution-resource lifecycle; this chapter defines what execution participants require from that owner.
 
 Normal-path value destruction is distinct from process/runtime teardown. Panic aborts without unwinding or a deinit guarantee. Process exit and immortal top-level roots likewise do not create a universal destructor pass. Restoring a borrowed host argument view is resource bookkeeping, not a promise to destroy all application values or safely restart an embedded host.
 

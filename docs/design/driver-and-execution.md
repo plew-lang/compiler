@@ -1,6 +1,6 @@
 # Driver and Demand-Driven Execution
 
-**Status:** Draft for review. This chapter defines command orchestration and one-execution ownership. It does not adopt a stable embedding ABI, reusable in-process execution environments, or compiler-owned Hot Restart.
+**Status:** Reviewed draft. This chapter defines command orchestration and one-execution ownership. It does not adopt a stable embedding ABI, reusable in-process execution environments, or compiler-owned Hot Restart.
 
 ## Responsibility
 
@@ -91,6 +91,14 @@ Compiler services return structured diagnostics or domain failures. CLI/process 
 The one-shot worker isolates compiler/application execution from the outer command's process orchestration. The outer command owns spawning, signal forwarding, waiting, exit-status propagation, temporary files, and final artifact publication. Build output must not replace a previous good artifact until generation and linking succeed. A compiler object file alone is not a completed executable.
 
 A stable package-manager/tool installation strategy is separate from these runtime contracts. Single-binary distribution can embed standard resources and runtime objects while still using the permitted OS SDK/linker services. Development versus distribution linking must not change source checking or runtime meaning.
+
+## Change Paths
+
+Adding a command starts with its target/input and required success guarantee, then invokes the existing session services and artifact consumers. A new CLI spelling must not introduce independent source-checking rules. Test unused invalid bodies to distinguish whole-target and demand coverage, and use the same dependency/configuration inputs when comparing modes.
+
+Adding a callable kind requires retained body identity, an agreed physical entry signature, registration, requested-body emission, dependency admission, and publication before execution. Test multiple entries per body, recursion, first and repeated calls, and failure before the callee starts. Callback lifetime tests must exercise the final native consumer, not only registry lookup.
+
+Changing startup or global storage requires tracing preparation, definition, initialization, and main entry together, including zero-sized identity and repeated requests. Changing process ownership or enabling a second execution requires a lifecycle design covering native exit callbacks, pending work, signal handling, registry closure, and code disposal; resetting one global flag is insufficient.
 
 ## Reference Designs and Rationale
 
