@@ -76,9 +76,35 @@ Completion is published once per operation. A continuation has one registration/
 
 An event-loop scheduler is an execution service, not a VM or a compiler. It can call already published native functions regardless of whether those functions were generated ahead of time or on demand. No bytecode interpreter, speculative tier, or independent language evaluator is required by this architecture.
 
+## Cross-Worker Completion Delivery
+
+A cross-worker transport does not transfer ownership of an event loop's local completion state. A Promise, receive registration, activation, and continuation remain associated with their destination loop. Making the transport queue thread-safe, using atomic allocation counts, or releasing its lock does not authorize a sending worker to resolve another worker's Promise or update that worker's local reference counts directly.
+
+| State or operation | Responsible owner |
+|---|---|
+| Accepted payload, admission/closure state, and cross-worker notification state | Common synchronized transport; payload copy/move/drop behavior is supplied by the compiler's checked type contract |
+| Pending receive registration, Promise result, and application continuation | Destination event loop; foreign workers may signal it through the transport, not operate on its local completion objects |
+| Pending-work registration and delivery-resource lifetime | Runtime protocol spanning registration through local completion and release |
+| Value transfer, discarded results, and cleanup | The one path that owns the value after admission/delivery; generated typed operations execute on the authorized path, outside transport locks |
+
+The protocol must close registration, notification, and final use together:
+
+1. Establish the destination's pending operation and ownership before making its wakeup route available to a producer. A message or closure event can arrive immediately; registration cannot leave a window in which the destination is already eligible to terminate.
+2. A sender or closure producer commits the shared state and payload ownership under the transport's synchronization protocol. Successful admission and returned failure must never both own the same payload. Publish a safe notification after that state is visible; do not run destination application code on the producer's thread.
+3. The destination observes the committed state on its own loop, associates values or terminal completion with its registrations, and completes each operation once. Repeated or coalesced wakeups must not repeat delivery, and a wakeup arriving between an empty check and parking must not be lost. This does not require one physical notification per message.
+4. Commit the local completion and transfer ownership to the result, scheduled continuation, or discarded-result cleanup before releasing the operation's pending-work and delivery obligations. A queued continuation has its own ownership until execution. User callbacks and deinit must not observe intermediate transport state or run under its internal lock.
+
+Shared transport state must not own unrestricted access to a destination-local Promise. Destination identities, registration tokens, inboxes, wakeup handles, and their physical storage are implementation choices, but their lifetime and publication must obey the protocol above. A late notification must not access a destroyed or reused destination registration. No new source-level lifetime, cross-worker borrow, or second AOT/JIT runtime is implied.
+
+Dropping a public completion handle is not cancellation. An outstanding receive can therefore remain pending, accept a value later, and destroy its result if no public owner remains. A producer-disconnection or explicit channel-closure event must reach the destination and finish registrations that can no longer receive a value; these are completion paths rather than an implicit cancellation mechanism. Payload already transferred into a completed result is not reclaimed by a later transport close.
+
+The compiler/driver must preserve destination queues, runtime state, and executable code until these obligations are discharged. Dispatch during application suspension for lazy compilation follows the [common execution boundary](#one-execution-implementation); the whole-application worker quiescence protocol is still an open concurrency boundary, not a separate channel-specific mechanism. This section supplies the internal ownership protocol; it does not choose channel capacity, receive ordering, exact library signatures, or certify an implemented worker transport.
+
 ## Pending Work and Process Lifetime
 
 Loop completion depends on owned pending work, not simply whether main returned or the ready queue is momentarily empty. Timer, I/O, worker completion, and detached-result disposal need explicit registration, completion, and release rules as those facilities are implemented. The specification's spawn/join semantics include worker-loop completion and processing at the registered destination; queue exhaustion in the current timer-only runtime does not implement that contract.
+
+Count a cross-worker receive from registration through its terminal local completion, including in-flight notification and completion delivery. Releasing a public handle or returning from a worker body does not remove that obligation. Conversely, a stored channel handle or buffered value is not by itself a registered receive operation, and its reference count is not a substitute for pending-work accounting. A service that keeps a loop alive must have an explicit owned obligation. Normal owner loss can still destroy buffered values according to the transport contract without first delivering them to application code.
 
 Code, global storage, callback contexts, process-argument views, and runtime support must outlive every permitted callback, including native process-exit callbacks. Returning from a main invocation alone is not permission to unload JIT code. The [driver chapter](driver-and-execution.md) owns the execution-resource lifecycle; this chapter defines what execution participants require from that owner.
 
