@@ -61,6 +61,8 @@ excluded in v1 because declaration-shared versus per-instantiation storage
 would otherwise be unclear; [associated values](https://github.com/plew-lang/spec/blob/main/spec/02-type-system/07-methods-impl.md)
 explain the distinction from computed associated functions.
 
+One first-edition decision remains at this startup boundary: a synchronous callee can read a global whose async initializer is incomplete while holding borrow/inout access. The source force-on-read promise alone does not select a safe wait mechanism. Do not silently add nested event pumping, stackful suspension, a synchronous-to-async ABI rewrite or rejection of otherwise admitted initialization. The [final review finding](../issues/com-7knz.md#f1--p1-synchronous-reads-during-asynchronous-global-initialization) records the required language/execution decision. This unresolved case is distinct from the already adopted JIT compilation-pause protocol.
+
 ## Demand Call and Publication
 
 The following states describe responsibilities, not a required new enum or general-purpose request framework:
@@ -204,7 +206,7 @@ Focused source inspection uses compiler revision `6fe09bc7c0e75260b3f77364392147
 - `native/llvm_backend.cpp` uses synchronous LLJIT, prohibits lookup during preparation, distinguishes source/host metadata, registers multiple entries, checks shared metadata's session/identity/size, and rewrites uses to canonical stubs. Native `emitted` bookkeeping precedes successful IR-module submission and is therefore not by itself proof of callable success; failures are terminal. The DataLayout admission discrepancy remains recorded in the backend chapter.
 - `distribution/_.pw` dispatches check directly and run to the worker adapter. `native/tool.cpp` resolves dependencies for build/run, invokes the one-shot worker, forwards signals, waits for completion, and links through a pending output before committing it. This is selected-path inspection, not proof of complete command parity.
 
-This audit does not certify every source snapshot race, target selector, package command, dependency-resolution path, request cache, foreign signature, global initialization path, signal race, failure cleanup, or ABI trampoline. Check's dependency-resolution parity with build/run requires explicit audit; direct dispatch alone does not prove it. Whole-program atomic sharing with future spawn and demand checking remains open as noted in Runtime. A finite reusable embedding lifecycle and stable public API remain outside the adopted current execution scope. No compiler/test/performance run was performed for this chapter.
+This audit does not certify every source snapshot race, target selector, package command, dependency-resolution path, request cache, foreign signature, global initialization path, signal race, failure cleanup, or ABI trampoline. Check's dependency-resolution parity with build/run requires explicit audit; direct dispatch alone does not prove it. The Runtime chapter defines AOT sharing-plan admission and the conservative atomic demand baseline; implementation of those protocols remains unaudited. A finite reusable embedding lifecycle and stable public API remain outside the adopted current execution scope. No compiler/test/performance run was performed for this chapter.
 
 ## Demand Execution Integration Audit
 

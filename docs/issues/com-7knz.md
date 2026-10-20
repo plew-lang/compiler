@@ -34,8 +34,7 @@ Cross-review checks challenge the principal findings rather than counting votes.
 The review is complete. Design-level resolutions and their remaining gates are
 listed below; implementation verification is outside this task. R6's recorded-input
 validation scope is approved and reflected in canonical text, and its chapter
-review found no required correction. The other repairs have scoped reviewer confirmation; final
-whole-reference review and first-edition acceptance remain separate.
+review found no required correction. The other repairs have scoped reviewer confirmation; the final cross-domain review retains F1 as a required startup decision. First-edition acceptance remains separate.
 
 | Item | Design-level disposition | Canonical evidence |
 |---|---|---|
@@ -264,6 +263,34 @@ retaining scoped evidence and genuine unresolved design/implementation questions
 Do not confuse an implementation audit's date with adoption of a design contract.
 
 Resolution: canonical chapters point to retained follow-up issues without claiming migration is still in progress. Scoped inspection revisions, unaudited implementation boundaries and the physical checked-body restart gate remain intact.
+
+## Final Cross-Domain Review
+
+After formal synchronization and the R6 decision, three reviewers rechecked source/type checking, execution/runtime and architecture/tooling against the current specification. They found one additional first-edition decision below. Repairs based on existing contracts were rechecked: default-derived selectors admit the same bounded capability families; Result read APIs retain their own copyable range; immortal lifetime is independent of sendability; unique await distinguishes source consumption, receipt rights and private cell retention; Array's declaration range remains distinct from adopted autounique enums. Stale factory, reference syntax, migration status, Syntax package placement, AOT/JIT summary, native Rust artifact, cache and example explanations were corrected and the responsible reviewers confirmed the follow-up diffs without adding new public features.
+
+This is a cross-domain review of contracts and representative paths, not an exhaustive compilation audit of all examples. Source review covered eight semantic design documents and relevant rules in spec03–13; execution review covered the assigned Mid/ownership/ABI/backend/runtime/driver/collections/verification contracts and relevant spec03/04/11/14/15; tooling review covered eleven architecture/input/generation/diagnostic/maintenance/library documents and spec01/02/16/17/18 plus relevant module/FFI sections. No implementation, compiler/test execution or performance evidence was produced. Uninspected physical coverage remains in implementation issues; it is not silently counted as verified.
+
+### F1 — P1: Synchronous reads during asynchronous global initialization
+
+Spec15 permits function-mediated force-on-read and waiting for noncyclic async initialization, while the synchronous calling/access contract does not permit an active borrow/inout to escape into an async frame. The following can reach an incomplete b while a holds its synchronous call and mutable access:
+
+```plew
+val b = await loadNumber()
+val a = {
+    mut val n = 0I64
+    add(x: inout n)
+    give n
+}
+fn add(x: inout I64) {
+    x += b
+}
+```
+
+Blocking the root loop prevents b's local asynchronous completion from progressing. Rejecting or panicking on the incomplete read adds a source restriction, because this dependency is not a cycle. Ordinary Suspend cannot simply replace a synchronous call's ABI; a call reached through a native C callback can retain a C stack as well. Nested event pumping or stackful waiting would need an explicit reentry/access/root/stack contract and is a substantial execution choice, not a scheduler helper implied by ownership retention.
+
+The user decision is whether to retain asynchronous global initialization with such an explicit execution contract, or simplify global initialization to synchronous work and put asynchronous setup in an explicit async entry (a global Promise may still be a value to await explicitly). The latter changes the accepted source contract; the former needs a heavier architecture and a clear treatment of active accesses. These are alternatives for discussion, neither is adopted. The startup chapter points here rather than pretending the wait path is closed.
+
+[Swift concurrency](https://github.com/swiftlang/swift-book/blob/main/TSPL.docc/LanguageGuide/Concurrency.md) makes suspension explicit at await and does not provide a synchronous wrapper that safely waits for arbitrary async work. [Rust static items](https://doc.rust-lang.org/reference/items/static-items.html) use constant initializers. These are useful comparisons for the simpler direction, not evidence that Plew's existing combination already has a wait implementation. Resolve the language/execution choice before declaring the first edition complete; compiler implementation remains paused.
 
 ## Project Fit and Preservation
 

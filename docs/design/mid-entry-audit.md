@@ -62,9 +62,13 @@ arguments, destination and normal target; panic has no unwind edge. A selected
 noncontinuing call closes its nominal continuation with Unreachable and publishes
 no usable result; already closed argument evaluation is not closed again.
 Suspend stores state, resume target, ExprId, evaluated promise and destination.
-Its input is a Read borrow of an owned Promise home; resumption independently
-initializes the result, without consuming that input owner. FinalAwaitResolution
-selects and validates the concrete input/result relationship.
+The selected await contract distinguishes source ownership from private cell
+retention. A copyable Promise supplies an owned result copy. A unique Promise's
+source owner is consumed and its one result-receipt right transfers to the waiting
+activation; retaining a private Promise home/cell through Suspend grants no second
+receipt right. Resumption initializes the destination under that selected contract.
+FinalAwaitResolution validates the concrete input/result and ownership relationship.
+The already-complete path continues inline under the same contract.
 
 Drop is a statement because it has no normal branching/unwind contract. Return,
 break, continue, try propagation and match exits become ordinary edges/terminators.
@@ -206,10 +210,13 @@ view identity or an independent expansion of the language's cast rules.
 
 Convert uses its proof DAG directly. Copy repacks acquire an independent result
 from borrowed input; Move into an existential box transfers ownership. Move with
-structural Array/Enum repack is only a future allowUnique design obligation: it
-must dispose the consumed source after reading and leave only the fresh destination.
-Current copyable generic restrictions do not make that path an implementation/test
-requirement. Nonidentity proofs are never thawed or selected again in LLVM.
+an admitted structural repack must dispose the consumed source after transfer and
+leave only the destination owner; a unique payload must never acquire a Copy path.
+Adopted autounique enum contracts are not a future language feature. Array retains
+its declared copyable element range, and no extra structural conversion becomes
+legal merely because allowunique exists. Exact consumed-repack implementation
+coverage remains unaudited; this is an implementation obligation for admitted
+conversion proofs, not permission to broaden nominal conversion rules. Nonidentity proofs are never thawed or selected again in LLVM.
 
 Canonical integer magnitude comes from literal spelling while its selected type
 comes from the retained term. An integer-spelled float constructs a floating

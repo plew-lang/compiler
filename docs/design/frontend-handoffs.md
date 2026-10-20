@@ -281,7 +281,7 @@ Structural records use sorted labels and complete field terms; a layout ID or
 synthetic nominal name is not semantic authority. Grounding a record need not
 register physical layout. Reachability later visits grounded record children and
 registers the necessary shape; colliding names cannot share incompatible ABI.
-Field/arrow access retains selected slot and type rather than guessing slot zero.
+Field and standard-reference `.*` access retain selected slot and type rather than guessing slot zero.
 
 Lowering preserves syntax, origins, and argument ranges; semantic selection and
 context propagation belong to the checker. In particular, the older attempt to

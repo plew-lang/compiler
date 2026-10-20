@@ -16,7 +16,7 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 6. [Types and Semantic Evidence](types-and-evidence.md) — reviewed draft.
 7. [Expression and Body Checking](body-checking.md) — reviewed draft; physical storage remains unresolved.
 8. [Generics and Body Instantiation](generics.md) — reviewed draft.
-9. [Metaprogramming and Generated Code](metaprogramming.md) — reviewed draft; isolation/freshness/runner protocols remain open.
+9. [Metaprogramming and Generated Code](metaprogramming.md) — reviewed draft; host-unit/output/recorded-input contracts are specified, while their implementation and coverage remain unaudited.
 10. [Mid Representation and Lowering](mid.md) — reviewed draft; upstream checked-body storage remains unresolved.
 11. [Ownership, Access, and Lifetimes](ownership-and-access.md) — reviewed draft; whole-program enforcement coverage remains to be audited.
 12. [Passes and Optimization](passes-and-optimization.md) — reviewed draft; unique-copy input preservation needs implementation audit.
@@ -32,7 +32,7 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 
 18. [Verification and Validation](verification.md) — reviewed draft; evidence scope remains distinct from implementation completeness.
 
-All planned chapters have reviewed drafts, and the initial cross-chapter review corrections are incorporated. Prior contracts, rationale, implementation gaps and scoped evidence have been consolidated into their authoritative homes and independently checked against the original records. First-edition confirmation with the user remains required.
+All planned chapters have reviewed drafts, and the initial cross-chapter review corrections are incorporated. Prior contracts, rationale, implementation gaps and scoped evidence have been consolidated into their authoritative homes and independently checked against the original records. The final cross-domain review retains one [startup waiting decision](../issues/com-7knz.md#f1--p1-synchronous-reads-during-asynchronous-global-initialization) before first-edition closure. First-edition confirmation with the user remains required.
 
 ## Detailed Contracts and Decisions
 
