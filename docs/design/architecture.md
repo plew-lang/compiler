@@ -78,7 +78,8 @@ Compilation is dependency-driven, even when a command requests whole-target chec
 flowchart LR
     input[Fixed inputs] --> parsed[Syntax]
     parsed --> checked[Checked source facts]
-    checked --> instance[Concrete body facts]
+    checked --> parametric[Parametric Mid]
+    parametric --> instance[Concrete Mid and evidence]
     instance --> mid[Prepared Mid]
     mid --> abi[ABI lowering]
     abi --> module[LLVM module]
@@ -92,8 +93,9 @@ The following names are conceptual artifacts, not requirements to introduce corr
 | Result | Decision owner | Successful publication guarantees | Legitimate remaining work | Consumers |
 |---|---|---|---|---|
 | Fixed inputs and syntax | Loader: input identity; parser: syntactic structure | Consistent source version, package/configuration identity, node provenance | Resolve declarations and meaning | Lookup and semantic checking |
-| Checked source body | Semantic checker: source member/call selection, types, conversions, flow meaning | Required source facts are complete under the declared environment; abstract obligations are explicit and justified | Substitute a concrete environment; discharge instance-dependent obligations | Generic instantiation and declaration analyses |
-| Concrete body facts | Instantiation: substitutions and first concrete witness selection where deferred legitimately | Execution-relevant types, call relationships, and evidence are complete for the instance | Construct CFG and perform mandatory path-sensitive analyses | Mid construction and preparation |
+| Checked source body | Semantic checker: source member/call selection, types, conversions, flow meaning | Required source facts are complete under the declared environment; abstract obligations are explicit and justified | Construct and freeze the parametric CFG without reselecting source meaning | Mid construction and declaration analyses |
+| Parametric Mid | Mid construction: explicit evaluation and CFG under the checked environment | Frozen typed CFG, selected operation templates and justified instance-dependent recipes | Analyze symbolic declaration obligations; instantiate types, evidence and selected recipes | Declaration analyses and generic instantiation |
+| Concrete Mid and evidence | Instantiation: substitutions and first concrete witness selection where deferred legitimately | Execution-relevant types, call relationships, and evidence are complete for the instance; CFG realizes the checked decisions | Elaborate access and destruction; perform required concrete analyses and verification | Mid preparation |
 | Prepared Mid | Mid preparation: valid operations, ownership/access analysis, required elaboration | Required static analyses succeed; remaining dynamic checks have an enforcement plan | Choose physical representation and emit operations | ABI and LLVM lowering |
 | Physical calling/layout decisions | ABI lowering: target representation and calling contracts | Physical signatures and layouts preserve semantic identity and ownership contracts | Emit and optimize LLVM; resolve native symbols | LLVM backend and native integration |
 | LLVM module and native publication | Backend: LLVM translation; object/ORC boundary: executable publication | Owned module resources and valid emitted artifacts; code becomes callable only after required preparation and publication succeed | Link/load and execute according to runtime protocols | Linker, ORC, execution host, common runtime |

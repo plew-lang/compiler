@@ -69,7 +69,7 @@ Runtime existential evidence supports dynamic dispatch. It is not static entailm
 
 ### Capability and Conditional-Selection Contracts
 
-The adopted copyable / unique / allowunique proposals extend the same evidence pipeline; their full language-specification synchronization is tracked by [the design review task](../issues/com-7knz.md). They do not authorize a second source selector in Mid or the backend.
+The [language capability rules](https://github.com/plew-lang/spec/blob/main/spec/02-type-system/06-generics.md) for copyable / unique / allowunique extend the same evidence pipeline. They do not authorize a second source selector in Mid or the backend.
 
 | Producer | Published semantic contract | Final consumers |
 |---|---|---|
@@ -78,9 +78,9 @@ The adopted copyable / unique / allowunique proposals extend the same evidence p
 | Conditional candidate-family checking | Source-selected candidates, applicability predicates, proof of disjointness and coverage, and one compatible call contract | Instance-specific selection and witness preparation |
 | Source call/conversion checking | Exact admitted conformance path, source requirement, modes, conversions, and any opening/re-erasure plan | Instantiated calls, dynamic slots and explicit Mid conversions |
 
-For example, an aggregate directly owning two parameters can have `Copy(T) AND Copy(U)` as its finalized condition. A shared handle owning a cell reference has its own copyable handle contract even when its referent is unique; it does not recursively acquire the referent's copy prohibition. Use declared ownership edges, not pointer layout or every type mentioned inside a field. Sendability additionally includes selected destruction/effect obligations; copyability is not a substitute for that proof.
+For example, an aggregate directly owning two parameters can have `Copy(T) AND Copy(U)` as its finalized condition. A shared handle owning a cell reference has its own copyable handle contract even when its referent is unique; it does not recursively acquire the referent's copy prohibition. Use declared ownership edges, not pointer layout or every type mentioned inside a field. A private owned field can change a public autounique type's copyability condition, so such a change affects its public capability contract despite field privacy. Recursive capability derivation and finite physical-layout validation are separate checks. Sendability additionally includes selected destruction/effect obligations; copyability is not a substitute for that proof.
 
-Predicates reference canonical type/projection terms and binder identities, not spelling. Equality normalization must not discard conformance-path provenance. Keep recursive active, ready, failed and deferred states distinct. Use the adopted bounded capability/equality reasoning and saved derivations; proving every arbitrary trait formula satisfiable is not required. A condition that cannot yet be discharged is not `false` and cannot justify a copy, a missing destructor, or an arbitrary candidate.
+Predicates reference canonical type/projection terms and binder identities, not spelling. Equality normalization must not discard conformance-path provenance. Keep recursive active, ready, failed and deferred states distinct. Use the adopted bounded capability/equality reasoning and saved derivations; proving every arbitrary trait formula satisfiable is not required. Diagnostics distinguish a proved overlap from failure to prove disjointness within the supported reasoning. Both can reject a candidate family, but unknown is not proof of overlap. A condition that cannot yet be discharged is not `false` and cannot justify a copy, a missing destructor, or an arbitrary candidate.
 
 Readers keep a reference to this contract plus an explicit substitution rather than independently reconstructing its conditions. Two equivalent normal forms may share storage; callers' explicitly selected sources do not become interchangeable. [Instantiation](generics.md#capability-discharge-and-witness-admission) owns concrete discharge and [ownership](ownership-and-access.md#standard-reference-projection-handoff) owns place/value use.
 

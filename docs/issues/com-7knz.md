@@ -31,7 +31,27 @@ Cross-review checks challenge the principal findings rather than counting votes.
 
 ## Findings
 
-The review is complete; the design repairs and decisions below remain open.
+The review is complete. Design-level resolutions and their remaining gates are
+listed below; implementation verification is outside this task. R6's external-input
+freshness assurance boundary is awaiting a user decision. The other repairs have
+canonical text and scoped reviewer confirmation; final whole-reference review
+and first-edition acceptance remain separate.
+
+| Item | Design-level disposition | Canonical evidence |
+|---|---|---|
+| R1 | Addressed; implementation separate | Conformance path identity and admission below |
+| R2 | Addressed; language synchronization complete | Runtime RC plan/publication and spec14 |
+| R3 | Addressed; managed/native scope approved | Driver coordination, Runtime participant protocol and spec15 |
+| R4 | Handoff specified and chapter reviewed | Sources native-build service |
+| R5 | Stage order aligned and rechecked | Architecture and Mid |
+| R6 | User decision pending | Minimum external-observation assurance; no silent adoption |
+| R7 | Aggregation and state-preservation fixes rechecked | Metaprogramming host units and one publication |
+| R8 | Initialization contract aligned and rechecked | Mid and operation supplement |
+| S0 | Adopted language rules synchronized and domain reviewed | spec03/04/05/06/07/08/11/14/15 and canonical capability/runtime chapters |
+| S1 | Stale derive visibility condition repaired and rechecked | spec16 ordinary construction visibility |
+| S2 | Stale explanations repaired and rechecked | spec12/15/17 |
+| E1 | Migration progress wording removed | Syntax, Sources, Metaprogramming and Generics; audit limits retained |
+
 No proposed resolution is adopted merely by recording it here.
 
 ### R1 — P1: Conformance admission needs path uniqueness, not only a terminal witness
@@ -56,7 +76,7 @@ and [coherence](https://doc.rust-lang.org/reference/items/implementations.html#t
 separate internal proof work and admissibility. Rust's coherence assumptions are
 not a substitute for Plew's explicit path-selection rule.
 
-Design resolution: [Conformance Evidence](../design/types-and-evidence.md#5-conformance-evidence) now separates internal existence, source path admission and terminal executable witness selection. [Capability contracts](../design/types-and-evidence.md#capability-and-conditional-selection-contracts) and [instance admission](../design/generics.md#capability-discharge-and-witness-admission) retain path identity through witness construction, including unused/empty bounds and branches sharing a terminal. The design requirement is addressed; source migration and implementation verification are separate from this documentation review.
+Design resolution: [Conformance Evidence](../design/types-and-evidence.md#5-conformance-evidence) now separates internal existence, source path admission and terminal executable witness selection. [Capability contracts](../design/types-and-evidence.md#capability-and-conditional-selection-contracts) and [instance admission](../design/generics.md#capability-discharge-and-witness-admission) retain path identity through witness construction, including unused/empty bounds and branches sharing a terminal. The design requirement is addressed; source-rule synchronization and implementation verification are distinct from one another.
 
 ### R2 — P1: Static allocation-mode analysis is not connected to lazy publication
 
@@ -77,7 +97,7 @@ Comparison: [Rust Arc](https://doc.rust-lang.org/std/sync/struct.Arc.html) fixes
 thread-safe ownership mechanism explicitly; Plew hides that choice and therefore
 needs its own allocation-sharing contract.
 
-Design resolution under the adopted sharing proposal: [Storage, ARC, and CoW](../design/runtime.md#storage-arc-and-cow) assigns AOT plan production to execution preparation, retention to the session and admission to the driver. Demand execution fixes ordinary managed allocations and typed operations to a conservative atomic baseline before execution; later requests do not reclassify live allocations. [Callable publication](../design/driver-and-execution.md#demand-call-and-publication) consumes this mode contract alongside effect closure. Full proposal-to-spec synchronization remains under S0. This addresses R2's initial publication gap at reference-design scope; it neither verifies implementation nor resolves R3's worker-pause protocol.
+Design resolution under the adopted sharing proposal: [Storage, ARC, and CoW](../design/runtime.md#storage-arc-and-cow) assigns AOT plan production to execution preparation, retention to the session and admission to the driver. Demand execution fixes ordinary managed allocations and typed operations to a conservative atomic baseline before execution; later requests do not reclassify live allocations. [Callable publication](../design/driver-and-execution.md#demand-call-and-publication) consumes this mode contract alongside effect closure. The adopted AOT/JIT baseline is synchronized into spec14 under S0. This addresses R2's initial publication gap at reference-design scope; it neither verifies implementation nor resolves R3's worker-pause protocol.
 
 ### R3 — P1: Worker demand and application-wide compilation pause have no protocol
 
@@ -100,7 +120,7 @@ illustrates explicit thread/safepoint management.
 
 Adopted pause scope: stop all Plew-managed application execution, event delivery, continuation execution, callback entry and user destruction. A registered external C call may continue, but managed return/callback waits at the common gate. External effects and OS activity are not stopped or cancelled. This scope was explicitly approved after comparing Dart and HotSpot native-state transitions; it is not inferred solely from FFI safety responsibility.
 
-Design resolution: [Worker Demand Coordination](../design/driver-and-execution.md#worker-demand-coordination) assigns a single independent compiler-affine owner, synchronized request admission/coalescing, managed quiescence, private preparation, complete publication and terminal failure. [Managed Pause and Native Boundaries](../design/runtime.md#managed-pause-and-native-boundaries) defines participant states, cooperative polling, membership races, stable native boundaries, lock/wakeup rules and retained roots/access/code. [Session ownership](../design/compiler-state.md#2-sessions-and-input-identity) prevents application workers from reading the nonsendable compiler registry. Root-waits-worker and C-waits-worker scenarios can reach the service without draining application events or waiting for C to return. No compiler-required lock can remain held by a waiting requester, including ORC materialization callbacks. These contracts address the design gap. The managed/native pause scope is synchronized into spec15's run contract; the remaining proposal-to-spec synchronization stays under S0 and implementation validation is not claimed. Two chapter reviewers confirmed the protocol and the follow-up fixes for ORC followers, managed generated helpers, native departure ordering and transitive service-lock dependencies.
+Design resolution: [Worker Demand Coordination](../design/driver-and-execution.md#worker-demand-coordination) assigns a single independent compiler-affine owner, synchronized request admission/coalescing, managed quiescence, private preparation, complete publication and terminal failure. [Managed Pause and Native Boundaries](../design/runtime.md#managed-pause-and-native-boundaries) defines participant states, cooperative polling, membership races, stable native boundaries, lock/wakeup rules and retained roots/access/code. [Session ownership](../design/compiler-state.md#2-sessions-and-input-identity) prevents application workers from reading the nonsendable compiler registry. Root-waits-worker and C-waits-worker scenarios can reach the service without draining application events or waiting for C to return. No compiler-required lock can remain held by a waiting requester, including ORC materialization callbacks. These contracts address the design gap. The managed/native pause scope is synchronized into spec15's run contract; the wider sharing/capability rules are synchronized under S0 and implementation validation is not claimed. Two chapter reviewers confirmed the protocol and the follow-up fixes for ORC followers, managed generated helpers, native departure ordering and transitive service-lock dependencies.
 
 Rationale and alternatives: waiting for every C call to return can create a cycle when C awaits a worker that first needs JIT. Arbitrary OS-thread suspension can strand allocator/library locks. A compiler service attached only to the application's root can become unavailable in either example. The chosen independent owner and cooperative managed boundary avoid those added dependencies while retaining synchronous calls and one runtime implementation. The runtime comparison sources concern safe stopping, not a claim that Dart or HotSpot stop their applications for every compilation.
 
@@ -124,6 +144,8 @@ are actual host executable work; [Cargo build cache](https://doc.rust-lang.org/c
 separates build artifacts and their inputs. Plew's stricter trust/sandbox contract
 must be designed explicitly rather than attributed to Cargo.
 
+Design resolution: [Native Build Service Handoff](../design/sources-and-modules.md#native-build-service-handoff) assigns plan validation, user-local policy admission, constrained execution, successful provenance publication and driver/generator consumption. The resolver does not gain execution authority, the lock does not imply trust, and Cargo children remain in the admitted tool/input/loader closure. Native artifacts are separate from the generator-owned Plew harness. Chapter review confirmed this concretizes spec17 rather than introducing a general build-hook framework; physical isolation and cache implementation remain unverified.
+
 ### R5 — P2: Overview and canonical Mid stage order disagree
 
 [Architecture](../design/architecture.md#3-compilation-model-and-handoffs) puts
@@ -133,6 +155,8 @@ analysis must not acquire different input/owner assumptions depending on which
 chapter is read first. Align the overview graph/table with the canonical stages
 and distinguish symbolic declaration analysis from concrete execution preparation.
 No new specification or representation choice is required.
+
+Design resolution: [Architecture](../design/architecture.md#3-compilation-model-and-handoffs) now shows checked facts -> frozen parametric Mid -> concrete Mid/evidence -> prepared Mid. Its table no longer assigns first CFG construction to concrete instantiation. Symbolic declaration analysis remains independent of executable instance preparation. The affected chapter comparison was rechecked.
 
 ### R6 — P2: Generation freshness admission needs a defined minimum guarantee
 
@@ -145,6 +169,16 @@ input identity, absent/invalid receipt behavior and failure publication. Choose
 explicitly which external observations freshness covers; that assurance boundary
 requires a decision. Wire format and exact publication API can remain details.
 
+Pending decision: whether first-edition freshness covers only recorded source,
+configuration/provider/dependency identity and output content, leaving arbitrary
+provider filesystem/environment/network observations outside that guarantee, or
+requires an external-input declaration/validation mechanism. The former is the
+recommendation presented to the user, not an adopted rule yet. Ordinary build
+must not run providers in either case. After the boundary is chosen, specify
+producer/loader receipt admission for a fresh checkout, missing/mismatched
+receipts, provider changes and interrupted publication without conflating
+freshness with output semantic correctness.
+
 ### R7 — P2: Provider isolation needs a generator-level aggregation boundary
 
 [Metaprogramming](../design/metaprogramming.md#3-syntax-input-and-the-process-boundary)
@@ -154,6 +188,8 @@ generator's division into compatible host units, ordered result aggregation and
 one successful output publication for the target source. Separate processes or
 serialized schemas are not automatically required. This concretizes the existing
 String boundary and avoids independent runners publishing partial output.
+
+Design resolution: [Host Units and One Output Publication](../design/metaprogramming.md#host-units-and-one-output-publication) assigns compatible-graph grouping and invocation identity to the generator, isolates nominally incompatible graphs, collects ordered Strings and publishes once after all successes. A logical host unit retains ordinary global identity, one initialization, shared state and cleanup; runner batching cannot reset a provider between repeated invocations. Chapter review identified that state-preservation gap and the native-artifact/harness boundary; the corrective diffs were rechecked. The unit plan scans invocations in source order and selects the earliest valid merged resolved graph, preserving revisions; nontransitive compatibility is not assumed to define an equivalence class. No AST serialization framework or per-directive process requirement is introduced.
 
 ### R8 — P2: Mid initialization order contradicts runtime force-on-read
 
@@ -170,6 +206,8 @@ frontend source order or a static graph cannot replace it. Existing source
 semantics decide this repair; no new language choice is needed. Include a read
 through an initializer-called function and async/worker waits in the cross-domain
 trace, not only direct acyclic roots.
+
+Design resolution: [Mid](../design/mid.md#preparation-stages-and-executable-admission) and its [operation supplement](../design/mid-entry-audit.md) distinguish initial root enumeration from runtime dependency execution. Selected reads force the common state machine, including initializer-called functions, async waiting and root/worker cycles; initialized ownership publishes only on success. The affected chapter comparison was rechecked against spec15. No static dependency sort or extra language policy was added.
 
 ### S0 — P1, specification decision: Read capability is not immutable sharing
 
@@ -192,6 +230,8 @@ An independent cross-review found no alias-exclusion or transfer rule that remov
 this counterexample. The finding is a conflict between specified rules, not a
 tested compiler race.
 
+Adopted resolution: ordinary Ref/MutableRef and corresponding weak handles are nonsendable. FrozenRef and MutexRef provide distinct access/ownership contracts without repairing nonsendable payloads. Explicit capabilities, autounique, conditional candidates, existential opening, unique outcomes, global effects and implicit destruction connect those rules through the language. The formal specification owns the rules; [standard-library boundaries](../design/standard-library.md) and the semantic/runtime chapters own their handoffs. Three domain reviewers checked synchronization and repairs, including old Ref capture permission, place generalities, Optional/Result declarations, method candidate families and buffer destruction destination. Their follow-up checks found those contradictions resolved. A separate compression review retained rationale, future scope and Guard verification obligations while replacing the two meta drafts with canonical links. This is document/design evidence, not a tested concurrency implementation.
+
 ### S1 — Specification conflict: Parameterized derive and private fields
 
 Spec16 line110 requires public argument fields for parameterized derive construction.
@@ -201,6 +241,8 @@ correctly delegates to ordinary construction rules. Reconcile the stale special
 condition in the specification with the already approved public-factory decision;
 do not add a derive-only field-visibility exception to the design. This is a
 specification inconsistency, not a demonstrated implementation bug.
+
+Resolution: spec16 now requires an applicable visible factory and public API closure, not public storage fields. Chapter recheck confirmed the rule is ordinary construction, with no derive-only privilege or extra visibility requirement.
 
 ### S2 — Stale specification explanations and comparisons
 
@@ -220,12 +262,16 @@ specification inconsistency, not a demonstrated implementation bug.
 These are specification maintenance findings, not evidence of implementation
 bugs. Align them with existing decisions rather than inventing new behavior.
 
+Resolution: spec12 now acknowledges ownership/borrowing and uses the existing place contract. Its indexed compound-assignment explanation preserves key/value evaluation and writes the element into the current container rather than overwriting unrelated changes with an earlier container snapshot. spec15 describes LLVM/manifest linking and adopted expose/callback contracts; spec17 accurately distinguishes SwiftPM build/prebuild commands from Plew's own no-general-hook choice. The corrective writeback diff and other changes were rechecked.
+
 ### E1 — Editorial: Migration status remains in otherwise canonical chapters
 
 Syntax and Metaprogramming retain “gap migration in progress” language although
 README records consolidation complete. Remove migration progress wording while
 retaining scoped evidence and genuine unresolved design/implementation questions.
 Do not confuse an implementation audit's date with adoption of a design contract.
+
+Resolution: canonical chapters point to retained follow-up issues without claiming migration is still in progress. Scoped inspection revisions, unaudited implementation boundaries and the physical checked-body restart gate remain intact.
 
 ## Project Fit and Preservation
 

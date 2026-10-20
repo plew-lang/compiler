@@ -121,7 +121,7 @@ Move is invalid, and ordinary ScopeExit/cliff flags do not destroy globals.
 InitializeGlobal transfers a fresh initializer owner once into an unprojected
 matching global root in its synthetic body, including immutable globals. It is
 neither fresh local Assign nor replacement Overwrite and receives no prior Drop.
-Initialization order is the frontend dependency order. Runtime replacement uses
+Initial root enumeration does not determine dependency execution order. Global reads force initialization through the common runtime state machine, including indirect reads through callees, async waiting and root/worker cycle detection. InitializeGlobal publishes ownership only on successful initializer completion; no waiter may observe an incomplete value. Runtime replacement uses
 an explicit permitted Drop/Overwrite pair rather than implicit destruction.
 
 Inout locals contain a valid caller/environment-owned value, but are not owners
@@ -365,7 +365,7 @@ external code; physical helpers are audited separately from semantic bodies.
 | Entry.genLlvmMain / main | Sync source Mid plus startup ABI/global-init glue |
 | ProvidedFns / gf*, pf* | Free/generic/provided bodies through Any.genLlvmFuncBody |
 | GenMethods.emitOneGenMethod / gm* | Methods, factories, operators, defaults, deinit through common preparation |
-| Entry.genLlvmInitGlobals / plew_init_globals | Synthetic ordered InitializeGlobal body |
+| Entry.genLlvmInitGlobals / plew_init_globals | Synthetic InitializeGlobal body (root enumeration, not static dependency ordering) |
 | Closures.emitClosures / __closure* | Registered ClosureSignature BodyInstance and capture inputs |
 | Closures.emitClosureEnvironmentDrops / pwclodrop* | Verified synthetic environment destruction |
 | MidAsync.genLlvmMidAsyncResume / __af*_resume | Verified source Suspend/resume body |
