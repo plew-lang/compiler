@@ -98,6 +98,12 @@ materialization, not Plew application stopping or session ownership;
 [Dart thread registry](https://github.com/dart-lang/sdk/blob/main/runtime/vm/thread_registry.h)
 illustrates explicit thread/safepoint management.
 
+Decision needed — scope of application pause at a native boundary: one worker can be inside a blocking C function awaiting another worker's response while that second worker first requests JIT compilation. Waiting for every C call to return before starting compilation makes this otherwise productive dependency cyclic. Arbitrary OS-thread suspension can strand allocator/library locks and does not supply a safe in-process compiler protocol.
+
+Recommended, not yet adopted: stop all Plew-managed application execution, event delivery, continuation execution and callback entry. Treat a registered native call as outside managed execution: it may continue, but return or callback into Plew must wait at the common entry gate until publication completes. Preserve its live values, access scopes and code resources. This does not guarantee stopping external C effects or OS activity, and does not cancel the native operation. The compiler must not depend on application locks or application event progress; its owner must remain serviceable even while the application root is in C. Exact request routing and owner placement remain internal protocol design after the pause scope is approved.
+
+The user decision is whether the adopted phrase “application stopped during compilation” permits an already entered external C call to continue under that boundary. FFI safety responsibility does not itself decide the scope of this observable pause guarantee. [Dart's native transitions](https://github.com/dart-lang/sdk/blob/main/runtime/vm/heap/safepoint.h) distinguish generated/native execution and gate reentry; that is a comparison input, not automatic adoption for Plew. No native-continuation exception has been silently added to the current runtime/driver contract.
+
 ### R4 — P2: Native host execution is assigned to a layer without a handoff contract
 
 [Sources](../design/sources-and-modules.md#2-packages-are-not-modules-or-directories)

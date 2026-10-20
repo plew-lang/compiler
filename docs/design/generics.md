@@ -97,7 +97,7 @@ Destruction selection consumes its own saved selection contract, explicitly repr
 
 At existential injection, conformance preparation fixes the concrete witness and associated bindings under the admitted source path. Runtime dispatch retains the requirement/slot, logical modes and capability guarantees established at the call. A stored copyability class or fully bound associated type can discharge the corresponding condition, but does not authorize runtime overload search. Field requirements retain a selected storage projection rather than becoming owning getters. An owned Self result uses its checked re-erasure plan; a storage address cannot be reinterpreted as writable existential storage of another concrete type.
 
-This closes the semantic producer-to-consumer handoff. It does not settle the executable bridge for a generic parameter bound to runtime-only opened Self. That bridge must be chosen before claiming executable support; the concrete-instance model below is not proof that arbitrary hidden Self already has code. No metadata ABI or second generic evaluator is adopted by this section.
+This closes the semantic producer-to-consumer handoff. Runtime-only opened Self additionally requires the [prepared execution bridge](#runtime-opened-self-execution-bridge); semantic evidence alone is not executable code.
 
 ## 6. Signatures, Adapters, and Returns
 
@@ -126,6 +126,32 @@ For a repeated instance key, reuse the registered identity and its computation s
 Recursion that generates endlessly different type instances is not eliminated by same-key deduplication. The compiler needs a bounded resource/depth diagnostic with source provenance. Such an implementation limit can prevent `build` or `run` after successful abstract checking; it must not be presented as a new source typing rule or silently truncate the executable graph.
 
 Execution publication requires the concrete body's needed local and interprocedural analyses and its callable dependencies to be satisfied under the execution model. A successfully grounded type, an interned body ID, or source-only checks are each insufficient. Lazy target readiness is handled at the common call-entry boundary, not by a second runtime semantics for generic bodies.
+
+### Runtime-Opened Self Execution Bridge
+
+Retain Plew's checked-body and concrete-instance execution model. An implicitly opened existential chooses a concrete instantiation through a prepared private bridge; it does not turn the existential box into a conforming nominal type or introduce an unspecialized generic interpreter. This is an internal realization of the adopted opening rules, not a wider member-availability or conversion rule.
+
+The saved opening plan identifies the source-selected callable/body, its abstract bindings and admitted conformance relationships, logical ownership modes, and the result's permitted re-erasure. Each existential value retains private concrete type and selected witness identities from injection. They are executable metadata, not public type values, downcasts, or a request to search declarations at runtime. Independent boxes do not gain a same-type proof from this mechanism.
+
+| Stage | Required work |
+|---|---|
+| Source checking | Commit the operation and opening/re-erasure plan using ordinary applicability. Reject unrepresentable escaping results or unjustified same-type relationships here |
+| Concrete existential injection | Register the payload type, exact conformance provenance, associated bindings and typed value operations |
+| Execution preparation | Combine a checked opening plan with admitted concrete descriptor identities; instantiate its recorded environment and prepare a typed adapter plus ordinary concrete callee instance |
+| Runtime call | Select that prepared bridge by operation/descriptor identity; preserve evaluated arguments, owners and access dependencies; do no overload, trait-path or associated-output search |
+| Adapter result | Perform the saved owned-result re-erasure or inout writeback exactly once and retain the original type/guarantees |
+
+A bridge's execution key includes the opening operation's contract, all opened concrete type/witness identities, remaining substitutions, ownership/conversion plan, and required RC/target/ABI specialization. Distinct source provenance cannot collapse merely because the payload layout matches. The callee's concrete body uses the ordinary instance registry and can be reused across equivalent bridge requests. Diagnostics retain the requesting occurrence even when executable adapters are shared.
+
+For AOT, collect concrete existential injections and compatible opening operations along the executable dependency worklist. Close dependencies over their instantiated bodies, adapters, value/destruction operations and further injections before emitting the target. Conservative compatible combinations are allowed; reachability precision is an optimization. With multiple independently opened parameters, required combinations can grow; do not silently omit combinations or substitute an unprepared fallback. A repeated key reuses work, while indefinitely growing type instances receive the existing resource-limit diagnostic. The binary contains every bridge admitted by that closure and requires no compiler service to execute it.
+
+For demand execution, a concrete descriptor is registered before the value is exposed as an existential. An opening operation can request its concrete bridge on first use through the ordinary preparation/publication entry, using the saved descriptor identities and evidence. Prepare the source body under its declared abstract bounds and instantiate that checked meaning; do not type-check it as a new concrete template. Registration or a cached address alone is not readiness. Compilation preserves existing argument evaluation and ownership across the pause, and publication closes effects, typed operations and RC-mode requirements. An existing caller of an unprepared bridge treats unknown effects conservatively under the common enforcement contract; it cannot assume a pure target until first use. Publishing a new bridge must not invalidate an existing caller's omitted-check justification. Further injections or demands can extend the prepared set without changing a previously committed operation's meaning.
+
+The private adapter boundary passes hidden payload storage under the saved copy/borrow/inout/move contract and returns a representable erased result. Representation lowering may use indirect lanes or private descriptor-indexed tables; it must emit a typed adapter under a concrete environment rather than reinterpret unrelated storage with a raw cast. Inout keeps the opened concrete type fixed through writeback. A new owned Self result is repacked using its retained witness; no invariant generic container is mapped elementwise to an existential container.
+
+This chooses concrete preparation plus private dispatch over adopting a general metadata-parameterized generic ABI. [Rust monomorphization collection](https://rustc-dev-guide.rust-lang.org/backend/monomorph.html) supplies a precedent for closing concrete code dependencies, but Rust does not supply Plew's implicit opening rule. [Swift generic signatures](https://github.com/swiftlang/swift/blob/main/docs/ABI/GenericSignature.md) and [type metadata](https://github.com/swiftlang/swift/blob/main/docs/ABI/TypeMetadata.rst) show the alternative of passing metadata and witnesses into generic execution. Plew uses their separation of type and conformance evidence without requiring that alternative execution ABI. Compile-time/code-size growth is acknowledged; specialization, dispatch-table organization and cache precision can be optimized without changing source ownership or introducing a second runtime.
+
+The whole-worker pause protocol remains a separate [R3 design boundary](../issues/com-7knz.md). This bridge must consume that protocol in concurrent demand execution; its descriptor registry does not solve application quiescence. No implementation or performance verification of this bridge is claimed.
 
 ## 8. Examples and Change Impact
 
