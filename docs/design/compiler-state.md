@@ -17,6 +17,8 @@ A session admits one consistent set of source versions, resolved dependencies, c
 
 The session owns mutable construction state and the lifetimes needed by published results. Callers request operations through its boundaries; an escaping mutable arena would allow callers to invalidate the guarantees of already published results. Whole-target checking and execution preparation may transfer ownership of this same state rather than reconstructing an unrelated compiler and attaching an old success token.
 
+An active demand session has one [compiler-affine control owner](driver-and-execution.md#worker-demand-coordination), independent of application workers. Session/registry access occurs there after native request routing; sending an identity is not sending a nonsendable session value. The service begins application-triggered preparation only under the runtime's managed-pause grant. Common runtime implementation does not merge compiler/application state ownership.
+
 Persistent caches, cross-session ID stability, and incremental invalidation are not promised here. An integer that happens to match in two sessions is not a shared identity. Native handles must preserve session association and reject stale or foreign use at their admission boundary.
 
 ## 3. Identity Domains
