@@ -125,7 +125,7 @@ Move is invalid, and ordinary ScopeExit/cliff flags do not destroy globals.
 InitializeGlobal transfers a fresh initializer owner once into an unprojected
 matching global root in its synthetic body, including immutable globals. It is
 neither fresh local Assign nor replacement Overwrite and receives no prior Drop.
-Initial root enumeration does not determine dependency execution order. Global reads force initialization through the common runtime state machine, including indirect reads through callees, async waiting and root/worker cycle detection. InitializeGlobal publishes ownership only on successful initializer completion; no waiter may observe an incomplete value. Runtime replacement uses
+Initial root enumeration does not determine dependency execution order. The [static startup plan](driver-and-execution.md#static-initialization-plan) requires dependency readiness before body entry, including accesses through callees, continuations and workers. Ordinary global accesses do not force or wait. InitializeGlobal publishes ownership only on successful initializer completion; no consumer may observe an incomplete value. Runtime replacement uses
 an explicit permitted Drop/Overwrite pair rather than implicit destruction.
 
 Inout locals contain a valid caller/environment-owned value, but are not owners

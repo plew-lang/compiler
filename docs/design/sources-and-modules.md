@@ -96,7 +96,7 @@ The loader must preserve enough edge provenance to diagnose a cycle or conflicti
 
 Within a module, definitions are shared across root and part files. External names introduced by `use` remain file-local: a part does not inherit the root's external bindings. Part contents are restricted to impl blocks and permitted structural directives; free functions, types, extern declarations, top-level values, and re-publication are rejected there. Membership does not excuse these restrictions.
 
-The module DAG is a source dependency rule. It is not the runtime initialization dependency graph, nor does it forbid recursive calls within a module. Initialization order and cycles belong to runtime preparation under the specification; a DAG does not by itself prove initialization safety.
+The module DAG is a source dependency rule. It is not the static global-initialization dependency graph, nor does it forbid recursive calls within a module. The [startup plan](driver-and-execution.md#static-initialization-plan) owns initialization order and cycle checking under the specification; a DAG does not by itself prove initialization safety.
 
 ## 5. Visibility and Generated Membership
 

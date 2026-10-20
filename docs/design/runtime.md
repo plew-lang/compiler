@@ -49,6 +49,10 @@ I/O completion and cross-worker notifications may accumulate while paused, but o
 
 This boundary follows the distinction in [Dart's generated/native transitions](https://github.com/dart-lang/sdk/blob/main/runtime/vm/heap/safepoint.h) and [HotSpot's native reentry checks](https://github.com/openjdk/jdk/blob/master/src/hotspot/share/runtime/interfaceSupport.inline.hpp). Their safepoint machinery is a comparison for safe stopping, not evidence that those languages stop all application execution for every compilation. Plew adopts the stronger compilation pause to keep compiler-session mutation independent of application execution, while excluding already entered external C work from that pause guarantee.
 
+### Startup Readiness
+
+Runtime executes the [driver's closed initialization plan](driver-and-execution.md#static-initialization-plan); it does not discover dependencies on a global read. It starts only prerequisite-ready bodies, uses the ordinary async machinery for their explicit awaits, and publishes each completed owner once before admitting dependent bodies. A synchronous call or borrow/inout access never waits for another global initializer. Storage readiness and one-time publication states remain separate from JIT entry registration/materialization and the managed-pause gate. Workers share these initialized roots rather than initiating root-side forcing. General native callback/embedding eligibility remains within its existing ABI boundary. An acyclic startup plan does not establish termination of arbitrary lock, channel or I/O waits.
+
 ## Storage, ARC, and CoW
 
 Logical value ownership is distinct from storage reference counts. One semantic copy may share a backing allocation under CoW; a move transfers responsibility without creating another logical owner. A byte copy of an ABI argument or relocated element is not by itself a semantic Copy operation. The backend and runtime must agree on when a retain, element copy, payload destruction, and allocation release occur, with no independently added second ownership operation.

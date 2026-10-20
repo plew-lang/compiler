@@ -19,6 +19,7 @@ Language acceptance comes from the specification and responsible semantic/mandat
 | Declaration ownership/access analysis | Its named static obligations and retained deferred dependencies | Complete concrete executable preparation |
 | Instantiation | Concrete substitutions and evidence for the selected meaning | Validity of an unchecked generic declaration |
 | Mid structure/stage verification | Defined rows, operands/targets/types and stage-specific ownership/access obligations | Whole-program effect closure or native linking |
+| Startup plan | Closed global may-access dependencies, noncyclic initializer graph and readiness before body entry | General I/O/lock/channel progress or public callback eligibility |
 | Prepared execution scope | Required body and interprocedural dependencies closed for that scope | Whole-target check if unrelated bodies remain |
 | LLVM verification | LLVM structural/type validity at the relevant transformation boundary | Plew value semantics, correct ABI choice, or source acceptance |
 | Native publication/linking | Required symbols, target/ABI/resource contract, successful materialization/artifact | Correct program behavior for every input |
