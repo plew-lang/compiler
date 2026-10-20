@@ -36,6 +36,8 @@ All planned chapters have reviewed drafts, and the initial cross-chapter review 
 
 ## Detailed Contracts and Decisions
 
+- [Standard Library Boundaries](standard-library.md) assigns declaration ownership, public package routes, private runtime handoffs and representative channel APIs without expanding implicit names.
+
 - [Checked-body Storage and Implementation Restart](checked-body-storage.md) records the unresolved physical storage/API decision and the gate before paused compiler work resumes.
 - [Frontend Handoffs and Admission](frontend-handoffs.md) refines saved semantic facts, publication and final-consumer admission.
 - [Declaration and Execution Audit](declaration-and-execution-audit.md) retains declaration obligations and scoped demand-execution audit details.

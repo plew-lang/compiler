@@ -39,6 +39,10 @@ Resolution follows the specification's newest-compatible policy, with the top-le
 
 The resolver publishes direct dependency bindings per package. A transitive package's presence in the compilation does not grant a source-level `@Name` binding to its consumer. Explicit re-publication exposes the original declaration through the publishing package's API; it does not grant direct access to that dependency's package namespace.
 
+### Standard Library Ownership
+
+[Standard Library Boundaries](standard-library.md) fixes the defining owner and public routes of the foundation, shared references and synchronization APIs. Existing Lang/Core/Hash/Async/Set/Random routes remain; Sync is an explicit standard package above the admitted foundation, not a new implicit namespace. The startup language-item closure registers identities before contract validation and body checking, so ambient references do not introduce reverse use edges or permit source cycles. Source package dependencies are distinct from private generated/native operation dependencies. A standard package has no general permission to call another module's private factories; the exact registered typed operations own that handoff.
+
 ### Compiler-Known Declaration Contracts
 
 Dependency resolution selects the admitted package versions, including Std; declaration registration binds compiler-known language operations, protocol mappings, and intrinsics to declarations from those admitted inputs. Registration owns validating their required signatures and ownership contracts before publishing consumable semantic identities. Equal spelling in an unrelated module is not such a binding, and registration of an identity alone is not proof that its required contract passed.
