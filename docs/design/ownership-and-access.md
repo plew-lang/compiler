@@ -60,6 +60,26 @@ Shared-world paths retain the evaluated cell identity and field/container path. 
 
 Directly owned unique borrows are checked statically against move, inout, and destruction. Shared cells obey shared-storage checks even when their contents are unique. Read/read is valid; a long write reservation conflicts with an independent overlapping read or write.
 
+### Standard Reference Projection Handoff
+
+The adopted standard-reference proposals use `.*` as a place-producing operation, not an owning getter. Frontend selection recognizes the trusted declaration identity and supplies the referent type, read/write permission, evaluated base occurrence, storage provenance, and owner dependencies. A user type with the same spelling does not acquire those permissions. Trait field requirements selected through `via` produce the same kind of storage projection, with the recorded field identity and requirement permissions.
+
+| Projection input | Saved dependency | Consumer obligation |
+|---|---|---|
+| Ref / FrozenRef | Evaluated cell and read-only authority | Pin the chosen cell; permit only valid reads/borrows |
+| MutableRef | Evaluated cell and read/write authority | Pin it and apply ordinary shared-storage access checks |
+| MutexGuard | Protected cell plus the original unique Guard and its owner path | Preserve the Guard borrow through final use/writeback; cell lifetime alone does not preserve the lock |
+| Nested field/index/reference | Evaluation-occurrence IDs, original cells/keys and each relevant owner path | Reuse evaluated inputs and the common writeback spine |
+| Trait field | Admitted requirement/witness and concrete storage projection | Apply the same place rules; do not synthesize a unique-copy getter or amplify write permission |
+
+Construction evaluates a base or index once. Owner protection starts when the dependent place is formed, before later arguments execute. This is separate from the long referent inout reservation that starts after the specified snapshots/defaults: postponing that reservation does not permit an intervening argument to move, drop, or replace the unique Guard or an owning wrapper on which the prepared place depends. Keep the original Guard read borrow, read access to intermediate shared storage that contains its owning wrapper, and referent read/write access distinct. Replacing that wrapper through an alias cannot destroy the Guard while the prepared place depends on it. Dependency protection is not a blanket referent write reservation and must not falsely conflict with otherwise disjoint referent fields. For an ordinary copyable reference, pinning the evaluated cell permits later handle rebinding without redirecting the access. Do not impose the Guard's source-owner restriction on every reference variable.
+
+The final consumer decides whether the prepared place supplies a logical copy, a synchronous borrow, an inout access, or a replacement target. Unique contents cannot supply a copy or unsupported move-out. A copyable snapshot ceases to depend on the source place once its owned copy is established; a borrow or inout keeps its dependencies through the call and final writeback. Reject storage escape, capture and suspension of an active synchronous access under the existing rules. Owning an inactive Guard across await remains distinct from keeping its referent borrowed across await.
+
+Access elaboration carries the evaluated cell, owner dependencies and permission into common access intervals. Verification checks the same dependencies against all consume/cleanup paths, including later argument evaluation, early exits and enclosing-owner destruction. Normal cleanup ends access/writeback before releasing pins and permitting Guard destruction; the Guard's ordinary deinit unlocks before releasing its strong cell share. Abort does not create an unwind guarantee. LLVM consumes this plan and must not recover it from the reference type name.
+
+A generic `replace(inout target, newValue)` consumes a prepared writable place and owned new value through one trusted exchange operation. Evaluate inputs first, transfer the old initialized value to an owned result, install the new value, and expose no intermediate uninitialized storage or user callback. The exchange does not destroy the returned old value or acquire a Mutex lock. Later destruction follows its new owner's ordinary cleanup boundary; the required writeback and Guard protection remain in force until exchange completion. No general borrow-return, user-defined projection trait or public lifetime parameter follows from this primitive.
+
 ## Evaluation, Access Elaboration, and Writeback
 
 All by-value argument/default snapshots and receiver/index subexpressions are evaluated before the long inout reservation begins. Earlier child values are preserved as described in [Mid evaluation](mid.md#places-operands-and-explicit-evaluation). This allows a by-value snapshot of a variable alongside an inout argument to that variable without treating the snapshot as a continued borrow.

@@ -52,7 +52,7 @@ including weaker/reordered implementation bounds and supertrait/where entailment
 The final body receives implementation-bound identities; intermediate requirement
 bindings are not themselves proof that the body environment is complete.
 
-Presence obligations do not automatically demand unique member dispatch. A saved
+Source-bound admission first requires the unique path described in [conformance evidence](types-and-evidence.md#5-conformance-evidence), even if no member is used. A weaker internal existence obligation cannot stand in for that admission. Presence obligations do not automatically demand unique member dispatch. A saved
 existence proof cannot silently choose a caller path as a shared callee's dispatch
 priority. Prepare the evidence actually demanded by saved member/conversion/
 protocol operations, preserve required uniqueness, and keep first concrete
@@ -86,6 +86,18 @@ Instantiation consumes a successful source artifact and explicit environment. It
 Closed parent types alone do not discharge a symbolic child condition. Preserve deferred, failed/missing, and ready outcomes distinctly. A request requiring executable facts cannot publish unresolved obligations as if they were pure, identity conversions, or optional absent data. Failures carry the original source/call provenance and are stable under unchanged inputs.
 
 Conditional conformance matching binds only impl-owned parameters and checks its conditions. Source priority and associated-output checking obey [the shared evidence rule](types-and-evidence.md): an output mismatch cannot reopen a shadowed implementation. Static evidence and runtime existential evidence remain separate. Generic abstraction does not turn an existential value into static proof of every requirement.
+
+### Capability Discharge and Witness Admission
+
+Instantiate the [saved capability/selection contract](types-and-evidence.md#capability-and-conditional-selection-contracts) with the instance's explicit binder and evidence environment. Do not rewalk nominal fields to invent a different unique condition. An allowunique body's justified borrow/move modes adapt to by-value copy semantics for a copyable instance; this is one substitution of its checked contract, not a second source diagnostic or permission to insert a copy for a unique instance.
+
+A conditional candidate family is one checked source operation. Evaluate its saved predicates to select exactly one recorded branch for the admitted environment. Retain the branch's declaration/body identity, conversions, modes and evidence. Default adapters, provided methods and `via` witnesses use the same applicability contract. An uncovered or conflicting environment is a preparation failure; concrete-name lookup or a more-specific-implementation fallback cannot repair it.
+
+Destruction selection consumes its own saved selection contract, explicitly representing the absence of a user deinit as well as selected deinit branches. This valid absence is not an uncovered callable candidate family. Instantiate the recorded conditional deinit and child destruction relationships into the final type destruction contract. Copyable instances retain ordinary child cleanup; a missing user deinit does not mean release-free storage. Drop elaboration, effect closure and physical glue consume this result rather than each selecting deinit again.
+
+At existential injection, conformance preparation fixes the concrete witness and associated bindings under the admitted source path. Runtime dispatch retains the requirement/slot, logical modes and capability guarantees established at the call. A stored copyability class or fully bound associated type can discharge the corresponding condition, but does not authorize runtime overload search. Field requirements retain a selected storage projection rather than becoming owning getters. An owned Self result uses its checked re-erasure plan; a storage address cannot be reinterpreted as writable existential storage of another concrete type.
+
+This closes the semantic producer-to-consumer handoff. It does not settle the executable bridge for a generic parameter bound to runtime-only opened Self. That bridge must be chosen before claiming executable support; the concrete-instance model below is not proof that arbitrary hidden Self already has code. No metadata ABI or second generic evaluator is adopted by this section.
 
 ## 6. Signatures, Adapters, and Returns
 

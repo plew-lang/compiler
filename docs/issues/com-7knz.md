@@ -56,6 +56,8 @@ and [coherence](https://doc.rust-lang.org/reference/items/implementations.html#t
 separate internal proof work and admissibility. Rust's coherence assumptions are
 not a substitute for Plew's explicit path-selection rule.
 
+Design resolution: [Conformance Evidence](../design/types-and-evidence.md#5-conformance-evidence) now separates internal existence, source path admission and terminal executable witness selection. [Capability contracts](../design/types-and-evidence.md#capability-and-conditional-selection-contracts) and [instance admission](../design/generics.md#capability-discharge-and-witness-admission) retain path identity through witness construction, including unused/empty bounds and branches sharing a terminal. The design requirement is addressed; source migration and implementation verification are separate from this documentation review.
+
 ### R2 — P1: Static allocation-mode analysis is not connected to lazy publication
 
 [Runtime](../design/runtime.md#storage-arc-and-cow) explicitly leaves closure of
@@ -74,6 +76,8 @@ This requires an architecture choice, not more assertions in runtime helpers.
 Comparison: [Rust Arc](https://doc.rust-lang.org/std/sync/struct.Arc.html) fixes a
 thread-safe ownership mechanism explicitly; Plew hides that choice and therefore
 needs its own allocation-sharing contract.
+
+Design resolution under the adopted sharing proposal: [Storage, ARC, and CoW](../design/runtime.md#storage-arc-and-cow) assigns AOT plan production to execution preparation, retention to the session and admission to the driver. Demand execution fixes ordinary managed allocations and typed operations to a conservative atomic baseline before execution; later requests do not reclassify live allocations. [Callable publication](../design/driver-and-execution.md#demand-call-and-publication) consumes this mode contract alongside effect closure. Full proposal-to-spec synchronization remains under S0. This addresses R2's initial publication gap at reference-design scope; it neither verifies implementation nor resolves R3's worker-pause protocol.
 
 ### R3 — P1: Worker demand and application-wide compilation pause have no protocol
 
