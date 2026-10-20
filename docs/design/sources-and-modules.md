@@ -108,7 +108,7 @@ Generated sources must have explicit membership, input identity, and provenance 
 
 Ordinary compilation reads committed generated parts with the rest of the admitted sources. Explicit generation suppresses automatic inclusion of the output being regenerated, avoiding a dependency on stale output. The loader must receive that mode explicitly; it must not infer it from which generated files happen to exist.
 
-The visible `@[...]` directive is the auto-part trigger for the corresponding `.gen.pw`, not merely that file's presence. Ordinary build must diagnose missing or stale required output and direct the user to generation. Freshness evidence and its checking mechanism belong to metaprogramming; silently ignoring the output or generating it as an undisclosed ordinary-load side effect would violate this boundary.
+The visible `@[...]` directive is the auto-part trigger for the corresponding `.gen.pw`, not merely that file's presence. Ordinary build must diagnose missing or stale required output and direct the user to generation. [Recorded-input validation](metaprogramming.md#recorded-input-validation) belongs to metaprogramming; the loader checks portable generation evidence before admission, without executing providers or discovering their arbitrary external I/O dependencies. Silently ignoring the output or generating it as an undisclosed ordinary-load side effect would violate this boundary.
 
 Host tools and target artifacts may need different target configuration and native dependencies. Their source universes and cache validity must be explicit even when they select the same package revision. A host-built generator's successful execution is not evidence that its output is valid for the target.
 

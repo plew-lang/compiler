@@ -32,10 +32,10 @@ Cross-review checks challenge the principal findings rather than counting votes.
 ## Findings
 
 The review is complete. Design-level resolutions and their remaining gates are
-listed below; implementation verification is outside this task. R6's external-input
-freshness assurance boundary is awaiting a user decision. The other repairs have
-canonical text and scoped reviewer confirmation; final whole-reference review
-and first-edition acceptance remain separate.
+listed below; implementation verification is outside this task. R6's recorded-input
+validation scope is approved and reflected in canonical text, and its chapter
+review found no required correction. The other repairs have scoped reviewer confirmation; final
+whole-reference review and first-edition acceptance remain separate.
 
 | Item | Design-level disposition | Canonical evidence |
 |---|---|---|
@@ -44,7 +44,7 @@ and first-edition acceptance remain separate.
 | R3 | Addressed; managed/native scope approved | Driver coordination, Runtime participant protocol and spec15 |
 | R4 | Handoff specified and chapter reviewed | Sources native-build service |
 | R5 | Stage order aligned and rechecked | Architecture and Mid |
-| R6 | User decision pending | Minimum external-observation assurance; no silent adoption |
+| R6 | Go-style scope approved; handoff reviewed | Explicit generation, recorded-input validation and portable receipts |
 | R7 | Aggregation and state-preservation fixes rechecked | Metaprogramming host units and one publication |
 | R8 | Initialization contract aligned and rechecked | Mid and operation supplement |
 | S0 | Adopted language rules synchronized and domain reviewed | spec03/04/05/06/07/08/11/14/15 and canonical capability/runtime chapters |
@@ -169,15 +169,7 @@ input identity, absent/invalid receipt behavior and failure publication. Choose
 explicitly which external observations freshness covers; that assurance boundary
 requires a decision. Wire format and exact publication API can remain details.
 
-Pending decision: whether first-edition freshness covers only recorded source,
-configuration/provider/dependency identity and output content, leaving arbitrary
-provider filesystem/environment/network observations outside that guarantee, or
-requires an external-input declaration/validation mechanism. The former is the
-recommendation presented to the user, not an adopted rule yet. Ordinary build
-must not run providers in either case. After the boundary is chosen, specify
-producer/loader receipt admission for a fresh checkout, missing/mismatched
-receipts, provider changes and interrupted publication without conflating
-freshness with output semantic correctness.
+Adopted resolution: the user approved Go-style explicit generation with author-managed arbitrary external observations. [Recorded-Input Validation](../design/metaprogramming.md#recorded-input-validation) records source/directive/configuration identity, resolved provider/dependency identities (content for mutable local inputs), validation-contract version and complete output content. The generator publishes a portable receipt only on successful combined generation; loader admission checks it without executing providers. A fresh checkout may consume matching committed source/output/receipt without recreating the author's host executable, SDK or environment. Missing, invalid, mismatched or unsupported evidence rejects admission with an actionable diagnostic. Partial publication cannot certify a mismatched pair. External I/O is outside this validation guarantee, not prohibited or silently tracked; explicit gen still executes even if recorded inputs match. Compiler source and execution verification remain separate; affected-chapter review found no required correction. The old output/receipt may remain admissible after a failed explicit generation only if its recorded inputs still match; no guarantee about changed external observations is inferred.
 
 ### R7 — P2: Provider isolation needs a generator-level aggregation boundary
 
