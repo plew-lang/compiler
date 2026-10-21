@@ -12,7 +12,7 @@ tags: [frontend, generics, verification]
 ---
 # Finish semantic-fact publication and final reader closure
 
-Retain the cumulative semantic expression/completion, binding, closure, pattern, try and aggregate migrations rather than reopening earlier public-array issues without checking current source. Their focused successes do not establish owner-wide closure. Physical storage remains the parent restart decision.
+Retain the cumulative semantic expression/completion, binding, closure, pattern, try and aggregate migrations rather than reopening earlier public-array issues without checking current source. Their focused successes do not establish owner-wide closure. Physical storage is adopted; the parent restart gate retains reconciliation and fresh baseline validation.
 
 Audit all writers and final readers: semantic types/completions; source call membership/templates and completed signatures; parameter/result/receiver records; nominal binder stamping; binding and global type readers; conversions; selected proofs and dynamic descriptors. Distinguish construction metadata/first-concrete preparation from a successful owner artifact. A Building record cannot be updated after its saved owner has succeeded or failed. Global sentinels and active Cursor are not initializer identity. Legitimate monotonic auxiliary classification is not semantic revision, and shared generated/default/provided ExprIds need explicit source-domain ownership, not arbitrary rejection.
 
@@ -26,7 +26,7 @@ Acceptance: inventory writer/API/status/owner/environment/obligation owner, then
 
 ## Specific Remaining Reader Distinctions
 
-Body signatures: record receiver, parameters and logical return under the same source owner. Declaration signature queries needed during construction cannot require that body already be Prepared. Preserve provided lexical owner, async logical return versus public Promise, closure signature, initializer versus synthetic global scope, and extern/bodyless callable versus body preparation. The old semanticBodyReturnTerm rederivation must be removed from completed Mid/Mono paths, not blindly from construction queries.
+Body signatures: record receiver, parameters and logical return under the same source owner. Declaration signature queries needed during construction cannot require that body already be Prepared. Preserve provided lexical owner, async logical return versus public Promise, closure signature, initializer versus synthetic global scope, and extern/bodyless callable versus body preparation. At 2983c47f, semanticBodyReturnTerm is absent; Mono/Call.preparedBodyReturnTerm reads the prepared function/closure signature. Preserve that saved-header boundary while migrating its backing; do not remove construction-time registered signature queries.
 
 Mid operand/place/condition/call readers distinguish successful Value, Unit, NoNormalValue and a recorded result-recipe dependency. Lower's synthetic MatchSubject has an evaluated pattern place as its separate authority; this is not a general missing-source-fact exemption. Carry recipes explicitly rather than guessing from term zero. Earlier 9badb6f7 already has bounded work in this area; inspect the cumulative source before treating it as outstanding.
 
