@@ -38,6 +38,12 @@ end-to-end feature family, not an assertion that ordinary generics do not work.
 
 ## Completion Boundary
 
+The [R1/R2 design prerequisite](met-yotl.md) is resolved. Implement its single
+fixed semantic expansion-depth limit and select the initial numeric constant
+using ordinary/adversarial controls. Include finite-deep overflow, changing
+projections, SCCs and cold/warm cache behavior. No infinity proof/detector,
+additional budget dimensions or public override API is required by this design.
+
 Carry capability declarations through pinned Syntax, semantic terms, checked
 conditions, conformance/existential formation, instantiation, ownership and final
 copy/drop. Preserve one chosen candidate family through ordinary calls and via.

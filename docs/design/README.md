@@ -49,9 +49,10 @@ All planned chapters have reviewed drafts, and the initial cross-chapter review 
 ## Reading and Maintenance
 
 The [review follow-up issues](../issues/met-ukm5.md#outcome-and-next-boundary)
-link active, unadopted comparisons in `proposals/`. Those documents do not override
-this reference or the language specification; incorporate accepted contracts and
-retire completed comparisons according to the maintenance policy.
+record each resolution and its implementation boundary. Accepted comparisons
+are incorporated into the owning chapters and retired under the maintenance
+policy. Any future active proposal remains separate from this adopted reference
+and the language specification.
 
 [Maintenance policy](maintenance.md) defines writing, review, adoption, decision retention and the boundary between design completion and implementation completion.
 

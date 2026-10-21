@@ -80,7 +80,7 @@ The [language capability rules](https://github.com/plew-lang/spec/blob/main/spec
 
 For example, an aggregate directly owning two parameters can have `Copy(T) AND Copy(U)` as its finalized condition. A shared handle owning a cell reference has its own copyable handle contract even when its referent is unique; it does not recursively acquire the referent's copy prohibition. Use declared ownership edges, not pointer layout or every type mentioned inside a field. A private owned field can change a public autounique type's copyability condition, so such a change affects its public capability contract despite field privacy. Recursive capability derivation and finite physical-layout validation are separate checks. Sendability additionally includes selected destruction/effect obligations; copyability is not a substitute for that proof.
 
-Predicates reference canonical type/projection terms and binder identities, not spelling. Equality normalization must not discard conformance-path provenance. Keep recursive active, ready, failed and deferred states distinct. Use one common capability/equality decision boundary and saved derivations; proving every arbitrary trait formula satisfiable is not required. Diagnostics distinguish a proved overlap from failure to prove disjointness within the supported reasoning. Both can reject a candidate family, but unknown is not proof of overlap. A condition that cannot yet be discharged is not `false` and cannot justify a copy, a missing destructor, or an arbitrary candidate. The minimum source-acceptance fragment and expanding-projection limit are under discussion in [R1/R2](../issues/met-yotl.md), not established by the phrase "bounded reasoning" alone.
+Predicates reference canonical type/projection terms and binder identities, not spelling. Equality normalization must not discard conformance-path provenance. Keep recursive active, ready, failed and deferred states distinct. Use the common bounded capability/equality decision contract below and saved derivations; proving every arbitrary trait formula satisfiable is not required. Diagnostics distinguish a proved overlap from failure to prove disjointness within the supported reasoning. Both can reject a candidate family, but unknown is not proof of overlap. A condition that cannot yet be discharged is not `false` and cannot justify a copy, a missing destructor, or an arbitrary candidate.
 
 Readers keep a reference to this contract plus an explicit substitution rather than independently reconstructing its conditions. Two equivalent normal forms may share storage; callers' explicitly selected sources do not become interchangeable. [Instantiation](generics.md#capability-discharge-and-witness-admission) owns concrete discharge and [ownership](ownership-and-access.md#standard-reference-projection-handoff) owns place/value use.
 
@@ -121,8 +121,9 @@ can be complete without an executable copy/drop classification being discharged.
 Use dependency worklists and shared immutable conditions so that unchanged
 components/atoms are reused. No runtime classifier or payload scan is introduced.
 The contract does not promise linear cost for arbitrary symbolic formulas, and
-resource exhaustion cannot be converted into a guessed capability. Supported
-expanding-projection handling remains a separate acceptance decision in R1/R2.
+resource exhaustion cannot be converted into a guessed capability. Changing
+type arguments/projections use the bounded expansion rule below; discovering
+that a sequence is infinite is not a prerequisite for stopping.
 
 One capability relation owns applicability, pairwise overlap and domain coverage
 queries for saved candidate families. Its inputs include the admitted capability
@@ -137,8 +138,85 @@ merely because concrete instantiation will eventually pick a branch.
 Ordinary calls, via and conditional deinit consume the same relation and saved
 derivations. This is not another source selector. Proof of Boolean coverage alone
 does not establish labels, modes, result compatibility or valid absence of deinit.
-The finite minimum fragment is pending user judgment; these shared ownership/API
-rules do not silently adopt a new source acceptance boundary.
+The following minimum fragment and fixed analysis limit implement the
+specification's bounded reasoning rule.
+
+### Bounded Capability Reasoning and Analysis Limit
+
+The common relation supports capability atoms on canonical terms, constants,
+and finite AND/OR/NOT combinations of those capability conditions. Copy(T) and
+Unique(T) are complements within the admitted two-class domain. Parameter, Self
+and associated-type declarations supply domain restrictions; completed nominal
+summaries supply derived conditions. Equality uses exact semantic identity and
+equations already justified by retained conformance/associated-binding evidence.
+It does not search for a different conformance to obtain a convenient equation,
+infer arbitrary negated trait requirements, or introduce new source predicate syntax.
+
+Normalize through those saved summaries/equations, then answer finite capability
+obligations through one shared propositional decision procedure. Representations
+may share condition nodes; no particular SAT/decision-diagram library is required.
+For admitted domain D and recorded branch predicates F_i, disjointness requires
+proof that `D AND F_i AND F_j` is impossible for each distinct pair; coverage
+requires proof that `D AND NOT(OR(F_i))` is impossible. Preserve the domain and
+normalization derivation with the result. A model that disregards required type
+relationships is not proof of a real overlap; unresolved relationships retain
+their unproved outcome instead of authorizing a fabricated counterexample.
+
+Use **one fixed semantic expansion-depth limit L** for this procedure initially.
+A root request starts at depth zero. Following an unresolved normalization,
+projection, summary substitution or decision branch adds one along that chain;
+sequential rewriting also preserves that chain depth instead of resetting it.
+Check before expanding past L and return a distinct AnalysisLimit outcome.
+Sibling branches use the same parent depth. Ordinary worklist iteration within
+an already discovered finite structural SCC is not repeated descent through its
+self edge; it still must complete its fixed point before publishing a result.
+
+L is an implementation constant, not a language-level numeric guarantee. Select
+its initial value with the capability implementation and representative controls;
+the design does not need that number to define the protocol. No user override,
+infinity detector, extra rule-count/size budgets or elapsed-time acceptance rule
+is part of this initial contract. A depth bound alone is not a bound on total
+branching work; broader cost controls require a separately justified change.
+
+An AnalysisLimit may stop a finite request that would succeed with more work.
+The diagnostic identifies the requested relation and its source and says the
+analysis limit was exceeded, not that recursion was proved infinite. It is not
+false, an overlapping family, a default capability or permission to omit drop.
+The required proof cannot be deferred past source admission or executable
+publication merely to avoid the limit. A justified abstract residual obligation
+still has its ordinary scoped meaning; it is not failed analysis relabeled ready.
+
+All consumers share this limit and outcome contract. Incidental helper calls do
+not consume semantic depth, and wrappers may not reset it. Memoized proof/limit
+results must respect their available-depth assumptions; an overflow result cannot
+be cached as a context-free negative answer. Reuse of a completed source artifact
+is distinct from pretending an unfinished request succeeded.
+
+| Control | Required result within the shared rule |
+|---|---|
+| Complementary copyable/unique branches | Prove one applicable branch over the admitted domain, subject to the common call contract |
+| Pair owning A/B; recursive List owning T/rest | Preserve Copy(Pair)=Copy(A) AND Copy(B), Copy(List[T])=Copy(T); do not unfold runtime list length |
+| Established associated binding T#Link.Next=U | Use the retained identity/evidence and U's capability condition |
+| Copy(T) alone used to assume Copy(T.Next) | Reject the unjustified implication; an allowunique associated type may be unique |
+| Candidate overlap or missing coverage | Preserve a proved error separately from unproved/unsupported relations |
+| Changing projection chain or finite deep query exceeding L | AnalysisLimit, with no infinite-recursion proof or capability guess |
+| Cold/warm memoization and indirect call/via/deinit consumers | Preserve the same promised evidence, depth assumptions and outcome distinctions |
+
+For example, an owned recursive Chain[T] whose next payload is Chain[T#Link.Next]
+may normalize back to a known node or finite summary. Its declaration is not
+automatically forbidden. A particular required classification that keeps expanding
+is stopped by L regardless of whether that expansion would eventually close.
+Source capability proof and endlessly growing concrete code-instance generation
+remain distinct requests and diagnostics.
+
+This selects a small proof boundary plus a fixed cutoff instead of an analysis
+whose job is to prove nontermination or accept every terminating query.
+[Rust's recursion limits](https://doc.rust-lang.org/reference/attributes/limits.html)
+and [Swift's bounded completion](https://forums.swift.org/t/the-requirement-machine-a-new-generics-implementation-based-on-term-rewriting/55601)
+are precedents for stopping finite expensive work too. Plew does not import
+Swift's several budgets, Rust's override syntax or either general trait solver.
+The [R1/R2 resolution](../issues/met-yotl.md) records scope; implementation and
+actual numeric tuning remain separate from this adopted design.
 
 [Rust coinduction](https://rustc-dev-guide.rust-lang.org/solve/coinduction.html)
 motivates an explicit solution for recursive structural properties, not universal

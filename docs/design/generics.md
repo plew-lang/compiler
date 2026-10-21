@@ -97,6 +97,9 @@ under that same environment. Visiting an active instance is not a copyability
 proof. A symbolic component's completion is distinct from discharging a concrete
 copy/drop request. Conditional call/via/deinit paths use the common relation's
 results and evidence rather than implementing separate overlap or coverage tests.
+The [fixed expansion-depth limit](types-and-evidence.md#bounded-capability-reasoning-and-analysis-limit)
+can stop a finite deep request as AnalysisLimit. It never permits selecting a
+different candidate or publishing an undisclosed residual classification.
 
 A conditional candidate family is one checked source operation. Evaluate its saved predicates to select exactly one recorded branch for the admitted environment. Retain the branch's declaration/body identity, conversions, modes and evidence. Default adapters, provided methods and `via` witnesses use the same applicability contract. An uncovered or conflicting environment is a preparation failure; concrete-name lookup or a more-specific-implementation fallback cannot repair it.
 
