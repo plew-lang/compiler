@@ -85,8 +85,10 @@ A consumer should acquire the required result/context at its preparation boundar
 The adopted physical layout is [owner-local sealed payloads with shared session
 pool identities](checked-body-storage.md), using a small read-only strong handle
 per body and a separate instance registry. The supplement supplies concrete
-records, APIs, failure isolation, alternatives and measurement criteria. Restart reconciliation and implementation remain pending; it is not a claim
-about the currently implemented representation. The logical owner/publication guarantees in this chapter apply
+records, APIs, failure isolation, alternatives and measurement criteria. Its
+[restart evidence](../issues/met-j9mv.md) and implementation progress are tracked
+in issues; adoption is not a claim about the currently implemented representation.
+The logical owner/publication guarantees in this chapter apply
 to either physical choice; no new typed IR or universal pool follows from them.
 
 ## 7. Example and Change Impact

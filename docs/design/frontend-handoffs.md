@@ -84,18 +84,13 @@ struct, enum, type, and bound additions update the corresponding indexes at the
 same boundary; value copying must copy rows and indexes consistently. Readers
 must not alter visibility, arity, aliases, or candidate order.
 
-The current name-index scheme uses row ID plus one, zero for absence, and current
-row count as a transient missing-reader result. Do not cache that count across
-appends. Function indexes cover generated rows too, separately from the source
-callable set. Generic struct/enum lookup must seek the first matching generic
-row rather than filter only the first same-named row. Additional predicates
-continue through same-named candidates instead of stopping at the first failure.
-
-A global type-parameter-spelling query excludes registered nongeneric struct
-and enum names, not generic declarations, traits, or newtypes. It is not lexical
-binder resolution, type identity, visibility, or conformance. Bare-name indexes
-exclude arguments, views, existential/sendable decoration; their result is not
-a type-equality decision. Scalar predicates need not materialize aggregate rows.
+Lookup readers preserve the complete same-name candidate set and continue past
+inapplicable candidates. Generic arity, source visibility and selected namespace
+remain part of applicability. A missing-reader result is transient: no cached
+absence may hide a later registered/generated declaration. Lexical parameter
+identity is not supplied by a global spelling-membership query, and a bare-name
+index is not structural type equality. Concrete legacy index/sentinel behavior is
+retained as a migration observation in [met-m7wx](../issues/met-m7wx.md#retained-migration-observations).
 
 Resolved nominal declaration identity is authoritative: failure to find it may
 not fall back to another same-spelled declaration. Parameters, projections,
@@ -335,6 +330,9 @@ re-derived from AST. Async signatures distinguish public Promise result from
 logical result. Async entry owns its accepted receiver/arguments; declaration
 borrow/inout restrictions and frame ownership cannot be replaced with unique
 copies or a different ABI rule.
+The [activation-input plan](ownership-and-access.md#async-activation-inputs)
+connects that requirement to initial Mid owners and source cleanup. Operand/frame
+storage and successful async signature registration do not establish it alone.
 
 Final dependencies follow selected calls, globals, aggregate/storage types, and
 implicit destruction. Destruction visits fields, enum payloads, Buffer elements,
@@ -459,33 +457,12 @@ shared signature, ownership, or final-dependency contract.
 
 ## 11. Implementation Map and Remaining Closure
 
-The following are retained implementation observations and bounded migration
-contracts, not certification of the current tree. The audit base and physical
-storage question remain those in Compiler State. Evidence lives in meta's
-[typechecking remediation evidence](../../../evidence/typechecking-remediation/).
-Focused success never replaces whole-compiler, sanitizer, fixed-point, or
-performance gates, and historical watchdog failures are not newly reproduced bugs.
-
-| Boundary | Retained state and limitation |
-|---|---|
-| Static/conversion proofs | Private arenas append complete child-first proofs and expose common readers; no replacement API. Proof-ID-bearing source tables and whole-owner authority still need closure. Decoding/freeze-thaw are not admission. |
-| Final calls | Arena owns rows, five payload pools, and index. Publisher owns ranges and rejects duplicate body/site before row/payload publication. A private argument-tail handle checks continuation/ranges, but is neither a rollback transaction nor foreign-arena authority proof. Mid/LLVM use scalar readers; Comp owns semantic preparation/diagnostics. |
-| Prepared call constraints | Private Building/Prepared states publish owned immutable snapshots only after successful function/global source obligations and common admission. Mono's Direct reader uses Prepared data without rechecking constraints. This alone does not seal type facts, selection tables, or proof stores. |
-| Recorded bound consumption | Written Direct calls pass saved child proofs to concrete body admission. Static/protocol/operator/implicit calls and entry requests retain Declaration paths in the recorded candidate; do not claim complete migration. Extern/bodyless calls still require final call admission. |
-| Source templates | Private rows reject selected-site replacement after Prepared; conservative storage classification is auxiliary, not reselection. Private append-only operand/type/view pools and lookup indexes do not yet prohibit every append after owner success. Historical slices: compiler `ce6e87fd` and `16f5af17`. |
-| Bounds/projections | FunctionBoundArena owns stable rows and ordered per-owner indexes together. Projection-presence summaries remain tri-state for forward children. Selected normalization equations replay proofs, not lookup. |
-| Owner readers | Mono expression, await, construction, assignment, Access projections, call-argument Expression sources, and global closures must share explicit successful owner facts. Global targets and closure owners cannot come from ambient Cursor. Constructing-reader closure remains incomplete. |
-| Completion | PreparedSemanticCompletionOwner must identify exact session/snapshot; expressions, statements, and blocks share immutable source/execution flow. Earlier flow migrations are bounded work, not proof all readers use the shared channel. |
-| Remaining acceptance | General Unit value binding/conversion, source-place mutability/ownership at all call kinds, captured generic shapes, and full signature/result/bound consumer coverage require audit. No language prohibition or confirmed current bug follows from absence of audit. |
-
-Focused evidence directories retain separate scopes: `source-typing-closure`,
-`diagnostic-continuation`, `conversion-proof-boundaries`,
-`structural-proof-admission`, `box-proof-admission`, `box-proof-subjects`,
-`path-proof-admission`, `assumption-authority`, `call-proof-admission`,
-`call-proof-boundary`, `call-signature-admission`, `static-signature-admission`, and
-`call-bound-admission`. The last includes append-only proof/final-call publication
-and source-template row/pool slice comparisons. These are evidence pointers, not
-adopted physical storage APIs or a current all-green claim.
+Current migration state, historical carrier/index details and scoped evidence
+belong to issues rather than this logical contract. The previous bounded mapping
+is retained in [met-m7wx](../issues/met-m7wx.md#retained-migration-observations);
+the cumulative producer/reader reconciliation and first implementation increment
+are owned by [met-j9mv](../issues/met-j9mv.md#cumulative-restart-reconciliation).
+Neither is evidence of complete compiler implementation or all-language coverage.
 
 Diagnostic continuation preserves an owner's first failure and independent
 conversion errors. Missing owner authority fails the request; an error queue or
@@ -493,17 +470,18 @@ rendering severity cannot replace domain failure. Declaration checking may
 continue to collect diagnostics without publishing that owner as successful.
 Remaining owner/evidence closure is tracked by [met-si6j](../issues/met-si6j.md);
 completion migration by [com-tijs](../issues/com-tijs.md).
-Physical storage must be decided with concrete saved fields, acquisition/append
-cost, copying/retaining, indexing, and failure isolation before paused
-implementation resumes. A generic all-types layout-use table with no actual
+The adopted [physical storage contract](checked-body-storage.md) supplies concrete
+saved fields, acquisition/append cost, copying/retaining, indexing and failure
+isolation. Its [restart prerequisite](../issues/met-j9mv.md) has a separate scope
+from implementation closure. A generic all-types layout-use table with no actual
 consumer is not adopted: it duplicates facts and can add quadratic work.
 
 ## 12. Storage Decision and Remediation Boundaries
 
 [Checked-body Storage](checked-body-storage.md) owns concrete storage alternatives,
 worked producer-to-consumer paths, cost comparison and the implementation restart
-requirements. Its physical layout is adopted, with restart reconciliation pending; it
-is not another logical authority.
+requirements. Its physical layout is adopted; [reconciliation and restart evidence](../issues/met-j9mv.md)
+are tracked independently from implementation. It is not another logical authority.
 The [remediation parent](../issues/met-si6j.md) owns the eleven completion criteria;
 [selection](../issues/met-ucze.md), [source publication](../issues/met-acfl.md),
 [callee evidence](../issues/met-ia09.md) and [conversion/descriptor consumers](../issues/met-6e6k.md)

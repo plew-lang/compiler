@@ -1,6 +1,6 @@
 ---
 id: met-6kzo
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-10-21T11:49:40Z
@@ -11,12 +11,13 @@ tags: [design, mid, ownership]
 ---
 # Close the async input ownership handoff
 
-## Active Discussion
+## Adopted Contract
 
-[Async Input Ownership Handoff](../design/proposals/async-input-ownership.md)
-holds the unadopted comparison, decisions to close and design controls. The meta
+[Async Activation Inputs](../design/ownership-and-access.md#async-activation-inputs)
+owns the accepted internal design, rationale, alternatives and controls. The
+temporary comparison was incorporated and retired. The meta
 [progress document](../../../agents/compiler-design-progress.md#再レビュー指摘の具体化)
-owns current work order; this issue retains the completion boundary.
+owns work order; this issue records design resolution, not implementation support.
 
 ## Problem and Evidence
 
@@ -51,10 +52,25 @@ resume completing synchronously as well as suspension, without conflating source
 cleanup with Promise/frame bookkeeping or inventing cancellation semantics.
 
 No new public API, source lifetime rule, second runtime or general coroutine IR is
-required. The +0 public entry with explicit activation acquisition is a natural
-recommendation; changing all internal entries to consuming ABI is an alternative
-whose callers/adapters would need the same finalized contract. Neither is adopted
-by this issue. Independent review must check acquisition and cleanup together.
+required. The adopted +0 entry with explicit activation acquisition preserves the
+existing call contract. A distinct consuming internal ABI was not selected because
+it would expand the consumers to synchronize without a demonstrated benefit here.
+Independent review checked acquisition and cleanup together.
 
 [com-tn1m](com-tn1m.md) owns implementation/payload coverage. Closing this design
 task alone does not close that implementation investigation.
+
+## Resolution: Design Handoff Closed
+
+Read-only review of the documentation delta against spec03/06/07/14 found the
+decision derivable from existing ownership semantics. Common Mid construction
+creates the checked input plan; instantiation grounds it; acquisition/transfer
+feeds logical initial ownership, Drop and independent verification. LLVM handles
+storage and runtime handles separate scheduling/Promise/frame obligations.
+Direct and mechanical forwarding entries share one activation boundary.
+
+Temporary input, copy-self, unique Move, environment, generic/indirect entry and
+immediate-versus-suspended completion controls are specified in the owning chapter.
+No source rule, lifetime extension, cancellation or backend-only cleanup was added.
+The execution reviewer found no blocking design problem. No compiler execution,
+performance or sanitizer evidence is claimed. Implementation remains com-tn1m.

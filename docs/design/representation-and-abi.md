@@ -48,6 +48,12 @@ Physical aggregate construction uses the selected result type and destination fi
 
 A Copy operand already acquires an owned value. Storing it into a new local, field, box, or return home transfers that owner without another retain. Borrowed ABI inputs acquire a new share only when an independent owner is stored or returned. Machine glue implements the [type destruction contract](ownership-and-access.md#type-destruction-contracts), including selected user deinit and child order; it does not rediscover those decisions from physical fields.
 
+Async public entries keep this guaranteed-input convention. Their
+[Mid input plan](ownership-and-access.md#async-activation-inputs) establishes
+activation ownership explicitly before caller guarantees end. Callee binding and
+frame emission consume its finalized lane roles; byval bytes, direct pointers or
+frame allocation do not acquire another semantic owner or invent its destruction.
+
 An enum's representation retains its discriminant and active payload relationships. A consuming match transfers the whole source ownership to the selected payload destinations; removing a physical box is not permission to leave a partially live source enum. Shared-cell extraction and final-owner extraction have different ownership consequences supplied by the operation contract.
 
 Zero-sized physical load/store handling is centralized. For a completed empty struct/array representation, ordinary loads can reconstruct the empty value and stores need no machine memory instruction. Opaque types are not empty. This rule does not remove allocation identity, source evaluation, moves/copies, access checks, or user destruction, and does not grant permission to omit future volatile/atomic operations.

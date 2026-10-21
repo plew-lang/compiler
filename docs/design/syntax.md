@@ -22,6 +22,12 @@ This is a cost and ownership choice. It avoids recursive value-tree retain/drop 
 
 ## 3. Information Preserved at the Handoff
 
+For string tokens and interpolation, the
+[common literal decoder boundary](declaration-and-execution-audit.md#string-literal-decoding)
+owns decoded-value preparation and its semantic validation handoff. Later physical
+materialization consumes that established value; it is not a second escape parser
+that can make an invalid source literal pass `check` and fail only in LLVM.
+
 | Syntax information | Semantic input must retain | Decision deferred to its owner |
 |---|---|---|
 | Names and qualified segments | Spelling/provenance, segment order, each segment's arguments and labels | Namespace/type/projection/variant interpretation and declaration identity |

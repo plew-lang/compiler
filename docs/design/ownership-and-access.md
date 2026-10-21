@@ -18,6 +18,67 @@ Plew's current unique model does not support arbitrary partial moves. Whole-valu
 
 Ordinary value parameters may use a guaranteed physical ABI while retaining by-value source semantics. That implementation borrowing does not make their source values aliases of the caller's mutable storage. Conversely, an explicit semantic borrow must retain its storage provenance even if both kinds of operand share a physical representation.
 
+### Async Activation Inputs
+
+The async entry boundary preserves the public call's guaranteed ordinary inputs,
+but the logical activation owns its accepted values. Common Mid construction
+authors an **activation-input plan** from the checked logical signature, selected
+input modes and closure/copy-self metadata. Instantiation grounds that plan with
+the ordinary body environment. Before ownership/access/drop analysis, its explicit
+acquisition and transfer operations establish the logical body's initial owners.
+This is generated Mid under an existing checked contract, not another AST check
+or an ownership decision deferred to frame emission.
+
+| Input lane | Entry action | Logical body state |
+|---|---|---|
+| Ordinary copyable input or copy-self | Acquire one independent owned value from the guaranteed input using its selected value-copy operation | Initialized owned local with the source binding identity and lifetime |
+| Unique Move input/self | Transfer the already accepted owner into the activation; no unique copy | Initialized owned local; the entry's forwarding owner is consumed |
+| Required closure environment | Retain or transfer its admitted environment owner under the selected capture contract | Explicit hidden owner keeping dependent captures/cells alive |
+| Synchronous borrow/inout | Reject under the existing async declaration/access restrictions | No borrowed caller storage retained as an activation input |
+
+An environment owner preserves its selected capture relationships; it does not
+recopy arbitrary capture payloads, clone unique values, or turn a forbidden borrow
+capture into an owning one. Copyable specialization of an allowunique mode uses
+the already specified mode adaptation. The plan records all required input owners
+before first resume and before any caller guarantee can end.
+
+Acquisition initializes a logical owner/home once. Moving it to a physical frame
+slot transfers that owner without another Copy/retain. Logical binding-end and
+normal-exit edges feed the ordinary ownership analysis and drop elaboration,
+including moves, source lifetime cliffs and source cleanup order. Hidden owner
+dependencies remain live through their dependent cleanup; they are not dropped
+as guessed extra frame fields. The verifier independently checks the entry plan's
+initialized/consumed states and their connection to the body and normal cleanup.
+
+The same plan applies when first resume completes synchronously and when execution
+suspends. Liveness selects storage and includes cleanup uses; it does not decide
+whether an input needs ownership. Source drops come only from elaborated Mid.
+Completion notification, the activation's Promise share and frame allocation have
+separate runtime obligations. A caller's guaranteed value is never dropped as an
+activation owner, and a forwarded Move owner is never cleaned at both boundaries.
+
+Static preparation failure publishes no executable entry. Runtime panic follows
+the existing abort rule rather than acquiring an unwind guarantee for partially
+initialized inputs. No additional cancellation or early-drop policy is introduced.
+
+This keeps the existing +0 public ABI and avoids a second consuming call convention
+for every direct, witness, closure and default adapter. All those entries consume
+the same finalized plan. Required value Copy can be cheap RC sharing; byte-level
+byval alone does not establish it. Optimizations may remove redundant acquisition
+or stores only while preserving the existing source lifetime/destruction rules.
+Mechanical forwarding adapters route inputs into that same boundary; they do not
+create another activation or execute input acquisition twice for one logical call.
+[Swift guaranteed ownership](https://github.com/swiftlang/swift/blob/main/docs/SIL/Ownership.md#guaranteed)
+supports the enclosing-owner requirement. [Rust async inputs](https://doc.rust-lang.org/reference/items/functions.html#async-functions)
+provide a state-machine ownership comparison, without adopting Rust Future start
+or cancellation semantics.
+
+Verification controls must follow temporary String/aggregate inputs, copy-self,
+unique Move with visible deinit, required closure environments and indirect/generic
+entries through both synchronous completion and suspension. Check the return value
+and exactly-once cleanup, not only frame-slot presence. Implementation coverage
+remains [com-tn1m](../issues/com-tn1m.md).
+
 ## Lifetime Boundaries and Drop Elaboration
 
 Source-defined obligation-ending edges—including lexical exits, explicit binding ends, and conditional-move accessibility cliffs—are the cleanup authority. An owned unique binding shadowed by a new declaration ends at the frontend-selected shadowing commit, after RHS evaluation and its temporary cleanup. A shadowed copyable binding retains its ordinary scope lifetime. Mid consumes binding IDs rather than re-resolving names to reconstruct this distinction.

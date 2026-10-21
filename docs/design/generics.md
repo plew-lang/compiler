@@ -91,6 +91,13 @@ Conditional conformance matching binds only impl-owned parameters and checks its
 
 Instantiate the [saved capability/selection contract](types-and-evidence.md#capability-and-conditional-selection-contracts) with the instance's explicit binder and evidence environment. Do not rewalk nominal fields to invent a different unique condition. An allowunique body's justified borrow/move modes adapt to by-value copy semantics for a copyable instance; this is one substitution of its checked contract, not a second source diagnostic or permission to insert a copy for a unique instance.
 
+Recursive capability instances consume the completed
+[structural summary](types-and-evidence.md#structural-recursion-and-shared-capability-decisions)
+under that same environment. Visiting an active instance is not a copyability
+proof. A symbolic component's completion is distinct from discharging a concrete
+copy/drop request. Conditional call/via/deinit paths use the common relation's
+results and evidence rather than implementing separate overlap or coverage tests.
+
 A conditional candidate family is one checked source operation. Evaluate its saved predicates to select exactly one recorded branch for the admitted environment. Retain the branch's declaration/body identity, conversions, modes and evidence. Default adapters, provided methods and `via` witnesses use the same applicability contract. An uncovered or conflicting environment is a preparation failure; concrete-name lookup or a more-specific-implementation fallback cannot repair it.
 
 Destruction selection consumes its own saved selection contract, explicitly representing the absence of a user deinit as well as selected deinit branches. This valid absence is not an uncovered callable candidate family. Instantiate the recorded conditional deinit and child destruction relationships into the final type destruction contract. Copyable instances retain ordinary child cleanup; a missing user deinit does not mean release-free storage. Drop elaboration, effect closure and physical glue consume this result rather than each selecting deinit again.

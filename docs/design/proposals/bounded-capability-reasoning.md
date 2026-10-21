@@ -1,6 +1,6 @@
 # Bounded Capability Reasoning
 
-**Status: Under discussion.** Review finding R2; tracked with R1 by
+**Status: Source-acceptance decision pending.** Review finding R2; tracked with R1 by
 [met-yotl](../../issues/met-yotl.md). This document owns the active R2 comparison,
 not the adopted contract or work status. See the
 [progress document](../../../../agents/compiler-design-progress.md#再レビュー指摘の具体化).
@@ -20,6 +20,22 @@ Keep source-selected candidates, a common call contract and their proof together
 No later name search, candidate priority fallback, unknown-as-false conversion or
 different solver per consumer is permitted. R1 supplies recursive capability
 summaries; this document must not define another ownership derivation.
+
+The [shared relation's ownership, inputs and outcome distinctions](../types-and-evidence.md#structural-recursion-and-shared-capability-decisions)
+are now adopted and independently reviewed. The minimum accepted fragment below
+is still a proposal: the user explicitly requires confirmation for decisions
+affecting source acceptance, even when the internal recommendation is strong.
+
+## Pending User Question
+
+The pending question asks whether to adopt finite combinations of copyable/unique
+conditions and established type equalities as the basic acceptance domain, with
+explicit analysis-limit diagnostics for requests that do not close finitely.
+Ordinary recursive List/mutual recursion must not be rejected merely because they
+are recursive; no uncertain capability is rounded to copyable or unique. Await a
+reply before treating this minimum domain or limit outcome as an adopted rule.
+If more examples are requested, explain accepted complementary families,
+associated-binding identity, and growing projection chains before changing spec.
 
 ## Candidate Minimum Fragment
 
@@ -54,9 +70,10 @@ Close these questions before adoption:
    fragment? Where is a recursive summary reference allowed?
 2. Which saved equality/projection evidence permits atom identity, and what remains
    distinct even when physical types or terminal witnesses coincide?
-3. How does the common result distinguish proved disjoint/overlapping/covered,
-   unproved or unsupported cases, justified deferred obligations, resource limits
-   and invalid input? These are semantic distinctions, not a required enum layout.
+3. How does each approved case map to the common relation's already adopted
+   proof/counterevidence, unproved, residual, resource-limit and invalid-input
+   distinctions? Specify diagnostics without reintroducing separate per-consumer
+   outcome systems or requiring a particular enum layout.
 4. Which conclusions may be deferred under a declared bound, and which admission
    requires a proof now? A family cannot publish incomplete required coverage.
 5. What proof or residual condition survives concrete substitution, and which

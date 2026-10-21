@@ -34,8 +34,10 @@ Canonical Instantiate, Access and Drop append snapshots directly. Remap every
 edge using actual expansion widths, not old statement counts. No thawed body,
 cleanup-block owned-array backlog, AST/type-cache fallback or restored draft
 proof is the normal rewrite protocol. Verify/LLVM read immutable body/node IDs.
-Constant literal token bytes may be retained for physical decoding; ExprId is
-provenance, not a carrier asking the backend to reevaluate source.
+Constant literal token bytes may be retained for physical representation under
+the [common decoder contract](declaration-and-execution-audit.md#string-literal-decoding);
+this does not defer semantic escape validation to LLVM. ExprId is provenance,
+not a carrier asking the backend to reevaluate source.
 
 Rejected substitutes include passing statements by pointer to avoid copies,
 suppressing ARC in selected matches/compiler modes, running only with tracing,
@@ -184,6 +186,9 @@ Try failure cleans unfinished generated builders under those same rules.
 
 Final calls retain receiver None/Borrow/Inout/Move and argument Borrow/Inout/Move.
 Normal value inputs are caller-guaranteed +0, not implicit consuming ownership.
+Async entry turns these guarantees into activation owners through the explicit
+[input plan](ownership-and-access.md#async-activation-inputs); the guaranteed
+parameter itself does not become an owning local merely by occupying frame bytes.
 A nonidentity argument conversion first produces an owned temporary then lends
 it for the call; a consuming ABI receives Move of an independently copied source
 temporary when appropriate, never Move of the original copyable binding. Call
@@ -323,6 +328,12 @@ Suspend payload remains a coverage question, also constrained by instantiation,
 ownership checks and backend preflight.
 
 ## Async and Machine Boundaries
+
+Common Mid construction and instance grounding materialize the
+[activation-input ownership plan](ownership-and-access.md#async-activation-inputs)
+before ownership/access/drop preparation. Entry Copy/Move/environment acquisition
+and the logical body's initial owners/cleanup form one boundary. Frame planning
+below consumes those established obligations; it creates none of them.
 
 Frame planning reads the instantiated, access/drop-elaborated, verified CFG and
 computes backward liveness to fixed point. Drop/ConditionalDrop/ReleaseCaptureCell

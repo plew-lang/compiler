@@ -1,6 +1,6 @@
 ---
 id: met-yotl
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-21T11:49:40Z
@@ -15,7 +15,9 @@ tags: [design, generics]
 
 R1: [Recursive Capability Summaries](../design/proposals/recursive-capability-summaries.md).
 R2: [Bounded Capability Reasoning](../design/proposals/bounded-capability-reasoning.md).
-Both are under discussion, not adopted. The meta
+R1's finite structural component and the shared decision authority are adopted;
+the source-acceptance fragment and expanding-projection limits remain pending
+user judgment. The meta
 [progress document](../../../agents/compiler-design-progress.md#再レビュー指摘の具体化)
 owns current work order; this issue retains the joint completion boundary.
 
@@ -64,3 +66,24 @@ public annotation requires user judgment first. This task adopts none of them.
 
 This is a design prerequisite for [met-b2la](met-b2la.md)'s capability feature,
 not a requirement to implement that whole feature inside [met-si6j](met-si6j.md).
+
+## Partial Internal Resolution and Pending Source Judgment
+
+The [structural summary/shared decision contract](../design/types-and-evidence.md#structural-recursion-and-shared-capability-decisions)
+now chooses the least fixed point of may-be-unique for closed finite structural
+components, with private provisional state, complete symbolic publication and
+explicit instance substitutions. Recursive summary graphs do not make ordinary
+conformance-proof DAGs cyclic. A shared relation supplies call/via/deinit proof
+outcomes without taking over their complete applicability rules.
+
+The semantics reviewer independently confirmed this finite internal rule follows
+existing all-field/all-variant ownership and adds no source restriction. No field
+rescan, runtime classifier or Active-as-success shortcut was adopted.
+
+A user question remains open: adopt a specified finite capability/equality
+fragment as the basic accepted domain and explicitly report requests that cannot
+close finitely as analysis limits. This affects compilation outcomes, so neither
+that acceptance boundary nor a fallback reclassification is adopted without a
+reply. R1/R2 remain open even though their internal shared ownership is settled.
+No source/implementation execution, formal general termination proof or performance
+result is claimed.

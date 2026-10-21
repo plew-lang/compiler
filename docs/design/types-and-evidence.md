@@ -80,9 +80,73 @@ The [language capability rules](https://github.com/plew-lang/spec/blob/main/spec
 
 For example, an aggregate directly owning two parameters can have `Copy(T) AND Copy(U)` as its finalized condition. A shared handle owning a cell reference has its own copyable handle contract even when its referent is unique; it does not recursively acquire the referent's copy prohibition. Use declared ownership edges, not pointer layout or every type mentioned inside a field. A private owned field can change a public autounique type's copyability condition, so such a change affects its public capability contract despite field privacy. Recursive capability derivation and finite physical-layout validation are separate checks. Sendability additionally includes selected destruction/effect obligations; copyability is not a substitute for that proof.
 
-Predicates reference canonical type/projection terms and binder identities, not spelling. Equality normalization must not discard conformance-path provenance. Keep recursive active, ready, failed and deferred states distinct. Use the adopted bounded capability/equality reasoning and saved derivations; proving every arbitrary trait formula satisfiable is not required. Diagnostics distinguish a proved overlap from failure to prove disjointness within the supported reasoning. Both can reject a candidate family, but unknown is not proof of overlap. A condition that cannot yet be discharged is not `false` and cannot justify a copy, a missing destructor, or an arbitrary candidate.
+Predicates reference canonical type/projection terms and binder identities, not spelling. Equality normalization must not discard conformance-path provenance. Keep recursive active, ready, failed and deferred states distinct. Use one common capability/equality decision boundary and saved derivations; proving every arbitrary trait formula satisfiable is not required. Diagnostics distinguish a proved overlap from failure to prove disjointness within the supported reasoning. Both can reject a candidate family, but unknown is not proof of overlap. A condition that cannot yet be discharged is not `false` and cannot justify a copy, a missing destructor, or an arbitrary candidate. The minimum source-acceptance fragment and expanding-projection limit are under discussion in [R1/R2](../issues/met-yotl.md), not established by the phrase "bounded reasoning" alone.
 
 Readers keep a reference to this contract plus an explicit substitution rather than independently reconstructing its conditions. Two equivalent normal forms may share storage; callers' explicitly selected sources do not become interchangeable. [Instantiation](generics.md#capability-discharge-and-witness-admission) owns concrete discharge and [ownership](ownership-and-access.md#standard-reference-projection-handoff) owns place/value use.
+
+### Structural Recursion and Shared Capability Decisions
+
+For a closed finite structural ownership component, capability derivation uses
+the **least fixed point of may-be-unique**, equivalently the greatest fixed point
+of copyability. For an autounique aggregate, may-be-unique is the disjunction of
+its owned field/payload conditions over every variant. Fixed unique/copyable
+declarations supply constants; binders and justified projections supply their
+declared ranges or symbolic atoms. A fixed-kind summary does not excuse checking
+that its owned fields and type arguments are permitted in that declaration.
+
+For example, `U(List[T]) = U(T) OR U(List[T])` yields `U(List[T]) = U(T)`.
+Starting from "not yet known to own unique" and propagating positive ownership
+dependencies selects this solution. A cycle alone is not evidence of a unique
+payload. The result does not depend on whether a finite inhabitant exists;
+recursive layout legality and inhabitation are different questions. For shared
+handles, follow their declared ownership contract rather than the referent's
+copy prohibition. Sendability and destruction do not inherit this stopping rule.
+
+The domain owner constructs equations over canonical nominal identities,
+explicit substitutions and owned-edge relationships. It closes components over
+that graph, retaining finite symbolic conditions instead of enumerating concrete
+uses. A recursive summary graph/schema is permitted; flattening every condition
+into a copied formula is not required. This rule applies when normalization and
+saved summaries close over finitely many terms/atoms. It does not claim that an
+unbounded chain of changing associated projections is the same finite problem.
+
+Provisional component state is private. Publish a summary only when its equations,
+chosen solution contract, binder identities and outgoing obligations are complete
+for its advertised scope. Active visitation alone publishes no capability truth.
+Recursive summary references belong to this typed component artifact; they do
+not permit cycles or unfinished nodes in the ordinary conformance-proof DAG.
+Readers retain a summary identity and explicit substitution. A symbolic summary
+can be complete without an executable copy/drop classification being discharged.
+
+Use dependency worklists and shared immutable conditions so that unchanged
+components/atoms are reused. No runtime classifier or payload scan is introduced.
+The contract does not promise linear cost for arbitrary symbolic formulas, and
+resource exhaustion cannot be converted into a guessed capability. Supported
+expanding-projection handling remains a separate acceptance decision in R1/R2.
+
+One capability relation owns applicability, pairwise overlap and domain coverage
+queries for saved candidate families. Its inputs include the admitted capability
+domain, canonical terms, selected family/summary identities, explicit substitution,
+and retained equality/conformance evidence. It distinguishes positive proof,
+counterevidence, unsupported/unproved requests, justified residual obligations,
+resource exhaustion and invalid input. These distinctions need not be one enum.
+Only evidence appropriate to the requested publication scope authorizes success.
+In particular, family admission cannot defer required disjointness or coverage
+merely because concrete instantiation will eventually pick a branch.
+
+Ordinary calls, via and conditional deinit consume the same relation and saved
+derivations. This is not another source selector. Proof of Boolean coverage alone
+does not establish labels, modes, result compatibility or valid absence of deinit.
+The finite minimum fragment is pending user judgment; these shared ownership/API
+rules do not silently adopt a new source acceptance boundary.
+
+[Rust coinduction](https://rustc-dev-guide.rust-lang.org/solve/coinduction.html)
+motivates an explicit solution for recursive structural properties, not universal
+coinduction for Plew trait proofs. [Swift SE-0427](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0427-noncopyable-generics.md#recursive-copyable)
+illustrates why growing associated-type conditions are a separate problem. A
+field rescan per consumer or an Active-as-success shortcut would violate the
+single derivation authority; a general trait solver is unnecessary for the finite
+structural component covered here.
 
 ## 6. Publication and Consumption
 

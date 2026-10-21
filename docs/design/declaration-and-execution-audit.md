@@ -199,6 +199,8 @@ provide an in-allocation data pointer without changing logical length/capacity.
 This is an implementation audit requirement, not proof of complete LSan coverage
 on every platform or of reusable execution teardown.
 
+### String Literal Decoding
+
 String-literal decoding belongs to the common source/Mid preparation boundary,
 not an LLVM-only validator. The recorded map uses `StringLiteral.decodeStringLiteral`
 without LLVM or `CompResult`, successful decoded values in an append-only session

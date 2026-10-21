@@ -99,6 +99,11 @@ FFI beyond the checked boundary is the programmer's responsibility under the spe
 
 The compiler produces the state machine and frame layout from prepared Mid. The runtime owns queue and waiter mechanics, not a second AST interpreter. A suspended activation preserves its owned values and resume state; a callback reentry reloads frame contents rather than relying on SSA values from an earlier invocation. Source cleanup remains on the Mid paths that discharge those values. Completion code separately releases the activation's own completion-handle count and frame storage.
 
+Input owners already exist under the compiler's
+[activation-input plan](ownership-and-access.md#async-activation-inputs) before
+first resume. The runtime neither promotes a guaranteed argument into an owner
+by storing its descriptor nor releases all frame fields as a second source cleanup.
+
 Entry must establish the returned Promise owner's count before an initial resume that can complete synchronously. Otherwise completion could free the cell before entry returns its handle. Pending operations, timers, and awaited handles need independent ownership obligations so dropping a user-visible handle does not leave a dangling scheduled callback or imply cancellation.
 
 A Promise belongs to one event loop. For a copyable result it is a shared completion handle: multiple waiters may register without replacing one another, completion transfers their continuations to scheduling, and each waiter receives an owned logical copy. For a unique result, the consuming protocol in [Typed Outcomes and Worker Results](#typed-outcomes-and-worker-results) applies; private cell ownership does not permit multiple public result consumers. The runtime/typed generated support must preserve a compound result and destroy it when its last owner disappears. A scalar completion slot is only an implementation subset, not the representation contract for every Promise[T].

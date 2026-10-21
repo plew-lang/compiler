@@ -1,7 +1,9 @@
 # Recursive Capability Summaries
 
-**Status: Under discussion.** Review finding R1; tracked by
-[met-yotl](../../issues/met-yotl.md). No solution is adopted by this proposal.
+**Status: Partly settled; source acceptance pending.** Review finding R1; tracked by
+[met-yotl](../../issues/met-yotl.md). The finite structural rule is adopted in
+[Types and Evidence](../types-and-evidence.md#structural-recursion-and-shared-capability-decisions);
+this active document retains the unsettled expanding-projection boundary.
 Work order and current progress live in the meta
 [design progress document](../../../../agents/compiler-design-progress.md#再レビュー指摘の具体化).
 
@@ -52,25 +54,44 @@ These are design controls, not executed Plew tests or newly adopted source rules
    only with a demonstrated termination boundary; naive expansion cannot be the
    general solution.
 
-The initial direction to investigate is a finite structural solution with reusable
-summary references, rather than a general coinductive trait solver. The approaches
-may be combined; no storage format or algorithm is selected here.
+The finite structural solution with reusable summary references has been adopted
+and independently reviewed. General trait coinduction and naive expansion were
+not selected. Its exact physical packing remains an implementation choice; this
+does not settle acceptance of unbounded changing projections.
 
-## Decisions to Close
+## Pending Source-Acceptance Decision
 
-- What are the graph nodes/edges and the exact solution for ordinary nominal
-  recursion? Which facts are available while constructing a component?
-- What is a complete symbolic summary, and what is its substitution/publication
-  contract? What must [bounded reasoning](bounded-capability-reasoning.md) consume?
-- Which changing arguments/projections close finitely under declared summaries?
-  Which justified obligations can remain deferred, and which request needs a
-  resource-limit diagnostic rather than a source-typing rejection?
-- How are always-copyable/always-unique declarations classified over their full
-  admitted domain without enumerating observed concrete uses?
-- What inputs and cache keys preserve binder, projection and conformance identity,
-  and what bounds traversal, repeated work and memory?
+User judgment has been requested before setting the basic accepted fragment and
+the outcome for requests that do not close finitely. Recommendation: retain the
+finite capability/equality fragment and explicit analysis-limit diagnostics,
+without silently classifying an uncertain type or rejecting ordinary recursive
+List/mutual recursion. This recommendation is **not adopted** while awaiting the
+reply. A request for more examples is also a valid response.
 
-Ordinary structural recursion can be settled as internal realization of adopted
+Distinguish same-component recursion from a declaration such as an allowunique
+Link with an allowunique Next associated type, and an owned Chain whose recursive
+child is Chain[T#Link.Next]. Repeated discovery can introduce predicates for T,
+T.Next, T.Next.Next and so on. A finite schema may describe the relation without
+making every useful source query decidable. The open decision concerns admission
+and diagnostics for such requests, not permission to guess their answer.
+
+## Remaining Decisions to Close
+
+The finite component's solution, private provisional state, complete symbolic
+publication, binder/summary identity and instance-reader rules are already in
+Types and Evidence. Do not reopen them as unspecified merely because this
+proposal remains active. The remaining questions are:
+
+- Which changing arguments/projections close finitely under the supported summary
+  normalizations, and what acceptance/diagnostic policy applies otherwise?
+- How does the approved minimum fragment handle full-domain autounique
+  classification when a recursive symbolic relation cannot be reduced far enough?
+- Which justified conditions remain residual obligations, and which admission
+  requires proof immediately? Coordinate that distinction with R2.
+- What source-facing controls distinguish a genuine typing rejection from the
+  agreed analysis limit, independently of observed concrete uses?
+
+Ordinary finite structural recursion is settled as internal realization of adopted
 meaning. A new source restriction, public annotation or capability reclassification
 requires user judgment. Do not claim a restriction is necessary before checking
 the finite-summary alternative and distinguishing source checking from execution
