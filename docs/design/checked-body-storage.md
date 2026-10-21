@@ -1,6 +1,6 @@
 # Checked-body Storage and Implementation Restart
 
-**Status: adopted physical design; implementation and restart validation pending.**
+**Status: adopted physical design; implementation is not certified by this reference.**
 This supplement owns the physical storage/API contract and the gate before the
 paused type-checking remediation resumes. [Compiler State](compiler-state.md),
 [Body Checking](body-checking.md), [Generics](generics.md), [Types and Evidence](types-and-evidence.md)

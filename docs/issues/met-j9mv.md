@@ -1,6 +1,6 @@
 ---
 id: met-j9mv
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-10-13T01:40:08Z
@@ -12,15 +12,15 @@ tags: [frontend, architecture]
 ---
 # Decide checked-body storage and implementation restart boundary
 
-Design-only prerequisite for the paused type-checking remediation. The [adopted physical design](../design/checked-body-storage.md) selects owner-local sealed payloads with private read-only strong handles and shared session term/proof IDs, compared against a live shared-store alternative. Restart reconciliation remains required; this is not an implemented or measured representation. Private arrays and snapshots already present do not implement the adopted owner boundary. Do not add another implementation layer instead of reconciling the existing producers/readers.
+Design-only prerequisite for the paused type-checking remediation. The [adopted physical design](../design/checked-body-storage.md) selects owner-local sealed payloads with private read-only strong handles and shared session term/proof IDs, compared against a live shared-store alternative. The seven-family reconciliation and fresh cumulative baseline are recorded below; this is not an implemented or measured representation. Private arrays and snapshots already present do not implement the adopted owner boundary. Do not add another implementation layer instead of reconciling the existing producers/readers.
 
 Acceptance: provide actual field/key/state/API and writer/reader permissions, failure isolation, acquisition/append/copy-retain/index cost, worked end-to-end examples and finite old-to-new removal map. Resolve open architecture decisions with the user where required. Obtain design review, then establish one fresh cumulative baseline before implementation. An interned handle, CoW snapshot or new IR is not prescribed by this ticket.
 
 ## Current Design Boundary
 
-The supplement now specifies the source/instance keys, payload fields, Building/Succeeded/Failed publication, registered-signature queries, required/optional readers, synthetic plans, worked paths and finite migration families. Read-only comparison against the retained 2983c47f candidate identified all-owner semantic snapshots in preparedSemanticFacts; no compiler was run. Independent design comparison supports the owner-local direction without claiming shared stores inherently require whole-table CoW.
+The supplement now specifies the source/instance keys, payload fields, Building/Succeeded/Failed publication, registered-signature queries, required/optional readers, synthetic plans, worked paths and finite migration families. Read-only comparison against the retained 2983c47f candidate identified all-owner semantic snapshots in preparedSemanticFacts. That source inspection is separate from the fresh baseline below. Independent design comparison supports the owner-local direction without claiming shared stores inherently require whole-table CoW.
 
-Before implementation, finish reconciliation of every migration family with the selected cumulative revision and its final consumers, then establish one fresh baseline. The independent comparison and corrective design review are complete; adoption falls within delegated internal decisions because it preserves the existing public/semantic contracts and replaceable reader boundary. Source/instance authority, failure isolation and missing-fact rejection are fixed; index shape, packing and allocation refinements follow the recorded correctness/cost measurements. No implementation gate or 5.7-second condition is waived.
+The cumulative reconciliation below identifies the producers and final consumers; the same candidate now has a fresh fixed-point/performance and normal-suite baseline. The independent comparison and corrective design review are complete; adoption falls within delegated internal decisions because it preserves the existing public/semantic contracts and replaceable reader boundary. Source/instance authority, failure isolation and missing-fact rejection are fixed; index shape, packing and allocation refinements follow the recorded correctness/cost measurements. No implementation gate or 5.7-second condition is waived.
 
 ## Cumulative Restart Reconciliation
 
@@ -84,3 +84,22 @@ references to the changed symbols and remove its old writers/readers. This finit
 family inventory locates that work; it is not a claim that every call or negative
 language combination has been examined. Baseline outcomes and artifact identity
 are retained in meta evidence/worklog; main/seed/carrier promotion is separate.
+
+## Resolution: Design and Restart Prerequisite
+
+Resolved at the design/reconciliation scope. Owner-local storage/API is adopted
+and independently reviewed; the cumulative migration matrix above identifies
+actual producers, state owners and final readers, and corrects stale historical
+claims. The input-fixed [restart baseline](https://github.com/plew-lang/meta/blob/main/evidence/typechecking-remediation/restart-baseline/README.md)
+uses unchanged compiler `2983c47f`: generation-3 fixed point, formal three-run
+median 6.260879 seconds, and the same measured compiler passed the normal suite
+(run1415, midcoverage1, midborrowedread1, panic45, reject977, part90, partreject80;
+skip/fail0). Both execution handles ended with exit 0 and unchanged inputs.
+
+This closes the prerequisite, not met-si6j or the source/storage implementation.
+The parent's 5.7-second condition is unmet; repair difficulty is not established.
+Generation, dependency and sanitizer gates remain unrun for this baseline.
+Next, follow the first closed increment above on the cumulative source, with
+per-increment reference/removal audits and applicable validation. Main, seed and
+the adopted carrier remain unchanged; the new measured binary is retained as
+a baseline artifact, not promoted as the official carrier.

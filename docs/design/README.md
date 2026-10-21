@@ -14,7 +14,7 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 4. [Syntax and Semantic Input](syntax.md) — reviewed draft.
 5. [Declarations, Scopes, and Name Lookup](name-lookup.md) — reviewed draft.
 6. [Types and Semantic Evidence](types-and-evidence.md) — reviewed draft.
-7. [Expression and Body Checking](body-checking.md) — reviewed draft; physical storage is specified; restart validation remains pending.
+7. [Expression and Body Checking](body-checking.md) — reviewed draft; physical storage is specified; implementation remains pending.
 8. [Generics and Body Instantiation](generics.md) — reviewed draft.
 9. [Metaprogramming and Generated Code](metaprogramming.md) — reviewed draft; host-unit/output/recorded-input contracts are specified, while their implementation and coverage remain unaudited.
 10. [Mid Representation and Lowering](mid.md) — reviewed draft; upstream storage implementation remains pending.
