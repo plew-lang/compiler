@@ -18,6 +18,8 @@ Phase 1 of [com-604k](com-604k.md). Pinned compiler source `f89857b1f3f967630739
 
 The fixed inventory below covers all 53 open issues preceding this classification, including mixed/new/optional work. It records the classification at this input, not future live status or a second global issue index. Closed review/evidence issues remain closed and preserved; they are not reopened as implementation tasks. Changes to a work contract belong in its owning issue and the integration dependencies.
 
+The approved root-only use decision updates the current contract of [com-w4c2](com-w4c2.md); its inclusion remains unchanged. Follow that owning issue for root/part/provider migration rather than implementing the superseded file-local lookup direction from the original audit.
+
 ## Classified Inventory
 
 Detailed scope, rationale, consumers and completion conditions remain in the linked owning issue. This snapshot does not duplicate those live contracts.

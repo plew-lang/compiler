@@ -18,6 +18,8 @@ Current-feature implementation/verification split from [com-vy62](com-vy62.md) f
 
 This is an explicitly bounded migration step, not adoption of the legacy runtime-trait provider model as the final design. Its completion does not establish the adopted macro-role contract or close com-vy62. Preserve ordinary trait/conformance semantics and source visibility; do not create compiler-only name exceptions to simulate the future role model.
 
+The [root-owned use contract](../design/sources-and-modules.md#root-owned-use-bindings) applies to target output as to every ordinary part. Target output must omit `use`/`pub use`; consumer roots explicitly supply documented support bindings. The corresponding current provider/consumer migration is owned by [com-w4c2](com-w4c2.md), while this task preserves normal generated-part admission without hoisting or a macro exception. Host provider/harness imports remain in their own module roots. This does not add new macro-role syntax to either task.
+
 ## Existing Producer to Final Consumer
 
 Use three end-to-end increments under the current admitted provider forms:

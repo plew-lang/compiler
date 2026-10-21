@@ -14,8 +14,8 @@ Consumer dependency discovery is entry/use-reachable, not an instruction to reso
 |---|---|---|
 | Dependency resolution | Selected package sources, revisions, dependency-name bindings, and configuration inputs | Load the selected sources; do not independently select a newer revision |
 | Source access | Bytes and logical source identity, or a load failure | Parse those bytes and preserve their provenance |
-| Module discovery | Module roots, part membership, file-local use directives, and dependency edges | Register declarations and construct visibility under the published membership |
-| Semantic scope construction | Candidate identities and provenance under the module/file environment | Select meaning using ordinary checking rules |
+| Module discovery | Module roots, part membership, root-owned use directives, and dependency edges | Register declarations and construct visibility under the published membership |
+| Semantic scope construction | Candidate identities and provenance under the module environment | Select meaning using ordinary checking rules |
 
 ## 2. Packages Are Not Modules or Directories
 
@@ -94,7 +94,17 @@ Two graphs must not be conflated:
 
 The loader must preserve enough edge provenance to diagnose a cycle or conflicting parent with the responsible directives. File deduplication cannot silently resolve conflicting membership by accepting whichever traversal reached the file first. A visited file and a completely discovered module are different states.
 
-Within a module, definitions are shared across root and part files. External names introduced by `use` remain file-local: a part does not inherit the root's external bindings. Part contents are restricted to impl blocks and permitted structural directives; free functions, types, extern declarations, top-level values, and re-publication are rejected there. Membership does not excuse these restrictions.
+Within a module, definitions and the root's external use bindings are shared across the root and every transitive part. Only a module's root may contain top-level `use` or `pub use`; this is each module root, not only the package entry `src/_.pw`. Part contents are restricted to impl blocks, nested part directives and macro directives. Use/re-publication, free functions, types, extern declarations and top-level values are rejected in every part, including generated parts. Membership does not excuse these restrictions.
+
+### Root-Owned Use Bindings
+
+Discovery validates directive placement from the shared syntax and root/part membership before publishing use bindings for semantic lookup. The root supplies one external binding environment for the entire module. Parent/depth/traversal order does not create part-specific environments or precedence. Preserve each directive's source provenance for diagnostics and the use DAG; module-wide lookup is not permission to erase file identity. Ordinary alias, duplicate-declaration, overload and public-surface rules remain unchanged.
+
+This choice keeps the module as the unit of both declarations and external bindings, with dependency declarations centralized in its root. File-local imports would make visibility across parts depend on whether a name was defined locally or imported, while module-wide imports from arbitrary parts would let generated dependencies alter the surrounding environment. Root-only imports accept more explicit consumer setup in exchange for one lookup environment and ordinary part admission, without generated-code privileges.
+
+Macro authors must document the external bindings their output needs, and consumers provide those bindings at the root. Generators cannot insert uses into the original root or have the loader hoist a generated use. Provider implementations and generation harnesses may use dependencies in their own module roots under the same rules.
+
+**Reconsideration conditions:** required imports can become verbose, expose generated implementation dependencies, or force consumer-root edits when a macro's support dependencies change. Generated references or helper declarations can also collide with root bindings or user declarations; root-only use prevents generated import injection, not every macro capture/collision. If these costs become concrete, reconsider macro-specific dependency binding or hygiene/isolation with the user. No such exception, collision waiver, dedicated generated scope or unique-name facility is adopted now. Until a new decision, generated and handwritten parts obey identical restrictions.
 
 The module DAG is a source dependency rule. It is not the static global-initialization dependency graph, nor does it forbid recursive calls within a module. The [startup plan](driver-and-execution.md#static-initialization-plan) owns initialization order and cycle checking under the specification; a DAG does not by itself prove initialization safety.
 
@@ -128,7 +138,7 @@ Adding another path that re-publishes `Item` preserves its declaration identity.
 
 For a new source provider, change source access and provenance admission while preserving graph and lookup contracts. For a new dependency syntax, update the package resolver and path-category handoff rather than teaching body checking to fetch packages. For a visibility change, update semantic scope construction and affected public-surface consumers; do not solve it by loading fewer files.
 
-Verification should exercise directory roots versus neighbors, nested parts, conflicting parents, part/use cycles, file-local external bindings, selective overload sets and duplicate re-publication paths, and missing embedded resources. Input-version tests must also request an unprepared body after editing its backing file and demonstrate that the old session retains its admitted inputs. These are required coverage categories, not claims that all current tests exist or pass.
+Verification should exercise directory roots versus neighbors, nested parts, conflicting parents, part/use cycles, root-owned bindings shared across nested parts, rejected use in handwritten/generated parts, explicit macro support dependencies, selective overload sets and duplicate re-publication paths, and missing embedded resources. Input-version tests must also request an unprepared body after editing its backing file and demonstrate that the old session retains its admitted inputs. These are required coverage categories, not claims that all current tests exist or pass.
 
 ## 7. Comparisons and Rationale
 

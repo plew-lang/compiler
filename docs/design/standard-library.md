@@ -45,7 +45,7 @@ These operations must not let ordinary callers construct arbitrary WeakRef value
 
 The existing language-item list remains the complete implicit surface. Promise and JoinHandle remain available for their async/spawn syntax; this does not make every Core declaration implicit. Ref, MutableRef, FrozenRef, WeakRef, Weakable, Buffer, drop, replace and all Sync names require ordinary `use` when named. Traits remain explicit even when syntax implicitly dispatches through their admitted identities.
 
-Using `.*` on a known reference or calling an already resolved method does not perform a fresh lookup of the pointer type or Weakable name. Lang/Core/Hash can be admitted to bind language items without importing all their public names into each file. The Lang entry is a manifest/defining module, not permission to make arbitrary future exports implicit. Loading Sync does not itself create workers or impose atomic RC on an otherwise nonsharing AOT program. Compiler-known representation is neither implicit visibility nor a second namespace authority.
+Using `.*` on a known reference or calling an already resolved method does not perform a fresh lookup of the pointer type or Weakable name. Lang/Core/Hash can be admitted to bind language items without importing all their public names into each module scope. The Lang entry is a manifest/defining module, not permission to make arbitrary future exports implicit. Loading Sync does not itself create workers or impose atomic RC on an otherwise nonsharing AOT program. Compiler-known representation is neither implicit visibility nor a second namespace authority.
 
 ## Channel Construction and Operation Results
 

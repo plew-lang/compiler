@@ -96,8 +96,8 @@ Contract owners: [sources/modules](../design/sources-and-modules.md),
 | Shared parser entry and spans | Loader.pw parseFileSyntax lexes/parses into one SyntaxFile with the original base; syntax parseExprAst/parseBlockAst materialize from direct parser results. SourceFiles.pw append/containing preserve disjoint ranges and return None for synthetic gaps. | Existing common entry/provenance. All arena/value-AST constructs and retired helper reachability remain com-2p9p; private old helpers alone do not prove a competing active grammar |
 | Admitted source lifetime | Frontend loads bytes/syntax before body demand; CompilerSession holds that Comp. SourceAccess separates embedded paths and never falls back to disk for a missing embedded resource. | Conforming scoped session path. Filesystem existence/read races and failed-read versus empty-file handling are not proved safe by existence checks alone |
 | Module graph/membership | Frontend queues part/use distinctly, rejects duplicate admitted part targets; Loader rejects non-impl part items; Check/Visibility detectImportCycles walks source import edges. | Existing module/forest checks; exhaustive filesystem alias/cycle combinations unverified |
-| Overload sets and provenance | Resolve/Module appendFreeFunctionSurface combines public declaration identities and re-export origins, deduplicates Func IDs; visibleFreeFunctions combines local/imported candidates before callableArgMatchRank. | Existing overload combination to preserve; the file-scope defect below is separate from declaring imports universally broken |
-| File-local use scope | Frontend.recordSyntaxImportOrigins -> Ir/Modules.registerImportOrigin indexes module+NameId; Visibility.moduleBindingAt/checkImports and Resolve/Module.visibleFreeFunctions omit the file when reading/merging. | Source-confirmed mismatch; new com-w4c2. Root/part bindings leak or collide despite spec15's file-local rule |
+| Overload sets and provenance | Resolve/Module appendFreeFunctionSurface combines public declaration identities and re-export origins, deduplicates Func IDs; visibleFreeFunctions combines local/imported candidates before callableArgMatchRank. | Existing overload combination to preserve; the root-use admission boundary below is separate from declaring imports universally broken |
+| Use binding ownership | Frontend.recordSyntaxImportOrigins -> Ir/Modules.registerImportOrigin indexes module+NameId; Visibility.moduleBindingAt/checkImports and Resolve/Module.visibleFreeFunctions use that environment. | Under the subsequently adopted root-only use contract this module indexing is appropriate. com-w4c2 owns root-only directive admission and real part/provider/consumer migration; the former file-local interpretation is superseded |
 | Top-level lock/direct package binding | Frontend captures entryLock once; each file's manifest supplies direct names to resolveGitDepImport with that root lock. | Existing intended authority. Manifest.loadLock's per-package comment is not the actual loader behavior |
 | Reachable version-resolution closure | resolve/Resolver.runResolver queues all manifest git edges, skips path-to-git closure, and first-wins deduplicates by url+major after per-edge pickLatest. Lock.lockCommitForConstraint can reject an unsatisfied later edge but cannot find the omitted joint solution. | Source-confirmed resolution gap; new com-9ttw. Independent from native builds and command-entry asymmetry |
 | Capability syntax/summary/proof | Pinned Syntax binder fields and Lower/Decl.lowerTypeParamBinds carry sendable only; Ir Bind/nominal declarations lack allowunique/autounique ranges; Check/Unique recursively skips boxed/array-owned edges and rejects unique generic use under the old restrictions. | Absent end-to-end family; met-b2la. No implementation of the new shared capability SCC/Boolean relation/L limit is claimed; existing sendability's 32-depth false result is a different query, not that protocol |
@@ -199,7 +199,7 @@ claim that every normative sentence has an executable control.
 | Compiler state/identity | A source/instance/header/caches; D native session lifetime |
 | Sources/packages/modules | C file provenance, graph, import scope, lock/resolution/native admission |
 | Syntax | C shared parser, new surfaces, deinit; E explicit paired-path limit |
-| Lookup | A source selection/provided provenance; C overload identity/file scope |
+| Lookup | A source selection/provided provenance; C overload identity/root-use admission |
 | Types/evidence | A substitution/proof/environment keys; C capability surface and trusted identity |
 | Body checking | A source/global/closure/binding/aggregate/completion; E contextual compatibility |
 | Generics | A environment/call/evidence consumption; C capability/conditional family |
@@ -218,7 +218,7 @@ claim that every normative sentence has an executable control.
 ### Repair Boundaries and Recommended Order
 
 1. **Independent current correctness fixes:** com-p10m (checked storage arithmetic
-   and allocation failure), com-w4c2 (file-local external bindings) and the already
+   and allocation failure), com-w4c2 (root-only use admission and migration) and the already
    known com-6ygf (ORC layout agreement). Their contracts are settled; none requires
    all new concurrency/capability APIs. Reproduce them with focused controls before
    repair; no repair is authorized by merely closing this audit.
@@ -256,9 +256,11 @@ and reusable Hot Restart remain their adopted future scope.
 The detailed static audit is complete for the recorded contract paths across all
 reference domains. It goes beyond met-z0ro by tracing retained-source readers,
 closure/header publication, body-key evidence, async acquisition/cleanup,
-file-local lookup, root-lock selection, Buffer failure and native ownership gates.
-Three new owning tasks record newly evidenced gaps (com-p10m, com-w4c2, com-9ttw);
-existing tasks retain all other repairs and unknown combinations. No implementation
+module binding construction, root-lock selection, Buffer failure and native ownership gates.
+Three owning tasks retain the follow-up map (com-p10m, com-w4c2, com-9ttw);
+com-w4c2 now follows the approved root-only use contract rather than the original
+file-local interpretation.
+Existing tasks retain all other repairs and unknown combinations. No implementation
 issue was closed and no source/runtime/test/seed/carrier was changed.
 
 This is not exhaustive certification of all programs or a fresh compiler test run.

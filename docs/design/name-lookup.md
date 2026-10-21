@@ -57,7 +57,7 @@ Qualified expressions must distinguish a namespace from a same-spelled local val
 
 ## 4. Free Functions and Public Surfaces
 
-The [module specification](https://github.com/plew-lang/spec/blob/main/spec/04-execution/15-modules.md) defines file-local use bindings, module-private declarations, and individual public declarations. Free-function lookup combines visible local declarations and explicitly imported public declarations into one candidate set, deduplicated by declaration identity. It does not prefer a local declaration merely because it is local, or prefer the first import encountered.
+The [module specification](https://github.com/plew-lang/spec/blob/main/spec/04-execution/15-modules.md) defines root-owned use bindings shared across the root and all parts, module-private declarations, and individual public declarations. Directive-placement validation rejects use in handwritten and generated parts before lookup; there is no separate part-file import environment. The [root-owned binding contract](sources-and-modules.md#root-owned-use-bindings) owns this boundary and its reconsideration conditions. Free-function lookup combines visible local declarations and explicitly imported public declarations into one candidate set, deduplicated by declaration identity. It does not prefer a local declaration merely because it is local, or prefer the first import encountered.
 
 Selective use of a function name transfers all public overloads under that name. An alias changes the local binding name of the set. Non-public overloads do not become public because another overload shares their spelling. Namespace-qualified calls read that namespace's reachable public surface; they do not fall back to unrelated same-named declarations.
 

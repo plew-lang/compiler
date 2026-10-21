@@ -6,6 +6,8 @@ Generation constructs and executes a host program that transforms annotated synt
 
 The [metaprogramming specification](https://github.com/plew-lang/spec/blob/main/spec/04-execution/16-metaprogramming.md) owns macro roles, directive forms, AST input, add-only output and auto-part behavior. [Syntax](syntax.md) owns the shared grammar and arena/value-AST boundary. [Sources and modules](sources-and-modules.md) owns membership and source snapshots. This chapter does not introduce general compile-time evaluation, expression macros, or another source type checker.
 
+Generated output obeys the same [root-owned use contract](sources-and-modules.md#root-owned-use-bindings) as handwritten parts: it cannot contain `use`/`pub use`. Consumers explicitly supply required dependencies and binding names in the target module root; providers document that contract. Neither generation nor loading silently edits the root or hoists output imports. Provider/harness dependency selection for the host is independent of these consumer-root bindings. Import verbosity and generated-name collisions are recorded reconsideration conditions in that source contract, not current macro exceptions.
+
 ## 2. Macro Identity and Host Contracts
 
 A directive names an existing declaration with a registered macro role. The provider's owner alone may attach that role. Cross-module use requires both the declaration's visibility and a public macro role; recognizing the spelling `Hash` is not sufficient. Directive-name resolution follows ordinary use/visibility rules before trusted harness synthesis.

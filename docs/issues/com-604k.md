@@ -21,6 +21,8 @@ Scope classification is [com-esri](com-esri.md). Its pinned matrix records inclu
 
 Start with com-p10m (checked Buffer arithmetic/allocation publication), then com-w4c2 and com-6ygf as independent current correctness boundaries. No source/type-system migration blocks the first Buffer unit. The manual diagnostic repair com-ydgx is not a prerequisite when that repair uses the existing standard sanitizer gate.
 
+com-w4c2 follows the approved root-only use rule, with one module-wide binding environment shared by parts. Its scope includes real part/provider/consumer migration; the former file-local lookup direction is superseded. Reconsideration conditions for macro dependency verbosity/collisions belong to the source design, not an immediate exception or another mandatory feature family.
+
 The frontend uses com-kp3y for owner-local header/expression/binding/completion publication through actual Mid/Mono readers, then met-ucze/met-ia09/met-6e6k and final met-acfl closure. Existing closures/globals/aggregate/try/pattern readers must remain valid during each increment. Sequence is recommended implementation order, not evidence that every entire task blocks another: record a hard tk edge only where the complete named contract actually needs the prerequisite. met-si6j retains its existing current-surface criteria.
 
 Current-gen handoff/framing/receipts are scoped by [met-8b8w](met-8b8w.md); its parent com-vy62 retains the absent macro/macrointerface public-role migration, which does not block current-feature integration. This is a migration boundary, not a change to the adopted final macro design.
