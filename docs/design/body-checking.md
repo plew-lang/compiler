@@ -113,7 +113,7 @@ Body success is scoped. Source semantic success does not imply Mid ownership/acc
 The [storage supplement](checked-body-storage.md) makes the adopted owner-local payload
 layout concrete: fields/keys, private builders, sealing/failure, read-only
 handles, separate instance results and final-consumer migration. It also compares
-the shared-store alternative and states measurement criteria. Restart reconciliation and implementation validation remain pending. This chapter owns the logical source
+the shared-store alternative and states measurement criteria. The scoped [restart reconciliation](../issues/met-j9mv.md#cumulative-restart-reconciliation) and fresh cumulative baseline are recorded separately; storage implementation and its validation remain pending. This chapter owns the logical source
 result; the supplement is the single home for the physical choice. Neither
 private arrays alone nor a wrapper around all-owner snapshots satisfies it.
 
@@ -167,7 +167,7 @@ Inspected source base: `6fe09bc7c0e75260b3f773643921478b5020b94f`. [Record.pw](.
 
 The paused type-checking review identifies incomplete producer-to-consumer closure, independent selectors, and expensive snapshot acquisition. Its retained implementation candidates are not all present in this inspected source base. This chapter describes the intended authority and publication contracts without claiming those candidates have completed them. Every expression form, synthetic path, storage cost, and final consumer has not been audited here. No compiler execution or performance measurement was performed; retained implementation follow-up work belongs in [local issues](../issues/README.md).
 
-Chapter review checked source authority, inference/completion semantics, owner publication, final-consumer paths, and the primary-language comparisons. Receiver and logical result signature contents and forward-inference/completion examples were made explicit. No required semantic correction remained within that scope. The physical storage/API contract is adopted in the supplement; its restart reconciliation and fresh cumulative baseline remain required.
+Chapter review checked source authority, inference/completion semantics, owner publication, final-consumer paths, and the primary-language comparisons. Receiver and logical result signature contents and forward-inference/completion examples were made explicit. No required semantic correction remained within that scope. The physical storage/API contract is adopted in the supplement; its scoped reconciliation and fresh baseline are recorded in [met-j9mv](../issues/met-j9mv.md), while storage implementation and final-consumer validation remain pending.
 
 ## Retained Follow-up Investigations
 

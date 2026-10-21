@@ -392,7 +392,7 @@ pub struct Comp {
     // collection pass, which deterministically reaches every record instance via scanType.
     // Gating registration to this phase keeps grounding side-effect-free everywhere else
     // (type checker, backend), instead of registering on demand as a side effect of
-    // grounding (the old "detour"). See agents/generic-unification.md A-1.
+    // grounding (the old "detour"). See docs/design/generics.md, Instance Identity and Registration.
     pub mut val inCollection: Bool = false
     // name interning (Phase C): a content-keyed table mapping each name span to a
     // stable 1-based id, so name equality is an integer compare (see `Interner`).

@@ -69,6 +69,8 @@ Demand execution instead uses conservative atomic RC for ordinary managed alloca
 
 The driver admits a body only when its allocation, copy/drop, weak-promotion and called-entry modes agree with its execution environment. Physical RC specializations are keyed by that frozen mode/alias plan as well as source instance, target and ABI. They do not change semantic type identity or authorize different overload selection. AOT invalidation precedes execution; demand publication cannot silently invalidate a mode already used by live allocations. Foreign-memory safety remains at the explicit FFI boundary. The existing non-atomic primitives do not prove spawn support. Cycle reporting/reclamation described as future work in the specification is not an implemented collector or a reason to weaken normal-path destruction guarantees.
 
+Generate only required mode combinations, not every possible specialization in advance. Potentially combinatorial code growth and propagation across distant callers are accepted costs of retaining non-atomic operations where safe. Argument count alone is not a general bound: result and internal-buffer modes and their alias relationships also constrain a specialization. Programs without a sharing boundary should bypass unnecessary sharing analysis; measure dependency collection, analysis and generated-code costs rather than assuming the fast path is free.
+
 The exact raw-buffer header and immortal-storage encoding are private representation choices. Any change must update generated operations, native helpers, constants, and relevant validation together. It must not expose allocation identity as ordinary value equality.
 
 The [concurrency specification](https://github.com/plew-lang/spec/blob/main/spec/04-execution/14-concurrency.md)

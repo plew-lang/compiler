@@ -136,6 +136,8 @@ Standard-reference verification also covers replacement of an intermediate owner
 
 The Guard's strong ownership solves the protected cell's lifetime; borrowing the original Guard through final projected use separately prevents early unlock. [Swift Mutex](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0433-mutex.md) illustrates protected-value access under a lock, but its borrowing/accessor mechanisms do not require Plew to expose lifetime parameters or user-defined borrowed returns. Plew keeps a small set of standard projections connected to ordinary access enforcement.
 
+MutexRef deliberately pays for a stable shared cell and its ownership management per mutex, including when several mutexes are fields of one value. This avoids making the protected cell's lifetime depend on a user's original handle or introducing a public borrowing-lifetime contract for the Guard. A Guard must retain that cell, but need not itself be heap allocated. Shared ownership preserves cell lifetime and address stability; the ordinary Guard borrow separately preserves lock ownership.
+
 Ownership and effect dataflow operate over canonical rows without thawing bodies. Worklists and reusable reverse dependencies avoid repeated whole-program scans. Effects absent by proof can avoid runtime operations; uncertain effects retain enforcement. These are cost-management rules, not permission to weaken verification or a measured performance claim. A richer region/NLL system is not adopted by documenting these extension boundaries.
 
 ## Implementation Audit and Open Boundaries
