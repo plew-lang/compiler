@@ -55,3 +55,9 @@ pass after a module-wide selector has already chosen the wrong candidate.
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
 
 Current root/part external bindings, duplicate checks and overload candidate scope. Preserve module public surfaces and repair file identity from admission through final selectors.
+
+## Existing Test Decision Required
+
+`tests/fixtures/part/root_import_type_in_part/Helper.pw` explicitly states that a part shares its root's use scope; its `make() -> Token` and `<Token ... />` use the type imported only by Main. Main.out expects 7. The original WIP regression was introduced in `07931963`, later moved with the fixture inventory and renamed with use/only; this is an intentional acceptance expectation, not an accidental missing import in a new test. It contradicts spec15's file-local external-use rule.
+
+Before modifying this existing surface test, obtain user judgment under the current stop conditions. Recommended repair: retain a positive fixture with an explicit use in Helper and add a rejection fixture proving root-only use does not grant visibility. Preserve the module's own Producer declaration and impl membership. No such test change or scope implementation has been made yet. Buffer validation can finish independently.

@@ -4,6 +4,7 @@ import argparse
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -51,6 +52,6 @@ with tempfile.TemporaryDirectory(prefix='buffer-capacity-', dir=ROOT / 'tmp') as
             assert result.returncode == 0, result.stderr.decode(errors='replace')
             assert result.stdout == fixture.with_suffix('.out').read_bytes(), result.stdout
         else:
-            assert result.returncode not in (0, 1), (name, result.returncode, result.stderr)
+            assert result.returncode == 128 + signal.SIGABRT, (name, result.returncode, result.stderr)
             assert b'panic: '+fixture.with_suffix('.panic').read_bytes().strip() in result.stderr, result.stderr
         print('PASS Buffer lazy execution ' + name, flush=True)

@@ -2,12 +2,12 @@ use @Std/Core only { Buffer }
 use @Std/Io only { print }
 fn main() {
     mut val buffer: Buffer[String] = Buffer.withCapacity(capacity: 1U64)
-    buffer.append("original")
+    buffer.append(<String value=41I64 />)
     val first = buffer
-    buffer.append("appended")
+    buffer.append(<String value=42I64 />)
     val second = buffer
     buffer.reserve(additionalCapacity: 32U64)
-    buffer.insertAt(index: 1U64, "inserted")
+    buffer.insertAt(index: 1U64, <String value=44I64 />)
     print(first[0U64])
     print(first.count())
     print(second[1U64])
@@ -17,7 +17,7 @@ fn main() {
     print(buffer.count())
     print(buffer.capacity() >= 34U64)
     mut val reserved: Buffer[String] = Buffer.withCapacity(capacity: 16U64)
-    reserved.append("retained")
+    reserved.append(<String value=43I64 />)
     val reservedAlias = reserved
     reserved.reserve(additionalCapacity: 0U64)
     print(reserved.capacity() >= 16U64)

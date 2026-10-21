@@ -1,6 +1,6 @@
 ---
 id: com-p10m
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-21T13:05:07Z
@@ -61,6 +61,14 @@ The current CoW-then-grow/reserve sequence publishes privatized storage before a
 
 Keep allocator failure injection and arithmetic-edge checks in an internal generated-runtime harness, with actual public Buffer panic and normal growth/CoW fixtures on AOT and lazy run. No public allocator API or failure recovery is introduced; panic still aborts. Zero-size logical capacity must obey header/count range while retaining a traceable data address.
 
-## Current Evidence
+## Resolution and Evidence
 
-Before repair, the saved prior compiler compiled an I64 capacity 2^61 request and the AOT program exited 0 without the required panic (`tmp/conformance-stage2/before.result.txt`). Current generated-runtime O0/O2 tests and lazy Buffer controls pass; full fixed-point/performance and suite gates remain pending. The actual current public construction lane uses existing associated `Buffer.new/withCapacity` functions; the new tests exercise that admitted lane rather than adding the absent factory migration.
+Implementation source `582b393c` closes the capacity-changing floor: unsigned checked count/additional arithmetic, element-byte/header/PTRDIFF and i64-header limits, checked growth fallback near the limit, null allocation panic, and one prepare/copy/retire boundary before slot publication. Shared copies acquire typed element owners; unique relocation transfers them. Reserve preserves capacity. The separate LLVM minimum addition and CoW-then-grow/reserve sequence, obsolete grow/reserve helpers and runtime cow entry are removed.
+
+Before repair, the saved prior compiler compiled an I64 capacity 2^61 request and the AOT program exited 0 without the required panic. The current construction lane uses associated `Buffer.new/withCapacity`; tests exercise that admitted lane, not the absent factory migration.
+
+[Saved evidence](../../../evidence/existing-feature-conformance/buffer-capacity/README.md) records generation-3 LLVM/runtime fixed point, formal three-run median 6.204308 seconds, and the normal suite: run1416/panic47/reject977/part90/partreject80, skip0/fail0, exit0 and unchanged inputs. Compiler SHA256 is `26584bdc6ab27289fb89c776dcf39923ea31f4661fa4ede7f595a5bd351389e7`.
+
+Generated-runtime O0/O2 and ASan/UBSan controls cover overflow, header/allocator range, zero-sized elements, near-limit growth, private/shared allocation failure, unchanged content/count/capacity/RC, capacity preservation and bounded real allocation. After the full normal run, the new CoW fixture was strengthened to dynamically allocated Strings; focused JIT and raw-LLVM-instrumented AOT ASan with runtime ASan/UBSan and LSan enabled pass for that fixture and both capacity panic controls. Panic is SIGABRT with the required diagnostic. The normal gate retains its original fixture input; focused results cover the strengthened fixture without claiming another full run.
+
+This closes the selected Buffer capacity/allocation contract, not collection reentry or all floor operations. Full ASan/LSan, generation/dependency and final integration gates remain with com-604k at the final-candidate milestone; target sanitizer evidence is not a blanket all-gates claim. No main/seed promotion is made.
