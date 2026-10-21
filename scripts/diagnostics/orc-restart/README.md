@@ -1,7 +1,7 @@
 # ORC feasibility probes (manual)
 
 These probes do not change the compiler, seed, language semantics, or standard
-test gates. The plan is in the meta repository's `agents/hot-restart-validation.md`.
+test gates. The [design decision](../../../docs/design/decisions/hot-restart.md) owns the adopted scope and future host lifecycle. [Archived evidence](../../../../evidence/2026-10-01/compiler/orc-restart/README.md) records historical measurements and their limits.
 
 From the compiler repository:
 
