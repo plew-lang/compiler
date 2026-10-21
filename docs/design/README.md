@@ -48,6 +48,10 @@ All planned chapters have reviewed drafts, and the initial cross-chapter review 
 
 ## Reading and Maintenance
 
+[Detailed implementation conformance audit](../issues/com-nsxb.md) records pinned
+source-to-consumer traces, evidenced gaps, preserved conforming paths and explicit
+unverified combinations. Its completion does not certify compiler implementation.
+
 The [review follow-up issues](../issues/met-ukm5.md#outcome-and-next-boundary)
 record each resolution and its implementation boundary. Accepted comparisons
 are incorporated into the owning chapters and retired under the maintenance
