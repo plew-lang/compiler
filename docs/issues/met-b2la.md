@@ -1,7 +1,7 @@
 ---
 id: met-b2la
 status: open
-deps: []
+deps: [met-yotl]
 links: []
 created: 2026-10-21T11:05:50Z
 type: task
