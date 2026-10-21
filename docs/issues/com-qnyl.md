@@ -11,7 +11,7 @@ tags: [backend, runtime]
 ---
 # Specify remaining C interoperability API extensions
 
-Retained design questions: handle Eq (currently not provided), platform-width conversion thresholds, type aliases and future repr(packed)/callconv. C numeric/string/ownership wrapper directions and native manifest link settings are already described in spec and are not wholly undecided. expose publication is adopted. Anonymous callback and repr(c) coverage are owned by com-0oxy and com-042v; do not duplicate them.
+Current policy: handle Eq is not provided. Integer conversions use target signedness/value-range inclusion for lossless From/as versus fallible TryFrom, including nominally distinct CSize/USize/U64; this follows the normal conversion contract and is no longer an open threshold question. Handle identity APIs, type aliases and future repr(packed)/callconv require a concrete use and explicit source decision before implementation. They do not block the type-checking remediation. C numeric/string/ownership wrapper directions and native manifest link settings are already described in spec. expose publication is adopted. Anonymous callback and repr(c) coverage remain owned by com-0oxy and com-042v; do not duplicate them.
 
 Design: [representation-and-abi](../design/representation-and-abi.md). Source contracts: [modules](https://github.com/plew-lang/spec/blob/main/spec/04-execution/15-modules.md), [concurrency](https://github.com/plew-lang/spec/blob/main/spec/04-execution/14-concurrency.md), [basic types](https://github.com/plew-lang/spec/blob/main/spec/01-basics/02-basic-types.md) and [packages](https://github.com/plew-lang/spec/blob/main/spec/04-execution/17-packages.md), as applicable.
 

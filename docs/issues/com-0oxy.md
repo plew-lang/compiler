@@ -21,4 +21,10 @@ This is deferred design work and unimplemented general interoperability, not a c
 
 ## Acceptance Criteria
 
-Decide the unresolved public boundary with the user, then specify producer-to-consumer eligibility, ABI, ownership, failure, and lifetime checks. Implement/test accepted routes and rejected labeled/capturing/incompatible routes through variables, generic instances, returns and storage. Preserve the common runtime and ordinary demand compilation, without runtime ABI switching.
+Decide the unresolved public boundary with the user, then specify producer-to-consumer eligibility, ABI, ownership, failure, and lifetime checks. Implement/test accepted and rejected routes under the adopted eligibility, including labeled, capturing and incompatible cases through variables, generic instances, returns and storage. Preserve the common runtime and ordinary demand compilation, without runtime ABI switching.
+
+## Decision Point and Fixed Internal Requirements
+
+Before general public callback implementation, decide function-pointer type syntax, nullability, eligibility through parameters/results/storage and captured-environment handling together. The recommended baseline is a context-free thin pointer with explicit external context/ID, but it is not adopted public syntax or eligibility. These decisions are not prerequisites for the current internal exposed compiler callback or the source-checking remediation.
+
+Existing admitted callbacks consume the common finalized C signature, execution owner, managed gate, startup dependencies, borrow/access checks and code/context lifetime. Preserve those contracts without waiting for a new public API. Arbitrary foreign-thread entry and C-owned runtime startup/unload are deferred to a concrete native API or embedding host with specified synchronization/return/lifetime needs; no automatic attach or first-entry initialization is implied. The owning ABI chapter records this distinction and physical validation conditions.

@@ -140,6 +140,16 @@ The one-execution process owner keeps ORC code/globals, program arguments, and r
 
 The current process-lifetime owner is not a reusable in-process Restart API. Process termination can let the OS reclaim resources without adding a guarantee to run every user deinit. A future reusable host must separately establish callback quiescence, pending-work disposal, global/state teardown, and resource reconstruction. Reusing the current global owner without that protocol is not an implementation shortcut. The [Hot Restart decision](decisions/hot-restart.md) retains the approved future host direction, rejected Hot Reload alternative, historical feasibility evidence, and limits without extending the current execution API.
 
+For that future host, the fixed requirements above are not deferred: one common
+runtime, explicit environment ownership, closed entry/notification admission,
+quiescent callbacks and retained code/state until their last permitted use. The
+open choice is the public host protocol and concrete teardown/reconstruction
+mechanism. Revisit it when a framework needs multiple executions in one process,
+with a defined native callback/resource model. Evaluate the 500 ms target only
+for fixed edits, application initialization and host conditions, measuring input
+admission, checking, JIT/linking, teardown and startup separately. The current
+one-shot run and paused type-checking work do not depend on that host protocol.
+
 ## Failure and OS Integration
 
 Compiler services return structured diagnostics or domain failures. CLI/process adapters render them and choose exit status. Native lazy materialization cannot recover by returning through an arbitrary function signature with a guessed value; terminal execution failure aborts/stops the execution process. Prior I/O is not rolled back, and user destruction is not guaranteed on that path.

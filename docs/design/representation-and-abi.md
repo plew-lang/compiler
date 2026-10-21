@@ -97,6 +97,56 @@ make an external lifetime safe. [Remaining interoperability API
 questions](../issues/com-qnyl.md) are distinct from the adopted expose contract
 and the callback/layout investigations above.
 
+### Settled Boundaries and Deferred Public Facilities
+
+The following are already consequences of the adopted contracts and do not wait
+for a new public C-callback API:
+
+- Native name collision checking uses resolved external names in the selected
+  target/artifact scope, including imported declarations and exposed definitions.
+  Permitted ABI decoration and source pub visibility are independent. The source
+  prohibition is settled; unaudited diagnostics/linker coverage is implementation work.
+- Imported, exposed and admitted indirect calls consume one finalized C signature
+  description, including attributes and conversions. Memory layout equivalence
+  cannot replace boundary classification or semantic ownership eligibility.
+- A callable native address alone grants neither startup readiness nor permission
+  to enter a paused/closed execution. Admitted callbacks use the existing owner,
+  resource retention, managed gate and failure protocol. Reentry keeps existing
+  borrow/inout accesses live; known Plew-side conflicts and initializer dependencies
+  remain checked. This does not make an arbitrary foreign thread an application worker.
+- Target-width integer conversion uses the target's signedness/value ranges:
+  lossless inclusion admits From/as; possible out-of-range values require TryFrom.
+  CSize/USize/U64 remain nominally distinct even on a target with equal ranges.
+  Do not infer conversion from width equality or use the compiler host's widths.
+
+| Remaining topic | Why it stays open / decision point |
+|---|---|
+| Public C function-pointer types, nullability and parameters/results/storage | A language-surface decision, to be made together before implementing general anonymous-function C interoperability. Existing data-pointer or Plew-function types do not silently answer it |
+| Captured environments and C-pointer eligibility | Decide with that public boundary, before implementing any conversion. A context-free thin pointer plus an explicit C context/ID is the recommended baseline, not adopted source eligibility. Optimization must not determine whether a closure counts as capturing |
+| Arbitrary foreign-thread entry | Requires a concrete host/API and a choice between owner delivery and attached-thread execution, including synchronous results, root isolation, JIT pause and shutdown. No automatic attachment or thread migration is introduced now |
+| C-owned runtime startup, unload and repeated executions | Design with a real embedding host before implementing that facility; do not initialize automatically on first exposed-function call. Current one-execution ownership remains authoritative |
+| Handle equality and extra representation syntax | No handle Eq now; aliases, repr(packed), explicit callconv and new targets remain optional additions requiring a concrete use and source decision before implementation |
+
+The recommended context-free pointer direction follows [Rust's noncapturing closure
+conversion](https://doc.rust-lang.org/reference/types/function-pointer.html) and
+[Swift's C-convention restriction](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/attributes/#convention),
+while Plew keeps its own use-site selection and label rules. This comparison does
+not adopt either language's public syntax. [Rust's callback guidance](https://doc.rust-lang.org/nomicon/ffi.html#asynchronous-callbacks)
+separates same-thread reentry from foreign-thread callbacks and requires correct
+synchronization and callback cessation before resources are freed; Plew must also
+respect its root isolation and managed-pause contract.
+
+Resolve these language/host choices before the corresponding feature, not as a
+prerequisite for the paused source-checking migration. No performance experiment
+can decide whether a new callback form or foreign-thread operation should be
+accepted source. Physical validation instead fixes target/SDK/toolchain and
+compares C↔Plew calls in both directions, direct/indirect entries, scalar/mixed
+aggregate parameters/results, inout and extension attributes, at O0/O2 and with
+applicable sanitizers. Callback publication tests include prepared/first-JIT calls,
+reentry, pause/shutdown races, stale IDs and failure. External unwind/longjmp is
+not an adopted way to skip Plew ownership/access cleanup or recover a failed
+execution; any such support needs a separate boundary contract.
+
 ## AOT, Demand Execution, and Symbol Publication
 
 AOT and requested JIT modules use the same logical/physical conventions. Requested modules retain body identity independently of symbol spelling, including multiple physical entries associated with async execution. Private generated names occupy a namespace distinct from source external names so an exposed symbol cannot capture an internal body reference.
