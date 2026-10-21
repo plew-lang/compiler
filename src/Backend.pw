@@ -1374,7 +1374,7 @@ fn emitLlvmIntChecked() {
 }
 
 pub fn emitLlvmRuntime() {
-    write(s: "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdint.h>\n#include <sys/wait.h>\n")
+    write(s: "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdint.h>\n#include <stddef.h>\n#include <limits.h>\n#include <sys/wait.h>\n")
     write(s: "void plew_exit(long long code){{ exit((int)code); }}\n")
     write(s: "void plew_write_raw(const char* d, long long n){{ fwrite(d,1,(size_t)n,stdout); }}\n")
     write(s: "void plew_eprint_raw(const char* d, long long n){{ fwrite(d,1,(size_t)n,stderr); }}\n")
@@ -1397,7 +1397,7 @@ pub fn emitLlvmRuntime() {
     // rawbuf_alloc / set_count, defined below.)
     // Keep the data pointer inside the allocation even for zero payload bytes.
     // Conservative root scanners must be able to trace process-lived empty buffers.
-    write(s: "void* plew_rawbuf_alloc(long long elemSize, long long cap);\n")
+    write(s: "void* plew_rawbuf_alloc(unsigned long long elemSize, unsigned long long cap);\n")
     write(s: "void plew_rawbuf_set_count(void* p, long long n);\n")
     write(s: "static char* plew_str_buf(long long n){{ return (char*)plew_rawbuf_alloc(1, n+1); }}\n")
     write(s: "static char* plew_str_empty(void){{ static char* e=0; if(!e){{ e=(char*)plew_rawbuf_alloc(1,1); e[0]=0; ((long long*)e)[-1]=(long long)1<<62; }} return e; }}\n")
@@ -1410,21 +1410,21 @@ pub fn emitLlvmRuntime() {
     write(s: "unsigned char* plew_cString(char* d, long long n){{ unsigned char* b=(unsigned char*)malloc((size_t)n+1); if(n) memcpy(b,d,(size_t)n); b[n]=0; return b; }}\n")
     write(s: "void plew_cFree(unsigned char* p){{ free(p); }}\n")
     write(s: "char* plew_stringFromCString(unsigned char* p){{ if(!p) return plew_str_empty(); size_t n=strlen((const char*)p); char* b=plew_str_buf((long long)n); memcpy(b,p,n); b[n]=0; plew_rawbuf_set_count(b,(long long)n); return b; }}\n")
-    // Array / Buffer storage floor (a [cap][count][rc][data...] block). The pointer is
-    // the data; three header words sit before it: cap=[-3], count=[-2], rc=[-1]. `count`
-    // is the floor's own live-element count — the Buffer intrinsics maintain it; the
-    // legacy Array path tracks count in its {ptr,i64} value and leaves this slot 0.
-    // alloc seeds count=0, rc=1; binding an array eager-copies (arr_copy), so an array
-    // buffer is sole-owned (rc==1, never retained — only `Ref` cells are). grow therefore
-    // FREES the buffer it replaces on realloc (guarded by rc<=1 — a shared buffer is left
-    // alone, leak-safe), reclaiming the geometric-growth intermediates an append chain
-    // would otherwise leak. per-element load/store is inlined in IR via typed GEP.
-    write(s: "void* plew_rawbuf_alloc(long long elemSize, long long cap){{ long long* h=(long long*)malloc(3*sizeof(long long)+(elemSize*cap ? (size_t)(elemSize*cap) : 1)); h[0]=cap; h[1]=0; h[2]=1; return (void*)(h+3); }}\n")
+    // Buffer's shared storage floor owns checked logical capacity, byte layout,
+    // allocation failure and transactional backing replacement. Keep arithmetic
+    // unsigned until representability is established; headers remain signed i64.
+    write(s: "__attribute__((noreturn)) static void plew_buffer_capacity_panic(void){{ plew_panic_raw(\"buffer capacity overflow\",24); }}\n")
+    write(s: "static unsigned long long plew_buffer_capacity_limit(unsigned long long elemSize){{ size_t limit=PTRDIFF_MAX; if(limit>(unsigned long long)LLONG_MAX) limit=LLONG_MAX; size_t payload=limit-3*sizeof(long long); return elemSize ? payload/elemSize : (unsigned long long)LLONG_MAX; }}\n")
+    write(s: "static unsigned long long plew_buffer_required(unsigned long long count, unsigned long long additional){{ if(count>(unsigned long long)LLONG_MAX || additional>(unsigned long long)LLONG_MAX-count) plew_buffer_capacity_panic(); return count+additional; }}\n")
+    write(s: "static size_t plew_buffer_allocation_size(unsigned long long elemSize, unsigned long long cap){{ if(cap>(unsigned long long)LLONG_MAX || cap>plew_buffer_capacity_limit(elemSize)) plew_buffer_capacity_panic(); size_t payload=(size_t)(elemSize*cap); return 3*sizeof(long long)+(payload ? payload : 1); }}\n")
+    write(s: "void* plew_rawbuf_alloc(unsigned long long elemSize, unsigned long long cap){{ size_t bytes=plew_buffer_allocation_size(elemSize,cap); long long* h=(long long*)malloc(bytes); if(!h) plew_panic_raw(\"buffer allocation failed\",24); h[0]=(long long)cap; h[1]=0; h[2]=1; return (void*)(h+3); }}\n")
     write(s: "long long plew_rawbuf_cap(void* p){{ return p?((long long*)p)[-3]:0; }}\n")
     // header `count` accessors (the Buffer floor's live-element count).
     write(s: "long long plew_rawbuf_count(void* p){{ return p?((long long*)p)[-2]:0; }}\n")
     write(s: "void plew_rawbuf_set_count(void* p, long long n){{ if(p) ((long long*)p)[-2]=n; }}\n")
-    write(s: "void* plew_arr_grow(void* data, long long elemSize, long long count){{ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count){{ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; }} if(data){{ if(((long long*)data)[-1]<=1) free((long long*)data-3); else ((long long*)data)[-1]--; }} return nd; }}\n")
+    write(s: "static unsigned long long plew_buffer_growth(unsigned long long elemSize, unsigned long long cap, unsigned long long required){{ unsigned long long limit=plew_buffer_capacity_limit(elemSize); if(required>limit) plew_buffer_capacity_panic(); unsigned long long grown=cap<8 ? 8 : (cap<=limit/2 ? cap*2 : required); return grown>=required && grown<=limit ? grown : required; }}\n")
+    write(s: "static void* plew_arr_reallocate(void* data, unsigned long long elemSize, unsigned long long count, unsigned long long capacity){{ void* nd=plew_rawbuf_alloc(elemSize,capacity); if(count){{ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=(long long)count; }} if(data){{ if(((long long*)data)[-1]<=1) free((long long*)data-3); else ((long long*)data)[-1]--; }} return nd; }}\n")
+    write(s: "void* plew_arr_prepare(void* data, unsigned long long elemSize, unsigned long long additional, long long geometric){{ unsigned long long count=(unsigned long long)plew_rawbuf_count(data), cap=(unsigned long long)plew_rawbuf_cap(data), required=plew_buffer_required(count,additional); if(required>plew_buffer_capacity_limit(elemSize)) plew_buffer_capacity_panic(); int shared=data && ((long long*)data)[-1]>1; if(required<=cap && !shared) return data; unsigned long long capacity=cap>=required ? cap : required; if(required>cap && geometric) capacity=plew_buffer_growth(elemSize,cap,required); return plew_arr_reallocate(data,elemSize,count,capacity); }}\n")
     write(s: "void* plew_arr_copy(void* data, long long elemSize, long long count){{ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count){{ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; }} return nd; }}\n")
     write(s: "void plew_rawbuf_retain(void* p){{ if(p) ((long long*)p)[-1]++; }}\n")
     write(s: "long long plew_rawbuf_release(void* p){{ if(!p) return 0; return --((long long*)p)[-1]; }}\n")
@@ -1450,14 +1450,6 @@ pub fn emitLlvmRuntime() {
     // drop one weak observer: decrement the weak count; free the cell when it is the last
     // reference of either kind (weak==0 AND strong already 0 — the pointee is long gone).
     write(s: "void plew_weak_release(void* p){{ if(!p) return; if(--((long long*)p)[-2]==0 && ((long long*)p)[-1]==0) free((long long*)p-3); }}\n")
-    // copy-on-write a (scalar-element) array buffer before an in-place mutation: if the
-    // buffer is shared (rc>1), allocate a private rc=1 copy of `count` elements, drop one
-    // owner from the shared original, and return the copy; otherwise return it unchanged.
-    write(s: "void* plew_arr_cow(void* data, long long elemSize, long long count){{ if(data && ((long long*)data)[-1]>1){{ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count){{ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; }} ((long long*)data)[-1]--; return nd; }} return data; }}\n")
-    // grow a buffer's capacity to at least `mincap` (reserve), preserving the live
-    // elements + count; a no-op when cap already suffices. The caller has privatized
-    // (rc<=1), so the old cell is freed when reallocated.
-    write(s: "void* plew_arr_reserve(void* data, long long elemSize, long long mincap){{ long long cap=plew_rawbuf_cap(data); if(cap>=mincap) return data; void* nd=plew_rawbuf_alloc(elemSize,mincap); long long cnt=plew_rawbuf_count(data); if(cnt){{ memcpy(nd,data,(size_t)(elemSize*cnt)); ((long long*)nd)[-2]=cnt; }} if(data){{ if(((long long*)data)[-1]<=1) free((long long*)data-3); else ((long long*)data)[-1]--; }} return nd; }}\n")
     // relocate `n` element slots within a buffer (insertAt/removeAt shift). A pure byte
     // move: each element's inline bytes (incl any heap reference) move intact, so no
     // element retain/release is needed (buffer-floor.md §5 relocation = memmove).

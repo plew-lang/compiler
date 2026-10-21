@@ -1,0 +1,7 @@
+use @Std/Core only { Buffer }
+fn main() {
+    mut val buffer: Buffer[I64] = Buffer.new()
+    buffer.append(42I64)
+    val alias = buffer
+    buffer.reserve(additionalCapacity: 18446744073709551615U64)
+}

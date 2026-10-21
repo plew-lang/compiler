@@ -104,38 +104,6 @@ pub impl LlvmCtx {
         return <Result.Ok value=() />
     }
 
-    // Declare/cache `plew_arr_grow(data, elemSize, count) -> ptr` — ensure room for one
-    // more element (grows by doubling when count>=cap), returning the (possibly new) data.
-    inout fn growBuf(c: inout Comp, data: LLVMValueRef, elemTy: LLVMTypeRef, count: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.ptrty)
-        ptys.append(self.i64ty)
-        ptys.append(self.i64ty)
-        val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 3U64, 0I32)
-        val grow: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_arr_grow", fnTy: fty))
-        mut val av: Array[LLVMValueRef] = []
-        av.append(data)
-        av.append(LLVMSizeOf(elemTy))
-        av.append(count)
-        return <Result.Ok value=LLVMBuildCall2(self.b, fty, grow, arrayCPtr(av), 3U64, anon()) />
-    }
-
-    // Declare/cache `plew_arr_reserve(data, elemSize, mincap) -> ptr` — grow capacity to
-    // >= mincap (preserving elements + count), returning the (possibly new) data pointer.
-    inout fn rawbufReserve(c: inout Comp, data: LLVMValueRef, elemSize: LLVMValueRef, mincap: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.ptrty)
-        ptys.append(self.i64ty)
-        ptys.append(self.i64ty)
-        val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 3U64, 0I32)
-        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_arr_reserve", fnTy: fty))
-        mut val av: Array[LLVMValueRef] = []
-        av.append(data)
-        av.append(elemSize)
-        av.append(mincap)
-        return <Result.Ok value=LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 3U64, anon()) />
-    }
-
     // ---- Array/String value representation SEAM (C1 migration boundary) ----
     //
     // An array/string VALUE is a single data pointer (== the Buffer floor): `data` points at
@@ -399,42 +367,40 @@ pub impl LlvmCtx {
         return <Result.Ok value=() />
     }
 
-    // CoW a scalar array place's buffer in its storage slot before an in-place mutation:
-    // load {data,count}, call plew_arr_cow (copies + drops one owner iff rc>1), store the
-    // possibly-new data back, and return that data pointer. The slot is the array local's
-    // {ptr,count} alloca (or an inout param's slot — so a mutation through `inout` CoWs the
-    // caller's binding, leaving other sharers untouched).
-    inout fn cowArraySlot(c: inout Comp, slotPtr: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
-        val data: LLVMValueRef = self.arrSlotData(c: inout c, slot: slotPtr)
-        val count: LLVMValueRef = (try self.arrSlotCount(c: inout c, slot: slotPtr))
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.ptrty)
-        ptys.append(self.i64ty)
-        ptys.append(self.i64ty)
-        val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 3U64, 0I32)
-        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_arr_cow", fnTy: fty))
-        mut val av: Array[LLVMValueRef] = []
-        av.append(data)
-        av.append(LLVMSizeOf(elemTy))
-        av.append(count)
-        val nd: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 3U64, anon())
-        self.arrSlotSetData(c: inout c, slot: slotPtr, data: nd)
-        // when the CoW actually duplicated the buffer (nd != old data), the shallow memcpy
-        // duplicated every element's leading heap reference too — retain each so the new
-        // owner co-owns it (balanced by this owner's eventual element release at drop).
-        if (try c.finalNeedsRelease(typeRef: elemRef)) {
-            val copied: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), nd, data, anon())
-            val retBBCString = <CString.copied text="cow.retain" />
-            val retBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, retBBCString.ptr)
-            val contBBCString = <CString.copied text="cow.cont" />
-            val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, contBBCString.ptr)
-            LLVMBuildCondBr(self.b, copied, retBB, contBB)
-            LLVMPositionBuilderAtEnd(self.b, retBB)
-            try self.emitRetainArrayElems(c: inout c, data: nd, count: count, elemTy: elemTy, elemRef: elemRef)
-            LLVMBuildBr(self.b, contBB)
-            LLVMPositionBuilderAtEnd(self.b, contBB)
+    // Prepare writable capacity before publishing any changed receiver. Growing a
+    // unique backing relocates owners; duplicating a shared backing acquires them.
+    inout fn prepareArraySlot(c: inout Comp, slotPtr: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64, additional: LLVMValueRef, geometric: Bool) -> Result[LLVMValueRef, CompileDiagnostic] {
+        val data = self.arrSlotData(c: inout c, slot: slotPtr)
+        val count = (try self.rawbufCount(c: inout c, data: data))
+        val needsOwners = (try c.finalNeedsRelease(typeRef: elemRef))
+        mut val shared = LLVMConstInt(self.i1ty, 0U64, 0I32)
+        if needsOwners {
+            val owners = (try self.rawbufHeaderValue(c: inout c, data: data, name: "pw_buffer_owners", distance: 1U64))
+            shared = LLVMBuildICmp(self.b, llvmIntUgt(), owners, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
         }
-        return <Result.Ok value=nd />
+        val parameters: Array[LLVMTypeRef] = [self.ptrty, self.i64ty, self.i64ty, self.i64ty]
+        val signature = LLVMFunctionType(self.ptrty, arrayCPtr(parameters), 4U64, 0I32)
+        val callee = (try self.getOrDeclare(c: inout c, name: "plew_arr_prepare", fnTy: signature))
+        val policy: U64 = if geometric { give 1U64 } else { give 0U64 }
+        val arguments: Array[LLVMValueRef] = [data, LLVMSizeOf(elemTy), additional, LLVMConstInt(self.i64ty, policy, 0I32)]
+        val prepared = LLVMBuildCall2(self.b, signature, callee, arrayCPtr(arguments), 4U64, anon())
+        if needsOwners {
+            val retainCString = <CString.copied text="cow.retain" />
+            val retainBlock = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, retainCString.ptr)
+            val continueCString = <CString.copied text="cow.cont" />
+            val continueBlock = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, continueCString.ptr)
+            LLVMBuildCondBr(self.b, shared, retainBlock, continueBlock)
+            LLVMPositionBuilderAtEnd(self.b, retainBlock)
+            try self.emitRetainArrayElems(c: inout c, data: prepared, count: count, elemTy: elemTy, elemRef: elemRef)
+            LLVMBuildBr(self.b, continueBlock)
+            LLVMPositionBuilderAtEnd(self.b, continueBlock)
+        }
+        self.arrSlotSetData(c: inout c, slot: slotPtr, data: prepared)
+        return <Result.Ok value=prepared />
+    }
+
+    inout fn cowArraySlot(c: inout Comp, slotPtr: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
+        return self.prepareArraySlot(c: inout c, slotPtr: slotPtr, elemTy: elemTy, elemRef: elemRef, additional: LLVMConstInt(self.i64ty, 0U64, 0I32), geometric: false)
     }
 
     // ---- recursive value ARC over array element heap (1-3b: element cascade) ----

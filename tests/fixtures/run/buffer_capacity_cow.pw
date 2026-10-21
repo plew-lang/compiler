@@ -1,0 +1,32 @@
+use @Std/Core only { Buffer }
+use @Std/Io only { print }
+fn main() {
+    mut val buffer: Buffer[String] = Buffer.withCapacity(capacity: 1U64)
+    buffer.append("original")
+    val first = buffer
+    buffer.append("appended")
+    val second = buffer
+    buffer.reserve(additionalCapacity: 32U64)
+    buffer.insertAt(index: 1U64, "inserted")
+    print(first[0U64])
+    print(first.count())
+    print(second[1U64])
+    print(second.count())
+    print(buffer[1U64])
+    print(buffer[2U64])
+    print(buffer.count())
+    print(buffer.capacity() >= 34U64)
+    mut val reserved: Buffer[String] = Buffer.withCapacity(capacity: 16U64)
+    reserved.append("retained")
+    val reservedAlias = reserved
+    reserved.reserve(additionalCapacity: 0U64)
+    print(reserved.capacity() >= 16U64)
+    print(reservedAlias[0U64])
+    mut val empty: Buffer[()] = Buffer.withCapacity(capacity: 4U64)
+    empty.append(())
+    val sharedEmpty = empty
+    empty.reserve(additionalCapacity: 9U64)
+    empty.insertAt(index: 0U64, ())
+    print(sharedEmpty.count())
+    print(empty.count())
+}

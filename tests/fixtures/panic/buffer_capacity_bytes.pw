@@ -1,0 +1,4 @@
+use @Std/Core only { Buffer }
+fn main() {
+    val buffer: Buffer[I64] = Buffer.withCapacity(capacity: 2305843009213693952U64)
+}

@@ -158,6 +158,13 @@ for gate in \
     fi
 done
 
+# Checked arithmetic and failure atomicity use bounded native allocation controls.
+if python3 -B ./tests/compiler/codegen/test-buffer-capacity.py --compiler "$PLEWC" --llvm-config "$LC"; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed buffer-capacity"
+fi
+
 # Keep phase tracing composable with both coverage modes used for self-hosting.
 if python3 -B ./tests/tooling/test-standalone-build.py; then
     :

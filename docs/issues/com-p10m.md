@@ -60,3 +60,7 @@ Current Buffer allocation/reserve/growth arithmetic and failure publication. Fir
 The current CoW-then-grow/reserve sequence publishes privatized storage before a later allocation can fail. Replace that sequence for capacity-changing mutators with one checked writable-storage preparation: validate count/additional/element bytes/header/allocator range, choose bounded growth, allocate/copy, and only then retire raw backing and publish the slot. Typed lowering acquires copied element owners only on shared-backing duplication; unique relocation transfers them. Non-growing mutators use the same preparation boundary with zero additional capacity.
 
 Keep allocator failure injection and arithmetic-edge checks in an internal generated-runtime harness, with actual public Buffer panic and normal growth/CoW fixtures on AOT and lazy run. No public allocator API or failure recovery is introduced; panic still aborts. Zero-size logical capacity must obey header/count range while retaining a traceable data address.
+
+## Current Evidence
+
+Before repair, the saved prior compiler compiled an I64 capacity 2^61 request and the AOT program exited 0 without the required panic (`tmp/conformance-stage2/before.result.txt`). Current generated-runtime O0/O2 tests and lazy Buffer controls pass; full fixed-point/performance and suite gates remain pending. The actual current public construction lane uses existing associated `Buffer.new/withCapacity` functions; the new tests exercise that admitted lane rather than adding the absent factory migration.

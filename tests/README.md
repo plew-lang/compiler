@@ -26,6 +26,13 @@ does not imply that the others passed.
 specification test. Some inputs import compiler internals. Classify by the
 assertion's responsibility, not prefixes such as `mid_` or the tool used.
 
+`compiler/codegen/test-buffer-capacity.py` is registered in the normal harness.
+It checks the actual emitted runtime at O0/O2 with bounded allocation-failure
+injection, overflow/header/zero-size limits and unchanged backing on failure,
+then runs the shared Buffer fixtures through lazy execution. Its optional
+`--asan` instruments this native runtime harness with ASan/UBSan; public AOT
+fixtures also participate in the standard normal and ASan suites.
+
 `compiler/codegen/test-global-modules.py` is a manual native diagnostic using
 `GlobalModules.pw`. Set `PLEWC` to the candidate and optionally `LLVM_CONFIG`.
 It links separate global-definition and executable modules, checks shared
