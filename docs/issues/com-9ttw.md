@@ -51,3 +51,9 @@ incompatibility, different majors, ordering independence and stale root locks.
 Do not adopt manifest-wide resolution or silently relax version constraints to
 match the existing traversal. Establish fresh local fixed repositories/fixtures
 before claiming a demonstrated CLI failure. No compiler code was changed here.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
+
+Existing git/path dependency resolution, source-use reachability, joint same-major constraints and top-level lock. Local fixed repos cover path-to-git, unused edges, constraint order, compatible/incompatible versions and cold/warm locks. No native-package executor.

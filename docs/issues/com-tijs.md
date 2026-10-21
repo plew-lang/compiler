@@ -13,7 +13,7 @@ tags: [frontend, mid, diagnostics, verification]
 
 Adopted divergence/value-use/following-code semantics are in the specification, but the retained type-checking implementation migration and existing-test synchronization are incomplete. Centralize classification and sequential/branch composition instead of recognizing terminal syntax independently in each checker/lowerer. Source completion and diagnostic cause differ from analytical CFG non-continuation.
 
-The paused remediation candidate and validation evidence remain in the meta worklog, not in this issue. This issue does not authorize restarting implementation before its unresolved checked-body storage/reader design is decided. The former divergence memo identified standalone_block_return.pw and old unreachable-warning fixtures for intent/spec-impact reassessment; do not silently keep the old meaning or change unrelated test purposes.
+The paused remediation candidate and validation evidence remain in the meta worklog, not in this issue. The checked-body storage/reader design is adopted; current-subset restart and completion follow the conformance plan and met-si6j. The former divergence memo identified standalone_block_return.pw and old unreachable-warning fixtures for intent/spec-impact reassessment; do not silently keep the old meaning or change unrelated test purposes.
 
 ## Design
 
@@ -41,3 +41,9 @@ and pinned Syntax also retain isDiverging on function types. These are implement
 parts of the adopted divergence design, not untouched work. Final-consumer closure
 and full value-position/diagnostic combinations remain under met-si6j and this
 issue; this static pass did not reproduce the entire language regression corpus.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Mixed: split current subset**.
+
+Existing completion/divergence final consumers are com-fuo8, plus continuation ownership in com-gyup. Preserve already implemented SourceCompletion/isDiverging lanes. Absent loop/value-bearing break syntax remains separate missing implementation; it is not required to close the current-subset child.

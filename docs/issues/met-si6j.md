@@ -1,7 +1,7 @@
 ---
 id: met-si6j
 status: open
-deps: []
+deps: [met-ucze, met-ia09, met-acfl, met-6e6k, com-gyup, met-rzt4, com-fuo8]
 links: []
 created: 2026-10-13T01:29:29Z
 type: task
@@ -53,3 +53,9 @@ Completion-flow work also uses [com-tijs](com-tijs.md) and the existing control-
 Stop for an unapproved specification change; a language-specific design decision not derivable from adopted policy/Rust/Swift references; tooling/environment failure preventing necessary validation after diagnosis; or self-compilation at least 7 seconds when repair is judged difficult. A threshold crossing alone does not establish irreparable cost: investigate with matching-source comparisons. Do not weaken validators, checks, test expectations or performance conditions to continue.
 
 Stop for erroneous tests except authorized cases: tests broken by an approved specification change, internal non-language-surface tests, or newly written tests that have never passed may be repaired after preserving their original purpose. An unrelated known limitation need not block a bounded required fix. Keep unresolved design issues explicit rather than calling a compromise the final design.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
+
+The existing typed-source parent is the frontend workstream within com-604k, not the parent of every conformance task. Its 11 criteria remain mandatory on the admitted source surface, with the approved below-7-second target. Missing unique-generic/loop/new-reference facilities remain separate. Current acceptance controls from com-uutc are discharged here; unsupported forms are not enabled to close this parent.

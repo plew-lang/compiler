@@ -20,3 +20,9 @@ Evidence scope: migrated from meta agents/optimization-candidates.md at meta rev
 ## Acceptance Criteria
 
 Identify complete dependency keys and invalidation boundaries, compare independent analysis results, and measure savings on representative instances.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: optional optimization**.
+
+Cross-instance analysis sharing is optional and needs concrete equivalence proofs; immutable source artifact sharing is not optional duplicated authority.

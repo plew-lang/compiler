@@ -42,3 +42,9 @@ consumers. A lock entry is not trust, and a successful arbitrary cargo process i
 not proof of a bounded admitted plan. Recheck unknown manifest sections and target
 selection separately; do not silently claim full package-spec coverage from this
 bounded inspection. Generated-Plew freshness remains [com-vy62](com-vy62.md).
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: unimplemented or independent release capability**.
+
+Package-native build trust/sandbox/host-target/provenance service is absent, distinct from repairing current git/path resolution and gen harness ownership.

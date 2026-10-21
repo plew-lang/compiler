@@ -18,3 +18,9 @@ Evidence scope: retained from meta agents/provisional.md at c539d7b96615a5c59c01
 ## Acceptance Criteria
 
 Select a target and explicit support scope before implementation; validate target layout/ABI, runtime and available execution modes. Do not infer iOS/mobile or other target support from local macOS ORC diagnostics.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: unimplemented or independent release capability**.
+
+Additional targets are not implemented to complete current native-host conformance.

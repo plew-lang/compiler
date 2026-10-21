@@ -35,3 +35,9 @@ comparing an existing nonempty layout. The object path's agreement check remains
 separate. This confirms the recorded source discrepancy at the audit input; it
 is not a demonstrated application miscompile, a new severity escalation, or proof
 that every malformed layout reaches this function.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
+
+Current object/ORC layout admission and failure ownership. Compatible/absent/incompatible input controls; no new target.

@@ -36,3 +36,9 @@ returning the operand for transfer. This preserves the investigation: source
 structure is confirmed, but earlier admission and the final verifier may still
 make the malformed case unreachable or rejected. Do not relabel it a reproduced
 unique-copy bypass without following the entire pass chain and a negative control.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included bounded verification**.
+
+Current return Copy-to-Move eligibility across declaration admission, optimization on/off and executable verification. Valid copyable controls, malformed unique Copy and incomplete destruction evidence distinguish an actual bypass from an already-protected path. Fix or close with the complete proof, not table presence.

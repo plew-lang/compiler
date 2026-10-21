@@ -43,3 +43,9 @@ requests, warning draining and returning APIs. Do not infer new acceptance from
 recovery or move semantic selection into the renderer. Existing call-specific
 checks remain [com-lndr](com-lndr.md). Code suggestions/stable error codes are not
 added as mandatory scope by this audit.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
+
+Existing source/generated/instantiated cause provenance, retained request failures and current reporting adapters. Finish cause ownership to renderer, with current multi-file and repeat-failure controls. Rich fix-its, stable error-code catalogs and future embedding services are not required.

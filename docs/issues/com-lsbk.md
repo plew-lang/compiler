@@ -20,3 +20,9 @@ Evidence scope: migrated from meta agents/optimization-candidates.md at meta rev
 ## Acceptance Criteria
 
 Compare the same input with a fixed compiler/toolchain and inspect actual load/store changes while preserving snapshot, alias and ownership contracts.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: optional optimization**.
+
+Aggregate argument reduction is optional; current admitted ABI/ownership must remain valid.

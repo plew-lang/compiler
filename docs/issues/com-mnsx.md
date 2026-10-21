@@ -26,3 +26,9 @@ Separate already specified contracts from genuinely absent API decisions; docume
 Separate missing API decisions from specified-but-unimplemented library operations: string scalar/grapheme/Ord operations, builder/substring/slice, generic iteration APIs, Range Ord constraints and contains, and missing Dictionary iterator operations. Consult the current basic-types spec before classifying any item as absent or undecided.
 
 Evidence scope: retained from meta agents/provisional.md at c539d7b96615a5c59c0165b0a5e3df90ec1f8dac; grammar-specific items additionally come from agents/grammar.md at that revision. These notes mix historical reproduction and uninspected combinations. No current compiler run or exhaustive implementation audit was performed during migration. Recheck current source and minimal run/reject inputs before claiming a defect; close resolved investigations with evidence rather than weakening the specification.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: unimplemented or independent release capability**.
+
+Missing text-view/builder/grapheme/iteration APIs and undecided public shapes are not added. Already implemented formatting/interpolation/iterator semantics remain covered by typed-source, ownership and parser work.

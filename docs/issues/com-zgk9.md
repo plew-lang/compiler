@@ -18,3 +18,9 @@ Evidence scope: retained from meta agents/provisional.md at c539d7b96615a5c59c01
 ## Acceptance Criteria
 
 Check minimal executable/reject cases against current specification, preserve independent owners and commit-before-user-code safety, and distinguish current evidence from whole-API/combination coverage.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included bounded verification**.
+
+Current Buffer/Array/Dictionary/Set operations, CoW/iteration ownership, nested inout and callback/deinit reentry. Trace commit-before-user-code, retired ranges and multi-buffer updates; test mutation/final-release/alias controls. Capacity failure is independently com-p10m; no new collection APIs.

@@ -53,3 +53,9 @@ consumption. Do not relax the old unique-argument guard before the full ownershi
 contract is implemented. Ordinary deinit placement is separately owned by
 [met-2t3l](met-2t3l.md). The existing [type-checking remediation](met-si6j.md)
 is a foundation, not a promise to implement this entire new feature in its scope.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: unimplemented or independent release capability**.
+
+allowunique/unique binders, autounique, capability-qualified existential/associated/provided families and the newly adopted capability-summary solver are absent end-to-end. Preserve the design; ordinary generic source/proof correctness stays in met-si6j.

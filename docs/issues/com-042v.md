@@ -36,3 +36,9 @@ that type directly or a pointer for inout, not a target aggregate classifier.
 This is partial C interoperability with a missing aggregate/layout path. Existing
 expose and CString/CPtr support must not be counted as absent. No two-way aggregate
 C comparison or target-specific runtime probe was run in this audit.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Mixed: split current subset**.
+
+Current scalar/pointer extern/expose/compiler-callback admission is com-2o4w. The inspected absence of repr(c)/aggregate classification remains outside; reject unsupported aggregate entry rather than accidentally accepting it through a scalar physical shape.

@@ -44,3 +44,9 @@ combinations need fresh focused probes; the missing admission/handoff is source
 confirmed. General arbitrary external file/environment freshness is deliberately
 outside the adopted guarantee, not an implementation defect. Native package build
 admission is separately [met-nm1w](met-nm1w.md).
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
+
+Current gen/derive/generated-part paths, not optional authoring APIs. Use three closed increments: (1) source form/role plus library-owned derive handoff through generated target, (2) compatible provider host units plus private result framing through staged publication, (3) recorded-input receipt production through normal missing/stale generated-source admission. Provider print cannot corrupt returned output. Preserve approved Go-style freshness limits; no arbitrary provider I/O freshness or package-native executor.

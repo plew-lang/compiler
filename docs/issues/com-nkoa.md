@@ -20,3 +20,9 @@ Evidence scope: migrated from meta agents/optimization-candidates.md at meta rev
 ## Acceptance Criteria
 
 Define the proof that permits each removed check/copy, retain effect closure/publication validity, compare behavior and verification with optimization disabled, and measure total cost.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: optional optimization**.
+
+More precise effect summaries/interprocedural borrowing is optional. Required effect closure, conservative unknown targets and current access safety remain included.

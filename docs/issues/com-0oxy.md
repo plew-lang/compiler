@@ -28,3 +28,9 @@ Decide the unresolved public boundary with the user, then specify producer-to-co
 Before general public callback implementation, decide function-pointer type syntax, nullability, eligibility through parameters/results/storage and captured-environment handling together. The recommended baseline is a context-free thin pointer with explicit external context/ID, but it is not adopted public syntax or eligibility. These decisions are not prerequisites for the current internal exposed compiler callback or the source-checking remediation.
 
 Existing admitted callbacks consume the common finalized C signature, execution owner, managed gate, startup dependencies, borrow/access checks and code/context lifetime. Preserve those contracts without waiting for a new public API. Arbitrary foreign-thread entry and C-owned runtime startup/unload are deferred to a concrete native API or embedding host with specified synchronization/return/lifetime needs; no automatic attach or first-entry initialization is implied. The owning ABI chapter records this distinction and physical validation conditions.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: unimplemented or independent release capability**.
+
+General anonymous C function-pointer/context eligibility and public syntax remain open/absent. Existing exposed free-function/compiler callback safety is covered by the scalar/pointer child without deciding a new API.

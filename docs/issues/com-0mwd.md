@@ -20,3 +20,9 @@ Evidence scope: migrated from meta agents/optimization-candidates.md at meta rev
 ## Acceptance Criteria
 
 Define legal cases and fallback, prove producer-to-final-consumer result/ownership equivalence, and measure whether analysis plus rewriting pays.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: optional optimization**.
+
+Direct construction into result storage is optional cost removal; existing copy/move/cleanup semantics stay mandatory.

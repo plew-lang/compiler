@@ -20,3 +20,9 @@ Evidence scope: migrated from meta agents/optimization-candidates.md at meta rev
 ## Acceptance Criteria
 
 Specify an equivalence condition and test conditional moves, flags, destruction order and exceptional/terminal exits applicable to the changed paths.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: optional optimization**.
+
+Cleanup CFG sharing is optional; each current exit must already perform the correct cleanup.

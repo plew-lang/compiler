@@ -21,3 +21,9 @@ Acceptance: record demanded dependency paths, typed endpoint/scope/owner validat
 Retained representation audit: CallTemplateReceiver.Opaque descriptions that compiler-internal types need no semantic term, and Verify/Call comments that C handles are interchangeable, must not authorize erasing semantic type identity. Inspect actual uses before changing them; machine handle/layout equality is not source compatibility. Check/Literal associated-function inference, groundedTypeOf/typeOf and construction fallback entry points remain classified producer/reader audit targets, not blanket deletion requests. Preserve operator result projection (Ord -> Bool, Ne negation) from saved operation identity.
 
 Dependency identity rechecked at `2983c47ff7ba0b1d693d656094e9fd0dbeca63dc`: Check/Obligations.sourceCallArgumentType passes PriorCallResult.siteKey to Check/Bounds.sourceSelectedCallResult, which finds the selected template and compares the result recipe's callSite. The historical ignored-siteKey observation is not current for this path. Preserve matching/wrong-key tests during migration; other recipe variants and final-consumer closure still require their own evidence. The finite [restart reconciliation](met-j9mv.md#cumulative-restart-reconciliation) identifies current entry points and consumers; it is not a full correctness audit.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
+
+Existing conversion/projection/descriptor/result-recipe and first-concrete consumers, including PriorCallResult.siteKey controls. Preserve implemented checks; remove legacy unstamped/name/cursor decisions only with matching producer migration. No new existential/interface feature is inferred from this task.

@@ -358,3 +358,9 @@ Record accepted repairs or decisions in their canonical chapters and
 re-review affected cross-domain paths. Do not declare the full-spec reference
 complete by silently restricting it to the currently implemented subset.
 This review does not authorize compiler implementation, build or integration.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Evidence: design review, not an implementation work unit**.
+
+Retains adopted design resolutions and deferred feature boundaries. Its input and review completion do not certify implementation. Current findings are assigned by com-nsxb and this scoped conformance plan; do not make every new facility in the design review a current-feature blocker.

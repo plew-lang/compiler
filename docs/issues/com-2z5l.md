@@ -20,3 +20,9 @@ Evidence scope: migrated from meta agents/design-decisions.md at d2c317318126e99
 ## Acceptance Criteria
 
 Define/report the supported graph and safe-point protocol, preserve normal ARC semantics, verify reporting and reclamation separately, and retain the specified no-deinit behavior for reclaimed cycles.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: unimplemented or independent release capability**.
+
+Future shared-cycle reporting/reclamation is additive. Ordinary deterministic ARC/drop/weak safety remains included.

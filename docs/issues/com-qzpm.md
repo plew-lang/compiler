@@ -53,3 +53,9 @@ migration is [met-op15](met-op15.md). This issue retains worker/channel transpor
 sendability/effect closure, fixed RC allocation modes, typed delivery/cleanup and
 AOT/JIT agreement. Do not enable spawn or declare RC support by changing the type
 predicate or adding the missing syntax alone.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Mixed: split current subset**.
+
+Current sendable binder/annotation predicate is com-f8bw, used independently of spawn by Infer/Type and Infer/Check. Ref/WeakRef nonsendability is therefore an in-scope static correction. Worker/channel transport, sharing modes and atomic RC remain outside; changing that predicate cannot claim workers safe.

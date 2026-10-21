@@ -20,3 +20,9 @@ Evidence scope: migrated from meta agents/design-decisions.md at d2c317318126e99
 ## Acceptance Criteria
 
 Check current spec for each proposed API, decide only genuinely open details, and distinguish implementation coverage audits from source-language changes.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: unimplemented or independent release capability**.
+
+New handle-identity APIs, aliases and future packed/callconv need independent public decisions. Current scalar conversion/expose contracts are covered by the current C boundary and typed-source work.

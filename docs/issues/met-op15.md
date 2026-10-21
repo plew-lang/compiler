@@ -56,3 +56,9 @@ the new projection/weak operations instead of retaining a name-only classifier.
 Existing owner-qualified runtimeIntrinsicDeclaration is a separate useful lane;
 it is not proof these type predicates are already declaration qualified.
 No same-named-user-type runtime miscompile was reproduced by this audit.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Mixed: split current subset**.
+
+Current standard references, weak operations and exact trusted identity are com-legt. FrozenRef/MutexRef/Guard/Weakable, new .* and WeakRef[R] public migration remain outside. Existing arrow operations still need safe root lifetime/writeback.

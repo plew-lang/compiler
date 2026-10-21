@@ -22,3 +22,9 @@ This investigation belongs to the paused type-checking remediation, not authoriz
 ## Acceptance Criteria
 
 Audit current producer-to-final-consumer flow against the adopted specification. Build specification-valid positive controls and loop-exit use-after-move rejects, preserving diagnostic/static checking. Close with actual revision/scope and targeted results; either demonstrate that the contract already holds or repair the common transfer/join owner and remove superseded paths. Complete the applicable paused-work gates before claiming implementation integration.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included bounded verification**.
+
+Current specification-valid continuation joins: normal/give/return/break/continue destinations, loop exits and live versus checked-dead paths. Reassess old short-circuit tests against approved value-position rejection. No new value-bearing break or loop syntax.

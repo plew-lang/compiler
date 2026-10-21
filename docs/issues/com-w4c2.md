@@ -49,3 +49,9 @@ part forest/use-DAG checks, source origins and qualified/synthetic bindings.
 Add root/part/sibling positive and negative controls, independent same-name
 imports, overloads, aliases and pub use. Do not add a special part-only visibility
 pass after a module-wide selector has already chosen the wrong candidate.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
+
+Current root/part external bindings, duplicate checks and overload candidate scope. Preserve module public surfaces and repair file identity from admission through final selectors.

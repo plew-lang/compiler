@@ -44,3 +44,9 @@ restrictions through publication/failure/resumption. Test root-waits-worker and
 C-waits-worker progress, retained Guard/access roots and termination. Introduce
 this with worker support ([com-qzpm](com-qzpm.md)); do not duplicate runtimes or
 turn reusable embedding/Hot Restart into this task's implicit scope.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: unimplemented or independent release capability**.
+
+Multi-worker managed pause and independent compiler owner require the currently rejected worker facility. Current one-thread synchronous demand callback remains covered without adding compiler threads.

@@ -32,3 +32,9 @@ or function-typed captured values. The generic/function-shaped capture restricti
 is retained implementation coverage, not a new language prohibition. Unique move
 capture remains a separately deferred design, so its absence alone is not a bug
 or an expansion of the current type-checking parent's completion scope.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Mixed: split current subset**.
+
+Currently admitted environment capture/copy/drop/access is com-j3pp, with source publication in met-acfl. Explicitly rejected generic-struct/function-typed captures remain new shape support; unique move capture remains a future contract. This does not create a language-level type-kind prohibition.

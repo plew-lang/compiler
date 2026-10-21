@@ -18,3 +18,9 @@ Evidence scope: retained from meta agents/provisional.md at c539d7b96615a5c59c01
 ## Acceptance Criteria
 
 Inspect shared parse producers and both consumer representations, compare supported syntax/errors with paired fixtures, and close divergences without a second grammar authority.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included bounded verification**.
+
+Current arena/value-AST parse entry points for admitted block/if/match/interpolation/pattern/function forms and paired malformed inputs. Verify one grammar authority, spans and any reachable legacy parser; new absent syntax is outside. Matching current paths may close with evidence, without deleting private unused helpers merely for style.

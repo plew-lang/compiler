@@ -18,3 +18,9 @@ Evidence scope: retained from meta agents/provisional.md at c539d7b96615a5c59c01
 ## Acceptance Criteria
 
 Check each current limitation against spec and minimal inputs, distinguish extensions requiring decisions from already specified behavior, and retain producer-to-cleanup implementation obligations for selected work.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Mixed: split current subset**.
+
+Already admitted unique move/borrow/cleanup and current projections are verified by met-si6j/com-gyup/met-6e6k and current-reference/closure units. Explicitly unsupported unique block-result transport, unique collection/generic payloads and escaping/public region facilities are outside. Ordinary malformed ownership acceptance remains in scope regardless of these missing shapes.

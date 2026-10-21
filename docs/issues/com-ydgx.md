@@ -20,3 +20,9 @@ The diagnostic has dedicated retain/drop assertions and remains manual. Preserve
 ## Acceptance Criteria
 
 Route the manual sanitizer mode through the shared full IR instrumentation/link path, preserve retain/drop checks, and verify emitted ASan accesses plus intentional detection controls and clean positive cases. Record the actual coverage separately from the standard gate.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
+
+Existing manual --asan mode must instrument generated Plew IR through the shared helper before claiming coverage. Preserve retain/drop assertions and intentional UAF/clean controls. Standard ASan remains an independent gate; discovery of the manual test is not changed.

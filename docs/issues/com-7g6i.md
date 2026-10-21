@@ -22,3 +22,9 @@ Spec03 at spec revision `a6f2384` retained an older implementation note claiming
 ## Acceptance Criteria
 
 Measure representative depth and destruction order, identify any actual resource limitation, and document or implement a semantics-preserving remedy without asserting an unmeasured stack defect.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included bounded verification**.
+
+First verify current recursive-box copy/drop/release and destruction order; then measure a small finite depth series for owned trees. Missing lifecycle is an in-scope repair. Constant-stack arbitrary-depth destruction is not a new promised feature, and a measured resource limit alone is not a demonstrated memory-safety bug.

@@ -18,3 +18,9 @@ Evidence scope: retained from meta agents/provisional.md at c539d7b96615a5c59c01
 ## Acceptance Criteria
 
 Record current support and source requirements for each entry/storage case, close selected final consumers and startup/exit behavior, and preserve the v1 generic stored-assoc prohibition.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Mixed: split current subset**.
+
+Currently admitted process/main/exit and non-generic storage controls are com-cgdk; initializer ordering is com-fkxl. Absent new Process/ExitCode API forms and generic stored assoc are not added; specified generic stored-assoc rejection remains.

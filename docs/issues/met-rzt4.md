@@ -17,3 +17,9 @@ Retained independent investigation from type-checking remediation. Historical re
 Recheck exact historical inputs/revisions and watchdog output in [migration evidence](https://github.com/plew-lang/meta/blob/main/evidence/typechecking-remediation/design-migration.md) and the [final-call-authority record](https://github.com/plew-lang/meta/blob/main/evidence/typechecking-remediation/final-call-authority/README.md) (compiler 1a2ed6b6); separate parser recovery/progress from JIT dependency/abort ownership. Do not infer the _memcpy issue (com-8w4c) is the same failure.
 
 Acceptance: minimal current controls, bounded termination or actionable error, failure-state propagation, and specific implementation/evidence if still reproducible. Do not weaken watchdogs or turn unfinished investigations into source restrictions. Route discovered responsibility changes to separate tickets if necessary.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included bounded verification**.
+
+Current bounded parser recovery for the retained malformed input and the distinct InternalSession JIT abort. Use exact old inputs/revisions, current error/exit controls and stage evidence. Keep the libcall issue separate. Do not weaken watchdogs or introduce unsupported syntax to restore old acceptance.

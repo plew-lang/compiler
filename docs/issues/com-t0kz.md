@@ -20,3 +20,9 @@ Evidence scope: migrated from meta agents/optimization-candidates.md at meta rev
 ## Acceptance Criteria
 
 Specify content identity, invalidation and corruption handling, demonstrate cache-hit/miss equivalence and input recording, and measure benefit without skipping sanitizer coverage.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: optional optimization**.
+
+Caching sanitizer preparation is optional; complete instrumentation/coverage and standard gates remain required.

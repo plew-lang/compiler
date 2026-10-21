@@ -18,3 +18,9 @@ Evidence scope: retained from meta agents/provisional.md at c539d7b96615a5c59c01
 ## Acceptance Criteria
 
 Produce focused failures and valid controls, preserve structured frontend causes/provenance through rendering, and avoid downstream name lookup as a substitute for missing evidence.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included bounded verification**.
+
+Current no-candidate/visibility/label/type/ambiguity/view failures and valid controls through common call selection and final rendering. Keep causes structured; do not reconstruct a source decision in diagnostics.

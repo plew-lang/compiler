@@ -20,3 +20,9 @@ Evidence scope: migrated from meta agents/optimization-candidates.md at meta rev
 ## Acceptance Criteria
 
 Establish a bounded legal subset with enabled/disabled behavior comparisons, malformed-input controls, structural effect checks, and analysis/snapshot cost measurements. Preserve complete-expression temporaries, named binding ends, guaranteed by-value ownership, and ReturnBoundary provenance.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: optional optimization**.
+
+General CFG copy propagation is optional. Correctness of transformations already enabled is included under Mid/ownership verification.

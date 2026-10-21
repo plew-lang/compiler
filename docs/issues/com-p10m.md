@@ -48,3 +48,9 @@ private/shared backing. Do not fix only the public reserve wrapper or rely on
 LLVM optimization, sanitizer detection or OS termination as the language panic.
 Verify normal growth/CoW values and panic controls without enormous real allocations;
 record sanitizer and fixed-input parent gates applicable to the eventual repair.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
+
+Current Buffer allocation/reserve/growth arithmetic and failure publication. First implementation unit: checked count/byte/header/growth and null failure across the common floor, including no mutation before failure. No large real allocation is needed for the controls.

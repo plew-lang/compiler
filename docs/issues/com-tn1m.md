@@ -41,3 +41,9 @@ the runtime registration helper's queued fast path; generated await bypasses tha
 helper for an already-complete Promise. Scalar suspension and frame preparation
 exist. Remaining composite ownership, async-self and consuming-result combinations
 need their own verification, not blanket claims of missing all async support.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Mixed: split current subset**.
+
+Current scalar async/activation/frame/loop lifetime is com-7u06. Composite/unique results and method/generic async remain unimplemented future work. Do not require or claim them when closing the child.

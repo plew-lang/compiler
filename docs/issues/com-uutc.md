@@ -25,3 +25,9 @@ Evidence scope: retained from meta agents/provisional.md at c539d7b96615a5c59c01
 ## Acceptance Criteria
 
 For each combination record current source and minimal positive/reject controls, distinguish justified limitations from defects and already fixed cases, and route proven changes through the paused remediation design/restart conditions. Preserve saved decisions through final consumers; do not stop at adding checks.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Mixed: split current subset**.
+
+Current admitted combinations are bounded controls for met-si6j/met-ucze/met-ia09/met-acfl/met-6e6k, com-w4c2 and com-2p9p: contextual arrays, nominal/generic binders, overload labels/ownership, views/projections currently present, aggregate defaults and return results. Historically absent explicit free-call type arguments or new projection/interface paths remain unimplemented; reject/diagnose unsupported forms. Existing wrapping/type-annotation discrepancies cannot be dismissed as new feature work.

@@ -33,3 +33,9 @@ collect/run such declarations. tests/README.md describes external run/reject/
 part/gen/sanitizer fixtures instead. Thus the language-level test feature of
 spec15 remains absent; the existing fixture infrastructure and its passing records
 are real but do not establish language test support.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: unimplemented or independent release capability**.
+
+Language-level test syntax/discovery/runner is absent. Existing external fixture and sanitizer infrastructure remains mandatory for validation.

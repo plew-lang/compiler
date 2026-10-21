@@ -43,3 +43,9 @@ syntax/semantic boundary. Preserve defining-module, unique-Self, overlap, ordina
 field cleanup and exactly-once deinit contracts through final destruction.
 Cover direct and materialized Syntax paths and normal AOT/JIT uses. Do not remove
 the old parser form before bootstrap/source compatibility has a concrete plan.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
+
+Ordinary deinit already has an inherent-impl implementation; rejecting its prohibited struct-body location is an existing-feature correction. Migrate current compiler/std/tests with an explicit current-carrier/add-before-use pin/bootstrap sequence before removing the old parse lane. No conditional unique-generic deinit or new bootstrap strategy.

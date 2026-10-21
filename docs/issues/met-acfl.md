@@ -1,7 +1,7 @@
 ---
 id: met-acfl
 status: open
-deps: []
+deps: [com-kp3y]
 links: []
 created: 2026-10-13T01:40:08Z
 type: task
@@ -46,3 +46,9 @@ request/publication. Migrate closure construction versus body success explicitly
 facets; its inspected caller is declaration registration in resolveTypeDeclIdentities.
 Preserve legal pre-publication resolution, while making the immutable-term
 publication boundary structural; no later overwrite was demonstrated.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
+
+Existing source publication/header/closure/global/fact consumers; com-kp3y owns the first owner-local storage increment. Final closure still includes current operation/evidence/origin families, term declaration publication and old-reader removal; a sealed component does not finish the whole parent.

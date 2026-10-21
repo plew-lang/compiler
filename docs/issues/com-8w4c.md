@@ -22,3 +22,9 @@ Reproduce with pinned source/toolchain, identify intended backend libcall resolu
 ## Later Evidence Superseding the Earlier Unresolved Note
 
 The later type-checking remediation record explicitly reports the memory-libcall repair: LLVM-generated memcpy/memmove/memset and Darwin bzero resolve through a limited fallback JITDylib to the common host implementation; general process lookup for source symbols remains prohibited. [Immutable later record](https://github.com/plew-lang/meta/blob/39db039d6d20a53b19966440a9886a30c4476858/agents/typechecking-design-review.md#再開順序発散仕様を確定して共通基盤へ統合する). Treat the original unresolved reproduction as historical, not current failure. The retained follow-up is fresh scoped/full-gate confirmation of the repair, not implementing it again. The internal-session JIT interruption under final-call-authority is a separate investigation in [met-rzt4](met-rzt4.md).
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included bounded verification**.
+
+Fresh confirmation only of the already implemented limited backend-memory-libcall fallback on the retained Syntax workload, with equivalent AOT/JIT result and no arbitrary source-symbol process lookup. Do not implement the historical _memcpy repair again.

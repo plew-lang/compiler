@@ -46,3 +46,9 @@ function SCCs from initializer SCCs. Execute prerequisite-ready owners once, wit
 ordinary explicit awaits and no hidden global force/wait/event pumping. Verify
 direct/indirect/conditional cycles, declaration-order reversals, drop effects and
 AOT/JIT agreement. [com-8j0w](com-8j0w.md) retains other process/assoc questions.
+
+## Existing-Feature Conformance Classification
+
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Mixed: split current subset**.
+
+The currently executable managed initializer/effect subset is com-fkxl. Future worker and new public/foreign-thread callback paths stay open in this parent and must join the same plan when introduced. The current child must not treat unknown existing targets as empty effects.
