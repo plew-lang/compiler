@@ -28,3 +28,16 @@ Close producer, saved completion/targets/callable contracts, instance readers, M
 Track loop expression and value-bearing break connection to shared Syntax and internal IR separately from completion classification. The retained note reports these forms unconnected and uses while true for infinite-iteration probes; while true success does not prove loop syntax implementation. Preserve the specification distinction between source divergence and analytical non-continuation.
 
 Evidence scope: retained from meta agents/provisional.md at c539d7b96615a5c59c0165b0a5e3df90ec1f8dac; grammar-specific items additionally come from agents/grammar.md at that revision. These notes mix historical reproduction and uninspected combinations. No current compiler run or exhaustive implementation audit was performed during migration. Recheck current source and minimal run/reject inputs before claiming a defect; close resolved investigations with evidence rather than weakening the specification.
+
+## Source Recheck for the Conformance Inventory
+
+Compiler `ea5f751a`, spec `16f2f13`, Syntax `00f740e1`; static inspection only,
+without executing a compiler or reproducing runtime/test failures. The bounded
+[whole-reference inventory](met-z0ro.md) does not close this implementation issue.
+
+SourceCompletion.pw already centralizes source versus execution edge sets and
+makes loop source continuation distinct from analyzed execution. Lower/Types.pw
+and pinned Syntax also retain isDiverging on function types. These are implemented
+parts of the adopted divergence design, not untouched work. Final-consumer closure
+and full value-position/diagnostic combinations remain under met-si6j and this
+issue; this static pass did not reproduce the entire language regression corpus.

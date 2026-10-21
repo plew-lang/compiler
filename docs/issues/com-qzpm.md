@@ -9,9 +9,9 @@ priority: 3
 assignee: Koji Murata
 tags: [ownership, runtime]
 ---
-# Close future concurrency and atomic allocation analysis boundaries
+# Implement adopted concurrency and atomic allocation contracts
 
-spawn/channel and whole-program sendability/effect propagation remain implementation boundaries, not a redesign of the specified event-loop baseline. Allocation sharing determines a fixed atomic/non-atomic mode; no boundary graph-copy or dynamic promotion is adopted. Demand execution must close required sharing facts before allocation/publication. Current non-atomic helpers do not establish concurrency implementation.
+spawn/channel and whole-program sendability/effect propagation remain implementation boundaries, not a redesign of the specified event-loop baseline. Allocation sharing determines a fixed atomic/non-atomic mode; no boundary graph-copy or dynamic promotion is adopted. AOT must close its sharing plan before execution; demand execution adopts a conservative atomic baseline before allocation/publication. Current non-atomic helpers do not establish concurrency implementation.
 
 Design: [runtime](../design/runtime.md). Source contracts: [modules](https://github.com/plew-lang/spec/blob/main/spec/04-execution/15-modules.md), [concurrency](https://github.com/plew-lang/spec/blob/main/spec/04-execution/14-concurrency.md), [basic types](https://github.com/plew-lang/spec/blob/main/spec/01-basics/02-basic-types.md) and [packages](https://github.com/plew-lang/spec/blob/main/spec/04-execution/17-packages.md), as applicable.
 
@@ -26,3 +26,30 @@ Audit current implementation, preserve selected protocol from semantic roots thr
 Also audit sendable closure snapshot captures, sendable-to-ordinary function guarantee erasure, capture ownership/non-escaping use and read capabilities through Ref. The former grammar note reports shallow sendability/type carriers but loud rejection of sendable fn literals and spawn; do not equate accepted type syntax with execution support or turn this retained limitation into a new specification prohibition.
 
 Evidence scope: retained from meta agents/provisional.md at c539d7b96615a5c59c0165b0a5e3df90ec1f8dac; grammar-specific items additionally come from agents/grammar.md at that revision. These notes mix historical reproduction and uninspected combinations. No current compiler run or exhaustive implementation audit was performed during migration. Recheck current source and minimal run/reject inputs before claiming a defect; close resolved investigations with evidence rather than weakening the specification.
+
+## Source Recheck for the Conformance Inventory
+
+Compiler `ea5f751a`, spec `16f2f13`, Syntax `00f740e1`; static inspection only,
+without executing a compiler or reproducing runtime/test failures. The bounded
+[whole-reference inventory](met-z0ro.md) does not close this implementation issue.
+
+The current implementation is smaller than the adopted spec14 contract. Pinned
+Syntax has a spawn token but no spawn declaration/expression in the inspected
+semantic input; fixtures spawn_fn_rejected, pub_spawn_fn_rejected and
+spawn_block_rejected intentionally reject those forms. No standard Sync endpoints
+or worker transport implementation accompanies this route. Backend.pw's generated
+rawbuf retain/release and weak operations use ordinary increments/decrements;
+there is no allocation-mode plan or JIT atomic variant in this inspected runtime.
+
+There is also a source-confirmed semantic mismatch independent of runtime worker
+support: Codegen/Infer/Sendability.pw::typeRefIsSendableDepth treats Ref[T] and
+WeakRef[T] as sendable when T is sendable, whereas spec03/14 makes these handles
+nonsendable. MutableRef is already rejected. This does not demonstrate a live
+cross-thread race, since spawn is currently rejected, but it is not merely missing
+optimization or uncertain coverage.
+
+Worker/JIT pausing is separately [met-b04w](met-b04w.md); standard reference
+migration is [met-op15](met-op15.md). This issue retains worker/channel transport,
+sendability/effect closure, fixed RC allocation modes, typed delivery/cleanup and
+AOT/JIT agreement. Do not enable spawn or declare RC support by changing the type
+predicate or adding the missing syntax alone.

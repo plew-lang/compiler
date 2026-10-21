@@ -22,3 +22,17 @@ Evidence: spec/04-execution/15-modules.md shared struct section; former meta C c
 ## Acceptance Criteria
 
 Audit shared Syntax, AST/semantic type representation, layout, construction/access, imported/exposed direct/indirect calls and diagnostics. Record confirmed gaps, then close accepted-spec support through all consumers with target-specific C comparisons, two-way calls, inout, stack/results, O0/O2 and applicable sanitizer checks. Unsupported targets must reject explicitly; reference Clang remains a development tool.
+
+## Source Recheck for the Conformance Inventory
+
+Compiler `ea5f751a`, spec `16f2f13`, Syntax `00f740e1`; static inspection only,
+without executing a compiler or reproducing runtime/test failures. The bounded
+[whole-reference inventory](met-z0ro.md) does not close this implementation issue.
+
+Pinned Syntax/semantic nominal declarations do not carry the specified repr(c)
+layout contract in the inspected struct/declaration paths. Backend/Llvm/CAbi.pw
+provides shared scalar/pointer and narrow-number conversion; cParameterType uses
+that type directly or a pointer for inout, not a target aggregate classifier.
+This is partial C interoperability with a missing aggregate/layout path. Existing
+expose and CString/CPtr support must not be counted as absent. No two-way aggregate
+C comparison or target-specific runtime probe was run in this audit.

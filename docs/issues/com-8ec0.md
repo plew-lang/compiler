@@ -20,3 +20,16 @@ Evidence scope: migrated from meta agents/design-decisions.md at d2c317318126e99
 ## Acceptance Criteria
 
 Implement producer-to-runner collection and failure reporting with no silent discovery omissions; resolve only the remaining protocol details, and validate production exclusion and unchanged ordinary-code meaning.
+
+## Source Recheck for the Conformance Inventory
+
+Compiler `ea5f751a`, spec `16f2f13`, Syntax `00f740e1`; static inspection only,
+without executing a compiler or reproducing runtime/test failures. The bounded
+[whole-reference inventory](met-z0ro.md) does not close this implementation issue.
+
+Pinned Syntax TopItemAst/semantic top-item forms have no language test-block
+variant in the inspected grammar. Distribution CLI and native tool modes do not
+collect/run such declarations. tests/README.md describes external run/reject/
+part/gen/sanitizer fixtures instead. Thus the language-level test feature of
+spec15 remains absent; the existing fixture infrastructure and its passing records
+are real but do not establish language test support.

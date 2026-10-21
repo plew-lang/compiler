@@ -20,3 +20,15 @@ Evidence scope: retained from meta agents/provisional.md at c539d7b96615a5c59c01
 ## Acceptance Criteria
 
 Reproduce current scope, close selected capture type/environment/drop paths consistently, preserve declaration versus instance diagnostics and ordinary value ownership, and do not use AST backend fallback.
+
+## Source Recheck for the Conformance Inventory
+
+Compiler `ea5f751a`, spec `16f2f13`, Syntax `00f740e1`; static inspection only,
+without executing a compiler or reproducing runtime/test failures. The bounded
+[whole-reference inventory](met-z0ro.md) does not close this implementation issue.
+
+Codegen/Mono/Call.pw::checkedCaptureCell still explicitly rejects unique, generic-struct
+or function-typed captured values. The generic/function-shaped capture restriction
+is retained implementation coverage, not a new language prohibition. Unique move
+capture remains a separately deferred design, so its absence alone is not a bug
+or an expansion of the current type-checking parent's completion scope.

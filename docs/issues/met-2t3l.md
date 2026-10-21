@@ -1,0 +1,45 @@
+---
+id: met-2t3l
+status: open
+deps: []
+links: []
+created: 2026-10-21T11:05:50Z
+type: bug
+priority: 2
+assignee: Koji Murata
+tags: [frontend, ownership, documentation]
+---
+# Enforce impl-only deinit placement
+
+
+## Current Source Inspection
+
+Compiler `ea5f751a8343febe8dfecfa3e88e48ccebdefb27`, spec
+`16f2f13970dbe2789214b2206c48af3df21b68c8`, pinned Syntax
+`00f740e1178e5b992cfdd30ddaa5a0612ce27b43`. Static source inspection only;
+no compiler execution, regression reproduction or performance result is claimed.
+
+## Contract and Source-Confirmed Mismatch
+
+Spec03's deinit rule permits explicit destruction only in the defining module's
+inherent impl, with unique Self over the impl's entire applicability range. Struct
+bodies and enum-level deinit are rejected. Conditional capability ranges are
+separately part of [met-b2la](met-b2la.md).
+
+Pinned Syntax parseSyntaxStructDecl still accepts KwDeinit into the declaration's
+hasDeinit/deinitBody. [Lower/Decl](../../src/Codegen/Lower/Decl.pw) lowers that
+body, and compiler source itself uses struct-body deinit, for example
+[CompilerExecution](../../src/CompilerExecution.pw)::SessionRegistration.
+[Lower/Impl](../../src/Codegen/Lower/Impl.pw) also supports an impl deinit, so
+implementation of the correct form does not establish rejection of the old one.
+This is visible acceptance/representation of a prohibited source form; no fresh
+execution or new destructor-safety bug is claimed. Checked spec03 and spec15
+examples already use impl placement and should not be reported as contradictory.
+
+## Completion Boundary
+
+Migrate compiler/std/tests using the old location and reject it at the shared
+syntax/semantic boundary. Preserve defining-module, unique-Self, overlap, ordinary
+field cleanup and exactly-once deinit contracts through final destruction.
+Cover direct and materialized Syntax paths and normal AOT/JIT uses. Do not remove
+the old parser form before bootstrap/source compatibility has a concrete plan.
