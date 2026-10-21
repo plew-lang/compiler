@@ -31,3 +31,18 @@ Body signatures: record receiver, parameters and logical return under the same s
 Mid operand/place/condition/call readers distinguish successful Value, Unit, NoNormalValue and a recorded result-recipe dependency. Lower's synthetic MatchSubject has an evaluated pattern place as its separate authority; this is not a general missing-source-fact exemption. Carry recipes explicitly rather than guessing from term zero. Earlier 9badb6f7 already has bounded work in this area; inspect the cumulative source before treating it as outstanding.
 
 Field default generators reuse the authored field.defaultVal ExprId. Earlier inspection counted 24 direct type/flow writer fixtures; this is a historical audit count, not current coverage certification. Reconcile each fixture's normal producer intent. Do not turn owner failure into a bool/sentinel meaning only an optimization is unavailable, or add repeated prepare-result copying to every expression.
+
+## Detailed Audit Additions
+
+[com-nsxb](com-nsxb.md), compiler `78bd9691`, rechecks rather than discards the
+existing prepared function/global/closure readers. `recordSourceBodySignature`
+can replace its row without a completed-owner guard; physical header sealing
+must close that writer too, without claiming a production overwrite reproduction.
+`SemanticCompletionOwner` currently has Function/Global only. `putSemanticClosure`
+retains its parent's completion owner and Record checks the closure inline;
+a separate Mono bodyKey does not supply the adopted independent closure-body
+request/publication. Migrate closure construction versus body success explicitly.
+`Ir/Types.resolveTypeDeclaration` can replace an existing term's declaration
+facets; its inspected caller is declaration registration in resolveTypeDeclIdentities.
+Preserve legal pre-publication resolution, while making the immutable-term
+publication boundary structural; no later overwrite was demonstrated.

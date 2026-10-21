@@ -45,3 +45,14 @@ during its final projected use. Preserve existing Ref usage while migrating its
 public API; do not add public lifetimes, arbitrary raw reference construction or
 a generic user-defined projection trait. Unique-generic support is tracked in
 [met-b2la](met-b2la.md); transport/atomic work remains [com-qzpm](com-qzpm.md).
+
+## Trusted Identity Consumer Recheck
+
+Detailed audit [com-nsxb](com-nsxb.md), compiler `78bd9691`, found
+Mono/Helpers.pw isRefInst/isMutableRefInst/isStrongRefInst/isWeakRefInst still
+classify a one-argument term by head spelling. The adopted standard-reference
+handoff requires exact registered declaration identity. Carry that authority into
+the new projection/weak operations instead of retaining a name-only classifier.
+Existing owner-qualified runtimeIntrinsicDeclaration is a separate useful lane;
+it is not proof these type predicates are already declaration qualified.
+No same-named-user-type runtime miscompile was reproduced by this audit.
