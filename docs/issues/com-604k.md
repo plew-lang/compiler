@@ -1,7 +1,7 @@
 ---
 id: com-604k
 status: in_progress
-deps: [com-p10m, com-w4c2, com-6ygf, com-9ttw, met-si6j, met-k7ks, com-vy62, met-2t3l, com-ydgx, com-2p9p, com-wqd7, com-zgk9, com-lndr, met-0139, com-8w4c, com-7g6i, com-0k37, com-7u06, com-legt, com-f8bw, com-2o4w, com-cgdk, com-fkxl, com-j3pp, com-esri]
+deps: [com-p10m, com-w4c2, com-6ygf, com-9ttw, met-si6j, met-k7ks, met-2t3l, com-ydgx, com-2p9p, com-wqd7, com-zgk9, com-lndr, met-0139, com-8w4c, com-7g6i, com-0k37, com-7u06, com-legt, com-f8bw, com-2o4w, com-cgdk, com-fkxl, com-j3pp, com-esri, met-8b8w]
 links: []
 created: 2026-10-21T15:16:01Z
 type: epic
@@ -22,6 +22,8 @@ Scope classification is [com-esri](com-esri.md). Its pinned matrix records inclu
 Start with com-p10m (checked Buffer arithmetic/allocation publication), then com-w4c2 and com-6ygf as independent current correctness boundaries. No source/type-system migration blocks the first Buffer unit. The manual diagnostic repair com-ydgx is not a prerequisite when that repair uses the existing standard sanitizer gate.
 
 The frontend uses com-kp3y for owner-local header/expression/binding/completion publication through actual Mid/Mono readers, then met-ucze/met-ia09/met-6e6k and final met-acfl closure. Existing closures/globals/aggregate/try/pattern readers must remain valid during each increment. Sequence is recommended implementation order, not evidence that every entire task blocks another: record a hard tk edge only where the complete named contract actually needs the prerequisite. met-si6j retains its existing current-surface criteria.
+
+Current-gen handoff/framing/receipts are scoped by [met-8b8w](met-8b8w.md); its parent com-vy62 retains the absent macro/macrointerface public-role migration, which does not block current-feature integration. This is a migration boundary, not a change to the adopted final macro design.
 
 Other boundaries close in independent finite units. Current-reference identity precedes changing reference sendability; source operation/effect summaries must be available before global startup publication; generated result/provider identity must be final before its receipt publication/admission. These producer requirements do not imply waiting for unrelated new features or a second runtime. Current runtime/ABI/driver unit descriptions name their exact subset and final consumers.
 

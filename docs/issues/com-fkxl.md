@@ -22,6 +22,8 @@ Existing global/associated initializer forms, selected calls/defaults/conversion
 
 Saved selected operations and complete execution-effect summaries -> initializer dependency/provenance graph -> SCC/cycle rejection and prerequisite-ready one-time startup -> current AOT/JIT. Replace direct-AST-only dependency guesses; closure construction is distinct from invocation. Semantic/effect summaries must be closed before startup, while machine bodies can stay lazy. Unknown current dynamic targets cannot mean empty effects.
 
+This task owns generating, retaining and closing the startup summaries it consumes; it is not waiting for an unassigned producer. Reuse/refine the common Mid/AmbientEffects machinery with its owning modules. Existing access-summary success alone does not prove transitive initializer readiness or startup closure.
+
 ## Completion and Verification
 
 Direct/indirect/single-root cycles, declaration order reversal, dependencies through blocks/defaults/invoked closures/drop and supported async, clean independent initializers and AOT/JIT agreement. Refine existing effect producers with their owners; do not add hidden global waits or force a new worker service to finish this current-subset task.

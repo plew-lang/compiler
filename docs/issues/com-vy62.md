@@ -47,6 +47,8 @@ admission is separately [met-nm1w](met-nm1w.md).
 
 ## Existing-Feature Conformance Classification
 
-[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Mixed: split current subset**.
 
-Current gen/derive/generated-part paths, not optional authoring APIs. Use three closed increments: (1) source form/role plus library-owned derive handoff through generated target, (2) compatible provider host units plus private result framing through staged publication, (3) recorded-input receipt production through normal missing/stale generated-source admission. Provider print cannot corrupt returned output. Preserve approved Go-style freshness limits; no arbitrary provider I/O freshness or package-native executor.
+[met-8b8w](met-8b8w.md) owns current gen's directive-form/library handoff, compatible host units/private result framing and recorded-input receipt/admission through their final consumers. Its scope does not introduce new public macro declarations.
+
+The new `macro X as ...` / `macrointerface` syntax, macro-role registration/visibility and standard-provider migration to that form remain unimplemented public-family work in this parent. Current Syntax has ordinary Derive/ParameterizedDerive traits and trait-based providers; completing their bounded handoff repair neither certifies that legacy role model as the final design nor closes this parent. When the public role family is implemented, it must use the same host/framing/admission contracts rather than a competing generator. Arbitrary provider I/O freshness and package-native execution remain outside the adopted current contract.
