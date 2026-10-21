@@ -140,6 +140,88 @@ all projections, accept arbitrary Boolean syntax in source, or approve a general
 trait solver. Exact internal representation and implementation budgets come after
 that acceptance-policy decision.
 
+## Reference-Language Treatment of Analysis Limits
+
+Researched 2026-10-21 in response to the user's question about infinite recursion
+and finite-but-deep types. These are reference observations and a recommendation,
+not an adopted Plew source policy or selected numerical limits.
+
+**Rust:** [The Reference](https://doc.rust-lang.org/reference/attributes/limits.html)
+provides a crate-level recursion_limit with rustc default 128 for potentially
+unbounded compile-time operations. Its finite macro example can exceed a reduced
+limit; an overflow is not proof of infinity. The separate type_length_limit
+currently requires the nightly enforcement flag, so it must not be described as
+an always-enforced stable compiler limit.
+
+[E0275](https://doc.rust-lang.org/error_codes/E0275.html) documents overflowing
+recursive trait evaluation. The compiler's
+[finite nested-type example](https://doc.rust-lang.org/stable/nightly-rustc/rustc_lint/builtin/static.RECURSION_DEPTH_EXCEEDING_LIMIT.html)
+also demonstrates a trait query exceeding a small depth budget and suggests a
+larger limit. It discusses old/new solver accounting differences, so it is not
+evidence that every stable solver version counts identical work identically.
+
+The [new solver caching design](https://rustc-dev-guide.rust-lang.org/solve/caching.html)
+represents depth overflow as ambiguity internally, not automatic failure of every
+enclosing query. A required proof still cannot be invented from that result.
+Cache reuse accounts for available/reached depth so an overflow-sensitive answer
+does not become unrestricted success or depend incorrectly on cache availability.
+[Cycle handling](https://rustc-dev-guide.rust-lang.org/solve/coinduction.html)
+is distinct from simply recursing until the budget expires.
+
+[E0320](https://doc.rust-lang.org/error_codes/E0320.html) separately illustrates
+drop-check overflow for a recursively changing generic argument behind a Box.
+Finite physical layout does not ensure bounded type/drop preparation. Do not
+interpret its example as claiming every runtime value traverses infinite data.
+
+**Swift:** The Requirement Machine author describes completion as a
+[semi-decision procedure with explicit cutoffs](https://forums.swift.org/t/the-requirement-machine-a-new-generics-implementation-based-on-term-rewriting/55601).
+The compiler attempts to construct a usable rewrite system within limits instead
+of first proving that every failed completion would run forever. This is an
+implementation acceptance boundary, not a guarantee that all finite inputs are
+eventually accepted.
+
+Current [LangOptions](https://github.com/swiftlang/swift/blob/main/include/swift/Basic/LangOptions.h)
+contain rule-count, rule-length, concrete-nesting, concrete-size and type-difference
+budgets. Observed settings include rule count 4000, rule-length allowance 12,
+concrete nesting 30, concrete size 4000 and type differences 13000. These are
+implementation settings, not Swift language constants or Plew recommendations.
+[Completion code](https://github.com/swiftlang/swift/blob/main/lib/AST/RequirementMachine/KnuthBendix.cpp)
+checks generated rules and measures the rule-length allowance relative to the
+longest initial rule; 12 is not a ban on writing a 13-segment source type.
+[Diagnostics](https://github.com/swiftlang/swift/blob/main/include/swift/AST/DiagnosticsSema.def)
+identify the exhausted dimension rather than diagnosing every limit as a logical
+contradiction. Hidden frontend options can change these budgets.
+
+The author's [recursive associated-type discussion](https://forums.swift.org/t/fixedwidth-cannot-build-rewrite-system-for-protocol/64285)
+distinguishes finite-but-large completion from examples requiring infinitely many
+rewrite rules in the chosen ordering. It supports practical cutoffs, not a claim
+that every large or renamed declaration must have identical complexity. These
+historical explanations were checked against current limit fields and checks;
+no local Rust/Swift compiler experiments were run for this research.
+
+**Recommendation for Plew, pending approval:**
+
+- Keep the finite structural SCC rule already adopted. Do not count runtime list
+  length as type-analysis depth or unfold the same nominal cycle repeatedly.
+- Bound the admitted proof procedure by deterministic structural/work budgets.
+  Stop after exhaustion even if the particular request might terminate later;
+  no proof of nontermination is required before stopping.
+- Distinguish an unsupported relation, an unresolved required proof, a proved
+  contradiction/overlap and exhausted budget. None authorizes a guessed capability.
+- Consider depth, generated conditions/rules and term size together; shallow
+  branching can be expensive while a long shared chain can be cheap. Do not
+  equate "100 recursive calls" with one universal complexity measure.
+- Make memoized proofs/overflow respect their budget assumptions. Cold/warm caches
+  must not silently change the required proof contract.
+- Select Plew budgets with ordinary compiler/library controls and adversarial
+  cases; do not import 128/12/30 as source promises. A user override and its syntax
+  would be a separate decision. No override facility is adopted here.
+
+The earlier phrase "requests that cannot close finitely" is not a requirement to
+decide infinity. The concrete policy under consideration is "required proof did
+not complete within the supported procedure and budget". The user has not yet
+approved that policy or a stricter language-level prohibition of complex shapes.
+
 ## Candidate Minimum Fragment
 
 Investigate the following as a proposal, not an adopted acceptance boundary:

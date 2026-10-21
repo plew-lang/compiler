@@ -90,3 +90,14 @@ required proof. Neither the acceptance boundary nor a fallback reclassification
 is adopted. R1/R2 remain open even though internal shared ownership is settled.
 No source/implementation execution, formal general termination proof or performance
 result is claimed.
+
+## Reference-Language Limit Research
+
+The [Rust/Swift research](../design/proposals/bounded-capability-reasoning.md#reference-language-treatment-of-analysis-limits)
+confirms practical depth/complexity cutoffs that can stop finite work without
+proving nontermination. Rust's documented new-solver cache accounts for remaining
+depth; Swift has several independent completion/type-complexity budgets. The
+recommendation is a bounded Plew proof procedure with explicit limit diagnostics,
+not a promise to classify infinity. Numerical budgets, any override API and source
+acceptance remain unadopted. Research used primary documentation/current source;
+no compiler reproduction, performance or implementation claim is made.

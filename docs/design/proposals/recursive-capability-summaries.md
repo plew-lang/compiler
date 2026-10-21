@@ -97,6 +97,12 @@ T.Next, T.Next.Next and so on. A finite schema may describe the relation without
 making every useful source query decidable. The open decision concerns admission
 and diagnostics for such requests, not permission to guess their answer.
 
+For the distinction between proving nontermination and enforcing a finite budget,
+see the [Rust/Swift limit research](bounded-capability-reasoning.md#reference-language-treatment-of-analysis-limits).
+The proposed cutoff can stop finite-but-expensive requests too. It does not need
+to establish that a projection sequence is actually infinite, and it does not
+change the adopted finite structural-component solution.
+
 ## Remaining Decisions to Close
 
 The finite component's solution, private provisional state, complete symbolic
