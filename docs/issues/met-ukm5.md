@@ -45,8 +45,9 @@ universal query/trait framework, or restart the reference from scratch was found
 The separation between checked source decisions, legitimate concrete discharge,
 Mid correctness, representation and executable publication is worth preserving.
 
-It is not yet a fully closed instruction for every affected implementation:
-three actionable contract gaps remain in two areas. R1/R2 belong to one capability
+At the reviewed input, it was not yet a fully closed instruction for every
+affected implementation: three actionable contract gaps remained in two areas.
+R1/R2 belong to one capability
 design task; R3 belongs to the async ownership boundary. Their existence does not
 invalidate already closed unrelated increments. Close the affected contracts
 before implementing those areas; do not silently fill them with local selectors
@@ -300,10 +301,22 @@ test, compiler execution, sanitizer, fixed-point or performance run was performe
 
 ## Outcome and Next Boundary
 
-The review is complete as an investigation, with open design work in
-[met-yotl](met-yotl.md), [met-6kzo](met-6kzo.md) and editorial work in
-[met-m7wx](met-m7wx.md). It does not approve their proposed solutions, certify
-compiler implementation, adopt the first edition, or authorize an automatic
-restart of paused type-checker work. Recommended next step: close the two affected
-design areas in their authoritative homes, review their changes, then continue
-the implementation/design conformance audit against the resulting fixed reference.
+The review and its design/editorial follow-ups are complete at their stated
+scopes. The adopted contracts, rationale, limits and independent delta-review
+controls are retained in the owning chapters and resolution issues:
+
+- R1/R2: [met-yotl](met-yotl.md) records the recursive summaries and shared bounded
+  capability judgment. Implementation, including the fixed limit's numeric
+  selection, belongs to [met-b2la](met-b2la.md).
+- R3: [met-6kzo](met-6kzo.md#resolution-design-handoff-closed) records the async
+  ownership handoff; implementation and execution controls belong to
+  [com-tn1m](com-tn1m.md).
+- E1: [met-m7wx](met-m7wx.md#resolution-editorial-boundary-closed) records the
+  navigation corrections and preserves displaced implementation observations.
+
+The comparisons were incorporated and their temporary proposal files removed.
+The subsequent [detailed implementation conformance audit](com-nsxb.md) records
+pinned traces, findings, unverified combinations and repair boundaries. Neither
+review closure nor that static audit certifies compiler implementation, adopts
+the first edition, or automatically resumes paused type-checker work. Current
+work selection remains in the meta worklog.

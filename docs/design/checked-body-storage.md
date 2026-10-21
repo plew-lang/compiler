@@ -230,8 +230,12 @@ instance environments; controls/mode parity (7/9) use the common producer and
 worked paths; correctness/performance/documentation gates remain 10/11. This map
 does not mark any implementation criterion complete.
 
-After reconciliation, build/check the fresh cumulative baseline
-before extending it. Stage slice validation through (a) source owner/signature,
+After reconciliation, establish the cumulative baseline before extending it.
+Reuse recorded success only when its input, compiler and execution conditions
+match; a new session alone does not require repeating the same baseline. Changes
+or unverified conditions require the affected validation gates. The owning issue
+and meta worklog retain the selected input and evidence, not this contract.
+Stage slice validation through (a) source owner/signature,
 (b) calls and evidence through concrete final consumers, (c) remaining implicit,
 closure/global/default/conversion paths, with each affected old path removed.
 Run required full gates and formal fixed-point/performance at integration points;

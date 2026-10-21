@@ -8,31 +8,31 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 
 ## Available Chapters
 
-1. [Architecture and Design Principles](architecture.md) — reviewed draft.
-2. [Compiler State, Identity, and Computation](compiler-state.md) — reviewed draft; owner-local checked-body storage is adopted; implementation remains pending.
-3. [Sources, Packages, and Modules](sources-and-modules.md) — reviewed draft.
-4. [Syntax and Semantic Input](syntax.md) — reviewed draft.
-5. [Declarations, Scopes, and Name Lookup](name-lookup.md) — reviewed draft.
-6. [Types and Semantic Evidence](types-and-evidence.md) — reviewed draft.
-7. [Expression and Body Checking](body-checking.md) — reviewed draft; physical storage is specified; implementation remains pending.
-8. [Generics and Body Instantiation](generics.md) — reviewed draft.
-9. [Metaprogramming and Generated Code](metaprogramming.md) — reviewed draft; host-unit/output/recorded-input contracts are specified, while their implementation and coverage remain unaudited.
-10. [Mid Representation and Lowering](mid.md) — reviewed draft; upstream storage implementation remains pending.
-11. [Ownership, Access, and Lifetimes](ownership-and-access.md) — reviewed draft; whole-program enforcement coverage remains to be audited.
-12. [Passes and Optimization](passes-and-optimization.md) — reviewed draft; unique-copy input preservation needs implementation audit.
-13. [Representation and ABI](representation-and-abi.md) — reviewed draft; callback and external runtime boundaries remain open.
+1. [Architecture and Design Principles](architecture.md)
+2. [Compiler State, Identity, and Computation](compiler-state.md)
+3. [Sources, Packages, and Modules](sources-and-modules.md)
+4. [Syntax and Semantic Input](syntax.md)
+5. [Declarations, Scopes, and Name Lookup](name-lookup.md)
+6. [Types and Semantic Evidence](types-and-evidence.md)
+7. [Expression and Body Checking](body-checking.md)
+8. [Generics and Body Instantiation](generics.md)
+9. [Metaprogramming and Generated Code](metaprogramming.md)
+10. [Mid Representation and Lowering](mid.md)
+11. [Ownership, Access, and Lifetimes](ownership-and-access.md)
+12. [Passes and Optimization](passes-and-optimization.md)
+13. [Representation and ABI](representation-and-abi.md)
+14. [LLVM Backend](llvm-backend.md)
+15. [Runtime](runtime.md)
+16. [Driver and Demand-Driven Execution](driver-and-execution.md)
+17. [Diagnostics](diagnostics.md)
+18. [Verification and Validation](verification.md)
 
-14. [LLVM Backend](llvm-backend.md) — reviewed draft; ORC DataLayout admission remains an implementation discrepancy.
-
-15. [Runtime](runtime.md) — reviewed draft; general concurrency and reusable embedding remain outside the audited subset.
-
-16. [Driver and Demand-Driven Execution](driver-and-execution.md) — reviewed draft; reusable embedding and full command parity remain unaudited.
-
-17. [Diagnostics](diagnostics.md) — reviewed draft; richer provenance and complete returning-service migration remain unaudited.
-
-18. [Verification and Validation](verification.md) — reviewed draft; evidence scope remains distinct from implementation completeness.
-
-All planned chapters have reviewed drafts, and the initial cross-chapter review corrections are incorporated. Prior contracts, rationale, implementation gaps and scoped evidence have been consolidated into their authoritative homes and independently checked against the original records. The final cross-domain finding is addressed by the adopted [static initialization plan](driver-and-execution.md#static-initialization-plan), with its language change and bounded execution guarantee recorded in [F1](../issues/com-7knz.md#f1--p1-synchronous-reads-during-asynchronous-global-initialization). First-edition confirmation with the user remains required.
+All 18 chapters have been reviewed, the adopted language rules are synchronized
+with the specification, and the design/editorial review findings have been
+resolved. First-edition confirmation with the user remains a separate milestone
+under the [maintenance policy](maintenance.md#first-edition-and-implementation-restart).
+Implementation status and pinned audit evidence belong in the linked issues;
+the chapter list is not a second implementation-progress ledger.
 
 ## Detailed Contracts and Decisions
 

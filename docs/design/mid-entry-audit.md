@@ -429,9 +429,7 @@ run):
 - [existential bodies](../../tests/compiler/codegen/test-existential-mid-bodies.py): one-to-one member witness/Mid definitions for Self results, heap Array/Optional, inout and Unit; copy/drop vtable glue excluded.
 - [closure environment bodies](../../tests/compiler/codegen/test-closure-environment-mid.py): heap values, cells and multiple captures; `mid_closure_environment_drop` additionally checks escape/alias/final release order.
 - [value ABI](../../tests/compiler/codegen/test-value-abi.py): field shrinking plus callback/inout mutation and escaping closure snapshot behavior.
-- [static view boundary](../../tests/fixtures/run/mid_static_view_boundary.pw): valid execution and malformed-boundary rejection. The old note also named
-  `test-mid-value-views.sh`, which is absent from the current tree; that historical
-  name is not evidence of an available or successful gate.
+- [static view boundary](../../tests/fixtures/run/mid_static_view_boundary.pw): valid execution and malformed-boundary rejection.
 - `mid_type_consistency`: typed valid controls and mismatches through production checking.
 
 The common LLVM preprocessing/ASan boundary belongs to the backend chapter:
