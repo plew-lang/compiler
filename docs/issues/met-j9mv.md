@@ -20,7 +20,7 @@ Acceptance: provide actual field/key/state/API and writer/reader permissions, fa
 
 The supplement now specifies the source/instance keys, payload fields, Building/Succeeded/Failed publication, registered-signature queries, required/optional readers, synthetic plans, worked paths and finite migration families. Read-only comparison against the retained 2983c47f candidate identified all-owner semantic snapshots in preparedSemanticFacts. That source inspection is separate from the fresh baseline below. Independent design comparison supports the owner-local direction without claiming shared stores inherently require whole-table CoW.
 
-The cumulative reconciliation below identifies the producers and final consumers; the same candidate now has a fresh fixed-point/performance and normal-suite baseline. The independent comparison and corrective design review are complete; adoption falls within delegated internal decisions because it preserves the existing public/semantic contracts and replaceable reader boundary. Source/instance authority, failure isolation and missing-fact rejection are fixed; index shape, packing and allocation refinements follow the recorded correctness/cost measurements. No implementation gate or 5.7-second condition is waived.
+The cumulative reconciliation below identifies the producers and final consumers; the same candidate now has a fresh fixed-point/performance and normal-suite baseline. The independent comparison and corrective design review are complete; adoption falls within delegated internal decisions because it preserves the existing public/semantic contracts and replaceable reader boundary. Source/instance authority, failure isolation and missing-fact rejection are fixed; index shape, packing and allocation refinements follow the recorded correctness/cost measurements. Implementation gates and the current parent performance condition still apply.
 
 ## Cumulative Restart Reconciliation
 
@@ -97,7 +97,8 @@ median 6.260879 seconds, and the same measured compiler passed the normal suite
 skip/fail0). Both execution handles ended with exit 0 and unchanged inputs.
 
 This closes the prerequisite, not met-si6j or the source/storage implementation.
-The parent's 5.7-second condition is unmet; repair difficulty is not established.
+The recorded 6.260879-second baseline is below the currently user-approved
+7-second target; this changes no implementation or validation completion claim.
 Generation, dependency and sanitizer gates remain unrun for this baseline.
 Next, follow the first closed increment above on the cumulative source, with
 per-increment reference/removal audits and applicable validation. Main, seed and

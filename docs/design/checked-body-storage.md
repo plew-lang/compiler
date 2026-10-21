@@ -211,9 +211,8 @@ Use focused counters outside formal timing to observe payload acquisitions,
 facts visited per seal, whole-table copies/CoW and peak memory across many tiny
 bodies, one large body, many instances of one generic body and interleaved JIT
 requests while earlier readers remain alive. Formal fixed-point/performance runs
-exclude diagnostic counters and concurrent builds. The parent's 5.7-second
-condition remains unchanged; baseline failure requires investigation, not relaxed
-acceptance. Correctness/ownership/target eligibility cannot be selected by timing.
+exclude diagnostic counters and concurrent builds. The parent's current performance
+condition applies; baseline failure requires investigation, not relaxed acceptance. Correctness/ownership/target eligibility cannot be selected by timing.
 
 ## Restart and Validation Gate
 
