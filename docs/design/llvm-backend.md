@@ -95,7 +95,7 @@ Focused inspection uses compiler revision `6fe09bc7c0e75260b3f773643921478b5020b
 
 The inspected ORC DataLayout admission differs from the adopted agreement/rejection contract. The [tracked discrepancy](../issues/com-6ygf.md) owns its current evidence, affected consumers, and completion conditions; this chapter does not claim the whole ORC layout path has been audited.
 
-The focused inspection does not certify every resource-failure path, LLVM verifier entry, helper queue, async output, sanitizer mode, or foreign target. Requested publication and runtime lifetime require the following chapters. Upstream checked-body storage and the unique-Copy preservation audit recorded in earlier chapters also remain unresolved; backend success is not evidence that those boundaries have been closed.
+The focused inspection does not certify every resource-failure path, LLVM verifier entry, helper queue, async output, sanitizer mode, or foreign target. Requested publication and runtime lifetime require the following chapters. Upstream checked-body storage implementation and the unique-Copy preservation audit recorded in earlier chapters remain incomplete; backend success is not evidence that those boundaries have been closed.
 
 ## Demand Execution Integration Audit
 

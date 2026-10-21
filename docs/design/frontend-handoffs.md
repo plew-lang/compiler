@@ -5,8 +5,8 @@
 [body checking](body-checking.md), [instantiation](generics.md),
 [ABI](representation-and-abi.md), and [driver](driver-and-execution.md) chapters.
 They are not a declaration that every current implementation path satisfies them.
-Physical checked-body storage remains unresolved; private arrays or successful
-focused probes do not settle that choice or establish whole-owner sealing.
+The adopted [physical storage contract](checked-body-storage.md) awaits implementation;
+private arrays or successful focused probes do not establish whole-owner sealing.
 
 ## 1. Guarantees and Request Ownership
 
@@ -501,8 +501,9 @@ consumer is not adopted: it duplicates facts and can add quadratic work.
 ## 12. Storage Decision and Remediation Boundaries
 
 [Checked-body Storage](checked-body-storage.md) owns concrete storage alternatives,
-worked producer-to-consumer paths, cost comparison and the five implementation
-restart requirements. It is unresolved design, not another logical authority.
+worked producer-to-consumer paths, cost comparison and the implementation restart
+requirements. Its physical layout is adopted, with restart reconciliation pending; it
+is not another logical authority.
 The [remediation parent](../issues/met-si6j.md) owns the eleven completion criteria;
 [selection](../issues/met-ucze.md), [source publication](../issues/met-acfl.md),
 [callee evidence](../issues/met-ia09.md) and [conversion/descriptor consumers](../issues/met-6e6k.md)

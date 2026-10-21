@@ -10,7 +10,7 @@ A source construct requiring new evaluation behavior therefore changes its front
 
 ## Input and Published Result
 
-Construction consumes a checked body owner with stable bindings, expression types, selected calls, conversions, patterns, source completion, and provenance. The concrete physical frontend storage contract remains unresolved as described in [Compiler State](compiler-state.md); a design-level input contract is not evidence that all current readers satisfy it.
+Construction consumes a checked body owner with stable bindings, expression types, selected calls, conversions, patterns, source completion, and provenance. The concrete physical frontend storage contract is specified in [Checked-body Storage](checked-body-storage.md); a design-level input contract is not evidence that all current readers satisfy it.
 
 Parametric construction may retain explicit type recipes and selected call templates whose environment-dependent application belongs to instantiation. Such a recipe names the decision to apply; it is not permission to repeat name lookup. Missing required facts are an internal failure, not a request to infer again from syntax.
 
@@ -95,4 +95,4 @@ Focused source inspection uses compiler revision `6fe09bc7c0e75260b3f77364392147
 
 The implementation names its draft structure `MidBody`; this chapter's “draft” describes its role rather than prescribing a completed rename. The audited preparation entry establishes body-local executable verification and registers body access information; it does not alone prove a complete global access analysis.
 
-This inspection is not a complete audit of every builder exit, projection, async transformation, or execution entry. Physical checked-body storage remains unresolved upstream. The ownership/access, pass infrastructure, ABI, backend, runtime, and verification chapters must refine their own contracts without reopening source semantic selection in Mid.
+This inspection is not a complete audit of every builder exit, projection, async transformation, or execution entry. Upstream checked-body storage implementation remains pending. The ownership/access, pass infrastructure, ABI, backend, runtime, and verification chapters must refine their own contracts without reopening source semantic selection in Mid.

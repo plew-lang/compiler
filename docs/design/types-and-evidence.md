@@ -94,7 +94,7 @@ The [computation lifecycle](compiler-state.md) applies to evidence requests. A v
 
 Published terms and evidence are immutable. Recursive evidence is saved child-first, then the parent is published. Append-only pools must preserve old IDs and keep each parent's variable-length range contiguous even when constructing children appends to the same pool. Readers validate ownership, kind, range, and required completeness; validation does not become a second selector.
 
-Sharing immutable terms and proof IDs avoids repeated recursive value copies. Indexes may exclude impossible candidates, but cannot discard semantic distinctions. The checked-body storage choice remains unresolved as documented in [compiler state](compiler-state.md); this chapter does not settle it by prescribing copied proof trees or a universal global pool.
+Sharing immutable terms and proof IDs avoids repeated recursive value copies. Indexes may exclude impossible candidates, but cannot discard semantic distinctions. The [checked-body storage contract](checked-body-storage.md) uses owner-local sealed payloads with shared session pool identities; it does not prescribe copied proof trees or another universal global pool. Its implementation remains separate.
 
 ## 7. Change Impact and Verification
 

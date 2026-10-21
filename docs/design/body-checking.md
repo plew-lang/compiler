@@ -108,18 +108,14 @@ A saved range's presence is not proof that its owner succeeded. Required readers
 
 Body success is scoped. Source semantic success does not imply Mid ownership/access success. Local declaration checks do not imply interprocedural effect closure or concrete execution readiness. The [request protocol](compiler-state.md) retains success/failure and diagnostics under unchanged inputs; requesting a callee signature does not recursively prepare its body. Recursive analyses use their own graph protocol rather than consume active construction as success.
 
-## 7. Storage Decision Still Required Before Implementation
+## 7. Physical Storage and Restart Gate
 
-The saved contents above define one logical owner result. They do not yet decide between the physical alternatives retained in [compiler state](compiler-state.md). The comparison must use these fields and the following consumer path, not a preference for arena-style names:
-
-| Alternative | Construction/publication and access | Cost to establish |
-|---|---|---|
-| Owner-scoped immutable payload with references to shared terms/evidence | Build the owner's expression/operation/binding arrays privately; publish one payload. Acquire that owner's reader once, and pass shared-pool access explicitly during consumption. | Per-owner arrays/allocations; retaining a selected payload must not retain/copy the outer mutable registry or all owners. Shared references must outlive the payload's use. |
-| Shared store with prepared owner handles | Build owner-tagged rows and private indexes; publication seals the owner's membership/completeness. A prepared handle gives required readers access only to that published scope. | Appending another owner must preserve old IDs without cloning all retained fact tables. No mutable accessor or raw handle may bypass owner success. |
-
-For either design, type/proof pools have session lifetime or another explicit retained lifetime; an owner handle alone cannot extend a destroyed session. During consumption, acquire a body context once and read many facts. Do not acquire a value snapshot of `Comp` or every semantic table for each expression. The comparison must specify retain/drop traffic, CoW when another owner is appended, index lookup, and failure rollback or isolation.
-
-This remains an implementation-blocking internal design choice, not a language question and not permission to continue incremental cache guards indefinitely. Resolve it with a concrete API/storage sketch and representative acquisition/append costs before restarting the paused type-checking migration. Neither a new typed IR nor a universal global pool is adopted by this chapter.
+The [storage supplement](checked-body-storage.md) makes the adopted owner-local payload
+layout concrete: fields/keys, private builders, sealing/failure, read-only
+handles, separate instance results and final-consumer migration. It also compares
+the shared-store alternative and states measurement criteria. Restart reconciliation and implementation validation remain pending. This chapter owns the logical source
+result; the supplement is the single home for the physical choice. Neither
+private arrays alone nor a wrapper around all-owner snapshots satisfies it.
 
 ## 8. Representative End-to-End Paths
 
@@ -171,7 +167,7 @@ Inspected source base: `6fe09bc7c0e75260b3f773643921478b5020b94f`. [Record.pw](.
 
 The paused type-checking review identifies incomplete producer-to-consumer closure, independent selectors, and expensive snapshot acquisition. Its retained implementation candidates are not all present in this inspected source base. This chapter describes the intended authority and publication contracts without claiming those candidates have completed them. Every expression form, synthetic path, storage cost, and final consumer has not been audited here. No compiler execution or performance measurement was performed; retained implementation follow-up work belongs in [local issues](../issues/README.md).
 
-Chapter review checked source authority, inference/completion semantics, owner publication, final-consumer paths, and the primary-language comparisons. Receiver and logical result signature contents and forward-inference/completion examples were made explicit. No required semantic correction remained within that scope. The unresolved physical storage/API decision still blocks implementation restart; chapter review does not discharge it.
+Chapter review checked source authority, inference/completion semantics, owner publication, final-consumer paths, and the primary-language comparisons. Receiver and logical result signature contents and forward-inference/completion examples were made explicit. No required semantic correction remained within that scope. The physical storage/API contract is adopted in the supplement; its restart reconciliation and fresh cumulative baseline remain required.
 
 ## Retained Follow-up Investigations
 

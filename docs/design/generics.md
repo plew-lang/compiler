@@ -187,9 +187,9 @@ Chapter review checked abstract/concrete selection, instance identity, recursion
 
 [generic inference, projections and conformance audit](../issues/com-uutc.md). These scoped tasks retain implementation limits or uninspected combinations; their existence is not evidence of a current defect or completed coverage.
 
-## Pending Representation Decision
+## Representation and Restart Boundary
 
-[Checked-body Storage](checked-body-storage.md) owns the unresolved physical
+[Checked-body Storage](checked-body-storage.md) owns the adopted physical
 representation and implementation restart checklist. [met-si6j](../issues/met-si6j.md)
 owns remediation completion; [met-ia09](../issues/met-ia09.md) tracks saved evidence
 through real callee environments. The contracts above do not certify that all

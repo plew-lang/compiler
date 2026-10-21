@@ -1,6 +1,6 @@
 # Compiler State, Identity, and Computation
 
-**Status:** Reviewed draft. This chapter specifies shared contracts derived from adopted decisions. It does not introduce a universal query engine or choose the unresolved physical storage strategy for checked bodies.
+**Status:** Reviewed draft. This chapter specifies shared contracts derived from adopted decisions. It does not introduce a universal query engine or duplicate the physical storage contract in the checked-body supplement.
 
 Detailed producer-to-consumer obligations, saved-fact admission, and bounded
 implementation observations are retained in [Frontend Handoffs](frontend-handoffs.md).
@@ -82,14 +82,12 @@ Logical ownership and physical allocation are separate. Shared interned types, i
 
 A consumer should acquire the required result/context at its preparation boundary and reuse it while consuming that body. Reading one fact must not require constructing a snapshot of every owner's mutable tables. Appending another owner's facts must not invalidate existing readers. Designs must account for retain/drop traffic, CoW separation, index lookup, and the lifetime of referenced pools rather than describing a value copy as costless.
 
-The physical checked-body storage choice remains open:
-
-| Candidate | Benefit | Cost or condition to resolve |
-|---|---|---|
-| Owner-scoped immutable payload | Direct completeness and lifetime boundary; unrelated owner construction need not copy its facts | Per-owner allocations and references to shared types/evidence; publication and lookup layout must be specified |
-| Shared immutable store with prepared handles | Compact shared storage and cheap indexed access | Must specify how append/build work coexists with immutable publication without global CoW copies or exposed mutable state |
-
-Neither candidate is adopted by this chapter. The body-checking design must resolve this comparison using concrete saved fields and consumer paths before implementation resumes. A new typed IR is also not implied by the need for immutable results.
+The adopted physical layout is [owner-local sealed payloads with shared session
+pool identities](checked-body-storage.md), using a small read-only strong handle
+per body and a separate instance registry. The supplement supplies concrete
+records, APIs, failure isolation, alternatives and measurement criteria. Restart reconciliation and implementation remain pending; it is not a claim
+about the currently implemented representation. The logical owner/publication guarantees in this chapter apply
+to either physical choice; no new typed IR or universal pool follows from them.
 
 ## 7. Example and Change Impact
 
@@ -113,11 +111,11 @@ Validation should cover repeated success and failure, foreign-session/foreign-ow
 
 Inspected source base: `6fe09bc7c0e75260b3f773643921478b5020b94f` (documentation changes excluded). Focused reading covered [`CompilerSession` and preparation result types](../../src/CheckedProgram.pw), [`InstanceEnvironment`](../../src/Ir.pw), and the [native session registry](../../src/CompilerSessions.pw). The session hides mutable `Comp`; instance environments carry substitutions, receiver, and proof; the registry uses non-recycled numeric IDs and shared cells, with ORC destruction required before unregistering.
 
-These observations do not prove every request key, writer, cycle path, or final reader satisfies this chapter. The paused type-checking work includes unresolved physical publication/storage boundaries and source-selection duplication. No new runtime or performance experiment was performed for this chapter. [Owner publication and final-consumer closure](../issues/met-si6j.md) tracks the retained migration boundary; absence of additional issue links is not an implementation-completeness claim.
+These observations do not prove every request key, writer, cycle path, or final reader satisfies this chapter. The paused type-checking work still requires implementing the specified publication/storage boundaries and removing source-selection duplication. No new runtime or performance experiment was performed for this chapter. [Owner publication and final-consumer closure](../issues/met-si6j.md) tracks the retained migration boundary; absence of additional issue links is not an implementation-completeness claim.
 
-Chapter review found no blocking design problem. Physical storage and domain-specific publication APIs still require resolution in their owning chapters; this review does not certify their implementation.
+Chapter review found no blocking design problem. The physical storage/API contract is now specified in its supplement; this review does not certify their implementation.
 
-## Unresolved Checked-body Storage
+## Physical Checked-body Storage
 
 The concrete ownership/storage choice and implementation restart requirements are
 in [Checked-body Storage](checked-body-storage.md); this chapter retains the logical

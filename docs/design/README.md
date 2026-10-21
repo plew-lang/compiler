@@ -9,15 +9,15 @@ The [Plew language specification](https://github.com/plew-lang/spec/blob/main/SP
 ## Available Chapters
 
 1. [Architecture and Design Principles](architecture.md) — reviewed draft.
-2. [Compiler State, Identity, and Computation](compiler-state.md) — reviewed draft; physical checked-body storage remains unresolved.
+2. [Compiler State, Identity, and Computation](compiler-state.md) — reviewed draft; owner-local checked-body storage is adopted; implementation remains pending.
 3. [Sources, Packages, and Modules](sources-and-modules.md) — reviewed draft.
 4. [Syntax and Semantic Input](syntax.md) — reviewed draft.
 5. [Declarations, Scopes, and Name Lookup](name-lookup.md) — reviewed draft.
 6. [Types and Semantic Evidence](types-and-evidence.md) — reviewed draft.
-7. [Expression and Body Checking](body-checking.md) — reviewed draft; physical storage remains unresolved.
+7. [Expression and Body Checking](body-checking.md) — reviewed draft; physical storage is specified; restart validation remains pending.
 8. [Generics and Body Instantiation](generics.md) — reviewed draft.
 9. [Metaprogramming and Generated Code](metaprogramming.md) — reviewed draft; host-unit/output/recorded-input contracts are specified, while their implementation and coverage remain unaudited.
-10. [Mid Representation and Lowering](mid.md) — reviewed draft; upstream checked-body storage remains unresolved.
+10. [Mid Representation and Lowering](mid.md) — reviewed draft; upstream storage implementation remains pending.
 11. [Ownership, Access, and Lifetimes](ownership-and-access.md) — reviewed draft; whole-program enforcement coverage remains to be audited.
 12. [Passes and Optimization](passes-and-optimization.md) — reviewed draft; unique-copy input preservation needs implementation audit.
 13. [Representation and ABI](representation-and-abi.md) — reviewed draft; callback and external runtime boundaries remain open.
@@ -38,7 +38,7 @@ All planned chapters have reviewed drafts, and the initial cross-chapter review 
 
 - [Standard Library Boundaries](standard-library.md) assigns declaration ownership, public package routes, private runtime handoffs and representative channel APIs without expanding implicit names.
 
-- [Checked-body Storage and Implementation Restart](checked-body-storage.md) records the unresolved physical storage/API decision and the gate before paused compiler work resumes.
+- [Checked-body Storage and Implementation Restart](checked-body-storage.md) defines the adopted owner-local storage/API, alternatives, measurement criteria and the gate before paused compiler work resumes.
 - [Frontend Handoffs and Admission](frontend-handoffs.md) refines saved semantic facts, publication and final-consumer admission.
 - [Declaration and Execution Audit](declaration-and-execution-audit.md) retains declaration obligations and scoped demand-execution audit details.
 - [Mid Operation Details and Execution-Entry Audit](mid-entry-audit.md) retains operation-level invariants and the scoped entry/probe map.
