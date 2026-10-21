@@ -61,12 +61,34 @@ does not settle acceptance of unbounded changing projections.
 
 ## Pending Source-Acceptance Decision
 
-User judgment has been requested before setting the basic accepted fragment and
-the outcome for requests that do not close finitely. Recommendation: retain the
+The user requested concrete examples before setting the basic accepted fragment
+and the outcome for requests that do not close finitely. Recommendation: retain the
 finite capability/equality fragment and explicit analysis-limit diagnostics,
 without silently classifying an uncertain type or rejecting ordinary recursive
-List/mutual recursion. This recommendation is **not adopted** while awaiting the
-reply. A request for more examples is also a valid response.
+List/mutual recursion. This recommendation is **not adopted**. The
+[acceptance examples](bounded-capability-reasoning.md#acceptance-examples-and-limits-for-user-review)
+separate supported cases, genuine typing errors and unresolved/limited analysis.
+
+### Changing Projection Example
+
+```plew
+allowunique trait Link {
+    allowunique type Next: Link
+}
+
+autounique enum Chain[allowunique T] where T: Link {
+    End
+    Step(value: T, rest: Chain[T#Link.Next])
+}
+```
+
+This is a design example, not an executed acceptance test. Its ownership relation
+may follow a different associated subject at each step. Equalities that return to
+an earlier subject can close a finite component; known nominal summaries may also
+collapse syntactically changing subjects. A complementary source candidate family
+can use the whole subject's capability symbolically without expanding every child.
+Do not classify this declaration as automatically illegal or automatically beyond
+all possible finite reasoning.
 
 Distinguish same-component recursion from a declaration such as an allowunique
 Link with an allowunique Next associated type, and an owned Chain whose recursive

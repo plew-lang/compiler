@@ -82,8 +82,11 @@ rescan, runtime classifier or Active-as-success shortcut was adopted.
 
 A user question remains open: adopt a specified finite capability/equality
 fragment as the basic accepted domain and explicitly report requests that cannot
-close finitely as analysis limits. This affects compilation outcomes, so neither
-that acceptance boundary nor a fallback reclassification is adopted without a
-reply. R1/R2 remain open even though their internal shared ownership is settled.
+close finitely as analysis limits. The user requested concrete examples before
+deciding; the [proposal](../design/proposals/bounded-capability-reasoning.md#acceptance-examples-and-limits-for-user-review)
+now distinguishes basic supported families/recursive summaries, established
+associated identity, actual typing/overlap errors, and limited or unsupported
+required proof. Neither the acceptance boundary nor a fallback reclassification
+is adopted. R1/R2 remain open even though internal shared ownership is settled.
 No source/implementation execution, formal general termination proof or performance
 result is claimed.

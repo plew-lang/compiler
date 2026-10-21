@@ -34,8 +34,111 @@ explicit analysis-limit diagnostics for requests that do not close finitely.
 Ordinary recursive List/mutual recursion must not be rejected merely because they
 are recursive; no uncertain capability is rounded to copyable or unique. Await a
 reply before treating this minimum domain or limit outcome as an adopted rule.
-If more examples are requested, explain accepted complementary families,
-associated-binding identity, and growing projection chains before changing spec.
+The user requested concrete acceptance examples and limits before deciding.
+The examples below explain the proposal; no source-acceptance policy is approved.
+
+## Acceptance Examples and Limits for User Review
+
+These examples describe the proposed source contract, not results from running
+the present compiler. Passing this proof boundary does not waive label, mode,
+type, visibility or ownership checks at the rest of the call boundary.
+
+### A. Complementary Copyable and Unique Branches
+
+```plew
+fn consume[T](value: T) {}
+fn consume[unique T](value: move T) {}
+
+fn forward[allowunique T](value: move T) {
+    consume(value: move value)
+}
+```
+
+The candidates cover Copy(T) and Unique(T): exactly one applies for every admitted
+T. The allowunique mode adaptation is already specified. This basic family must
+be supported; choosing between these two recorded branches is not another name
+search during instantiation.
+
+### B. Several Owned Parameters and Recursive Nominal Values
+
+```plew
+autounique struct Pair[allowunique A, allowunique B] {
+    val a: A
+    val b: B
+}
+
+autounique enum List[allowunique T] {
+    Nil
+    Cons(value: T, rest: List[T])
+}
+```
+
+The saved summaries are Copy(Pair[A,B]) = Copy(A) AND Copy(B), and
+Copy(List[T]) = Copy(T). List's self edge does not create another independent
+capability atom on each traversal. Mutual recursion closing over a finite
+structural component follows the same rule. No prohibition of ordinary lists,
+trees, recursive types or generic combinations is proposed.
+
+For two independent capabilities, complementary groups may cover both-copyable
+versus at-least-one-unique, or three disjoint cases: A unique; A copyable and B
+unique; both copyable. All these are finite propositional obligations. Source
+call-contract compatibility remains a separate requirement.
+
+### C. Associated Types with Established Identity
+
+A term such as T#Link.Next is not rejected merely because it is a projection.
+Its declared capability can be represented by an atom. If retained conformance
+evidence already establishes T#Link.Next = U, use the same capability condition
+as U. Do not require the user to duplicate that equality or distinguish spellings.
+Do not equate unrelated projections without such evidence.
+
+A complementary family can sometimes be proved even while its subject capability
+remains abstract: for one fixed term S, Copy(S) OR Unique(S) covers its admitted
+two-class domain. Such a proof need not expand every field of S first. Concrete
+copy/drop preparation still must discharge S's executable capability through its
+saved summary and instance evidence; source family proof is not that discharge.
+
+### D. Ordinary Typing or Overlap Errors
+
+| Request | Reason for rejection, not an analysis limit |
+|---|---|
+| An allowunique caller relies on only a copyable branch | The unique part of its admitted domain is uncovered |
+| One branch requires A copyable, another requires B copyable, with both otherwise unconstrained | The both-copyable case overlaps; no priority chooses a winner |
+| Copy(T) is used to assume Copy(T#Link.Next), while Next is allowunique | The bound does not give that implication; Next may be unique even when T is copyable |
+
+A general solver cannot justify a false implication. Adding an actual required
+bound or changing the family may fix these errors; raising a resource limit will
+not. If a purported counterexample depends on ignored summary/equality relations,
+it is not a proved overlap: preserve the separate unproved result.
+
+### E. A Request That Does Not Close Under Supported Normalization
+
+See the [changing-projection example](recursive-capability-summaries.md#changing-projection-example).
+An owned recursive relation may depend on Copy(T), Copy(T.Next),
+Copy(T.Next.Next), and further terms. A fixed-point rule over the same finite
+nodes does not by itself answer this expanding request. It may still close using
+a finite schema, known summaries or equalities; those cases should be supported
+when their proof is available. The declaration alone is not automatically an
+analysis-limit error.
+
+The proposed stopping rule applies only when a proof required by the current
+admission request cannot close in the supported reasoning, or consumes its
+deterministic work/depth allowance. Do not guess a capability, label the source
+mathematically invalid, or treat absence of proof as proven overlap. An unknown
+compiler-specific numeric limit is not being approved by these examples.
+
+Increasing a resource allowance may help a finite but expensive request; an
+unbounded expansion may require a different finite proof/summary or a simpler
+declaration/bound. Arbitrary trait satisfiability, inferred infinite chains of
+requirements and "a valid program must always terminate analysis" are outside
+the proposed guarantee. A source check succeeding also does not promise that
+build/run can generate endlessly many distinct concrete code instances.
+
+The decision requested is whether this finite, evidence-based basic fragment and
+explicit limit outcome are the intended boundary. It is not a request to outlaw
+all projections, accept arbitrary Boolean syntax in source, or approve a general
+trait solver. Exact internal representation and implementation budgets come after
+that acceptance-policy decision.
 
 ## Candidate Minimum Fragment
 
