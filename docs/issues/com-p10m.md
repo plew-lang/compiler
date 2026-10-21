@@ -1,6 +1,6 @@
 ---
 id: com-p10m
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-21T13:05:07Z
@@ -54,3 +54,9 @@ record sanitizer and fixed-input parent gates applicable to the eventual repair.
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
 
 Current Buffer allocation/reserve/growth arithmetic and failure publication. First implementation unit: checked count/byte/header/growth and null failure across the common floor, including no mutation before failure. No large real allocation is needed for the controls.
+
+## Repair Increment
+
+The current CoW-then-grow/reserve sequence publishes privatized storage before a later allocation can fail. Replace that sequence for capacity-changing mutators with one checked writable-storage preparation: validate count/additional/element bytes/header/allocator range, choose bounded growth, allocate/copy, and only then retire raw backing and publish the slot. Typed lowering acquires copied element owners only on shared-backing duplication; unique relocation transfers them. Non-growing mutators use the same preparation boundary with zero additional capacity.
+
+Keep allocator failure injection and arithmetic-edge checks in an internal generated-runtime harness, with actual public Buffer panic and normal growth/CoW fixtures on AOT and lazy run. No public allocator API or failure recovery is introduced; panic still aborts. Zero-size logical capacity must obey header/count range while retaining a traceable data address.
