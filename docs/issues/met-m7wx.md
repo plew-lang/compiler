@@ -11,6 +11,13 @@ tags: [design, documentation]
 ---
 # Improve canonical contract navigation and remove stale descriptions
 
+## Active Discussion
+
+[Contract Navigation Cleanup](../design/proposals/contract-navigation-cleanup.md)
+holds the bounded editorial plan. The meta
+[progress document](../../../agents/compiler-design-progress.md#再レビュー指摘の具体化)
+owns current work order; no cleanup has been applied merely by creating the plan.
+
 ## Scope
 
 Editorial improvements from the design-only [met-ukm5](met-ukm5.md) review,

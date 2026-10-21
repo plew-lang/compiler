@@ -48,6 +48,11 @@ All planned chapters have reviewed drafts, and the initial cross-chapter review 
 
 ## Reading and Maintenance
 
+The [review follow-up issues](../issues/met-ukm5.md#outcome-and-next-boundary)
+link active, unadopted comparisons in `proposals/`. Those documents do not override
+this reference or the language specification; incorporate accepted contracts and
+retire completed comparisons according to the maintenance policy.
+
 [Maintenance policy](maintenance.md) defines writing, review, adoption, decision retention and the boundary between design completion and implementation completion.
 
 Start with the architecture's responsibility map and follow the reading paths relevant to the change. Chapter boundaries describe conceptual ownership, not mandatory source modules.

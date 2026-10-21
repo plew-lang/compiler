@@ -11,6 +11,13 @@ tags: [design, mid, ownership]
 ---
 # Close the async input ownership handoff
 
+## Active Discussion
+
+[Async Input Ownership Handoff](../design/proposals/async-input-ownership.md)
+holds the unadopted comparison, decisions to close and design controls. The meta
+[progress document](../../../agents/compiler-design-progress.md#再レビュー指摘の具体化)
+owns current work order; this issue retains the completion boundary.
+
 ## Problem and Evidence
 
 Design-only review [met-ukm5](met-ukm5.md), R3; design `1d83231e`, spec

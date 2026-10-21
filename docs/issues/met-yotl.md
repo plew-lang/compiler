@@ -11,6 +11,14 @@ tags: [design, generics]
 ---
 # Specify recursive capability summaries and bounded discharge
 
+## Active Discussion
+
+R1: [Recursive Capability Summaries](../design/proposals/recursive-capability-summaries.md).
+R2: [Bounded Capability Reasoning](../design/proposals/bounded-capability-reasoning.md).
+Both are under discussion, not adopted. The meta
+[progress document](../../../agents/compiler-design-progress.md#再レビュー指摘の具体化)
+owns current work order; this issue retains the joint completion boundary.
+
 ## Problem and Evidence
 
 Design-only review [met-ukm5](met-ukm5.md), findings R1/R2. Inputs: design
