@@ -1,0 +1,15 @@
+use @Std/Core only { Iterable }
+use @Std/Io only { print }
+fn total[I](values: I) -> fn() -> I64 where I: Iterable[Item=I64] {
+    return fn() -> I64 {
+        mut val result: I64 = 0I64
+        for val item in values { result += item }
+        return result
+    }
+}
+fn main() {
+    val first = total(values: [1I64, 2I64])
+    val second = total(values: [3I64, 4I64])
+    print(first())
+    print(second())
+}

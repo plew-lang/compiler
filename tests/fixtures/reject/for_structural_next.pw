@@ -1,0 +1,4 @@
+// A same-named cursor method is not the Core.Iterator contract.
+struct Cursor {}
+impl Cursor { inout fn next() -> Optional[I64] { return <Optional.None /> } }
+fn main() { for val item in <Cursor /> {} }

@@ -784,18 +784,11 @@ pub impl Comp {
             Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, varTy: _, val iter, val body, val isStruct, val patStart, val patLen, val binds) => {
                 val forMark: U64 = self.scopeMark()
                 try self.checkBoundsExpr(exprId: iter)
-                val et: TypeInfo = (try self.sourceSubjectTypeInfo(exprId: iter))
-                try self.checkAbstractIterationReceiver(receiver: et.ref, offset: self.exprOffset(id: iter))
+                val item = self.typeInfoOfRef(ref: (try self.sourceForItemTerm(stmtId: stmtId)))
                 if isStruct {
-                    try self.addForStructBinds(et: et, binds: binds)
+                    try self.addForStructBinds(et: item, binds: binds)
                 } else {
-                    if et.kind == 3 {
-                        self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
-                    } else {
-                        // a general Iterable: the loop var is the iterator's Item type.
-                        val elemTi: TypeInfo = (try self.iterableItemInfo(et: et))
-                        self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
-                    }
+                    self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: item.nameStart, tyLen: item.nameLen, isArray: item.kind == 3, ty: item.ref, isInout: false, isMut: false, owned: false)
                 }
 
                 try self.checkBoundsBlock(blkId: body)
@@ -828,53 +821,6 @@ pub impl Comp {
     // The protocol's associated Item is part of its declaration contract.
     // Preserve an opaque projection when a bound does not give an equality;
     // scalarInfo would silently discard that type in an unused generic body.
-    inout fn symbolicIterationItemTerm(receiver: U64) -> Result[U64, CompileDiagnostic] {
-        if receiver == 0U64 || receiver >= self.arena.typeCount() || self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=0U64 /> }
-        val receiverType = self.arena.typeAt(index: receiver)
-        if receiverType.isAny { return <Result.Ok value=0U64 /> }
-        val item = self.internBytes(s: "Item")
-        for val name in ["Iterable", "Iterator"] {
-            val owner = self.coreTraitOwner(name: name)
-            if owner != 0U64 {
-                val proof = try self.staticTraitPatternProof(receiverRef: receiver, traitId: self.internBytes(s: name).nameId, traitOwner: owner, traitArgs: [], patternParams: <PatternBindInput.Values values=[] />)
-                mut val proven = true
-                match proof { StaticConformanceProof.Missing => { proven = false } _ => {} }
-                if proven {
-                    val output = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: item.nameId)
-                    if output != 0U64 { return <Result.Ok value=output /> }
-                    return <Result.Ok value=self.pushType(t: <TypeRef nameStart=receiverType.nameStart nameLen=receiverType.nameLen nameId=receiverType.nameId paramId=receiverType.paramId args=receiverType.args isRecord=receiverType.isRecord recordFieldLabels=receiverType.recordFieldLabels recordFieldTerms=receiverType.recordFieldTerms projectionReceiver=receiver assocTraitStart=owner assocTraitLen=self.traitNameLenByOwner(owner: owner) assocTraitId=self.internBytes(s: name).nameId assocNameStart=item.nameStart assocNameLen=item.nameLen assocNameId=item.nameId hasAssocTraitDecl=true assocTraitDeclOffset=owner hasDecl=receiverType.hasDecl declOffset=receiverType.declOffset />) />
-                }
-            }
-        }
-        return <Result.Ok value=0U64 />
-    }
-
-    // A rigid lexical parameter can only be iterated through its declared
-    // protocol evidence. Use the same member selection as explicit calls so
-    // supertrait paths and declaration owners retain their identities.
-    inout fn checkAbstractIterationReceiver(receiver: U64, offset: U64) -> Result[(), CompileDiagnostic] {
-        if receiver == 0U64 || receiver >= self.arena.typeCount() { return <Result.Ok value=() /> }
-        if self.arena.typeTerms[receiver].isAny {
-            return self.checkExistentialIterationReceiver(receiver: receiver, fnIdx: self.cur.checkFn, offset: offset)
-        }
-        if self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=() /> }
-        if (try self.symbolicIterationItemTerm(receiver: receiver)) != 0U64 { return <Result.Ok value=() /> }
-        val arguments = self.pushArgs(args: [])
-        val iteratorName = self.kwSpan(kw: "iterator", kwLen: 8U64)
-        val iterableOwner = self.coreTraitOwner(name: "Iterable")
-        if iterableOwner != 0U64 {
-            val selected = try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiver, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: arguments, requiredTraitOwner: iterableOwner)
-            match selected { StaticMemberResolution.Missing => {} _ => { return <Result.Ok value=() /> } }
-        }
-        val nextName = self.kwSpan(kw: "next", kwLen: 4U64)
-        val iteratorOwner = self.coreTraitOwner(name: "Iterator")
-        if iteratorOwner != 0U64 {
-            val selected = try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiver, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: arguments, requiredTraitOwner: iteratorOwner)
-            match selected { StaticMemberResolution.Missing => {} _ => { return <Result.Ok value=() /> } }
-        }
-        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "for-loop requires an Iterable or Iterator") />
-    }
-
     inout fn checkBoundsBlock(blkId: U64) -> Result[(), CompileDiagnostic] {
         val mark: U64 = self.scopeMark()
         mut val i: U64 = 0

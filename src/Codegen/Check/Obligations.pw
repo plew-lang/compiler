@@ -1143,33 +1143,63 @@ pub impl Comp {
                 return self.sourceDeclarationCallBounds(indices: indices, signature: <SourceCallSignature.Direct environment=environment />)
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val arguments, resultTerm: _) => {
-                val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: template.siteKey.originStart)
-                match resolution {
-                    StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIndex, reqIdx: _) => {
-                        if function.signatureBounds.len == 0U64 { return <Result.Ok value=[] /> }
-                        val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
-                        val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: function.typeParams) args=self.callTemplateTypeArgs(range: arguments) receiverRef=template.receiverTypeTerm proof=proof />
-                        val signature = <SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=environment />
-                        mut val bounds: Array[TraitBound] = []
-                        mut val index = 0U64
-                        while index < function.signatureBounds.len {
-                            val clause = self.conformBoundAt(bounds: function.signatureBounds, index: index)
-                            bounds.append(<TraitBound subject=(try self.sourceCallSignatureParameter(ref: clause.subject, signature: signature)) constraint=(try self.sourceCallSignatureConstraint(constraint: clause.constraint, signature: signature)) offset=clause.offset />)
-                            index += 1U64
-                        }
-                        return <Result.Ok value=bounds />
-                    }
-                    StaticMemberResolution.Provided(proof: val proof, traitIdx: val traitIndex, callee: val callee) => {
-                        val indices = self.sourceDeclarationCallBoundIndices(functionIndex: callee)
-                        if indices.count() == 0U64 { return <Result.Ok value=[] /> }
-                        val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
-                        val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: arguments), proof: proof)
-                        return self.sourceDeclarationCallBounds(indices: indices, signature: <SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=environment />)
-                    }
-                    StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "deferred declaration obligation has no selected member") /> }
+                return self.sourceSelectedStaticSignatureBounds(resolution: resolution, receiverTerm: template.receiverTypeTerm, arguments: self.callTemplateTypeArgs(range: arguments), offset: template.siteKey.originStart)
+            }
+            CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
+                match selection {
+                    OperatorSelection.Direct(callee: val callee) => { return self.sourceSelectedReceiverBounds(callee: callee, receiverTerm: template.receiverTypeTerm, proof: <StaticConformanceProof.Missing />) }
+                    OperatorSelection.Static(resolution: val resolution) => { return self.sourceSelectedStaticSignatureBounds(resolution: resolution, receiverTerm: template.receiverTypeTerm, arguments: [], offset: template.siteKey.originStart) }
+                    _ => { return <Result.Ok value=[] /> }
+                }
+            }
+            CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
+                match selection {
+                    ProtocolSelection.Direct(callee: val callee, proof: val proof) => { return self.sourceSelectedReceiverBounds(callee: callee, receiverTerm: template.receiverTypeTerm, proof: proof) }
+                    ProtocolSelection.Static(resolution: val resolution) => { return self.sourceSelectedStaticSignatureBounds(resolution: resolution, receiverTerm: template.receiverTypeTerm, arguments: [], offset: template.siteKey.originStart) }
+                    _ => { return <Result.Ok value=[] /> }
                 }
             }
             _ => { return <Result.Ok value=[] /> }
+        }
+    }
+
+    // Operator and protocol syntax own an ordinary selected callable
+    // signature, including its declaration bounds. Do not defer those bounds
+    // until an unrelated declaration-worklist instance reconstructs them.
+    inout fn sourceSelectedReceiverBounds(callee: U64, receiverTerm: U64, proof: StaticConformanceProof) -> Result[Array[TraitBound], CompileDiagnostic] {
+        val indices = self.sourceDeclarationCallBoundIndices(functionIndex: callee)
+        if indices.count() == 0U64 { return <Result.Ok value=[] /> }
+        val function = self.arena.functionAt(index: callee)
+        val arguments = try self.callConstraintTypeArguments(function: function, receiver: receiverTerm, proof: proof)
+        val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: receiverTerm, typeArgs: arguments, proof: proof)
+        return self.sourceDeclarationCallBounds(indices: indices, signature: <SourceCallSignature.Direct environment=environment />)
+    }
+
+    inout fn sourceSelectedStaticSignatureBounds(resolution: StaticMemberResolution, receiverTerm: U64, arguments: Array[U64], offset: U64) -> Result[Array[TraitBound], CompileDiagnostic] {
+        val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: offset)
+        match resolution {
+            StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIndex, reqIdx: _) => {
+                if function.signatureBounds.len == 0U64 { return <Result.Ok value=[] /> }
+                val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+                val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: function.typeParams) args=arguments receiverRef=receiverTerm proof=proof />
+                val signature = <SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=environment />
+                mut val bounds: Array[TraitBound] = []
+                mut val index = 0U64
+                while index < function.signatureBounds.len {
+                    val clause = self.conformBoundAt(bounds: function.signatureBounds, index: index)
+                    bounds.append(<TraitBound subject=(try self.sourceCallSignatureParameter(ref: clause.subject, signature: signature)) constraint=(try self.sourceCallSignatureConstraint(constraint: clause.constraint, signature: signature)) offset=clause.offset />)
+                    index += 1U64
+                }
+                return <Result.Ok value=bounds />
+            }
+            StaticMemberResolution.Provided(proof: val proof, traitIdx: val traitIndex, callee: val callee) => {
+                val indices = self.sourceDeclarationCallBoundIndices(functionIndex: callee)
+                if indices.count() == 0U64 { return <Result.Ok value=[] /> }
+                val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+                val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: receiverTerm, typeArgs: arguments, proof: proof)
+                return self.sourceDeclarationCallBounds(indices: indices, signature: <SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=environment />)
+            }
+            StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no selected member") /> }
         }
     }
 

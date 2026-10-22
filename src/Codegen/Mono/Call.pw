@@ -86,7 +86,7 @@ pub impl Comp {
             val optional: U64 = (try self.groundSemanticTypeRecipeForBody(recipeId: input, bodyId: bodyId, selfRef: selfRef, itemRef: itemRef))
             if optional == 0U64 || optional >= self.arena.typeCount() { return <Result.Ok value=0U64 />}
             val t: TypeRef = self.arena.typeAt(index: optional)
-            if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Optional") && t.args.count() == 1U64 { return <Result.Ok value=t.args[0U64] />}
+            if t.hasDecl && t.declOffset == self.arena.semanticTypeRecipes[recipeId - 1U64].payloadOwner && t.args.count() == 1U64 { return <Result.Ok value=t.args[0U64] />}
         }
         return <Result.Ok value=0U64 />
     }
@@ -191,14 +191,6 @@ pub impl Comp {
             out = self.typeRefWithViews(ref: out, viewExtId: f.extId, viewIds: selectedView)
         }
         return out
-    }
-
-    // Control-flow protocol calls have no receiver expression at finalization:
-    // their receiver is already a grounded CallTemplate term.  Do not feed a
-    // statement's iterable AST back into view collection; all source facets
-    // must have travelled with that term from Record.
-    inout fn resolveProtocolMethodForReceiver(recvRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
-        return <Result.Ok value=(try self.resolveMethodForResolvedReceiver(recv: 0U64, surfaceRef: recvRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: 0U64, readReceiverSyntax: false)) />
     }
 
     // The only reader for an implicit protocol receiver. Slot 1 owns either a

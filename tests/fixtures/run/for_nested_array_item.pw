@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+fn identity[T](value: T) -> T { return value }
+fn main() {
+    for val row in [[1I64], [2I64]] {
+        val retained: Array[I64] = identity(value: row)
+        print(retained[0])
+    }
+}

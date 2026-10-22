@@ -3260,6 +3260,8 @@ pub struct SemanticTypeRecipe {
     pub val kind: U64 = 0U64
     pub val term: U64 = 0U64
     pub val input: U64 = 0U64
+    // OptionalPayload retains the selected carrier declaration, never its spelling.
+    pub val payloadOwner: U64 = 0U64
     pub val exprId: U64 = 0U64
     pub val siteIsStmt: Bool = false
     pub val callSite: CallSiteKey = <CallSiteKey />

@@ -1,0 +1,10 @@
+use @Std/Core only { Iterator }
+struct Cursor {}
+impl Cursor as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] { return <Optional.None /> }
+}
+struct Collection {}
+impl Collection { fn iterator() -> Cursor { return <Cursor /> } }
+// Even a valid returned cursor cannot turn an inherent method into Iterable.
+fn main() { for val item in <Collection /> {} }

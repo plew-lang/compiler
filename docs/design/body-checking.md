@@ -76,6 +76,16 @@ The [explicit-divergence decision](decisions/divergence.md) retains the motivati
 
 A source call occurrence records the selected declaration or abstract requirement, receiver/view provenance, type substitution, parameter/result terms, argument mapping, conversions, passing modes, completion, and any instance obligations. Explicit and synthetic occurrences need stable identities; a single source expression can contain several protocol calls. An expression offset alone cannot distinguish those sites.
 
+Implicit iteration selects the canonical `Iterable.iterator` and
+`Iterator.next` operations during source construction. A same-named inherent
+method is not protocol evidence. The source Item term is the payload of that
+selected next result, retaining the carrier's declaration identity and the exact
+implicit call site. Generic compatibility and concrete finalization interpret
+these same saved results; they cannot independently recover Item through a
+member-name or associated-type search. A destructuring consumer receives the
+Item term, whether that term is scalar, nominal, record or another array. It
+does not peel an array a second time because of an iterator-oriented flag.
+
 Selection is not execution order. Explicit arguments are evaluated in their specified order; omitted defaults are then evaluated in declaration order under the default generator's environment. Retain the argument evaluation sources separately from declaration-ordered parameter slots. Forwarding/default adapters and `via` witness construction must preserve the selected operation and this order. A downstream pass must not manufacture a same-named call and resolve it again.
 
 The default expression belongs to its declaring lexical environment, including its generic substitutions and evidence. Default memberwise fields follow the same evaluation contract. Moving an explicit effectful argument into a default can change its order relative to other explicit arguments; purity or optimization success must not switch that rule.

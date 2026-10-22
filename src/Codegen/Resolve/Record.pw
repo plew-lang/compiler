@@ -156,14 +156,14 @@ pub impl Comp {
     // a static Iterator proof and an existential requirement witness through
     // the same immutable CallResolution, without a second trait lookup.
     // Recording it on Decls makes it survive fresh local scopes.
-    inout fn recordForItemTypeRecipe(stmtId: U64) -> Result[(), CompileDiagnostic] {
+    inout fn recordForItemTypeRecipe(stmtId: U64, nextTerm: U64) -> Result[(), CompileDiagnostic] {
         match self.decls.forTypeRecipe(stmtId: stmtId) {
             Optional.Some(v: _) => { return <Result.Ok value=() /> }
             Optional.None => {}
         }
         val iterator: U64 = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 exprId=stmtId siteIsStmt=true callSite=(try self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: 1U64)) />)
         val next: U64 = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 exprId=stmtId siteIsStmt=true callSite=(try self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: 2U64)) />)
-        val item: U64 = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=4U64 input=next />)
+        val item: U64 = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=4U64 input=next payloadOwner=self.arena.typeAt(index: nextTerm).declOffset />)
         self.decls.registerForTypeRecipe(recipe: <ForTypeRecipe stmtId=stmtId iteratorRecipe=iterator nextRecipe=next itemRecipe=item />)
         return <Result.Ok value=() />
     }
@@ -272,45 +272,45 @@ pub impl Comp {
         return <Result.Ok value=base />
     }
 
-    // `for` introduces a source-level binding just like `val`: its type must
-    // be the iterator proof's associated `Item` term, not the legacy
-    // TypeInfo name recovered from the iterator head.  An adapter such as
-    // `xs.map(...).filter(...)` owns `Item = E` in its conformance; retaining
-    // that term is what lets a generic free call in the loop body later ground
-    // E through the enclosing BodyInstance.
-    inout fn iterableItemTerm(iterExpr: U64, iterTerm: U64) -> Result[U64, CompileDiagnostic] {
-        if iterTerm == 0U64 || iterTerm >= self.arena.typeCount() { return <Result.Ok value=0U64 />}
-        val iterTy: TypeRef = self.arena.typeAt(index: iterTerm)
-        if iterTy.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: iterTy.nameStart, len: iterTy.nameLen, kw: "Array") {
-            return <Result.Ok value=iterTy.args[0] />
+    // Item is the payload of the already selected Core.Iterator.next result.
+    // Source checking and concrete recipe evaluation retain this carrier's
+    // declaration identity; neither may guess it from a same-spelled type.
+    inout fn forItemPayload(nextTerm: U64, payloadOwner: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
+        if nextTerm != 0U64 && nextTerm < self.arena.typeCount() && payloadOwner != 0U64 {
+            val result = self.arena.typeAt(index: nextTerm)
+            if result.hasDecl && result.declOffset == payloadOwner && result.args.count() == 1U64 { return <Result.Ok value=result.args[0U64] /> }
         }
-        val protocolItem: U64 = (try self.iterableProtocolItemTerm(iterTerm: iterTerm))
-        if protocolItem != 0U64 { return <Result.Ok value=protocolItem />}
-        // Prefer the resolved source carried by the iterator-producing call.
-        // It is a declaration owner, so a user trait spelled `Iterator` can
-        // never capture this proof query. A direct iterator value has no call
-        // provenance and uses assocItemRef's Core-contract path below.
-        mut val itemTerm: U64 = 0U64
-        if iterExpr < self.arena.exprs.count() {
-            val template: CallTemplate = (try self.callTemplateForCurrentBody(exprId: iterExpr))
-            match template.kind {
-                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                    if callee < self.arena.functionCount() {
-                        val selected: Func = self.arena.functionAt(index: callee)
-                        if selected.originTraitOwner != 0U64 {
-                            val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
-                            itemTerm = (try self.assocBindingFor(baseRef: iterTerm, traitId: selected.originTraitId, traitOwner: selected.originTraitOwner, traitArgs: self.copyFuncTypes(types: selected.recvTraitArgs), assocId: intern(c: inout self, start: item.nameStart, len: item.nameLen)))
-                        }
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "for-loop requires an Iterable or Iterator") />
+    }
+
+    inout fn sourceForItemTerm(stmtId: U64) -> Result[U64, CompileDiagnostic] {
+        val recipe = match self.decls.forTypeRecipe(stmtId: stmtId) {
+            Optional.Some(v: val saved) => { give saved }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: for source type recipe was not recorded") /> }
+        }
+        if recipe.nextRecipe == 0U64 || recipe.nextRecipe > self.arena.semanticTypeRecipes.count() || recipe.itemRecipe == 0U64 || recipe.itemRecipe > self.arena.semanticTypeRecipes.count() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: for source type recipe is incomplete") />
+        }
+        val next = self.arena.semanticTypeRecipes[recipe.nextRecipe - 1U64]
+        val payload = self.arena.semanticTypeRecipes[recipe.itemRecipe - 1U64]
+        val site = try self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: 2U64)
+        if next.kind != 2U64 || !self.sameCallSiteKey(a: next.callSite, b: site) || payload.kind != 4U64 || payload.input != recipe.nextRecipe {
+            return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: for source type recipe belongs to another operation") />
+        }
+        val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: site)
+        if index < self.callTemplates.count() {
+            match self.callTemplates[index].kind {
+                CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: val result) => {
+                    match selection {
+                        ProtocolSelection.Pending | ProtocolSelection.Identity => { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: for next operation has no selected callable") /> }
+                        _ => {}
                     }
+                    return self.forItemPayload(nextTerm: result, payloadOwner: payload.payloadOwner, offset: site.originStart)
                 }
                 _ => {}
             }
         }
-        if itemTerm == 0U64 {
-            itemTerm = (try self.assocItemRef(recvStart: iterTy.nameStart, recvLen: iterTy.nameLen, recvInstRef: iterTerm))
-        }
-        if itemTerm != 0U64 { return <Result.Ok value=itemTerm />}
-        return <Result.Ok value=0U64 />
+        return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: for source operation was not recorded") />
     }
 
     // A body-local `Self` is a semantic receiver projection, not an opaque
@@ -2344,46 +2344,19 @@ pub impl Comp {
                     }
                 }
                 try self.recordExpr(exprId: iter, expectedTerm: iteratorContext)
-                val et: TypeInfo = (try self.sourceSubjectTypeInfo(exprId: iter))
-                mut val iterTerm: U64 = self.parametricExprTerm(exprId: iter)
-                if iterTerm == 0U64 { iterTerm = et.ref }
-                // The preparation pass establishes lexical item bindings;
-                // only the publication pass selects and stores protocol calls.
-                // Neither protocol result is an input to the item binding below.
-                if self.cur.recordCallTemplates {
-                    val iteratorReceiver: CallTemplateReceiver = (try self.protocolReceiverTemplateForExpr(exprId: iter))
-                    val nextReceiver: CallTemplateReceiver = <CallTemplateReceiver.PriorProtocolResult slot=1U64 />
-                    val iteratorResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 1U64, receiver: iteratorReceiver, receiverTerm: iterTerm)
-                    val nextResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 2U64, receiver: nextReceiver, receiverTerm: iteratorResult)
-                }
-                try self.recordForItemTypeRecipe(stmtId: stmtId)
-                val semanticItem: U64 = (try self.iterableItemTerm(iterExpr: iter, iterTerm: iterTerm))
+                val iterTerm = self.parametricExprTerm(exprId: iter)
+                val iteratorReceiver = try self.protocolReceiverTemplateForExpr(exprId: iter)
+                val iteratorResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 1U64, receiver: iteratorReceiver, receiverTerm: iterTerm, useOffset: self.exprOffset(id: iter))
+                val nextResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 2U64, receiver: <CallTemplateReceiver.PriorProtocolResult slot=1U64 />, receiverTerm: iteratorResult, useOffset: self.exprOffset(id: iter))
+                val optional = self.internBytes(s: "Optional")
+                val carrier = self.typeDeclIdentityFromSurface(surfaceMod: self.modules.langModule, start: optional.nameStart, len: optional.nameLen)
+                val semanticItem = try self.forItemPayload(nextTerm: nextResult, payloadOwner: carrier.nameStart, offset: self.exprOffset(id: iter))
+                if self.cur.recordCallTemplates { try self.recordForItemTypeRecipe(stmtId: stmtId, nextTerm: nextResult) }
+                val item = self.typeInfoOfRef(ref: semanticItem)
                 if isStruct {
-                    if semanticItem != 0U64 {
-                        try self.addForStructBinds(et: self.typeInfoOfRef(ref: semanticItem), binds: binds)
-                    } else {
-                        try self.addForStructBinds(et: et, binds: binds)
-                    }
+                    try self.addForStructBinds(et: item, binds: binds)
                 } else {
-                    if semanticItem != 0U64 {
-                        val itemTi: TypeInfo = self.typeInfoOfRef(ref: semanticItem)
-                        self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: itemTi.nameStart, tyLen: itemTi.nameLen, isArray: itemTi.kind == 3, ty: semanticItem, isInout: false, isMut: false, owned: false)
-                    } else if et.kind == 3 {
-                        // carry the ELEMENT ref off the array's carried `Array[E]`
-                        // (an `any P` / generic-inst element loses its structure as
-                        // a bare name — `for s in shapes` then can't dispatch on s).
-                        mut val fer: U64 = 0
-                        if et.ref != 0U64 && et.ref < self.arena.typeCount() {
-                            val fat: TypeRef = self.arena.typeAt(index: et.ref)
-                            if fat.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: fat.nameStart, len: fat.nameLen, kw: "Array") {
-                                fer = fat.args[0]
-                            }
-                        }
-                        self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: fer, isInout: false, isMut: false, owned: false)
-                    } else {
-                        val elemTi: TypeInfo = (try self.iterableItemInfo(et: et))
-                        self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
-                    }
+                    self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: item.nameStart, tyLen: item.nameLen, isArray: item.kind == 3, ty: semanticItem, isInout: false, isMut: false, owned: false)
                 }
 
                 try self.recordBlock(blkId: body)

@@ -1335,9 +1335,14 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: Core From has no conversion requirement") />
     }
 
-    inout fn recordProtocolCallTemplate(stmtId: U64, slot: U64, receiver: CallTemplateReceiver, receiverTerm: U64) -> Result[U64, CompileDiagnostic] {
+    inout fn recordProtocolCallTemplate(stmtId: U64, slot: U64, receiver: CallTemplateReceiver, receiverTerm: U64, useOffset: U64) -> Result[U64, CompileDiagnostic] {
         val name = if slot == 1U64 { give self.kwSpan(kw: "iterator", kwLen: 8U64) } else { give self.kwSpan(kw: "next", kwLen: 4U64) }
         val arguments = self.pushArgs(args: [])
+        val owner = self.coreTraitOwner(name: if slot == 1U64 { give "Iterable" } else { give "Iterator" })
+        if owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: useOffset, msg: "for-loop requires an Iterable or Iterator") /> }
+        if slot == 1U64 && receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.arena.typeTerms[receiverTerm].isAny {
+            try self.checkExistentialIterationReceiver(receiver: receiverTerm, fnIdx: self.cur.checkFn, offset: useOffset)
+        }
         mut val selection = <ProtocolSelection.Pending />
         mut val resultTerm = 0U64
         if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
@@ -1351,10 +1356,10 @@ pub impl Comp {
                 } else if slot == 1U64 { selection = <ProtocolSelection.Identity />
                     resultTerm = receiverTerm }
             } else {
-                val resolution = try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: name.nameStart, nameLen: name.nameLen, args: arguments)
+                val resolution = try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: name.nameStart, nameLen: name.nameLen, args: arguments, requiredTraitOwner: owner)
                 match resolution {
                     StaticMemberResolution.Missing => {
-                        val callee = try self.resolveProtocolMethodForReceiver(recvRef: receiverTerm, nameStart: name.nameStart, nameLen: name.nameLen, args: arguments)
+                        val callee = try self.resolveMethodForResolvedReceiver(recv: 0U64, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: name.nameStart, nameLen: name.nameLen, args: arguments, useOffset: useOffset, readReceiverSyntax: false, requiredTraitOwner: owner)
                         if callee < self.arena.functionCount() {
                             val function = self.arena.functionAt(index: callee)
                             val proof = if function.isProvided { give try self.providedBodyProof(f: function, receiverRef: receiverTerm, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn)) } else { give <StaticConformanceProof.Missing /> }

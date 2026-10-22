@@ -188,7 +188,7 @@ pub impl Comp {
     // possibly a generic instance). Shared by the for-loop destructure across the
     // check/mono/codegen passes so they agree on each bound field's type.
     inout fn forBindFieldType(et: TypeInfo, bd: Bind) -> Result[TypeInfo, CompileDiagnostic] {
-        val receiver = (try self.destructureSubjectType(info: et, isElement: et.kind == 3))
+        val receiver = self.lexicalLayoutReceiver(receiverTerm: self.typedIrRefOfInfo(ti: et))
         return <Result.Ok value=(try self.genericFieldTypeInfo(instRef: receiver, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)) />
     }
 

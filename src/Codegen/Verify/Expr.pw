@@ -648,28 +648,17 @@ pub impl Comp {
     // owning statement's verify arm, where the locals env is live, keyed by the
     // lowered init/iter expr id. An unknown/non-record init type is left to the
     // regular per-field machinery (the synthesized Field reads still check).
-    inout fn checkDestructureSite(initId: U64, isElem: Bool) -> Result[(), CompileDiagnostic] {
+    inout fn checkDestructureSite(initId: U64) -> Result[(), CompileDiagnostic] {
         mut val si: U64 = 0
         while si < self.decls.destructureSites.count() {
             val site: DestructureSite = self.decls.destructureSites[si]
-            if site.initId == initId && site.isElem == isElem {
+            if site.initId == initId && !site.isElem {
                 try self.checkDestructureSiteBinds(site: site)
                 return <Result.Ok value=() />
             }
             si += 1
         }
         return <Result.Ok value=() />
-    }
-
-    inout fn destructureSubjectType(info: TypeInfo, isElement: Bool) -> Result[U64, CompileDiagnostic] {
-        val term = self.typedIrRefOfInfo(ti: info)
-        if !isElement { return <Result.Ok value=self.lexicalLayoutReceiver(receiverTerm: term) /> }
-        if info.kind == 3 && term != 0U64 && term < self.arena.typeCount() {
-            val array = self.arena.typeAt(index: term)
-            if array.args.count() != 0U64 { return <Result.Ok value=self.lexicalLayoutReceiver(receiverTerm: array.args[0]) /> }
-        }
-        val item = (try self.iterableItemInfo(et: info))
-        return <Result.Ok value=self.lexicalLayoutReceiver(receiverTerm: self.typedIrRefOfInfo(ti: item)) />
     }
 
     inout fn structPatternMatches(typeStart: U64, typeLen: U64, subjectRef: U64) -> Bool {
@@ -681,7 +670,21 @@ pub impl Comp {
 
     inout fn checkDestructureSiteBinds(site: DestructureSite) -> Result[(), CompileDiagnostic] {
         val ti: TypeInfo = (try self.typeOf(id: site.initId))
-        val subjectRef = (try self.destructureSubjectType(info: ti, isElement: site.isElem))
+        if site.isElem { return <Result.Err error=self.diagnosticAt(offset: site.offset, msg: "internal error: for destructuring requires its selected Item term") /> }
+        val subjectRef = self.lexicalLayoutReceiver(receiverTerm: self.typedIrRefOfInfo(ti: ti))
+        return self.checkDestructureSiteSubject(site: site, subjectRef: subjectRef)
+    }
+
+    inout fn checkForDestructureSite(initId: U64, itemTerm: U64) -> Result[(), CompileDiagnostic] {
+        for site in self.decls.destructureSites {
+            if site.initId == initId && site.isElem {
+                return self.checkDestructureSiteSubject(site: site, subjectRef: self.lexicalLayoutReceiver(receiverTerm: itemTerm))
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkDestructureSiteSubject(site: DestructureSite, subjectRef: U64) -> Result[(), CompileDiagnostic] {
         // the struct form (`P { val x } = e`) declares the type it destructures —
         // the initializer must actually BE that struct (another type silently
         // binding same-named fields would hide a type error, spec/03).
@@ -836,12 +839,12 @@ pub impl Comp {
             // `P`) used to crash the field lookup (out-of-bounds) — reject cleanly.
             val st: TypeInfo = (try self.typeOf(id: scrut))
             if a.enumLen == 0U64 {
-                val subject = try self.destructureSubjectType(info: st, isElement: false)
+                val subject = self.lexicalLayoutReceiver(receiverTerm: self.typedIrRefOfInfo(ti: st))
                 if subject == 0U64 || subject >= self.arena.typeCount() || !self.arena.typeAt(index: subject).isRecord {
                     return <Result.Err error=self.diagnosticAt(offset: patternDiagOffset(c: inout self, a: a), msg: "record pattern requires a record value") />
                 }
             } else if st.nameLen > 0U64 {
-                if !self.structPatternMatches(typeStart: a.enumStart, typeLen: a.enumLen, subjectRef: (try self.destructureSubjectType(info: st, isElement: false))) {
+                if !self.structPatternMatches(typeStart: a.enumStart, typeLen: a.enumLen, subjectRef: (self.lexicalLayoutReceiver(receiverTerm: self.typedIrRefOfInfo(ti: st)))) {
                     return <Result.Err error=self.diagnosticAt(offset: patternDiagOffset(c: inout self, a: a), msg: "struct destructure pattern type does not match the scrutinee type") />
                 }
             }

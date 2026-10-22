@@ -42,40 +42,6 @@ pub impl Comp {
         return <TypeInfo kind=2 nameStart=t.nameStart nameLen=t.nameLen ref=ref viewExtId=t.viewExtId />
     }
 
-    inout fn iterableProtocolItemTerm(iterTerm: U64) -> Result[U64, CompileDiagnostic] {
-        if iterTerm == 0U64 || iterTerm >= self.arena.typeCount() { return <Result.Ok value=0U64 />}
-        // An Iterable is not itself the cursor. Its selected Iter witness
-        // owns the next() Item; using Item on the iterable (or its bare type
-        // name) loses the element type for conditionally conforming cursors.
-        val iterableOwner: U64 = self.coreTraitOwner(name: "Iterable")
-        if iterableOwner != 0U64 {
-            val iteratorName: Bind = self.internBytes(s: "Iter")
-            val iteratorTerm: U64 = (try self.assocBindingFor(baseRef: iterTerm, traitId: self.internBytes(s: "Iterable").nameId, traitOwner: iterableOwner, traitArgs: [], assocId: iteratorName.nameId))
-            if iteratorTerm != 0U64 && iteratorTerm < self.arena.typeCount() {
-                val iteratorType: TypeRef = self.arena.typeAt(index: iteratorTerm)
-                val element: U64 = (try self.assocItemRef(recvStart: iteratorType.nameStart, recvLen: iteratorType.nameLen, recvInstRef: iteratorTerm))
-                if element != 0U64 { return <Result.Ok value=element />}
-            }
-        }
-        val iteratorType = self.arena.typeAt(index: iterTerm)
-        return self.assocItemRef(recvStart: iteratorType.nameStart, recvLen: iteratorType.nameLen, recvInstRef: iterTerm)
-    }
-
-    inout fn iterableItemInfo(et: TypeInfo) -> Result[TypeInfo, CompileDiagnostic] {
-        val symbolicItem = try self.symbolicIterationItemTerm(receiver: et.ref)
-        if symbolicItem != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: symbolicItem) /> }
-        val protocolItem: U64 = (try self.iterableProtocolItemTerm(iterTerm: et.ref))
-        if protocolItem != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: protocolItem) />}
-        if et.ref != 0U64 && et.ref < self.arena.typeCount() && self.arena.typeTerms[et.ref].isAny {
-            val item = self.existentialIterationItemTerm(receiver: et.ref)
-            if item != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: item) /> }
-            return <Result.Err error=self.diagnosticAt(offset: et.nameStart, msg: "for-loop requires an Iterable or Iterator") />
-        }
-        // Item is a protocol contract, not a guess from a same-named next
-        // method. A missing proof remains unresolved for the caller to reject.
-        return <Result.Ok value=scalarInfo() />
-    }
-
     inout fn groundedArrayFieldInfo(params: Array[Bind], instArgs: Array[U64], arrayTyRef: U64) -> Result[TypeInfo, CompileDiagnostic] {
         val at: TypeRef = self.arena.typeAt(index: arrayTyRef)
         if at.args.count() == 0 {

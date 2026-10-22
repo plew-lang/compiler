@@ -680,11 +680,22 @@ pub impl Comp {
         return <Result.Ok value=sources />
     }
 
+    // Protocol syntax supplies a canonical trait identity. It narrows an
+    // existing view set; an inherent same-named method cannot satisfy it.
+    inout fn appendRequiredTraitSource(sources: inout Array[ViewSource], owner: U64) -> Bool {
+        if owner == 0U64 { return true }
+        val index = self.decls.traitOwnerIndex(offset: owner)
+        if index >= self.decls.traitOwnerCount() { return false }
+        val declaration = self.decls.traitOwnerAt(index: index)
+        self.appendViewSource(sources: inout sources, source: <ViewSource kind=2U64 id=intern(c: inout self, start: owner, len: declaration.nameLen) owner=owner arity=declaration.arity />)
+        return true
+    }
+
     // The semantic query for a method call whose receiver has already been
     // grounded by a BodyInstance.  Candidate search, newtype normalization and
     // view-source normalization belong to the frontend resolver; Mono supplies
     // only the concrete receiver term it obtained from its environment.
-    inout fn resolveMethodForResolvedReceiver(recv: U64, surfaceRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: ArgRange, useOffset: U64, readReceiverSyntax: Bool = true) -> Result[U64, CompileDiagnostic] {
+    inout fn resolveMethodForResolvedReceiver(recv: U64, surfaceRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: ArgRange, useOffset: U64, readReceiverSyntax: Bool = true, requiredTraitOwner: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         if surfaceRef == 0U64 || surfaceRef >= self.arena.typeCount() {
             return <Result.Ok value=self.arena.functionCount() />
         }
@@ -698,12 +709,13 @@ pub impl Comp {
             resolvedRef = underlying
         }
         val rt: TypeRef = self.arena.typeAt(index: resolvedRef)
-        val sources: Array[ViewSource] = (try self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: surfaceRef, finalSourceId: sourceId, finalSourceOwner: sourceOwner, readReceiverSyntax: readReceiverSyntax))
+        mut val sources: Array[ViewSource] = (try self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: surfaceRef, finalSourceId: sourceId, finalSourceOwner: sourceOwner, readReceiverSyntax: readReceiverSyntax))
+        if !self.appendRequiredTraitSource(sources: inout sources, owner: requiredTraitOwner) { return <Result.Ok value=self.arena.functionCount() /> }
         mut val callee: U64 = self.arena.functionCount()
         if sources.count() > 0U64 {
-            callee = (try self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef))
+            callee = (try self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef, requiredTraitOwner: requiredTraitOwner))
         }
-        if callee >= self.arena.functionCount() {
+        if callee >= self.arena.functionCount() && requiredTraitOwner == 0U64 {
             callee = (try self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef, useOffset: useOffset))
         }
         return <Result.Ok value=callee />
@@ -950,13 +962,7 @@ pub impl Comp {
                 _ => {}
             }
         }
-        if requiredTraitOwner != 0U64 {
-            val ownerIndex = self.decls.traitOwnerIndex(offset: requiredTraitOwner)
-            if ownerIndex >= self.decls.traitOwnerCount() { return <Result.Ok value=self.arena.functionCount() />}
-            val owner = self.decls.traitOwnerAt(index: ownerIndex)
-            val ownerLen = owner.nameLen
-            self.appendViewSource(sources: inout sources, source: <ViewSource kind=2U64 id=intern(c: inout self, start: requiredTraitOwner, len: ownerLen) owner=requiredTraitOwner arity=owner.arity />)
-        }
+        if !self.appendRequiredTraitSource(sources: inout sources, owner: requiredTraitOwner) { return <Result.Ok value=self.arena.functionCount() /> }
         if sources.count() > 0U64 {
             mfi = (try self.findMethodInViewSet(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref, requiredTraitOwner: requiredTraitOwner))
         }

@@ -1,0 +1,58 @@
+// Iteration compatibility reads its selected next result and carrier identity.
+// The implicit slots keep distinct source identities; missing or malformed
+// operations cannot be repaired by another Item/member lookup.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Diag only { CompileDiagnostic }
+use /Ir only { Stmt, TypeRef, CallTemplate, CallTemplateKind, ProtocolSelection }
+use @Std/Io only { print }
+
+fn checked[T](result~: Result[T, CompileDiagnostic]) -> T {
+    match result {
+        Result.Ok(value: val value) => { return value }
+        Result.Err(error: val error) => { panic(error.message) }
+    }
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    val sources = <SourceAccess stdRoot="plew:std/".bytes() resources=[
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64 }} pub enum Optional[T] {{ Some(v: T) None }}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 }} pub trait Iterator {{ type Item inout fn next() -> Optional[Item] }} pub trait Iterable {{ type Item type Iter: Iterator[Item=Item] fn iterator() -> Iter }}" />,
+        <SourceResource path="plew:std/IterationProbe.pw".bytes() text="use @Std/Core only {{ Iterator }} struct Cursor {{}} impl Cursor as Iterator {{ type Item = I64 inout fn next() -> Optional[I64] {{ return <Optional.None /> }} }} fn probe(cursor: Cursor) {{ for val item in cursor {{}} }}" />,
+    ] />
+    checked(analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="plew:std/IterationProbe.pw" />, sources: sources))
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    checked(compiler.recordParametricFunction(fnIdx: owner, recordCallTemplates: true))
+    compiler.cur.checkFn = owner
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: owner).body, index: 0U64)
+    match compiler.arena.stmts[statement] { Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, iter: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {} _ => { panic("missing for") } }
+    val item = checked(compiler.sourceForItemTerm(stmtId: statement))
+    val count = compiler.callTemplateCount()
+    compiler.cur.recordCallTemplates = false
+    checked(compiler.verifyFunctionDeclaration(fnIdx: owner))
+    if compiler.callTemplateCount() != count || !compiler.typeRefEq(a: item, b: checked(compiler.sourceForItemTerm(stmtId: statement))) { panic("iteration verification reconstructed a result") }
+    val key = checked(compiler.templateProtocolSiteKey(fnIdx: owner, stmtId: statement, slot: 2U64))
+    val index = compiler.callTemplateIndex(siteKey: key)
+    val selected = compiler.callTemplateAt(index: index)
+    val result = match selected.kind {
+        CallTemplateKind.Protocol(receiver: _, selection: _, resultTerm: val term) => term
+        _ => { panic("missing next selection") }
+    }
+    val carrier = compiler.arena.typeAt(index: result)
+    // Preserve the spelling and arity, but replace the nominal declaration.
+    val wrong = compiler.pushType(t: <TypeRef nameStart=carrier.nameStart nameLen=carrier.nameLen args=carrier.args hasDecl=true declOffset=compiler.arena.typeAt(index: item).declOffset />)
+    val malformed = match selected.kind {
+        CallTemplateKind.Protocol(receiver: val receiver, selection: val selection, resultTerm: _) => <CallTemplateKind.Protocol receiver=receiver selection=selection resultTerm=wrong />
+        _ => { panic("missing next signature") }
+    }
+    if !compiler.replaceBuildingCallTemplate(index: index, template: <CallTemplate siteKey=key kind=malformed receiverTypeTerm=selected.receiverTypeTerm resultTypeRecipe=selected.resultTypeRecipe />) { panic("missing builder") }
+    match compiler.sourceForItemTerm(stmtId: statement) { Result.Err(error: _) => {} Result.Ok(value: _) => { panic("same spelling replaced selected carrier") } }
+    val pending = match selected.kind {
+        CallTemplateKind.Protocol(receiver: val receiver, selection: _, resultTerm: _) => <CallTemplateKind.Protocol receiver=receiver selection=<ProtocolSelection.Pending /> resultTerm=result />
+        _ => { panic("missing next signature") }
+    }
+    if !compiler.replaceBuildingCallTemplate(index: index, template: <CallTemplate siteKey=key kind=pending receiverTypeTerm=selected.receiverTypeTerm resultTypeRecipe=selected.resultTypeRecipe />) { panic("missing builder") }
+    match compiler.sourceForItemTerm(stmtId: statement) { Result.Err(error: _) => {} Result.Ok(value: _) => { panic("missing next selection was reconstructed") } }
+    print("ok")
+}

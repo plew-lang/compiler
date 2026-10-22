@@ -293,3 +293,27 @@ The frozen ff9a8a1c full suite failed in three positive view cases and two rejec
 diagnostics. The following build/slice must establish these repairs independently;
 the formal 5.932379-second checkpoint remains evidence for ff9a8a1c only. This
 repair does not close iteration selection or owner-local operation storage.
+
+
+## Iteration Source Contract Increment (WIP)
+
+Record now selects canonical Core protocol owners even for concrete receivers.
+The pre-repair carrier accepted both a structural next-only cursor and a
+structural iterator-only collection; dedicated reject controls retain these
+failures. Generic/Verify read the selected next result through its exact slot
+and the saved Optional carrier identity. For-field access receives the actual
+Item, including a nested array; the old independent iterable Item helpers are
+removed. The provisional registration walk may query private protocol context
+without publishing operation/recipe success; the successful owner commits it.
+
+The first fresh build passed 19 AOT golden outputs and 15 rejection outcomes,
+including generic closure iteration, projected/inherited/existential protocols,
+array-valued Items, typed bindings and destructuring. An operator-bound diagnostic
+still failed because sourceSelectedCallBounds omitted Operator/Protocol entirely;
+its eventual declaration worklist reconstructed the constraint at a library span.
+The follow-up gives these selected signatures the same source constraint
+construction as written methods. It must pass a fresh build and the existing
+nested_array_noeq control; the earlier attribution change alone did not fix it.
+
+Physical operation/constraint storage and exact callee evidence remain open.
+These source compatibility repairs are not phase-three completion.
