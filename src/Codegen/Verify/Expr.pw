@@ -365,12 +365,11 @@ pub impl Comp {
             Expr.Binary(val op, val lhs, val rhs) => {
                 try self.verifyExpr(id: lhs)
                 try self.verifyExpr(id: rhs)
-                try self.verifyBinaryOp(op: op, lhs: lhs, rhs: rhs)
-                try self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
+                try self.tcCheckBinop(exprId: id, op: op, lhs: lhs, rhs: rhs)
             }
             Expr.Unary(val op, val operand) => {
                 try self.verifyExpr(id: operand)
-                try self.tcCheckUnary(op: op, operand: operand)
+                try self.tcCheckUnary(exprId: id, op: op, operand: operand)
             }
             Expr.Index(val base, val index) => {
                 try self.verifyExpr(id: base)

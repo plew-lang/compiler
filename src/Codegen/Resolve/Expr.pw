@@ -1200,9 +1200,7 @@ pub impl Comp {
             }
             StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => {
                 val function = self.arena.functionAt(index: callee)
-                if !self.methodIsVisible(mf: function, offset: self.exprOffset(id: exprId)) {
-                    return <Result.Err error=self.unavailableSourceMethod(receiverTerm: receiverTerm, offset: self.exprOffset(id: exprId), fallback: "method is private (callable only in its defining module; put it in a `pub impl`)") />
-                }
+                try self.checkSourceMethodVisibility(exprId: exprId, receiverTerm: receiverTerm, function: function)
                 try self.checkCallDeclarationKind(exprId: exprId, declaration: function)
             }
             _ => {}

@@ -173,7 +173,56 @@ pub impl Comp {
         return self.continueTypeDiagnostic(diagnostic: self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)"))
     }
 
-    inout fn tcCheckBinop(op: I64, lhs: U64, rhs: U64) -> Result[(), CompileDiagnostic] {
+    // Compatibility reads the committed source operation. The only query
+    // here is interpretation of its selected signature under its saved proof.
+    inout fn recordedSourceOperator(exprId: U64, op: I64) -> Result[CallTemplate, CompileDiagnostic] {
+        val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+        val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: site)
+        if index < self.callTemplates.count() {
+            val template = self.callTemplates[index]
+            match template.kind {
+                CallTemplateKind.Operator(op: val selected, operands: _, resolution: _, resultTerm: _) => {
+                    if selected == op { return <Result.Ok value=template /> }
+                }
+                _ => {}
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: operator validation has no recorded source selection") />
+    }
+
+    inout fn sourceOperatorParameter(template: CallTemplate, index: U64) -> Result[U64, CompileDiagnostic] {
+        match template.kind {
+            CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
+                match selection {
+                    OperatorSelection.Direct(callee: val callee) => {
+                        if callee < self.arena.functionCount() {
+                            val function = self.arena.functionAt(index: callee)
+                            if index < function.params.count() {
+                                return self.operatorCalleeType(callee: callee, receiverRef: template.receiverTypeTerm, term: self.funcParamAt(params: function.params, index: index).ty)
+                            }
+                        }
+                    }
+                    OperatorSelection.Static(resolution: val resolution) => {
+                        val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: template.siteKey.originStart)
+                        if index < function.params.count() {
+                            match resolution {
+                                StaticMemberResolution.Requirement(proof: val proof, traitIdx: val owner, reqIdx: _) | StaticMemberResolution.Provided(proof: val proof, traitIdx: val owner, callee: _) => {
+                                    val bound = try self.staticProofBound(proof: proof, traitIdx: owner)
+                                    return <Result.Ok value=self.traitBoundTypeTerm(ref: self.funcParamAt(params: function.params, index: index).ty, bound: bound, traitIndex: owner) />
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    OperatorSelection.Primitive | OperatorSelection.Pending => { return <Result.Ok value=0U64 /> }
+                }
+            }
+            _ => {}
+        }
+        return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "internal error: selected operator has no parameter") />
+    }
+
+    inout fn tcCheckBinop(exprId: U64, op: I64, lhs: U64, rhs: U64) -> Result[(), CompileDiagnostic] {
         // `&&` / `||` are short-circuit control flow (spec/12), not a trait op: both
         // operands must be Bool (`1I64 && true` has no truthiness coercion).
         if op == opAnd() || op == opOr() {
@@ -185,58 +234,39 @@ pub impl Comp {
             }
             return <Result.Ok value=() />
         }
-        // arithmetic (Add/Sub/Mul/Div/Rem) and comparison (Eq/Ne/Lt/Le/Gt/Ge).
-        mut val isCompare: Bool = false
-        if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
-            isCompare = true
-        }
-        mut val handled: Bool = isCompare
-        if op == opAdd() || op == opSub() || op == opMul() || op == opDiv() || op == opRem() {
-            handled = true
-        }
-        // bitwise/shift: a primitive's witnesses are all same-type (`impl I8 as Shl[I8]`,
-        // not `Shl[U64]`), so mixed primitive operands have no witness — same as arith.
-        if op == opBitAnd() || op == opBitOr() || op == opBitXor() || op == opShl() || op == opShr() {
-            handled = true
-        }
-        if !(handled) {
+        val template = try self.recordedSourceOperator(exprId: exprId, op: op)
+        val parameter = try self.sourceOperatorParameter(template: template, index: 1U64)
+        if parameter != 0U64 {
+            try self.tcCheckValue(expectedRef: (try self.sourceOperatorParameter(template: template, index: 0U64)), valueExpr: lhs, pos: "operator argument")
+            try self.tcCheckValue(expectedRef: parameter, valueExpr: rhs, pos: "operator argument")
             return <Result.Ok value=() />
         }
-        mut val l = try self.inferType(id: lhs)
-        mut val r = try self.inferType(id: rhs)
-        // Resolve lexical Self/associated bindings before selecting a
-        // signature, just as value compatibility normalizes its two terms.
-        if l != 0U64 { l = try self.groundTypeRef(ref: l) }
-        if r != 0U64 { r = try self.groundTypeRef(ref: r) }
-        // An unsuffixed left operand takes the typed right operand's context,
-        // using the same direction rule as semantic expression recording.
-        if self.acceptsFloatingOperandContext(exprId: lhs, siblingExprId: rhs, siblingTerm: r) {
-            try self.tcCheckValue(expectedRef: r, valueExpr: lhs, pos: "binop")
-            return <Result.Ok value=() />
+        // Primitive legality is still source semantics, not the absence of a
+        // user callable. No witness/name search may fill in a missing selection.
+        if (try self.exprIsFloat(id: lhs)) || (try self.exprIsFloat(id: rhs)) {
+            if op == opRem() { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "`%` (remainder) is integer-only; not defined for floats (spec/12)") /> }
+        } else {
+            if (try self.compareNeedsTrait(op: op, lhs: lhs, rhs: rhs)) {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison") />
+            }
+            if (try self.binTraitNeedsTrait(op: op, lhs: lhs, rhs: rhs)) {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type") />
+            }
         }
-        val resolution = try self.staticOperatorTemplateResolution(op: op, receiverTerm: l, isUnary: false)
-        match resolution {
-            StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
-                val parameter = try self.staticRequirementParamTypeAt(resolution: resolution, paramIdx: 1U64)
-                if parameter == 0U64 {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: rhs), msg: "operator requirement has no resolved right operand type") />
+        match template.kind {
+            CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
+                match selection {
+                    OperatorSelection.Pending => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "cannot resolve this operator from the available context") /> }
+                    OperatorSelection.Primitive => {
+                        val receiver = template.receiverTypeTerm
+                        if receiver != 0U64 { try self.tcCheckValue(expectedRef: receiver, valueExpr: rhs, pos: "operator argument") }
+                    }
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "internal error: selected operator signature is incomplete") /> }
                 }
-                try self.tcCheckValue(expectedRef: parameter, valueExpr: rhs, pos: "operator argument")
-                return <Result.Ok value=() />
             }
             _ => {}
         }
-        if l == 0U64 || r == 0U64 {
-            return <Result.Ok value=() />
-        }
-        if l >= self.arena.typeCount() || r >= self.arena.typeCount() {
-            return <Result.Ok value=() />
-        }
-        // Availability is checked separately; operand compatibility must use
-        // the complete selected signature for every receiver, not just numbers.
-        val selected = try self.findBinTraitWitnessForRef(receiverRef: l, op: op, rhsRef: r, rhsUntyped: false)
-        if selected < self.arena.functionCount() { return <Result.Ok value=() /> }
-        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: rhs), msg: "type mismatch: this value's type does not match the type required here; no operator implementation accepts this right operand type (spec/12)") />
+        return <Result.Ok value=() />
     }
 
     inout fn tcIsUnsignedInt(ref: U64) -> Bool {
@@ -264,7 +294,27 @@ pub impl Comp {
         return self.continueTypeDiagnostic(diagnostic: self.diagnosticAt(offset: self.exprOffset(id: operand), msg: msg))
     }
 
-    inout fn tcCheckUnary(op: I64, operand: U64) -> Result[(), CompileDiagnostic] {
+    inout fn tcCheckUnary(exprId: U64, op: I64, operand: U64) -> Result[(), CompileDiagnostic] {
+        try self.tcCheckPrimitiveUnary(op: op, operand: operand)
+        val template = try self.recordedSourceOperator(exprId: exprId, op: op)
+        val parameter = try self.sourceOperatorParameter(template: template, index: 0U64)
+        if parameter != 0U64 {
+            try self.tcCheckValue(expectedRef: parameter, valueExpr: operand, pos: "operator argument")
+        } else {
+            match template.kind {
+                CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
+                    match selection {
+                        OperatorSelection.Primitive => {}
+                        _ => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "this unary operator on a type parameter needs the matching bound (add `where T: Neg` / `: Not` / `: BitNot`) (spec/12)") /> }
+                    }
+                }
+                _ => {}
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn tcCheckPrimitiveUnary(op: I64, operand: U64) -> Result[(), CompileDiagnostic] {
         val t: U64 = (try self.inferType(id: operand))
         if t == 0U64 || t >= self.arena.typeCount() {
             return <Result.Ok value=() />

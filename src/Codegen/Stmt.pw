@@ -126,56 +126,6 @@ pub impl Comp {
     // witness — primitives are not special-cased (O6): `I32 < I32` routes through Core's
     // `impl I32 as Ord` to the `i32Lt` intrinsic. An untyped literal / String / enum has
     // no Eq/Ord here and keeps its own lowering (the dispatch handles those first).
-    inout fn hasCompareWitness(op: I64, lhs: U64, rhs: U64) -> Result[Bool, CompileDiagnostic] {
-        val lt: TypeInfo = (try self.cmpOperandType(lhs: lhs, rhs: rhs))
-        // Array equality requires the complete element type's Eq proof.
-        // Nested generic arguments must survive the legacy TypeInfo projection.
-        if lt.kind == 3 {
-            if op == opEq() || op == opNe() {
-                mut val elemOk: Bool = false
-                mut val er: U64 = 0U64
-                if lt.ref != 0U64 && lt.ref < self.arena.typeCount() {
-                    val arrayType = self.arena.typeAt(index: lt.ref)
-                    if arrayType.args.count() == 1U64 { er = arrayType.args[0U64] }
-                }
-                if er == 0U64 { er = self.arrayElemRef(start: lt.nameStart, len: lt.nameLen) }
-                if er != 0U64 {
-                    val eqOwner: U64 = self.coreTraitOwner(name: "Eq")
-                    elemOk = eqOwner != 0U64 && (try self.conformsInstance(ref: er, traitStart: eqOwner, traitLen: self.traitNameLenByOwner(owner: eqOwner)))
-                } else {
-                    // a bare scalar/named element with no registered structured ref
-                    // (no type args to constrain): the name-based Eq check suffices.
-                    elemOk = self.eqWitnessReady(ti: lt)
-                }
-                if elemOk {
-                    val arr: Bind = self.internBytes(s: "Array")
-                    return <Result.Ok value=self.findAssocByName(typeStart: arr.nameStart, typeLen: arr.nameLen, name: "eq") < self.arena.functionCount() />
-                }
-            }
-            return <Result.Ok value=false />
-        }
-        if lt.kind == 2 || lt.kind == 0 {
-            if lt.nameLen == 0 {
-                return <Result.Ok value=false />
-            }
-            // `==`/`!=` desugar to Eq.eq; gated on an explicit `impl T as Eq` (spec/12:
-            // operators are trait sugar, not implicit). `< <= > >=` likewise on Ord.
-            if op == opEq() {
-                return <Result.Ok value=self.eqWitnessReady(ti: lt) />
-            }
-            if op == opNe() {
-                return <Result.Ok value=self.eqWitnessReady(ti: lt) />
-            }
-            if op >= 52 {
-                if op <= 55 {
-                    if self.typeConformsToName(typeStart: lt.nameStart, typeLen: lt.nameLen, traitName: "Ord") {
-                        return <Result.Ok value=self.findAssocByName(typeStart: lt.nameStart, typeLen: lt.nameLen, name: "compare") < self.arena.functionCount() />
-                    }
-                }
-            }
-        }
-        return <Result.Ok value=false />
-    }
 
     // Whether the operand type both conforms to Eq and carries the `eq` witness.
     inout fn eqWitnessReady(ti: TypeInfo) -> Bool {
@@ -208,16 +158,6 @@ pub impl Comp {
 
     // Verify uses the same Core declaration, full receiver identity, extension
     // visibility and right-operand compatibility as literal typing and dispatch.
-    inout fn hasBinTraitWitness(op: I64, lhs: U64, rhs: U64) -> Result[Bool, CompileDiagnostic] {
-        if !(isBinTraitOp(op: op)) {
-            return <Result.Ok value=false />
-        }
-        val left = try self.binWitnessType(lhs: lhs, rhs: rhs)
-        val right = try self.typeOf(id: rhs)
-        val rightRef = self.operatorTypeRef(t: right)
-        val callee = try self.findBinTraitWitnessForRef(receiverRef: self.operatorTypeRef(t: left), op: op, rhsRef: rightRef, rhsUntyped: rightRef == 0U64)
-        return <Result.Ok value=callee < self.arena.functionCount() />
-    }
 
     // A typed operand under an arithmetic op with no operator-trait witness: the C
     // `+`/`-`/... has no meaning, so it is a loud error (spec/12: an operator is only

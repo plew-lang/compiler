@@ -402,29 +402,32 @@ pub impl Comp {
     // Source selection is already committed. Compatibility may inspect that
     // signature, but cannot reopen names, views or conformance candidates.
     inout fn verifyRecordedMethodCall(exprId: U64, recv: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
+        // Diagnostic location is separate from the lexical module authority
+        // used by checkSourceMethodVisibility, and from synthetic identity.
+        val offset = self.exprOffset(id: exprId)
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
         val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: site)
         if index >= self.callTemplates.count() {
-            return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: method validation has no recorded source selection") />
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: method validation has no recorded source selection") />
         }
         val template = self.callTemplates[index]
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
                 if callee >= self.arena.functionCount() {
-                    return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected method has no declaration") />
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected method has no declaration") />
                 }
                 val function = self.arena.functionAt(index: callee)
-                try self.checkMethodVis(ownerStart: function.recvStart, ownerLen: function.recvLen, mf: function, offset: site.originStart)
+                try self.checkSourceMethodVisibility(exprId: exprId, receiverTerm: template.receiverTypeTerm, function: function)
                 try self.verifySelectedMethodReceiver(recv: recv, function: function, args: args)
                 val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: self.thawStaticConformanceProof(id: proofId))
                 try self.checkSelectedMethodArguments(exprId: exprId, function: function, environment: environment, args: args)
                 self.recordResolvedMethodCallee(id: exprId, callee: callee)
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: _, resultTerm: _) => {
-                val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: site.originStart)
+                val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: offset)
                 match resolution {
                     StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
-                        try self.checkMethodVis(ownerStart: function.recvStart, ownerLen: function.recvLen, mf: function, offset: site.originStart)
+                        try self.checkSourceMethodVisibility(exprId: exprId, receiverTerm: template.receiverTypeTerm, function: function)
                     }
                     _ => {}
                 }
@@ -436,15 +439,15 @@ pub impl Comp {
                 match target {
                     DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => {
                         if traitIndex >= self.decls.traitCount() || slot == 0U64 || slot > self.decls.traitAt(index: traitIndex).reqs.count() {
-                            return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected dynamic method has no requirement") />
+                            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected dynamic method has no requirement") />
                         }
                         try self.verifySelectedMethodReceiver(recv: recv, function: self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64), args: args)
                     }
                     DynamicCallTemplateTarget.ClosureField(fieldIndex: _, fnTypeTerm: _) => {}
-                    _ => { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: recorded method has a non-method dynamic target") /> }
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: recorded method has a non-method dynamic target") /> }
                 }
             }
-            _ => { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: method validation has no completed source selection") /> }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: method validation has no completed source selection") /> }
         }
         return <Result.Ok value=() />
     }
@@ -500,41 +503,6 @@ pub impl Comp {
             }
         }
         return <Result.Ok value=false />
-    }
-
-    inout fn verifyBinaryOp(op: I64, lhs: U64, rhs: U64) -> Result[(), CompileDiagnostic] {
-        // Abstract declarations consume the same bound proof used by call
-        // recording. A missing proof must still pass the ordinary witness test.
-        val receiverTerm = self.parametricExprTerm(exprId: lhs)
-        match (try self.staticOperatorTemplateResolution(op: op, receiverTerm: receiverTerm, isUnary: false)) {
-            StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => { return <Result.Ok value=() /> }
-            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => { return <Result.Ok value=() /> }
-            StaticMemberResolution.Missing => {}
-        }
-        // float arithmetic / comparison is accepted directly (the backend emits the IEEE
-        // op); `%`/`Rem` is integer-only, so reject it on a float (spec/12).
-        if (try self.exprIsFloat(id: lhs)) || (try self.exprIsFloat(id: rhs)) {
-            if op == opRem() {
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "`%` (remainder) is integer-only; not defined for floats (spec/12)") />
-            }
-            return <Result.Ok value=() />
-        }
-        // String `==`/`!=` is no longer a name-special case: String conforms to `Eq`
-        // (`impl String as Eq` in Core, riding `bufferEq`), so it is accepted by the
-        // general witness path below like any other Eq type (collections.md §3-付録4).
-        if (try self.hasCompareWitness(op: op, lhs: lhs, rhs: rhs)) {
-            return <Result.Ok value=() />
-        }
-        if (try self.compareNeedsTrait(op: op, lhs: lhs, rhs: rhs)) {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison") />
-        }
-        if (try self.hasBinTraitWitness(op: op, lhs: lhs, rhs: rhs)) {
-            return <Result.Ok value=() />
-        }
-        if (try self.binTraitNeedsTrait(op: op, lhs: lhs, rhs: rhs)) {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type") />
-        }
-        return <Result.Ok value=() />
     }
 
     inout fn castOperandIsBool(operand: U64) -> Result[Bool, CompileDiagnostic] {

@@ -519,6 +519,14 @@ pub impl Comp {
     // generic bound.  Both ordinary and source-qualified (`#…`) method syntax
     // reach this one finalization point so they cannot diverge by silently
     // treating a view-qualified static call as a closure-field call.
+    inout fn checkSourceMethodVisibility(exprId: U64, receiverTerm: U64, function: Func) -> Result[(), CompileDiagnostic] {
+        if function.isPub { return <Result.Ok value=() /> }
+        if !self.methodIsVisibleInModule(mf: function, useModule: (try self.sourceBodyModule())) {
+            return <Result.Err error=self.unavailableSourceMethod(receiverTerm: receiverTerm, offset: self.exprOffset(id: exprId), fallback: "method is private (callable only in its defining module; put it in a `pub impl`)") />
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn unavailableSourceMethod(receiverTerm: U64, offset: U64, fallback: String) -> CompileDiagnostic {
         val type = self.typeInfoOfRef(ref: receiverTerm)
         if self.cur.checkFn < self.arena.functionCount() && self.isTypeParamOf(fnIdx: self.cur.checkFn, start: type.nameStart, len: type.nameLen) {

@@ -199,7 +199,7 @@ pub impl Comp {
                         if !handled {
                             val lt: TypeInfo = (try self.exprType(id: lhs))
                             if lt.kind == 2 {
-                                if (try self.checkBinTraitRhs(op: op, lhs: lhs, rhs: rhs)) {
+                                if (try self.checkBinTraitRhs(exprId: id, op: op, lhs: lhs, rhs: rhs)) {
                                     try self.checkLitCtx(id: lhs, eKind: 0, eBits: 0, eSgn: false)
                                     handled = true
                                 }
@@ -347,17 +347,36 @@ pub impl Comp {
 
     // Literal context comes from the same declaration selected for dispatch.
     // Equal method/type spellings elsewhere do not contribute candidates.
-    inout fn checkBinTraitRhs(op: I64, lhs: U64, rhs: U64) -> Result[Bool, CompileDiagnostic] {
+    inout fn checkBinTraitRhs(exprId: U64, op: I64, lhs: U64, rhs: U64) -> Result[Bool, CompileDiagnostic] {
         if !isBinTraitOp(op: op) { return <Result.Ok value=false /> }
-        val left = try self.binWitnessType(lhs: lhs, rhs: rhs)
-        val right = try self.typeOf(id: rhs)
-        val receiver = self.operatorTypeRef(t: left)
-        val rightRef = self.operatorTypeRef(t: right)
-        val callee = try self.findBinTraitWitnessForRef(receiverRef: receiver, op: op, rhsRef: rightRef, rhsUntyped: rightRef == 0U64)
-        if callee >= self.arena.functionCount() { return <Result.Ok value=false /> }
-        val function = self.arena.functionAt(index: callee)
-        val parameter = self.funcParamAt(params: function.params, index: 1U64)
-        val parameterRef = try self.operatorCalleeType(callee: callee, receiverRef: receiver, term: parameter.ty)
+        mut val parameterRef = 0U64
+        mut val recorded = false
+        val key = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+        val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: key)
+        if index < self.callTemplates.count() {
+            val template = self.callTemplates[index]
+            match template.kind {
+                CallTemplateKind.Operator(op: _, operands: _, resolution: _, resultTerm: _) => {
+                    parameterRef = try self.sourceOperatorParameter(template: template, index: 1U64)
+                    recorded = true
+                }
+                CallTemplateKind.Pending => { return <Result.Ok value=false /> }
+                _ => {}
+            }
+        }
+        if !recorded {
+            // An uncommitted contextual expression can probe a candidate for
+            // literal context. A committed operation always owns that context.
+            val left = try self.binWitnessType(lhs: lhs, rhs: rhs)
+            val right = try self.typeOf(id: rhs)
+            val receiver = self.operatorTypeRef(t: left)
+            val rightRef = self.operatorTypeRef(t: right)
+            val callee = try self.findBinTraitWitnessForRef(receiverRef: receiver, op: op, rhsRef: rightRef, rhsUntyped: rightRef == 0U64)
+            if callee >= self.arena.functionCount() { return <Result.Ok value=false /> }
+            val function = self.arena.functionAt(index: callee)
+            parameterRef = try self.operatorCalleeType(callee: callee, receiverRef: receiver, term: self.funcParamAt(params: function.params, index: 1U64).ty)
+        }
+        if parameterRef == 0U64 { return <Result.Ok value=false /> }
         val parameterInfo = self.typeInfoOfRef(ref: parameterRef)
         val integer = self.spanIntTy(start: parameterInfo.nameStart, len: parameterInfo.nameLen)
         if integer.known {

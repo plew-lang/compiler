@@ -226,3 +226,27 @@ owner's plan before corrupting it. Neither change removes rejection, owner
 independence, cursor restoration or evidence checks. Current-source AOT controls
 for operator selection, diagnostic retention, global constraint evidence and
 concrete selected methods pass. Fresh binary and full gates remain pending.
+
+
+## Operator Compatibility Reader (WIP)
+
+Generic and concrete unary/binary compatibility consume the retained Operator
+selection and parameter types under its saved receiver/proof. Logical operators
+remain Bool control flow. Primitive range/type restrictions remain separate from
+availability. Remove Verify's independent witness search and Generic's
+bound-name/candidate search; missing operation state is never reconstructed.
+The source_operator_literal_context control now removes a saved selection after
+successful construction and requires compatibility to reject it.
+
+A source identity's span is not authored visibility provenance: synthetic keys
+use a serial and zero originStart. Concrete verification derives visibility from the lexical source owner's
+authored module (through its retained parent/header), while diagnostic offsets
+and CallSiteKey remain separate. Neither a diagnostic-name edit nor a synthetic
+serial-only key may change namespace authority. A cross-module private-factory control is being added.
+
+The optimized current-source diagnostic driver accepts the entire compiler
+source and preserves the constructor-conflict and two private-member rejects.
+The same driver linked at O0 exhausts the default stack on the deep whole-source
+probe (recursive frame approximately 522 KB); the regular optimizer/link pipeline
+succeeds. This diagnostic driver is not a fresh compiler executable or a formal
+performance result. Fresh build, target execution and gates remain pending.

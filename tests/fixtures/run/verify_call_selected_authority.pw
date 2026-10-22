@@ -1,17 +1,18 @@
 // Concrete compatibility consumes the recorded selection, including explicit
 // views and associated qualifiers. Diagnostic spelling is not another query.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
-use /SourceAccess only { SourceAccess }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Diag only { CompileDiagnostic }
 use /Ir only { Expr, Stmt, CallTemplate, CallTemplateKind }
 use @Std/Io only { print }
 
 fn check(source: String) {
     mut val compiler = <Comp />
-    analyzeFrontendForRequests(c: inout compiler,
+    checked(analyzeFrontendForRequests(c: inout compiler,
         input: <FrontendInput.Text path="selected-method.pw" text=source />,
-        sources: <SourceAccess />).unwrap()
+        sources: <SourceAccess />))
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
-    compiler.recordParametricFunction(fnIdx: owner, recordCallTemplates: true).unwrap()
+    checked(compiler.recordParametricFunction(fnIdx: owner, recordCallTemplates: true))
     val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: owner).body, index: 0U64)
     val expression = match compiler.arena.stmts[statement] {
         Stmt.Return(value: val value, hasValue: _, offset: _) => value
@@ -37,7 +38,7 @@ fn check(source: String) {
     }
     if !compiler.templateCallSiteKey(fnIdx: owner, exprId: expression).unwrap().sameKey(other: key) { panic("changed semantic site") }
     compiler.cur.recordCallTemplates = false
-    compiler.verifyFunctionDeclaration(fnIdx: owner).unwrap()
+    checked(compiler.verifyFunctionDeclaration(fnIdx: owner))
     if compiler.resolvedCallee(id: expression).unwrap() != callee { panic("verification selected another callee") }
     if compiler.callTemplateCount() != count { panic("verification constructed another operation") }
     if !compiler.replaceBuildingCallTemplate(index: index, template: <CallTemplate siteKey=selected.siteKey resultTypeRecipe=selected.resultTypeRecipe expectedResultTerm=selected.expectedResultTerm receiverTypeTerm=selected.receiverTypeTerm kind=<CallTemplateKind.Pending /> />) { panic("missing builder") }
@@ -49,9 +50,9 @@ fn check(source: String) {
 
 fn checkReceiver(source: String, message: String) {
     mut val compiler = <Comp />
-    analyzeFrontendForRequests(c: inout compiler,
+    checked(analyzeFrontendForRequests(c: inout compiler,
         input: <FrontendInput.Text path="selected-receiver.pw" text=source />,
-        sources: <SourceAccess />).unwrap()
+        sources: <SourceAccess />))
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     match compiler.prepareLexicalBody(fnIdx: owner) {
         Result.Err(error: val diagnostic) => {
@@ -59,6 +60,37 @@ fn checkReceiver(source: String, message: String) {
         }
         Result.Ok(value: _) => { panic("invalid selected receiver accepted") }
     }
+}
+
+fn checked(result~: Result[(), CompileDiagnostic]) {
+    match result {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+}
+
+fn checkSynthetic() {
+    mut val compiler = <Comp />
+    val sources = <SourceAccess stdRoot="plew:std/".bytes() resources=[
+        <SourceResource path="plew:std/Lang.pw".bytes() text="" />,
+        <SourceResource path="plew:std/Selected/Main.pw".bytes() text="use ./Lib only {{ probe }} fn main() {{ val number = probe() }}" />,
+        <SourceResource path="plew:std/Selected/Lib.pw".bytes() text="pub struct Number {{ val raw: I64 }} impl Number {{ factory(value: I64) {{ return <Number raw=value /> }} }} pub fn probe() -> Number {{ return <Number value=1I64 /> }}" />,
+    ] />
+    checked(analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.File path="plew:std/Selected/Main.pw" />, sources: sources))
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    checked(compiler.recordParametricFunction(fnIdx: owner, recordCallTemplates: true))
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: owner).body, index: 0U64)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Return(value: val value, hasValue: _, offset: _) => value
+        _ => { panic("missing synthetic factory call") }
+    }
+    val key = compiler.templateCallSiteKey(fnIdx: owner, exprId: expression).unwrap()
+    if key.originKind != 2U64 || key.originStart != 0U64 { panic("fixture did not use serial identity") }
+    compiler.cur.recordCallTemplates = false
+    // The key has no span. Visibility still uses Lib's authored call site,
+    // rather than interpreting zero as a position in the importing module.
+    checked(compiler.verifyFunctionDeclaration(fnIdx: owner))
 }
 
 fn main() {
@@ -71,10 +103,11 @@ fn main() {
         message: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
     checkReceiver(source: "struct Box {{}} impl Box {{ inout fn change() {{}} }} fn probe() {{ <Box />.change() }}",
         message: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)")
+    checkSynthetic()
     mut val compiler = <Comp />
-    analyzeFrontendForRequests(c: inout compiler,
+    checked(analyzeFrontendForRequests(c: inout compiler,
         input: <FrontendInput.Text path="selected-global.pw" text="struct Box {{}} impl Box {{ assoc fn read() -> I64 {{ return 1I64 }} }} val stored = Box.read()" />,
-        sources: <SourceAccess />).unwrap()
-    compiler.prepareGlobalInitializer(target: compiler.arena.globals[0U64].nameStart).unwrap()
+        sources: <SourceAccess />))
+    checked(compiler.prepareGlobalInitializer(target: compiler.arena.globals[0U64].nameStart))
     print("ok")
 }

@@ -238,6 +238,10 @@ pub impl Comp {
     }
 
     inout fn methodIsVisible(mf: Func, offset: U64) -> Bool {
+        return self.methodIsVisibleInModule(mf: mf, useModule: self.moduleOf(offset: offset))
+    }
+
+    inout fn methodIsVisibleInModule(mf: Func, useModule: U64) -> Bool {
         if mf.isPub { return true }
         // Provided bodies retain the module that authored the declaration;
         // conformance instantiation must not grant the caller new access.
@@ -249,7 +253,7 @@ pub impl Comp {
         } else if mf.defOffset == 0U64 {
             ownerModule = self.typeDefinitionModule(ref: mf.recvTy)
         }
-        return ownerModule != self.typeDeclModuleMissing() && ownerModule == self.moduleOf(offset: offset)
+        return ownerModule != self.typeDeclModuleMissing() && ownerModule == useModule
     }
 
     inout fn checkMethodVis(ownerStart: U64, ownerLen: U64, mf: Func, offset: U64) -> Result[(), CompileDiagnostic] {

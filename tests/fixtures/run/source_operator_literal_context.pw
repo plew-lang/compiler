@@ -2,7 +2,7 @@
 // operator selection. Later verification must not be needed to repair Pending.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess, SourceResource }
-use /Ir only { CallTemplateKind, OperatorSelection }
+use /Ir only { CallTemplate, CallTemplateKind, OperatorSelection }
 use @Std/Io only { print }
 
 fn comparison(value: I64) -> Bool { return 0 < value }
@@ -36,6 +36,22 @@ fn main() {
         }
     }
     if !found { panic("missing operator") }
+    compiler.cur.recordCallTemplates = false
+    compiler.verifyFunctionDeclaration(fnIdx: owner).unwrap()
+    for operation in compiler.callTemplateSnapshot() {
+        match operation.kind {
+            CallTemplateKind.Operator(op: _, operands: _, resolution: _, resultTerm: _) => {
+                val index = compiler.callTemplateIndex(siteKey: operation.siteKey)
+                if !compiler.replaceBuildingCallTemplate(index: index, template: <CallTemplate siteKey=operation.siteKey kind=<CallTemplateKind.Pending /> />) { panic("missing operator builder") }
+                match compiler.verifyFunctionDeclaration(fnIdx: owner) {
+                    Result.Err(error: _) => {}
+                    Result.Ok(value: _) => { panic("operator validation reconstructed missing selection") }
+                }
+                break
+            }
+            _ => {}
+        }
+    }
     // The real Std Ord witness returns Ordering; the source expression and
     // emitted result still retain their Bool projection.
     if !comparison(value: 1I64) { panic("comparison lost its source result projection") }

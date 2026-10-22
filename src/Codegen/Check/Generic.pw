@@ -293,59 +293,12 @@ pub impl Comp {
             Expr.Str(start: val start, len: val len) => { try self.prepareStringLiteral(start: start, len: len) }
             Expr.Unary(val op, val operand) => {
                 try self.checkBoundsExpr(exprId: operand)
-                // a unary operator on a type-parameter value needs the matching bound
-                // (`-x` -> `where T: Neg`, `!x` -> `: Not`, `~x` -> `: BitNot`). spec/12.
-                val ut: TypeInfo = (try self.typeOf(id: operand))
-                if ut.kind == 2 {
-                    if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: ut.nameStart, len: ut.nameLen) {
-                        val need: String = self.unOpTraitName(op: op)
-                        if need.bytes().count() != 0U64 {
-                            if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: ut.nameStart, tpLen: ut.nameLen, traitName: need)) {
-                                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "this unary operator on a type parameter needs the matching bound (add `where T: Neg` / `: Not` / `: BitNot`) (spec/12)") />
-                            }
-                        }
-                    }
-                }
+                try self.tcCheckUnary(exprId: exprId, op: op, operand: operand)
             }
             Expr.Binary(val op, val lhs, val rhs) => {
                 try self.checkBoundsExpr(exprId: lhs)
                 try self.checkBoundsExpr(exprId: rhs)
-                // concrete operand checks in a generic body (`1I64 + true`, `aT == 5I64`):
-                // the same binop type-check verifyProgram runs on non-generic bodies, now
-                // applied to EVERY module's generic templates (std included — no
-                // trusted-use boundary).
-                if self.cur.checkFn < self.arena.functionCount() {
-                    try self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
-                }
-                val lt: TypeInfo = (try self.typeOf(id: lhs))
-                if lt.kind == 2 {
-                    if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: lt.nameStart, len: lt.nameLen) {
-                        mut val need: String = ""
-                        if op >= 50 {
-                            if op <= 55 {
-                                need = "Ord"
-                                if op == opEq() { need = "Eq" }
-                                if op == opNe() { need = "Eq" }
-                            }
-                        }
-                        // arithmetic / bitwise / shift desugar to their operator trait.
-                        if need.bytes().count() == 0U64 {
-                            need = self.binOpTraitName(op: op)
-                        }
-                        if need.bytes().count() != 0U64 {
-                            // Capability checking and call recording consume
-                            // the same requirement and inherited-bound proof.
-                            val resolution: StaticMemberResolution = (try self.staticOperatorTemplateResolution(op: op, receiverTerm: (try self.inferType(id: lhs)), isUnary: false))
-                            match resolution {
-                                StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {}
-                                StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {}
-                                StaticMemberResolution.Missing => {
-                                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)") />
-                                }
-                            }
-                        }
-                    }
-                }
+                try self.tcCheckBinop(exprId: exprId, op: op, lhs: lhs, rhs: rhs)
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
                 mut val i: U64 = 0

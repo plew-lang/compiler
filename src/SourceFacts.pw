@@ -606,6 +606,28 @@ impl Comp {
 }
 
 impl Comp {
+    // Authored namespace belongs to the lexical source owner. Diagnostic
+    // spellings and serial-only synthetic CallSiteKeys are not that authority.
+    inout fn sourceBodyModule() -> Result[U64, CompileDiagnostic] {
+        val owner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => self.lexicalSourceFactOwner(owner: owner)
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: source visibility has no body owner") /> }
+        }
+        mut val offset = 0U64
+        match owner {
+            SemanticCompletionOwner.Function(index: val index) => {
+                val source = try self.semanticBodyOwner(fnIdx: index)
+                if source >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: source visibility has no lexical declaration") /> }
+                offset = self.arena.functionAt(index: source).defOffset
+            }
+            SemanticCompletionOwner.Global(target: val target) => { offset = target }
+            SemanticCompletionOwner.Closure(expression: _) => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: source closure has no lexical namespace") /> }
+        }
+        val module = self.moduleOf(offset: offset)
+        if module == self.typeDeclModuleMissing() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: source body has no authored module") /> }
+        return <Result.Ok value=module />
+    }
+
     inout fn lexicalSourceFactOwner(owner: SemanticCompletionOwner) -> SemanticCompletionOwner {
         match self.sourceFacts.parent(owner: owner) {
             Optional.Some(v: val parent) => { return self.lexicalSourceFactOwner(owner: parent) }
