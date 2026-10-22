@@ -210,7 +210,7 @@ pub impl Comp {
 
     // Consume the existing identifier decision. In particular, do not seed
     // source locals or search names after Record has closed the lexical scope.
-    fn recordedGlobalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] {
+    inout fn recordedGlobalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] {
         if exprId >= self.typeCache.identBind.count() || exprId >= self.typeCache.identTarget.count() { return <Optional.None /> }
         if self.typeCache.identBind[exprId] != identValueCode() { return <Optional.None /> }
         val target = self.typeCache.identTarget[exprId]

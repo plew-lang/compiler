@@ -117,7 +117,7 @@ pub impl Comp {
     // Selection facts are published by typing, before executable call
     // templates. Pending is not rewritten to Returns by this construction-
     // time walker; finalized readers must require a completed selection.
-    fn invocationDiverges(exprId: U64) -> Bool {
+    inout fn invocationDiverges(exprId: U64) -> Bool {
         if exprId >= self.arena.exprs.count() { return false }
         match self.constructionExpression(exprId: exprId).invocation {
             InvocationCompletion.Diverges => { return true }

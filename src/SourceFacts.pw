@@ -265,7 +265,7 @@ impl Comp {
     // Late constraint closure reads the node's registered owner, not the
     // cursor left by another source walk. This is a construction query and
     // does not grant a prepared-body reader.
-    fn recordedSourceExpressionTerm(exprId: U64) -> U64 {
+    inout fn recordedSourceExpressionTerm(exprId: U64) -> U64 {
         match self.sourceFacts.expressionOwners.get(key: exprId) {
             Optional.Some(v: val owner) => {
                 match self.sourceFacts.expression(owner: owner, exprId: exprId) {
@@ -277,7 +277,10 @@ impl Comp {
         }
         return 0U64
     }
-    fn constructionExpression(exprId: U64) -> SemanticExprType {
+    // Construction queries borrow the mutable session in place. Passing Comp
+    // by value here would copy the entire session through the aggregate ABI.
+    // Published payload readers remain immutable, small Ref-backed handles.
+    inout fn constructionExpression(exprId: U64) -> SemanticExprType {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => {
                 match self.sourceFacts.expression(owner: owner, exprId: exprId) {
@@ -289,7 +292,7 @@ impl Comp {
         }
         return <SemanticExprType />
     }
-    fn semanticExprConstructionClosed(exprId: U64) -> Bool {
+    inout fn semanticExprConstructionClosed(exprId: U64) -> Bool {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => { if self.sourceOwnerConstructionClosed(owner: owner) { return true } }
             Optional.None => {}
@@ -299,7 +302,7 @@ impl Comp {
             Optional.None => { return false }
         }
     }
-    fn semanticStmtConstructionClosed(stmtId: U64) -> Bool {
+    inout fn semanticStmtConstructionClosed(stmtId: U64) -> Bool {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => { if self.sourceOwnerConstructionClosed(owner: owner) { return true } }
             Optional.None => {}
@@ -387,7 +390,7 @@ pub impl Comp {
     }
     // Internal construction probes must supply their lexical cursor. Final
     // consumers acquire a successful owner's reader instead.
-    fn sourceSemanticExprTypeAt(index: U64) -> SemanticExprType { return self.constructionExpression(exprId: index) }
+    inout fn sourceSemanticExprTypeAt(index: U64) -> SemanticExprType { return self.constructionExpression(exprId: index) }
 }
 
 impl SourceFactDirectory {
@@ -420,7 +423,7 @@ impl SourceFactDirectory {
     }
 }
 impl Comp {
-    fn constructionAggregate(exprId: U64) -> Optional[SemanticAggregate] {
+    inout fn constructionAggregate(exprId: U64) -> Optional[SemanticAggregate] {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => {
                 match self.sourceFacts.state(owner: owner) {
@@ -438,7 +441,7 @@ impl Comp {
         }
         return <Optional.None />
     }
-    fn constructionMatch(source: MatchSource) -> Optional[SemanticMatch] {
+    inout fn constructionMatch(source: MatchSource) -> Optional[SemanticMatch] {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => {
                 match self.sourceFacts.state(owner: owner) {

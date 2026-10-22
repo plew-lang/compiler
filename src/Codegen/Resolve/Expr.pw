@@ -407,7 +407,7 @@ pub impl Comp {
         return 0U64
     }
 
-    fn hasSemanticExprTypeFact(exprId: U64) -> Bool {
+    inout fn hasSemanticExprTypeFact(exprId: U64) -> Bool {
         if exprId >= self.arena.exprs.count() { return false }
         match self.constructionExpression(exprId: exprId).typeState {
             SemanticExpressionTypeState.Unrecorded => { return false }
@@ -417,7 +417,7 @@ pub impl Comp {
 
     // Source checking consumes the recorded result, not a declaration's
     // annotation presence. In particular, an implicit async result is Promise.
-    fn recordedExpressionHasUnitResult(exprId: U64) -> Bool {
+    inout fn recordedExpressionHasUnitResult(exprId: U64) -> Bool {
         if exprId >= self.arena.exprs.count() { return false }
         match self.constructionExpression(exprId: exprId).typeState {
             SemanticExpressionTypeState.Unit => { return true }

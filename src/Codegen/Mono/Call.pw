@@ -3446,7 +3446,11 @@ pub impl Comp {
         if !(self.proofIsMissing(proof: proof)) {
             concreteProof = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         }
-        val resultRef: U64 = (try self.groundSemanticExprTypeRef(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+        // This call is being selected now: its result descriptor does not
+        // exist yet. Instantiate the checked source term, not a recipe that
+        // would query the very final call we are constructing.
+        val result = try self.preparedBodyExpression(bodyId: self.currentBodyInstanceId(), exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)
+        val resultRef = try self.groundAndRecordBodyType(ref: result.term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.currentBodyInstanceId())
         return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=self.templateArgumentRangeFromValues(arguments: arguments) argumentSources=arguments calleeTypeArgs=calleeArgs proof=concreteProof resultHintRef=expected resultRef=resultRef /> />
     }
 
@@ -5899,13 +5903,18 @@ pub impl Comp {
     // scope loses lexical binders and can disagree with the storage operand.
     // Annotation checking and the earlier declaration walk keep their own
     // source-level inference phase; this reader does not repeat that phase.
-    inout fn scanLocalDeclarationType(tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64) -> Result[LetEff, CompileDiagnostic] {
-        val bodyId: U64 = self.currentBodyInstanceId()
-        if bodyId == 0U64 || tyLen != 0U64 || tyIsArray {
-            return <Result.Ok value=(try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)) />
+    inout fn scanLocalDeclarationType(stmtId: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64) -> Result[LetEff, CompileDiagnostic] {
+        val bodyId = self.currentBodyInstanceId()
+        if bodyId == 0U64 {
+            return self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
         }
-        val ref: U64 = (try self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: init, globalInitializerTarget: self.cur.globalInitializerTarget, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
-        val info: TypeInfo = self.typeInfoOfRef(ref: ref)
+        val facts = try self.preparedSemanticFacts(owner: (try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)))
+        val binding = match facts.binding(stmtId: stmtId) {
+            Optional.Some(v: val binding) => binding
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: final local has no checked source binding") /> }
+        }
+        val ref = try self.groundAndRecordBodyType(ref: binding.typeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)
+        val info = self.typeInfoOfRef(ref: ref)
         return <Result.Ok value=<LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=ref /> />
     }
 
@@ -5962,7 +5971,7 @@ pub impl Comp {
                 // annotation), mirroring codegen — otherwise a later `p.x` on an
                 // inferred-typed `val p = <P …/>` can't recover its type, so a generic
                 // call like `print(p.x + p.y)` fails to discover its instantiation.
-                val le: LetEff = (try self.scanLocalDeclarationType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
+                val le: LetEff = (try self.scanLocalDeclarationType(stmtId: stmtId, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
                 try self.finalizeStorageConversion(stmtId: stmtId, exprId: init, targetTerm: le.ty)
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
                 // an INFERRED non-literal type registers its instance the same way an

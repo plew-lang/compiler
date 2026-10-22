@@ -102,6 +102,8 @@ fn main() {
     c.cur.recordCallTemplates = false
     if c.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: 0U64).unwrap() { write(s: "completed-parent-plan\n") }
     if c.cur.checkFn == 999U64 && !c.cur.recordCallTemplates { write(s: "record-cursor-restored\n") }
+    // Subsequent construction readers explicitly use the caller owner.
+    c.cur.checkFn = 0U64
     match c.callTemplateAt(index: index).kind {
         CallTemplateKind.Direct(callee: _, receiver: _, args: val range, calleeTypeArgs: _, proofId: _) => {
             val completed = c.callTemplateArguments(range: range)
