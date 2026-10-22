@@ -907,22 +907,22 @@ impl Comp {
     inout fn putSemanticAggregate(aggregate: SemanticAggregate) -> Result[(), CompileDiagnostic] {
         val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: aggregate has no source owner") /> } }
         if self.sourceOwnerConstructionClosed(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: completed source owner cannot replace an aggregate fact") /> }
-        val builder = self.sourceFacts.builder(owner: owner)
-        builder->data.putAggregate(fact: aggregate)
+        self.sourceFacts.activate(owner: owner)
+        self.sourceFacts.activeBuilder.data.putAggregate(fact: aggregate)
         return <Result.Ok value=() />
     }
     inout fn putSemanticTry(fact: SemanticTry) -> Result[(), CompileDiagnostic] {
         val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: try has no source owner") /> } }
         if self.sourceOwnerConstructionClosed(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: completed source owner cannot replace a try fact") /> }
-        val builder = self.sourceFacts.builder(owner: owner)
-        builder->data.putTry(fact: fact)
+        self.sourceFacts.activate(owner: owner)
+        self.sourceFacts.activeBuilder.data.putTry(fact: fact)
         return <Result.Ok value=() />
     }
     inout fn putSemanticMatch(fact: SemanticMatch) -> Result[(), CompileDiagnostic] {
         val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: match has no source owner") /> } }
         if self.sourceOwnerConstructionClosed(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: completed source owner cannot replace a match fact") /> }
-        val builder = self.sourceFacts.builder(owner: owner)
-        builder->data.putMatch(fact: fact)
+        self.sourceFacts.activate(owner: owner)
+        self.sourceFacts.activeBuilder.data.putMatch(fact: fact)
         self.sourceFacts.recordMatchOwner(source: fact.matchSource, owner: owner)
         return <Result.Ok value=() />
     }
@@ -2123,8 +2123,8 @@ pub impl Comp {
                     // The enclosing request has multiple construction/check
                     // walks. They may revisit this child before either outcome
                     // is published; that is not a recursive body request.
-                    val child = self.sourceFacts.builder(owner: owner)
-                    child->requested = true
+                    self.sourceFacts.activate(owner: owner)
+                    self.sourceFacts.activeBuilder.requested = true
                     mut val inputs: Array[SourceBodyParameter] = []
                     mut val parameterIndex = 0U64
                     while parameterIndex < params.count() {
@@ -2132,9 +2132,9 @@ pub impl Comp {
                         inputs.append(<SourceBodyParameter declarationTarget=parameter.nameStart typeTerm=self.arena.typeAt(index: signature).args[parameterIndex + 1U64] isInout=parameter.isInout isMove=parameter.isMove isBorrow=parameter.isBorrow />)
                         parameterIndex += 1U64
                     }
-                    val builder = self.sourceFacts.builder(owner: owner)
+                    self.sourceFacts.activate(owner: owner)
                     val result = self.arena.typeAt(index: signature).args[0U64]
-                    builder->data.signature = <Optional.Some v=<SourceBodySignature hasReceiver=false receiverTerm=0U64 selfInout=false selfMove=false isAsync=false hasReturnValue=!self.callableResultIsUnit(ref: result) resultTerm=result block=body parameters=inputs /> />
+                    self.sourceFacts.activeBuilder.data.signature = <Optional.Some v=<SourceBodySignature hasReceiver=false receiverTerm=0U64 selfInout=false selfMove=false isAsync=false hasReturnValue=!self.callableResultIsUnit(ref: result) resultTerm=result block=body parameters=inputs /> />
                 }
                 mut val pi: U64 = 0
                 while pi < params.count() {
@@ -2206,10 +2206,10 @@ pub impl Comp {
         }
         match self.sourceRecordingOwner() {
             Optional.Some(v: val owner) => {
-                val builder = self.sourceFacts.builder(owner: owner)
-                if !builder->requiredKeys.contains(exprId) {
-                    builder->requiredKeys.insert(exprId)
-                    builder->data.requiredExpressions.append(exprId)
+                self.sourceFacts.activate(owner: owner)
+                if !self.sourceFacts.activeBuilder.requiredKeys.contains(exprId) {
+                    self.sourceFacts.activeBuilder.requiredKeys.insert(exprId)
+                    self.sourceFacts.activeBuilder.data.requiredExpressions.append(exprId)
                 }
             }
             // Declaration/field recording has its own checking boundary.
@@ -2219,8 +2219,8 @@ pub impl Comp {
     }
 
     inout fn checkSourceTypingObligations(owner: SemanticCompletionOwner) -> Result[(), CompileDiagnostic] {
-        val builder = self.sourceFacts.builder(owner: owner)
-        for expression in builder->data.requiredExpressions {
+        val required = self.sourceFacts.requiredExpressions(owner: owner)
+        for expression in required {
             val fact = match self.sourceFacts.expression(owner: owner, exprId: expression) {
                 Optional.Some(v: val fact) => fact
                 Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") /> }
@@ -2612,8 +2612,8 @@ impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: parameter.declarationTarget, msg: "internal error: source body parameter has an unresolved type") />
             }
         }
-        val builder = self.sourceFacts.builder(owner: <SemanticCompletionOwner.Function index=fnIdx />)
-        builder->data.signature = <Optional.Some v=signature />
+        self.sourceFacts.activate(owner: <SemanticCompletionOwner.Function index=fnIdx />)
+        self.sourceFacts.activeBuilder.data.signature = <Optional.Some v=signature />
         return <Result.Ok value=() />
     }
 }

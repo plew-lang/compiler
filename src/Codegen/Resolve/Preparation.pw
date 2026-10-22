@@ -1,6 +1,6 @@
 // Source owner success is published only by these checked preparation phases.
 impl Comp {
-    fn sourceOwnerConstructionClosed(owner: SemanticCompletionOwner) -> Bool { return self.sourceFacts.outcome(owner: owner).isSome() }
+    inout fn sourceOwnerConstructionClosed(owner: SemanticCompletionOwner) -> Bool { return self.sourceFacts.outcome(owner: owner).isSome() }
 
 
     inout fn prepareLexicalBodyUncached(owner: U64) -> Result[(), CompileDiagnostic] {

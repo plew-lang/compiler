@@ -409,7 +409,7 @@ pub impl Comp {
 
     inout fn hasSemanticExprTypeFact(exprId: U64) -> Bool {
         if exprId >= self.arena.exprs.count() { return false }
-        match self.constructionExpression(exprId: exprId).typeState {
+        match self.constructionExpressionHead(exprId: exprId).typeState {
             SemanticExpressionTypeState.Unrecorded => { return false }
             _ => { return true }
         }
@@ -419,7 +419,7 @@ pub impl Comp {
     // annotation presence. In particular, an implicit async result is Promise.
     inout fn recordedExpressionHasUnitResult(exprId: U64) -> Bool {
         if exprId >= self.arena.exprs.count() { return false }
-        match self.constructionExpression(exprId: exprId).typeState {
+        match self.constructionExpressionHead(exprId: exprId).typeState {
             SemanticExpressionTypeState.Unit => { return true }
             _ => { return false }
         }
@@ -440,7 +440,7 @@ pub impl Comp {
 
     inout fn semanticExprTerm(exprId: U64) -> U64 {
         if exprId < self.arena.exprs.count() {
-            return self.constructionExpression(exprId: exprId).term
+            return self.constructionExpressionHead(exprId: exprId).term
         }
         return 0U64
     }
@@ -1109,7 +1109,26 @@ pub impl Comp {
 
     // Checking and diagnostic continuation also need lexical identity, without
     // authorizing publication of a completed expression fact.
-    fn currentSourceOwner() -> Optional[SemanticCompletionOwner] {
+    inout fn currentSourceOwner() -> Optional[SemanticCompletionOwner] {
+        // A matching active slot already holds the canonical source identity.
+        // Generated aliases still take the lexical-root lookup below.
+        match self.sourceFacts.activeOwner {
+            Optional.Some(v: val owner) => {
+                match owner {
+                    SemanticCompletionOwner.Function(index: val index) => { if self.cur.checkFn == index { return <Optional.Some v=owner /> } }
+                    SemanticCompletionOwner.Closure(expression: val expression) => { if self.cur.checkFn == 9223372036854775808U64 + expression { return <Optional.Some v=owner /> } }
+                    SemanticCompletionOwner.Global(target: val target) => {
+                        if self.cur.checkFn == 18446744073709551615U64 {
+                            match self.cur.globalInitializerTarget {
+                                Optional.Some(v: val current) => { if current == target { return <Optional.Some v=owner /> } }
+                                Optional.None => {}
+                            }
+                        }
+                    }
+                }
+            }
+            Optional.None => {}
+        }
         if self.cur.checkFn >= 9223372036854775808U64 && self.cur.checkFn != 18446744073709551615U64 {
             return <Optional.Some v=<SemanticCompletionOwner.Closure expression=self.cur.checkFn - 9223372036854775808U64 /> />
         }

@@ -2,7 +2,7 @@
 // while reading. Later requests and rejected writes cannot change old readers.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { Expr, Stmt }
+use /Ir only { Expr, Stmt, InstanceEnvironment }
 use @Std/Io only { print }
 fn returnExpression(compiler: inout Comp, function: U64) -> U64 {
     val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: function).body, index: 0U64)
@@ -31,6 +31,14 @@ fn main() {
         count += 1U64
     }
     if compiler.sourceFactStatistics().acquisitions != acquisitions { panic("expression read reacquired body storage") }
+    val body = compiler.internBodyInstance(fnIdx: first, environment: <InstanceEnvironment />)
+    val beforeConsumer = compiler.sourceFactStatistics().acquisitions
+    count = 0U64
+    while count < 128U64 {
+        if compiler.preparedBodyExpression(bodyId: body, exprId: expression).unwrap().term != term { panic("consumer lost its reader") }
+        count += 1U64
+    }
+    if compiler.sourceFactStatistics().acquisitions != beforeConsumer + 1U64 { panic("consumer reacquired owner storage for each expression") }
     compiler.prepareLexicalBody(fnIdx: second).unwrap()
     val other = compiler.preparedFunctionSemanticFacts(fnIdx: second).unwrap()
     if other.expression(exprId: expression).isSome() { panic("foreign owner supplied a fact") }

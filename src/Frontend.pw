@@ -1,4 +1,4 @@
-use @Std/Core only { Ref, MutableRef }
+use @Std/Core only { Ref }
 use ./Ir only { SemanticTypeRecipe, CallTemplateArgumentRange, CallTemplateTypeArgumentRange, CallTemplateOperandRange, CallTemplateViewRange }
 use ./Ir only { CallSiteSelection, CallTarget }
 use ./Diag only { eprintU64 }
@@ -2222,6 +2222,14 @@ fn allocateSourceFactSession() -> U64 {
 
 // Each source request publishes only its own immutable backing. Shared type
 // and proof identities remain in Comp; this store never owns the session.
+// Small read projection for construction queries. No second semantic store.
+struct SourceExpressionHead {
+    val term: U64 = 0U64
+    val typeState: SemanticExpressionTypeState = <SemanticExpressionTypeState.Unrecorded />
+    val invocation: InvocationCompletion = <InvocationCompletion.Pending />
+}
+impl SourceExpressionHead { factory }
+
 struct SourceBodyData {
     val owner: SemanticCompletionOwner
     mut val parent: Optional[SemanticCompletionOwner] = <Optional.None />
@@ -2258,14 +2266,23 @@ struct SourceBodyBuilder {
 impl SourceBodyBuilder { factory }
 
 enum SourceBodyState {
-    Building(builder: MutableRef[SourceBodyBuilder])
-    Succeeded(facts: PreparedSemanticFacts)
+    Building
+    Active
+    Succeeded(reader: U64)
     Failed(diagnostic: CompileDiagnostic)
     Registered
 }
 
 struct SourceFactDirectory {
+    // Exactly one directory-owned builder is active. Switching owners saves
+    // the previous value in its slot; no mutable alias crosses a Comp copy.
+    mut val activeOwner: Optional[SemanticCompletionOwner] = <Optional.None />
+    mut val activeBuilder: SourceBodyBuilder = <SourceBodyBuilder data=<SourceBodyData owner=<SemanticCompletionOwner.Function index=0U64 /> /> />
+    mut val functionBuilders: Dictionary[U64, SourceBodyBuilder] = [:]
+    mut val globalBuilders: Dictionary[U64, SourceBodyBuilder] = [:]
+    mut val closureBuilders: Dictionary[U64, SourceBodyBuilder] = [:]
     val session: U64 = allocateSourceFactSession()
+    mut val readers: Array[PreparedSemanticFacts] = []
     mut val functions: Array[Optional[SourceBodyState]] = []
     mut val globals: Dictionary[U64, SourceBodyState] = [:]
     mut val closures: Dictionary[U64, SourceBodyState] = [:]
@@ -2328,6 +2345,7 @@ impl SourceBindingFact { factory }
 // This component seals source types, bindings, regions and aggregate plans;
 // it is not a whole CheckedBody or permission to execute an instance.
 pub struct PreparedSemanticFacts {
+    val readerIndex: U64
     val session: U64
     val owner: SemanticCompletionOwner
     val payload: Ref[SourceBodyData]

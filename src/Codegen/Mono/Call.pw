@@ -5074,8 +5074,8 @@ impl Comp {
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: closure.exprId, msg: "internal error: closure declaration has no source preparation owner") /> }
         }
         try self.requireBuildingClosureOwner(owner: owner, offset: self.exprOffset(id: closure.exprId))
-        val builder = self.sourceFacts.builder(owner: owner)
-        builder->data.putClosure(closure: closure)
+        self.sourceFacts.activate(owner: owner)
+        self.sourceFacts.activeBuilder.data.putClosure(closure: closure)
         val prior: U64 = (try self.semanticClosureIndex(ownerFnIdx: closure.ownerFnIdx, exprId: closure.exprId))
         if prior < self.semanticClosures.count() {
             try self.requireBuildingClosureOwner(owner: self.semanticClosureOwners[prior], offset: self.exprOffset(id: closure.exprId))
@@ -5144,8 +5144,8 @@ impl Comp {
         val boxed = try self.checkedCaptureCell(lo: local)
         val mode = if boxed { give <SemanticClosureCaptureMode.CellBorrow /> } else { give <SemanticClosureCaptureMode.ValueCopy /> }
         captures.append(<SemanticClosureCapture bindingTarget=local.nameStart nameLen=local.nameLen typeTerm=local.ty mode=mode />)
-        val builder = self.sourceFacts.builder(owner: self.semanticClosureOwners[index])
-        builder->data.putClosure(closure: <SemanticClosure ownerFnIdx=closure.ownerFnIdx exprId=closure.exprId bodyKey=closure.bodyKey functionTypeTerm=closure.functionTypeTerm bodyBlock=closure.bodyBlock parameters=closure.parameters hasReturn=closure.hasReturn returnTypeTerm=closure.returnTypeTerm captures=captures />)
+        self.sourceFacts.activate(owner: self.semanticClosureOwners[index])
+        self.sourceFacts.activeBuilder.data.putClosure(closure: <SemanticClosure ownerFnIdx=closure.ownerFnIdx exprId=closure.exprId bodyKey=closure.bodyKey functionTypeTerm=closure.functionTypeTerm bodyBlock=closure.bodyBlock parameters=closure.parameters hasReturn=closure.hasReturn returnTypeTerm=closure.returnTypeTerm captures=captures />)
         return <Result.Ok value=() />
     }
 }
@@ -5908,7 +5908,7 @@ pub impl Comp {
         if bodyId == 0U64 {
             return self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
         }
-        val facts = try self.preparedSemanticFacts(owner: (try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)))
+        val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
         val binding = match facts.binding(stmtId: stmtId) {
             Optional.Some(v: val binding) => binding
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: final local has no checked source binding") /> }
@@ -5924,7 +5924,11 @@ pub impl Comp {
         val completion = if self.cur.bodyId == 0U64 {
             give self.exprCompletion(exprId: exprId)
         } else {
-            give try self.checkedSemanticExprCompletion(exprId: exprId)
+            val expression = try self.preparedBodyExpression(bodyId: self.cur.bodyId, exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)
+            give match expression.completion {
+                Optional.Some(v: val completion) => completion.flow
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: prepared source value has no completion") /> }
+            }
         }
         try self.scanExprInsts(exprId: exprId)
         return <Result.Ok value=completion.execution.normal() />
@@ -6070,7 +6074,8 @@ pub impl Comp {
 
     inout fn scanBlockInsts(blkId: U64) -> Result[(), CompileDiagnostic] {
         val owner: Optional[PreparedSemanticFacts] = if self.cur.bodyId != 0U64 && self.blockStmtCount(blkId: blkId) != 0U64 {
-            give <Optional.Some v=try self.checkedSemanticStmtCompletionOwner(stmtId: self.blockStmtAt(blkId: blkId, index: 0U64)) />
+            val source = try self.bodySourceOwner(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+            give <Optional.Some v=try self.sourceConsumerFacts(owner: source) />
         } else {
             give <Optional.None />
         }
@@ -6112,9 +6117,15 @@ pub impl Comp {
 pub impl Comp {
     // Execution bodies retain a lexical owner; global initializers additionally
     // require their declaration target because they share an anonymous body.
+    inout fn preparedBodyFacts(bodyId: U64, globalInitializerTarget: Optional[U64] = <Optional.None />) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
+        return self.sourceConsumerFacts(owner: (try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: globalInitializerTarget)))
+    }
     inout fn preparedBodyExpression(bodyId: U64, exprId: U64, globalInitializerTarget: Optional[U64] = <Optional.None />) -> Result[SemanticExprType, CompileDiagnostic] {
-        val owner = try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: globalInitializerTarget)
-        return self.preparedSourceExpression(owner: owner, exprId: exprId)
+        val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: globalInitializerTarget)
+        match facts.expression(exprId: exprId) {
+            Optional.Some(v: val expression) => { return <Result.Ok value=expression /> }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: prepared owner has no matching source expression") /> }
+        }
     }
 }
 
@@ -6140,7 +6151,7 @@ impl Comp {
         if !semanticCompletionOwnersEqual(recorded: use.sourceOwner, prepared: owner) {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: parent.exprId), msg: "internal error: access use belongs to another source body") />
         }
-        return self.preparedSemanticFacts(owner: use.sourceOwner)
+        return self.sourceConsumerFacts(owner: use.sourceOwner)
     }
 }
 
@@ -6178,8 +6189,7 @@ impl Comp {
 
 pub impl Comp {
     inout fn preparedBodyMatch(bodyId: U64, matchSource: MatchSource, globalInitializerTarget: Optional[U64] = <Optional.None />) -> Result[Optional[SemanticMatch], CompileDiagnostic] {
-        val owner = try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: globalInitializerTarget)
-        val facts = try self.preparedSemanticFacts(owner: owner)
+        val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: globalInitializerTarget)
         val body = self.arena.bodyInstanceAt(index: bodyId - 1U64)
         return <Result.Ok value=facts.pattern(ownerFnIdx: (try self.semanticBodyOwner(fnIdx: body.fnIdx)), matchSource: matchSource) />
     }
@@ -6198,14 +6208,12 @@ pub impl Comp {
 
 pub impl Comp {
     inout fn preparedBodyAggregate(bodyId: U64, exprId: U64, globalInitializerTarget: Optional[U64] = <Optional.None />) -> Result[Optional[SemanticAggregate], CompileDiagnostic] {
-        val owner = try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: globalInitializerTarget)
-        val facts = try self.preparedSemanticFacts(owner: owner)
+        val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: globalInitializerTarget)
         val body = self.arena.bodyInstanceAt(index: bodyId - 1U64)
         return <Result.Ok value=facts.aggregate(ownerFnIdx: (try self.semanticBodyOwner(fnIdx: body.fnIdx)), exprId: exprId) />
     }
     inout fn preparedBodyTry(bodyId: U64, exprId: U64, globalInitializerTarget: Optional[U64] = <Optional.None />) -> Result[Optional[SemanticTry], CompileDiagnostic] {
-        val owner = try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: globalInitializerTarget)
-        val facts = try self.preparedSemanticFacts(owner: owner)
+        val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: globalInitializerTarget)
         val body = self.arena.bodyInstanceAt(index: bodyId - 1U64)
         return <Result.Ok value=facts.tryDecomposition(ownerFnIdx: (try self.semanticBodyOwner(fnIdx: body.fnIdx)), exprId: exprId) />
     }

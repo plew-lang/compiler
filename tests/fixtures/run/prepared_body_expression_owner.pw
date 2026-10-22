@@ -6,7 +6,7 @@ use /Ir only { InstanceEnvironment, Stmt, CallArgumentSource }
 fn main() {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler,
-        input: <FrontendInput.Text path="body-expression.pw" text="val first: I64 = 3I64\nval second: I64 = 4I64\nfn probe() -> I64 {{ return 1I64 }} fn unrelated() {{}}" />,
+        input: <FrontendInput.Text path="body-expression.pw" text="val first: I64 = 3I64\nval second: I64 = 4I64\nfn probe() -> I64 {{ return 1I64 }} fn unrelated() {{}} fn exits() {{ return }}" />,
         sources: <SourceAccess />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "unrelated").nameId)
@@ -44,6 +44,16 @@ fn main() {
     match compiler.preparedBodyExpression(bodyId: 0U64, exprId: expression) {
         Result.Err(error: _) => {}
         Result.Ok(value: _) => { panic("missing body admitted") }
+    }
+    // A foreign statement must not choose its own completion authority, even
+    // when both source signatures return Unit and there is no value operand.
+    val exits = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "exits").nameId)
+    compiler.prepareLexicalBody(fnIdx: exits).unwrap()
+    compiler.cur.bodyId = foreign
+    compiler.cur.bodyFnIdx = other
+    match compiler.scanBlockInsts(blkId: compiler.arena.functionAt(index: exits).body) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("foreign completion admitted") }
     }
     val global = compiler.arena.globals[0U64]
     val unrelatedGlobal = compiler.arena.globals[1U64]

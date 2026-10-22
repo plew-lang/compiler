@@ -1,0 +1,37 @@
+// Compiler-state copies may fork construction tables, but never an open writer.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, Stmt, SemanticExpressionTypeState }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="branch.pw" text="fn owner() -> I64 {{ return 1I64 }}" />,
+        sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "owner").nameId)
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: owner).body, index: 0U64)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Return(value: val value, hasValue: _, offset: _) => value
+        _ => { panic("missing return") }
+    }
+    compiler.cur.checkFn = owner
+    compiler.cur.recordCallTemplates = true
+    compiler.recordExpr(exprId: expression).unwrap()
+    val term = compiler.semanticExprTerm(exprId: expression)
+    mut val fork = compiler
+    val extra = fork.pushExpr(e: <Expr.Int value=3U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    fork.recordExpr(exprId: extra, expectedTerm: term).unwrap()
+    match compiler.sourceSemanticExprTypeAt(index: extra).typeState {
+        SemanticExpressionTypeState.Unrecorded => {}
+        _ => { panic("fork mutated the original builder") }
+    }
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    val original = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    val publishedTerm = original.expression(exprId: expression).unwrap().term
+    if original.expression(exprId: extra).isSome() { panic("foreign construction entered original payload") }
+    if fork.semanticExprTerm(exprId: extra) != term { panic("original sealing emptied fork builder") }
+    fork.prepareLexicalBody(fnIdx: owner).unwrap()
+    if fork.preparedFunctionSemanticFacts(fnIdx: owner).unwrap().expression(exprId: extra).unwrap().term != term { panic("fork lost its own fact") }
+    if original.expression(exprId: expression).unwrap().term != publishedTerm { panic("fork sealing changed original reader") }
+    print("ok")
+}

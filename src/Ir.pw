@@ -3835,6 +3835,9 @@ pub impl ParseScratch { factory }
 // lowering-time return type (generic-constructor inference); `checkFn` is the
 // function index the eager generic checker is on.
 pub struct Cursor {
+    // Navigation into this session's immutable source-reader registry. Saved
+    // with the rest of the context; it is not an independent success flag.
+    pub mut val sourceFactReader: Optional[U64] = <Optional.None />
     pub mut val locals: Array[Local] = []
     pub mut val tmp: U64 = 0
     pub mut val loopMark: U64 = 0
