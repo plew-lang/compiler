@@ -27,3 +27,25 @@ Dependency identity rechecked at `2983c47ff7ba0b1d693d656094e9fd0dbeca63dc`: Che
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
 
 Existing conversion/projection/descriptor/result-recipe and first-concrete consumers, including PriorCallResult.siteKey controls. Preserve implemented checks; remove legacy unstamped/name/cursor decisions only with matching producer migration. No new existential/interface feature is inferred from this task.
+
+
+## Nominal Body-Receiver Identity Increment
+
+The registered-carrier repair of mid_type_recipe_instances adds a same-spelled
+carrier with a different declaration identity. It exposed sameBodyRuntimeRef
+comparing only names/arguments when interning body environments, which merged
+that foreign receiver with the intended carrier and attempted to publish a
+second different call at one body/site. Prefer canonical declaration identity
+when both terms have it, including aliases whose authored spellings differ.
+Keep the existing bootstrap legacy fallback only where a producer lacks it; its
+remaining removal is still part of the producer audit, not proof of completeness.
+
+The internal recipe fixture uses the normal binder and Arena.registerEnum APIs
+to supply a real nominal generic payload carrier. It remains a Mid-only test,
+without requiring frontend initialization, a source body or executing a callable.
+Its instance-specific results, cross-instance cursor, missing publication,
+known Unit, forged Unit and absent-result controls are preserved. Added controls
+reject a foreign nominal payload and require distinct body identities. A duplicate
+statement-owned final publication reports through CallSiteKey rather than reading
+a nonexistent source expression for its diagnostic. Current-source imported AOT
+passes; fresh compiler/full gates remain separate.

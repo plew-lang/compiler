@@ -1,28 +1,53 @@
 use @Std/Io only { write }
 use /Frontend only { Comp }
-use /Ir only { TypeRef, InstanceEnvironment, SemanticTypeRecipe }
+use /Ir only { TypeRef, InstanceEnvironment, SemanticTypeRecipe, EnumDef, Variant, FieldDef }
 use /Mid only { MidBody, MidBlock, MidTerminator, MidLocalDecl, MidScope, MidOperand, MidPlace, MidInstantiateError, instantiateCanonicalMidBody }
+
+fn carrier(compiler: inout Comp, name: String) -> U64 {
+    val declaration = compiler.internBytes(s: name)
+    val parameters = compiler.lowerTypeParamNames(names: ["T"], anchor: declaration.nameStart).unwrap()
+    val parameter = parameters[0U64]
+    val term = compiler.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId paramId=parameter.paramId args=[] />)
+    val payload = compiler.internBytes(s: "v")
+    val some = compiler.internBytes(s: "Some")
+    val none = compiler.internBytes(s: "None")
+    val field = <FieldDef nameStart=payload.nameStart nameLen=payload.nameLen nameId=payload.nameId tyStart=parameter.nameStart tyLen=parameter.nameLen tyNameId=parameter.nameId tyIsArray=false ty=term isMut=false hasDefault=false defaultVal=0U64 />
+    compiler.arena.registerEnum(<EnumDef nameStart=declaration.nameStart nameLen=declaration.nameLen nameId=declaration.nameId typeParams=parameters variants=[<Variant nameStart=some.nameStart nameLen=some.nameLen nameId=some.nameId fields=[field] />, <Variant nameStart=none.nameStart nameLen=none.nameLen nameId=none.nameId fields=[] />] defOffset=declaration.nameStart />)
+    return declaration.nameStart
+}
 
 fn main() {
     mut val compiler = <Comp />
     compiler.arena.reserveTypeSentinel()
+    // Register nominal carriers through the same binder/declaration APIs as
+    // lowering, while keeping this a Mid-only recipe/instance test.
+    val optionalOwner = carrier(compiler: inout compiler, name: "Optional")
+    val otherOwner = carrier(compiler: inout compiler, name: "Other")
+    val noCallee = compiler.arena.functionCount()
+    compiler.cur.bodyFnIdx = noCallee
     val firstName = compiler.internBytes(s: "First")
     val secondName = compiler.internBytes(s: "Second")
     val optionalName = compiler.internBytes(s: "Optional")
     val firstType = compiler.pushType(t: <TypeRef nameStart=firstName.nameStart nameLen=firstName.nameLen args=[] />)
     val secondType = compiler.pushType(t: <TypeRef nameStart=secondName.nameStart nameLen=secondName.nameLen args=[] />)
-    val firstOptional = compiler.pushType(t: <TypeRef nameStart=optionalName.nameStart nameLen=optionalName.nameLen args=[firstType] />)
-    val secondOptional = compiler.pushType(t: <TypeRef nameStart=optionalName.nameStart nameLen=optionalName.nameLen args=[secondType] />)
-    val firstBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=firstType />)
-    val secondBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=secondType />)
+    val firstOptional = compiler.pushType(t: <TypeRef nameStart=optionalName.nameStart nameLen=optionalName.nameLen hasDecl=true declOffset=optionalOwner args=[firstType] />)
+    val secondOptional = compiler.pushType(t: <TypeRef nameStart=optionalName.nameStart nameLen=optionalName.nameLen hasDecl=true declOffset=optionalOwner args=[secondType] />)
+    val firstBody = compiler.internBodyInstance(fnIdx: noCallee, environment: <InstanceEnvironment receiverRef=firstType />)
+    val secondBody = compiler.internBodyInstance(fnIdx: noCallee, environment: <InstanceEnvironment receiverRef=secondType />)
     compiler.cur.bodyId = firstBody
     val site = compiler.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: 2U64).unwrap()
-    compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 2U64, recvTypeRef: firstType, resultTypeRef: firstOptional).unwrap()
+    compiler.appendFinalCallee(exprId: 0U64, callee: noCallee, siteIsStmt: true, slot: 2U64, recvTypeRef: firstType, resultTypeRef: firstOptional).unwrap()
     compiler.cur.bodyId = secondBody
-    compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 2U64, recvTypeRef: secondType, resultTypeRef: secondOptional).unwrap()
+    compiler.appendFinalCallee(exprId: 0U64, callee: noCallee, siteIsStmt: true, slot: 2U64, recvTypeRef: secondType, resultTypeRef: secondOptional).unwrap()
+    // A duplicate statement-owned call has no source expression to inspect.
+    // Reject it through its retained site without dereferencing exprId zero.
+    match compiler.appendFinalCallee(exprId: 0U64, callee: noCallee, siteIsStmt: true, slot: 2U64, recvTypeRef: secondType, resultTypeRef: secondOptional, generatedSite: site) {
+        Result.Err(error: val error) => { if error.message != "final call occurrence is already published" { panic(error.message) } }
+        Result.Ok(value: _) => { panic "duplicate call occurrence accepted" }
+    }
     // Navigation is deliberately unrelated to the stored semantic call site.
     compiler.arena.semanticTypeRecipes.append(<SemanticTypeRecipe kind=2U64 exprId=999U64 siteIsStmt=true callSite=site />)
-    compiler.arena.semanticTypeRecipes.append(<SemanticTypeRecipe kind=4U64 input=1U64 />)
+    compiler.arena.semanticTypeRecipes.append(<SemanticTypeRecipe kind=4U64 input=1U64 payloadOwner=optionalOwner />)
     // Frontend closes each dependency before Mid consumes the body facts.
     if compiler.groundSemanticTypeRecipeForBody(recipeId: 2U64, bodyId: firstBody, selfRef: firstType, itemRef: 0U64).unwrap() != firstType { panic "first recipe producer failed" }
     if compiler.groundSemanticTypeRecipeForBody(recipeId: 2U64, bodyId: secondBody, selfRef: secondType, itemRef: 0U64).unwrap() != secondType { panic "second recipe producer failed" }
@@ -43,16 +68,26 @@ fn main() {
     if compiler.mid.locals[firstLocal].typeTerm != firstType || compiler.mid.locals[secondLocal].typeTerm != secondType { panic "instance result identity lost" }
     if compiler.mid.locals[firstLocal].typeRecipe != 0U64 || compiler.mid.locals[secondLocal].typeRecipe != 0U64 { panic "ground result retained recipe" }
     if compiler.mid.locals[sourceLocal].typeTerm != 0U64 || compiler.mid.locals[sourceLocal].typeRecipe != 2U64 { panic "source recipe mutated" }
-    val missingBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment />)
+    val missingBody = compiler.internBodyInstance(fnIdx: noCallee, environment: <InstanceEnvironment />)
     // Even an available call dependency cannot replace an unpublished result.
     compiler.cur.bodyId = missingBody
-    compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 2U64, recvTypeRef: firstType, resultTypeRef: firstOptional).unwrap()
+    compiler.appendFinalCallee(exprId: 0U64, callee: noCallee, siteIsStmt: true, slot: 2U64, recvTypeRef: firstType, resultTypeRef: firstOptional).unwrap()
     val missing = instantiateCanonicalMidBody(c: inout compiler, body: source, bodyId: missingBody)
     match missing.error { MidInstantiateError.InvalidLocalResultType => {} _ => { panic "missing dependency accepted" } }
+    // A same-spelled, same-arity result from another nominal carrier cannot
+    // satisfy the selected payload recipe.
+    val wrongOptional = compiler.pushType(t: <TypeRef nameStart=optionalName.nameStart nameLen=optionalName.nameLen hasDecl=true declOffset=otherOwner args=[firstType] />)
+    val wrongBody = compiler.internBodyInstance(fnIdx: noCallee, environment: <InstanceEnvironment receiverRef=wrongOptional />)
+    if wrongBody == compiler.internBodyInstance(fnIdx: noCallee, environment: <InstanceEnvironment receiverRef=firstOptional />) { panic "body key merged nominal carrier declarations" }
+    compiler.cur.bodyId = wrongBody
+    compiler.appendFinalCallee(exprId: 0U64, callee: noCallee, siteIsStmt: true, slot: 2U64, recvTypeRef: firstType, resultTypeRef: wrongOptional, generatedSite: site).unwrap()
+    if compiler.groundSemanticTypeRecipeForBody(recipeId: 2U64, bodyId: wrongBody, selfRef: firstType, itemRef: 0U64).unwrap() != 0U64 { panic "wrong nominal carrier supplied payload" }
+    val wrong = instantiateCanonicalMidBody(c: inout compiler, body: source, bodyId: wrongBody)
+    match wrong.error { MidInstantiateError.InvalidLocalResultType => {} _ => { panic "wrong nominal carrier accepted" } }
     // A selected no-payload call is known Unit, not a missing result.
-    val unitBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=firstOptional />)
+    val unitBody = compiler.internBodyInstance(fnIdx: noCallee, environment: <InstanceEnvironment receiverRef=firstOptional />)
     compiler.cur.bodyId = unitBody
-    compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 2U64, recvTypeRef: firstType, resultTypeRef: 0U64, generatedSite: site).unwrap()
+    compiler.appendFinalCallee(exprId: 0U64, callee: noCallee, siteIsStmt: true, slot: 2U64, recvTypeRef: firstType, resultTypeRef: 0U64, generatedSite: site).unwrap()
     compiler.arena.setBodyTypeRecipeResult(bodyId: unitBody, recipeId: 1U64, resultType: 0U64)
     val unitSource = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=0U64 typeRecipe=1U64 sourceScope=0U64 isUnique=false isParameter=false />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
     val unit = instantiateCanonicalMidBody(c: inout compiler, body: unitSource, bodyId: unitBody)
@@ -61,7 +96,7 @@ fn main() {
     compiler.arena.setBodyTypeRecipeResult(bodyId: missingBody, recipeId: 1U64, resultType: 0U64)
     val forged = instantiateCanonicalMidBody(c: inout compiler, body: unitSource, bodyId: missingBody)
     match forged.error { MidInstantiateError.InvalidLocalResultType => {} _ => { panic "non-Unit call accepted as Unit" } }
-    val absentBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=secondOptional />)
+    val absentBody = compiler.internBodyInstance(fnIdx: noCallee, environment: <InstanceEnvironment receiverRef=secondOptional />)
     val absent = instantiateCanonicalMidBody(c: inout compiler, body: unitSource, bodyId: absentBody)
     match absent.error { MidInstantiateError.InvalidLocalResultType => {} _ => { panic "absent result accepted as Unit" } }
     write(s: "mid-type-recipe-instances-ok\n")

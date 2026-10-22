@@ -1273,6 +1273,9 @@ pub impl Comp {
                     CallTemplateKind.Operator(op: val op, operands: _, resolution: _, resultTerm: _) => {
                         return <Result.Err error=self.unresolvedSourceOperatorDiagnostic(op: op, offset: template.siteKey.originStart) />
                     }
+                    CallTemplateKind.Protocol(receiver: _, selection: _, resultTerm: _) => {
+                        return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "for-loop requires an Iterable or Iterator") />
+                    }
                     _ => {}
                 }
                 return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "type argument does not conform to the trait required by `where`") />

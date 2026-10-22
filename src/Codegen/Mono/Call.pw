@@ -130,6 +130,9 @@ pub impl Comp {
         // Source facets (view, capability, associated-type spelling) are
         // resolved before this point.  The emitted receiver representation is
         // determined solely by its runtime head/arguments and existential bit.
+        // Registered declaration identity is stronger than source spelling:
+        // imported aliases may differ in spelling, while unrelated modules
+        // may declare distinct same-named receivers.
         // A few bootstrap-era TypeRef construction paths predate nameId and
         // legitimately carry 0.  Interned ids are a fast path, not part of the
         // runtime type contract; fall back to the head spelling for those
@@ -138,7 +141,9 @@ pub impl Comp {
         // two such legacy refs as equal merged unrelated runtime receivers
         // (for example Counter and Two) in final-callable/body keys.  Use ids
         // only when BOTH exist; otherwise compare the authoritative spelling.
-        if left.nameId == 0U64 || right.nameId == 0U64 {
+        if left.hasDecl && right.hasDecl {
+            if left.declOffset != right.declOffset { return false }
+        } else if left.nameId == 0U64 || right.nameId == 0U64 {
             if !(spansEqual(c: inout self, aStart: left.nameStart, aLen: left.nameLen, bStart: right.nameStart, bLen: right.nameLen)) {
                 return false
             }
@@ -1565,7 +1570,7 @@ pub impl Comp {
         if siteKey.originKind == 0U64 { siteKey = (try self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)) }
         val evaluationArguments = self.prepareFinalCalleeArguments(arguments: arguments, parameterTypes: parameterTypeRefs, sourceTypes: argumentSourceTypes)
         if !self.arena.publishFinalCallee(row: <CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee receiverPassing=receiverPassing recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target />, typeArguments: calleeTypeArgs, parameterTypes: parameterTypeRefs, conversions: argumentConversions, passings: argumentPassings, arguments: <Optional.Some v=evaluationArguments />) {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "final call occurrence is already published") />
+            return <Result.Err error=self.diagnosticAt(offset: siteKey.originStart, msg: "final call occurrence is already published") />
         }
         // A call's result recipe is part of the selected call contract, even
         // when no surrounding frontend expression asks for its concrete type.
