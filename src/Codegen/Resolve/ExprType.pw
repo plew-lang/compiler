@@ -7,9 +7,8 @@
 pub impl Comp {
 
     // The declared return TypeInfo of trait `traitOwner`'s member `qName` (requirement
-    // or provided method, supertraits included) — the type-recovery analog of
-    // traitProvidesMember, for typing a method reached through a type parameter's
-    // bounds. A bare `Self` return maps back to the PARAMETRIC receiver name
+    // or provided method, supertraits included) during private source type
+    // construction through a type parameter's bounds. A bare `Self` return maps back to the PARAMETRIC receiver name
     // (tpStart/tpLen — the conformer IS the type param, so it grounds per instance); a
     // structured return mentioning `Self`/`Item` stays unknown for now (recording it
     // raw would let the ENCLOSING method's Self substitute in — a different Self).

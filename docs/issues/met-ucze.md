@@ -116,8 +116,9 @@ plans and admitted bounds/evidence.
 Generic method validation reads the selected declaration for qualifier category
 and retains its existing contextual argument checks. Remove its independent
 staticMemberResolution, boundProvidesMethod and traitProvidesMember call paths.
-The old traitProvidesMember helper has an internal owner-identity fixture; migrate
-that control before removing the now test-only helper. Operators/iteration and
+The old traitProvidesMember/boundProvidesMethod candidate-exists helpers are
+removed. Their internal owner-identity control now uses the retained source-type
+query, preserving positive/private visibility and wrong-owner rejection. Operators/iteration and
 Verify's concrete method queries still require their own saved-operation reader
 migration. Removing a walk alone is not completion of this task.
 
