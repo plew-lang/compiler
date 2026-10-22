@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
+#include <llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
 #include <llvm/ExecutionEngine/Orc/LazyReexports.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
@@ -122,7 +123,18 @@ extern "C" PlewLlvmJit *plew_llvm_jit_create(void) {
   }
   // The ORC platform needs process symbols for its own support, but source
   // modules must resolve only their declared imports, not compiler globals.
+  auto machine = llvm::orc::JITTargetMachineBuilder::detectHost();
+  if (!machine) {
+    jitError(nullptr, machine.takeError());
+    return nullptr;
+  }
+  // Demand execution prioritizes materialization latency. The default target
+  // pipeline runs greedy register allocation even on unoptimized source IR,
+  // which can dominate the first call of large functions. This changes only
+  // JIT machine-code optimization, not the shared runtime or AOT pipeline.
+  machine->setCodeGenOptLevel(llvm::CodeGenOptLevel::None);
   auto engine = llvm::orc::LLJITBuilder()
+      .setJITTargetMachineBuilder(std::move(*machine))
       .setLinkProcessSymbolsByDefault(false)
       .setProcessSymbolsJITDylibSetup([](llvm::orc::LLJIT &engine)
           -> llvm::Expected<llvm::orc::JITDylibSP> {
