@@ -1490,6 +1490,19 @@ pub impl Comp {
 
     inout fn recordOperatorTemplate(exprId: U64, op: I64, operandExprs: Array[U64], isUnary: Bool) -> Result[(), CompileDiagnostic] {
         if !isUnary && (op == opAnd() || op == opOr()) { return <Result.Ok value=() /> }
+        // A typed integer sibling fixes an otherwise untyped numeric receiver
+        // (e.g. 0 - value). Resolve that permitted literal hole before choosing
+        // its callable. Once the receiver is typed, its selected signature owns
+        // RHS context; never impose homogeneous typing on a heterogeneous Rhs.
+        if operandExprs.count() == 2U64 && self.parametricExprTerm(exprId: operandExprs[0U64]) == 0U64 && contextualNumericExpression(self.arena.exprs, exprId: operandExprs[0U64], floatingLiterals: false) {
+            val sibling = self.parametricExprTerm(exprId: operandExprs[1U64])
+            if sibling != 0U64 && sibling < self.arena.typeCount() {
+                val type = self.arena.typeTerms[sibling]
+                if self.isIntType(start: type.nameStart, len: type.nameLen) {
+                    try self.recordSemanticExprExpectedResult(exprId: operandExprs[0U64], expectedTerm: sibling)
+                }
+            }
+        }
         mut val receiverTerm: U64 = 0U64
         if operandExprs.count() > 0U64 { receiverTerm = self.parametricExprTerm(exprId: operandExprs[0]) }
         val resolution: StaticMemberResolution = (try self.staticOperatorTemplateResolution(op: op, receiverTerm: receiverTerm, isUnary: isUnary))
@@ -1534,6 +1547,13 @@ pub impl Comp {
         self.recordInvocationCompletion(exprId: exprId, diverging: false)
         val staticResult: U64 = (try self.staticOperatorTemplateResultTerm(op: op, resolution: resolution))
         if staticResult != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: staticResult) }
+        match selection {
+            OperatorSelection.Direct(callee: val callee) => {
+                val result = try self.operatorCalleeType(callee: callee, receiverRef: receiverTerm, term: self.semanticCallableReturnTerm(function: self.arena.functionAt(index: callee)))
+                if result != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: result) }
+            }
+            _ => {}
+        }
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
         val resultTerm: U64 = self.parametricExprTerm(exprId: exprId)
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))

@@ -1,0 +1,33 @@
+// The first source construction closes permitted integer-literal context and
+// operator selection. Later verification must not be needed to repair Pending.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplateKind, OperatorSelection }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="operator-context.pw" text="fn probe(value: I64) -> I64 {{ return 0 - value }}" />,
+        sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    compiler.recordParametricFunction(fnIdx: owner, recordCallTemplates: true).unwrap()
+    mut val found = false
+    for operation in compiler.callTemplateSnapshot() {
+        match operation.kind {
+            CallTemplateKind.Operator(op: _, operands: val operands, resolution: val selection, resultTerm: val result) => {
+                match selection {
+                    OperatorSelection.Pending => { panic("operator selection waited for verification") }
+                    _ => {}
+                }
+                if operands.len != 2U64 || result == 0U64 { panic("incomplete operator signature") }
+                val receiver = compiler.callTemplateOperandAt(index: operands.start)
+                if !compiler.typeRefEq(a: compiler.sourceCallArgumentType(source: receiver), b: compiler.arena.functionAt(index: owner).retTy) { panic("receiver did not retain its literal context") }
+                found = true
+            }
+            _ => {}
+        }
+    }
+    if !found { panic("missing operator") }
+    print("ok")
+}
