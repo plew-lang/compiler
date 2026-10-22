@@ -1,5 +1,5 @@
 use @Std/Io only { write }
-use /Ir only { Arena, TypeRef }
+use /Ir only { Arena, TypeRef, ResolvedTypeDeclaration }
 fn check(arena: Arena) {
     mut val name: U64 = 0U64
     while name < 220U64 {
@@ -39,7 +39,7 @@ fn main() {
     val added = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=1U64 nameId=201U64 args=[] />, nameCount: 219U64)
     if arena.firstBareTypeNamed(nameId: 201U64) != added || copy.firstBareTypeNamed(nameId: 201U64) != copy.typeCount() { panic "copy index changed" }
     val first = arena.firstBareTypeNamed(nameId: 1U64)
-    arena.resolveTypeDeclaration(index: first, hasDecl: true, declOffset: 456U64, hasAssocTraitDecl: true, assocTraitDeclOffset: 789U64)
+    if !arena.finishTypeDeclarationResolution(resolutions: [<ResolvedTypeDeclaration index=first hasDecl=true declOffset=456U64 hasAssocTraitDecl=true assocTraitDeclOffset=789U64 />]) { panic("declaration identities did not publish") }
     if arena.firstBareTypeNamed(nameId: 1U64) != first || arena.typeAt(index: first).declOffset != 456U64 || arena.typeTerms[first].declOffset != 456U64 || copy.typeAt(index: first).hasDecl { panic "declaration update changed lookup or copy" }
     copy.registerType(t: <TypeRef nameStart=0U64 nameLen=1U64 nameId=202U64 args=[] />, nameCount: 219U64)
     check(arena: arena)

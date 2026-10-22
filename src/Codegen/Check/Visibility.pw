@@ -558,7 +558,8 @@ pub impl Comp {
         return false
     }
 
-    inout fn resolveTypeDeclIdentities() {
+    inout fn resolveTypeDeclIdentities() -> Result[(), CompileDiagnostic] {
+        mut val resolutions: Array[ResolvedTypeDeclaration] = []
         mut val i: U64 = 0
         while i < self.arena.typeCount() {
             val t: TypeRef = self.arena.typeAt(index: i)
@@ -571,10 +572,14 @@ pub impl Comp {
                 }
                 // Resolve both representations at the same declaration boundary.
                 // The scalar reader must never observe pre-resolution identity.
-                self.arena.resolveTypeDeclaration(index: i, hasDecl: decl.nameLen != 0U64, declOffset: decl.nameStart, hasAssocTraitDecl: assoc.nameLen != 0U64, assocTraitDeclOffset: assoc.nameStart)
+                resolutions.append(<ResolvedTypeDeclaration index=i hasDecl=decl.nameLen != 0U64 declOffset=decl.nameStart hasAssocTraitDecl=assoc.nameLen != 0U64 assocTraitDeclOffset=assoc.nameStart />)
             }
             i += 1
         }
+        if !self.arena.finishTypeDeclarationResolution(resolutions: resolutions) {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: type declaration resolution cannot be published twice or with invalid row identities") />
+        }
+        return <Result.Ok value=() />
     }
 
     inout fn checkSurfaceName(surfaces: inout PublicSurfaceIndex, surfaceMod: U64, start: U64, len: U64, offset: U64) -> Result[(), CompileDiagnostic] {

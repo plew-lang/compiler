@@ -1,4 +1,4 @@
-use ../../../src/Ir only { Arena, TypeRef }
+use ../../../src/Ir only { Arena, TypeRef, ResolvedTypeDeclaration }
 fn main() {
     mut val arena = <Arena />
     arena.reserveTypeSentinel()
@@ -9,7 +9,7 @@ fn main() {
     val record = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldTerms=[projected] />, nameCount: 0U64)
     val trait = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] assocTraitArgs=[record] />, nameCount: 0U64)
     if !arena.typeContainsAssociatedProjection(ref: trait) { panic("nested projection") }
-    arena.resolveTypeDeclaration(index: trait, hasDecl: true, declOffset: 12U64, hasAssocTraitDecl: true, assocTraitDeclOffset: 13U64)
+    if !arena.finishTypeDeclarationResolution(resolutions: [<ResolvedTypeDeclaration index=trait hasDecl=true declOffset=12U64 hasAssocTraitDecl=true assocTraitDeclOffset=13U64 />]) { panic("declaration identities did not publish") }
     if !arena.typeContainsAssociatedProjection(ref: trait) { panic("declaration stamping") }
     val future = arena.typeCount() + 1U64
     val parent = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[future] />, nameCount: 0U64)

@@ -52,3 +52,26 @@ publication boundary structural; no later overwrite was demonstrated.
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
 
 Existing source publication/header/closure/global/fact consumers; com-kp3y owns the first owner-local storage increment. Final closure still includes current operation/evidence/origin families, term declaration publication and old-reader removal; a sealed component does not finish the whole parent.
+
+## Declaration-facet Publication Increment (WIP)
+
+Replace the public per-row resolveTypeDeclaration writer with one validated
+finishTypeDeclarationResolution batch. The actual row mutation is private to Ir.
+The frontend computes resolved facets after source declarations/imports are
+registered; Arena validates ordered, unique, in-range row identities before any
+write and permanently closes this phase on success. A rejected batch changes
+neither type representation nor publication state. Post-publication appends are
+still supported, but do not reopen facet resolution for any row. Source typing
+admission requires the completed declaration dependency before owner success.
+
+Existing internal bare-name, projection-presence, closedness and unification
+oracles now publish their initial construction batch through this API. Preserve
+their original lookup/metadata/copy/matching assertions; do not expose a test-only
+writer. The new publication control covers invalid/duplicate batches, stable
+parallel representations, post-success rejection, later append rejection and
+independent Arena branches. Whole-source checking succeeds; current-source
+imported controls are running. Fresh compiler and full gates remain required.
+
+This closes the declaration-facet writer boundary, not every canonical type
+producer or late legacy name/ambient read. The source/header/closure owner storage
+increments already recorded in com-kp3y remain intact and are not reimplemented.

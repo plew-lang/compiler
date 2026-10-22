@@ -1,6 +1,6 @@
 use @Std/Core only { Ref }
 use ./Ir only { SemanticTypeRecipe, CallTemplateArgumentRange, CallTemplateTypeArgumentRange, CallTemplateOperandRange, CallTemplateViewRange }
-use ./Ir only { CallSiteSelection, CallTarget }
+use ./Ir only { CallSiteSelection, CallTarget, ResolvedTypeDeclaration }
 use ./Diag only { eprintU64 }
 use ./Ir only { ExistentialRequirementSignature, ExistentialWitnessPlan, SelectedCallableSubstitution, BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, SemanticAccessInput, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticMatchKind, SemanticMatchArm, SemanticMatchPayload, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalStorageResolution, FinalExistentialResolution, FinalForResolution, ValueConversionBoundary, EnumPayloadConversion, ValueConversionProof, BodySignature, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, FinalCallArguments, CallEvaluationArgument }
 use @Plew/Syntax only { StringPartAst }
@@ -1848,7 +1848,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     } else {
         try c.checkSourceTypeUses(types: c.loweringTypeUses)
     }
-    c.resolveTypeDeclIdentities()
+    try c.resolveTypeDeclIdentities()
     try c.checkMemberwiseFactoryCollisions()
     // recursive value types (spec/03): mark fields that close a containment cycle
     // onto their owner; codegen stores them behind a heap pointer so the C type is

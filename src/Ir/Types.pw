@@ -91,7 +91,28 @@ pub impl Arena {
     }
 
     // Declaration resolution cannot change the fields used by the name index.
-    inout fn resolveTypeDeclaration(index: U64, hasDecl: Bool, declOffset: U64, hasAssocTraitDecl: Bool, assocTraitDeclOffset: U64) {
+    fn typeDeclarationResolutionComplete() -> Bool { return self.typeDeclarationResolutionFinished }
+
+    // Declaration registration is the only mutable facet-construction phase.
+    // Validate the whole ordered batch before changing either representation.
+    // After publication there is no per-row writer, including for later appends.
+    inout fn finishTypeDeclarationResolution(resolutions: Array[ResolvedTypeDeclaration]) -> Bool {
+        if self.typeDeclarationResolutionFinished { return false }
+        mut val previousEnd = 1U64
+        for resolution in resolutions {
+            if resolution.index < previousEnd || resolution.index >= self.typeRows.count() { return false }
+            previousEnd = resolution.index + 1U64
+        }
+        for resolution in resolutions {
+            self.applyResolvedTypeDeclaration(index: resolution.index, hasDecl: resolution.hasDecl, declOffset: resolution.declOffset, hasAssocTraitDecl: resolution.hasAssocTraitDecl, assocTraitDeclOffset: resolution.assocTraitDeclOffset)
+        }
+        self.typeDeclarationResolutionFinished = true
+        return true
+    }
+}
+
+impl Arena {
+    inout fn applyResolvedTypeDeclaration(index: U64, hasDecl: Bool, declOffset: U64, hasAssocTraitDecl: Bool, assocTraitDeclOffset: U64) {
         val t: TypeRef = self.typeRows[index]
         val term: TypeTerm = self.typeTerms[index]
         self.typeTerms[index] = <TypeTerm closedness=term.closedness projectionPresence=term.projectionPresence nameStart=term.nameStart nameLen=term.nameLen nameId=term.nameId paramId=term.paramId args=term.args isRecord=term.isRecord recordFieldLabels=term.recordFieldLabels recordFieldTerms=term.recordFieldTerms viewExtId=term.viewExtId viewIds=term.viewIds viewSources=term.viewSources isAny=term.isAny argLabels=term.argLabels assocTraitStart=term.assocTraitStart assocTraitLen=term.assocTraitLen assocTraitId=term.assocTraitId assocTraitArgs=term.assocTraitArgs assocTraitArgLabels=term.assocTraitArgLabels assocNameStart=term.assocNameStart assocNameLen=term.assocNameLen assocNameId=term.assocNameId projectionReceiver=term.projectionReceiver isSendable=term.isSendable isDiverging=term.isDiverging siteOffset=term.siteOffset hasDecl=hasDecl declOffset=declOffset hasAssocTraitDecl=hasAssocTraitDecl assocTraitDeclOffset=assocTraitDeclOffset />

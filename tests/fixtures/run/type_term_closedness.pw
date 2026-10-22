@@ -1,6 +1,6 @@
 use @Std/Io only { write }
 use @Plew/Syntax only { rangeEquals }
-use /Ir only { Arena, TypeRef }
+use /Ir only { Arena, TypeRef, ResolvedTypeDeclaration }
 
 // Reference behavior before registration-time structural evidence.
 fn referenceClosed(arena: Arena, ref: U64) -> Bool {
@@ -69,7 +69,7 @@ fn main() {
     if arena.typeIsClosed(ref: pending) || arena.typeIsClosed(ref: wrapper) { panic "future child accepted" }
     val published = arena.registerType(t: <TypeRef nameStart=4U64 nameLen=4U64 args=[leaf] />, nameCount: 0U64)
     if published != future || !arena.typeIsClosed(ref: pending) || !arena.typeIsClosed(ref: wrapper) { panic "unknown evidence became stale" }
-    arena.resolveTypeDeclaration(index: leaf, hasDecl: true, declOffset: 41U64, hasAssocTraitDecl: false, assocTraitDeclOffset: 0U64)
+    if !arena.finishTypeDeclarationResolution(resolutions: [<ResolvedTypeDeclaration index=leaf hasDecl=true declOffset=41U64 hasAssocTraitDecl=false assocTraitDeclOffset=0U64 />]) { panic("declaration identities did not publish") }
     check(arena: arena)
     check(arena: snapshot)
     if snapshot.typeIsClosed(ref: wrapper) || snapshot.typeAt(index: leaf).hasDecl { panic "snapshot changed" }

@@ -1,0 +1,25 @@
+// Declaration facets publish as one validated batch. Success closes all facet
+// writers, including for rows appended later; an Arena fork remains independent.
+use /Ir only { Arena, TypeRef, ResolvedTypeDeclaration }
+use @Std/Io only { print }
+fn main() {
+    mut val arena = <Arena />
+    arena.reserveTypeSentinel()
+    val first = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] />, nameCount: 0U64)
+    mut val branch = arena
+    val identity = <ResolvedTypeDeclaration index=first hasDecl=true declOffset=42U64 hasAssocTraitDecl=true assocTraitDeclOffset=43U64 />
+    val missing = <ResolvedTypeDeclaration index=arena.typeCount() hasDecl=true declOffset=99U64 hasAssocTraitDecl=false assocTraitDeclOffset=0U64 />
+    if arena.finishTypeDeclarationResolution(resolutions: [identity, missing]) { panic("invalid batch published") }
+    if arena.typeDeclarationResolutionComplete() || arena.typeAt(index: first).hasDecl || arena.typeTerms[first].hasDecl { panic("invalid batch partly changed a type") }
+    if arena.finishTypeDeclarationResolution(resolutions: [identity, identity]) { panic("duplicate row published") }
+    if !arena.finishTypeDeclarationResolution(resolutions: [identity]) { panic("valid batch did not publish") }
+    if !arena.typeDeclarationResolutionComplete() || !arena.typeAt(index: first).hasDecl || arena.typeAt(index: first).declOffset != 42U64 || arena.typeTerms[first].assocTraitDeclOffset != 43U64 { panic("type representations disagree after publication") }
+    val replacement = <ResolvedTypeDeclaration index=first hasDecl=true declOffset=88U64 hasAssocTraitDecl=false assocTraitDeclOffset=0U64 />
+    if arena.finishTypeDeclarationResolution(resolutions: [replacement]) { panic("published type changed") }
+    val later = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] hasDecl=true declOffset=90U64 />, nameCount: 0U64)
+    if arena.finishTypeDeclarationResolution(resolutions: [<ResolvedTypeDeclaration index=later hasDecl=true declOffset=91U64 hasAssocTraitDecl=false assocTraitDeclOffset=0U64 />]) { panic("late append reopened declaration resolution") }
+    if arena.typeAt(index: first).declOffset != 42U64 || arena.typeTerms[first].declOffset != 42U64 || arena.typeAt(index: later).declOffset != 90U64 { panic("rejected write changed a row") }
+    if branch.typeDeclarationResolutionComplete() || branch.typeAt(index: first).hasDecl { panic("publication changed an independent branch") }
+    if !branch.finishTypeDeclarationResolution(resolutions: [replacement]) || branch.typeAt(index: first).declOffset != 88U64 || arena.typeAt(index: first).declOffset != 42U64 { panic("branch publication changed retained types") }
+    print("type-declaration-publication")
+}

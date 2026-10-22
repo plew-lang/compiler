@@ -1,7 +1,7 @@
 use /Ir only { PatternBindInput }
 use @Std/Io only { write }
 use /Frontend only { Comp }
-use /Ir only { TypeRef, Bind, UnifyBind }
+use /Ir only { TypeRef, Bind, UnifyBind, ResolvedTypeDeclaration }
 
 fn check(compiler: inout Comp, pattern: U64, actual: U64, expected: Bool, ignoreTopView: Bool = false) {
     mut val bindings: Array[UnifyBind] = []
@@ -84,7 +84,7 @@ fn main() {
     if compiler.unifyPatterns(a: variable, aSide: 0U64, b: nestedVariable, bSide: 1U64, aParams: <PatternBindInput.Values values=[parameter] />, bParams: <PatternBindInput.Values values=[parameter] />, binds: inout bindings) { panic "occurs check ignored" }
     if bindings.count() != 0U64 { panic "occurs check appended binding" }
     if !compiler.unifyPatterns(a: variable, aSide: 0U64, b: variable, bSide: 1U64, aParams: <PatternBindInput.Values values=[parameter] />, bParams: <PatternBindInput.Values values=[parameter] />, binds: inout bindings) { panic "corresponding binder changed" }
-    compiler.arena.resolveTypeDeclaration(index: ownedOther, hasDecl: true, declOffset: 10U64, hasAssocTraitDecl: false, assocTraitDeclOffset: 0U64)
+    if !compiler.arena.finishTypeDeclarationResolution(resolutions: [<ResolvedTypeDeclaration index=ownedOther hasDecl=true declOffset=10U64 hasAssocTraitDecl=false assocTraitDeclOffset=0U64 />]) { panic("declaration identities did not publish") }
     check(compiler: inout compiler, pattern: owned, actual: ownedOther, expected: true)
     write(s: "unify-type-term-ok\n")
 }

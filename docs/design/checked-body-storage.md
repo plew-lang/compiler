@@ -73,6 +73,12 @@ measurement choice; neither may use name spelling as semantic identity.
 Shared term/evidence rows are stable immutable values, including their child
 ranges. Appending new rows cannot rewrite an existing term or proof. The session
 owns these pools and the directory, which never escape as a mutable arena.
+Initial declaration-facet resolution is a construction phase: it computes and
+validates one complete batch before publishing either type representation. That
+publication permanently closes facet updates, including updates to later appended
+rows. Source-body success requires this declaration dependency to be complete.
+Later substitutions append supplied canonical terms; they do not reopen the
+declaration resolver or revise terms retained by an existing checked owner.
 CheckedBody/PreparedInstance are usable only while that session remains alive;
 external consumers receive owned results/resources, not unsupported borrowed IDs.
 Do not copy a whole pool into each payload merely to extend its lifetime. A payload
