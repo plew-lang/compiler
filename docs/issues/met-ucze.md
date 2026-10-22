@@ -83,3 +83,22 @@ actual callee bodies, with positive and wrong/missing owner/site/clause/proof
 controls, AOT/JIT/gen and removal of competing decisions. Include a matching-source
 old/new cost comparison whenever the new increment appears slower; fix easy
 extra copies/searches rather than relying only on the seven-second ceiling.
+
+## Storage Summary Publication Increment
+
+First remove the remaining post-success template rewrite before moving operation
+rows into owner payloads. `mayHaveStorageArguments` is a conservative source-stable
+summary of the selected signature and operand passing forms. Compute it at the
+private successful lexical/global preparation tail, including nested closure
+rows, after default/selection/obligation closure and before source publication.
+Whole-program closure and Mid analysis only read the result. Preserve the
+conservative true default for unknown forms and subsequent sites once an owner
+is already known to require access analysis.
+
+Remove requireCallTemplateStorage entirely. DeclarationLocalAccess's existing
+eager comparison must request eager analysis explicitly instead of mutating source
+calls; preserve diagnostic equivalence, demand-versus-eager body counts and absence
+of executable/destructor discovery. New controls check precision immediately after
+a lazy function/global request, post-success writer rejection and stability across
+whole-program closure. This bounded publication repair does not complete source
+operation storage/selection/evidence migration.

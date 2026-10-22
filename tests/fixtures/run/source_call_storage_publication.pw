@@ -1,0 +1,48 @@
+// Storage-demand summaries are final before an owner succeeds, including lazy
+// requests. Whole-program closure and later analyses cannot rewrite them.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplateKind }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="storage.pw" text="fn identity(value: I64) -> I64 {{ return value }} fn valueCaller() -> I64 {{ return identity(value: 1I64) }} fn access(value: inout I64) {{}} fn storageCaller(value: inout I64) {{ access(value: inout value) }} val stored = identity(value: 3I64)" />,
+        sources: <SourceAccess />).unwrap()
+    val valueOwner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "valueCaller").nameId)
+    val storageOwner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "storageCaller").nameId)
+    compiler.prepareLexicalBody(fnIdx: valueOwner).unwrap()
+    compiler.prepareLexicalBody(fnIdx: storageOwner).unwrap()
+    compiler.prepareGlobalInitializer(target: compiler.arena.globals[0U64].nameStart).unwrap()
+    val published = compiler.callTemplateSnapshot()
+    mut val values = 0U64
+    mut val storage = 0U64
+    mut val index = 0U64
+    while index < published.count() {
+        val call = published[index]
+        match call.kind {
+            CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                if call.siteKey.ownerFnIdx == storageOwner {
+                    if !call.mayHaveStorageArguments { panic("storage parameter lost access demand") }
+                    storage += 1U64
+                } else {
+                    if call.mayHaveStorageArguments { panic("owner succeeded with an unfinished storage summary") }
+                    values += 1U64
+                }
+            }
+            _ => {}
+        }
+        if compiler.replaceBuildingCallTemplate(index: index, template: call) { panic("published call reopened") }
+        index += 1U64
+    }
+    if values != 2U64 || storage != 1U64 { panic("missing source calls") }
+    compiler.closeProgramCallTemplates().unwrap()
+    index = 0U64
+    while index < published.count() {
+        if compiler.callTemplateAt(index: index).mayHaveStorageArguments != published[index].mayHaveStorageArguments { panic("program closure rewrote a published source call") }
+        index += 1U64
+    }
+    if compiler.callTemplateCount() != published.count() { panic("program closure added source calls") }
+    print("ok")
+}

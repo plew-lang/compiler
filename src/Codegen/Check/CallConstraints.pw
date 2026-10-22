@@ -104,13 +104,6 @@ impl Comp {
 }
 
 pub impl Comp {
-    inout fn requireCallTemplateStorage(index: U64) {
-        val template = self.callTemplates[index]
-        self.callTemplates.set(i: index, value: <CallTemplate siteKey=template.siteKey resultTypeRecipe=template.resultTypeRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm mayHaveStorageArguments=true />)
-    }
-}
-
-pub impl Comp {
     fn callTemplateOperandCount() -> U64 { return self.callTemplateOperandPool.count() }
     fn callTemplateOperandAt(index: U64) -> CallArgumentSource { return self.callTemplateOperandPool[index] }
 }

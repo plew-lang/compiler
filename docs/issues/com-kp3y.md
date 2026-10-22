@@ -50,6 +50,28 @@ Exact source `85aa9a96` reaches generation-two fixed point with formal runs 7.19
 
 Internal fixtures retain assertions/golden output while supplying explicit construction owners and real recorded bindings; sealed readers ignore later construction-cache edits. Tests of removed private fields/index methods are consolidated at the actual private directory/payload boundaries. Mid's invocation completion and generator global reachability now consume scoped successful facts. The latter's helper used to call a construction query indirectly; the removal audit follows that call path, not only names directly appearing in Mono.
 
-`369da8a9` full normal gate `20261022T062357-test-052805` passes run1419 / panic47 / reject967 / part91 / partreject84 / skip0 / fail0, including lazy CLI and tooling controls. Source `85aa9a96` fixes generation-only global reachability and passes full generation `20261022T070110-gen-d4f1e3` (24 positive / 5 rejects / zero skip or failure). The exact final measured binary is now running normal `20261022T070727-test-d92523`; final generation/dependency/sanitizer evidence remains pending. Do not claim an earlier binary ran those final gates.
+The exact `85aa9a96` measured binary passes final normal `20261022T070727-test-d92523`
+(run1419 / panic47 / reject967 / part91 / partreject84 / zero skip/failure),
+generation `20261022T095415-gen-9e33dc` (24 positive / 5 rejects), dependency
+`20261022T095515-deps-305f4d` and LLVM22 ASan/LSan
+`20261022T095520-asan-a86744` (A1 / B2433 / C1419 / D47 / E76). All exit zero
+with unchanged inputs. Full normal includes lazy CLI and native/tooling controls.
 
-Before closing: successful final whole normal/generation/lazy/sanitizer coverage, exact evidence and completed removal audit. Main/seed/adopted carrier remain unchanged. Evidence and reproduction controls are in meta `evidence/existing-feature-conformance/source-owner-facts/`; parent integration gates remain separate.
+The subsequent `20c1ec47` reader correction replaces whole 688-byte
+SourceBodyData getter arguments with just required rows/indexes. Owner/session
+guards and lookup results are unchanged. Twenty focused AOT cases, two privacy
+rejects and full generation 24/5 pass. Same frozen-source alternating comparisons
+measure 6.717053 -> 6.490937 seconds, with identical LLVM; these are diagnostic
+medians, not formal speedup claims. Formal `20261022T112014-self-host-d515b4`
+reaches generation-two fixed point with runs 7.075059 / 6.705942 / 6.566374, median
+6.705942 seconds. Exact measured binary is saved as
+`bin/plewc-source-owner-narrow-fixed`, SHA256
+`3a6391b9c136fc59a2153815179a6d81381aa3ca3153ce96ba4acf6468453ae9`.
+
+This component remains open until applicable final-reader coverage and evidence
+are reconciled at its final revision. Continuing met-ucze also removes the remaining
+post-success call-storage summary rewrite, which must precede operation sealing.
+Earlier full gates are not attributed to later binaries. Main/seed/adopted carrier
+remain unchanged. Evidence and reproduction controls are in meta
+`evidence/existing-feature-conformance/source-owner-facts/`; parent integration
+gates and the full eleven criteria remain separate.

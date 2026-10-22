@@ -633,23 +633,6 @@ pub impl Comp {
             index += 1U64
         }
         try self.checkBodyCallTemplateSelections(owner: 18446744073709551615U64)
-        // Selection and expected-result completion are now stable. Compute
-        // access demand once, rather than rebuilding it at every Record update.
-        mut val required: Dictionary[U64, Bool] = [:]
-        index = 0U64
-        while index < self.callTemplates.count() {
-            val template = self.callTemplates[index]
-            if !required.getOr(key: template.siteKey.ownerFnIdx, fallback: false) {
-                if self.recordedCallHasStorageArguments(kind: template.kind) {
-                    required[template.siteKey.ownerFnIdx] = true
-                } else {
-                    self.callTemplates.set(i: index, value: <CallTemplate siteKey=template.siteKey resultTypeRecipe=template.resultTypeRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm mayHaveStorageArguments=false />)
-                }
-            }
-            // Unexamined sites retain the conservative true default. Once an
-            // owner is required, further precision cannot remove its body.
-            index += 1U64
-        }
         self.globalCallTemplatesClosed = true
         return <Result.Ok value=() />
     }
@@ -850,8 +833,8 @@ pub impl Comp {
         }
     }
 
-    // This summary is published at Record, while source argument modes and
-    // the selected signature are available. Mid never reopens source syntax.
+    // Source publication computes this summary while argument modes and the
+    // selected signature are stable. Mid never reopens source syntax.
     fn sourceArgumentUsesStorage(exprId: U64) -> Bool {
         if exprId >= self.arena.exprs.count() { return true }
         match self.arena.exprs[exprId] {

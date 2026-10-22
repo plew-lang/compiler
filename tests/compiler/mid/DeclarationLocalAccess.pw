@@ -1,6 +1,5 @@
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
 use ../../../src/SourceAccess only { SourceAccess }
-use ../../../src/Ir only { CallTemplate }
 use ../../../src/Mid/Build only { MidFunctionTemplates }
 use ../../../src/Mid/DeclarationAccess only { checkDeclarationLocalAccess, DeclarationAccessError }
 use ../../../src/Mid/Verify only { MidVerifyError }
@@ -33,17 +32,19 @@ fn main() {
     assert(compiler.arena.finalDestructions.count() == 0U64)
     val identities = compiler.arena.bodyInstanceCount()
     mut val eager = compiler
-    mut val index = 0U64
-    while index < eager.callTemplateCount() {
-        val template = eager.callTemplateAt(index: index)
-        eager.requireCallTemplateStorage(index: index)
-        index += 1U64
-    }
+    val sourceCalls = compiler.callTemplateSnapshot()
     mut val demanded = <MidFunctionTemplates />
     mut val full = <MidFunctionTemplates />
     val result = classification(result: checkDeclarationLocalAccess(c: inout compiler, templates: inout demanded))
-    val reference = classification(result: checkDeclarationLocalAccess(c: inout eager, templates: inout full))
+    val reference = classification(result: checkDeclarationLocalAccess(c: inout eager, templates: inout full, eager: true))
     assert(result == reference)
+    assert(compiler.mid.bodies.count() <= eager.mid.bodies.count())
+    mut val index = 0U64
+    while index < sourceCalls.count() {
+        assert(eager.callTemplateAt(index: index).mayHaveStorageArguments == sourceCalls[index].mayHaveStorageArguments)
+        assert(compiler.callTemplateAt(index: index).mayHaveStorageArguments == sourceCalls[index].mayHaveStorageArguments)
+        index += 1U64
+    }
     assert(compiler.monoWork.bodyCount() == 0U64)
     assert(compiler.arena.finalDestructions.count() == 0U64)
     assert(compiler.arena.bodyInstanceCount() == identities)

@@ -23,6 +23,7 @@ impl Comp {
         try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Function index=owner />)
         try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Function index=owner />)
         try self.checkNestedSourceFacts(owner: <SemanticCompletionOwner.Function index=owner />)
+        self.finalizeLexicalCallStorage(owner: owner)
         for token in admitted { self.publishPreparedCallConstraints(admitted: token) }
         return <Result.Ok value=() />
     }
@@ -47,7 +48,44 @@ impl Comp {
         try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Global target=target />)
         try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Global target=target />)
         try self.checkNestedSourceFacts(owner: <SemanticCompletionOwner.Global target=target />)
+        self.finalizeGlobalCallStorage(target: target)
         for token in admitted { self.publishPreparedCallConstraints(admitted: token) }
         return <Result.Ok value=() />
+    }
+
+    // This is a source-stable conservative summary, not a mutable result of a
+    // later analysis. Only the successful construction tail may publish it.
+    inout fn finalizeSourceCallStorage(index: U64) -> Bool {
+        val template = self.callTemplates[index]
+        val required = self.recordedCallHasStorageArguments(kind: template.kind)
+        if !required {
+            self.replaceSourceCallTemplate(index: index, template: <CallTemplate siteKey=template.siteKey resultTypeRecipe=template.resultTypeRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm mayHaveStorageArguments=false />)
+        }
+        return required
+    }
+
+    inout fn finalizeLexicalCallStorage(owner: U64) {
+        mut val required: Dictionary[U64, Bool] = [:]
+        mut val row = self.firstLexicalCallTemplate(owner: owner)
+        while row != 0U64 {
+            val index = row - 1U64
+            val sourceOwner = self.callTemplates[index].siteKey.ownerFnIdx
+            if !required.getOr(key: sourceOwner, fallback: false) {
+                if self.finalizeSourceCallStorage(index: index) { required[sourceOwner] = true }
+            }
+            // Once this body's analysis is needed, unexamined sites retain
+            // their conservative true default without scanning their operands.
+            row = self.callTemplateBodyNext[index]
+        }
+    }
+
+    inout fn finalizeGlobalCallStorage(target: U64) {
+        mut val required: Dictionary[U64, Bool] = [:]
+        for index in self.globalCallTemplateOwners.getOr(key: target, fallback: []) {
+            val sourceOwner = self.callTemplates[index].siteKey.ownerFnIdx
+            if !required.getOr(key: sourceOwner, fallback: false) {
+                if self.finalizeSourceCallStorage(index: index) { required[sourceOwner] = true }
+            }
+        }
     }
 }
