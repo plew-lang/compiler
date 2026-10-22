@@ -2,7 +2,7 @@
 // requirement evidence. The common enqueue entry has no Declaration fallback.
 use /Frontend only { Comp, FrontendInput, analyzeFrontend, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess, SourceResource }
-use /Ir only { InstanceEnvironment, CallableConstraintEvidence, StaticConformanceProof, CallConstraintInstance }
+use /Ir only { InstanceEnvironment, CallableConstraintEvidence, StaticConformanceProof, CallConstraintInstance, CallTemplateKind }
 use @Std/Io only { print }
 
 fn main() {
@@ -59,7 +59,7 @@ fn checkExplicitEnvironment(compiler: inout Comp, templateIndex: U64, callee: U6
 
 fn checkBodyless() {
     mut val compiler = <Comp />
-    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="extern(c) {{ fn foreign() }}" path="bodyless.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="extern(c) {{ fn foreign() }} fn probe() {{ foreign() }}" path="bodyless.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreign").nameId)
     mut val requests: Array[CallConstraintInstance] = []
     mut val heads: Dictionary[U64, U64] = [:]
@@ -68,4 +68,20 @@ fn checkBodyless() {
     compiler.appendCallConstraintInstance(function: function, arguments: [], receiver: 0U64, proof: <StaticConformanceProof.Missing />, constraints: <CallableConstraintEvidence.Recorded bounds=[] proofs=[] />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant).unwrap()
     if compiler.appendCallConstraintInstance(function: function, arguments: [], receiver: 0U64, proof: <StaticConformanceProof.Missing />, constraints: <CallableConstraintEvidence.Recorded bounds=[] proofs=[<StaticConformanceProof.Missing />] />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant).isOk() { panic("bodyless declaration skipped evidence admission") }
     if requests.count() != 0U64 { panic("bodyless signature fabricated a body request") }
+    val probe = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    compiler.prepareLexicalBody(fnIdx: probe).unwrap()
+    mut val found = false
+    for template in compiler.callTemplateSnapshot() {
+        match template.kind {
+            CallTemplateKind.Direct(callee: val selected, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                if selected == function && template.siteKey.ownerFnIdx == probe {
+                    if compiler.selectedCallConstraintEvidence(template: template, callee: probe, proof: <StaticConformanceProof.Missing />, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64).isOk() { panic("empty evidence authorized a different callable") }
+                    found = true
+                }
+            }
+            _ => {}
+        }
+    }
+    if !found { panic("missing bodyless source call") }
+
 }

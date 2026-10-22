@@ -1,0 +1,9 @@
+// A nominal head with concrete arguments stays concrete even when an unrelated
+// function's parameter has the same spelling. Final readers use binder identity.
+use @Std/Io only { print }
+struct Box[Value] { val value: Value }
+fn keep[Box](value: Box) -> Box { return value }
+fn main() {
+    val box = keep(value: <Box value=42I64 />)
+    print(box.value)
+}

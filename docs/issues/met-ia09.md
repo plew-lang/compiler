@@ -51,3 +51,18 @@ An internal source-imported control is being added for operator/protocol callee
 bindings, explicit environments and malformed bodyless evidence. Fresh binary,
 matching-source cost and applicable full gates remain pending. This increment does
 not close dynamic descriptors, associated proof consumers or the entire issue.
+
+Current-source imported controls pass existing requirement derivation (including
+reordered/weaker/conformance bounds), provided-body bindings, Direct evidence,
+selected conditional proofs and independent global owners. The new implicit-call
+control reaches real operator/protocol callee environments and succeeds with an
+explicit caller environment while the ambient cursor is cleared. A canonical
+nominal/binder confusion exposed by this control is recorded in met-6e6k.
+Additional empty-evidence replacement and provided-placement guards require the
+next fresh candidate's checks; no full-gate success is claimed yet.
+
+The fixed 2b241be3 full normal run found lexical_body_requests reading a failed
+owner's unpublishable operation before testing writer rejection. Preserve that
+fixture's original refusal/retry/cursor/independence checks: retain the attempted
+row while Building, then use it for the post-failure rejected writer call. Do not
+make failed-owner rows readable to satisfy this internal fixture.

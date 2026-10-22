@@ -927,6 +927,10 @@ pub impl Comp {
         }
         val t: TypeRef = self.arena.typeAt(index: ref)
         if t.paramId != 0U64 { return <Result.Ok value=false />}
+        // Registered nominal identity and its canonical children are complete
+        // authority. Global parameter-name membership only serves the remaining
+        // unstamped construction inputs; it cannot override a known declaration.
+        if t.hasDecl { return <Result.Ok value=self.arena.typeIsClosed(ref: ref) /> }
         // an existential `any P` is a concrete ground type — its `P` names a TRAIT, never a
         // type parameter (a single-letter trait name like `P` would otherwise be misread as a
         // type-param name by the check below, poisoning `Array[any P]` registration).

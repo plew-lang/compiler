@@ -3994,7 +3994,13 @@ pub impl Comp {
             StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIndex, reqIdx: val requirement) => {
                 return self.requirementCallConstraintEvidence(template: template, callee: callee, proof: proof, traitIndex: traitIndex, requirement: requirement, environment: environment, selfRef: selfRef, itemRef: itemRef)
             }
-            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
+            StaticMemberResolution.Provided(proof: _, traitIdx: val traitIndex, callee: val declaration) => {
+                if callee >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "provided call has no selected declaration") /> }
+                val member = self.arena.functionAt(index: callee)
+                val placement = self.proofWitnessForTrait(proof: proof, traitIdx: traitIndex)
+                if placement.conformIdx == 0U64 || member.originConformIdx != placement.conformIdx || (try self.semanticBodyOwner(fnIdx: callee)) != (try self.semanticBodyOwner(fnIdx: declaration)) {
+                    return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "provided call does not match its retained declaration and placement") />
+                }
                 return self.instantiateSelectedCallConstraints(template: template, environment: environment, selfRef: selfRef, itemRef: itemRef)
             }
             StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has no retained member evidence") /> }
@@ -4003,13 +4009,17 @@ pub impl Comp {
 
     inout fn selectedCallConstraintEvidence(template: CallTemplate, callee: U64, proof: StaticConformanceProof, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
         match template.kind {
-            CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {}
+            CallTemplateKind.Direct(callee: val selected, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                if selected != callee { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "call evidence belongs to another selected declaration") /> }
+            }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: _, resultTerm: _) => {
                 return self.selectedMemberConstraintEvidence(template: template, resolution: resolution, callee: callee, proof: proof, environment: environment, selfRef: selfRef, itemRef: itemRef)
             }
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 match selection {
-                    ProtocolSelection.Direct(callee: _, proof: _) => {}
+                    ProtocolSelection.Direct(callee: val selected, proof: _) => {
+                        if selected != callee { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "protocol evidence belongs to another selected declaration") /> }
+                    }
                     ProtocolSelection.Static(resolution: val resolution) => {
                         return self.selectedMemberConstraintEvidence(template: template, resolution: resolution, callee: callee, proof: proof, environment: environment, selfRef: selfRef, itemRef: itemRef)
                     }
@@ -4018,7 +4028,9 @@ pub impl Comp {
             }
             CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
                 match selection {
-                    OperatorSelection.Direct(callee: _) => {}
+                    OperatorSelection.Direct(callee: val selected) => {
+                        if selected != callee { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "operator evidence belongs to another selected declaration") /> }
+                    }
                     OperatorSelection.Static(resolution: val resolution) => {
                         return self.selectedMemberConstraintEvidence(template: template, resolution: resolution, callee: callee, proof: proof, environment: environment, selfRef: selfRef, itemRef: itemRef)
                     }
@@ -4410,11 +4422,13 @@ pub impl Comp {
         if e.calleeTypeArgs.count() != f.typeParams.count() {
             return <Result.Ok value=false />
         }
-        // `fnArgsAllGround([])` intentionally returns false: callers use it
-        // to distinguish absent generic inference from a real substitution.
-        // A non-generic callable is nevertheless complete with zero args.
-        if f.typeParams.count() > 0U64 && !((try self.fnArgsAllGround(args: self.copyFinalCalleeTypeArgs(args: e.calleeTypeArgs)))) {
-            return <Result.Ok value=false />
+        // These are published canonical terms, not unregistered construction
+        // syntax. A same-spelled binder in another declaration cannot make a
+        // nominal argument symbolic, and no ambient resolveTy query is needed.
+        for argument in self.copyFinalCalleeTypeArgs(args: e.calleeTypeArgs) {
+            if argument == 0U64 || !self.arena.typeIsClosed(ref: argument) {
+                return <Result.Ok value=false />
+            }
         }
         if e.parameterTypeRefs.count() != f.params.count() {
             return <Result.Ok value=false />

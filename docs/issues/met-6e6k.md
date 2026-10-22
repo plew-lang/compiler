@@ -49,3 +49,22 @@ reject a foreign nominal payload and require distinct body identities. A duplica
 statement-owned final publication reports through CallSiteKey rather than reading
 a nonexistent source expression for its diagnostic. Current-source imported AOT
 passes; fresh compiler/full gates remain separate.
+
+## Canonical Grounded-Argument Read Increment
+
+A new ordinary source control reproduces an incorrect rejection of
+keep(value: <Box value=42I64 />) when keep's unrelated generic parameter is also
+named Box. The final descriptor contains a canonical closed Box[I64] nominal term,
+but finalStaticCalleeIsComplete called fnArgsAllGround/tyRefIsGround, whose legacy
+global parameter-name query classified the generic nominal head as symbolic.
+A virtual Iterator control reproduced the same issue with Cursor[Item]. Its
+canonical typeIsClosed result is true, while the name-based query returns false.
+
+Final descriptor validation now reads canonical argument closedness directly,
+rejecting zero/missing and genuinely open terms without resolveTy or global name
+queries. Construction tyRefIsGround also defers to canonical closedness when the
+nominal declaration is already known. The legacy unstamped construction path
+remains separately auditable; this does not certify every type producer.
+The new nominal/binder source fixture preserves the old failure as a negative
+carrier control. Current-source imported implicit-call and owner-request controls
+pass after the canonical repair; fresh/full gates remain required.
