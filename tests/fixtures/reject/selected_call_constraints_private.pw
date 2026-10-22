@@ -1,5 +1,5 @@
-use /Frontend only { Comp }
-fn main() {
-    val compiler: Comp = <Comp />
-    val plans = compiler.selectedCallConstraints
+use /Frontend only { PreparedCallConstraints }
+fn inspect(snapshot: PreparedCallConstraints) {
+    val plan = snapshot.plan
 }
+fn main() {}

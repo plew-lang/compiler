@@ -1,0 +1,19 @@
+// Failure of an optional Iterable conformance must not hide a valid Iterator.
+use @Std/Core only { Iterable, Iterator }
+use @Std/Io only { print }
+trait Required {}
+struct Unmarked {}
+struct Cursor[Element] {}
+impl[Element] Cursor[Element] as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] { return <Optional.None /> }
+}
+impl[Element] Cursor[Element] as Iterable where Element: Required {
+    type Item = I64
+    type Iter = Cursor[Element]
+    fn iterator() -> Cursor[Element] { return self }
+}
+fn main() {
+    for val item in <Cursor[Unmarked] /> { print(item) }
+    print(42I64)
+}

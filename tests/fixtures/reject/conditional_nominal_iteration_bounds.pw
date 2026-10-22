@@ -1,0 +1,13 @@
+// A closed conditional protocol failure reports its actual where requirement.
+use @Std/Core only { Iterator }
+trait Required {}
+struct Unmarked {}
+struct Cursor[Element] {}
+impl[Element] Cursor[Element] as Iterator where Element: Required {
+    type Item = I64
+    inout fn next() -> Optional[I64] { return <Optional.None /> }
+}
+fn unused(cursor: Cursor[Unmarked]) {
+    for val item in cursor {}
+}
+fn main() {}

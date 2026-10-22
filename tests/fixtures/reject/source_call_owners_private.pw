@@ -1,5 +1,5 @@
 use /Frontend only { Comp }
 fn main() {
     val compiler = <Comp />
-    val owners = compiler.callTemplateSourceOwners
+    val owners = compiler.callTemplateLocations
 }

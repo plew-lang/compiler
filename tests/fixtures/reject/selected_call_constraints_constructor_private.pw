@@ -1,4 +1,7 @@
-use /Frontend only { Comp }
-fn main() {
-    val compiler: Comp = <Comp selectedCallConstraints=[:] />
+// A caller cannot mint a prepared constraint snapshot around an arbitrary plan.
+use /Frontend only { PreparedCallConstraints }
+use /Ir only { SelectedCallConstraints }
+fn forge(plan: SelectedCallConstraints) -> PreparedCallConstraints {
+    return <PreparedCallConstraints plan=plan />
 }
+fn main() {}

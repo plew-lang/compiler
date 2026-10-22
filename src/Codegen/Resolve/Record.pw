@@ -275,6 +275,32 @@ pub impl Comp {
     // Item is the payload of the already selected Core.Iterator.next result.
     // Source checking and concrete recipe evaluation retain this carrier's
     // declaration identity; neither may guess it from a same-spelled type.
+    // Error reporting only: selection has already failed for both protocols.
+    // Retain a closed conditional-conformance cause instead of disguising it
+    // as a type with no protocol at all. This never admits a candidate and is
+    // never a prepared-body reader or an alternative source selector.
+    inout fn unresolvedSourceIterationDiagnostic(receivers: Array[U64], offset: U64) -> Result[CompileDiagnostic, CompileDiagnostic] {
+        val iterable = self.coreTraitOwner(name: "Iterable")
+        val iterator = self.coreTraitOwner(name: "Iterator")
+        val assumptions = self.functionBoundAssumptions(fnIdx: self.cur.checkFn)
+        for receiver in receivers {
+            if receiver != 0U64 && receiver < self.arena.typeCount() && self.arena.typeIsClosed(ref: receiver) {
+                mut val index = 0U64
+                while index < self.decls.conformCount() {
+                    val declaration = self.decls.conformAt(index: index)
+                    if !declaration.derived && declaration.subjectTraitOwner == 0U64 && declaration.bounds.len != 0U64 && (declaration.traitStart == iterable || declaration.traitStart == iterator) && self.proofSourceIsActive(baseRef: receiver, extId: declaration.extId) {
+                        val matched = try self.conformanceWitnessMatch(conformIdx: index, typeRef: receiver, traitArgs: [], traitArgsOpen: true)
+                        if matched.conformIdx != 0U64 && !(try self.witnessConditionsSatisfied(witness: matched, assumptions: assumptions)) {
+                            return <Result.Ok value=self.diagnosticAt(offset: offset, msg: "type argument does not conform to the trait required by `where`") />
+                        }
+                    }
+                    index += 1U64
+                }
+            }
+        }
+        return <Result.Ok value=self.diagnosticAt(offset: offset, msg: "for-loop requires an Iterable or Iterator") />
+    }
+
     inout fn forItemPayload(nextTerm: U64, payloadOwner: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
         if nextTerm != 0U64 && nextTerm < self.arena.typeCount() && payloadOwner != 0U64 {
             val result = self.arena.typeAt(index: nextTerm)
@@ -2353,6 +2379,9 @@ pub impl Comp {
                 val nextResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 2U64, receiver: <CallTemplateReceiver.PriorProtocolResult slot=1U64 />, receiverTerm: iteratorResult, useOffset: self.exprOffset(id: iter))
                 val optional = self.internBytes(s: "Optional")
                 val carrier = self.typeDeclIdentityFromSurface(surfaceMod: self.modules.langModule, start: optional.nameStart, len: optional.nameLen)
+                if nextResult == 0U64 {
+                    return <Result.Err error=(try self.unresolvedSourceIterationDiagnostic(receivers: [iterTerm, iteratorResult], offset: self.exprOffset(id: iter))) />
+                }
                 val semanticItem = try self.forItemPayload(nextTerm: nextResult, payloadOwner: carrier.nameStart, offset: self.exprOffset(id: iter))
                 if self.cur.recordCallTemplates { try self.recordForItemTypeRecipe(stmtId: stmtId, nextTerm: nextResult) }
                 val item = self.typeInfoOfRef(ref: semanticItem)

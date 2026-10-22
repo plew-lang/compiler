@@ -405,3 +405,24 @@ validation, visibility or semantic check is suppressed. The directory simplifica
 has passed whole-source checking; its fresh carrier, matching-source performance
 and complete affected gates remain required. Performance and scoped evidence live
 in meta/evidence/existing-feature-conformance/source-owner-facts.
+
+## Conditional Protocol Failure Diagnostics (WIP)
+
+The 2899ddad full normal gate completes all 1433 run cases and reports four
+rejection-diagnostic mismatches, with unchanged inputs. Three internal privacy
+fixtures still address the removed global constraint/owner storage. They now
+exercise PreparedCallConstraints's private plan/factory and private navigation
+locations, preserving actual construction/read boundaries and their original
+privacy assertions.
+
+The external unused_for_float_range remains rejected, but a generic missing
+protocol message hides its original closed Step-bound failure. Preserve its
+expectation. At the failed source-selection boundary only, diagnose a structurally
+matching canonical Iterable/Iterator conformance whose closed substitution fails
+its declared conditions. The same matcher and condition-evidence query supply the
+cause; candidate presence never permits acceptance or a prepared-owner read.
+Abstract underconstrained receivers still use the protocol diagnostic. Valid
+Iterator fallback is resolved before this error path; an unavailable conditional
+Iterable cannot hide an available Iterator. Add a non-range conditional protocol
+rejection and that positive fallback control. No source type spelling is special.
+Fresh diagnostics/execution and full gates remain required.
