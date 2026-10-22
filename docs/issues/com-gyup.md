@@ -1,6 +1,6 @@
 ---
 id: com-gyup
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-10-13T01:09:56Z
@@ -11,20 +11,37 @@ tags: [frontend, ownership, verification]
 ---
 # Reassess continuation-specific move-state joins
 
-Retained R10-O1 / D5 investigation from the block-expression review. At source a8934f06 / compiler bb2e80e0, the frontend merged move state from exiting short-circuit RHS and condition-chain paths into the normal continuation, rejecting programs without a double consumption. The same branch expressed as an if control succeeded. This is historical evidence, not a fresh reproduction on the current implementation or retained candidate.
+Resolved as bounded current-surface verification at compiler 2899ddad. The old
+R10-O1 probes put a wholly source-diverging return block in a Boolean operand;
+that form is now correctly rejected by the adopted value-position rule and must
+not be restored as a positive test. The historical inputs remain in meta's
+block-expression-tenth-review evidence, rather than defining current acceptance.
 
-[Historical reproductions and results](../../../evidence/block-expression-tenth-review/README.md#r10-o1--p2短絡評価で脱出する経路のmove状態が正常経路へ混入する) and [paused remediation design](../../../agents/typechecking-design-review.md) retain inputs, detailed diagnosis and D5. The current [completion contract](../design/body-checking.md#4-blocks-branches-patterns-and-completion) rejects wholly source-diverging expressions in operand positions: the original `flag && { consume(...); return }` is therefore not automatically a valid positive fixture under the adopted specification. Reassess fixture intent and find specification-valid controls rather than restoring obsolete acceptance.
+The replacement control conditional_move_continuations covers AND, OR,
+condition-chain and loop contexts with a normal RHS path plus a consuming return
+path. Its 12 executions consume each resource once, with dynamic String fields
+also exercising cleanup. Check and AOT/golden pass. Companion rejection controls
+cover a consuming normal RHS and a later use reached from break/continue, both
+inside a short-circuit RHS and directly in a loop. All four reject in check with
+the expected ownership diagnostic.
 
-The required [ownership contract](../design/ownership-and-access.md) joins only paths reaching the same continuation. Carry normal/give/break/continue destinations explicitly; condition clauses need success/failure inputs and loops need backedge/exit state. Merely discarding RHS state can miss a move reaching a loop exit. Static checks of unreachable code remain required, without merging that state into executable continuations. Source completion and analytical reachability have distinct owners and cannot be guessed independently by syntax-specific move handlers.
+Verify's branch handling reads the shared completion contract and preserves live
+continuations. DeclarationProgram's checked Mid ownership analysis validates
+loop exits/backedges and diagnoses MoveUnavailable; the loop controls exercise
+that real path rather than relying only on frontend move flags. No move analysis
+or unreachable-code checking is disabled, and no new loop syntax is enabled.
+Source completion, analytical reachability and ownership flow retain their
+separate responsibilities. No new implementation defect was reproduced within
+this bounded admitted scope, so no speculative ownership rewrite is required.
 
-This investigation belongs to the paused type-checking remediation, not authorization to resume implementation during design consolidation. R10-T1 and R10-T2 have separately recorded scoped fixes in [remediation evidence](../../../evidence/typechecking-remediation/README.md); that does not close D5 or the whole type-checking redesign.
-
-## Acceptance Criteria
-
-Audit current producer-to-final-consumer flow against the adopted specification. Build specification-valid positive controls and loop-exit use-after-move rejects, preserving diagnostic/static checking. Close with actual revision/scope and targeted results; either demonstrate that the contract already holds or repair the common transfer/join owner and remove superseded paths. Complete the applicable paused-work gates before claiming implementation integration.
+The exact carrier is bin/plewc-selected-callee-evidence-fixed, SHA256
+ae0e81c4a820d7dedad39f717180f20875935aefe5d02f48e5a5d06554a0a897.
+Scoped commands, fixture hashes and results are retained in meta/evidence/
+existing-feature-conformance/source-owner-facts/continuation-ownership-audit.json.
+The positive control is included in ASan's pre-optimization compiler ownership
+manifest. Parent-wide final candidate
+gates remain required; this investigation closure does not certify them.
 
 ## Existing-Feature Conformance Classification
 
-[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included bounded verification**.
-
-Current specification-valid continuation joins: normal/give/return/break/continue destinations, loop exits and live versus checked-dead paths. Reassess old short-circuit tests against approved value-position rejection. No new value-bearing break or loop syntax.
+[com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included bounded verification**, investigated with current specification-valid controls.

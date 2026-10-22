@@ -1,0 +1,68 @@
+// Only ownership states reaching the same continuation participate in a join.
+use @Std/Io only { print }
+unique struct Resource { val id: I64 val text: String }
+fn consume(value~: move Resource) { print(value.id) }
+fn andCase(flag: Bool, leave: Bool, id: I64) {
+    val item = <Resource id=id text="resource {id}" />
+    val result = flag && {
+        if leave {
+            consume(move item)
+            return
+        }
+        give true
+    }
+    consume(move item)
+}
+
+fn orCase(flag: Bool, leave: Bool, id: I64) {
+    val item = <Resource id=id text="resource {id}" />
+    val result = flag || {
+        if leave {
+            consume(move item)
+            return
+        }
+        give true
+    }
+    consume(move item)
+}
+
+fn chainCase(flag: Bool, leave: Bool, id: I64) {
+    val item = <Resource id=id text="resource {id}" />
+    if flag && {
+        if leave {
+            consume(move item)
+            return
+        }
+        give true
+    } {} else {}
+    consume(move item)
+}
+
+fn loopCase(flag: Bool, leave: Bool, id: I64) {
+    val item = <Resource id=id text="resource {id}" />
+    while flag {
+        val result = flag && {
+            if leave {
+                consume(move item)
+                return
+            }
+            give true
+        }
+        break
+    }
+    consume(move item)
+}
+fn main() {
+    andCase(flag: false, leave: true, id: 1I64)
+    andCase(flag: true, leave: false, id: 2I64)
+    andCase(flag: true, leave: true, id: 3I64)
+    orCase(flag: true, leave: true, id: 4I64)
+    orCase(flag: false, leave: false, id: 5I64)
+    orCase(flag: false, leave: true, id: 6I64)
+    chainCase(flag: false, leave: true, id: 7I64)
+    chainCase(flag: true, leave: false, id: 8I64)
+    chainCase(flag: true, leave: true, id: 9I64)
+    loopCase(flag: false, leave: true, id: 10I64)
+    loopCase(flag: true, leave: false, id: 11I64)
+    loopCase(flag: true, leave: true, id: 12I64)
+}

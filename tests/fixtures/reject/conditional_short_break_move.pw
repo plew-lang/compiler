@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+unique struct Resource { val id: I64 val text: String }
+fn consume(value~: move Resource) { print(value.id) }
+fn probe(flag: Bool) {
+ val item = <Resource id=1I64 text="owned" />
+ while true {
+  val result = flag && {
+   if flag { consume(move item)
+    break }
+   give true
+  }
+  break
+ }
+ consume(move item)
+}
+fn main() {}
