@@ -4,7 +4,7 @@
 // A completed owner therefore protects every row without reading/copying its
 // retained constraint evidence merely to decide whether writing is allowed.
 pub impl Comp {
-    fn selectedCallConstraintPlan(index: U64) -> Optional[SelectedCallConstraints] {
+    inout fn selectedCallConstraintPlan(index: U64) -> Optional[SelectedCallConstraints] {
         match self.sourceOperationConstraints(index: index) {
             Optional.Some(v: val state) => {
                 match state {
@@ -21,7 +21,7 @@ pub impl Comp {
         return self.storeBuildingOperationConstraints(index: index, state: <CallConstraintPlanState.Building plan=plan />)
     }
 
-    fn preparedCallConstraints(index: U64) -> Optional[PreparedCallConstraints] {
+    inout fn preparedCallConstraints(index: U64) -> Optional[PreparedCallConstraints] {
         match self.sourceOperationConstraints(index: index) {
             Optional.Some(v: val state) => {
                 match state {
@@ -92,23 +92,11 @@ pub impl Comp {
 
 pub impl Comp {
     fn callTemplateCount() -> U64 { return self.callTemplateLocations.count() }
-    fn callTemplateAt(index: U64) -> CallTemplate {
-        val location = self.callTemplateLocations[index]
-        val cached = cachedSourceOperationReader(readers: self.sourceFacts.readers, index: self.cur.sourceFactReader, session: self.sourceFacts.session, owner: location.owner)
-        val row = match cached {
-            Optional.Some(v: val reader) => reader.operationAt(index: location.localIndex)
-            Optional.None => self.sourceFacts.operation(owner: location.owner, index: location.localIndex)
-        }
-        match row {
-            Optional.Some(v: val template) => {
-                if template.siteKey.sameKey(other: location.siteKey) { return template }
-            }
-            Optional.None => {}
-        }
-        panic("internal error: source operation navigation has no owner row")
+    inout fn callTemplateAt(index: U64) -> CallTemplate {
+        return requiredSourceOperation(tables: <SourceOperationLookup activeOwner=self.sourceFacts.activeOwner activeOperations=self.sourceFacts.activeBuilder.data.operations activeConstraints=self.sourceFacts.activeBuilder.data.operationConstraints functions=self.sourceFacts.functions globals=self.sourceFacts.globals closures=self.sourceFacts.closures functionBuilders=self.sourceFacts.functionBuilders globalBuilders=self.sourceFacts.globalBuilders closureBuilders=self.sourceFacts.closureBuilders readers=self.sourceFacts.readers cachedReader=self.cur.sourceFactReader session=self.sourceFacts.session />, locations: self.callTemplateLocations, index: index)
     }
     // Explicit inspection copy for diagnostics/tests, never a body reader.
-    fn callTemplateSnapshot() -> Array[CallTemplate] {
+    inout fn callTemplateSnapshot() -> Array[CallTemplate] {
         mut val result: Array[CallTemplate] = []
         mut val index = 0U64
         while index < self.callTemplateLocations.count() {
@@ -124,8 +112,7 @@ pub impl Comp {
         if self.sourceOwnerConstructionClosed(owner: location.owner) || !location.siteKey.sameKey(other: template.siteKey) { return false }
         self.sourceFacts.activate(owner: location.owner)
         if location.localIndex >= self.sourceFacts.activeBuilder.data.operations.count() { return false }
-        val prior = self.sourceFacts.activeBuilder.data.operations[location.localIndex]
-        self.sourceFacts.activeBuilder.data.operations.set(i: location.localIndex, value: <SourceOperationRow template=template constraints=prior.constraints />)
+        self.sourceFacts.activeBuilder.data.operations.set(i: location.localIndex, value: template)
         return true
     }
 }
@@ -206,22 +193,16 @@ impl Comp {
 
 
 impl Comp {
-    fn sourceOperationConstraints(index: U64) -> Optional[CallConstraintPlanState] {
-        if index >= self.callTemplateLocations.count() { return <Optional.None /> }
-        val location = self.callTemplateLocations[index]
-        match cachedSourceOperationReader(readers: self.sourceFacts.readers, index: self.cur.sourceFactReader, session: self.sourceFacts.session, owner: location.owner) {
-            Optional.Some(v: val reader) => { return readSourceOperationConstraints(rows: reader.payload->operations, index: location.localIndex) }
-            Optional.None => { return self.sourceFacts.operationConstraints(owner: location.owner, index: location.localIndex) }
-        }
+    inout fn sourceOperationConstraints(index: U64) -> Optional[CallConstraintPlanState] {
+        return optionalSourceOperationConstraints(tables: <SourceOperationLookup activeOwner=self.sourceFacts.activeOwner activeOperations=self.sourceFacts.activeBuilder.data.operations activeConstraints=self.sourceFacts.activeBuilder.data.operationConstraints functions=self.sourceFacts.functions globals=self.sourceFacts.globals closures=self.sourceFacts.closures functionBuilders=self.sourceFacts.functionBuilders globalBuilders=self.sourceFacts.globalBuilders closureBuilders=self.sourceFacts.closureBuilders readers=self.sourceFacts.readers cachedReader=self.cur.sourceFactReader session=self.sourceFacts.session />, locations: self.callTemplateLocations, index: index)
     }
     inout fn storeBuildingOperationConstraints(index: U64, state: CallConstraintPlanState) -> Bool {
         if index >= self.callTemplateLocations.count() { return false }
         val location = self.callTemplateLocations[index]
         if self.sourceOwnerConstructionClosed(owner: location.owner) { return false }
         self.sourceFacts.activate(owner: location.owner)
-        if location.localIndex >= self.sourceFacts.activeBuilder.data.operations.count() { return false }
-        val prior = self.sourceFacts.activeBuilder.data.operations[location.localIndex]
-        self.sourceFacts.activeBuilder.data.operations.set(i: location.localIndex, value: <SourceOperationRow template=prior.template constraints=<Optional.Some v=state /> />)
+        if location.localIndex >= self.sourceFacts.activeBuilder.data.operationConstraints.count() { return false }
+        self.sourceFacts.activeBuilder.data.operationConstraints.set(i: location.localIndex, value: <Optional.Some v=state />)
         return true
     }
 }

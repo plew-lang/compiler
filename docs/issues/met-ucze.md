@@ -376,3 +376,26 @@ These controls compile current algorithms through /Frontend with the previous
 fixed carrier. A fresh compiler, formal cost and full current-candidate gates are
 still required. Exact callee evidence transfer is the next semantic increment;
 physical storage alone does not certify it or phase-three completion.
+
+
+## Operation Read Projection Cost Repair (WIP)
+
+The first owner-local storage candidate reached a second-generation fixed point
+but regressed to a formal median 7.624807 seconds. The same frozen source measured
+5.909264 versus 7.607760 seconds, with identical LLVM on every run. Sampling and
+optimized IR identify nontrivial readonly Comp getters retaining a complete Comp
+value argument (gm3135 callTemplateAt), rather than only the operation inputs.
+The immutable conversion of SourceFactDirectory state/isActive/inactiveBuilder
+also changed existing hot construction queries.
+
+Restore in-place session queries for construction/read adapters, including the
+actual Mid declaration-access callers. A transient SourceOperationLookup passes
+only operation-related table projections to readonly lookup logic, never Comp,
+SourceFactDirectory or SourceBodyData as an aggregate value. It is an ephemeral
+query input, not a second stored directory or semantic authority. Retained
+PreparedSemanticFacts remains the immutable final reader. Source owner operations
+and constraint states use parallel dense columns under the same local ID; reading
+one template cannot copy and destroy its unrelated constraint state. Their writer
+and publication boundary remains joint and owner-local. No ARC, validation,
+visibility or semantic check is suppressed. Verify output equality, preserved
+owner/constraint/default controls and fresh same-source/formal performance.

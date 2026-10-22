@@ -937,7 +937,8 @@ pub impl Comp {
         val resultRecipe = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 callSite=template.siteKey sourceExpression=resultExpression />)
         self.sourceFacts.activate(owner: owner)
         val localIndex = self.sourceFacts.activeBuilder.data.operations.count()
-        self.sourceFacts.activeBuilder.data.operations.append(<SourceOperationRow template=<CallTemplate siteKey=template.siteKey resultTypeRecipe=resultRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm /> />)
+        self.sourceFacts.activeBuilder.data.operations.append(<CallTemplate siteKey=template.siteKey resultTypeRecipe=resultRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm />)
+        self.sourceFacts.activeBuilder.data.operationConstraints.append(<Optional.None />)
         self.callTemplateLocations.append(<SourceCallLocation owner=owner siteKey=template.siteKey localIndex=localIndex />)
         val capacity: U64 = self.callTemplateIndexSlots.count()
         mut val slot: U64 = template.siteKey.lookupHash() % capacity

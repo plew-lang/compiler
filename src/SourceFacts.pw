@@ -92,7 +92,7 @@ impl SourceBodyData {
 }
 
 impl SourceFactDirectory {
-    fn state(owner: SemanticCompletionOwner) -> Optional[SourceBodyState] {
+    inout fn state(owner: SemanticCompletionOwner) -> Optional[SourceBodyState] {
         match owner {
             SemanticCompletionOwner.Function(index: val index) => {
                 if index >= self.functions.count() { return <Optional.None /> }
@@ -139,13 +139,13 @@ impl SourceFactDirectory {
         }
         return <Optional.None />
     }
-    fn isActive(owner: SemanticCompletionOwner) -> Bool {
+    inout fn isActive(owner: SemanticCompletionOwner) -> Bool {
         match self.activeOwner {
             Optional.Some(v: val active) => { return semanticCompletionOwnersEqual(recorded: active, prepared: owner) }
             Optional.None => { return false }
         }
     }
-    fn inactiveBuilder(owner: SemanticCompletionOwner) -> SourceBodyBuilder {
+    inout fn inactiveBuilder(owner: SemanticCompletionOwner) -> SourceBodyBuilder {
         val entry = match owner {
             SemanticCompletionOwner.Function(index: val index) => self.functionBuilders.get(key: index)
             SemanticCompletionOwner.Global(target: val target) => self.globalBuilders.get(key: target)
@@ -689,43 +689,5 @@ pub impl Comp {
     inout fn enableSourceFactStatistics() { self.sourceFacts.measure = true }
     fn sourceFactStatistics() -> SourceFactStatistics {
         return <SourceFactStatistics enabled=self.sourceFacts.measure bodiesSealed=self.sourceFacts.bodiesSealed rowsSealed=self.sourceFacts.rowsSealed acquisitions=self.sourceFacts.acquisitions />
-    }
-}
-
-
-impl SourceFactDirectory {
-    fn operation(owner: SemanticCompletionOwner, index: U64) -> Optional[CallTemplate] {
-        if self.isActive(owner: owner) { return readSourceOperationTemplate(rows: self.activeBuilder.data.operations, index: index) }
-        match self.state(owner: owner) {
-            Optional.Some(v: val state) => {
-                match state {
-                    SourceBodyState.Building => {
-                        val builder = self.inactiveBuilder(owner: owner)
-                        return readSourceOperationTemplate(rows: builder.data.operations, index: index)
-                    }
-                    SourceBodyState.Succeeded(reader: val reader) => { return self.readers[reader].operationAt(index: index) }
-                    _ => {}
-                }
-            }
-            Optional.None => {}
-        }
-        return <Optional.None />
-    }
-    fn operationConstraints(owner: SemanticCompletionOwner, index: U64) -> Optional[CallConstraintPlanState] {
-        if self.isActive(owner: owner) { return readSourceOperationConstraints(rows: self.activeBuilder.data.operations, index: index) }
-        match self.state(owner: owner) {
-            Optional.Some(v: val state) => {
-                match state {
-                    SourceBodyState.Building => {
-                        val builder = self.inactiveBuilder(owner: owner)
-                        return readSourceOperationConstraints(rows: builder.data.operations, index: index)
-                    }
-                    SourceBodyState.Succeeded(reader: val reader) => { return readSourceOperationConstraints(rows: self.readers[reader].payload->operations, index: index) }
-                    _ => {}
-                }
-            }
-            Optional.None => {}
-        }
-        return <Optional.None />
     }
 }

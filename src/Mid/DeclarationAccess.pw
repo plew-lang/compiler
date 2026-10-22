@@ -86,12 +86,12 @@ impl DeclarationAccessState {
             Result.Ok(value: val canonical) => { give canonical }
             Result.Err(error: val verification) => { return <Result.Err error=<DeclarationAccessError.Ownership body=self.owners[index] verification=verification /> /> }
         }
-        return self.scanBody(c: c, index: index, canonical: destruction)
+        return self.scanBody(c: inout c, index: index, canonical: destruction)
     }
 
     // Ownership preparation may extend Mid; effect collection only reads the
     // resulting snapshot and mutates this analysis's graph and obligations.
-    inout fn scanBody(c: Comp, index: U64, canonical: MidCanonicalBody) -> Result[(), DeclarationAccessError] {
+    inout fn scanBody(c: inout Comp, index: U64, canonical: MidCanonicalBody) -> Result[(), DeclarationAccessError] {
         val body = c.mid.bodies[canonical.body - 1U64]
         val reachable = canonicalMidReachable(arena: c.mid, body: body)
         mut val blockIndex = 0U64
@@ -295,7 +295,7 @@ pub fn analyzeDeclarationGlobalAccessRoots(c: inout Comp, templates: inout MidFu
 
 // Local place conflicts do not require a mutable global or executable instance.
 // Function snapshots are shared with global analysis and executable preparation.
-fn declarationCallHasStorageArguments(c: Comp, term: MidTerminatorNode) -> Bool {
+fn declarationCallHasStorageArguments(c: inout Comp, term: MidTerminatorNode) -> Bool {
     mut val index = 0U64
     while index < term.args.len {
         val argument = c.mid.operands[c.mid.callArguments[term.args.start + index] - 1U64]
@@ -316,7 +316,7 @@ pub fn checkDeclarationBodyAccess(c: inout Comp, owner: DeclarationAccessNode, b
         if reachable[index] {
             val block = c.mid.blocks[body.blocks.start + index]
             val term = c.mid.terminators[block.terminator - 1U64]
-            if term.tag == 4U64 && declarationCallHasStorageArguments(c: c, term: term) {
+            if term.tag == 4U64 && declarationCallHasStorageArguments(c: inout c, term: term) {
                 val target = c.mid.callTargets[term.callTarget - 1U64]
                 mut val receiverTag = 0U64
                 if target.tag == 1U64 {
