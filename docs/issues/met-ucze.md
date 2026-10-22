@@ -170,3 +170,28 @@ The 8cd5172f row-refinement follow-up also passes fresh whole-source checking,
 eight AOT controls and eight existing rejects, including identity/boxing
 conversion completion. Formal fixed-point/performance validation is in progress. Full operation storage, callee-evidence and remaining
 Verify/operator/iteration selector migration are still open.
+
+
+## Concrete Compatibility Consumer Increment (WIP)
+
+Verify's method and source-qualified method cases consume the exact CallSiteKey
+selection. Direct calls use the recorded callee, type arguments and proof to form
+the parameter environment; StaticMethod reads the retained requirement/provided
+declaration; existential calls read the retained requirement slot. A missing or
+unfinished selection is an error, never a reason to retry resolveWrittenMethod
+or resolveExtMethodFinal. Receiver ownership/place/inout-overlap checks share the
+selected Func contract. Public visibility applies to concrete/provided callable
+declarations; a trait requirement is not reinterpreted as a private free method.
+The transient callee cache is only populated from the saved direct selection.
+
+Global initializers also construct calls before Verify, removing their second
+Record pass. Record passes its already computed static resolution to unresolved
+method recording instead of repeating the same candidate query. This is still a
+construction boundary, not final owner-local operation/evidence storage.
+
+verify_call_selected_authority preserves the selected direct identity under a
+diagnostic-name edit for ordinary, source-qualified and associated calls. Removing
+the saved selection must fail. It also requests a method-bearing global. The
+current-source AOT probe passes, as does source checking by the stable prior
+compiler; fresh compiler execution remains pending. Operators/iteration, global
+legacy entry points, operation storage and callee evidence remain to close.

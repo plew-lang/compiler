@@ -1,0 +1,60 @@
+// Concrete compatibility consumes the recorded selection, including explicit
+// views and associated qualifiers. Diagnostic spelling is not another query.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, Stmt, CallTemplate, CallTemplateKind }
+use @Std/Io only { print }
+
+fn check(source: String) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="selected-method.pw" text=source />,
+        sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    compiler.recordParametricFunction(fnIdx: owner, recordCallTemplates: true).unwrap()
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: owner).body, index: 0U64)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Return(value: val value, hasValue: _, offset: _) => value
+        _ => { panic("missing return") }
+    }
+    val key = compiler.templateCallSiteKey(fnIdx: owner, exprId: expression).unwrap()
+    val index = compiler.callTemplateIndex(siteKey: key)
+    val selected = compiler.callTemplateAt(index: index)
+    val callee = match selected.kind {
+        CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => callee
+        _ => { panic("missing selected declaration") }
+    }
+    val count = compiler.callTemplateCount()
+    val missing = compiler.internBytes(s: "absentAfterSelection")
+    match compiler.arena.exprs[expression] {
+        Expr.Method(recv: val receiver, nameStart: _, nameLen: _, args: val arguments) => {
+            compiler.arena.exprs.set(i: expression, value: <Expr.Method recv=receiver nameStart=missing.nameStart nameLen=missing.nameLen args=arguments />)
+        }
+        Expr.ExtMethod(recv: val receiver, source: val source, nameStart: _, nameLen: _, args: val arguments) => {
+            compiler.arena.exprs.set(i: expression, value: <Expr.ExtMethod recv=receiver source=source nameStart=missing.nameStart nameLen=missing.nameLen args=arguments />)
+        }
+        _ => { panic("missing method") }
+    }
+    if !compiler.templateCallSiteKey(fnIdx: owner, exprId: expression).unwrap().sameKey(other: key) { panic("changed semantic site") }
+    compiler.cur.recordCallTemplates = false
+    compiler.verifyFunctionDeclaration(fnIdx: owner).unwrap()
+    if compiler.resolvedCallee(id: expression).unwrap() != callee { panic("verification selected another callee") }
+    if compiler.callTemplateCount() != count { panic("verification constructed another operation") }
+    if !compiler.replaceBuildingCallTemplate(index: index, template: <CallTemplate siteKey=selected.siteKey resultTypeRecipe=selected.resultTypeRecipe expectedResultTerm=selected.expectedResultTerm receiverTypeTerm=selected.receiverTypeTerm kind=<CallTemplateKind.Pending /> />) { panic("missing builder") }
+    match compiler.verifyFunctionDeclaration(fnIdx: owner) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("verification reconstructed a missing selection") }
+    }
+}
+
+fn main() {
+    check(source: "struct Box {{ val number: I64 }} impl Box {{ fn read() -> I64 {{ return self.number }} }} fn probe(value: Box) -> I64 {{ return value.read() }}")
+    check(source: "trait Read {{ fn read() -> I64 }} struct Box {{ val number: I64 }} impl Box as Read {{ fn read() -> I64 {{ return self.number }} }} fn probe(value: Box) -> I64 {{ return value#Read.read() }}")
+    check(source: "struct Box {{}} impl Box {{ assoc fn read() -> I64 {{ return 1I64 }} }} fn probe() -> I64 {{ return Box.read() }}")
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="selected-global.pw" text="struct Box {{}} impl Box {{ assoc fn read() -> I64 {{ return 1I64 }} }} val stored = Box.read()" />,
+        sources: <SourceAccess />).unwrap()
+    compiler.prepareGlobalInitializer(target: compiler.arena.globals[0U64].nameStart).unwrap()
+    print("ok")
+}

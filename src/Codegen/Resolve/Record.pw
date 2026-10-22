@@ -519,20 +519,19 @@ pub impl Comp {
     // generic bound.  Both ordinary and source-qualified (`#…`) method syntax
     // reach this one finalization point so they cannot diverge by silently
     // treating a view-qualified static call as a closure-field call.
-    inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
-        val staticResolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
-        match staticResolution {
+    inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange, resolution: StaticMemberResolution) -> Result[(), CompileDiagnostic] {
+        match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
                 if self.typeParameterQualifierTerm(exprId: receiverExpr) != 0U64 && !self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx).isAssoc {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a type qualifier can only call an associated function") />
                 }
-                try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiver, args: args, resolution: staticResolution, resultTerm: (try self.staticRequirementCallResultType(resolution: staticResolution, args: args)))
+                try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiver, args: args, resolution: resolution, resultTerm: (try self.staticRequirementCallResultType(resolution: resolution, args: args)))
             }
             StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val declaration) => {
                 if self.typeParameterQualifierTerm(exprId: receiverExpr) != 0U64 && !self.arena.functionAt(index: declaration).isAssoc {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a type qualifier can only call an associated function") />
                 }
-                try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiver, args: args, resolution: staticResolution, resultTerm: self.parametricExprTerm(exprId: exprId))
+                try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiver, args: args, resolution: resolution, resultTerm: self.parametricExprTerm(exprId: exprId))
             }
             _ => {
                 val selected = try self.recordDynamicMethodCall(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -1605,8 +1604,8 @@ pub impl Comp {
                 }
                 val receiverTerm: U64 = self.syntheticCallReceiverTerm(exprId: exprId, fallback: (try self.methodReceiverTerm(exprId: recv)))
                 val requiredTraitOwner = self.syntheticRequiredTraitOwner(exprId: exprId)
-                // Verify publishes this cache through resolveWrittenMethod, so a
-                // selected entry already satisfies the synthetic requirement.
+                // The construction query preserves the synthetic requirement on its
+                // selected cache entry.
                 // Only unresolved receivers need the parametric Record query.
                 mut val methodCallee: U64 = (try self.resolvedCallee(id: exprId))
                 if requiredTraitOwner != 0U64 && methodCallee >= self.arena.functionCount() {
@@ -1667,7 +1666,7 @@ pub impl Comp {
                 try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, useOffset: self.exprOffset(id: exprId))
                 try self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverTerm: receiverTerm, args: args)
                 if methodCallee >= self.arena.functionCount() {
-                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: boundMember)
                 }
                 if self.cur.recordCallTemplates && !self.cur.recordingAccessWriteFacet && requiredTraitOwner != 0U64 {
                     // Record publishes under the lexical checking declaration.
@@ -1738,7 +1737,8 @@ pub impl Comp {
                     eprint(text: "\n")
                 }
                 if methodCallee >= self.arena.functionCount() {
-                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+                    val resolution = try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
+                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: resolution)
                 }
                 if methodCallee < self.arena.functionCount() {
                     try self.recordAccessUse(parentExpr: exprId, readExpr: recv, role: 1U64, argIndex: 0U64, parameterIndex: 0U64, modeKnown: true, write: self.arena.functionAt(index: methodCallee).selfInout)

@@ -34,12 +34,11 @@ impl Comp {
         try self.enterGlobalInitializer(target: target)
         val index: U64 = self.globalIndexForDeclarationTarget(target: target)
         val stmt: U64 = self.arena.globals[index].letStmt
-        try self.recordStmt(stmtId: stmt)
-        try self.enterGlobalInitializer(target: target)
-        try self.verifyStmt(stmtId: stmt)
-        try self.enterGlobalInitializer(target: target)
         self.cur.recordCallTemplates = true
         try self.recordStmt(stmtId: stmt)
+        self.cur.recordCallTemplates = false
+        try self.enterGlobalInitializer(target: target)
+        try self.verifyStmt(stmtId: stmt)
         self.cur.recordCallTemplates = false
         if (try self.completeRecordedDefaultCalls()) != 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: target, msg: "internal error: global default argument plans are incomplete") />

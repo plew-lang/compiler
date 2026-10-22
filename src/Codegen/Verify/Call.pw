@@ -43,16 +43,13 @@ pub impl Comp {
     // Final argument-type validation operates on the already source-selected
     // callable.  Bare and `#` method calls must not rediscover candidates by
     // different rules after resolution.
-    inout fn checkResolvedMethodArgCategories(exprId: U64, mf: U64, receiverRef: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
-        if mf >= self.arena.functionCount() { return <Result.Ok value=() /> }
-        val cf: Func = self.arena.functionAt(index: mf)
-        if !(self.paramsLabelsOk(params: cf.params, args: args)) { return <Result.Ok value=() /> }
-        val environment = try self.callParameterEnvironment(exprId: exprId, callee: mf, receiverRef: receiverRef, args: args)
+    inout fn checkSelectedMethodArgCategories(exprId: U64, function: Func, environment: InstanceEnvironment, args: ArgRange) -> Result[(), CompileDiagnostic] {
+        if !(self.paramsLabelsOk(params: function.params, args: args)) { return <Result.Ok value=() /> }
         mut val ai: U64 = 0U64
         while ai < args.len {
-            val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)
-            if pIdx < cf.params.count() {
-                val parameter = try self.groundTermForBody(ref: self.funcParamAt(params: cf.params, index: pIdx).ty, environment: environment, selfRef: environment.receiverRef, itemRef: (try self.finalMethodItemRef(f: cf, receiverRef: environment.receiverRef)))
+            val pIdx: U64 = self.paramIndexForArg(params: function.params, args: args, argIdx: ai)
+            if pIdx < function.params.count() {
+                val parameter = try self.groundTermForBody(ref: self.funcParamAt(params: function.params, index: pIdx).ty, environment: environment, selfRef: environment.receiverRef, itemRef: (try self.finalMethodItemRef(f: function, receiverRef: environment.receiverRef)))
                 try self.tcCheckValue(expectedRef: parameter, valueExpr: self.argAt(args: args, index: ai).expr, pos: "arg")
             }
             ai += 1U64
@@ -60,19 +57,17 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkResolvedMethodArgs(exprId: U64, mf: U64, receiverRef: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
-        if mf >= self.arena.functionCount() { return <Result.Ok value=() /> }
-        val cf: Func = self.arena.functionAt(index: mf)
-        if !(self.paramsLabelsOk(params: cf.params, args: args)) { return <Result.Ok value=() /> }
+    inout fn checkSelectedMethodArguments(exprId: U64, function: Func, environment: InstanceEnvironment, args: ArgRange) -> Result[(), CompileDiagnostic] {
+        if !(self.paramsLabelsOk(params: function.params, args: args)) { return <Result.Ok value=() /> }
         mut val ai: U64 = 0U64
         while ai < args.len {
-            val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)
-            if pIdx < cf.params.count() {
-                try self.checkArgInoutMode(p: self.funcParamAt(params: cf.params, index: pIdx), arg: self.argAt(args: args, index: ai))
+            val pIdx: U64 = self.paramIndexForArg(params: function.params, args: args, argIdx: ai)
+            if pIdx < function.params.count() {
+                try self.checkArgInoutMode(p: self.funcParamAt(params: function.params, index: pIdx), arg: self.argAt(args: args, index: ai))
             }
             ai += 1U64
         }
-        try self.checkResolvedMethodArgCategories(exprId: exprId, mf: mf, receiverRef: receiverRef, args: args)
+        try self.checkSelectedMethodArgCategories(exprId: exprId, function: function, environment: environment, args: args)
         return <Result.Ok value=() />
     }
 

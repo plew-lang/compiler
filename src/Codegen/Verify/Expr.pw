@@ -169,66 +169,14 @@ pub impl Comp {
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 try self.verifyRecv(recv: recv)
                 try self.verifyArgs(args: args)
-                // Bounds apply to semantic receiver terms, including concrete
-                // subjects such as `where Parser: Convert[T]`. Reuse the proof
-                // query rather than searching requirement names independently.
-                mut val receiverTerm = self.parametricExprTerm(exprId: recv)
-                if receiverTerm == 0U64 { receiverTerm = (try self.inferType(id: recv)) }
-                receiverTerm = self.syntheticCallReceiverTerm(exprId: id, fallback: receiverTerm)
-                if (try self.checkSymbolicMethodArgs(exprId: id, fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)) {
-                    return <Result.Ok value=() />
-                }
-                val mf: U64 = (try self.resolveWrittenMethod(exprId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args))
-                val rt: TypeInfo = (try self.typeOf(id: recv))
-                // A type qualifier is not a value receiver and may have no
-                // value TypeInfo. The selected declaration still requires
-                // visibility and ownership checks.
-                try self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args)
-                self.recordResolvedMethodCallee(id: id, callee: mf)
-                try self.checkResolvedMethodArgs(exprId: id, mf: mf, receiverRef: receiverTerm, args: args)
+                try self.verifyRecordedMethodCall(exprId: id, recv: recv, args: args)
             }
-            Expr.ExtMethod(val recv, source: val sourceSelector, val nameStart, val nameLen, val args) => {
-                val sourceSpan: InternedSpan = self.interner.entries[sourceSelector.surfaceId - 1U64]
-                val srcStart: U64 = sourceSpan.start
-                val srcLen: U64 = sourceSpan.len
-                val assoc: Bind = self.assocRecvName(recv: recv)
-                if assoc.nameLen != 0U64 {
-                    val assocRef: U64 = self.simpleTypeRef(nameStart: assoc.nameStart, nameLen: assoc.nameLen)
-                    val source: ViewSource = (try self.resolveViewSourceKey(recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: assocRef, sourceId: sourceSelector.surfaceId, sourceOwner: sourceSelector.traitOwner))
-                    if source.kind == 0U64 {
-                        return <Result.Err error=self.diagnosticAt(offset: sourceSelector.writtenStart, msg: "cannot apply this view to the associated-call type qualifier") />
-                    }
-                    val mf: U64 = (try self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, sourceOwner: sourceSelector.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args))
-                    self.recordResolvedMethodCallee(id: id, callee: mf)
-                    try self.checkResolvedMethodArgs(exprId: id, mf: mf, receiverRef: assocRef, args: args)
-                    try self.verifyArgs(args: args)
-                    return <Result.Ok value=() />
-                }
-                try self.checkResolvedViewValid(recv: recv, source: sourceSelector, strip: false)
-                val rt: TypeInfo = (try self.typeOf(id: recv))
-                val mf: U64 = (try self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, sourceOwner: sourceSelector.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args))
-                if mf < self.arena.functionCount() {
-                    val selectedFn: Func = self.arena.functionAt(index: mf)
-                    if self.methodRecvIsTrait(f: selectedFn) {
-                        val recvRef: U64 = (try self.inferType(id: recv))
-                        // Candidate selection and applicability validation use
-                        // the same normalized receiver view.  Do not rebuild a
-                        // proof from a provided copy's origin here: that loses
-                        // the selected trait owner/source-set and can turn an
-                        // already-resolved call into a false ambiguity or a
-                        // false nonconformance.
-                        if recvRef != 0U64 && !((try self.viewedTypeConforms(ref: recvRef, traitStart: selectedFn.recvStart, traitLen: selectedFn.recvLen, traitArgs: self.copyFuncTypes(types: selectedFn.recvTraitArgs)))) {
-                            return <Result.Err error=self.diagnosticAt(offset: sourceSelector.writtenStart, msg: "extension does not apply to this trait instance") />
-                        }
-                    }
-                }
-                self.recordResolvedMethodCallee(id: id, callee: mf)
-                if rt.nameLen != 0U64 {
-                    try self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args)
-                    try self.checkResolvedMethodArgs(exprId: id, mf: mf, receiverRef: rt.ref, args: args)
-                }
-                try self.verifyExpr(id: recv)
+            Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
+                // The source selector and view applicability belong to Record.
+                // This walk checks operands and the saved callable's contract.
+                try self.verifyRecv(recv: recv)
                 try self.verifyArgs(args: args)
+                try self.verifyRecordedMethodCall(exprId: id, recv: recv, args: args)
             }
             Expr.ExtView(val recv, source: val sourceSelector, val strip) => {
                 // When this node is the receiver of `Type#View.member()`, the
