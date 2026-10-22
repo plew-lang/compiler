@@ -1,6 +1,10 @@
 # Compiler memory safety before optimization: ownership, identity, snapshots,
 # async frame transfer and ARC teardown. Extend when ownership paths change.
 src/_.pw
+# Owner-local mutable builders transfer to immutable Ref-backed payloads.
+tests/fixtures/run/source_owner_payload_stability.pw
+tests/fixtures/run/source_builder_branch_isolation.pw
+tests/fixtures/run/prepared_value_block_source_owner.pw
 tests/fixtures/run/mid_inout_ownership.pw
 tests/fixtures/run/mid_unique_borrow_availability_verify.pw
 tests/fixtures/run/mid_unique_type_identity.pw

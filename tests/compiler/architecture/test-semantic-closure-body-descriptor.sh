@@ -1,7 +1,7 @@
 #!/bin/sh
 # A closure body is a normal semantic body with an environment ABI, not an
 # LLVM-side re-parse of Expr.Closure. Keep every body-navigation and ABI fact
-# needed by the Mid builder in the frontend-owned descriptor.
+# needed by the Mid builder in the frontend-owned descriptor and sealed header.
 set -eu
 cd "$(dirname "$0")/../../.."
 
@@ -36,13 +36,16 @@ require 'return self.scanFinalClosureBody(bodyId: bodyId)' src/Codegen/Mono/Call
 # that Mid later uses through bodyKey.
 require 'val closureBodyId = self.currentBodyInstanceId()' src/Codegen/Mono/Call.pw
 require 'self.cur.bodyId = closureBodyId' src/Codegen/Mono/Call.pw
-# The Mid closure-body builder consumes the frozen descriptor; it must not
+# The Mid closure-body builder consumes the sealed header and frozen captures; it must not
 # reopen Expr.Closure. Environment-bound captures are usable inside a closure
 # but are not lexical owners of the environment's value/cell.
 require 'buildParametricMidClosureBody' src/Mid/Build.pw
-require 'closure.parameters' src/Mid/Build.pw
+require 'c.preparedClosureSemanticFacts(closure: closure)' src/Mid/Build.pw
+require 'facts.functionSignature()' src/Mid/Build.pw
+require 'signature.parameters' src/Mid/Build.pw
 require 'closure.captures' src/Mid/Build.pw
 require 'closure.bodyBlock' src/Mid/Build.pw
+require 'blockId: signature.block' src/Mid/Build.pw
 require 'if declaration.isBorrowed || declaration.isInout { }' src/Mid/Drop.pw
 # A Mid body owns its ABI return contract. Synthetic closure body keys are not
 # Func indices, so shared return lowering must never rediscover a return type

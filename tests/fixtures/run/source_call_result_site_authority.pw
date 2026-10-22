@@ -13,6 +13,7 @@ fn main() {
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "accept").nameId)
     compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
     mut val found = false
     for template in compiler.callTemplateSnapshot() {
         match template.kind {
@@ -21,7 +22,7 @@ fn main() {
                     val argument = compiler.callTemplateArguments(range: arguments)[0U64]
                     match argument.source {
                         CallArgumentSource.PriorCallResult(exprId: val expression, siteKey: val site) => {
-                            val expected = compiler.semanticExprTerm(exprId: expression)
+                            val expected = facts.expression(exprId: expression).unwrap().term
                             if expected == 0U64 { panic("missing source call result") }
                             val detached = <CallArgumentSource.PriorCallResult exprId=0U64 siteKey=site />
                             if !compiler.typeRefEq(a: compiler.sourceCallArgumentType(source: detached), b: expected) {

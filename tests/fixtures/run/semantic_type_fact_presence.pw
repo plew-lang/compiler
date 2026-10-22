@@ -63,14 +63,18 @@ fn main() {
     if unit >= calls.arena.exprs.count() || stopped >= calls.arena.exprs.count() { panic "missing callable probes" }
     val owner = calls.arena.firstFunctionNamed(nameId: calls.internBytes(s: "probe").nameId)
     calls.prepareLexicalBody(fnIdx: owner).unwrap()
-    match calls.sourceSemanticExprTypeAt(index: unit).typeState {
+    val facts = calls.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    match facts.expression(exprId: unit).unwrap().typeState {
         SemanticExpressionTypeState.Unit => {}
         _ => { panic "selected Unit result became pending" }
     }
-    match calls.sourceSemanticExprTypeAt(index: stopped).typeState {
+    match facts.expression(exprId: stopped).unwrap().typeState {
         SemanticExpressionTypeState.NoNormalValue => {}
         _ => { panic "diverging callable acquired a normal value" }
     }
+    // Inference is a construction query with an explicit lexical cursor.
+    // Publication above is read through the successful owner's handle.
+    calls.cur.checkFn = owner
     if calls.inferenceArgumentType(exprId: stopped).unwrap() != 0U64 { panic "diagnostic type became an inference value" }
     print("semantic-type-fact-presence")
 }
