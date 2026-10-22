@@ -1,0 +1,16 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontend }
+use /SourceAccess only { SourceAccess }
+use @Std/Io only { print }
+fn main() {
+    val prefix = "trait Q {{}}\ntrait P {{}}\ntrait R {{}}\nstruct S {{}}\nimpl S as P {{}}\nimpl S as R {{}}\nimpl P as Q {{}}\nimpl R as Q {{}}\nfn requireQ[T](value: T) where T: Q {{}}\nfn viaP[T](value: T) where T: P {{ requireQ(value: value) }}\n"
+    for tail in ["fn main() {{ viaP(value: <S />) }}", "fn main() {{ viaP(value: <S />#P) }}", "fn main() {{}}"] {
+        mut val compiler = <Comp />
+        val result = analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text=prefix + tail path="forwarded-source.pw" />, sources: <SourceAccess />)
+        if tail == "fn main() {{ viaP(value: <S />) }}" {
+            if result.isOk() { panic("unused forwarded bound bypassed concrete source admission") }
+        } else {
+            result.unwrap()
+        }
+    }
+    print("forwarded-source-admission")
+}

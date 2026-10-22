@@ -310,3 +310,23 @@ This is a WIP boundary: executable-body interpretation, shared proof substitutio
 final dynamic consumption and concrete boxing evidence transfer are still open.
 The existing final consumers currently ignore the new root. No full-gate or fresh
 compiler claim is made for this increment.
+
+### First-Concrete Source Admission for Unused Derived Bounds
+
+A bounded control found a further omission: requireQ[T] where T:Q is empty,
+viaP[T] where T:P forwards to it through impl P as Q, and a concrete S has
+both P -> Q and R -> Q. Direct requireQ(S) rejects, while viaP(S) formerly
+passed both check and AOT; adding a Q member use made it reject. The relevance
+filter incorrectly limited declaration work to executable member obligations.
+
+Relevance now includes public conditions with unresolved subjects and propagates
+through callers. At their first concrete substitution, derived proofs discharge
+SourceAdmission uniqueness independently of MemberDispatch. This gate preserves
+the retained derivation: it never replaces it with the query result or reopens
+callable selection. An exact authored Function/Requirement premise instead
+consumes its already-admitted caller binding. This is not a blanket requery of
+closed source operations or permission to ignore missing proof storage.
+
+Whole source checking and the imported forwarded_source_admission control pass,
+covering an ambiguous bare S, explicit S#P, and an uninstantiated generic body.
+Fresh compiler checks remain pending at this increment.

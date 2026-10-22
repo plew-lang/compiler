@@ -1,0 +1,12 @@
+// An unused derived bound needs unique admission at its first concrete subject.
+trait Q {}
+trait P {}
+trait R {}
+struct S {}
+impl S as P {}
+impl S as R {}
+impl P as Q {}
+impl R as Q {}
+fn requireQ[T](value: T) where T: Q {}
+fn viaP[T](value: T) where T: P { requireQ(value: value) }
+fn main() { viaP(value: <S />) }

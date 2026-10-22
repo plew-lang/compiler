@@ -635,7 +635,7 @@ pub impl Comp {
         }
     }
 
-    inout fn instantiateBoundProof(bound: TraitBound, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+    inout fn instantiateBoundProof(demand: ConformanceProofDemand, bound: TraitBound, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         if bound.subject == 0U64 || bound.constraint.key.owner == 0U64 { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
         val traitIndex = self.decls.traitIndexByOffset(offset: bound.constraint.key.owner)
         if traitIndex >= self.decls.traitCount() { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
@@ -658,7 +658,7 @@ pub impl Comp {
         for val source in self.typeRefViewSources(ref: receiverRef) {
             if source.traitOwner != 0U64 { sourceOwners.append(source.traitOwner) }
         }
-        val proof = try self.traitPatternProof(demand: <ConformanceProofDemand.MemberDispatch />, baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, assocNames: associatedNames, assocValues: associatedValues, sourceOwners: sourceOwners)
+        val proof = try self.traitPatternProof(demand: demand, baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, assocNames: associatedNames, assocValues: associatedValues, sourceOwners: sourceOwners)
         if self.proofIsMissing(proof: proof) { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
         return <Result.Ok value=<StaticProofInstantiation.Ready proof=proof /> />
     }
@@ -715,19 +715,19 @@ pub impl Comp {
                 return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.TraitPath edges=grounded terminalConformIdx=terminal /> /> />
             }
             StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
-                val rootState = try self.instantiateBoundProof(bound: self.assumedSupertraitBound(source: source, steps: steps), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                val rootState = try self.instantiateBoundProof(demand: <ConformanceProofDemand.MemberDispatch />, bound: self.assumedSupertraitBound(source: source, steps: steps), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
                 return self.groundSelectedTraitPath(rootState: rootState, edges: edges, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
             }
             StaticConformanceProof.Missing => { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
             StaticConformanceProof.AssumedBound(source: val source) => {
                 if !self.declarationBoundIsValid(source: source) { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
-                return self.instantiateBoundProof(bound: self.declarationBound(source: source), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                return self.instantiateBoundProof(demand: <ConformanceProofDemand.MemberDispatch />, bound: self.declarationBound(source: source), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
             }
             StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => {
-                return self.instantiateBoundProof(bound: self.assumedSupertraitBound(source: source, steps: steps), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                return self.instantiateBoundProof(demand: <ConformanceProofDemand.MemberDispatch />, bound: self.assumedSupertraitBound(source: source, steps: steps), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
             }
             StaticConformanceProof.TraitSelf(traitIdx: val owner, receiverRef: _, traitArgs: _) => {
-                return self.instantiateBoundProof(bound: (try self.staticProofBound(proof: proof, traitIdx: owner)), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                return self.instantiateBoundProof(demand: <ConformanceProofDemand.MemberDispatch />, bound: (try self.staticProofBound(proof: proof, traitIdx: owner)), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
             }
         }
     }
@@ -3941,6 +3941,28 @@ pub impl Comp {
         return self.instantiateSelectedCallConstraints(template: template, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
     }
 
+    // A deferred source admission reaches its first concrete subject here.
+    // Replay keeps the retained derivation; the query below only discharges
+    // source-path uniqueness that an abstract subject could not establish.
+    // An exact authored premise was admitted by its caller already. Derived
+    // paths do not inherit that authority for a different target trait.
+    inout fn checkFirstConcreteSourcePath(bound: TraitBound, proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[(), CompileDiagnostic] {
+        if self.arena.typeIsClosed(ref: bound.subject) { return <Result.Ok value=() /> }
+        match proof {
+            StaticConformanceProof.AssumedBound(source: val source) => {
+                match source {
+                    DeclarationBoundRef.Function(index: _) | DeclarationBoundRef.Requirement(index: _) => { return <Result.Ok value=() /> }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        match (try self.instantiateBoundProof(demand: <ConformanceProofDemand.SourceAdmission />, bound: bound, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
+            StaticProofInstantiation.Ready(proof: _) => { return <Result.Ok value=() /> }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "where clause is not satisfied after caller substitution") /> }
+        }
+    }
+
     inout fn instantiateSelectedCallConstraints(template: CallTemplate, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
         val index = self.callTemplateIndex(siteKey: template.siteKey)
         if index >= self.callTemplateLocations.count() {
@@ -3960,6 +3982,7 @@ pub impl Comp {
                     val source = plan.bounds[position]
                     val grounded = try self.groundCallableBound(bound: source, environment: environment, selfRef: selfRef, itemRef: itemRef)
                     val proof = self.thawStaticConformanceProof(id: plan.proofs[position])
+                    try self.checkFirstConcreteSourcePath(bound: source, proof: proof, receiverRef: grounded.subject, environment: environment, selfRef: selfRef, itemRef: itemRef)
                     val state = try self.instantiateConstraintProof(proof: proof, receiverRef: grounded.subject, environment: environment, selfRef: selfRef, itemRef: itemRef)
                     match state {
                         StaticProofInstantiation.Ready(proof: val concrete) => {

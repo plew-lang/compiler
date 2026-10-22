@@ -647,10 +647,25 @@ pub impl Comp {
         return self.appendCallConstraintInstance(function: selected, arguments: arguments, receiver: receiver, proof: evidence, constraints: constraints, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
     }
 
+    // Relevance includes deferred public conditions even when no method is
+    // used in the callee. Empty trait bounds still require source admission.
+    inout fn selectedCallHasDeferredConstraints(template: CallTemplate) -> Result[Bool, CompileDiagnostic] {
+        val index = self.callTemplateIndex(siteKey: template.siteKey)
+        match self.preparedCallConstraints(index: index) {
+            Optional.Some(v: val snapshot) => {
+                for bound in snapshot.constraints().bounds {
+                    if !self.arena.typeIsClosed(ref: bound.subject) { return <Result.Ok value=true /> }
+                }
+                return <Result.Ok value=false />
+            }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "declaration call has no prepared source constraints") /> }
+        }
+    }
+
     inout fn checkCallConstraintTemplate(template: CallTemplate, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[DeclarationObligationState, CompileDiagnostic] {
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                if !(try self.callConstraintIsRelevant(function: callee, relevant: relevant)) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
+                if !(try self.callConstraintIsRelevant(function: callee, relevant: relevant)) && !(try self.selectedCallHasDeferredConstraints(template: template)) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => {}
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
@@ -663,7 +678,7 @@ pub impl Comp {
                 match selection {
                     OperatorSelection.Primitive => { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
                     OperatorSelection.Direct(callee: val callee) => {
-                        if !(try self.callConstraintIsRelevant(function: callee, relevant: relevant)) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
+                        if !(try self.callConstraintIsRelevant(function: callee, relevant: relevant)) && !(try self.selectedCallHasDeferredConstraints(template: template)) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
                     }
                     _ => {}
                 }
@@ -740,6 +755,13 @@ pub impl Comp {
         for conversion in self.decls.declarationConversions {
             val owner = self.callTemplateLexicalRoots.getOr(key: conversion.site.ownerFnIdx, fallback: conversion.site.ownerFnIdx)
             if owner < relevant.count() { relevant[owner] = true }
+        }
+        for templateIndex in 0U64..<self.callTemplateCount() {
+            val template = self.callTemplateAt(index: templateIndex)
+            if (try self.selectedCallHasDeferredConstraints(template: template)) {
+                val owner = self.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
+                if owner < relevant.count() { relevant[owner] = true }
+            }
         }
         mut val changed = true
         while changed {
