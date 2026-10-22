@@ -1549,8 +1549,12 @@ pub impl Comp {
         if staticResult != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: staticResult) }
         match selection {
             OperatorSelection.Direct(callee: val callee) => {
-                val result = try self.operatorCalleeType(callee: callee, receiverRef: receiverTerm, term: self.semanticCallableReturnTerm(function: self.arena.functionAt(index: callee)))
-                if result != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: result) }
+                // A source projection such as Ord -> Bool already owns its
+                // result above; otherwise consume this selected signature.
+                if staticResult == 0U64 {
+                    val result = try self.operatorCalleeType(callee: callee, receiverRef: receiverTerm, term: self.semanticCallableReturnTerm(function: self.arena.functionAt(index: callee)))
+                    if result != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: result) }
+                }
             }
             _ => {}
         }

@@ -488,7 +488,7 @@ pub impl Comp {
                 // Record already selected the declaration or requirement. Its
                 // full operand/signature/evidence check runs at source closure;
                 // this walk preserves the contextual generic compatibility checks.
-                val receiver = self.syntheticCallReceiverTerm(exprId: exprId, fallback: self.parametricExprTerm(exprId: recv))
+                val receiver = if qualifier != 0U64 { give qualifier } else { give self.syntheticCallReceiverTerm(exprId: exprId, fallback: self.parametricExprTerm(exprId: recv)) }
                 if !(try self.checkSymbolicMethodArgs(exprId: exprId, fnIdx: self.cur.checkFn, receiverRef: receiver, nameStart: nameStart, nameLen: nameLen, args: args)) {
                     try self.checkRecordedDirectCallArguments(exprId: exprId, args: args)
                 }
