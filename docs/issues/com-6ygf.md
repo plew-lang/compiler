@@ -1,6 +1,6 @@
 ---
 id: com-6ygf
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-13T00:48:29Z
@@ -11,7 +11,7 @@ tags: [backend, driver]
 ---
 # Reject incompatible nonempty DataLayout before ORC admission
 
-Known implementation discrepancy: object output rejects an incompatible nonempty module DataLayout, while ORC consumeModule replaces it with the engine layout without comparison. Previously emitted layout-dependent offsets cannot safely be reinterpreted merely by replacing the string.
+Resolved discrepancy: object output rejected an incompatible nonempty module DataLayout, while ORC consumeModule replaced it with the engine layout without comparison. Previously emitted layout-dependent offsets cannot safely be reinterpreted merely by replacing the string.
 
 Evidence: compiler source base 6fe09bc7c0e75260b3f773643921478b5020b94f, rechecked during documentation consolidation. native/llvm_backend.cpp consumeModule calls setDataLayout unconditionally after triple validation; object output compares LLVMGetDataLayoutStr first. This is source inspection, not a demonstrated user-program miscompile or a completed audit of all layout consumers.
 
@@ -48,4 +48,8 @@ A bounded native probe built from the unchanged bridge accepted a module with e-
 
 The inspected earlier producers lowerExecutableLlvm, lowerCallableDeclarationsLlvm and lowerGlobalStorageLlvm set the native triple without attaching another DataLayout. Native global-size queries occur after consumeModule; object optimization follows its agreement/attachment boundary. This closes native layout admission, not the separate whole-representation audit.
 
-Extended OrcNative.cpp covers missing/compatible/incompatible layouts on borrowed object and consuming ORC paths, unchanged output on object rejection, no callable publication after rejection, and signature-only mismatch. Normal LLVM20 and LLVM22 ASan/LSan pass; bridge/host instrumentation does not cover nested JIT instructions. The check is now registered in the normal suite. Fresh compiler self-host/performance and product entry checks remain pending; main/seed are unchanged.
+Extended OrcNative.cpp covers missing/compatible/incompatible layouts on borrowed object and consuming ORC paths, unchanged output on object rejection, no callable publication after rejection, and signature-only mismatch. Normal LLVM20 and LLVM22 ASan/LSan pass; bridge/host instrumentation does not cover nested JIT instructions. The check is now registered in the normal suite. Fresh compiler self-host/performance and product entry checks also pass; main/seed are unchanged.
+
+## Outcome
+
+Resolved in 9fd85bb6. [Saved evidence](../../../evidence/existing-feature-conformance/orc-layout/README.md) records the pre-fix admission probe, normal LLVM20 and native LLVM22 ASan/LSan controls, generation-2 LLVM/runtime fixed point, median 6.302362 seconds and final-binary lazy CLI/direct-object checks. Empty layout attachment and native-only target support are preserved. Original whole normal/gen evidence belongs to the preceding root-use increment; it is not relabeled as a post-native-fix run. Full final-candidate integration gates remain in com-604k. This closes the bounded admission contract, not the separate whole-representation audit.

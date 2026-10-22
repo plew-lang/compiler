@@ -19,7 +19,7 @@ Scope classification is [com-esri](com-esri.md). Its pinned matrix records inclu
 
 ## Ordering and Start Conditions
 
-Start with com-p10m (checked Buffer arithmetic/allocation publication), then com-w4c2 and com-6ygf as independent current correctness boundaries. No source/type-system migration blocks the first Buffer unit. The manual diagnostic repair com-ydgx is not a prerequisite when that repair uses the existing standard sanitizer gate.
+Phase 2's independent correctness units com-p10m (checked Buffer arithmetic/allocation publication), com-w4c2 (root-owned use) and com-6ygf (ORC layout agreement) are closed with scoped evidence. The next implementation boundary is the frontend increment below; final integration gates remain required. The manual diagnostic repair com-ydgx is not a prerequisite when that repair uses the existing standard sanitizer gate.
 
 com-w4c2 follows the approved root-only use rule, with one module-wide binding environment shared by parts. Its scope includes real part/provider/consumer migration; the former file-local lookup direction is superseded. Reconsideration conditions for macro dependency verbosity/collisions belong to the source design, not an immediate exception or another mandatory feature family.
 
