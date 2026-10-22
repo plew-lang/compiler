@@ -1,7 +1,7 @@
 // The first source construction closes permitted integer-literal context and
 // operator selection. Later verification must not be needed to repair Pending.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
-use /SourceAccess only { SourceAccess }
+use /SourceAccess only { SourceAccess, SourceResource }
 use /Ir only { CallTemplateKind, OperatorSelection }
 use @Std/Io only { print }
 
@@ -9,9 +9,13 @@ fn comparison(value: I64) -> Bool { return 0 < value }
 
 fn main() {
     mut val compiler = <Comp />
+    val resources = [
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub trait Sub[Rhs] {{ type Output assoc fn sub(lhs~: Self, rhs~: Rhs) -> Output }} pub impl I64 as Sub[I64] {{ type Output = I64 assoc fn sub(lhs~: I64, rhs~: I64) -> I64 {{ return lhs }} }}" />,
+        <SourceResource path="plew:std/OperatorProbe.pw".bytes() text="fn probe(value: I64) -> I64 {{ return 0 - value }}" />,
+    ]
     analyzeFrontendForRequests(c: inout compiler,
-        input: <FrontendInput.Text path="operator-context.pw" text="fn probe(value: I64) -> I64 {{ return 0 - value }}" />,
-        sources: <SourceAccess />).unwrap()
+        input: <FrontendInput.File path="plew:std/OperatorProbe.pw" />,
+        sources: <SourceAccess stdRoot="plew:std/".bytes() resources=resources />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     compiler.recordParametricFunction(fnIdx: owner, recordCallTemplates: true).unwrap()
     mut val found = false
