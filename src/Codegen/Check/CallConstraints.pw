@@ -94,7 +94,12 @@ pub impl Comp {
     fn callTemplateCount() -> U64 { return self.callTemplateLocations.count() }
     fn callTemplateAt(index: U64) -> CallTemplate {
         val location = self.callTemplateLocations[index]
-        match self.sourceFacts.operation(owner: location.owner, index: location.localIndex) {
+        val cached = cachedSourceOperationReader(readers: self.sourceFacts.readers, index: self.cur.sourceFactReader, session: self.sourceFacts.session, owner: location.owner)
+        val row = match cached {
+            Optional.Some(v: val reader) => reader.operationAt(index: location.localIndex)
+            Optional.None => self.sourceFacts.operation(owner: location.owner, index: location.localIndex)
+        }
+        match row {
             Optional.Some(v: val template) => {
                 if template.siteKey.sameKey(other: location.siteKey) { return template }
             }
@@ -204,7 +209,10 @@ impl Comp {
     fn sourceOperationConstraints(index: U64) -> Optional[CallConstraintPlanState] {
         if index >= self.callTemplateLocations.count() { return <Optional.None /> }
         val location = self.callTemplateLocations[index]
-        return self.sourceFacts.operationConstraints(owner: location.owner, index: location.localIndex)
+        match cachedSourceOperationReader(readers: self.sourceFacts.readers, index: self.cur.sourceFactReader, session: self.sourceFacts.session, owner: location.owner) {
+            Optional.Some(v: val reader) => { return readSourceOperationConstraints(rows: reader.payload->operations, index: location.localIndex) }
+            Optional.None => { return self.sourceFacts.operationConstraints(owner: location.owner, index: location.localIndex) }
+        }
     }
     inout fn storeBuildingOperationConstraints(index: U64, state: CallConstraintPlanState) -> Bool {
         if index >= self.callTemplateLocations.count() { return false }

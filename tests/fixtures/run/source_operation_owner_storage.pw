@@ -1,7 +1,7 @@
 // Operations and their constraints share the owner publication boundary.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { CallTemplate, CallTemplateKind, SelectedCallConstraints }
+use /Ir only { CallTemplate, CallTemplateKind, SelectedCallConstraints, Stmt, InstanceEnvironment }
 use @Std/Io only { print }
 
 fn owner(compiler: inout Comp, name: String) -> U64 {
@@ -17,6 +17,15 @@ fn main() {
     val broken = owner(compiler: inout compiler, name: "broken")
     compiler.prepareLexicalBody(fnIdx: first).unwrap()
     val reader = compiler.preparedFunctionSemanticFacts(fnIdx: first).unwrap()
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: first).body, index: 0U64)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Return(value: val value, hasValue: _, offset: _) => value
+        _ => { panic("missing source return") }
+    }
+    val body = compiler.internBodyInstance(fnIdx: first, environment: <InstanceEnvironment />)
+    compiler.preparedBodyExpression(bodyId: body, exprId: expression).unwrap()
+    // The consumer now caches first. Reads during second/broken preparation
+    // must reject that cached owner and use the actual operation owner.
     val operation = reader.operationAt(index: 0U64).unwrap()
     if operation.siteKey.ownerFnIdx != first || reader.operationAt(index: 1U64).isSome() { panic("reader crossed an owner boundary") }
     val index = compiler.callTemplateIndex(siteKey: operation.siteKey)

@@ -2271,6 +2271,22 @@ struct SourceOperationRow {
 }
 impl SourceOperationRow { factory }
 
+// Reuse the consumer's acquired owner handle. Only these narrow table
+// projections cross this query; reading one operation never copies Comp or
+// SourceBodyData and never opens another owner's payload as a fallback.
+fn cachedSourceOperationReader(readers: Array[PreparedSemanticFacts], index: Optional[U64], session: U64, owner: SemanticCompletionOwner) -> Optional[PreparedSemanticFacts] {
+    match index {
+        Optional.Some(v: val index) => {
+            if index < readers.count() {
+                val reader = readers[index]
+                if reader.session == session && semanticCompletionOwnersEqual(recorded: reader.owner, prepared: owner) { return <Optional.Some v=reader /> }
+            }
+        }
+        Optional.None => {}
+    }
+    return <Optional.None />
+}
+
 fn readSourceOperationTemplate(rows: Array[SourceOperationRow], index: U64) -> Optional[CallTemplate] {
     if index >= rows.count() { return <Optional.None /> }
     return <Optional.Some v=rows[index].template />

@@ -227,7 +227,7 @@ impl SourceFactDirectory {
         self.clearActive(owner: owner)
         if self.measure {
             self.bodiesSealed += 1U64
-            self.rowsSealed += data.expressions.count() + data.bindings.count() + data.statements.count() + data.aggregates.count() + data.tries.count() + data.matches.count() + data.closurePlans.count() + data.valueBlocks.count()
+            self.rowsSealed += data.operations.count() + data.expressions.count() + data.bindings.count() + data.statements.count() + data.aggregates.count() + data.tries.count() + data.matches.count() + data.closurePlans.count() + data.valueBlocks.count()
         }
         val payload: Ref[SourceBodyData] = <Ref value=data />
         val reader = self.readers.count()
