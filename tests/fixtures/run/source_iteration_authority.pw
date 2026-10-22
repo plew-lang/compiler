@@ -36,8 +36,18 @@ fn main() {
     val index = compiler.callTemplateIndex(siteKey: key)
     val selected = compiler.callTemplateAt(index: index)
     val result = match selected.kind {
-        CallTemplateKind.Protocol(receiver: _, selection: ProtocolSelection.Static(resolution: StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIndex, reqIdx: _)), resultTerm: val term) => {
-            if compiler.proofIsMissing(proof: proof) || compiler.decls.traitAt(index: traitIndex).nameStart != compiler.coreTraitOwner(name: "Iterator") { panic("iteration lost its canonical requirement evidence") }
+        CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: val term) => {
+            match selection {
+                ProtocolSelection.Static(resolution: val resolution) => {
+                    match resolution {
+                        StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIndex, reqIdx: _) => {
+                            if compiler.proofIsMissing(proof: proof) || compiler.decls.traitAt(index: traitIndex).nameStart != compiler.coreTraitOwner(name: "Iterator") { panic("iteration lost its canonical requirement evidence") }
+                        }
+                        _ => { panic("iteration selected an implementation instead of its requirement") }
+                    }
+                }
+                _ => { panic("missing canonical next requirement") }
+            }
             give term
         }
         _ => { panic("missing next selection") }
