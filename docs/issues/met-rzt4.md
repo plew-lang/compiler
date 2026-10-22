@@ -51,4 +51,22 @@ the shared runtime, checking, body preparation and AOT optimization remain commo
 or unchanged. Validate the four retained InternalSession fixtures and native ORC
 controls; keep the 60-second watchdog and exact output/failure checks. If a long
 phase remains, expose real phase progress rather than periodic heartbeat success.
-This candidate is not yet built or claimed to close the task.
+The candidate was built at 2154af1b. Its four exact CLI controls still hit the
+unchanged silence deadline; None alone did not solve the observation problem.
+An embedding diagnostic using the same executeProgram/runtime/preparation path,
+with only the existing tracePhases option enabled, completes all four exact
+fixtures with golden output at frozen 2154af1b (370.302 / 444.301 / 427.047 /
+561.319 seconds). The same Plew host object relinked with the previous default
+native policy also completes compiler_session_demand with golden output.
+Those diagnostic runs overlapped, so their elapsed times are not a controlled
+performance comparison. Native ORC/lazy controls pass normally and with LLVM22
+ASan/LSan; this does not instrument every generated JIT instruction.
+
+[Traced controls](https://github.com/plew-lang/meta/blob/main/evidence/existing-feature-conformance/source-owner-facts/session-traced-jit.json),
+[default-policy control](https://github.com/plew-lang/meta/blob/main/evidence/existing-feature-conformance/source-owner-facts/session-traced-default-jit.json),
+and [native controls](https://github.com/plew-lang/meta/blob/main/evidence/existing-feature-conformance/source-owner-facts/jit-codegen-native-controls.json)
+record the exact scope. All process handles are recovered. This establishes
+bounded successful current diagnostic executions, not normal CLI completion
+under its no-progress watchdog or a universal historical-cause claim. Keep the
+remaining CLI observability/materialization-latency question explicit; do not
+mislabel active compilation as a demonstrated deadlock or weaken the watchdog.

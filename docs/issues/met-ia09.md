@@ -330,3 +330,48 @@ closed source operations or permission to ignore missing proof storage.
 Whole source checking and the imported forwarded_source_admission control pass,
 covering an ambiguous bare S, explicit S#P, and an uninstantiated generic body.
 Fresh compiler checks remain pending at this increment.
+
+### Required Decision: Universal Interface Guarantees and Competing Paths
+
+This is a source-acceptance decision, not permission to silently substitute a
+concrete static witness for a universal interface proof. No option is adopted.
+
+```plew
+trait Q {}
+trait P { fn get() -> I64 where Self: Q }
+trait R {}
+struct S {}
+impl S as P { fn get() -> I64 { return 1I64 } }
+impl S as R {}
+impl P as Q {}
+impl R as Q {}
+fn probe(value: any P) -> I64 { return value.get() }
+fn main() { val result = probe(value: <S />) }
+```
+
+Spec/09 makes bare S:Q ambiguous. The pre-increment cccf6b38 compiler accepts
+check here but rejects AOT during concrete witness preparation. The fresh
+23f6ae76 check still accepts this erased caller. A source-imported scoped control
+also admits the hidden-Self derivation through impl P as Q. Thus the source
+interface proof cannot simply be fed into the static first-concrete query: the
+caller no longer knows S, and the selected P path does not establish globally
+unique Q for that concrete type.
+
+The user has been asked whether to require conditions justified by explicit
+interface guarantees (supertraits, associated constraints and actual caller
+premises), rejecting this probe, or to make the erased P path implicitly select
+P's route to Q. The latter changes how source priority crosses the erased
+boundary and cannot be introduced as a proof-visitor implementation detail.
+Forming an existential with unavailable members remains allowed in either case;
+rejecting every box is not an approved substitute for member availability.
+
+[Concrete programs and scoped observations](https://github.com/plew-lang/meta/blob/main/evidence/existing-feature-conformance/source-owner-facts/universal-interface-decision.json)
+retain the distinction from the repaired ordinary generic case. That case can
+validate source uniqueness at concrete instantiation; a universal hidden Self
+cannot be published as concrete Ready evidence merely to reuse that path.
+
+Swift SE-0309 separates existential formation from member availability. Rust's
+[coherence rules](https://doc.rust-lang.org/reference/items/implementations.html#trait-implementation-coherence)
+reject overlapping implementation instances, so they do not directly decide
+Plew's deliberately competing trait-subject paths. Do not adopt either language's
+answer without reconciling Plew's source-selector rules.
