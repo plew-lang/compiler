@@ -104,47 +104,6 @@ fn semanticCompletionOwnersEqual(recorded: SemanticCompletionOwner, prepared: Se
 // Its selected signature is required only when the access plan demands it.
 pub enum ExpressionRecordPurpose { Execution Capability }
 
-// Sparse source obligations retain only expressions that still require a type.
-// One linked list per lexical/global owner avoids rescanning the expression arena.
-pub struct SourceTypingObligation {
-    val expression: U64
-    val owner: SemanticCompletionOwner
-    val next: U64
-}
-impl SourceTypingObligation { factory }
-pub struct SourceTypingObligations {
-    mut val entries: Array[SourceTypingObligation] = []
-    mut val expressionIndices: Dictionary[U64, U64] = [:]
-    mut val functionHeads: Dictionary[U64, U64] = [:]
-    mut val globalHeads: Dictionary[U64, U64] = [:]
-    mut val closureHeads: Dictionary[U64, U64] = [:]
-}
-impl SourceTypingObligations {
-    factory
-    fn first(owner: SemanticCompletionOwner) -> U64 {
-        match owner {
-            SemanticCompletionOwner.Function(index: val index) => { return self.functionHeads.getOr(key: index, fallback: 0U64) }
-            SemanticCompletionOwner.Global(target: val target) => { return self.globalHeads.getOr(key: target, fallback: 0U64) }
-            SemanticCompletionOwner.Closure(expression: val expression) => { return self.closureHeads.getOr(key: expression, fallback: 0U64) }
-        }
-    }
-    inout fn record(expression: U64, owner: SemanticCompletionOwner) -> Bool {
-        match self.expressionIndices.get(key: expression) {
-            Optional.Some(v: val index) => { return semanticCompletionOwnersEqual(recorded: self.entries[index].owner, prepared: owner) }
-            Optional.None => {}
-        }
-        val index = self.entries.count()
-        self.entries.append(<SourceTypingObligation expression=expression owner=owner next=self.first(owner: owner) />)
-        self.expressionIndices[expression] = index
-        match owner {
-            SemanticCompletionOwner.Function(index: val function) => { self.functionHeads[function] = index + 1U64 }
-            SemanticCompletionOwner.Global(target: val target) => { self.globalHeads[target] = index + 1U64 }
-            SemanticCompletionOwner.Closure(expression: val expression) => { self.closureHeads[expression] = index + 1U64 }
-        }
-        return true
-    }
-}
-
 // Append-only publication progress belongs to one finalization session.
 // A diagnostic is terminal for this publisher; partial rows are never retried
 // or presented as a successful publication boundary.
@@ -328,7 +287,6 @@ pub struct Comp {
     pub mut val closedCallTemplateBodies: Array[Bool] = []
     // Session-local outcomes of lexical preparation, not whole-body ownership
     // or effect proofs. Failure must remain failure even after template closure.
-    mut val sourceTypingObligations: SourceTypingObligations = <SourceTypingObligations />
     // Lowering assigns authored type uses to their declaration, expression or
     // block. Record requests local uses; declaration loading checks only the
     // remaining signature/field uses. Synthetic types are not new source uses.
@@ -2269,6 +2227,10 @@ struct SourceBodyData {
     mut val parent: Optional[SemanticCompletionOwner] = <Optional.None />
     mut val expressions: Array[SemanticExprType] = []
     mut val expressionKeys: Dictionary[U64, U64] = [:]
+    mut val expressionIds: Array[U64] = []
+    mut val requiredExpressions: Array[U64] = []
+    mut val identifierTargets: Dictionary[U64, U64] = [:]
+    mut val globalAddresses: Dictionary[U64, SemanticGlobalAddress] = [:]
     mut val bindings: Array[SourceBindingFact] = []
     mut val bindingKeys: Dictionary[U64, U64] = [:]
     mut val statements: Array[SemanticExpressionCompletion] = []
@@ -2291,6 +2253,7 @@ impl SourceBodyData { factory }
 struct SourceBodyBuilder {
     mut val data: SourceBodyData
     mut val requested: Bool = false
+    mut val requiredKeys: Set[U64] = Set.new()
 }
 impl SourceBodyBuilder { factory }
 
@@ -2308,6 +2271,8 @@ struct SourceFactDirectory {
     mut val closures: Dictionary[U64, SourceBodyState] = [:]
     mut val functionRequests: U64 = 0U64
     mut val globalRequests: U64 = 0U64
+    mut val measure: Bool = false
+    mut val bodiesSealed: U64 = 0U64
     mut val acquisitions: U64 = 0U64
     mut val rowsSealed: U64 = 0U64
     // Navigation/provenance only. These maps contain no semantic value rows.
@@ -2318,6 +2283,15 @@ struct SourceFactDirectory {
     mut val conditionMatchOwners: Dictionary[U64, SemanticCompletionOwner] = [:]
 }
 impl SourceFactDirectory { factory }
+
+pub struct SourceFactStatistics {
+    pub val enabled: Bool
+    pub val bodiesSealed: U64
+    pub val rowsSealed: U64
+    pub val acquisitions: U64
+}
+impl SourceFactStatistics { factory }
+
 
 pub struct SourceBodyParameter {
     pub val declarationTarget: U64
@@ -2362,6 +2336,8 @@ impl PreparedSemanticFacts { factory }
 pub impl PreparedSemanticFacts {
     fn belongsToSession(session: U64) -> Bool { return self.session == session }
     fn expression(exprId: U64) -> Optional[SemanticExprType] { return self.payload->expression(exprId: exprId) }
+    fn identifierTarget(exprId: U64) -> Optional[U64] { return self.payload->identifierTargets.get(key: exprId) }
+    fn globalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] { return self.payload->globalAddresses.get(key: exprId) }
     fn bindingNeedsCaptureCell(sourceFunction: U64, bindingTarget: U64) -> Bool { return self.payload->bindingNeedsCaptureCell(sourceFunction: sourceFunction, bindingTarget: bindingTarget) }
     fn binding(stmtId: U64) -> Optional[SourceBindingFact] { return self.payload->binding(stmtId: stmtId) }
     fn functionSignature() -> Optional[SourceBodySignature] { return self.payload->signature }

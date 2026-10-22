@@ -356,7 +356,7 @@ pub fn midLocalForBinding(state: MidBuildState, declarationTarget: U64) -> MidBi
 }
 
 // The builder's only source-identifier boundary. Record/Verify has already
-// selected the lexical binding and stored it in TypeCache. The category and
+// selected the lexical binding and published it with this source body. The category and
 // declaration target are both required: target numeric domains overlap (for
 // example, a function index can equal a local declaration offset), so the
 // binding table alone must not reinterpret a callable as a local. `self`,
@@ -364,13 +364,12 @@ pub fn midLocalForBinding(state: MidBuildState, declarationTarget: U64) -> MidBi
 // separate typed address root, never a synthetic local. No source spelling,
 // scope scan, or AST pattern match is permitted here.
 pub fn midPlaceForRecordedIdent(c: inout Comp, state: MidBuildState, exprId: U64, typeTerm: U64) -> MidPlaceLookup {
-    if exprId >= c.typeCache.identBind.count() || exprId >= c.typeCache.identTarget.count() {
-        return <MidPlaceLookup />
-    }
-    if c.typeCache.identBind[exprId] != identValueCode() { return <MidPlaceLookup /> }
-    val local: MidBindingLookup = midLocalForBinding(state: state, declarationTarget: c.typeCache.identTarget[exprId])
+    val facts = match state.sourceFacts { Optional.Some(v: val facts) => facts Optional.None => { return <MidPlaceLookup /> } }
+    if !facts.belongsToSession(session: c.sourceFactSession()) { return <MidPlaceLookup /> }
+    val target = match facts.identifierTarget(exprId: exprId) { Optional.Some(v: val target) => target Optional.None => { return <MidPlaceLookup /> } }
+    val local: MidBindingLookup = midLocalForBinding(state: state, declarationTarget: target)
     if !local.found {
-        match c.recordedGlobalAddress(exprId: exprId) {
+        match facts.globalAddress(exprId: exprId) {
             Optional.Some(v: val global) => {
                 // A receiver view selects methods without changing storage.
                 // Preserve the declared global type just as for lexical locals.
@@ -1134,6 +1133,7 @@ fn midSemanticAggregateForSourceBody(c: inout Comp, sourceFunction: U64, sourceF
     val source = try c.semanticBodyOwner(fnIdx: sourceFunction)
     match sourceFacts {
         Optional.Some(v: val facts) => {
+            try c.requireSourceFactsSession(facts: facts)
             match facts.aggregate(ownerFnIdx: source, exprId: exprId) {
                 Optional.Some(v: val aggregate) => { return <Result.Ok value=<MidAggregateLookup found=true aggregate=aggregate /> /> }
                 Optional.None => {}
@@ -3426,14 +3426,18 @@ fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -> Mid
         Result.Ok(value: val facts) => facts
         Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
     }
+    val signature = match facts.functionSignature() {
+        Optional.Some(v: val signature) => signature
+        Optional.None => { return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) error=<MidBuildError.MissingSemanticType /> /> }
+    }
     mut val state: MidBuildState = <MidBuildState.initial sourceFunction=closure.bodyKey sourceFacts=<Optional.Some v=facts /> />
     // Source parameters are the contiguous Mid ABI prefix. The closure LLVM
     // emitter adds its environment pointer before this prefix; representing it
     // as an ordinary Mid parameter would shift every source ABI index.
     mut val parameterI: U64 = 0U64
-    while parameterI < closure.parameters.count() {
-        val parameter = closure.parameters[parameterI]
-        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: parameter.bindingTarget, typeTerm: parameter.typeTerm, isUnique: midTermIsUnique(c: inout c, term: parameter.typeTerm), isParameter: true, ownsAtEntry: parameter.isMove, isInout: parameter.isInout)
+    while parameterI < signature.parameters.count() {
+        val parameter = signature.parameters[parameterI]
+        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: parameter.declarationTarget, typeTerm: parameter.typeTerm, isUnique: midTermIsUnique(c: inout c, term: parameter.typeTerm), isParameter: true, ownsAtEntry: parameter.isMove, isInout: parameter.isInout)
         parameterI += 1U64
     }
     // Environment entries are available for the activation but owned by the
@@ -3458,14 +3462,14 @@ fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -> Mid
     // body locals belong to the child scope opened by buildMidBlock.
     val root: MidScope = state.scopes[0U64]
     state.scopes.set(i: 0U64, value: <MidScope parent=root.parent firstLocal=root.firstLocal localCount=state.locals.count() - root.firstLocal />)
-    if closure.hasReturn {
+    if signature.hasReturnValue {
         val resultLocal: U64 = state.locals.count()
-        state.locals.append(<MidLocalDecl typeTerm=closure.returnTypeTerm sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: closure.returnTypeTerm) isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=true sourceNameStart=0U64 />)
+        state.locals.append(<MidLocalDecl typeTerm=signature.resultTerm sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: signature.resultTerm) isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=true sourceNameStart=0U64 />)
         state.hasReturnPlace = true
         state.returnPlace = resultLocal
-        state.returnTypeTerm = closure.returnTypeTerm
+        state.returnTypeTerm = signature.resultTerm
     }
-    val result: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: closure.bodyBlock)
+    val result: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: signature.block)
     match result {
         MidBuildError.None => {}
         _ => { return <MidBodyBuild body=<MidBody sourceFunction=closure.bodyKey locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=result /> }

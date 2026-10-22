@@ -2120,7 +2120,11 @@ pub impl Comp {
                 self.cur.checkFn = self.closureBodyKey(closureId: exprId)
                 if self.cur.recordCallTemplates {
                     val owner = <SemanticCompletionOwner.Closure expression=exprId />
-                    if !self.sourceFacts.begin(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: cyclic closure source preparation") /> }
+                    // The enclosing request has multiple construction/check
+                    // walks. They may revisit this child before either outcome
+                    // is published; that is not a recursive body request.
+                    val child = self.sourceFacts.builder(owner: owner)
+                    child->requested = true
                     mut val inputs: Array[SourceBodyParameter] = []
                     mut val parameterIndex = 0U64
                     while parameterIndex < params.count() {
@@ -2192,10 +2196,6 @@ pub impl Comp {
         if exprId < self.typeCache.identBind.count() && self.typeCache.identBind[exprId] == identTypeQualCode() {
             return <Result.Ok value=() />
         }
-        match fact.typeState {
-            SemanticExpressionTypeState.Pending | SemanticExpressionTypeState.Unrecorded => {}
-            _ => { return <Result.Ok value=() /> }
-        }
         // Discarding a numeric literal needs no storage representation. Other
         // normal expressions still need their type for calls and construction.
         if !needsValue {
@@ -2206,8 +2206,10 @@ pub impl Comp {
         }
         match self.sourceRecordingOwner() {
             Optional.Some(v: val owner) => {
-                if !self.sourceTypingObligations.record(expression: exprId, owner: owner) {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: source typing obligation changed owner") />
+                val builder = self.sourceFacts.builder(owner: owner)
+                if !builder->requiredKeys.contains(exprId) {
+                    builder->requiredKeys.insert(exprId)
+                    builder->data.requiredExpressions.append(exprId)
                 }
             }
             // Declaration/field recording has its own checking boundary.
@@ -2217,28 +2219,26 @@ pub impl Comp {
     }
 
     inout fn checkSourceTypingObligations(owner: SemanticCompletionOwner) -> Result[(), CompileDiagnostic] {
-        mut val cursor = self.sourceTypingObligations.first(owner: owner)
-        while cursor != 0U64 {
-            val obligation = self.sourceTypingObligations.entries[cursor - 1U64]
-            val fact = match self.sourceFacts.expression(owner: owner, exprId: obligation.expression) {
+        val builder = self.sourceFacts.builder(owner: owner)
+        for expression in builder->data.requiredExpressions {
+            val fact = match self.sourceFacts.expression(owner: owner, exprId: expression) {
                 Optional.Some(v: val fact) => fact
-                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: obligation.expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") /> }
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") /> }
             }
             match fact.typeState {
                 SemanticExpressionTypeState.Pending | SemanticExpressionTypeState.Unrecorded => {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: obligation.expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") />
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") />
                 }
                 _ => {}
             }
             match fact.completion {
                 Optional.Some(v: val completion) => {
                     if !semanticCompletionOwnersEqual(recorded: completion.owner, prepared: owner) {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: obligation.expression), msg: "internal error: source typing obligation completion changed owner") />
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "internal error: source typing obligation completion changed owner") />
                     }
                 }
-                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: obligation.expression), msg: "internal error: typed source obligation has no checked completion") /> }
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "internal error: typed source obligation has no checked completion") /> }
             }
-            cursor = obligation.next
         }
         return <Result.Ok value=() />
     }

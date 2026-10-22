@@ -4516,13 +4516,13 @@ pub impl Comp {
                 return <Result.Ok value=(try self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, facts: facts, exprId: base)) />
             }
             Expr.Ident(start: _, len: _) => {
-                if exprId >= self.typeCache.identTarget.count() { return <Result.Ok value=0U64 />}
-                match self.recordedGlobalAddress(exprId: exprId) {
+                val target = match facts.identifierTarget(exprId: exprId) { Optional.Some(v: val target) => target Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: source identifier has no checked binding") /> } }
+                match facts.globalAddress(exprId: exprId) {
                     Optional.Some(v: val global) => {
                         self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=5U64 declarationTarget=global.declarationTarget globalMutable=global.mutable typeTerm=global.typeTerm />)
                     }
                     _ => {
-                        self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=1U64 declarationTarget=self.typeCache.identTarget[exprId] typeTerm=term />)
+                        self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=1U64 declarationTarget=target typeTerm=term />)
                     }
                 }
             }
@@ -6089,12 +6089,12 @@ pub impl Comp {
         if fnIdx < self.arena.functionCount() {
             return <Result.Ok value=(try self.preparedFunctionBodySignature(fnIdx: fnIdx)).resultTerm />
         }
-        mut val index = 0U64
-        while index < self.semanticClosures.count() {
-            if self.semanticClosures[index].bodyKey == fnIdx {
-                return <Result.Ok value=(try self.preparedSemanticClosureAt(index: index)).returnTypeTerm />
+        if fnIdx >= 9223372036854775808U64 && fnIdx != 18446744073709551615U64 {
+            val facts = try self.preparedSemanticFacts(owner: <SemanticCompletionOwner.Closure expression=fnIdx - 9223372036854775808U64 />)
+            match facts.functionSignature() {
+                Optional.Some(v: val signature) => { return <Result.Ok value=signature.resultTerm /> }
+                Optional.None => {}
             }
-            index += 1U64
         }
         return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: return boundary has no prepared source body") />
     }
@@ -6137,7 +6137,7 @@ impl Comp {
 
 impl Comp {
     // Execution-body provenance comes from the saved declaration. In
-    // particular a global closure keeps its initializer owner after the
+    // particular a global closure keeps its distinct body owner after the
     // initializer cursor is gone; it is not the shared anonymous body.
     inout fn bodySourceOwner(bodyId: U64, globalInitializerTarget: Optional[U64]) -> Result[SemanticCompletionOwner, CompileDiagnostic] {
         if bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() {

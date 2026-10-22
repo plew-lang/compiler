@@ -119,6 +119,10 @@ pub impl Comp {
                     self.cur.retIsArray = false
                     self.cur.retTy = 0
                 }
+                // The body is checked under its own source owner, with the
+                // enclosing locals retained only as capture bindings.
+                val savedCheckFn = self.cur.checkFn
+                self.cur.checkFn = closure.bodyKey
                 val cmark: U64 = self.scopeMark()
                 mut val cpi: U64 = 0
                 while cpi < closure.parameters.count() {
@@ -156,6 +160,7 @@ pub impl Comp {
                 self.cur.retLen = sRL
                 self.cur.retIsArray = sRA
                 self.cur.retTy = sRT
+                self.cur.checkFn = savedCheckFn
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 try self.verifyFieldReadVis(exprId: id, base: base, nameStart: nameStart, nameLen: nameLen)

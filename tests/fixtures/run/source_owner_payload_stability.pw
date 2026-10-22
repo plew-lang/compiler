@@ -1,0 +1,71 @@
+// Successful payloads retain their owner/session and do not reacquire a store
+// while reading. Later requests and rejected writes cannot change old readers.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, Stmt }
+use @Std/Io only { print }
+fn returnExpression(compiler: inout Comp, function: U64) -> U64 {
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: function).body, index: 0U64)
+    match compiler.arena.stmts[statement] {
+        Stmt.Return(value: val value, hasValue: _, offset: _) => { return value }
+        _ => { panic("missing return") }
+    }
+}
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="payload.pw" text="fn first() -> I64 {{ return 1I64 }} fn second() -> I64 {{ return 2I64 }} fn broken() {{ val values = [] }}" />,
+        sources: <SourceAccess />).unwrap()
+    val first = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "first").nameId)
+    val second = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "second").nameId)
+    val broken = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "broken").nameId)
+    compiler.enableSourceFactStatistics()
+    compiler.prepareLexicalBody(fnIdx: first).unwrap()
+    val reader = compiler.preparedFunctionSemanticFacts(fnIdx: first).unwrap()
+    val expression = returnExpression(compiler: inout compiler, function: first)
+    val term = reader.expression(exprId: expression).unwrap().term
+    val acquisitions = compiler.sourceFactStatistics().acquisitions
+    mut val count = 0U64
+    while count < 128U64 {
+        if reader.expression(exprId: expression).unwrap().term != term { panic("reader changed") }
+        count += 1U64
+    }
+    if compiler.sourceFactStatistics().acquisitions != acquisitions { panic("expression read reacquired body storage") }
+    compiler.prepareLexicalBody(fnIdx: second).unwrap()
+    val other = compiler.preparedFunctionSemanticFacts(fnIdx: second).unwrap()
+    if other.expression(exprId: expression).isSome() { panic("foreign owner supplied a fact") }
+    if reader.expression(exprId: expression).unwrap().term != term { panic("later owner changed retained backing") }
+    if compiler.sourceFactStatistics().bodiesSealed != 2U64 || compiler.sourceFactStatistics().rowsSealed == 0U64 { panic("invalid publication counters") }
+    mut val foreign = <Comp />
+    match foreign.requireSourceFactsSession(facts: reader) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("foreign session admitted source facts") }
+    }
+    compiler.cur.checkFn = first
+    compiler.cur.recordCallTemplates = true
+    val fresh = compiler.pushExpr(e: <Expr.Int value=3U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    match compiler.recordExpr(exprId: fresh, expectedTerm: term) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("completed owner gained a new expression") }
+    }
+    val failure = match compiler.prepareLexicalBody(fnIdx: broken) {
+        Result.Err(error: val diagnostic) => diagnostic.message
+        Result.Ok(value: _) => { panic("unresolved owner succeeded") }
+    }
+    match compiler.prepareLexicalBody(fnIdx: broken) {
+        Result.Err(error: val diagnostic) => { if diagnostic.message != failure { panic("failed request changed") } }
+        Result.Ok(value: _) => { panic("retry blessed failed owner") }
+    }
+    match compiler.preparedFunctionSemanticFacts(fnIdx: broken) {
+        Result.Err(error: val diagnostic) => { if diagnostic.message != failure { panic("failed owner changed diagnostic") } }
+        Result.Ok(value: _) => { panic("failed owner published a payload") }
+    }
+    compiler.cur.checkFn = broken
+    val afterFailure = compiler.pushExpr(e: <Expr.Int value=4U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    match compiler.recordExpr(exprId: afterFailure, expectedTerm: term) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("failed owner gained a new expression") }
+    }
+    if reader.expression(exprId: expression).unwrap().term != term { panic("rejected writes changed old reader") }
+    print("ok")
+}

@@ -1744,7 +1744,7 @@ pub impl Comp {
         val recipe = self.arena.semanticTypeRecipes[recipeId - 1U64]
         if recipe.kind != 2U64 || !self.sameCallSiteKey(a: recipe.callSite, b: siteKey) { return 0U64 }
         match recipe.sourceExpression {
-            Optional.Some(v: val expression) => { return self.semanticExprTerm(exprId: expression) }
+            Optional.Some(v: val expression) => { return self.recordedSourceExpressionTerm(exprId: expression) }
             Optional.None => {}
         }
         // Statement-owned protocols have no expression fact. Their selected

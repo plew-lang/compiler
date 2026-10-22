@@ -952,10 +952,10 @@ pub impl Comp {
             CallArgumentSource.Term(exprId: _, term: val term) => { return term }
             CallArgumentSource.Local(exprId: val expression, declarationTarget: _, term: val term) => {
                 if term != 0U64 { return term }
-                return self.semanticExprTerm(exprId: expression)
+                return self.recordedSourceExpressionTerm(exprId: expression)
             }
             CallArgumentSource.PriorCallResult(exprId: _, siteKey: val dependency) => { return self.sourceSelectedCallResult(siteKey: dependency) }
-            CallArgumentSource.Expression(exprId: val expression) => { return self.semanticExprTerm(exprId: expression) }
+            CallArgumentSource.Expression(exprId: val expression) => { return self.recordedSourceExpressionTerm(exprId: expression) }
         }
     }
 
