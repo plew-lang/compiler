@@ -123,3 +123,92 @@ are not imported wholesale: Plew's spec/08 explicitly separates existential
 formation from member availability. The exact internal representation must retain
 these adopted semantics; any newly necessary language decision still requires
 user judgment.
+
+### Internal Implementation Sequence
+
+Keep this work in the existing evidence domain rather than introducing a second
+body checker or a runtime trait solver. The representation below is an internal
+plan, not a new source-level opening feature or a claim of implementation.
+
+1. **Interface root and scope.** Intern an immutable, session-local interface
+   contract for an exact existential type/binding instance. Allocate its hidden
+   Self through the ordinary ParamId allocator; it is rigid and distinct from
+   both an inference variable and the enclosing provided body's lexical Self.
+   Retain the interface bound and binder together. A declaration-proof scope can
+   authorize this exact root only for the matching selected dynamic operation;
+   it cannot authorize arbitrary interface roots or make any P conform to P.
+   Reuse DeclarationBoundRef / existing assumption and supertrait/path evidence
+   with an explicit interface-root kind rather than a parallel trait solver.
+2. **Source call admission.** Dynamic and existential Protocol templates retain
+   their actual receiver and interface root. Normalize the selected requirement's
+   clauses with the existing SourceCallSignature.Trait machinery, substituting
+   its hidden Self and exact associated bindings. Derive only from that interface
+   and the caller's actual lexical premises. Seal the complete clause/proof plan
+   with the owner; an absent or mismatched plan is not an empty signature.
+3. **Two explicit evidence interpretations.** For a dynamic caller, substitute
+   caller-owned parameters while retaining the interface's universal hidden Self
+   under its exact new scope. This is capture-avoiding proof substitution, not
+   static concrete-witness selection. Return a distinct interface-call evidence
+   result so it cannot enter static callee enqueue as concrete evidence. For
+   first-concrete boxing, substitute the already selected boxing witness for
+   that same root and use the existing conformanceMethodPlan to transfer public
+   clause identities into implementation-bound evidence. Do not zip public and
+   implementation clauses or reconstruct them from an ambient body cursor.
+4. **Concrete member availability.** A source interface can exist with unavailable
+   members. First-concrete member preparation distinguishes genuinely unavailable
+   ABI/conditions from a malformed or foreign promised proof. A concrete method
+   whose preconditions fail is not enqueued merely because an implementation
+   exists. A member admitted as callable must retain its exact successful
+   evidence through body/adaptor/descriptors. Preserve both declaration-worklist
+   checking and executable preparation; neither uses Declaration as a substitute
+   for the retained requirement-to-implementation derivation.
+5. **Final consumption and removal.** The dynamic descriptor/call reads the
+   saved, caller-instantiated interface evidence and exact requirement/receiver
+   boundary. Concrete witness bodies receive mapped implementation evidence.
+   Required-fact deletion, another receiver/interface root, replaced clauses and
+   wrong caller bindings must fail without rerunning source selection. Remove
+   the Dynamic/Protocol bound-dropping branches and boxing Declaration fallback
+   only as these replacement paths become connected; do not call a source-only
+   rejection the completed fix.
+
+New red controls cover unproved Self, unproved Item, and an enclosing unrelated
+Self that does have the desired trait. Positive controls cover supertrait and
+associated guarantees, an unrelated enclosing Self, and forming a box whose
+conditional member is unused/unavailable. They are implementation targets, not
+currently green gates. Add scoped missing/foreign/replacement controls at the
+actual final readers before closure.
+
+References for representation, not imported source rules:
+[Swift SE-0352](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0352-implicit-open-existentials.md)
+distinguishes the box from its hidden conforming type and does not equate the
+underlying types of independent boxes. Plew's proof root follows that distinction
+without broadening this task to generic opening or Swift's erasure conversions.
+[Rust's higher-ranked checking](https://rustc-dev-guide.rust-lang.org/traits/hrtb.html)
+uses fresh placeholders and checks that they do not leak into unrelated existing
+parameters. The relevant lesson is scoped rigid identity and capture-avoiding
+substitution; this does not introduce Rust lifetime syntax or HRTB features.
+
+### Source Admission Versus Existence: Reproduced Additional Gap
+
+The measured 5e1dd64b candidate accepts a fully closed call to accept[T] where
+T: A when S reaches empty A through both S:C -> B -> A and S:D -> B -> A.
+No member is used; check exits zero. This violates the adopted unique source-path
+contract in Types and Evidence, not a new inference or trait feature.
+The new source_bound_ambiguous_empty_trait control retains that input. The
+positive source_bound_unique_empty_trait combines an explicit #C source with
+exact duplicate authored T:A premises; duplicate representations of the same
+premise are not separate declaration paths.
+
+The existing requireUniqueWitness flag describes executable member selection:
+mergeMemberWitnessProof can merge different paths with the same terminal witness.
+An internal existence result and that endpoint merger cannot certify unique
+source-path admission. Close this through one proof-query policy with explicit
+Existence / SourceAdmission / MemberDispatch demands, shared matching/conditions
+and source/view selection. Source admission deduplicates the same normalized
+root and declaration path, not merely equal endpoints; distinct trait-subject
+branches remain ambiguous. Caller-owned exact duplicate promises can be
+canonicalized by their checked bound and path, without arbitrary root-ID priority
+or a broader inference solver. Preserve explicit source views and conditional
+applicability before selection; do not make a #C positive ambiguous by dropping
+its selected source while collecting all paths. No such query-policy repair is
+implemented yet. Interface-bound admission must use this same source policy.

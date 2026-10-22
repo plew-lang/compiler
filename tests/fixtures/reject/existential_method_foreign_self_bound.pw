@@ -1,0 +1,8 @@
+// An enclosing provided body's Self is not the erased receiver's hidden Self.
+trait Marker {}
+trait Service { fn get() -> I64 where Self: Marker }
+trait Outer: Marker {}
+pub impl Outer {
+    fn probe(value: any Service) -> I64 { return value.get() }
+}
+fn main() {}

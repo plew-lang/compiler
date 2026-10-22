@@ -1,0 +1,27 @@
+// Dynamic method preconditions follow the exact interface and associated bindings.
+use @Std/Io only { print }
+trait Marker {}
+trait Service: Marker { fn get() -> I64 where Self: Marker }
+trait ItemService { type Item: Marker fn get() -> I64 where Item: Marker }
+struct Value {}
+impl Value as Marker {}
+impl Value as Service { fn get() -> I64 { return 40I64 } }
+struct ItemValue {}
+impl ItemValue as ItemService {
+    type Item = Value
+    fn get() -> I64 { return 2I64 }
+}
+trait Outer {}
+pub impl Outer {
+    fn probe(value: any Service) -> I64 { return value.get() }
+}
+struct Holder {}
+impl Holder as Outer {}
+fn sum(service: any Service, item: any ItemService[Item=Value]) -> I64 {
+    return service.get() + item.get()
+}
+fn main() {
+    print(sum(service: <Value />, item: <ItemValue />))
+    val holder = <Holder />
+    print(holder.probe(value: <Value />))
+}

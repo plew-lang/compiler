@@ -1,0 +1,10 @@
+// A conditional member can be unavailable without forbidding existential formation.
+use @Std/Io only { print }
+trait Marker {}
+trait Service { fn get() -> I64 where Self: Marker }
+struct Value {}
+impl Value as Service { fn get() -> I64 { return 42I64 } }
+fn main() {
+    val value: any Service = <Value />
+    print("formed")
+}

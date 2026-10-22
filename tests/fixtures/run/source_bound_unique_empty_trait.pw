@@ -1,0 +1,14 @@
+// Exact duplicate premises are not distinct conformance paths; a source view selects one path.
+trait C {}
+trait D {}
+trait B {}
+trait A {}
+struct S {}
+impl S as C {}
+impl S as D {}
+impl C as B {}
+impl D as B {}
+impl B as A {}
+fn accept[T](value: T) where T: A {}
+fn duplicate[T](value: T) where T: A, T: A { accept(value: value) }
+fn main() { duplicate(value: <S />#C) }

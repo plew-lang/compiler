@@ -1,0 +1,5 @@
+// The erased interface does not promise the method's Self precondition.
+trait Marker {}
+trait Service { fn get() -> I64 where Self: Marker }
+fn probe(value: any Service) -> I64 { return value.get() }
+fn main() {}

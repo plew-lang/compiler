@@ -1,0 +1,6 @@
+// Forming an existential does not make every conditional member available.
+trait Marker {}
+struct Unmarked {}
+trait Service { type Item fn get() -> I64 where Item: Marker }
+fn probe(value: any Service[Item=Unmarked]) -> I64 { return value.get() }
+fn main() {}
