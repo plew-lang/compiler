@@ -1,20 +1,48 @@
+// Readers receive only the relevant table projection. A by-value SourceBodyData
+// receiver would snapshot every table header for a query of just one table.
+// Construction and sealed reads share these lookup operations.
+fn readSourceRow[T](rows: Array[T], keys: Dictionary[U64, U64], key: U64) -> Optional[T] {
+    match keys.get(key: key) {
+        Optional.Some(v: val index) => { return <Optional.Some v=rows[index] /> }
+        Optional.None => { return <Optional.None /> }
+    }
+}
+fn readSourceExpressionHead(rows: Array[SemanticExprType], keys: Dictionary[U64, U64], exprId: U64) -> SourceExpressionHead {
+    match keys.get(key: exprId) {
+        Optional.Some(v: val index) => { return <SourceExpressionHead term=rows[index].term typeState=rows[index].typeState invocation=rows[index].invocation /> }
+        Optional.None => { return <SourceExpressionHead /> }
+    }
+}
+fn readSourceMatchIndex(statementKeys: Dictionary[U64, U64], expressionKeys: Dictionary[U64, U64], conditionKeys: Dictionary[U64, U64], source: MatchSource) -> Optional[U64] {
+    match source {
+        MatchSource.Statement(stmtId: val id) => { return statementKeys.get(key: id) }
+        MatchSource.Expression(exprId: val id) => { return expressionKeys.get(key: id) }
+        MatchSource.Condition(clauseIndex: val id) => { return conditionKeys.get(key: id) }
+    }
+}
+fn readSourcePattern(rows: Array[SemanticMatch], statementKeys: Dictionary[U64, U64], expressionKeys: Dictionary[U64, U64], conditionKeys: Dictionary[U64, U64], source: MatchSource) -> Optional[SemanticMatch] {
+    match readSourceMatchIndex(statementKeys: statementKeys, expressionKeys: expressionKeys, conditionKeys: conditionKeys, source: source) {
+        Optional.Some(v: val index) => { return <Optional.Some v=rows[index] /> }
+        Optional.None => { return <Optional.None /> }
+    }
+}
+fn sourceBindingNeedsCaptureCell(closures: Array[SemanticClosure], sourceFunction: U64, bindingTarget: U64) -> Bool {
+    for closure in closures {
+        if closure.ownerFnIdx == sourceFunction {
+            for capture in closure.captures {
+                match capture.mode {
+                    SemanticClosureCaptureMode.CellBorrow => { if capture.bindingTarget == bindingTarget { return true } }
+                    _ => {}
+                }
+            }
+        }
+    }
+    return false
+}
+
 // Private owner-local backing. A published reader holds one Ref, never a
 // snapshot of the directory or another owner's mutable arrays.
 impl SourceBodyData {
-    fn expressionHead(exprId: U64) -> SourceExpressionHead {
-        match self.expressionKeys.get(key: exprId) {
-            Optional.Some(v: val index) => {
-                return <SourceExpressionHead term=self.expressions[index].term typeState=self.expressions[index].typeState invocation=self.expressions[index].invocation />
-            }
-            Optional.None => { return <SourceExpressionHead /> }
-        }
-    }
-    fn expression(exprId: U64) -> Optional[SemanticExprType] {
-        match self.expressionKeys.get(key: exprId) {
-            Optional.Some(v: val index) => { return <Optional.Some v=self.expressions[index] /> }
-            Optional.None => { return <Optional.None /> }
-        }
-    }
     inout fn putExpression(exprId: U64, fact: SemanticExprType) {
         match self.expressionKeys.get(key: exprId) {
             Optional.Some(v: val index) => { self.expressions.set(i: index, value: fact) }
@@ -53,12 +81,6 @@ impl SourceBodyData {
             index += 1U64
         }
     }
-    fn binding(stmtId: U64) -> Optional[SourceBindingFact] {
-        match self.bindingKeys.get(key: stmtId) {
-            Optional.Some(v: val index) => { return <Optional.Some v=self.bindings[index] /> }
-            Optional.None => { return <Optional.None /> }
-        }
-    }
     inout fn putBinding(stmtId: U64, fact: SourceBindingFact) {
         match self.bindingKeys.get(key: stmtId) {
             Optional.Some(v: val index) => { self.bindings.set(i: index, value: fact) }
@@ -66,12 +88,6 @@ impl SourceBodyData {
                 self.bindingKeys[stmtId] = self.bindings.count()
                 self.bindings.append(fact)
             }
-        }
-    }
-    fn statement(stmtId: U64) -> Optional[SemanticExpressionCompletion] {
-        match self.statementKeys.get(key: stmtId) {
-            Optional.Some(v: val index) => { return <Optional.Some v=self.statements[index] /> }
-            Optional.None => { return <Optional.None /> }
         }
     }
     inout fn putStatement(stmtId: U64, fact: SemanticExpressionCompletion) {
@@ -83,12 +99,6 @@ impl SourceBodyData {
             }
         }
     }
-    fn aggregate(exprId: U64) -> Optional[SemanticAggregate] {
-        match self.aggregateKeys.get(key: exprId) {
-            Optional.Some(v: val index) => { return <Optional.Some v=self.aggregates[index] /> }
-            Optional.None => { return <Optional.None /> }
-        }
-    }
     inout fn putAggregate(fact: SemanticAggregate) {
         match self.aggregateKeys.get(key: fact.exprId) {
             Optional.Some(v: val index) => { self.aggregates.set(i: index, value: fact) }
@@ -96,12 +106,6 @@ impl SourceBodyData {
                 self.aggregateKeys[fact.exprId] = self.aggregates.count()
                 self.aggregates.append(fact)
             }
-        }
-    }
-    fn tryDecomposition(exprId: U64) -> Optional[SemanticTry] {
-        match self.tryKeys.get(key: exprId) {
-            Optional.Some(v: val index) => { return <Optional.Some v=self.tries[index] /> }
-            Optional.None => { return <Optional.None /> }
         }
     }
     inout fn putTry(fact: SemanticTry) {
@@ -113,21 +117,8 @@ impl SourceBodyData {
             }
         }
     }
-    fn matchIndex(source: MatchSource) -> Optional[U64] {
-        match source {
-            MatchSource.Statement(stmtId: val id) => { return self.statementMatchKeys.get(key: id) }
-            MatchSource.Expression(exprId: val id) => { return self.expressionMatchKeys.get(key: id) }
-            MatchSource.Condition(clauseIndex: val id) => { return self.conditionMatchKeys.get(key: id) }
-        }
-    }
-    fn pattern(source: MatchSource) -> Optional[SemanticMatch] {
-        match self.matchIndex(source: source) {
-            Optional.Some(v: val index) => { return <Optional.Some v=self.matches[index] /> }
-            Optional.None => { return <Optional.None /> }
-        }
-    }
     inout fn putMatch(fact: SemanticMatch) {
-        match self.matchIndex(source: fact.matchSource) {
+        match readSourceMatchIndex(statementKeys: self.statementMatchKeys, expressionKeys: self.expressionMatchKeys, conditionKeys: self.conditionMatchKeys, source: fact.matchSource) {
             Optional.Some(v: val index) => { self.matches.set(i: index, value: fact) }
             Optional.None => {
                 val index = self.matches.count()
@@ -308,12 +299,13 @@ impl SourceFactDirectory {
         }
     }
     inout fn expressionHead(owner: SemanticCompletionOwner, exprId: U64) -> SourceExpressionHead {
-        if self.isActive(owner: owner) { return self.activeBuilder.data.expressionHead(exprId: exprId) }
+        if self.isActive(owner: owner) { return readSourceExpressionHead(rows: self.activeBuilder.data.expressions, keys: self.activeBuilder.data.expressionKeys, exprId: exprId) }
         match self.state(owner: owner) {
             Optional.Some(v: val state) => {
                 match state {
-                    SourceBodyState.Building => { return self.inactiveBuilder(owner: owner).data.expressionHead(exprId: exprId) }
-                    SourceBodyState.Succeeded(reader: val reader) => { return self.readers[reader].payload->expressionHead(exprId: exprId) }
+                    SourceBodyState.Building => { val builder = self.inactiveBuilder(owner: owner)
+                        return readSourceExpressionHead(rows: builder.data.expressions, keys: builder.data.expressionKeys, exprId: exprId) }
+                    SourceBodyState.Succeeded(reader: val reader) => { return readSourceExpressionHead(rows: self.readers[reader].payload->expressions, keys: self.readers[reader].payload->expressionKeys, exprId: exprId) }
                     _ => {}
                 }
             }
@@ -322,12 +314,13 @@ impl SourceFactDirectory {
         return <SourceExpressionHead />
     }
     inout fn expression(owner: SemanticCompletionOwner, exprId: U64) -> Optional[SemanticExprType] {
-        if self.isActive(owner: owner) { return self.activeBuilder.data.expression(exprId: exprId) }
+        if self.isActive(owner: owner) { return readSourceRow(rows: self.activeBuilder.data.expressions, keys: self.activeBuilder.data.expressionKeys, key: exprId) }
         match self.state(owner: owner) {
             Optional.Some(v: val state) => {
                 match state {
-                    SourceBodyState.Active => { return self.activeBuilder.data.expression(exprId: exprId) }
-                    SourceBodyState.Building => { return self.inactiveBuilder(owner: owner).data.expression(exprId: exprId) }
+                    SourceBodyState.Active => { return readSourceRow(rows: self.activeBuilder.data.expressions, keys: self.activeBuilder.data.expressionKeys, key: exprId) }
+                    SourceBodyState.Building => { val builder = self.inactiveBuilder(owner: owner)
+                        return readSourceRow(rows: builder.data.expressions, keys: builder.data.expressionKeys, key: exprId) }
                     SourceBodyState.Succeeded(reader: val reader) => { return self.readers[reader].expression(exprId: exprId) }
                     _ => {}
                 }
@@ -351,13 +344,14 @@ impl SourceFactDirectory {
         return <Optional.None />
     }
     inout fn statement(owner: SemanticCompletionOwner, stmtId: U64) -> Optional[SemanticExpressionCompletion] {
-        if self.isActive(owner: owner) { return self.activeBuilder.data.statement(stmtId: stmtId) }
+        if self.isActive(owner: owner) { return readSourceRow(rows: self.activeBuilder.data.statements, keys: self.activeBuilder.data.statementKeys, key: stmtId) }
         match self.state(owner: owner) {
             Optional.Some(v: val state) => {
                 match state {
-                    SourceBodyState.Active => { return self.activeBuilder.data.statement(stmtId: stmtId) }
-                    SourceBodyState.Building => { return self.inactiveBuilder(owner: owner).data.statement(stmtId: stmtId) }
-                    SourceBodyState.Succeeded(reader: val reader) => { return self.readers[reader].payload->statement(stmtId: stmtId) }
+                    SourceBodyState.Active => { return readSourceRow(rows: self.activeBuilder.data.statements, keys: self.activeBuilder.data.statementKeys, key: stmtId) }
+                    SourceBodyState.Building => { val builder = self.inactiveBuilder(owner: owner)
+                        return readSourceRow(rows: builder.data.statements, keys: builder.data.statementKeys, key: stmtId) }
+                    SourceBodyState.Succeeded(reader: val reader) => { return readSourceRow(rows: self.readers[reader].payload->statements, keys: self.readers[reader].payload->statementKeys, key: stmtId) }
                     _ => {}
                 }
             }
@@ -587,9 +581,10 @@ impl Comp {
                 match self.sourceFacts.state(owner: owner) {
                     Optional.Some(v: val state) => {
                         match state {
-                            SourceBodyState.Active => { return self.sourceFacts.activeBuilder.data.aggregate(exprId: exprId) }
-                            SourceBodyState.Building => { return self.sourceFacts.inactiveBuilder(owner: owner).data.aggregate(exprId: exprId) }
-                            SourceBodyState.Succeeded(reader: val reader) => { return self.sourceFacts.readers[reader].payload->aggregate(exprId: exprId) }
+                            SourceBodyState.Active => { return readSourceRow(rows: self.sourceFacts.activeBuilder.data.aggregates, keys: self.sourceFacts.activeBuilder.data.aggregateKeys, key: exprId) }
+                            SourceBodyState.Building => { val builder = self.sourceFacts.inactiveBuilder(owner: owner)
+                        return readSourceRow(rows: builder.data.aggregates, keys: builder.data.aggregateKeys, key: exprId) }
+                            SourceBodyState.Succeeded(reader: val reader) => { return readSourceRow(rows: self.sourceFacts.readers[reader].payload->aggregates, keys: self.sourceFacts.readers[reader].payload->aggregateKeys, key: exprId) }
                             _ => {}
                         }
                     }
@@ -606,9 +601,10 @@ impl Comp {
                 match self.sourceFacts.state(owner: owner) {
                     Optional.Some(v: val state) => {
                         match state {
-                            SourceBodyState.Active => { return self.sourceFacts.activeBuilder.data.pattern(source: source) }
-                            SourceBodyState.Building => { return self.sourceFacts.inactiveBuilder(owner: owner).data.pattern(source: source) }
-                            SourceBodyState.Succeeded(reader: val reader) => { return self.sourceFacts.readers[reader].payload->pattern(source: source) }
+                            SourceBodyState.Active => { return readSourcePattern(rows: self.sourceFacts.activeBuilder.data.matches, statementKeys: self.sourceFacts.activeBuilder.data.statementMatchKeys, expressionKeys: self.sourceFacts.activeBuilder.data.expressionMatchKeys, conditionKeys: self.sourceFacts.activeBuilder.data.conditionMatchKeys, source: source) }
+                            SourceBodyState.Building => { val builder = self.sourceFacts.inactiveBuilder(owner: owner)
+                        return readSourcePattern(rows: builder.data.matches, statementKeys: builder.data.statementMatchKeys, expressionKeys: builder.data.expressionMatchKeys, conditionKeys: builder.data.conditionMatchKeys, source: source) }
+                            SourceBodyState.Succeeded(reader: val reader) => { return readSourcePattern(rows: self.sourceFacts.readers[reader].payload->matches, statementKeys: self.sourceFacts.readers[reader].payload->statementMatchKeys, expressionKeys: self.sourceFacts.readers[reader].payload->expressionMatchKeys, conditionKeys: self.sourceFacts.readers[reader].payload->conditionMatchKeys, source: source) }
                             _ => {}
                         }
                     }
@@ -671,12 +667,6 @@ impl Comp {
 }
 
 impl SourceBodyData {
-    fn closure(exprId: U64) -> Optional[SemanticClosure] {
-        match self.closureKeys.get(key: exprId) {
-            Optional.Some(v: val index) => { return <Optional.Some v=self.closurePlans[index] /> }
-            Optional.None => { return <Optional.None /> }
-        }
-    }
     inout fn putClosure(closure: SemanticClosure) {
         match self.closureKeys.get(key: closure.exprId) {
             Optional.Some(v: val index) => { self.closurePlans.set(i: index, value: closure) }
@@ -686,28 +676,16 @@ impl SourceBodyData {
             }
         }
     }
-    fn bindingNeedsCaptureCell(sourceFunction: U64, bindingTarget: U64) -> Bool {
-        for closure in self.closurePlans {
-            if closure.ownerFnIdx == sourceFunction {
-                for capture in closure.captures {
-                    match capture.mode {
-                        SemanticClosureCaptureMode.CellBorrow => { if capture.bindingTarget == bindingTarget { return true } }
-                        _ => {}
-                    }
-                }
-            }
-        }
-        return false
-    }
 }
 impl Comp {
     inout fn constructionClosure(owner: SemanticCompletionOwner, exprId: U64) -> Optional[SemanticClosure] {
         match self.sourceFacts.state(owner: owner) {
             Optional.Some(v: val state) => {
                 match state {
-                    SourceBodyState.Active => { return self.sourceFacts.activeBuilder.data.closure(exprId: exprId) }
-                    SourceBodyState.Building => { return self.sourceFacts.inactiveBuilder(owner: owner).data.closure(exprId: exprId) }
-                    SourceBodyState.Succeeded(reader: val reader) => { return self.sourceFacts.readers[reader].payload->closure(exprId: exprId) }
+                    SourceBodyState.Active => { return readSourceRow(rows: self.sourceFacts.activeBuilder.data.closurePlans, keys: self.sourceFacts.activeBuilder.data.closureKeys, key: exprId) }
+                    SourceBodyState.Building => { val builder = self.sourceFacts.inactiveBuilder(owner: owner)
+                        return readSourceRow(rows: builder.data.closurePlans, keys: builder.data.closureKeys, key: exprId) }
+                    SourceBodyState.Succeeded(reader: val reader) => { return readSourceRow(rows: self.sourceFacts.readers[reader].payload->closurePlans, keys: self.sourceFacts.readers[reader].payload->closureKeys, key: exprId) }
                     _ => {}
                 }
             }

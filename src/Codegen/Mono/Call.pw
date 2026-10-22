@@ -5155,7 +5155,7 @@ pub impl Comp {
         if index >= self.semanticClosures.count() || index >= self.semanticClosureOwners.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: closure declaration has no source preparation owner") /> }
         val declaration = self.semanticClosures[index]
         val facts = try self.preparedSemanticFacts(owner: self.semanticClosureOwners[index])
-        match facts.payload->closure(exprId: declaration.exprId) {
+        match readSourceRow(rows: facts.payload->closurePlans, keys: facts.payload->closureKeys, key: declaration.exprId) {
             Optional.Some(v: val closure) => { return <Result.Ok value=closure /> }
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: declaration.exprId), msg: "internal error: closure construction owner has no checked plan") /> }
         }

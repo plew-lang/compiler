@@ -2364,36 +2364,36 @@ pub struct PreparedSemanticFacts {
 impl PreparedSemanticFacts { factory }
 pub impl PreparedSemanticFacts {
     fn belongsToSession(session: U64) -> Bool { return self.session == session }
-    fn expression(exprId: U64) -> Optional[SemanticExprType] { return self.payload->expression(exprId: exprId) }
+    fn expression(exprId: U64) -> Optional[SemanticExprType] { return readSourceRow(rows: self.payload->expressions, keys: self.payload->expressionKeys, key: exprId) }
     fn valueBlock(blockId: U64) -> Optional[SourceValueBlockFact] { return self.payload->valueBlocks.get(key: blockId) }
     fn identifierTarget(exprId: U64) -> Optional[U64] { return self.payload->identifierTargets.get(key: exprId) }
     fn globalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] { return self.payload->globalAddresses.get(key: exprId) }
-    fn bindingNeedsCaptureCell(sourceFunction: U64, bindingTarget: U64) -> Bool { return self.payload->bindingNeedsCaptureCell(sourceFunction: sourceFunction, bindingTarget: bindingTarget) }
-    fn binding(stmtId: U64) -> Optional[SourceBindingFact] { return self.payload->binding(stmtId: stmtId) }
+    fn bindingNeedsCaptureCell(sourceFunction: U64, bindingTarget: U64) -> Bool { return sourceBindingNeedsCaptureCell(closures: self.payload->closurePlans, sourceFunction: sourceFunction, bindingTarget: bindingTarget) }
+    fn binding(stmtId: U64) -> Optional[SourceBindingFact] { return readSourceRow(rows: self.payload->bindings, keys: self.payload->bindingKeys, key: stmtId) }
     fn functionSignature() -> Optional[SourceBodySignature] { return self.payload->signature }
     fn aggregate(ownerFnIdx: U64, exprId: U64) -> Optional[SemanticAggregate] {
-        match self.payload->aggregate(exprId: exprId) {
+        match readSourceRow(rows: self.payload->aggregates, keys: self.payload->aggregateKeys, key: exprId) {
             Optional.Some(v: val fact) => { if fact.ownerFnIdx == ownerFnIdx { return <Optional.Some v=fact /> } }
             Optional.None => {}
         }
         return <Optional.None />
     }
     fn tryDecomposition(ownerFnIdx: U64, exprId: U64) -> Optional[SemanticTry] {
-        match self.payload->tryDecomposition(exprId: exprId) {
+        match readSourceRow(rows: self.payload->tries, keys: self.payload->tryKeys, key: exprId) {
             Optional.Some(v: val fact) => { if fact.ownerFnIdx == ownerFnIdx { return <Optional.Some v=fact /> } }
             Optional.None => {}
         }
         return <Optional.None />
     }
     fn pattern(ownerFnIdx: U64, matchSource: MatchSource) -> Optional[SemanticMatch] {
-        match self.payload->pattern(source: matchSource) {
+        match readSourcePattern(rows: self.payload->matches, statementKeys: self.payload->statementMatchKeys, expressionKeys: self.payload->expressionMatchKeys, conditionKeys: self.payload->conditionMatchKeys, source: matchSource) {
             Optional.Some(v: val fact) => { if fact.ownerFnIdx == ownerFnIdx { return <Optional.Some v=fact /> } }
             Optional.None => {}
         }
         return <Optional.None />
     }
     fn statementCompletion(stmtId: U64) -> Optional[SourceCompletion] {
-        match self.payload->statement(stmtId: stmtId) {
+        match readSourceRow(rows: self.payload->statements, keys: self.payload->statementKeys, key: stmtId) {
             Optional.Some(v: val fact) => { return <Optional.Some v=fact.flow /> }
             Optional.None => { return <Optional.None /> }
         }
