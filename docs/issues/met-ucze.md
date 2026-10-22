@@ -250,3 +250,21 @@ The same driver linked at O0 exhausts the default stack on the deep whole-source
 probe (recursive frame approximately 522 KB); the regular optimizer/link pipeline
 succeeds. This diagnostic driver is not a fresh compiler executable or a formal
 performance result. Fresh build, target execution and gates remain pending.
+
+
+## Next Source-operation Boundary
+
+Finish iteration compatibility from the retained iterator/next operations and
+result recipe, including record-pattern binders. Keep Core protocol identity,
+associated Item constraints and existential restrictions at the owning source
+selection boundary; removing a later query cannot erase its distinct checks.
+Audit staticOperatorTemplateResolution/checkSymbolicMethodArgs and lexical Self/
+parameter predicates: closure keys are operation owners, while assumptions come
+from the retained lexical root. Do not collapse a closure's CallSiteKey to that
+root to obtain its bounds. Existing generic_closure_lexical_bound and its wrong-
+lexical-bound reject remain controls; add operator/type-qualifier cases if the
+remaining raw function-count guards are reproduced as failures.
+
+Then move operation/constraint semantic rows into the owner payload and carry
+exact callee evidence through final consumers. The just-validated compatibility
+readers do not complete physical storage, callee evidence or phase three.

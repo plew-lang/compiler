@@ -54,10 +54,13 @@ preparation.
 | SynthesizedBodyPlan | Tagged synthetic origin, selected target/signature and boundary conversion/evidence plan; constructs mechanical adapters without fabricating authored source facts |
 | PreparedInstance | A read-only publication view of the existing BodyInstance/Concrete Mid: exact InstanceKey, grounded signature/operands/calls and concrete evidence/descriptors with residual execution dependencies. It is neither an independently mutable typed tree nor a whole-program executable token |
 
-A CallSiteKey retains the original source span, origin serial and implicit-call
-slot. A result recipe referencing an earlier call retains that exact key; a same-
-typed result from another call cannot supply it. Source-independent Mid temporary
-places use their own evaluated-place authority, not invented AST rows.
+A written CallSiteKey retains the source span, origin serial and implicit-call
+slot. A synthetic key can use its producer-assigned serial without a source span;
+zero is not namespace authority. Visibility comes from the authored lexical source
+owner and its retained environment, independently of diagnostic spellings or
+locations. A result recipe referencing an earlier call retains that exact key;
+a same-typed result from another call cannot supply it. Source-independent Mid
+temporary places use their own evaluated-place authority, not invented AST rows.
 
 Local table rows use dense local IDs with owner-local indexes from source/use
 keys. Nested operand/field/proof lists use ranges into that body's immutable
