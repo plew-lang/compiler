@@ -1,0 +1,1 @@
+`use` / `pub use` is allowed only in a module root (spec/15)

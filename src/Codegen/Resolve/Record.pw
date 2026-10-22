@@ -2,7 +2,6 @@
 // checks that require local or pattern bindings. Consumers ground these
 // facts under a BodyInstance; they do not repeat lexical type inference.
 
-use ../../Ir only { SemanticTry, InstanceEnvironment, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload }
 
 pub impl Comp {
     inout fn requireConstructionContext(ctxRef: U64, offset: U64) -> Result[U64, CompileDiagnostic] {

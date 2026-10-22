@@ -1,5 +1,3 @@
-use @Std/Core only { Eq }
-
 pub impl Item as Eq {
     assoc fn eq(lhs~: Item, rhs~: Item) -> Bool {
         return lhs.value == rhs.value

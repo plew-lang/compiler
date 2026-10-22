@@ -1,3 +1,8 @@
+use ./Mid only { planCanonicalMidAsyncFrame }
+use ./Ir only { ConversionProofNode, FrozenEnumPayloadConversion }
+use @Std/Core only { bitCastU64 }
+use ./Diag only { eprintU64 }
+use ./Mid/Diagnostics only { emitMidCoverageVerify }
 use ./LlvmHandles only { LLVMContextRef, LLVMModuleRef, PlewLlvmJitRef, PlewProgramArgumentsRef }
 use ./Mid/Ambient only { MidAmbientProgram, MidAmbientBodyPlan, MidAmbientStorage }
 use ./Mid/Program only { MidExecutableProgram }

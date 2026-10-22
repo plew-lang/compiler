@@ -1,6 +1,5 @@
 // Interpolation lowers to one ordinary value block. Receiver evaluation, calls,
 // full-expression cleanup and early returns remain the responsibility of Mid.
-use @Plew/Syntax only { StringPartAst }
 
 pub impl Comp {
     inout fn stringCoreType(name: String) -> U64 {

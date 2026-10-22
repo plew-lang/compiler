@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+use ./Library only { Token as Item, score }
+use ./Library as Names
+pub use ./Library only { score }
+part ./Helper
+part ./Sibling
+struct Producer {}
+fn main() {
+    print(Producer.first())
+    print(Producer.second())
+}

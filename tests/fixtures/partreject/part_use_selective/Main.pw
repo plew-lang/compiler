@@ -1,0 +1,3 @@
+// Parts cannot add imports to their module, even when unused.
+part ./Helper
+fn main() {}

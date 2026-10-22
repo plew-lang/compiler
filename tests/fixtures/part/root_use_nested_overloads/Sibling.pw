@@ -1,0 +1,3 @@
+pub impl Producer {
+    assoc fn second() -> I64 { return score(number: 4I64) }
+}

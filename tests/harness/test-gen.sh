@@ -63,6 +63,17 @@ for app in tests/fixtures/gen/*/App.pw; do
     if ! clang -w "$work/app.ll" "$RT" $("$LC" --ldflags) -o "$work/app" 2>/dev/null; then
         fail=$((fail + 1)); failed="$failed $name(app-link)"; continue
     fi
+    # The real generated Hash body must depend on explicit consumer-root
+    # bindings. Removing only Hasher leaves @[Hash] itself visible to gen.
+    if [ "$name" = derivehash ]; then
+        sed 's/{ Hash, Hasher, SipHasher }/{ Hash, SipHasher }/' "$work/App.pw" > "$work/MissingSupport.pw"
+        cp "$work/App.gen.pw" "$work/MissingSupport.gen.pw"
+        support_status=0
+        "$PLEWC" "$work/MissingSupport.pw" > /dev/null 2> "$work/support.err" || support_status=$?
+        if [ "$support_status" -ne 1 ] || [ ! -s "$work/support.err" ]; then
+            fail=$((fail + 1)); failed="$failed $name(missing-support)"; continue
+        fi
+    fi
     # 5. run + compare
     status=0
     got=$("$work/app" 2>/dev/null) || status=$?

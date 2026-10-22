@@ -1,0 +1,2 @@
+// Generated sources have no import privilege.
+use @Std/Io only { print }

@@ -46,6 +46,9 @@ pub impl Comp {
             SyntaxTopItemKind.Impl => {}
             SyntaxTopItemKind.Import => {
                 val imp = syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
+                if imp.isImport {
+                    return <Result.Err error=self.diagnosticAt(offset: imp.span.start, msg: "`use` / `pub use` is allowed only in a module root (spec/15) — move this directive to the root; its bindings are shared by all parts") />
+                }
                 if imp.isPublic { return <Result.Err error=self.partItemDiagnostic(offset: imp.span.start) /> }
             }
             SyntaxTopItemKind.Directive => {}

@@ -1,7 +1,6 @@
 // Part of name/type resolution (root: _.pw): global-init dependency
 // ordering and use-alias / factory-construction rewriting.
 
-use ../../Ir only { InstanceEnvironment }
 
 pub impl Comp {
     inout fn normalizeMemberwiseDefaultsAt(exprId: U64) {

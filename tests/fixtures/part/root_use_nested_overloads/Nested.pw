@@ -1,0 +1,7 @@
+// Aliases, namespace bindings and the full overload set come from the root.
+pub impl Producer {
+    assoc fn first() -> I64 {
+        val item: Item = <Names.Token value=7I64 />
+        return score(item: item) + score(number: 3I64)
+    }
+}

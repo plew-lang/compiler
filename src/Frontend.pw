@@ -1,3 +1,9 @@
+use ./Ir only { SemanticTypeRecipe, CallTemplateArgumentRange, CallTemplateTypeArgumentRange, CallTemplateOperandRange, CallTemplateViewRange }
+use ./Ir only { CallSiteSelection, CallTarget }
+use ./Diag only { eprintU64 }
+use ./Ir only { ExistentialRequirementSignature, ExistentialWitnessPlan, SelectedCallableSubstitution, BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, SemanticAccessInput, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticMatchKind, SemanticMatchArm, SemanticMatchPayload, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalStorageResolution, FinalExistentialResolution, FinalForResolution, ValueConversionBoundary, EnumPayloadConversion, ValueConversionProof, BodySignature, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, FinalCallArguments, CallEvaluationArgument }
+use @Plew/Syntax only { StringPartAst }
+use ./Ir only { DynamicCallTemplateTarget }
 use ./Ir only { SemanticClosure }
 use ./Ir only { CallableConstraintEvidence, ProjectionNormalizationStep, SelectedCallConstraints, SourceCallSignature, SelectedWitnessInstantiation, WitnessConditionPlan, ExistentialBoxEvidence, DeclarationTypeScope, DeclarationObligationState, CallConstraintInstance, DeclarationConversion, ExistentialImplementation }
 use ./Ir only { SemanticTry, SemanticMatch, MatchSource, ProtocolSelection, OperatorSelection, InvocationCompletion, SemanticExpressionTypeState, SemanticCompletionOwner, SemanticExpressionCompletion, TypeCompatibility, TypeArgumentMatch, ConditionClause, ConditionClauseRange }
@@ -1673,7 +1679,8 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
             tracePhaseCount(c: inout c, label: "load:parse-done", count: qi)
             pendingRoots.append(roots)
             // spec/15: a `part` file (a non-root file of an already-seen module) may
-            // contain only `impl` blocks — reject any free fn / type / extern / val.
+            // contain only impl/part/macro items. Reject use before following its
+            // dependency edge or registering bindings; root bindings serve all parts.
             if u64ArrayHas(a: rootSeen, v: moduleId) {
                 try c.checkPartSyntaxOnly(roots: roots)
             } else {
