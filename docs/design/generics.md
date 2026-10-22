@@ -60,6 +60,14 @@ preparation distinct from reselection of an already committed witness. Declarati
 worklists and execution preparation use the same explicit evidence contract,
 without making ambient monomorphization cursor state authoritative.
 
+Scheduling a source-selected static callee requires its retained operation as
+well as the concrete selection. Written calls, operators, iteration and implicit
+error conversions use this same entry; an omitted evidence argument cannot
+silently request declaration-based proof construction. Declaration worklists use
+the same evidence reader with their explicit caller environment. Root and sealed
+synthetic plans remain separate first-evidence producers. Extern/bodyless calls
+admit their substituted signature and evidence without inventing a checked body.
+
 ## 4. Instance Identity and Registration
 
 An executable body identity includes its selected declaration/body origin and complete semantic environment. Different receiver terms, lexical mappings, or selected static evidence cannot collapse merely because their machine layouts or ABI signatures match. Closure, global-initializer, default-generator, and adapter origins must remain distinct where their bodies or obligations differ. A registry may represent them using synthetic function keys, provided those keys have explicit ownership and stable provenance.

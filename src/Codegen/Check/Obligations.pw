@@ -520,14 +520,12 @@ pub impl Comp {
         return <Result.Ok value=owner < relevant.count() && relevant[owner] />
     }
 
-    inout fn appendCallConstraintInstance(function: U64, arguments: Array[U64], receiver: U64, proof: StaticConformanceProof, constraints: CallableConstraintEvidence = <CallableConstraintEvidence.Declaration />, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[DeclarationObligationState, CompileDiagnostic] {
+    // This gate admits the substitution, not the body. It is shared by source
+    // evidence instantiation and the declaration-body worklist so deferred
+    // arguments cannot be mistaken for missing concrete evidence.
+    inout fn callConstraintSubstitutionState(function: U64, arguments: Array[U64], receiver: U64) -> Result[DeclarationObligationState, CompileDiagnostic] {
         if function >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no selected function") /> }
-        // Provided copies can be registered after the relevance snapshot.
-        // Their lexical owner, not the new row number, owns body obligations.
-        val owner = try self.semanticBodyOwner(fnIdx: function)
-        if owner >= relevant.count() || !relevant[owner] { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
         val declaration = self.arena.functionAt(index: function)
-        if declaration.isExtern || declaration.body == 0U64 { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
         if arguments.count() != declaration.typeParams.count() { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "declaration obligation has incomplete type arguments") /> }
         mut val deferred = false
         for argument in arguments {
@@ -536,8 +534,20 @@ pub impl Comp {
         }
         if deferred { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
         if (declaration.hasRecv || declaration.isAssoc) && (receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver)) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
+        return <Result.Ok value=<DeclarationObligationState.Complete /> />
+    }
+
+    inout fn appendCallConstraintInstance(function: U64, arguments: Array[U64], receiver: U64, proof: StaticConformanceProof, constraints: CallableConstraintEvidence = <CallableConstraintEvidence.Declaration />, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[DeclarationObligationState, CompileDiagnostic] {
+        if function >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no selected function") /> }
+        // Provided copies can be registered after the relevance snapshot.
+        // Their lexical owner, not the new row number, owns body obligations.
+        val owner = try self.semanticBodyOwner(fnIdx: function)
+        if owner >= relevant.count() || !relevant[owner] { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
+        val declaration = self.arena.functionAt(index: function)
+        if (try self.callConstraintSubstitutionState(function: function, arguments: arguments, receiver: receiver)).isDeferred() { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
         val substitution = try self.bodyInstanceEnvironment(fnIdx: function, args: arguments, recvInstRef: receiver, selectedProof: proof)
         val environment = try self.environmentWithCallableConstraints(fnIdx: function, environment: substitution, evidence: constraints)
+        if declaration.isExtern || declaration.body == 0U64 { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
         mut val previous = heads.getOr(key: owner, fallback: 0U64)
         while previous != 0U64 {
             val prior = requests[previous - 1U64]
@@ -603,7 +613,7 @@ pub impl Comp {
         return <Result.Ok value=arguments />
     }
 
-    inout fn checkStaticMemberObligation(resolution: StaticMemberResolution, methodArguments: Array[U64] = [], receiver: U64, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[DeclarationObligationState, CompileDiagnostic] {
+    inout fn checkStaticMemberObligation(template: CallTemplate, resolution: StaticMemberResolution, methodArguments: Array[U64] = [], receiver: U64, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[DeclarationObligationState, CompileDiagnostic] {
         if receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
         mut val selected = self.arena.functionCount()
         mut val evidence = <StaticConformanceProof.Missing />
@@ -632,7 +642,9 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected trait member has no concrete conformance") />
         }
         val arguments = try self.staticMemberInstanceArguments(resolution: resolution, function: selected, receiver: receiver, proof: evidence, methodArguments: methodArguments, environment: environment)
-        return self.appendCallConstraintInstance(function: selected, arguments: arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+        if (try self.callConstraintSubstitutionState(function: selected, arguments: arguments, receiver: receiver)).isDeferred() { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
+        val constraints = try self.selectedCallConstraintEvidence(template: template, callee: selected, proof: evidence, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+        return self.appendCallConstraintInstance(function: selected, arguments: arguments, receiver: receiver, proof: evidence, constraints: constraints, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
     }
 
     inout fn checkCallConstraintTemplate(template: CallTemplate, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[DeclarationObligationState, CompileDiagnostic] {
@@ -683,12 +695,12 @@ pub impl Comp {
                 return self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: proof, constraints: constraints, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
-                return self.checkStaticMemberObligation(resolution: resolution, methodArguments: self.callTemplateTypeArgs(range: typeArgs), receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                return self.checkStaticMemberObligation(template: template, resolution: resolution, methodArguments: self.callTemplateTypeArgs(range: typeArgs), receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
             }
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 match selection {
                     ProtocolSelection.Static(resolution: val resolution) => {
-                        return self.checkStaticMemberObligation(resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                        return self.checkStaticMemberObligation(template: template, resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
                     }
                     ProtocolSelection.Direct(callee: val callee, proof: val selectedProof) => {
                         if receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
@@ -702,7 +714,9 @@ pub impl Comp {
                             }
                         }
                         val arguments = try self.callConstraintTypeArguments(function: self.arena.functionAt(index: callee), receiver: receiver, proof: proof)
-                        return self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: proof, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                        if (try self.callConstraintSubstitutionState(function: callee, arguments: arguments, receiver: receiver)).isDeferred() { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
+                        val constraints = try self.selectedCallConstraintEvidence(template: template, callee: callee, proof: proof, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                        return self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: proof, constraints: constraints, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
                     }
                     _ => {}
                 }
@@ -710,13 +724,15 @@ pub impl Comp {
             CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
                 match selection {
                     OperatorSelection.Static(resolution: val resolution) => {
-                        return self.checkStaticMemberObligation(resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                        return self.checkStaticMemberObligation(template: template, resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
                     }
                     OperatorSelection.Direct(callee: val callee) => {
                         if receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
                         val declaration = self.arena.functionAt(index: callee)
                         val arguments = try self.callConstraintTypeArguments(function: declaration, receiver: receiver, proof: <StaticConformanceProof.Missing />)
-                        return self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: <StaticConformanceProof.Missing />, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+                        if (try self.callConstraintSubstitutionState(function: callee, arguments: arguments, receiver: receiver)).isDeferred() { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
+                        val constraints = try self.selectedCallConstraintEvidence(template: template, callee: callee, proof: <StaticConformanceProof.Missing />, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                        return self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: <StaticConformanceProof.Missing />, constraints: constraints, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
                     }
                     OperatorSelection.Primitive => {}
                     OperatorSelection.Pending => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "operator constraint has no completed selection") /> }

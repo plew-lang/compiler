@@ -204,11 +204,16 @@ pub impl Comp {
     // recovering `Stmt.For.iter` here would create a second semantic source.
     // Finalization consumes the source-selected protocol identity. Only proof
     // substitution is instance-specific; no member-name lookup is permitted.
-    inout fn selectedProtocolTemplateCall(stmtId: U64, slot: U64, receiverRef: U64) -> Result[CallSiteSelection, CompileDiagnostic] {
+    inout fn protocolTemplateForCurrentBody(stmtId: U64, slot: U64) -> Result[CallTemplate, CompileDiagnostic] {
         val key = try self.currentCallSiteKey(exprId: stmtId, siteIsStmt: true, slot: slot)
         val index = self.callTemplateIndex(siteKey: key)
-        if index >= self.callTemplateLocations.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "implicit protocol selection was not recorded") /> }
-        match self.callTemplateAt(index: index).kind {
+        if index >= self.callTemplateLocations.count() { return <Result.Err error=self.diagnosticAt(offset: key.originStart, msg: "implicit protocol selection was not recorded") /> }
+        return <Result.Ok value=self.callTemplateAt(index: index) />
+    }
+
+    inout fn selectedProtocolTemplateCall(template: CallTemplate, stmtId: U64, slot: U64, receiverRef: U64) -> Result[CallSiteSelection, CompileDiagnostic] {
+        val key = template.siteKey
+        match template.kind {
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: val resultTerm) => {
                 mut val callee = self.arena.functionCount()
                 mut val proof = <StaticConformanceProof.Missing />
@@ -238,19 +243,14 @@ pub impl Comp {
                     }
                     ProtocolSelection.Pending => { return <Result.Err error=self.diagnosticAt(offset: key.originStart, msg: "for-loop requires an Iterable or Iterator") /> }
                 }
-                return <Result.Ok value=<CallSiteSelection exprId=stmtId siteIsStmt=true slot=slot callee=callee receiverRef=receiverRef calleeTypeArgs=typeArguments proof=proof resultRef=result resultHintRef=receiverRef target=target /> />
+                return <Result.Ok value=<CallSiteSelection siteKey=key exprId=stmtId siteIsStmt=true slot=slot callee=callee receiverRef=receiverRef calleeTypeArgs=typeArguments proof=proof resultRef=result resultHintRef=receiverRef target=target /> />
             }
             _ => { return <Result.Err error=self.diagnosticAt(offset: key.originStart, msg: "implicit protocol selection has the wrong call kind") /> }
         }
     }
 
-    inout fn groundedProtocolTemplateReceiver(stmtId: U64, slot: U64) -> Result[U64, CompileDiagnostic] {
-        val key: CallSiteKey = (try self.currentCallSiteKey(exprId: stmtId, siteIsStmt: true, slot: slot))
-        val index: U64 = self.callTemplateIndex(siteKey: key)
-        if index >= self.callTemplateLocations.count() {
-            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate was not recorded") />
-        }
-        match self.callTemplateAt(index: index).kind {
+    inout fn groundedProtocolTemplateReceiver(template: CallTemplate, stmtId: U64) -> Result[U64, CompileDiagnostic] {
+        match template.kind {
             CallTemplateKind.Protocol(receiver: val receiver, selection: _, resultTerm: _) => {
                 match receiver {
                     CallTemplateReceiver.Term(val term) => {
@@ -1152,7 +1152,7 @@ pub impl Comp {
         return <Result.Ok value=<Optional.Some v=<SelectedCallableSubstitution receiverRef=recvInst args=[] proof=calleeProof /> /> />
     }
 
-    inout fn enqueueSelectedCallee(selection: CallSiteSelection, constraints: CallableConstraintEvidence = <CallableConstraintEvidence.Declaration />) -> Result[(), CompileDiagnostic] {
+    inout fn enqueueSelectedCallee(selection: CallSiteSelection, template: CallTemplate) -> Result[(), CompileDiagnostic] {
         val substitution = match (try self.selectedCallableSubstitution(selection: selection)) {
             Optional.Some(v: val value) => { give value }
             Optional.None => { return <Result.Ok value=() /> }
@@ -1165,6 +1165,10 @@ pub impl Comp {
         val finalArgs = substitution.args
         val recvInst = substitution.receiverRef
         val calleeProof = substitution.proof
+        // Every source-selected call carries its admitted public obligations.
+        // Root and mechanically synthesized bodies use enqueueFinalBody's
+        // separate declaration producer; this entry cannot fall back to it.
+        val constraints = try self.selectedCallConstraintEvidence(template: template, callee: callee, proof: calleeProof, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         val calleeBodyId: U64 = (try self.enqueueFinalBody(fnIdx: callee, args: finalArgs, recvInstRef: recvInst, selectedProof: calleeProof, constraints: constraints))
         try self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: finalArgs, argumentSources: selection.argumentSources, resultRef: selection.resultRef, resultProjection: selection.resultProjection, siteIsStmt: siteIsStmt, slot: slot, calleeBodyId: calleeBodyId)
         val finalResult: U64 = (try self.bodyCalleeResultRef(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
@@ -1204,7 +1208,7 @@ pub impl Comp {
                 _ => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: error conversion has no recorded call template") /> }
             }
             try self.recordSelectedBodyCallee(selection: selection)
-            try self.enqueueSelectedCallee(selection: selection)
+            try self.enqueueSelectedCallee(selection: selection, template: template)
             conversionResolution = (try self.bodyCalleeIndex(exprId: exprId, slot: 1U64))
             if conversionResolution >= self.arena.finalCalleeCount() {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: recorded try conversion was not finalized") />
@@ -1440,7 +1444,7 @@ pub impl Comp {
         }
         val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef args=self.operatorTemplateArgs(operands: operands) argumentSources=argumentSources calleeTypeArgs=typeArguments proof=selectedProof resultHintRef=(try self.selectedResultHint(callee: callee)) resultRef=selectedResultRef resultProjection=resultProjection target=target />
         try self.recordSelectedBodyCallee(selection: selection)
-        if callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: selection) }
+        if callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: selection, template: template) }
         return <Result.Ok value=() />
     }
 
@@ -3981,16 +3985,61 @@ pub impl Comp {
         }
     }
 
-    inout fn requirementCallConstraintEvidence(template: CallTemplate, selection: CallSiteSelection, traitIndex: U64, requirement: U64) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
-        val witness = self.proofWitnessForTrait(proof: selection.proof, traitIdx: traitIndex)
+    // Source call admission and instance preparation share this evidence reader.
+    // The caller environment is explicit; only the Mono enqueue adapter reads
+    // its active body cursor. Implementation clauses come from the retained
+    // conformance entailment, never from a positional zip with public clauses.
+    inout fn selectedMemberConstraintEvidence(template: CallTemplate, resolution: StaticMemberResolution, callee: U64, proof: StaticConformanceProof, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
+        match resolution {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIndex, reqIdx: val requirement) => {
+                return self.requirementCallConstraintEvidence(template: template, callee: callee, proof: proof, traitIndex: traitIndex, requirement: requirement, environment: environment, selfRef: selfRef, itemRef: itemRef)
+            }
+            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
+                return self.instantiateSelectedCallConstraints(template: template, environment: environment, selfRef: selfRef, itemRef: itemRef)
+            }
+            StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has no retained member evidence") /> }
+        }
+    }
+
+    inout fn selectedCallConstraintEvidence(template: CallTemplate, callee: U64, proof: StaticConformanceProof, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
+        match template.kind {
+            CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {}
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: _, resultTerm: _) => {
+                return self.selectedMemberConstraintEvidence(template: template, resolution: resolution, callee: callee, proof: proof, environment: environment, selfRef: selfRef, itemRef: itemRef)
+            }
+            CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
+                match selection {
+                    ProtocolSelection.Direct(callee: _, proof: _) => {}
+                    ProtocolSelection.Static(resolution: val resolution) => {
+                        return self.selectedMemberConstraintEvidence(template: template, resolution: resolution, callee: callee, proof: proof, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                    }
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected protocol call has no retained callable evidence") /> }
+                }
+            }
+            CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
+                match selection {
+                    OperatorSelection.Direct(callee: _) => {}
+                    OperatorSelection.Static(resolution: val resolution) => {
+                        return self.selectedMemberConstraintEvidence(template: template, resolution: resolution, callee: callee, proof: proof, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                    }
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected operator call has no retained callable evidence") /> }
+                }
+            }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected callable has no retained source operation") /> }
+        }
+        return self.instantiateSelectedCallConstraints(template: template, environment: environment, selfRef: selfRef, itemRef: itemRef)
+    }
+
+    inout fn requirementCallConstraintEvidence(template: CallTemplate, callee: U64, proof: StaticConformanceProof, traitIndex: U64, requirement: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
+        val witness = self.proofWitnessForTrait(proof: proof, traitIdx: traitIndex)
         if witness.conformIdx == 0U64 { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "requirement call has no selected conformance") /> }
-        val function = self.arena.functionAt(index: selection.callee)
-        val implementation = if function.sourceWitnessFuncId != 0U64 { give function.sourceWitnessFuncId - 1U64 } else { give selection.callee }
+        val function = self.arena.functionAt(index: callee)
+        val implementation = if function.sourceWitnessFuncId != 0U64 { give function.sourceWitnessFuncId - 1U64 } else { give callee }
         val plan = match self.arena.conformanceMethodPlan(conformance: witness.conformIdx - 1U64, traitIndex: traitIndex, requirement: requirement, implementation: implementation) {
             Optional.Some(v: val plan) => { give plan }
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "requirement call has no retained implementation evidence") /> }
         }
-        match (try self.instantiateBodyCallConstraints(template: template)) {
+        match (try self.instantiateSelectedCallConstraints(template: template, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
             CallableConstraintEvidence.Recorded(bounds: val bounds, proofs: val proofs) => { return <Result.Ok value=<CallableConstraintEvidence.Requirement plan=plan bounds=bounds proofs=proofs /> /> }
             _ => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "requirement call has no retained public evidence") /> }
         }
@@ -4007,8 +4056,7 @@ pub impl Comp {
                 if storedCallee < self.arena.functionCount() {
                     val selection: CallSiteSelection = (try self.selectDirectTemplateCall(exprId: exprId, callee: storedCallee, receiver: receiver, arguments: self.callTemplateArguments(range: arguments), proof: self.thawStaticConformanceProof(id: proofId)))
                     try self.recordSelectedBodyCallee(selection: selection)
-                    val constraints = try self.instantiateBodyCallConstraints(template: template)
-                    try self.enqueueSelectedCallee(selection: selection, constraints: constraints)
+                    try self.enqueueSelectedCallee(selection: selection, template: template)
                     return <Result.Ok value=storedCallee />
                 }
             }
@@ -4020,14 +4068,7 @@ pub impl Comp {
             CallTemplateKind.StaticMethod(receiver: val receiver, args: val arguments, resolution: val resolution, methodTypeArgs: val methodTypeArgs, resultTerm: val resultTerm) => {
                 val selection: CallSiteSelection = (try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: self.callTemplateTypeArgs(range: methodTypeArgs), receiver: receiver, arguments: self.callTemplateArguments(range: arguments), resolution: resolution, resultTerm: resultTerm))
                 try self.recordSelectedBodyCallee(selection: selection)
-                // Public and implementation clauses have distinct identities.
-                // Requirement calls use their retained declaration entailment.
-                val constraints = match resolution {
-                    StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => { give try self.instantiateBodyCallConstraints(template: template) }
-                    StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIndex, reqIdx: val requirement) => { give try self.requirementCallConstraintEvidence(template: template, selection: selection, traitIndex: traitIndex, requirement: requirement) }
-                    _ => { give <CallableConstraintEvidence.Declaration /> }
-                }
-                try self.enqueueSelectedCallee(selection: selection, constraints: constraints)
+                try self.enqueueSelectedCallee(selection: selection, template: template)
                 return <Result.Ok value=selection.callee />
             }
             _ => {}
@@ -6026,14 +6067,16 @@ pub impl Comp {
                 // Record owns protocol selection and Item inference. This
                 // body instance only grounds those facts and schedules the
                 // selected bodies; missing facts never trigger AST lookup.
-                val initialRef = try self.groundedProtocolTemplateReceiver(stmtId: stmtId, slot: 1U64)
-                val iteratorSelection = try self.selectedProtocolTemplateCall(stmtId: stmtId, slot: 1U64, receiverRef: initialRef)
+                val iteratorTemplate = try self.protocolTemplateForCurrentBody(stmtId: stmtId, slot: 1U64)
+                val initialRef = try self.groundedProtocolTemplateReceiver(template: iteratorTemplate, stmtId: stmtId)
+                val iteratorSelection = try self.selectedProtocolTemplateCall(template: iteratorTemplate, stmtId: stmtId, slot: 1U64, receiverRef: initialRef)
                 try self.recordSelectedBodyCallee(selection: iteratorSelection)
-                if iteratorSelection.callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: iteratorSelection) }
+                if iteratorSelection.callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: iteratorSelection, template: iteratorTemplate) }
                 val iteratorRef = try self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: 1U64)
-                val nextSelection = try self.selectedProtocolTemplateCall(stmtId: stmtId, slot: 2U64, receiverRef: iteratorRef)
+                val nextTemplate = try self.protocolTemplateForCurrentBody(stmtId: stmtId, slot: 2U64)
+                val nextSelection = try self.selectedProtocolTemplateCall(template: nextTemplate, stmtId: stmtId, slot: 2U64, receiverRef: iteratorRef)
                 try self.recordSelectedBodyCallee(selection: nextSelection)
-                if nextSelection.callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: nextSelection) }
+                if nextSelection.callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: nextSelection, template: nextTemplate) }
                 val semanticItem = try self.finalizeForTypeRecipes(stmtId: stmtId)
                 if semanticItem == 0U64 {
                     return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal diagnostic: final for binding type recipe did not ground") />

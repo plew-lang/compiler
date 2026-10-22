@@ -27,3 +27,27 @@ Acceptance: producer construction/storage -> owner admission -> explicit substit
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
 
 Current declaration-bound identity, binder/proof/environment keys and selected-call instances through real callee contexts. Preserve existing simultaneous substitution and proof keys. Coordinate the saved-source operation contract with met-ucze; no new allowunique/conditional capability solver.
+
+## Source-selected Static Enqueue Increment (WIP)
+
+The existing Direct/Static evidence readers are reused, not replaced by a new
+constraint store. enqueueSelectedCallee now requires the retained CallTemplate;
+it constructs the exact evidence from that source operation in the explicit
+caller environment. Written calls, operators, protocol slots and try conversion
+all use this entry. Its default Declaration evidence parameter is removed.
+Protocol grounding and selection consume the same acquired template rather than
+independently acquiring or interpreting its source occurrence.
+
+Declaration worklists route static requirements/provided methods, protocol and
+operator calls through the same explicit-environment reader. A shared substitution
+gate distinguishes deferred/open arguments before concrete evidence instantiation.
+Bodyless requests admit signature/evidence before completing without a body.
+Root and synthetic declaration producers retain their separate legitimate path.
+Requirement-to-implementation mapping retains the existing conformance method
+plan and original clause identities; no public/implementation bound arrays are zipped.
+
+Whole-compiler source checking succeeds with the preceding fixed carrier.
+An internal source-imported control is being added for operator/protocol callee
+bindings, explicit environments and malformed bodyless evidence. Fresh binary,
+matching-source cost and applicable full gates remain pending. This increment does
+not close dynamic descriptors, associated proof consumers or the entire issue.

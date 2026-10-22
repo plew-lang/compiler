@@ -1,0 +1,71 @@
+// Source-selected implicit calls must reach callee environments with retained
+// requirement evidence. The common enqueue entry has no Declaration fallback.
+use /Frontend only { Comp, FrontendInput, analyzeFrontend, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Ir only { InstanceEnvironment, CallableConstraintEvidence, StaticConformanceProof, CallConstraintInstance }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    val sources = <SourceAccess stdRoot="plew:std/".bytes() resources=[
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64 }} pub enum Optional[T] {{ Some(v: T) None }}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 }} pub trait Add[Rhs] {{ type Output assoc fn add(lhs~: Self, rhs~: Rhs) -> Output }} pub trait Iterator {{ type Item inout fn next() -> Optional[Item] }} pub trait Iterable {{ type Item type Iter: Iterator[Item=Item] fn iterator() -> Iter }}" />,
+        <SourceResource path="plew:std/Probe.pw".bytes() text="use @Std/Core only {{ Add, Iterator }}\ntrait Tag {{}}\nstruct Item {{}}\nimpl Item as Tag {{}}\nstruct Token[T] {{}}\nimpl[T] Token[T] as Add[Token[T]] where T: Tag {{\n type Output = Token[T]\n assoc fn add(lhs~: Token[T], rhs~: Token[T]) -> Token[T] {{ return lhs }}\n}}\nstruct Cursor[T] {{}}\nimpl[T] Cursor[T] as Iterator where T: Tag {{\n type Item = Token[T]\n inout fn next() -> Optional[Token[T]] {{ return <Optional.None /> }}\n}}\nfn caller[Value, Cursor](token: Value, cursor: Cursor) where Value: Add[Value, Output=Value], Cursor: Iterator[Item=Value] {{\n val sum = token + token\n for val value in cursor {{}}\n}}\nfn main() {{ caller(token: <Token[Item] />, cursor: <Cursor[Item] />) }}\n" />,
+    ] />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="plew:std/Probe.pw" />, sources: sources) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val error) => { panic(error.message) }
+    }
+    val add = compiler.internBytes(s: "add").nameId
+    val next = compiler.internBytes(s: "next").nameId
+    mut val operators = 0U64
+    mut val protocols = 0U64
+    mut val index = 0U64
+    while index < compiler.arena.finalCalleeCount() {
+        val call = compiler.arena.finalCalleeAt(index: index)
+        if call.calleeBodyId != 0U64 && call.callee < compiler.arena.functionCount() {
+            val name = compiler.arena.functionAt(index: call.callee).nameId
+            if name == add || name == next {
+                val callee = compiler.arena.bodyInstanceAt(index: call.calleeBodyId - 1U64)
+                val bindings = callee.environment.constraints.unwrap()
+                if compiler.arena.callableConstraintCount(evidence: bindings) == 0U64 { panic("implicit callee lost its conformance obligations") }
+                val caller = compiler.arena.bodyInstanceAt(index: call.bodyId - 1U64)
+                val source = compiler.callTemplateAt(index: compiler.callTemplateIndex(siteKey: call.siteKey))
+                checkExplicitEnvironment(compiler: inout compiler, templateIndex: compiler.callTemplateIndex(siteKey: source.siteKey), callee: call.callee, proof: callee.environment.proof, environment: caller.environment)
+                if name == add { operators += 1U64 } else { protocols += 1U64 }
+            }
+        }
+        index += 1U64
+    }
+    if operators == 0U64 || protocols == 0U64 { panic("missing implicit callable controls") }
+    checkBodyless()
+    print("implicit-constraint-handoff")
+}
+
+fn checkExplicitEnvironment(compiler: inout Comp, templateIndex: U64, callee: U64, proof: StaticConformanceProof, environment: InstanceEnvironment) {
+    val template = compiler.callTemplateAt(index: templateIndex)
+    val saved = compiler.cur
+    compiler.cur.bodyEnvironment = <InstanceEnvironment />
+    compiler.cur.bodySelfRef = 0U64
+    compiler.cur.bodyItemRef = 0U64
+    match compiler.selectedCallConstraintEvidence(template: template, callee: callee, proof: proof, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64).unwrap() {
+        CallableConstraintEvidence.Requirement(plan: _, bounds: val bounds, proofs: val proofs) => {
+            if bounds.count() != proofs.count() { panic("implicit public evidence is incomplete") }
+        }
+        _ => { panic("implicit call reconstructed declaration evidence") }
+    }
+    compiler.cur = saved
+}
+
+fn checkBodyless() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="extern(c) {{ fn foreign() }}" path="bodyless.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreign").nameId)
+    mut val requests: Array[CallConstraintInstance] = []
+    mut val heads: Dictionary[U64, U64] = [:]
+    mut val relevant: Array[Bool] = []
+    while relevant.count() < compiler.arena.functionCount() { relevant.append(true) }
+    compiler.appendCallConstraintInstance(function: function, arguments: [], receiver: 0U64, proof: <StaticConformanceProof.Missing />, constraints: <CallableConstraintEvidence.Recorded bounds=[] proofs=[] />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant).unwrap()
+    if compiler.appendCallConstraintInstance(function: function, arguments: [], receiver: 0U64, proof: <StaticConformanceProof.Missing />, constraints: <CallableConstraintEvidence.Recorded bounds=[] proofs=[<StaticConformanceProof.Missing />] />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant).isOk() { panic("bodyless declaration skipped evidence admission") }
+    if requests.count() != 0U64 { panic("bodyless signature fabricated a body request") }
+}
