@@ -66,3 +66,60 @@ owner's unpublishable operation before testing writer rejection. Preserve that
 fixture's original refusal/retry/cursor/independence checks: retain the attempted
 row while Building, then use it for the post-failure rejected writer call. Do not
 make failed-owner rows readable to satisfy this internal fixture.
+
+## Dynamic Requirement Bounds: Reproduced Gap and Next Closure
+
+Compiler 2899ddad accepts this requested body in check (exit zero):
+
+```plew
+trait Marker {}
+trait Service { fn get() -> I64 where Self: Marker }
+fn probe(value: any Service) -> I64 { return value.get() }
+fn main() {}
+```
+
+The receiver interface does not guarantee Marker. sourceSelectedCallBounds drops
+Dynamic and existential Protocol clauses, and recordDynamicCallTemplate receives
+but does not retain receiverTerm. This is an existing complete-signature gap,
+not permission to forbid all method bounds through existentials or treat an
+existential container as conforming to its own trait.
+
+Close it from signature construction through final dynamic use and concrete
+witness preparation. Reuse the selected requirement, associated bindings and
+SourceCallSignature.Trait normalization. Represent an interface's universally
+quantified hidden Self with a distinct rigid binder and explicit immutable
+interface-evidence provenance; do not reuse an enclosing method's lexical Self,
+introduce a local inference variable, or infer equality of two erased values.
+The interface guarantee is a proof-only contract. It does not expose a new source
+type, enable unsupported generic opening, or change the dynamic ABI.
+
+A shared immutable interface evidence root can justify only guarantees entailed
+by that exact trait instance and its associated bindings. Caller substitution
+must retain this root and ground caller-owned terms explicitly. Source admission
+and the final dynamic descriptor consume the saved clauses/proofs; missing,
+foreign and replaced evidence must fail rather than silently regenerate a proof.
+Do not funnel a universally scoped interface guarantee into static callable
+selection as though the hidden concrete witness were known.
+
+Concrete existential witness preparation is the first-concrete boundary. Consume
+the already selected boxing proof, use the retained requirement-to-implementation
+plan, and pass exact implementation-bound identities into the selected body.
+Separate method formation from call availability: spec/08 allows an existential
+even when some members are unavailable. A member whose public preconditions are
+not established cannot be invoked; a forged/missing proof for a promised member
+is an error, not a non-dispatchable sentinel. No blanket new object-safety rule,
+implicit downcast, runtime trait search or where-clause exemption is approved.
+
+Required controls include the rejection above; an inherited guarantee that does
+permit the call; associated-type predicates; a call inside a provided body whose
+lexical Self is unrelated to the erased receiver; unavailable unused members;
+and missing/foreign/clause-replacement evidence through final AOT/JIT consumers.
+Do not close this task after only adding the receiver field or a source check.
+
+Reference: Rust's item-bound satisfaction contract requires bounds when an item
+is used (https://doc.rust-lang.org/reference/trait-bounds.html#bound-satisfaction).
+Its dyn-compatibility restrictions (https://doc.rust-lang.org/reference/items/traits.html#dyn-compatibility)
+are not imported wholesale: Plew's spec/08 explicitly separates existential
+formation from member availability. The exact internal representation must retain
+these adopted semantics; any newly necessary language decision still requires
+user judgment.

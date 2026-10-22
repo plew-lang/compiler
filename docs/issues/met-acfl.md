@@ -69,8 +69,8 @@ oracles now publish their initial construction batch through this API. Preserve
 their original lookup/metadata/copy/matching assertions; do not expose a test-only
 writer. The new publication control covers invalid/duplicate batches, stable
 parallel representations, post-success rejection, later append rejection and
-independent Arena branches. Whole-source checking succeeds; current-source
-imported controls are running. Fresh compiler and full gates remain required.
+independent Arena branches. Whole-source checking and all ten current-source imported controls succeed at
+8f054757. Fresh compiler and full gates remain required.
 
 This closes the declaration-facet writer boundary, not every canonical type
 producer or late legacy name/ambient read. The source/header/closure owner storage
