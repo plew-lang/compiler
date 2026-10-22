@@ -66,7 +66,7 @@ The source owner is unchanged. Generated `<Foo>.gen.pw` adds declarations to `<F
 
 Generation execution, output publication and target acceptance are distinct successes. On execution failure, partial returned source must not be presented as a successful current artifact. The generator stages one complete combined result and publishes it with its matching validity identity; readers reject interrupted or mismatched publication. This design contract does not claim an existing atomic implementation. A successfully generated String can still contain invalid Plew source, which ordinary compilation diagnoses in the generated file.
 
-Generated parts obey the ordinary allowed-item, visibility, ownership, coherence and public-API rules. There is no macro-specific “only impls for the annotated item” filter. Each part supplies its own required `use` declarations. A generated Hash implementation does not inherit the author's imports by magic or gain access to unrelated private modules.
+Generated parts obey the ordinary allowed-item, visibility, ownership, coherence and public-API rules. There is no macro-specific “only impls for the annotated item” filter. Each part uses the target module root's shared bindings and cannot declare `use` itself. A generated Hash implementation requires the consumer root to supply Hash/Hasher; it does not inherit the provider module's imports or gain access to unrelated private modules.
 
 The visible directive triggers auto-part admission. Required missing or stale output is an error directing the user to generation. Merely finding a neighboring `.gen.pw` is not a trigger. Ordinary `run`, `check` and `build` do not execute a provider or rebuild its host executable to validate generated source.
 
@@ -103,7 +103,7 @@ Syntax models, parser implementation and host macro interfaces must not become m
 
 ## 8. Examples, Change Impact, and Verification
 
-For `@[Hash] struct Point`, lookup first resolves Hash and its visible macro role. The provider receives Point's syntax even if Point does not yet satisfy Hash. Its host dependencies are checked and executed, and the returned implementation becomes the generated part. Ordinary compilation resolves that part's own imports and checks the implementation. The compiler never treats the annotation's existence as proof that Point conforms.
+For `@[Hash] struct Point`, lookup first resolves Hash and its visible macro role. The provider receives Point's syntax even if Point does not yet satisfy Hash. Its host dependencies are checked and executed, and the returned implementation becomes the generated part. Ordinary compilation checks that implementation using the target root's shared bindings, including its explicit Hash/Hasher imports. The compiler never treats the annotation's existence as proof that Point conforms.
 
 For `@[Configured()]`, preserve the parenthesized form even with zero fields: it requests configuration construction, unlike bare `@[Configured]`. A runner selecting the interface by argument count would violate the source contract. For a same-file provider that invokes an implementation it is about to generate, reject the generation dependency cycle instead of enabling stale output or skipping the provider's checks.
 

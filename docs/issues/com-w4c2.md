@@ -44,3 +44,7 @@ Resolved in compiler 8321aa0e/b02fcda6 with Syntax 0.1.11-dev.30. [Saved evidenc
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
 
 Current module bindings and directive admission under the approved root-only rule, including the corresponding source/generated-output migration. Preserve one module environment and ordinary collision/overload rules. Macro-specific isolation or dependency injection is future design work, not a condition of this repair.
+
+## Completion Review
+
+[com-i5vp](com-i5vp.md) found three inverse-contract examples in source/metaprogramming design and one file-binding phrase in spec15. These are corrected to root-owned module bindings and independently re-reviewed. Production, Syntax and fixtures are unchanged; focused existing positive/negative cases and preserved gate/carrier hashes support the implementation finding. The reviewer accepts this bounded repair as complete; final main integration gates remain separate.

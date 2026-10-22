@@ -41,8 +41,20 @@ static LLVMModuleRef layoutModule(LLVMContextRef context, const char *layout) {
   return module;
 }
 
+static LLVMModuleRef layoutDeclarationModule(LLVMContextRef context, const char *layout) {
+  auto module = LLVMModuleCreateWithNameInContext("layout-declarations", context);
+  if (layout) LLVMSetDataLayout(module, layout);
+  auto integer = LLVMInt64TypeInContext(context);
+  auto signature = LLVMFunctionType(integer, nullptr, 0, 0);
+  auto function = LLVMAddFunction(module, "layoutDeclaration", signature);
+  auto identity = LLVMValueAsMetadata(LLVMConstInt(integer, 1, 0));
+  LLVMGlobalSetMetadata(function, LLVMGetMDKindIDInContext(context, "plew.body", 9),
+                        LLVMMDNodeInContext2(context, &identity, 1));
+  return module;
+}
+
 static int unusedPrepare(uint64_t, uint64_t, LLVMModuleRef *, LLVMContextRef *) {
-  assert(false && "incompatible declarations must never publish callable entries");
+  assert(false && "declaration registration and lookup must not prepare a body");
   return 1;
 }
 
@@ -88,15 +100,19 @@ static void checkLayouts(const char *objectPath) {
       assert(plew_llvm_jit_lookup(jit, "layoutValue") == 0);
     }
     plew_llvm_jit_destroy(jit);
+
+    jit = plew_llvm_jit_create();
+    assert(jit);
+    context = LLVMContextCreate();
+    module = layoutDeclarationModule(context, layout);
+    const char *label = !layout ? "absent" : compatible ? "matching" : "incompatible";
+    std::fprintf(stderr, "CHECK declaration-layout %s\n", label);
+    assert((plew_llvm_jit_declarations(jit, module, context, unusedPrepare, 0) == 0) == compatible);
+    assert(bool(plew_llvm_jit_failed(jit)) == !compatible);
+    assert(bool(plew_llvm_jit_lookup(jit, "layoutDeclaration")) == compatible);
+    std::fprintf(stderr, "END declaration-layout %s\n", label);
+    plew_llvm_jit_destroy(jit);
   }
-  auto jit = plew_llvm_jit_create();
-  assert(jit);
-  auto context = LLVMContextCreate();
-  auto module = layoutModule(context, "e-p:32:32");
-  assert(plew_llvm_jit_declarations(jit, module, context, unusedPrepare, 0) != 0);
-  assert(plew_llvm_jit_failed(jit));
-  assert(plew_llvm_jit_lookup(jit, "layoutValue") == 0);
-  plew_llvm_jit_destroy(jit);
   std::remove(objectPath);
 }
 

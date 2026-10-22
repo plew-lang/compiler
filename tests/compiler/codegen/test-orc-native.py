@@ -25,6 +25,8 @@ if not (libdir / 'libLLVM.dylib').exists():
     libdir = Path(query('--libdir'))
 evidence = root / 'tmp/lazy-build/orc-native' / ('asan' if options.asan else 'normal')
 evidence.mkdir(parents=True, exist_ok=True)
+for previous in ['summary.txt', 'summary.json']:
+    (evidence / previous).unlink(missing_ok=True)
 binary = evidence / 'test'
 command = [str(bindir / 'clang++'), '-std=c++17', '-O1', '-g', '-isystem', query('--includedir'),
            str(root / 'native/llvm_backend.cpp'), str(root / 'tests/compiler/codegen/OrcNative.cpp'),
@@ -42,6 +44,10 @@ with (evidence / 'stdout').open('wb') as out, (evidence / 'stderr').open('wb') a
 errors = (evidence / 'stderr').read_text()
 for expected in ['Symbols not found', 'duplicate definition', 'does not have terminator', 'incompatible LLVM data layout']:
     assert expected.lower() in errors.lower(), expected
+for label in ['absent', 'matching', 'incompatible']:
+    case = errors.split('CHECK declaration-layout ' + label + '\n', 1)[1].split('END declaration-layout ' + label + '\n', 1)[0]
+    assert ('incompatible LLVM data layout' in case) == (label == 'incompatible'), (label, case)
+    assert 'declaration module contains executable code' not in case, (label, case)
 assert 'AddressSanitizer' not in errors and 'LeakSanitizer' not in errors
 assert not (evidence / 'stdout').read_bytes()
 (evidence / 'summary.txt').write_text('status=passed\nllvm=' + query('--version') + '\n')
@@ -51,7 +57,8 @@ assert not (evidence / 'stdout').read_bytes()
     'test_sha256': hashlib.sha256((root / 'tests/compiler/codegen/OrcNative.cpp').read_bytes()).hexdigest(),
     'sanitizers': 'ASan/LSan native bridge and host; JIT instructions not instrumented' if options.asan else 'none',
     'layouts': ['absent', 'matching native', 'incompatible nonempty'],
-    'paths': ['borrowed object output', 'consuming ORC add', 'incompatible ORC declarations'],
+    'paths': ['borrowed object output', 'consuming ORC add', 'signature-only ORC declarations with body metadata and lookup'],
+    'declaration_layout_diagnostic_checked_per_case': True,
     'object_failure_preserves_output': True, 'failed_sessions_are_terminal': True,
 }, indent=2) + '\n')
 print('PASS native ORC: layout admission, modules, shared storage, host callbacks, terminal failures, disposal')

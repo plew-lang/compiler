@@ -132,7 +132,7 @@ than inferring access from a field's physical layout.
 
 ## 6. Example and Change Impact
 
-Suppose `Models/_.pw` defines a type and includes `part ./Impl`, while `App.pw` writes `use ./Models only { Item }`. Discovery resolves `Models` to its root and assigns `Impl.pw` to that module. Lookup sees `Item` through the root's public surface. Code in `Impl.pw` can see module-owned definitions, but must write its own use directive for an external helper. Attempting `use ./Models/Impl` is rejected as a part target, even if those bytes were already loaded.
+Suppose `Models/_.pw` defines a type and includes `part ./Impl`, while `App.pw` writes `use ./Models only { Item }`. Discovery resolves `Models` to its root and assigns `Impl.pw` to that module. Lookup sees `Item` through the root's public surface. Code in `Impl.pw` can see module-owned definitions and the external bindings explicitly supplied by `Models/_.pw`; an external helper needed by that part must be imported at this root, not inside `Impl.pw`. Attempting `use ./Models/Impl` is rejected as a part target, even if those bytes were already loaded.
 
 Adding another path that re-publishes `Item` preserves its declaration identity. Adding a private overload under an already public function name does not enlarge the importing module's candidate set. Editing `Impl.pw` after session admission affects a future session, not a pending lazy request in this session.
 

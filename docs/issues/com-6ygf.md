@@ -1,7 +1,7 @@
 ---
 id: com-6ygf
-status: closed
-deps: []
+status: in_progress
+deps: [com-34wl]
 links: []
 created: 2026-10-13T00:48:29Z
 type: bug
@@ -50,6 +50,10 @@ The inspected earlier producers lowerExecutableLlvm, lowerCallableDeclarationsLl
 
 Extended OrcNative.cpp covers missing/compatible/incompatible layouts on borrowed object and consuming ORC paths, unchanged output on object rejection, no callable publication after rejection, and signature-only mismatch. Normal LLVM20 and LLVM22 ASan/LSan pass; bridge/host instrumentation does not cover nested JIT instructions. The check is now registered in the normal suite. Fresh compiler self-host/performance and product entry checks also pass; main/seed are unchanged.
 
-## Outcome
+## Implementation Outcome and Reopened Verification
 
-Resolved in 9fd85bb6. [Saved evidence](../../../evidence/existing-feature-conformance/orc-layout/README.md) records the pre-fix admission probe, normal LLVM20 and native LLVM22 ASan/LSan controls, generation-2 LLVM/runtime fixed point, median 6.302362 seconds and final-binary lazy CLI/direct-object checks. Empty layout attachment and native-only target support are preserved. Original whole normal/gen evidence belongs to the preceding root-use increment; it is not relabeled as a post-native-fix run. Full final-candidate integration gates remain in com-604k. This closes the bounded admission contract, not the separate whole-representation audit.
+Layout agreement is implemented in 9fd85bb6, but completion was reopened by [com-i5vp](com-i5vp.md). [Saved evidence](../../../evidence/existing-feature-conformance/orc-layout/README.md) records the pre-fix admission probe, normal LLVM20 and native LLVM22 ASan/LSan controls, generation-2 LLVM/runtime fixed point, median 6.302362 seconds and final-binary lazy CLI/direct-object checks. Empty layout attachment and native-only target support are preserved. Original whole normal/gen evidence belongs to the preceding root-use increment; it is not relabeled as a post-native-fix run. Full final-candidate integration gates remain in com-604k. This closes the bounded admission contract, not the separate whole-representation audit.
+
+## Completion Review Correction
+
+The old signature-only negative control actually contained executable code and lacked entry metadata. Its exit failure could be unrelated to DataLayout. Review corrected it to valid declarations with metadata, absent/matching positive registration/lookup and case-local layout diagnostics. Those controls now expose reproducible LLVM20 heap corruption after unexecuted lazy entry teardown, tracked by [com-34wl](com-34wl.md). com-6ygf remains in progress until that prerequisite and the strengthened controls pass. The admission implementation itself has no new blocking finding; earlier saved self-host/CLI evidence is retained at its original scope. No production change was made by this review.
