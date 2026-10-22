@@ -1,0 +1,5 @@
+trait Read { fn read() -> I64 }
+fn creator[T]() -> fn() -> I64 where T: Read {
+    return fn() -> I64 { return T.read() }
+}
+fn main() {}

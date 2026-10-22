@@ -197,12 +197,13 @@ pub impl Comp {
     // A type parameter used as an associated-call qualifier is a lexical
     // binder, not a value expression. Keep its term on the call receiver only.
     inout fn typeParameterQualifierTerm(exprId: U64) -> U64 {
-        if self.cur.checkFn >= self.arena.functionCount() { return 0U64 }
+        val owner = self.sourceLexicalFunction(fnIdx: self.cur.checkFn)
+        if owner >= self.arena.functionCount() { return 0U64 }
         match self.arena.exprs[exprId] {
             Expr.Ident(val start, val len) => {
                 if !self.identIsTypeQualifier(start: start, len: len, tpFn: self.cur.checkFn) { return 0U64 }
                 val nameId: U64 = intern(c: inout self, start: start, len: len)
-                val params: FuncBindRange = self.arena.functionAt(index: self.cur.checkFn).typeParams
+                val params: FuncBindRange = self.arena.functionAt(index: owner).typeParams
                 mut val index: U64 = 0U64
                 while index < params.count() {
                     val parameter: Bind = self.funcBindAt(binds: params, index: index)
@@ -327,8 +328,9 @@ pub impl Comp {
         if t.args.count() != 0U64 || !(rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self")) {
             return term
         }
-        if self.cur.checkFn >= self.arena.functionCount() { return term }
-        val owner: Func = self.arena.functionAt(index: self.cur.checkFn)
+        val function = self.sourceLexicalFunction(fnIdx: self.cur.checkFn)
+        if function >= self.arena.functionCount() { return term }
+        val owner: Func = self.arena.functionAt(index: function)
         if owner.recvTy != 0U64 { return owner.recvTy }
         return term
     }
@@ -530,10 +532,10 @@ pub impl Comp {
     inout fn unavailableSourceMethod(receiverTerm: U64, offset: U64, fallback: String) -> CompileDiagnostic {
         val type = self.typeInfoOfRef(ref: receiverTerm)
         if self.cur.checkFn < self.arena.functionCount() && self.isTypeParamOf(fnIdx: self.cur.checkFn, start: type.nameStart, len: type.nameLen) {
-            return self.diagnosticAt(offset: offset, msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
+            return self.diagnosticAt(offset: offset, msg: "no matching method for this argument list: method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
         }
         if self.isSelfTypeInProvided(start: type.nameStart, len: type.nameLen) {
-            return self.diagnosticAt(offset: offset, msg: "method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)")
+            return self.diagnosticAt(offset: offset, msg: "no matching method for this argument list: method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)")
         }
         return self.diagnosticAt(offset: offset, msg: fallback)
     }

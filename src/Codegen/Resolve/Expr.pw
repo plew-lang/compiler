@@ -507,14 +507,14 @@ pub impl Comp {
                 try self.checkSourceStaticCallArguments(template: template, function: function, arguments: args, typeArgs: typeArgs, resolution: resolution)
                 return <Result.Ok value=() />
             }
-            CallTemplateKind.Operator(op: _, operands: val operands, resolution: val selection, resultTerm: _) => {
+            CallTemplateKind.Operator(op: val op, operands: val operands, resolution: val selection, resultTerm: _) => {
                 if operands.len == 0U64 || operands.len > 2U64 || operands.start > self.callTemplateOperandPool.count() || operands.len > self.callTemplateOperandPool.count() - operands.start {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected operator has an incomplete operand plan") />
                 }
                 mut val parameterCount = operands.len
                 match selection {
                     OperatorSelection.Pending => {
-                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot resolve this operator from the available context") />
+                        return <Result.Err error=self.unresolvedSourceOperatorDiagnostic(op: op, offset: offset) />
                     }
                     OperatorSelection.Direct(callee: val callee) => {
                         if callee >= self.arena.functionCount() {
@@ -1430,7 +1430,7 @@ pub impl Comp {
     }
 
     inout fn staticOperatorTemplateResolution(op: I64, receiverTerm: U64, isUnary: Bool) -> Result[StaticMemberResolution, CompileDiagnostic] {
-        if self.cur.checkFn >= self.arena.functionCount() || receiverTerm == 0U64 { return <Result.Ok value=<StaticMemberResolution.Missing /> />}
+        if self.sourceLexicalFunction(fnIdx: self.cur.checkFn) >= self.arena.functionCount() || receiverTerm == 0U64 { return <Result.Ok value=<StaticMemberResolution.Missing /> />}
         if isUnary {
             if op == opSub() || op == opNot() || op == opBitNot() {
                 return <Result.Ok value=(try self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, traitName: self.unOpTraitName(op: op), memberName: unaryMethodName(op: op), arity: 1U64)) />
@@ -2640,7 +2640,7 @@ pub impl Comp {
                 TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { args = candidate }
                 TypeArgumentMatch.Mismatch => {}
                 TypeArgumentMatch.Conflict => {
-                    return <Result.Err error=self.diagnosticAt(offset: typeStart, msg: "type mismatch: this value's type does not match the type required here; constructor fields require conflicting type arguments") />
+                    return <Result.Err error=self.diagnosticAt(offset: typeStart, msg: "type mismatch: this value's type does not match the type required here; cannot infer the type argument(s) of this generic construction; annotate it (e.g. `Type[Arg]`, or a typed binding / return type): constructor fields require conflicting type arguments") />
                 }
             }
             index += 1U64

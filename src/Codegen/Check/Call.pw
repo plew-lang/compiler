@@ -33,7 +33,7 @@ pub impl Comp {
     // phases distinct prevents unrelated concrete conformance paths from
     // changing whether `fn f[T](x: T) where T: R { x.r() }` is well formed.
     inout fn checkSymbolicMethodArgs(exprId: U64, fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
-        if receiverRef == 0U64 || fnIdx >= self.arena.functionCount() { return <Result.Ok value=false /> }
+        if receiverRef == 0U64 || self.sourceLexicalFunction(fnIdx: fnIdx) >= self.arena.functionCount() { return <Result.Ok value=false /> }
         val site = try self.templateCallSiteKey(fnIdx: fnIdx, exprId: exprId)
         val templateIndex = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: site)
         if templateIndex >= self.callTemplates.count() { return <Result.Ok value=false /> }

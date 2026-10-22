@@ -47,10 +47,11 @@ pub impl Comp {
     }
 
     inout fn isSelfTypeInProvided(start: U64, len: U64) -> Bool {
-        if self.cur.checkFn >= self.arena.functionCount() {
+        val owner = self.sourceLexicalFunction(fnIdx: self.cur.checkFn)
+        if owner >= self.arena.functionCount() {
             return false
         }
-        val f: Func = self.arena.functionAt(index: self.cur.checkFn)
+        val f: Func = self.arena.functionAt(index: owner)
         if !(self.methodRecvIsTrait(f: f)) {
             return false
         }
@@ -65,10 +66,11 @@ pub impl Comp {
     }
 
     inout fn isTypeParamOf(fnIdx: U64, start: U64, len: U64) -> Bool {
-        if fnIdx >= self.arena.functionCount() {
+        val owner = self.sourceLexicalFunction(fnIdx: fnIdx)
+        if owner >= self.arena.functionCount() {
             return false
         }
-        val tps: Array[Bind] = self.copyFuncBinds(binds: self.arena.functionAt(index: fnIdx).typeParams)
+        val tps: Array[Bind] = self.copyFuncBinds(binds: self.arena.functionAt(index: owner).typeParams)
         val qTp: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0
         while i < tps.count() {
@@ -653,14 +655,15 @@ pub impl Comp {
         if expectedRef == 0U64 {
             return <Result.Ok value=() />
         }
-        if self.cur.checkFn >= self.arena.functionCount() {
+        val owner = self.sourceLexicalFunction(fnIdx: self.cur.checkFn)
+        if owner >= self.arena.functionCount() {
             return <Result.Ok value=() />
         }
         try self.requireExpressionValue(exprId: valueExpr)
         // an untyped numeric literal cannot flow into a type parameter / Self: `val y: T = 5`
         // is invalid — T is opaque, and no bound makes it numeric-literal-receptive (spec/06).
         if expectedRef < self.arena.typeCount() {
-            if self.arena.isTypeParamIdentityOf(fnIdx: self.cur.checkFn, identity: self.arena.typeTerms[expectedRef].paramId) || self.isSelfTypeInProvided(start: self.arena.typeTerms[expectedRef].nameStart, len: self.arena.typeTerms[expectedRef].nameLen) {
+            if self.arena.isTypeParamIdentityOf(fnIdx: owner, identity: self.arena.typeTerms[expectedRef].paramId) || self.isSelfTypeInProvided(start: self.arena.typeTerms[expectedRef].nameStart, len: self.arena.typeTerms[expectedRef].nameLen) {
                 match self.arena.exprs[valueExpr] {
                     Expr.Int(value: _, offset: _, val isBool, tyStart: _, val tyLen, isNeg: _) => {
                         if !(isBool) {

@@ -101,7 +101,7 @@ pub impl Comp {
     // Output=I64]` gives `a + b` the semantic term I64 even though T has no
     // concrete implementation while its body is checked.
     inout fn staticBinaryOperatorResultRef(lhs: U64, op: I64) -> Result[U64, CompileDiagnostic] {
-        if !(isBinTraitOp(op: op)) || self.cur.checkFn >= self.arena.functionCount() { return <Result.Ok value=0U64 />}
+        if !(isBinTraitOp(op: op)) || self.sourceLexicalFunction(fnIdx: self.cur.checkFn) >= self.arena.functionCount() { return <Result.Ok value=0U64 />}
         val receiverRef: U64 = (try self.inferType(id: lhs))
         if receiverRef == 0U64 { return <Result.Ok value=0U64 />}
         val resolution: StaticMemberResolution = (try self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverRef, traitName: self.binOpTraitName(op: op), memberName: binTraitMethodName(op: op), arity: 2U64, traitArity: 1U64))

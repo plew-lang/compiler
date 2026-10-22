@@ -198,6 +198,10 @@ pub impl Comp {
                         if callee < self.arena.functionCount() {
                             val function = self.arena.functionAt(index: callee)
                             if index < function.params.count() {
+                                // The selected operation's Self is the source receiver,
+                                // including its view. The implementation ABI receives
+                                // its own lexical Self through the final call boundary.
+                                if index == 0U64 && template.receiverTypeTerm != 0U64 { return <Result.Ok value=template.receiverTypeTerm /> }
                                 return self.operatorCalleeType(callee: callee, receiverRef: template.receiverTypeTerm, term: self.funcParamAt(params: function.params, index: index).ty)
                             }
                         }
@@ -205,6 +209,7 @@ pub impl Comp {
                     OperatorSelection.Static(resolution: val resolution) => {
                         val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: template.siteKey.originStart)
                         if index < function.params.count() {
+                            if index == 0U64 && template.receiverTypeTerm != 0U64 { return <Result.Ok value=template.receiverTypeTerm /> }
                             match resolution {
                                 StaticMemberResolution.Requirement(proof: val proof, traitIdx: val owner, reqIdx: _) | StaticMemberResolution.Provided(proof: val proof, traitIdx: val owner, callee: _) => {
                                     val bound = try self.staticProofBound(proof: proof, traitIdx: owner)
@@ -222,6 +227,16 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "internal error: selected operator has no parameter") />
     }
 
+    inout fn unresolvedSourceOperatorDiagnostic(op: I64, offset: U64) -> CompileDiagnostic {
+        if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
+            return self.diagnosticAt(offset: offset, msg: "comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison")
+        }
+        if isBinTraitOp(op: op) {
+            return self.diagnosticAt(offset: offset, msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type")
+        }
+        return self.diagnosticAt(offset: offset, msg: "cannot resolve this operator from the available context")
+    }
+
     inout fn tcCheckBinop(exprId: U64, op: I64, lhs: U64, rhs: U64) -> Result[(), CompileDiagnostic] {
         // `&&` / `||` are short-circuit control flow (spec/12), not a trait op: both
         // operands must be Bool (`1I64 && true` has no truthiness coercion).
@@ -233,6 +248,9 @@ pub impl Comp {
                 try self.tcCheckValue(expectedRef: boolRef, valueExpr: rhs, pos: "logical")
             }
             return <Result.Ok value=() />
+        }
+        if op == opRem() && ((try self.exprIsFloat(id: lhs)) || (try self.exprIsFloat(id: rhs))) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "`%` (remainder) is integer-only; not defined for floats (spec/12)") />
         }
         val template = try self.recordedSourceOperator(exprId: exprId, op: op)
         val parameter = try self.sourceOperatorParameter(template: template, index: 1U64)
@@ -256,7 +274,7 @@ pub impl Comp {
         match template.kind {
             CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
                 match selection {
-                    OperatorSelection.Pending => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "cannot resolve this operator from the available context") /> }
+                    OperatorSelection.Pending => { return <Result.Err error=self.unresolvedSourceOperatorDiagnostic(op: op, offset: template.siteKey.originStart) /> }
                     OperatorSelection.Primitive => {
                         val receiver = template.receiverTypeTerm
                         if receiver != 0U64 { try self.tcCheckValue(expectedRef: receiver, valueExpr: rhs, pos: "operator argument") }

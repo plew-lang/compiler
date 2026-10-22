@@ -268,3 +268,28 @@ remaining raw function-count guards are reproduced as failures.
 Then move operation/constraint semantic rows into the owner payload and carry
 exact callee evidence through final consumers. The just-validated compatibility
 readers do not complete physical storage, callee evidence or phase three.
+
+
+## Lexical Environment and Operator Surface Repair
+
+The operation owner of a closure remains its own body/site identity. Binder,
+Self and assumption queries project through the retained lexical function;
+function-count guards must not discard a closure's generic environment. Positive
+operator and type-qualifier cases and a wrong instance-qualified call exercise
+this distinction. The qualifier fixture supplies an unused typed witness to infer
+the outer generic argument; it does not require unrelated explicit generic-call
+syntax support.
+
+The selected operator has two boundaries: its logical source receiver, retaining
+views, and its implementation's lexical parameter representation. Compatibility
+uses the retained receiver term for Self; final call elaboration owns the selected
+implementation boundary. Do not globally erase views or relax value compatibility.
+A Pending operation is still rejected at source closure, using the shared operator
+category diagnostic rather than another lookup. Constructor constraint conflicts
+are decisive at construction and preserve the existing inference/type-mismatch
+diagnostic categories. No reject expectation is weakened.
+
+The frozen ff9a8a1c full suite failed in three positive view cases and two reject
+diagnostics. The following build/slice must establish these repairs independently;
+the formal 5.932379-second checkpoint remains evidence for ff9a8a1c only. This
+repair does not close iteration selection or owner-local operation storage.

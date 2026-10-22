@@ -20,11 +20,17 @@ pub impl Comp {
         return true
     }
 
+    // The body key remains the operation owner. Only lexical binder and
+    // assumption queries project a closure to its declaring function.
+    fn sourceLexicalFunction(fnIdx: U64) -> U64 {
+        return self.callTemplateLexicalRoots.getOr(key: fnIdx, fallback: fnIdx)
+    }
+
     fn functionBoundAssumptions(fnIdx: U64) -> Array[DeclarationBoundRef] {
         // A closure owns its call/body identity, but its generic assumptions
         // are declared by its lexical function. This mapping is published
         // before recording the closure body and preserves ParamId identity.
-        val owner = self.callTemplateLexicalRoots.getOr(key: fnIdx, fallback: fnIdx)
+        val owner = self.sourceLexicalFunction(fnIdx: fnIdx)
         mut val result: Array[DeclarationBoundRef] = []
         for index in self.decls.funcBounds.indices(owner: owner) {
             result.append(<DeclarationBoundRef.Function index=index />)
