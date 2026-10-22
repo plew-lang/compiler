@@ -73,6 +73,11 @@ struct MessageDisposer {
 };
 using Message = std::unique_ptr<char, MessageDisposer>;
 
+bool compatibleDataLayout(LLVMModuleRef module, llvm::StringRef expected) {
+  llvm::StringRef actual(LLVMGetDataLayoutStr(module));
+  return actual.empty() || actual == expected;
+}
+
 int jitError(PlewLlvmJit *jit, llvm::Error error) {
   if (jit)
     jit->failed = true;
@@ -202,9 +207,12 @@ consumeModule(PlewLlvmJit *jit, LLVMModuleRef module, LLVMContextRef context) {
   const char *actual = LLVMGetTarget(module);
   if (*actual && llvm::Triple(actual) != triple)
     return llvm::createStringError("module target is not the native JIT target");
+  const auto &layout = jit->engine->getDataLayout();
+  if (!compatibleDataLayout(module, layout.getStringRepresentation()))
+    return llvm::createStringError("incompatible LLVM data layout");
   LLVMSetTarget(module, triple.str().c_str());
   owned.withModuleDo([&](llvm::Module &value) {
-    value.setDataLayout(jit->engine->getDataLayout());
+    value.setDataLayout(layout);
   });
   return std::move(owned);
 }
@@ -554,8 +562,7 @@ extern "C" int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
   LLVMSetTarget(module, triple.get());
   auto layout = LLVMCreateTargetDataLayout(machine.get());
   Message layoutText(LLVMCopyStringRepOfTargetData(layout));
-  const char *moduleLayout = LLVMGetDataLayoutStr(module);
-  if (moduleLayout[0] && std::strcmp(moduleLayout, layoutText.get()) != 0) {
+  if (!compatibleDataLayout(module, layoutText.get())) {
     LLVMDisposeTargetData(layout);
     std::fprintf(stderr, "plew: incompatible LLVM data layout\n");
     return 1;

@@ -2,9 +2,103 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <cstdio>
+#include <string>
+#include <llvm-c/Target.h>
+#include <llvm-c/TargetMachine.h>
 
 static int hostCalls;
 extern "C" int64_t hostBump() { return ++hostCalls; }
+
+static std::string nativeLayout() {
+  char *triple = LLVMGetDefaultTargetTriple();
+  LLVMTargetRef target = nullptr;
+  char *error = nullptr;
+  assert(LLVMGetTargetFromTriple(triple, &target, &error) == 0);
+  auto machine = LLVMCreateTargetMachine(target, triple, "", "",
+      LLVMCodeGenLevelDefault, LLVMRelocPIC, LLVMCodeModelDefault);
+  assert(machine);
+  auto layout = LLVMCreateTargetDataLayout(machine);
+  char *text = LLVMCopyStringRepOfTargetData(layout);
+  std::string result(text);
+  LLVMDisposeMessage(text);
+  LLVMDisposeTargetData(layout);
+  LLVMDisposeTargetMachine(machine);
+  LLVMDisposeMessage(triple);
+  return result;
+}
+
+static LLVMModuleRef layoutModule(LLVMContextRef context, const char *layout) {
+  auto module = LLVMModuleCreateWithNameInContext("layout", context);
+  if (layout) LLVMSetDataLayout(module, layout);
+  auto type = LLVMInt64TypeInContext(context);
+  auto signature = LLVMFunctionType(type, nullptr, 0, 0);
+  auto function = LLVMAddFunction(module, "layoutValue", signature);
+  auto builder = LLVMCreateBuilderInContext(context);
+  LLVMPositionBuilderAtEnd(builder, LLVMAppendBasicBlockInContext(context, function, "entry"));
+  LLVMBuildRet(builder, LLVMConstInt(type, 7, 0));
+  LLVMDisposeBuilder(builder);
+  return module;
+}
+
+static int unusedPrepare(uint64_t, uint64_t, LLVMModuleRef *, LLVMContextRef *) {
+  assert(false && "incompatible declarations must never publish callable entries");
+  return 1;
+}
+
+static void checkLayouts(const char *objectPath) {
+  auto initializer = plew_llvm_jit_create();
+  assert(initializer);
+  plew_llvm_jit_destroy(initializer);
+  const auto native = nativeLayout();
+  for (const char *layout : {static_cast<const char *>(nullptr), native.c_str(), "e-p:32:32"}) {
+    bool compatible = !layout || native == layout;
+    auto context = LLVMContextCreate();
+    auto module = layoutModule(context, layout);
+    auto previous = std::fopen(objectPath, "wb");
+    assert(previous);
+    assert(std::fwrite("kept", 1, 4, previous) == 4);
+    std::fclose(previous);
+    assert((plew_llvm_emit_object(module, objectPath, "", 0) == 0) == compatible);
+    if (!compatible) {
+      // Object output borrows the pair and preserves both layout and output.
+      assert(std::strcmp(LLVMGetDataLayoutStr(module), layout) == 0);
+      char bytes[5] = {};
+      auto file = std::fopen(objectPath, "rb");
+      assert(file && std::fread(bytes, 1, 5, file) == 4);
+      std::fclose(file);
+      assert(std::strcmp(bytes, "kept") == 0);
+    }
+    LLVMDisposeModule(module);
+    LLVMContextDispose(context);
+
+    auto jit = plew_llvm_jit_create();
+    assert(jit);
+    context = LLVMContextCreate();
+    module = layoutModule(context, layout);
+    // Admission consumes both handles on success and failure; ASan/LSan checks cleanup.
+    assert((plew_llvm_jit_add(jit, module, context) == 0) == compatible);
+    assert(bool(plew_llvm_jit_failed(jit)) == !compatible);
+    if (compatible) {
+      auto address = plew_llvm_jit_lookup(jit, "layoutValue");
+      assert(address);
+      auto execute = reinterpret_cast<int64_t (*)()>(static_cast<uintptr_t>(address));
+      assert(execute() == 7);
+    } else {
+      assert(plew_llvm_jit_lookup(jit, "layoutValue") == 0);
+    }
+    plew_llvm_jit_destroy(jit);
+  }
+  auto jit = plew_llvm_jit_create();
+  assert(jit);
+  auto context = LLVMContextCreate();
+  auto module = layoutModule(context, "e-p:32:32");
+  assert(plew_llvm_jit_declarations(jit, module, context, unusedPrepare, 0) != 0);
+  assert(plew_llvm_jit_failed(jit));
+  assert(plew_llvm_jit_lookup(jit, "layoutValue") == 0);
+  plew_llvm_jit_destroy(jit);
+  std::remove(objectPath);
+}
 
 static void addStorage(PlewLlvmJit *jit) {
   auto context = LLVMContextCreate();
@@ -87,7 +181,9 @@ static void checkMemoryIntrinsics() {
   plew_llvm_jit_destroy(jit);
 }
 
-int main() {
+int main(int argc, char **argv) {
+  assert(argc == 2);
+  checkLayouts(argv[1]);
   checkMemoryIntrinsics();
   auto jit = plew_llvm_jit_create();
   assert(jit);

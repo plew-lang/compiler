@@ -49,8 +49,9 @@ session failure when that body is requested. It is not a full ORC execution gate
 
 `compiler/codegen/test-orc-native.py` builds and executes `OrcNative.cpp` against
 the selected LLVM. `--asan` defaults to LLVM22 and checks bridge ownership with
-ASan/LSan; it does not instrument the generated JIT instructions. This manual
-diagnostic covers shared storage, existing host symbols and terminal failures,
+ASan/LSan; it does not instrument the generated JIT instructions. This check is
+registered in the normal harness and covers object/ORC layout admission,
+shared storage, existing host symbols and terminal failures,
 not frontend lazy requests or the product CLI.
 
 `compiler/codegen/test-orc-lazy.py` checks synchronous first-call callbacks,

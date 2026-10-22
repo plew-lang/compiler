@@ -1,6 +1,6 @@
 ---
 id: com-6ygf
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-13T00:48:29Z
@@ -41,3 +41,11 @@ that every malformed layout reaches this function.
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
 
 Current object/ORC layout admission and failure ownership. Compatible/absent/incompatible input controls; no new target.
+
+## Implementation Increment
+
+A bounded native probe built from the unchanged bridge accepted a module with e-p:32:32 (return zero), demonstrating the mismatch on this 64-bit native host. The repair shares compatibleDataLayout between object and consuming ORC admission: empty is permitted and then attached; nonempty must agree with the selected native layout before publication. Module/Context ownership and terminal failure remain in the existing common consumeModule path used by add, signature declarations and lazy callbacks.
+
+The inspected earlier producers lowerExecutableLlvm, lowerCallableDeclarationsLlvm and lowerGlobalStorageLlvm set the native triple without attaching another DataLayout. Native global-size queries occur after consumeModule; object optimization follows its agreement/attachment boundary. This closes native layout admission, not the separate whole-representation audit.
+
+Extended OrcNative.cpp covers missing/compatible/incompatible layouts on borrowed object and consuming ORC paths, unchanged output on object rejection, no callable publication after rejection, and signature-only mismatch. Normal LLVM20 and LLVM22 ASan/LSan pass; bridge/host instrumentation does not cover nested JIT instructions. The check is now registered in the normal suite. Fresh compiler self-host/performance and product entry checks remain pending; main/seed are unchanged.

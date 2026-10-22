@@ -178,6 +178,12 @@ else
     fail=$((fail + 1)); failed="$failed direct-object"
 fi
 
+if LLVM_CONFIG="$LC" python3 -B ./tests/compiler/codegen/test-orc-native.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed orc-native"
+fi
+
 if python3 -B ./tests/tooling/test-check-command.py --compiler "$PLEWC"; then
     echo "PASS check-command"
 else
