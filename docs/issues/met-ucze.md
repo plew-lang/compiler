@@ -72,6 +72,11 @@ operation. Compute its source-stable part before sealing or give later analysis
 its own result. The public requireCallTemplateStorage writer has no production
 caller in this revision; audit tests/references and remove or place it under the
 actual analysis authority instead of retaining an unrestricted payload writer.
+`tests/compiler/mid/DeclarationLocalAccess.pw` does use it to force an eager
+reference analysis beside the demand-filtered analysis. Preserve that comparison,
+including equal diagnostics and absence of executable-body/destructor discovery;
+move the eager root selection to the analysis request rather than mutating the
+source payload or deleting the negative control.
 
 Verify direct, requirement/provided, dynamic, operator and implicit calls through
 actual callee bodies, with positive and wrong/missing owner/site/clause/proof
