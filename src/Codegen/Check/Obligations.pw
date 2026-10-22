@@ -1,9 +1,47 @@
 // Check source-call constraints without registering executable bodies. Open
 // substitutions remain declaration obligations; concrete calls propagate them
 // through their selected declarations and the same proof-instantiation API.
+impl Comp {
+    // Resolve only explicit builder dependencies, from already recorded source
+    // facts. This never re-infers an expression or changes a selected operation.
+    inout fn completePendingSourceConversion(index: U64) -> Result[(), CompileDiagnostic] {
+        val conversion = self.decls.declarationConversions[index]
+        val expression = match conversion.pendingSource {
+            Optional.Some(v: val expression) => expression
+            Optional.None => { return <Result.Ok value=() /> }
+        }
+        if self.semanticExprConstructionClosed(exprId: expression) {
+            return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "internal error: completed source owner has an unresolved conversion") />
+        }
+        val site = try self.templateCallSiteKey(fnIdx: conversion.site.ownerFnIdx, exprId: expression)
+        if !site.sameKey(other: conversion.site) {
+            return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "internal error: pending conversion changed source identity") />
+        }
+        val term = self.parametricExprTerm(exprId: expression)
+        if term == 0U64 { return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "source conversion requires a resolved value type") /> }
+        val source = try self.normalizedValueType(ref: term)
+        val proof = try self.callArgumentConversion(sourceRef: source, targetRef: conversion.target, assumptions: self.functionBoundAssumptions(fnIdx: conversion.site.ownerFnIdx))
+        self.decls.declarationConversions.set(i: index, value: <DeclarationConversion site=conversion.site source=source target=conversion.target proof=self.freezeValueConversionProof(proof: proof) />)
+        return <Result.Ok value=() />
+    }
+
+    inout fn completeSourceConversions(owner: SemanticCompletionOwner) -> Result[(), CompileDiagnostic] {
+        val indices = match self.lexicalSourceFactOwner(owner: owner) {
+            SemanticCompletionOwner.Function(index: val function) => self.decls.declarationConversionOwners.getOr(key: function, fallback: [])
+            SemanticCompletionOwner.Global(target: val target) => self.decls.globalDeclarationConversionOwners.getOr(key: target, fallback: [])
+            SemanticCompletionOwner.Closure(expression: val expression) => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "internal error: closure has no lexical fact parent") /> }
+        }
+        for index in indices { try self.completePendingSourceConversion(index: index) }
+        return <Result.Ok value=() />
+    }
+}
+
 pub impl Comp {
     inout fn recordDeclarationConversion(exprId: U64, target: U64) -> Result[(), CompileDiagnostic] {
         if !self.cur.recordCallTemplates || target == 0U64 { return <Result.Ok value=() /> }
+        if self.semanticExprConstructionClosed(exprId: exprId) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: completed source owner cannot record a conversion") />
+        }
         val rawSource = self.parametricExprTerm(exprId: exprId)
         // Diverging arms produce no value. Every normal source, including an
         // unresolved one, must retain an obligation until declaration closure.
@@ -29,7 +67,7 @@ pub impl Comp {
         }
         val proof = self.freezeValueConversionProof(proof: conversion)
         indices.append(self.decls.declarationConversions.count())
-        self.decls.declarationConversions.append(<DeclarationConversion site=site source=source target=normalizedTarget proof=proof />)
+        self.decls.declarationConversions.append(<DeclarationConversion site=site source=source target=normalizedTarget proof=proof pendingSource=(if source == 0U64 { give <Optional.Some v=exprId /> } else { give <Optional.None /> }) />)
         self.decls.declarationConversionOwners[owner] = indices
         self.recordGlobalConversionOwner(index: self.decls.declarationConversions.count() - 1U64)
         return <Result.Ok value=() />
@@ -55,6 +93,9 @@ pub impl Comp {
     // Evidence admission is shared by local owner publication and whole-target
     // closure. Concrete instantiation and member constraints remain separate.
     inout fn checkDeclarationConversionEvidence(conversion: DeclarationConversion) -> Result[(), CompileDiagnostic] {
+        if conversion.pendingSource.isSome() {
+            return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "source conversion requires a resolved value type") />
+        }
         val proof = self.thawValueConversionProof(id: conversion.proof)
         try self.checkConversionProofAtBoundary(proof: proof, source: conversion.source, target: conversion.target, offset: conversion.site.originStart)
         val scope = try self.declarationTypeScope(owner: conversion.site.ownerFnIdx)
@@ -1313,6 +1354,11 @@ pub impl Comp {
         // Recording precedes ordinary source diagnostics. Keep failed evidence
         // rather than suppressing it or replacing those diagnostics early.
         // No unresolved conversion may survive declaration completion.
+        mut val pending = 0U64
+        while pending < self.decls.declarationConversions.count() {
+            try self.completePendingSourceConversion(index: pending)
+            pending += 1U64
+        }
         for conversion in self.decls.declarationConversions {
             try self.checkDeclarationConversionEvidence(conversion: conversion)
         }

@@ -1,0 +1,39 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Stmt }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="pending-use.pw" text="fn probe() -> I64 {{ return 1 }}" />,
+        sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    val statement = compiler.blockStmtAt(blkId: function.body, index: 0U64)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Return(value: val expression, hasValue: _, offset: _) => expression
+        _ => { panic("missing fixture return") }
+    }
+    compiler.cur.checkFn = owner
+    compiler.cur.recordCallTemplates = true
+    compiler.recordDeclarationConversion(exprId: expression, target: function.retTy).unwrap()
+    val index = compiler.decls.declarationConversionOwners.getOr(key: owner, fallback: [])[0U64]
+    if !compiler.decls.declarationConversions[index].pendingSource.isSome() { panic("unresolved source was treated as recorded evidence") }
+    match compiler.checkDeclarationConversionEvidence(conversion: compiler.decls.declarationConversions[index]) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("pending conversion granted evidence") }
+    }
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    val recorded = compiler.decls.declarationConversions[index]
+    if recorded.pendingSource.isSome() || !compiler.typeRefEq(a: recorded.source, b: function.retTy) { panic("owner published an unresolved source conversion") }
+    compiler.checkDeclarationConversionEvidence(conversion: recorded).unwrap()
+    compiler.cur.checkFn = owner
+    compiler.cur.recordCallTemplates = true
+    match compiler.recordDeclarationConversion(exprId: expression, target: function.retTy) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("published owner reopened conversion construction") }
+    }
+    print("ok")
+}

@@ -2471,6 +2471,10 @@ pub struct DeclarationConversion {
     pub val source: U64
     pub val target: U64
     pub val proof: U64
+    // Builder-only dependency on an expression whose permitted type holes
+    // have not closed. None means the source/proof were actually recorded;
+    // it does not establish compatibility or successful owner publication.
+    pub val pendingSource: Optional[U64] = <Optional.None />
 }
 pub impl DeclarationConversion { factory }
 

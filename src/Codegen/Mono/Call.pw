@@ -2546,6 +2546,7 @@ pub impl Comp {
             for index in self.decls.declarationConversionOwners.getOr(key: owner, fallback: []) {
                 val recorded = self.decls.declarationConversions[index]
                 if self.sameCallSiteKey(a: recorded.site, b: site) {
+                    if recorded.pendingSource.isSome() { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: source value conversion was not completed") /> }
                     val target = try self.groundTermForBody(ref: recorded.target, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
                     if self.typeRefEq(a: target, b: targetRef) {
                         val source = try self.groundTermForBody(ref: recorded.source, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)

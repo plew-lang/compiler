@@ -18,6 +18,7 @@ impl Comp {
         if (try self.completeRecordedBodyDefaultCalls(owner: owner)) != 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: owner).defOffset, msg: "internal error: lexical body has incomplete default argument plans") />
         }
+        try self.completeSourceConversions(owner: <SemanticCompletionOwner.Function index=owner />)
         try self.closeCallTemplatesForBody(fnIdx: owner)
         val admitted = try self.admitRecordedBodyCallConstraints(owner: owner)
         try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Function index=owner />)
@@ -43,6 +44,7 @@ impl Comp {
         if (try self.completeRecordedDefaultCalls()) != 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: target, msg: "internal error: global default argument plans are incomplete") />
         }
+        try self.completeSourceConversions(owner: <SemanticCompletionOwner.Global target=target />)
         try self.prepareGlobalCallTemplateConstraints(target: target)
         val admitted = try self.admitGlobalCallConstraints(target: target)
         try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Global target=target />)
