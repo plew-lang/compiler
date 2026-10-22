@@ -4,7 +4,7 @@
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess, SourceResource }
 use /Diag only { CompileDiagnostic }
-use /Ir only { Stmt, TypeRef, CallTemplate, CallTemplateKind, ProtocolSelection }
+use /Ir only { Stmt, TypeRef, CallTemplate, CallTemplateKind, ProtocolSelection, StaticMemberResolution }
 use @Std/Io only { print }
 
 fn checked[T](result~: Result[T, CompileDiagnostic]) -> T {
@@ -36,7 +36,10 @@ fn main() {
     val index = compiler.callTemplateIndex(siteKey: key)
     val selected = compiler.callTemplateAt(index: index)
     val result = match selected.kind {
-        CallTemplateKind.Protocol(receiver: _, selection: _, resultTerm: val term) => term
+        CallTemplateKind.Protocol(receiver: _, selection: ProtocolSelection.Static(resolution: StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIndex, reqIdx: _)), resultTerm: val term) => {
+            if compiler.proofIsMissing(proof: proof) || compiler.decls.traitAt(index: traitIndex).nameStart != compiler.coreTraitOwner(name: "Iterator") { panic("iteration lost its canonical requirement evidence") }
+            give term
+        }
         _ => { panic("missing next selection") }
     }
     val carrier = compiler.arena.typeAt(index: result)

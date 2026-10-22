@@ -78,7 +78,12 @@ A source call occurrence records the selected declaration or abstract requiremen
 
 Implicit iteration selects the canonical `Iterable.iterator` and
 `Iterator.next` operations during source construction. A same-named inherent
-method is not protocol evidence. The source Item term is the payload of that
+method is not protocol evidence. Establish the selected trait's applicability,
+including conditional-conformance evidence, before a candidate can hide the
+Iterator fallback. Concrete and symbolic receivers retain the canonical
+requirement and its selected proof. Concrete associated outputs normalize through
+that proof under an explicit receiver environment, not by rediscovering a
+same-named implementation. The source Item term is the payload of that
 selected next result, retaining the carrier's declaration identity and the exact
 implicit call site. Generic compatibility and concrete finalization interpret
 these same saved results; they cannot independently recover Item through a

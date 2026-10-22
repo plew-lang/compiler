@@ -1339,7 +1339,7 @@ pub impl Comp {
     }
 
     inout fn recordProtocolCallTemplate(stmtId: U64, slot: U64, receiver: CallTemplateReceiver, receiverTerm: U64, useOffset: U64) -> Result[U64, CompileDiagnostic] {
-        val name = if slot == 1U64 { give self.kwSpan(kw: "iterator", kwLen: 8U64) } else { give self.kwSpan(kw: "next", kwLen: 4U64) }
+        val name = self.internBytes(s: if slot == 1U64 { give "iterator" } else { give "next" })
         val arguments = self.pushArgs(args: [])
         val owner = self.coreTraitOwner(name: if slot == 1U64 { give "Iterable" } else { give "Iterator" })
         if owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: useOffset, msg: "for-loop requires an Iterable or Iterator") /> }
@@ -1359,25 +1359,40 @@ pub impl Comp {
                 } else if slot == 1U64 { selection = <ProtocolSelection.Identity />
                     resultTerm = receiverTerm }
             } else {
-                val resolution = try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: name.nameStart, nameLen: name.nameLen, args: arguments, requiredTraitOwner: owner)
-                match resolution {
-                    StaticMemberResolution.Missing => {
-                        val callee = try self.resolveMethodForResolvedReceiver(recv: 0U64, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: name.nameStart, nameLen: name.nameLen, args: arguments, useOffset: useOffset, readReceiverSyntax: false, requiredTraitOwner: owner)
-                        if callee < self.arena.functionCount() {
-                            val function = self.arena.functionAt(index: callee)
-                            val proof = if function.isProvided { give try self.providedBodyProof(f: function, receiverRef: receiverTerm, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn)) } else { give <StaticConformanceProof.Missing /> }
-                            val environment = try self.finalMethodEnvironment(f: function, receiverRef: receiverTerm, args: arguments, selectedProof: proof)
-                            resultTerm = try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: function), environment: environment, selfRef: receiverTerm, itemRef: 0U64)
-                            selection = <ProtocolSelection.Direct callee=callee proof=proof />
-                        } else if slot == 1U64 { selection = <ProtocolSelection.Identity />
-                            resultTerm = receiverTerm }
-                    }
-                    _ => {
-                        resultTerm = try self.staticRequirementResultType(resolution: resolution)
-                        selection = <ProtocolSelection.Static resolution=resolution />
+                // Protocol syntax selects a canonical trait requirement. A
+                // same-shaped implementation is not applicability evidence:
+                // its conditional conformance must hold before this operation
+                // can prevent the ordinary Iterator fallback.
+                val traitIndex = self.decls.traitIndexByOffset(offset: owner)
+                if traitIndex < self.decls.traitCount() {
+                    val trait = self.decls.traitAt(index: traitIndex)
+                    val proof = try self.staticTraitPatternProof(receiverRef: receiverTerm, traitId: trait.nameId, traitOwner: owner, traitArgs: [], patternParams: <PatternBindInput.Values values=[] />)
+                    if !self.proofIsMissing(proof: proof) {
+                        val resolution = try self.selectStaticRequirement(proof: proof, traitIdx: traitIndex, memberId: name.nameId, args: arguments)
+                        match resolution {
+                            StaticMemberResolution.Missing => {}
+                            _ => {
+                                val declaredResult = try self.staticRequirementResultType(resolution: resolution)
+                                resultTerm = try self.closeBodyProjectionTerms(ref: declaredResult, environment: <InstanceEnvironment receiverRef=receiverTerm proof=proof />, selfRef: receiverTerm, itemRef: 0U64, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))
+                                selection = <ProtocolSelection.Static resolution=resolution />
+                            }
+                        }
                     }
                 }
+                if resultTerm == 0U64 && slot == 1U64 {
+                    selection = <ProtocolSelection.Identity />
+                    resultTerm = receiverTerm
+                }
             }
+        }
+        if self.traceCodegen {
+            eprint(text: "[trace-codegen] record-protocol slot=")
+            eprintU64(n: slot)
+            eprint(text: " receiver=")
+            self.traceMonoTypeHead(ref: receiverTerm)
+            eprint(text: " result=")
+            self.traceMonoTypeHead(ref: resultTerm)
+            eprint(text: "\n")
         }
         if !self.cur.recordCallTemplates { return <Result.Ok value=resultTerm /> }
         val key = try self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: slot)

@@ -421,8 +421,20 @@ expectation. At the failed source-selection boundary only, diagnose a structural
 matching canonical Iterable/Iterator conformance whose closed substitution fails
 its declared conditions. The same matcher and condition-evidence query supply the
 cause; candidate presence never permits acceptance or a prepared-owner read.
-Abstract underconstrained receivers still use the protocol diagnostic. Valid
-Iterator fallback is resolved before this error path; an unavailable conditional
-Iterable cannot hide an available Iterator. Add a non-range conditional protocol
+Abstract underconstrained receivers still use the protocol diagnostic. Protocol selection now establishes canonical trait applicability before selecting
+its requirement. It no longer accepts a same-shaped implementation and waits for
+its bounds to fail after it has hidden an available Iterator. Concrete and abstract
+receivers retain the same Requirement/proof contract; selected concrete evidence
+closes associated result projections under an explicit receiver environment.
+Valid Iterator fallback is resolved before the error path; an unavailable
+conditional Iterable cannot hide an available Iterator. Add a non-range conditional protocol
 rejection and that positive fallback control. No source type spelling is special.
 Fresh diagnostics/execution and full gates remain required.
+
+The first fresh diagnostic slice exposed three failures: the error-only helper
+was not reached when a structurally selected implementation later failed its
+conditions, and that early choice also hid valid Iterator fallback. The initial
+requirement-only experiment exposed missing name IDs and concrete associated
+result normalization; both are fixed at construction. A current-source imported
+frontend probe now accepts the fallback control. Fresh complete slice, canonical
+selection/corruption controls, matching-source cost and full gates remain required.
