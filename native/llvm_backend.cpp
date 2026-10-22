@@ -43,6 +43,9 @@
 
 struct PlewLlvmJit {
   // Destroy the engine (and its generators) before the trampoline owners.
+  // Pending call-through entries retain SymbolStringPtr values after engine
+  // teardown, so their interned storage must outlive the trampoline owners.
+  std::shared_ptr<llvm::orc::SymbolStringPool> symbolPool;
   std::unique_ptr<llvm::orc::LazyCallThroughManager> calls;
   std::unique_ptr<llvm::orc::IndirectStubsManager> stubs;
   std::unique_ptr<llvm::orc::LLJIT> engine;
@@ -136,6 +139,7 @@ extern "C" PlewLlvmJit *plew_llvm_jit_create(void) {
   }
   auto jit = std::make_unique<PlewLlvmJit>();
   jit->engine = std::move(*engine);
+  jit->symbolPool = jit->engine->getExecutionSession().getSymbolStringPool();
   // Memory intrinsics can become libc calls during machine-code lowering,
   // after the frontend's explicit host-import scan. Supply their shared host
   // implementations in a separate fallback library, without exposing the

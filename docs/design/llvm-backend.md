@@ -37,6 +37,8 @@ ORC handoff consumes the module/context pair together, including failure. The Pl
 
 A ThreadSafeModule provides LLVM context access coordination; it does not authorize application event processing during compilation. The adopted driver suspends application execution while compiling. Session ownership, callback lifetime, and callable publication belong to driver/runtime design; ThreadSafe ownership is not a substitute for those contracts.
 
+Native session teardown destroys the ORC engine and its generators before the call-through and stub managers they reference. Pending, unexecuted call-through entries can still own interned symbol handles at that point. The session therefore holds an explicit shared owner of the engine's SymbolStringPool until all trampoline managers are destroyed; a SymbolStringPtr retains a pool entry, not the pool itself. Lookup without execution is a valid session lifecycle and must release these resources safely, including on an early failure.
+
 ## Function-Local Emission State
 
 Physical emission state belongs to the function currently being built. Entry allocas, locals, environment bindings, result homes, async frame references, and block mappings cannot be inherited accidentally from an enclosing body when a helper/thunk is emitted.

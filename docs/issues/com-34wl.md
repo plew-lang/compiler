@@ -1,6 +1,6 @@
 ---
 id: com-34wl
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-22T01:17:27Z
@@ -23,7 +23,9 @@ The phase-two review com-i5vp found an invalid negative control, replaced it wit
 
 The production PlewLlvmJit member order destroys engine, then stubs, then calls. LLVM20 LazyCallThroughManager::Reexports stores SymbolStringPtr values; an unexecuted trampoline can retain these after the engine's ExecutionSession/SymbolStringPool is gone. Refcount release into a freed pool entry is consistent with the heap corruption, but source inspection plus a later allocator trap does not prove the exact write.
 
-Investigate retaining the ExecutionSession::getSymbolStringPool() shared owner in PlewLlvmJit until calls has been destroyed. Declaring such an owner before calls would preserve engine-before-trampoline teardown while keeping the referenced storage alive. Confirm the whole lifetime graph rather than blindly reordering owners. No production patch has yet been made.
+PlewLlvmJit now retains the ExecutionSession::getSymbolStringPool() shared owner until calls has been destroyed. Declaring that owner before calls preserves engine-before-trampoline teardown while keeping the referenced storage alive. LLVM20 SymbolStringPtr::decRef writes the pool entry's reference count; its handle does not retain the pool owner. LazyCallThroughManager retains such handles in pending Reexports entries, establishing the missing lifetime dependency.
+
+With only that production ownership change and the regression unchanged, normal LLVM20 and LLVM22 bridge/host ASan/LSan pass. Three standalone repetitions of the previously failing normal binary lifecycle now exit zero. Native first-call, reuse, recursion and terminal-failure controls also pass in both configurations. Fresh product entry checks and formal fixed-point/performance validation remain pending; the issue is not yet closed.
 
 ## Completion Boundary
 
