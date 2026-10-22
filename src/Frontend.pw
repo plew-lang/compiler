@@ -2223,6 +2223,48 @@ fn allocateSourceFactSession() -> U64 {
 // Each source request publishes only its own immutable backing. Shared type
 // and proof identities remain in Comp; this store never owns the session.
 // Small read projection for construction queries. No second semantic store.
+// Readers receive only the relevant table projection. A by-value SourceBodyData
+// receiver would snapshot every table header for a query of just one table.
+// Construction and sealed reads share these lookup operations.
+fn readSourceRow[T](rows: Array[T], keys: Dictionary[U64, U64], key: U64) -> Optional[T] {
+    match keys.get(key: key) {
+        Optional.Some(v: val index) => { return <Optional.Some v=rows[index] /> }
+        Optional.None => { return <Optional.None /> }
+    }
+}
+fn readSourceExpressionHead(rows: Array[SemanticExprType], keys: Dictionary[U64, U64], exprId: U64) -> SourceExpressionHead {
+    match keys.get(key: exprId) {
+        Optional.Some(v: val index) => { return <SourceExpressionHead term=rows[index].term typeState=rows[index].typeState invocation=rows[index].invocation /> }
+        Optional.None => { return <SourceExpressionHead /> }
+    }
+}
+fn readSourceMatchIndex(statementKeys: Dictionary[U64, U64], expressionKeys: Dictionary[U64, U64], conditionKeys: Dictionary[U64, U64], source: MatchSource) -> Optional[U64] {
+    match source {
+        MatchSource.Statement(stmtId: val id) => { return statementKeys.get(key: id) }
+        MatchSource.Expression(exprId: val id) => { return expressionKeys.get(key: id) }
+        MatchSource.Condition(clauseIndex: val id) => { return conditionKeys.get(key: id) }
+    }
+}
+fn readSourcePattern(rows: Array[SemanticMatch], statementKeys: Dictionary[U64, U64], expressionKeys: Dictionary[U64, U64], conditionKeys: Dictionary[U64, U64], source: MatchSource) -> Optional[SemanticMatch] {
+    match readSourceMatchIndex(statementKeys: statementKeys, expressionKeys: expressionKeys, conditionKeys: conditionKeys, source: source) {
+        Optional.Some(v: val index) => { return <Optional.Some v=rows[index] /> }
+        Optional.None => { return <Optional.None /> }
+    }
+}
+fn sourceBindingNeedsCaptureCell(closures: Array[SemanticClosure], sourceFunction: U64, bindingTarget: U64) -> Bool {
+    for closure in closures {
+        if closure.ownerFnIdx == sourceFunction {
+            for capture in closure.captures {
+                match capture.mode {
+                    SemanticClosureCaptureMode.CellBorrow => { if capture.bindingTarget == bindingTarget { return true } }
+                    _ => {}
+                }
+            }
+        }
+    }
+    return false
+}
+
 struct SourceExpressionHead {
     val term: U64 = 0U64
     val typeState: SemanticExpressionTypeState = <SemanticExpressionTypeState.Unrecorded />
