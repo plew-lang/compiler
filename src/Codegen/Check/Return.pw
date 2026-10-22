@@ -4,64 +4,37 @@ pub impl Comp {
     // A final consumer reads the owner's last Record result. Allocation,
     // signature readiness, and template closure are not source-check proofs.
     inout fn checkedSemanticExprCompletion(exprId: U64) -> Result[SourceCompletion, CompileDiagnostic] {
-        if exprId < self.semanticExprRecords.count() {
-            match self.semanticExprRecords[exprId].expression.completion {
-                Optional.Some(v: val fact) => {
-                    if try self.semanticCompletionOwnerPrepared(owner: fact.owner) { return <Result.Ok value=fact.flow /> }
-                }
-                Optional.None => {}
+        match self.sourceFacts.expressionOwners.get(key: exprId) {
+            Optional.Some(v: val owner) => {
+                val facts = try self.preparedSemanticFacts(owner: owner)
+                match facts.expressionCompletion(exprId: exprId) { Optional.Some(v: val flow) => { return <Result.Ok value=flow /> } Optional.None => {} }
             }
+            Optional.None => {}
         }
         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: expression completion requires a checked lexical owner") />
     }
 
     inout fn semanticCompletionOwnerPrepared(owner: SemanticCompletionOwner) -> Result[Bool, CompileDiagnostic] {
-        match owner {
-            SemanticCompletionOwner.Function(index: val index) => {
-                if index < self.arena.functionCount() {
-                    match self.lexicalBodyPreparations.get(key: index) {
-                        Optional.Some(v: val prepared) => { try prepared return <Result.Ok value=true /> }
-                        Optional.None => {}
-                    }
-                }
-            }
-            SemanticCompletionOwner.Global(target: val target) => {
-                match self.globalInitializerPreparations.get(key: target) {
-                    Optional.Some(v: val prepared) => { try prepared return <Result.Ok value=true /> }
-                    Optional.None => {}
-                }
-            }
+        match self.sourceFacts.outcome(owner: owner) {
+            Optional.Some(v: val outcome) => { try outcome return <Result.Ok value=self.sourceFacts.prepared(owner: owner).isSome() /> }
+            Optional.None => { return <Result.Ok value=false /> }
         }
-        return <Result.Ok value=false />
     }
 
     inout fn checkedSemanticStmtCompletion(stmtId: U64) -> Result[SourceCompletion, CompileDiagnostic] {
-        if stmtId < self.semanticStatementCompletions.count() {
-            match self.semanticStatementCompletions[stmtId] {
-                Optional.Some(v: val fact) => {
-                    if try self.semanticCompletionOwnerPrepared(owner: fact.owner) { return <Result.Ok value=fact.flow /> }
-                }
-                Optional.None => {}
-            }
-        }
-        return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: statement completion requires a checked lexical owner") />
+        val owner = try self.checkedSemanticStmtCompletionOwner(stmtId: stmtId)
+        return self.semanticStmtCompletionInOwner(stmtId: stmtId, owner: owner)
     }
 
     inout fn checkedSemanticStmtCompletionOwner(stmtId: U64) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
-        if stmtId < self.semanticStatementCompletions.count() {
-            match self.semanticStatementCompletions[stmtId] {
-                Optional.Some(v: val fact) => {
-                    if try self.semanticCompletionOwnerPrepared(owner: fact.owner) {
-                        return self.preparedSemanticFacts(owner: fact.owner)
-                    }
-                }
-                Optional.None => {}
-            }
+        match self.sourceFacts.statementOwners.get(key: stmtId) {
+            Optional.Some(v: val owner) => { return self.preparedSemanticFacts(owner: owner) }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: statement completion requires a checked lexical owner") /> }
         }
-        return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: statement completion requires a checked lexical owner") />
     }
 
     inout fn semanticStmtCompletionInOwner(stmtId: U64, owner: PreparedSemanticFacts) -> Result[SourceCompletion, CompileDiagnostic] {
+        try self.requireSourceFactsSession(facts: owner)
         match owner.statementCompletion(stmtId: stmtId) {
             Optional.Some(v: val flow) => { return <Result.Ok value=flow /> }
             Optional.None => {}
@@ -145,8 +118,8 @@ pub impl Comp {
     // templates. Pending is not rewritten to Returns by this construction-
     // time walker; finalized readers must require a completed selection.
     fn invocationDiverges(exprId: U64) -> Bool {
-        if exprId >= self.semanticExprRecords.count() { return false }
-        match self.semanticExprRecords[exprId].expression.invocation {
+        if exprId >= self.arena.exprs.count() { return false }
+        match self.constructionExpression(exprId: exprId).invocation {
             InvocationCompletion.Diverges => { return true }
             _ => { return false }
         }

@@ -1,11 +1,6 @@
 // Source owner success is published only by these checked preparation phases.
 impl Comp {
-    fn sourceOwnerConstructionClosed(owner: SemanticCompletionOwner) -> Bool {
-        match owner {
-            SemanticCompletionOwner.Function(index: val index) => { return self.lexicalBodyPreparations.contains(key: index) }
-            SemanticCompletionOwner.Global(target: val target) => { return self.globalInitializerConstructionClosed(target: target) }
-        }
-    }
+    fn sourceOwnerConstructionClosed(owner: SemanticCompletionOwner) -> Bool { return self.sourceFacts.outcome(owner: owner).isSome() }
 
 
     inout fn prepareLexicalBodyUncached(owner: U64) -> Result[(), CompileDiagnostic] {
@@ -27,6 +22,7 @@ impl Comp {
         try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Function index=owner />)
         try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Function index=owner />)
         try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Function index=owner />)
+        try self.checkNestedSourceFacts(owner: <SemanticCompletionOwner.Function index=owner />)
         for token in admitted { self.publishPreparedCallConstraints(admitted: token) }
         return <Result.Ok value=() />
     }
@@ -50,6 +46,7 @@ impl Comp {
         try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Global target=target />)
         try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Global target=target />)
         try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Global target=target />)
+        try self.checkNestedSourceFacts(owner: <SemanticCompletionOwner.Global target=target />)
         for token in admitted { self.publishPreparedCallConstraints(admitted: token) }
         return <Result.Ok value=() />
     }

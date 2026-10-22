@@ -901,231 +901,31 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Context can refine an array literal after its first post-order visit.
-    // Keep one source-body aggregate identity and replace its frozen facts as
-    // a whole; parallel "early" and "contextual" carriers would be two
-    // semantic roots for the same construction.
-    fn semanticExpressionSiteHash(ownerFnIdx: U64, exprId: U64) -> U64 {
-        // Keep every intermediate below 2^32: checked U64 arithmetic is part
-        // of the self-hosted compiler's own execution contract.
-        val modulus: U64 = 4294967291U64
-        mut val h: U64 = ownerFnIdx % modulus
-        h = ((h + exprId % modulus) * 65537U64) % modulus
-        return h
-    }
-
 }
 
 impl Comp {
-    inout fn rebuildSemanticAggregateIndex(capacity: U64) {
-        self.semanticAggregateIndexSlots = []
-        mut val zeroI: U64 = 0U64
-        while zeroI < capacity {
-            self.semanticAggregateIndexSlots.append(0U64)
-            zeroI += 1U64
-        }
-        mut val entry: U64 = 0U64
-        while entry < self.semanticAggregates.count() {
-            val aggregate: SemanticAggregate = self.semanticAggregates[entry].fact
-            mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: aggregate.ownerFnIdx, exprId: aggregate.exprId) % capacity
-            while self.semanticAggregateIndexSlots[slot] != 0U64 {
-                slot = (slot + 1U64) % capacity
-            }
-            self.semanticAggregateIndexSlots.set(i: slot, value: entry + 1U64)
-            entry += 1U64
-        }
-    }
-
-    inout fn ensureSemanticAggregateIndex(nextCount: U64) {
-        if self.semanticAggregateIndexSlots.count() == 0U64 {
-            self.rebuildSemanticAggregateIndex(capacity: 16U64)
-        }
-        if nextCount * 10U64 >= self.semanticAggregateIndexSlots.count() * 7U64 {
-            self.rebuildSemanticAggregateIndex(capacity: self.semanticAggregateIndexSlots.count() * 2U64)
-        }
-    }
-
-    // Return the canonical array index, or count() when absent. The vector is
-    // the semantic source; slots are a rebuildable reader for Record and Mid.
-    inout fn semanticAggregateIndex(ownerFnIdx: U64, exprId: U64) -> Result[U64, CompileDiagnostic] {
-        val sourceOwner: U64 = (try self.semanticBodyOwner(fnIdx: ownerFnIdx))
-        val capacity: U64 = self.semanticAggregateIndexSlots.count()
-        if capacity == 0U64 { return <Result.Ok value=self.semanticAggregates.count() />}
-        mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: sourceOwner, exprId: exprId) % capacity
-        while self.semanticAggregateIndexSlots[slot] != 0U64 {
-            val entry: U64 = self.semanticAggregateIndexSlots[slot] - 1U64
-            val prior: SemanticAggregate = self.semanticAggregates[entry].fact
-            if prior.ownerFnIdx == sourceOwner && prior.exprId == exprId { return <Result.Ok value=entry />}
-            slot = (slot + 1U64) % capacity
-        }
-        return <Result.Ok value=self.semanticAggregates.count() />
-    }
-
     inout fn putSemanticAggregate(aggregate: SemanticAggregate) -> Result[(), CompileDiagnostic] {
-        val owner = match self.currentSourceOwner() {
-            Optional.Some(v: val owner) => { give owner }
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: aggregate has no source owner") /> }
-        }
+        val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: aggregate has no source owner") /> } }
         if self.sourceOwnerConstructionClosed(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: completed source owner cannot replace an aggregate fact") /> }
-
-        val prior: U64 = (try self.semanticAggregateIndex(ownerFnIdx: aggregate.ownerFnIdx, exprId: aggregate.exprId))
-        if prior < self.semanticAggregates.count() {
-            if !semanticCompletionOwnersEqual(recorded: self.semanticAggregates[prior].owner, prepared: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: aggregate changed its source owner") /> }
-            self.semanticAggregates.set(i: prior, value: <SourceSemanticAggregate owner=owner fact=aggregate />)
-            return <Result.Ok value=() />
-        }
-        self.ensureSemanticAggregateIndex(nextCount: self.semanticAggregates.count() + 1U64)
-        self.semanticAggregates.append(<SourceSemanticAggregate owner=owner fact=aggregate />)
-        val capacity: U64 = self.semanticAggregateIndexSlots.count()
-        mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: aggregate.ownerFnIdx, exprId: aggregate.exprId) % capacity
-        while self.semanticAggregateIndexSlots[slot] != 0U64 {
-            slot = (slot + 1U64) % capacity
-        }
-        self.semanticAggregateIndexSlots.set(i: slot, value: self.semanticAggregates.count())
+        val builder = self.sourceFacts.builder(owner: owner)
+        builder->data.putAggregate(fact: aggregate)
         return <Result.Ok value=() />
     }
-
-}
-
-impl Comp {
-    inout fn rebuildSemanticTryIndex(capacity: U64) {
-        self.semanticTryIndexSlots = []
-        mut val zeroI: U64 = 0U64
-        while zeroI < capacity {
-            self.semanticTryIndexSlots.append(0U64)
-            zeroI += 1U64
-        }
-        mut val entry: U64 = 0U64
-        while entry < self.semanticTries.count() {
-            val fact: SemanticTry = self.semanticTries[entry].fact
-            mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: fact.ownerFnIdx, exprId: fact.exprId) % capacity
-            while self.semanticTryIndexSlots[slot] != 0U64 {
-                slot = (slot + 1U64) % capacity
-            }
-            self.semanticTryIndexSlots.set(i: slot, value: entry + 1U64)
-            entry += 1U64
-        }
-    }
-
-    inout fn ensureSemanticTryIndex(nextCount: U64) {
-        if self.semanticTryIndexSlots.count() == 0U64 {
-            self.rebuildSemanticTryIndex(capacity: 16U64)
-        }
-        if nextCount * 10U64 >= self.semanticTryIndexSlots.count() * 7U64 {
-            self.rebuildSemanticTryIndex(capacity: self.semanticTryIndexSlots.count() * 2U64)
-        }
-    }
-
-    // Return the canonical array index, or count() when absent. The vector is
-    // the semantic source; slots are a rebuildable reader for Record and Mid.
-    inout fn semanticTryIndex(ownerFnIdx: U64, exprId: U64) -> Result[U64, CompileDiagnostic] {
-        val sourceOwner: U64 = (try self.semanticBodyOwner(fnIdx: ownerFnIdx))
-        val capacity: U64 = self.semanticTryIndexSlots.count()
-        if capacity == 0U64 { return <Result.Ok value=self.semanticTries.count() />}
-        mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: sourceOwner, exprId: exprId) % capacity
-        while self.semanticTryIndexSlots[slot] != 0U64 {
-            val entry: U64 = self.semanticTryIndexSlots[slot] - 1U64
-            val prior: SemanticTry = self.semanticTries[entry].fact
-            if prior.ownerFnIdx == sourceOwner && prior.exprId == exprId { return <Result.Ok value=entry />}
-            slot = (slot + 1U64) % capacity
-        }
-        return <Result.Ok value=self.semanticTries.count() />
-    }
-
     inout fn putSemanticTry(fact: SemanticTry) -> Result[(), CompileDiagnostic] {
-        val owner = match self.currentSourceOwner() {
-            Optional.Some(v: val owner) => { give owner }
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: try has no source owner") /> }
-        }
+        val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: try has no source owner") /> } }
         if self.sourceOwnerConstructionClosed(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: completed source owner cannot replace a try fact") /> }
-        val prior: U64 = (try self.semanticTryIndex(ownerFnIdx: fact.ownerFnIdx, exprId: fact.exprId))
-        if prior < self.semanticTries.count() {
-            if !semanticCompletionOwnersEqual(recorded: self.semanticTries[prior].owner, prepared: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: try changed its source owner") /> }
-            self.semanticTries.set(i: prior, value: <SourceSemanticTry owner=owner fact=fact />)
-            return <Result.Ok value=() />
-        }
-        self.ensureSemanticTryIndex(nextCount: self.semanticTries.count() + 1U64)
-        self.semanticTries.append(<SourceSemanticTry owner=owner fact=fact />)
-        val capacity: U64 = self.semanticTryIndexSlots.count()
-        mut val slot: U64 = self.semanticExpressionSiteHash(ownerFnIdx: fact.ownerFnIdx, exprId: fact.exprId) % capacity
-        while self.semanticTryIndexSlots[slot] != 0U64 {
-            slot = (slot + 1U64) % capacity
-        }
-        self.semanticTryIndexSlots.set(i: slot, value: self.semanticTries.count())
+        val builder = self.sourceFacts.builder(owner: owner)
+        builder->data.putTry(fact: fact)
         return <Result.Ok value=() />
     }
-
-}
-
-impl Comp {
-    fn semanticMatchHash(ownerFnIdx: U64, matchSource: MatchSource) -> U64 { return sourceSemanticMatchHash(ownerFnIdx: ownerFnIdx, matchSource: matchSource) }
-    fn sameMatchSource(a: MatchSource, b: MatchSource) -> Bool { return sameSourceMatch(a: a, b: b) }
-
-    inout fn rebuildSemanticMatchIndex(capacity: U64) {
-        self.semanticMatchIndexSlots = []
-        mut val zero: U64 = 0U64
-        while zero < capacity {
-            self.semanticMatchIndexSlots.append(0U64)
-            zero += 1U64
-        }
-        mut val entry: U64 = 0U64
-        while entry < self.semanticMatches.count() {
-            val fact: SemanticMatch = self.semanticMatches[entry].fact
-            mut val slot: U64 = self.semanticMatchHash(ownerFnIdx: fact.ownerFnIdx, matchSource: fact.matchSource) % capacity
-            while self.semanticMatchIndexSlots[slot] != 0U64 {
-                slot = (slot + 1U64) % capacity
-            }
-            self.semanticMatchIndexSlots.set(i: slot, value: entry + 1U64)
-            entry += 1U64
-        }
-    }
-
-    inout fn ensureSemanticMatchIndex(nextCount: U64) {
-        if self.semanticMatchIndexSlots.count() == 0U64 {
-            self.rebuildSemanticMatchIndex(capacity: 16U64)
-        }
-        if nextCount * 10U64 >= self.semanticMatchIndexSlots.count() * 7U64 {
-            self.rebuildSemanticMatchIndex(capacity: self.semanticMatchIndexSlots.count() * 2U64)
-        }
-    }
-
-    inout fn semanticMatchIndex(ownerFnIdx: U64, matchSource: MatchSource) -> Result[U64, CompileDiagnostic] {
-        val sourceOwner: U64 = (try self.semanticBodyOwner(fnIdx: ownerFnIdx))
-        val capacity: U64 = self.semanticMatchIndexSlots.count()
-        if capacity == 0U64 { return <Result.Ok value=self.semanticMatches.count() />}
-        mut val slot: U64 = self.semanticMatchHash(ownerFnIdx: sourceOwner, matchSource: matchSource) % capacity
-        while self.semanticMatchIndexSlots[slot] != 0U64 {
-            val entry: U64 = self.semanticMatchIndexSlots[slot] - 1U64
-            val fact: SemanticMatch = self.semanticMatches[entry].fact
-            if fact.ownerFnIdx == sourceOwner && self.sameMatchSource(a: fact.matchSource, b: matchSource) { return <Result.Ok value=entry />}
-            slot = (slot + 1U64) % capacity
-        }
-        return <Result.Ok value=self.semanticMatches.count() />
-    }
-
     inout fn putSemanticMatch(fact: SemanticMatch) -> Result[(), CompileDiagnostic] {
-        val owner = match self.currentSourceOwner() {
-            Optional.Some(v: val owner) => { give owner }
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: match has no source owner") /> }
-        }
+        val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: match has no source owner") /> } }
         if self.sourceOwnerConstructionClosed(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: completed source owner cannot replace a match fact") /> }
-        val prior: U64 = (try self.semanticMatchIndex(ownerFnIdx: fact.ownerFnIdx, matchSource: fact.matchSource))
-        if prior < self.semanticMatches.count() {
-            if !semanticCompletionOwnersEqual(recorded: self.semanticMatches[prior].owner, prepared: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: match changed its source owner") /> }
-            self.semanticMatches.set(i: prior, value: <SourceSemanticMatch owner=owner fact=fact />)
-            return <Result.Ok value=() />
-        }
-        self.ensureSemanticMatchIndex(nextCount: self.semanticMatches.count() + 1U64)
-        self.semanticMatches.append(<SourceSemanticMatch owner=owner fact=fact />)
-        val capacity: U64 = self.semanticMatchIndexSlots.count()
-        mut val slot: U64 = self.semanticMatchHash(ownerFnIdx: fact.ownerFnIdx, matchSource: fact.matchSource) % capacity
-        while self.semanticMatchIndexSlots[slot] != 0U64 {
-            slot = (slot + 1U64) % capacity
-        }
-        self.semanticMatchIndexSlots.set(i: slot, value: self.semanticMatches.count())
+        val builder = self.sourceFacts.builder(owner: owner)
+        builder->data.putMatch(fact: fact)
+        self.sourceFacts.recordMatchOwner(source: fact.matchSource, owner: owner)
         return <Result.Ok value=() />
     }
-
 }
 
 pub impl Comp {
@@ -1153,9 +953,8 @@ pub impl Comp {
             if !(try self.matchExhaustive(scrut: scrut, arms: arms)) { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: scrut), msg: "match must be exhaustive: cover all variants or add a wildcard") /> }
         }
         try self.recordMatchCoverage(scrut: scrut, arms: arms)
-        val semanticIndex = try self.semanticMatchIndex(ownerFnIdx: self.cur.checkFn, matchSource: matchSource)
-        if semanticIndex < self.semanticMatches.count() {
-            val fact = self.semanticMatches[semanticIndex].fact
+        match self.constructionMatch(source: matchSource) {
+        Optional.Some(v: val fact) => {
             mut val selectedArms = fact.arms
             index = 0U64
             while index < selectedArms.count() {
@@ -1165,6 +964,8 @@ pub impl Comp {
                 index += 1U64
             }
             try self.putSemanticMatch(fact: <SemanticMatch isConsuming=fact.isConsuming ownerFnIdx=fact.ownerFnIdx matchSource=fact.matchSource scrutineeTerm=fact.scrutineeTerm kind=fact.kind arms=selectedArms />)
+        }
+        Optional.None => {}
         }
         return <Result.Ok value=() />
     }
@@ -1709,7 +1510,6 @@ pub impl Comp {
         // newer than every child; type publication must not depend on an
         // unrelated expression having already extended this table.
         self.ensureExprTySlot(exprId: exprId)
-        self.ensureSemanticExprType(exprId: exprId)
         // This full lexical semantic walk is observable only in phase tracing.
         // Reuse the existing transient work counter so normal compilation gains
         // neither stored state nor a second diagnostic traversal.
@@ -2087,7 +1887,7 @@ pub impl Comp {
                 if elems.len > 0U64 {
                     val eRef: U64 = self.parametricExprTerm(exprId: self.exprAt(exprs: elems, index: 0U64))
                     if eRef != 0U64 {
-                        if exprId < self.semanticExprRecords.count() {
+                        if exprId < self.arena.exprs.count() {
                             self.recordSemanticExprTerm(exprId: exprId, term: self.arrayRefOfElem(elemRef: eRef))
                         }
                     }
@@ -2181,7 +1981,7 @@ pub impl Comp {
                 // This form rewrites itself to MatchExpr below. Preserve its
                 // pre-rewrite legacy adapter before changing the AST node;
                 // other forms use the common post-order fallback.
-                if exprId < self.semanticExprRecords.count() {
+                if exprId < self.arena.exprs.count() {
                     self.recordSemanticExprInfo(exprId: exprId, ti: (try self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef)))
                 }
                 try self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
@@ -2314,8 +2114,24 @@ pub impl Comp {
                 // locals for capture typing; otherwise finalization searches the
                 // closure key and finds only a Pending template recorded under
                 // the parent function.
+                val parentOwner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: closure has no lexical parent") /> } }
+                self.registerClosureFactOwner(expression: exprId, parent: parentOwner)
                 val savedCheckFn: U64 = self.cur.checkFn
                 self.cur.checkFn = self.closureBodyKey(closureId: exprId)
+                if self.cur.recordCallTemplates {
+                    val owner = <SemanticCompletionOwner.Closure expression=exprId />
+                    if !self.sourceFacts.begin(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: cyclic closure source preparation") /> }
+                    mut val inputs: Array[SourceBodyParameter] = []
+                    mut val parameterIndex = 0U64
+                    while parameterIndex < params.count() {
+                        val parameter = params[parameterIndex]
+                        inputs.append(<SourceBodyParameter declarationTarget=parameter.nameStart typeTerm=self.arena.typeAt(index: signature).args[parameterIndex + 1U64] isInout=parameter.isInout isMove=parameter.isMove isBorrow=parameter.isBorrow />)
+                        parameterIndex += 1U64
+                    }
+                    val builder = self.sourceFacts.builder(owner: owner)
+                    val result = self.arena.typeAt(index: signature).args[0U64]
+                    builder->data.signature = <Optional.Some v=<SourceBodySignature hasReceiver=false receiverTerm=0U64 selfInout=false selfMove=false isAsync=false hasReturnValue=!self.callableResultIsUnit(ref: result) resultTerm=result block=body parameters=inputs /> />
+                }
                 mut val pi: U64 = 0
                 while pi < params.count() {
                     val p: Param = params[pi]
@@ -2336,7 +2152,7 @@ pub impl Comp {
         val completion = self.exprCompletion(exprId: exprId)
         self.recordSemanticExprCompletion(exprId: exprId, completion: completion)
         if needsValue { try self.requireExpressionCompletionValue(exprId: exprId, completion: completion) }
-        if exprId < self.semanticExprRecords.count() {
+        if exprId < self.arena.exprs.count() {
             if self.semanticExprTerm(exprId: exprId) == 0U64 {
                 self.recordSemanticExprInfo(exprId: exprId, ti: (try self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef)))
             }
@@ -2370,8 +2186,7 @@ pub impl Comp {
             ExpressionRecordPurpose.Execution => {}
         }
         if !self.cur.recordCallTemplates { return <Result.Ok value=() /> }
-        self.ensureSemanticExprType(exprId: exprId)
-        val fact = self.semanticExprRecords[exprId].expression
+        val fact = self.constructionExpression(exprId: exprId)
         // A type-qualified factory receiver names a declaration, not a
         // runtime value. Its recorded identifier decision owns this distinction.
         if exprId < self.typeCache.identBind.count() && self.typeCache.identBind[exprId] == identTypeQualCode() {
@@ -2405,7 +2220,10 @@ pub impl Comp {
         mut val cursor = self.sourceTypingObligations.first(owner: owner)
         while cursor != 0U64 {
             val obligation = self.sourceTypingObligations.entries[cursor - 1U64]
-            val fact = self.semanticExprRecords[obligation.expression].expression
+            val fact = match self.sourceFacts.expression(owner: owner, exprId: obligation.expression) {
+                Optional.Some(v: val fact) => fact
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: obligation.expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") /> }
+            }
             match fact.typeState {
                 SemanticExpressionTypeState.Pending | SemanticExpressionTypeState.Unrecorded => {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: obligation.expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") />
@@ -2708,14 +2526,16 @@ pub impl Comp {
         if owner >= self.arena.functionCount() {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: lexical body request has no declaration") />
         }
-        match self.lexicalBodyPreparations.get(key: owner) {
+        match self.sourceFacts.outcome(owner: <SemanticCompletionOwner.Function index=owner />) {
             Optional.Some(v: val result) => { return result }
             Optional.None => {}
         }
+        val sourceOwner = <SemanticCompletionOwner.Function index=owner />
+        if !self.sourceFacts.begin(owner: sourceOwner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: cyclic source body preparation") /> }
         val saved = self.cur
         val result = self.prepareLexicalBodyUncached(owner: owner)
         self.cur = saved
-        self.lexicalBodyPreparations.record(owner: owner, result: result)
+        self.finishSourceFacts(owner: sourceOwner, result: result, bodyless: self.arena.functionAt(index: owner).isExtern || self.arena.functionAt(index: owner).body == 0U64)
         return result
     }
 
@@ -2792,8 +2612,8 @@ impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: parameter.declarationTarget, msg: "internal error: source body parameter has an unresolved type") />
             }
         }
-        while self.sourceBodySignatures.count() <= fnIdx { self.sourceBodySignatures.append(<Optional.None />) }
-        self.sourceBodySignatures.set(i: fnIdx, value: <Optional.Some v=signature />)
+        val builder = self.sourceFacts.builder(owner: <SemanticCompletionOwner.Function index=fnIdx />)
+        builder->data.signature = <Optional.Some v=signature />
         return <Result.Ok value=() />
     }
 }

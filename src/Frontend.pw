@@ -1,3 +1,4 @@
+use @Std/Core only { Ref, MutableRef }
 use ./Ir only { SemanticTypeRecipe, CallTemplateArgumentRange, CallTemplateTypeArgumentRange, CallTemplateOperandRange, CallTemplateViewRange }
 use ./Ir only { CallSiteSelection, CallTarget }
 use ./Diag only { eprintU64 }
@@ -88,48 +89,14 @@ fn functionHasTraitReceiver(arena ~: Arena, decls ~: Decls, fnIdx: U64) -> Bool 
 fn semanticCompletionOwnersEqual(recorded: SemanticCompletionOwner, prepared: SemanticCompletionOwner) -> Bool {
     match recorded {
         SemanticCompletionOwner.Function(index: val index) => {
-            match prepared {
-                SemanticCompletionOwner.Function(index: val expected) => { return index == expected }
-                SemanticCompletionOwner.Global(target: _) => { return false }
-            }
+            match prepared { SemanticCompletionOwner.Function(index: val expected) => { return index == expected } _ => { return false } }
         }
         SemanticCompletionOwner.Global(target: val target) => {
-            match prepared {
-                SemanticCompletionOwner.Global(target: val expected) => { return target == expected }
-                SemanticCompletionOwner.Function(index: _) => { return false }
-            }
+            match prepared { SemanticCompletionOwner.Global(target: val expected) => { return target == expected } _ => { return false } }
         }
-    }
-}
-
-// Source owner IDs are dense arena indices. Retain the complete request
-// result at that index; allocation alone never means preparation succeeded.
-pub struct LexicalBodyPreparations {
-    mut val outcomes: Array[Optional[Result[(), CompileDiagnostic]]] = []
-    mut val requests: U64 = 0U64
-}
-pub impl LexicalBodyPreparations {
-    factory
-    fn count() -> U64 { return self.requests }
-    fn get(key: U64) -> Optional[Result[(), CompileDiagnostic]] {
-        if key >= self.outcomes.count() { return <Optional.None /> }
-        return self.outcomes[key]
-    }
-}
-impl LexicalBodyPreparations {
-    // Membership closes construction after either success or failure; it does
-    // not expose or copy the stored preparation result.
-    fn contains(key: U64) -> Bool {
-        if key >= self.outcomes.count() { return false }
-        return self.outcomes[key].isSome()
-    }
-    inout fn record(owner: U64, result: Result[(), CompileDiagnostic]) {
-        while self.outcomes.count() <= owner { self.outcomes.append(<Optional.None />) }
-        match self.outcomes[owner] {
-            Optional.None => { self.requests += 1U64 }
-            Optional.Some(v: _) => { return }
+        SemanticCompletionOwner.Closure(expression: val expression) => {
+            match prepared { SemanticCompletionOwner.Closure(expression: val expected) => { return expression == expected } _ => { return false } }
         }
-        self.outcomes.set(i: owner, value: <Optional.Some v=result />)
     }
 }
 
@@ -150,6 +117,7 @@ pub struct SourceTypingObligations {
     mut val expressionIndices: Dictionary[U64, U64] = [:]
     mut val functionHeads: Dictionary[U64, U64] = [:]
     mut val globalHeads: Dictionary[U64, U64] = [:]
+    mut val closureHeads: Dictionary[U64, U64] = [:]
 }
 impl SourceTypingObligations {
     factory
@@ -157,6 +125,7 @@ impl SourceTypingObligations {
         match owner {
             SemanticCompletionOwner.Function(index: val index) => { return self.functionHeads.getOr(key: index, fallback: 0U64) }
             SemanticCompletionOwner.Global(target: val target) => { return self.globalHeads.getOr(key: target, fallback: 0U64) }
+            SemanticCompletionOwner.Closure(expression: val expression) => { return self.closureHeads.getOr(key: expression, fallback: 0U64) }
         }
     }
     inout fn record(expression: U64, owner: SemanticCompletionOwner) -> Bool {
@@ -170,6 +139,7 @@ impl SourceTypingObligations {
         match owner {
             SemanticCompletionOwner.Function(index: val function) => { self.functionHeads[function] = index + 1U64 }
             SemanticCompletionOwner.Global(target: val target) => { self.globalHeads[target] = index + 1U64 }
+            SemanticCompletionOwner.Closure(expression: val expression) => { self.closureHeads[expression] = index + 1U64 }
         }
         return true
     }
@@ -243,15 +213,8 @@ enum CallConstraintPlanState {
 
 pub struct Comp {
     mut val semanticClosures: Array[SemanticClosure] = []
-    mut val semanticExprRecords: Array[SourceSemanticExpressionRecord] = []
-    mut val semanticAggregates: Array[SourceSemanticAggregate] = []
-    mut val semanticAggregateIndexSlots: Array[U64] = []
-    mut val semanticTries: Array[SourceSemanticTry] = []
-    mut val semanticTryIndexSlots: Array[U64] = []
-    mut val semanticMatches: Array[SourceSemanticMatch] = []
-    mut val semanticMatchIndexSlots: Array[U64] = []
-    mut val semanticBindings: Array[Optional[SourceBindingFact]] = []
-    mut val semanticStatementCompletions: Array[Optional[SemanticExpressionCompletion]] = []
+    mut val sourceFacts: SourceFactDirectory = <SourceFactDirectory />
+    mut val semanticRecordingStarted: Bool = false
     mut val semanticClosureOwners: Array[SemanticCompletionOwner] = []
     mut val semanticClosureIndexSlots: Array[U64] = []
     mut val globalCallTemplateOwners: Dictionary[U64, Array[U64]] = [:]
@@ -365,7 +328,6 @@ pub struct Comp {
     pub mut val closedCallTemplateBodies: Array[Bool] = []
     // Session-local outcomes of lexical preparation, not whole-body ownership
     // or effect proofs. Failure must remain failure even after template closure.
-    mut val lexicalBodyPreparations: LexicalBodyPreparations = <LexicalBodyPreparations />
     mut val sourceTypingObligations: SourceTypingObligations = <SourceTypingObligations />
     // Lowering assigns authored type uses to their declaration, expression or
     // block. Record requests local uses; declaration loading checks only the
@@ -381,9 +343,7 @@ pub struct Comp {
     pub mut val sourceExpressionLimit: U64 = 0U64
     pub mut val globalCallTemplatesClosed: Bool = false
     pub mut val selectedGlobalTargets: Array[U64] = []
-    mut val sourceBodySignatures: Array[Optional[SourceBodySignature]] = []
     mut val accessUses: Array[AccessUse] = []
-    mut val globalInitializerPreparations: Dictionary[U64, Result[(), CompileDiagnostic]] = [:]
     pub mut val resolvingGlobalTypes: Array[U64] = []
     // ASan mode (`plewc --asan <file>`): the backend tags the module with the host target
     // triple and marks every DEFINED function `sanitize_address`, so a downstream
@@ -1190,6 +1150,7 @@ pub fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
 // `pub` so the (still free-function) type-recovery callers can reach them during the
 // methodization transition.
 
+part ./SourceFacts
 part ./Parser/Decl
 part ./Codegen/Existentials
 part ./Codegen/Arc
@@ -1341,11 +1302,7 @@ fn traceLowerTopItem(c: inout Comp, index: U64, span: Span) {
 // CallTemplate finalization a real `Comp` boundary, rather than an incidental
 // region inside the frontend driver.
 fn recordSemanticExpressionTypes(c: inout Comp, includeBodies: Bool = true) -> Result[(), CompileDiagnostic] {
-    mut val i: U64 = 0U64
-    while i < c.arena.exprs.count() {
-        c.semanticExprRecords.append(<SourceSemanticExpressionRecord />)
-        i += 1U64
-    }
+    c.semanticRecordingStarted = true
     tracePhase(c: inout c, label: "semantic-expression-record:start")
     c.traceExprInstScans = 0U64
     try c.recordParametricTypes(includeBodies: includeBodies && !c.genMode)
@@ -2286,17 +2243,81 @@ fn sourceCallConstraintPlan(states: Dictionary[U64, CallConstraintPlanState], in
 
 pub impl Comp {
     inout fn semanticClosureCount() -> U64 { return self.semanticClosures.count() }
-    inout fn semanticClosureAt(index: U64) -> SemanticClosure { return self.semanticClosures[index] }
-    inout fn semanticClosureSnapshot() -> Array[SemanticClosure] { return self.semanticClosures }
+    inout fn semanticClosureAt(index: U64) -> SemanticClosure {
+        val declaration = self.semanticClosures[index]
+        match self.constructionClosure(owner: self.semanticClosureOwners[index], exprId: declaration.exprId) {
+            Optional.Some(v: val closure) => { return closure }
+            Optional.None => { return declaration }
+        }
+    }
 }
 
-// A body-scoped immutable semantic snapshot. Only successful source preparation
-// can create it; other owners' building metadata is not exposed by this view.
-struct SourceSemanticExpressionRecord {
-    val expression: SemanticExprType = <SemanticExprType />
-    val owner: Optional[SemanticCompletionOwner] = <Optional.None />
+// Session identities are generative, including independent internal Comp
+// values. A source handle cannot be grounded against another session's pools.
+mut val nextSourceFactSession: U64 = 1U64
+fn allocateSourceFactSession() -> U64 {
+    if nextSourceFactSession == 18446744073709551615U64 { panic("source fact session identities exhausted") }
+    val identity = nextSourceFactSession
+    nextSourceFactSession += 1U64
+    return identity
 }
-impl SourceSemanticExpressionRecord { factory }
+
+// Each source request publishes only its own immutable backing. Shared type
+// and proof identities remain in Comp; this store never owns the session.
+struct SourceBodyData {
+    val owner: SemanticCompletionOwner
+    mut val parent: Optional[SemanticCompletionOwner] = <Optional.None />
+    mut val expressions: Array[SemanticExprType] = []
+    mut val expressionKeys: Dictionary[U64, U64] = [:]
+    mut val bindings: Array[SourceBindingFact] = []
+    mut val bindingKeys: Dictionary[U64, U64] = [:]
+    mut val statements: Array[SemanticExpressionCompletion] = []
+    mut val statementKeys: Dictionary[U64, U64] = [:]
+    mut val aggregates: Array[SemanticAggregate] = []
+    mut val aggregateKeys: Dictionary[U64, U64] = [:]
+    mut val tries: Array[SemanticTry] = []
+    mut val tryKeys: Dictionary[U64, U64] = [:]
+    mut val matches: Array[SemanticMatch] = []
+    mut val statementMatchKeys: Dictionary[U64, U64] = [:]
+    mut val expressionMatchKeys: Dictionary[U64, U64] = [:]
+    mut val conditionMatchKeys: Dictionary[U64, U64] = [:]
+    mut val signature: Optional[SourceBodySignature] = <Optional.None />
+    mut val children: Array[U64] = []
+    mut val closurePlans: Array[SemanticClosure] = []
+    mut val closureKeys: Dictionary[U64, U64] = [:]
+}
+impl SourceBodyData { factory }
+
+struct SourceBodyBuilder {
+    mut val data: SourceBodyData
+    mut val requested: Bool = false
+}
+impl SourceBodyBuilder { factory }
+
+enum SourceBodyState {
+    Building(builder: MutableRef[SourceBodyBuilder])
+    Succeeded(facts: PreparedSemanticFacts)
+    Failed(diagnostic: CompileDiagnostic)
+    Registered
+}
+
+struct SourceFactDirectory {
+    val session: U64 = allocateSourceFactSession()
+    mut val functions: Array[Optional[SourceBodyState]] = []
+    mut val globals: Dictionary[U64, SourceBodyState] = [:]
+    mut val closures: Dictionary[U64, SourceBodyState] = [:]
+    mut val functionRequests: U64 = 0U64
+    mut val globalRequests: U64 = 0U64
+    mut val acquisitions: U64 = 0U64
+    mut val rowsSealed: U64 = 0U64
+    // Navigation/provenance only. These maps contain no semantic value rows.
+    mut val expressionOwners: Dictionary[U64, SemanticCompletionOwner] = [:]
+    mut val statementOwners: Dictionary[U64, SemanticCompletionOwner] = [:]
+    mut val statementMatchOwners: Dictionary[U64, SemanticCompletionOwner] = [:]
+    mut val expressionMatchOwners: Dictionary[U64, SemanticCompletionOwner] = [:]
+    mut val conditionMatchOwners: Dictionary[U64, SemanticCompletionOwner] = [:]
+}
+impl SourceFactDirectory { factory }
 
 pub struct SourceBodyParameter {
     pub val declarationTarget: U64
@@ -2330,278 +2351,57 @@ pub struct SourceBindingFact {
 }
 impl SourceBindingFact { factory }
 
-fn sourceSemanticMatchHash(ownerFnIdx: U64, matchSource: MatchSource) -> U64 {
-        val modulus: U64 = 4294967291U64
-        val encoded: U64 = match matchSource { MatchSource.Statement(stmtId: val id) => { give (id % modulus) * 3U64 } MatchSource.Expression(exprId: val id) => { give (id % modulus) * 3U64 + 1U64 } MatchSource.Condition(clauseIndex: val id) => { give (id % modulus) * 3U64 + 2U64 } }
-        return (((ownerFnIdx % modulus + encoded % modulus) * 65537U64) + 29U64) % modulus
-}
-
-fn sameSourceMatch(a: MatchSource, b: MatchSource) -> Bool {
-        match a {
-            MatchSource.Statement(stmtId: val left) => { match b { MatchSource.Statement(stmtId: val right) => { return left == right } _ => { return false } } }
-            MatchSource.Expression(exprId: val left) => { match b { MatchSource.Expression(exprId: val right) => { return left == right } _ => { return false } } }
-            MatchSource.Condition(clauseIndex: val left) => { match b { MatchSource.Condition(clauseIndex: val right) => { return left == right } _ => { return false } } }
-        }
-}
-
-fn sourceSemanticExpressionHash(ownerFnIdx: U64, exprId: U64) -> U64 {
-    val modulus: U64 = 4294967291U64
-    return ((ownerFnIdx % modulus + exprId % modulus) * 65537U64) % modulus
-}
-struct SourceSemanticAggregate {
-    val owner: SemanticCompletionOwner
-    val fact: SemanticAggregate
-}
-impl SourceSemanticAggregate { factory }
-
-struct SourceSemanticTry {
-    val owner: SemanticCompletionOwner
-    val fact: SemanticTry
-}
-impl SourceSemanticTry { factory }
-
-struct SourceSemanticMatch {
-    val owner: SemanticCompletionOwner
-    val fact: SemanticMatch
-}
-impl SourceSemanticMatch { factory }
-
+// This component seals source types, bindings, regions and aggregate plans;
+// it is not a whole CheckedBody or permission to execute an instance.
 pub struct PreparedSemanticFacts {
+    val session: U64
     val owner: SemanticCompletionOwner
-    val expressions: Array[SourceSemanticExpressionRecord]
-    val aggregates: Array[SourceSemanticAggregate]
-    val aggregateSlots: Array[U64]
-    val tries: Array[SourceSemanticTry]
-    val trySlots: Array[U64]
-    val matches: Array[SourceSemanticMatch]
-    val matchSlots: Array[U64]
-    val bindings: Array[Optional[SourceBindingFact]]
-    val statements: Array[Optional[SemanticExpressionCompletion]]
-    val signature: Optional[SourceBodySignature]
+    val payload: Ref[SourceBodyData]
 }
 impl PreparedSemanticFacts { factory }
 pub impl PreparedSemanticFacts {
+    fn belongsToSession(session: U64) -> Bool { return self.session == session }
+    fn expression(exprId: U64) -> Optional[SemanticExprType] { return self.payload->expression(exprId: exprId) }
+    fn bindingNeedsCaptureCell(sourceFunction: U64, bindingTarget: U64) -> Bool { return self.payload->bindingNeedsCaptureCell(sourceFunction: sourceFunction, bindingTarget: bindingTarget) }
+    fn binding(stmtId: U64) -> Optional[SourceBindingFact] { return self.payload->binding(stmtId: stmtId) }
+    fn functionSignature() -> Optional[SourceBodySignature] { return self.payload->signature }
     fn aggregate(ownerFnIdx: U64, exprId: U64) -> Optional[SemanticAggregate] {
-        val capacity = self.aggregateSlots.count()
-        if capacity == 0U64 { return <Optional.None /> }
-        mut val slot = sourceSemanticExpressionHash(ownerFnIdx: ownerFnIdx, exprId: exprId) % capacity
-        while self.aggregateSlots[slot] != 0U64 {
-            val record = self.aggregates[self.aggregateSlots[slot] - 1U64]
-            if record.fact.ownerFnIdx == ownerFnIdx && record.fact.exprId == exprId {
-                if semanticCompletionOwnersEqual(recorded: record.owner, prepared: self.owner) { return <Optional.Some v=record.fact /> }
-                return <Optional.None />
-            }
-            slot = (slot + 1U64) % capacity
+        match self.payload->aggregate(exprId: exprId) {
+            Optional.Some(v: val fact) => { if fact.ownerFnIdx == ownerFnIdx { return <Optional.Some v=fact /> } }
+            Optional.None => {}
         }
         return <Optional.None />
     }
-
     fn tryDecomposition(ownerFnIdx: U64, exprId: U64) -> Optional[SemanticTry] {
-        val capacity = self.trySlots.count()
-        if capacity == 0U64 { return <Optional.None /> }
-        mut val slot = sourceSemanticExpressionHash(ownerFnIdx: ownerFnIdx, exprId: exprId) % capacity
-        while self.trySlots[slot] != 0U64 {
-            val record = self.tries[self.trySlots[slot] - 1U64]
-            if record.fact.ownerFnIdx == ownerFnIdx && record.fact.exprId == exprId {
-                if semanticCompletionOwnersEqual(recorded: record.owner, prepared: self.owner) { return <Optional.Some v=record.fact /> }
-                return <Optional.None />
-            }
-            slot = (slot + 1U64) % capacity
+        match self.payload->tryDecomposition(exprId: exprId) {
+            Optional.Some(v: val fact) => { if fact.ownerFnIdx == ownerFnIdx { return <Optional.Some v=fact /> } }
+            Optional.None => {}
         }
         return <Optional.None />
     }
-
     fn pattern(ownerFnIdx: U64, matchSource: MatchSource) -> Optional[SemanticMatch] {
-        val capacity = self.matchSlots.count()
-        if capacity == 0U64 { return <Optional.None /> }
-        mut val slot = sourceSemanticMatchHash(ownerFnIdx: ownerFnIdx, matchSource: matchSource) % capacity
-        while self.matchSlots[slot] != 0U64 {
-            val record = self.matches[self.matchSlots[slot] - 1U64]
-            if record.fact.ownerFnIdx == ownerFnIdx && sameSourceMatch(a: record.fact.matchSource, b: matchSource) {
-                if semanticCompletionOwnersEqual(recorded: record.owner, prepared: self.owner) { return <Optional.Some v=record.fact /> }
-                return <Optional.None />
-            }
-            slot = (slot + 1U64) % capacity
+        match self.payload->pattern(source: matchSource) {
+            Optional.Some(v: val fact) => { if fact.ownerFnIdx == ownerFnIdx { return <Optional.Some v=fact /> } }
+            Optional.None => {}
         }
         return <Optional.None />
     }
-    fn binding(stmtId: U64) -> Optional[SourceBindingFact] {
-        if stmtId < self.bindings.count() {
-            match self.bindings[stmtId] {
-                Optional.Some(v: val fact) => {
-                    if semanticCompletionOwnersEqual(recorded: fact.owner, prepared: self.owner) {
-                        return <Optional.Some v=fact />
-                    }
-                }
-                Optional.None => {}
-            }
-        }
-        return <Optional.None />
-    }
-    fn functionSignature() -> Optional[SourceBodySignature] { return self.signature }
     fn statementCompletion(stmtId: U64) -> Optional[SourceCompletion] {
-        if stmtId < self.statements.count() {
-            match self.statements[stmtId] {
-                Optional.Some(v: val fact) => {
-                    if semanticCompletionOwnersEqual(recorded: fact.owner, prepared: self.owner) {
-                        return <Optional.Some v=fact.flow />
-                    }
-                }
-                Optional.None => {}
-            }
+        match self.payload->statement(stmtId: stmtId) {
+            Optional.Some(v: val fact) => { return <Optional.Some v=fact.flow /> }
+            Optional.None => { return <Optional.None /> }
         }
-        return <Optional.None />
     }
     fn expressionCompletion(exprId: U64) -> Optional[SourceCompletion] {
         match self.expression(exprId: exprId) {
             Optional.Some(v: val expression) => {
                 match expression.completion {
-                    Optional.Some(v: val fact) => {
-                        if semanticCompletionOwnersEqual(recorded: fact.owner, prepared: self.owner) {
-                            return <Optional.Some v=fact.flow />
-                        }
-                    }
+                    Optional.Some(v: val fact) => { return <Optional.Some v=fact.flow /> }
                     Optional.None => {}
                 }
             }
             Optional.None => {}
         }
         return <Optional.None />
-    }
-    fn expression(exprId: U64) -> Optional[SemanticExprType] {
-        if exprId >= self.expressions.count() { return <Optional.None /> }
-        match self.expressions[exprId].owner {
-            Optional.Some(v: val owner) => {
-                if semanticCompletionOwnersEqual(recorded: owner, prepared: self.owner) {
-                    return <Optional.Some v=self.expressions[exprId].expression />
-                }
-            }
-            Optional.None => {}
-        }
-        return <Optional.None />
-    }
-}
-pub impl Comp {
-    inout fn preparedSemanticFacts(owner: SemanticCompletionOwner) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
-        if !(try self.semanticCompletionOwnerPrepared(owner: owner)) {
-            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: semantic facts require a prepared source owner") />
-        }
-        mut val signature: Optional[SourceBodySignature] = <Optional.None />
-        match owner {
-            SemanticCompletionOwner.Function(index: val index) => {
-                if index < self.sourceBodySignatures.count() { signature = self.sourceBodySignatures[index] }
-            }
-            SemanticCompletionOwner.Global(target: _) => {}
-        }
-        return <Result.Ok value=<PreparedSemanticFacts owner=owner expressions=self.semanticExprRecords aggregates=self.semanticAggregates aggregateSlots=self.semanticAggregateIndexSlots tries=self.semanticTries trySlots=self.semanticTryIndexSlots matches=self.semanticMatches matchSlots=self.semanticMatchIndexSlots bindings=self.semanticBindings statements=self.semanticStatementCompletions signature=signature /> />
-    }
-    inout fn preparedFunctionSemanticFacts(fnIdx: U64) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
-        return self.preparedSemanticFacts(owner: <SemanticCompletionOwner.Function index=(try self.semanticBodyOwner(fnIdx: fnIdx)) />)
-    }
-    inout fn preparedFunctionBodySignature(fnIdx: U64) -> Result[SourceBodySignature, CompileDiagnostic] {
-        val owner = try self.semanticBodyOwner(fnIdx: fnIdx)
-        if !(try self.semanticCompletionOwnerPrepared(owner: <SemanticCompletionOwner.Function index=owner />)) {
-            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: semantic facts require a prepared source owner") />
-        }
-        if owner < self.sourceBodySignatures.count() {
-            match self.sourceBodySignatures[owner] {
-                Optional.Some(v: val signature) => { return <Result.Ok value=signature /> }
-                Optional.None => {}
-            }
-        }
-        return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: source body signature requires a prepared lexical body") />
-    }
-    inout fn preparedGlobalSemanticFacts(target: U64) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
-        return self.preparedSemanticFacts(owner: <SemanticCompletionOwner.Global target=target />)
-    }
-    inout fn preparedClosureSemanticFacts(closure: SemanticClosure) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
-        val index = try self.semanticClosureIndex(ownerFnIdx: closure.ownerFnIdx, exprId: closure.exprId)
-        if index >= self.semanticClosureOwners.count() {
-            return <Result.Err error=self.diagnosticAt(offset: closure.exprId, msg: "internal error: closure has no semantic source owner") />
-        }
-        return self.preparedSemanticFacts(owner: self.semanticClosureOwners[index])
-    }
-    inout fn preparedSourceExpression(owner: SemanticCompletionOwner, exprId: U64) -> Result[SemanticExprType, CompileDiagnostic] {
-        if !(try self.semanticCompletionOwnerPrepared(owner: owner)) {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: expression requires a prepared source owner") />
-        }
-        if exprId < self.semanticExprRecords.count() {
-            val row = self.semanticExprRecords[exprId]
-            match row.owner {
-                Optional.Some(v: val recorded) => {
-                    if semanticCompletionOwnersEqual(recorded: recorded, prepared: owner) {
-                        match row.expression.typeState {
-                            SemanticExpressionTypeState.Unrecorded => {}
-                            _ => { return <Result.Ok value=row.expression /> }
-                        }
-                    }
-                }
-                Optional.None => {}
-            }
-        }
-        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: prepared owner has no matching source expression") />
-    }
-    fn sourceSemanticExprTypeCount() -> U64 { return self.semanticExprRecords.count() }
-    fn sourceSemanticExprTypeAt(index: U64) -> SemanticExprType { return self.semanticExprRecords[index].expression }
-}
-impl Comp {
-    fn semanticExprConstructionClosed(exprId: U64) -> Bool {
-        if exprId >= self.semanticExprRecords.count() { return false }
-        match self.semanticExprRecords[exprId].owner {
-            Optional.Some(v: val owner) => { return self.sourceOwnerConstructionClosed(owner: owner) }
-            Optional.None => { return false }
-        }
-    }
-    inout fn storeBuildingSemanticExprType(i: U64, value: SemanticExprType) {
-        if self.semanticExprConstructionClosed(exprId: i) { panic("internal error: completed source owner cannot replace an expression fact") }
-        mut val recordedOwner = self.semanticExprRecords[i].owner
-        match self.sourceRecordingOwner() {
-            Optional.Some(v: val owner) => {
-                match recordedOwner {
-                    Optional.Some(v: val prior) => {
-                        if !semanticCompletionOwnersEqual(recorded: prior, prepared: owner) { panic("internal error: expression fact changed its source owner") }
-                    }
-                    Optional.None => { recordedOwner = <Optional.Some v=owner /> }
-                }
-            }
-            Optional.None => {}
-        }
-        self.semanticExprRecords.set(i: i, value: <SourceSemanticExpressionRecord expression=value owner=recordedOwner />)
-    }
-}
-
-impl Comp {
-    fn semanticStmtConstructionClosed(stmtId: U64) -> Bool {
-        if stmtId >= self.semanticStatementCompletions.count() { return false }
-        match self.semanticStatementCompletions[stmtId] {
-            Optional.Some(v: val fact) => { return self.sourceOwnerConstructionClosed(owner: fact.owner) }
-            Optional.None => { return false }
-        }
-    }
-    inout fn storeBuildingSemanticBinding(stmtId: U64, typeTerm: U64, endedBinding: U64) {
-        val owner = match self.sourceRecordingOwner() {
-            Optional.Some(v: val owner) => { give owner }
-            Optional.None => { return }
-        }
-        if self.sourceOwnerConstructionClosed(owner: owner) { panic("internal error: completed source owner cannot replace a binding fact") }
-        while self.semanticBindings.count() <= stmtId { self.semanticBindings.append(<Optional.None />) }
-        match self.semanticBindings[stmtId] {
-            Optional.Some(v: val prior) => {
-                if !semanticCompletionOwnersEqual(recorded: prior.owner, prepared: owner) { panic("internal error: binding fact changed its source owner") }
-            }
-            Optional.None => {}
-        }
-        self.semanticBindings.set(i: stmtId, value: <Optional.Some v=<SourceBindingFact owner=owner typeTerm=typeTerm endedBinding=endedBinding /> />)
-    }
-    inout fn storeBuildingSemanticStmtCompletion(stmtId: U64, fact: SemanticExpressionCompletion) {
-        if self.semanticStmtConstructionClosed(stmtId: stmtId) { panic("internal error: completed source owner cannot replace a statement fact") }
-        while self.semanticStatementCompletions.count() <= stmtId { self.semanticStatementCompletions.append(<Optional.None />) }
-        match self.semanticStatementCompletions[stmtId] {
-            Optional.Some(v: val prior) => {
-                if !semanticCompletionOwnersEqual(recorded: prior.owner, prepared: fact.owner) { panic("internal error: statement fact changed its source owner") }
-            }
-            Optional.None => {}
-        }
-        self.semanticStatementCompletions.set(i: stmtId, value: <Optional.Some v=fact />)
     }
 }

@@ -127,15 +127,15 @@ impl Comp {
             Optional.Some(v: val saved) => { return saved == root }
             Optional.None => {}
         }
-        if self.lexicalBodyPreparations.get(key: owner).isSome() || self.callTemplateBodyHeads.getOr(key: owner, fallback: 0U64) != 0U64 { return false }
+        if self.sourceFacts.outcome(owner: <SemanticCompletionOwner.Function index=owner />).isSome() || self.callTemplateBodyHeads.getOr(key: owner, fallback: 0U64) != 0U64 { return false }
         self.callTemplateLexicalRoots[owner] = root
         return true
     }
 }
 
 pub impl Comp {
-    fn lexicalBodyPreparationCount() -> U64 { return self.lexicalBodyPreparations.count() }
-    fn globalInitializerPreparationCount() -> U64 { return self.globalInitializerPreparations.count() }
+    fn lexicalBodyPreparationCount() -> U64 { return self.sourceFacts.functionRequests }
+    fn globalInitializerPreparationCount() -> U64 { return self.sourceFacts.globalRequests }
 }
 
 impl Comp {
@@ -148,7 +148,7 @@ impl Comp {
 
 impl Comp {
     inout fn recordGlobalCallTemplateOwner(templateIndex: U64) {
-        match self.callTemplateSourceOwners[templateIndex] {
+        match self.lexicalSourceFactOwner(owner: self.callTemplateSourceOwners[templateIndex]) {
             SemanticCompletionOwner.Global(target: val target) => {
                 mut val indices = self.globalCallTemplateOwners.getOr(key: target, fallback: [])
                 mut val present = false
@@ -157,6 +157,7 @@ impl Comp {
                 self.globalCallTemplateOwners[target] = indices
             }
             SemanticCompletionOwner.Function(index: _) => {}
+            SemanticCompletionOwner.Closure(expression: _) => { panic("internal error: closure call has no lexical parent") }
         }
     }
 

@@ -422,6 +422,7 @@ pub enum SemanticExpressionTypeState {
 pub enum SemanticCompletionOwner {
     Function(index: U64)
     Global(target: U64)
+    Closure(expression: U64)
 }
 pub struct SemanticExpressionCompletion {
     pub val owner: SemanticCompletionOwner

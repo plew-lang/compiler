@@ -1,0 +1,5 @@
+use /Frontend only { PreparedSemanticFacts }
+fn inspect(facts: PreparedSemanticFacts) {
+    val payload = facts.payload
+}
+fn main() {}

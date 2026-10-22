@@ -38,7 +38,7 @@ pub impl Comp {
     inout fn recordGlobalConversionOwner(index: U64) {
         match self.sourceRecordingOwner() {
             Optional.Some(v: val owner) => {
-                match owner {
+                match self.lexicalSourceFactOwner(owner: owner) {
                     SemanticCompletionOwner.Global(target: val target) => {
                         mut val indices = self.decls.globalDeclarationConversionOwners.getOr(key: target, fallback: [])
                         for prior in indices { if prior == index { return } }
@@ -349,7 +349,8 @@ pub impl Comp {
     }
 
     inout fn checkSourceConversionEvidence(owner: SemanticCompletionOwner) -> Result[(), CompileDiagnostic] {
-        val indices = match owner {
+        val indices = match self.lexicalSourceFactOwner(owner: owner) {
+            SemanticCompletionOwner.Closure(expression: val expression) => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "internal error: closure has no lexical fact parent") /> }
             SemanticCompletionOwner.Function(index: val function) => { give self.decls.declarationConversionOwners.getOr(key: function, fallback: []) }
             SemanticCompletionOwner.Global(target: val target) => { give self.decls.globalDeclarationConversionOwners.getOr(key: target, fallback: []) }
         }

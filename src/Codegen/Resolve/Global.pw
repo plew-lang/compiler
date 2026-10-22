@@ -62,7 +62,7 @@ pub impl Comp {
 
 
     fn globalInitializerPrepared(target: U64) -> Bool {
-        match self.globalInitializerPreparations.get(key: target) {
+        match self.sourceFacts.outcome(owner: <SemanticCompletionOwner.Global target=target />) {
             Optional.Some(v: val result) => {
                 match result { Result.Ok(value: _) => { return true } Result.Err(error: _) => {} }
             }
@@ -72,7 +72,7 @@ pub impl Comp {
     }
 
     fn globalInitializerConstructionClosed(target: U64) -> Bool {
-        return self.globalInitializerPreparations.contains(key: target)
+        return self.sourceFacts.outcome(owner: <SemanticCompletionOwner.Global target=target />).isSome()
     }
 
     inout fn selectReferencedGlobal(exprId: U64) {
@@ -170,14 +170,16 @@ pub impl Comp {
     }
 
     inout fn prepareGlobalInitializer(target: U64) -> Result[(), CompileDiagnostic] {
-        match self.globalInitializerPreparations.get(key: target) {
+        match self.sourceFacts.outcome(owner: <SemanticCompletionOwner.Global target=target />) {
             Optional.Some(v: val result) => { return result }
             Optional.None => {}
         }
+        val owner = <SemanticCompletionOwner.Global target=target />
+        if !self.sourceFacts.begin(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: target, msg: "internal error: cyclic global source preparation") /> }
         val saved = self.cur
         val result = self.prepareGlobalInitializerUncached(target: target)
         self.cur = saved
-        self.globalInitializerPreparations[target] = result
+        self.finishSourceFacts(owner: owner, result: result)
         return result
     }
 
@@ -212,8 +214,8 @@ pub impl Comp {
         if exprId >= self.typeCache.identBind.count() || exprId >= self.typeCache.identTarget.count() { return <Optional.None /> }
         if self.typeCache.identBind[exprId] != identValueCode() { return <Optional.None /> }
         val target = self.typeCache.identTarget[exprId]
-        if exprId >= self.semanticExprRecords.count() { return <Optional.None /> }
-        val term = self.semanticExprRecords[exprId].expression.term
+        if exprId >= self.arena.exprs.count() { return <Optional.None /> }
+        val term = self.constructionExpression(exprId: exprId).term
         if term == 0U64 || term >= self.arena.typeCount() { return <Optional.None /> }
         mut val index: U64 = 0U64
         while index < self.arena.globals.count() {

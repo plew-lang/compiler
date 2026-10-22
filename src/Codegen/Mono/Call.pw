@@ -1371,7 +1371,7 @@ pub impl Comp {
                 // decision in the first phase; defer it rather than reopening
                 // Expr syntax.  Once Record allocated the full table, a
                 // missing site is an invariant violation.
-                if self.semanticExprRecords.count() < self.arena.exprs.count() { return <Result.Ok value=() /> }
+                if !self.semanticRecordingStarted { return <Result.Ok value=() /> }
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: operator CallTemplate was not recorded") />
             }
         }
@@ -4477,12 +4477,14 @@ pub impl Comp {
     // lowering. Access only connects that occurrence's saved local to the
     // finalized key/owner type; it does not interpret value-expression syntax.
     inout fn freezeFinalAccessValue(facts: PreparedSemanticFacts, exprId: U64) -> Result[U64, CompileDiagnostic] {
+        try self.requireSourceFactsSession(facts: facts)
         if exprId >= self.arena.exprs.count() { return <Result.Ok value=0U64 /> }
         self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=8U64 sourceExpr=exprId typeTerm=(try self.requiredAccessExpression(facts: facts, exprId: exprId)).term />)
         return <Result.Ok value=self.arena.semanticAccessInputs.count() />
     }
 
     inout fn freezeFinalAccessInput(bodyId: U64, parent: CallResolution, facts: PreparedSemanticFacts, exprId: U64) -> Result[U64, CompileDiagnostic] {
+        try self.requireSourceFactsSession(facts: facts)
         if exprId >= self.arena.exprs.count() { return <Result.Ok value=0U64 />}
         val term: U64 = (try self.requiredAccessExpression(facts: facts, exprId: exprId)).term
         // A lowered Index.index call is the value result of the candidate,
@@ -4561,6 +4563,7 @@ pub impl Comp {
     // Root is represented explicitly so Mid does not need the candidate's
     // read Expr as an ambient convention.
     inout fn freezeFinalAccessProjection(facts: PreparedSemanticFacts, rootExpr: U64, exprId: U64) -> Result[U64, CompileDiagnostic] {
+        try self.requireSourceFactsSession(facts: facts)
         if exprId == rootExpr {
             self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=4U64 typeTerm=(try self.requiredAccessExpression(facts: facts, exprId: rootExpr)).term />)
             return <Result.Ok value=self.arena.semanticAccessInputs.count() />
@@ -5067,6 +5070,8 @@ impl Comp {
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: closure.exprId, msg: "internal error: closure declaration has no source preparation owner") /> }
         }
         try self.requireBuildingClosureOwner(owner: owner, offset: self.exprOffset(id: closure.exprId))
+        val builder = self.sourceFacts.builder(owner: owner)
+        builder->data.putClosure(closure: closure)
         val prior: U64 = (try self.semanticClosureIndex(ownerFnIdx: closure.ownerFnIdx, exprId: closure.exprId))
         if prior < self.semanticClosures.count() {
             try self.requireBuildingClosureOwner(owner: self.semanticClosureOwners[prior], offset: self.exprOffset(id: closure.exprId))
@@ -5120,7 +5125,11 @@ impl Comp {
         val local = try self.typedLocal(index: localIndex)
         if local.isGlobal { return <Result.Ok value=() /> }
         val index = self.cur.recordClosureIndex - 1U64
-        val closure = self.semanticClosures[index]
+        val declaration = self.semanticClosures[index]
+        val closure = match self.constructionClosure(owner: self.semanticClosureOwners[index], exprId: declaration.exprId) {
+            Optional.Some(v: val closure) => closure
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: declaration.exprId), msg: "internal error: capture has no construction plan") /> }
+        }
         try self.requireBuildingClosureOwner(owner: self.semanticClosureOwners[index], offset: self.exprOffset(id: closure.exprId))
         mut val captures = closure.captures
         mut val i = 0U64
@@ -5131,21 +5140,21 @@ impl Comp {
         val boxed = try self.checkedCaptureCell(lo: local)
         val mode = if boxed { give <SemanticClosureCaptureMode.CellBorrow /> } else { give <SemanticClosureCaptureMode.ValueCopy /> }
         captures.append(<SemanticClosureCapture bindingTarget=local.nameStart nameLen=local.nameLen typeTerm=local.ty mode=mode />)
-        self.semanticClosures.set(i: index, value: <SemanticClosure ownerFnIdx=closure.ownerFnIdx exprId=closure.exprId bodyKey=closure.bodyKey functionTypeTerm=closure.functionTypeTerm bodyBlock=closure.bodyBlock parameters=closure.parameters hasReturn=closure.hasReturn returnTypeTerm=closure.returnTypeTerm captures=captures />)
+        val builder = self.sourceFacts.builder(owner: self.semanticClosureOwners[index])
+        builder->data.putClosure(closure: <SemanticClosure ownerFnIdx=closure.ownerFnIdx exprId=closure.exprId bodyKey=closure.bodyKey functionTypeTerm=closure.functionTypeTerm bodyBlock=closure.bodyBlock parameters=closure.parameters hasReturn=closure.hasReturn returnTypeTerm=closure.returnTypeTerm captures=captures />)
         return <Result.Ok value=() />
     }
 }
 
 pub impl Comp {
     inout fn preparedSemanticClosureAt(index: U64) -> Result[SemanticClosure, CompileDiagnostic] {
-        if index >= self.semanticClosures.count() || index >= self.semanticClosureOwners.count() {
-            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: closure declaration has no source preparation owner") />
+        if index >= self.semanticClosures.count() || index >= self.semanticClosureOwners.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: closure declaration has no source preparation owner") /> }
+        val declaration = self.semanticClosures[index]
+        val facts = try self.preparedSemanticFacts(owner: self.semanticClosureOwners[index])
+        match facts.payload->closure(exprId: declaration.exprId) {
+            Optional.Some(v: val closure) => { return <Result.Ok value=closure /> }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: declaration.exprId), msg: "internal error: closure construction owner has no checked plan") /> }
         }
-        val closure = self.semanticClosures[index]
-        if !(try self.semanticCompletionOwnerPrepared(owner: self.semanticClosureOwners[index])) {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure source owner is not prepared") />
-        }
-        return <Result.Ok value=closure />
     }
 
     // Finalization freezes the closure ABI under the same lexical instance
@@ -6116,7 +6125,7 @@ impl Comp {
     inout fn preparedAccessUseFacts(use: AccessUse, parent: CallResolution) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
         val global: Optional[U64] = match use.sourceOwner {
             SemanticCompletionOwner.Global(target: val target) => <Optional.Some v=target />
-            SemanticCompletionOwner.Function(index: _) => <Optional.None />
+            SemanticCompletionOwner.Function(index: _) | SemanticCompletionOwner.Closure(expression: _) => <Optional.None />
         }
         val owner = try self.bodySourceOwner(bodyId: parent.bodyId, globalInitializerTarget: global)
         if !semanticCompletionOwnersEqual(recorded: use.sourceOwner, prepared: owner) {
@@ -6146,7 +6155,7 @@ impl Comp {
             if index >= self.semanticClosureOwners.count() {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "internal error: closure body has no source owner") />
             }
-            return <Result.Ok value=self.semanticClosureOwners[index] />
+            return <Result.Ok value=<SemanticCompletionOwner.Closure expression=expression /> />
         }
         if root != 18446744073709551615U64 {
             return <Result.Ok value=<SemanticCompletionOwner.Function index=root /> />
@@ -6169,19 +6178,10 @@ pub impl Comp {
     // reader is only for that composite source body, never a single RHS.
     inout fn preparedDeclarationMatch(sourceFunction: U64, matchSource: MatchSource) -> Result[Optional[SemanticMatch], CompileDiagnostic] {
         val source = try self.semanticBodyOwner(fnIdx: sourceFunction)
-        val index = try self.semanticMatchIndex(ownerFnIdx: source, matchSource: matchSource)
-        if index >= self.semanticMatches.count() { return <Result.Ok value=<Optional.None /> /> }
-        mut val target: Optional[U64] = <Optional.None />
-        if sourceFunction == 18446744073709551615U64 {
-            match self.semanticMatches[index].owner {
-                SemanticCompletionOwner.Global(target: val declared) => {
-                    if self.globalIndexForDeclarationTarget(target: declared) >= self.arena.globals.count() { return <Result.Ok value=<Optional.None /> /> }
-                    target = <Optional.Some v=declared />
-                }
-                _ => { return <Result.Ok value=<Optional.None /> /> }
-            }
+        val owner = match self.sourceFacts.matchOwner(source: matchSource) {
+            Optional.Some(v: val owner) => owner
+            Optional.None => { return <Result.Ok value=<Optional.None /> /> }
         }
-        val owner = try self.sourceFunctionOwner(fnIdx: sourceFunction, globalInitializerTarget: target)
         val facts = try self.preparedSemanticFacts(owner: owner)
         return <Result.Ok value=facts.pattern(ownerFnIdx: source, matchSource: matchSource) />
     }
