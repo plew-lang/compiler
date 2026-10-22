@@ -164,6 +164,9 @@ The `95bd11cb` fresh compiler source check passed. Its AOT slice passed the thre
 initial new controls plus retained call-result/substitution/proof/private-provided
 controls before stopping on operator_literal_nested's stale zero-source conversion.
 Its generation gate passed 23 positives and five rejects, failing directiveargs.
-The above pending/nominal fixes address those findings; their fresh product
-rechecks are pending. Full operation storage, callee-evidence and remaining
+The pending/nominal fixes pass fresh compiler source checking, fifteen AOT
+controls and the full generation gate (24 positives / five rejects) at 699a9c59.
+The 8cd5172f row-refinement follow-up also passes fresh whole-source checking,
+eight AOT controls and eight existing rejects, including identity/boxing
+conversion completion. Formal fixed-point/performance validation is in progress. Full operation storage, callee-evidence and remaining
 Verify/operator/iteration selector migration are still open.
