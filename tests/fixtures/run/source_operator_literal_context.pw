@@ -10,7 +10,8 @@ fn comparison(value: I64) -> Bool { return 0 < value }
 fn main() {
     mut val compiler = <Comp />
     val resources = [
-        <SourceResource path="plew:std/Lang.pw".bytes() text="pub trait Sub[Rhs] {{ type Output assoc fn sub(lhs~: Self, rhs~: Rhs) -> Output }} pub impl I64 as Sub[I64] {{ type Output = I64 assoc fn sub(lhs~: I64, rhs~: I64) -> I64 {{ return lhs }} }}" />,
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64 }}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 }} pub trait Sub[Rhs] {{ type Output assoc fn sub(lhs~: Self, rhs~: Rhs) -> Output }} pub impl I64 as Sub[I64] {{ type Output = I64 assoc fn sub(lhs~: I64, rhs~: I64) -> I64 {{ return lhs }} }}" />,
         <SourceResource path="plew:std/OperatorProbe.pw".bytes() text="fn probe(value: I64) -> I64 {{ return 0 - value }}" />,
     ]
     analyzeFrontendForRequests(c: inout compiler,
