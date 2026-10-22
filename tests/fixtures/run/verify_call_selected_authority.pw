@@ -47,10 +47,30 @@ fn check(source: String) {
     }
 }
 
+fn checkReceiver(source: String, message: String) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="selected-receiver.pw" text=source />,
+        sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    match compiler.prepareLexicalBody(fnIdx: owner) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != message { panic(diagnostic.message) }
+        }
+        Result.Ok(value: _) => { panic("invalid selected receiver accepted") }
+    }
+}
+
 fn main() {
     check(source: "struct Box {{ val number: I64 }} impl Box {{ fn read() -> I64 {{ return self.number }} }} fn probe(value: Box) -> I64 {{ return value.read() }}")
     check(source: "trait Read {{ fn read() -> I64 }} struct Box {{ val number: I64 }} impl Box as Read {{ fn read() -> I64 {{ return self.number }} }} fn probe(value: Box) -> I64 {{ return value#Read.read() }}")
     check(source: "struct Box {{}} impl Box {{ assoc fn read() -> I64 {{ return 1I64 }} }} fn probe() -> I64 {{ return Box.read() }}")
+    checkReceiver(source: "struct Box {{}} impl Box {{ inout fn change() {{}} }} fn probe(value: Box) {{ value.change() }}",
+        message: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
+    checkReceiver(source: "trait Change {{ inout fn change() }} struct Box {{}} impl Box as Change {{ inout fn change() {{}} }} fn probe(value: Box) {{ value#Change.change() }}",
+        message: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
+    checkReceiver(source: "struct Box {{}} impl Box {{ inout fn change() {{}} }} fn probe() {{ <Box />.change() }}",
+        message: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)")
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler,
         input: <FrontendInput.Text path="selected-global.pw" text="struct Box {{}} impl Box {{ assoc fn read() -> I64 {{ return 1I64 }} }} val stored = Box.read()" />,
