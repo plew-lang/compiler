@@ -1,6 +1,6 @@
 ---
 id: met-ucze
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-13T01:40:08Z
@@ -125,5 +125,45 @@ New generic_call_selected_authority poisons only the method's diagnostic AST nam
 after construction while retaining its CallSiteKey: compatibility must use the
 selected requirement, add no operation, and reject a deliberately missing saved
 selection. Ordinary/generic/provided/default/closure/global AOT/JIT/gen and full
-signature rejection controls remain required. This WIP has not been built yet;
+signature rejection controls remain required. Fresh builds and whole compiler-source checks now succeed at `699a9c59`;
 normal verification of the preceding 0793cf02 snapshot is independent.
+
+## Construction-Order Findings and Validation Boundary
+
+Enabling the first operation-construction walk exposes dependencies on the old
+second walk. Repair the owning producer rather than restore a global repair walk:
+
+- An untyped numeric receiver such as `0 - typedValue` obtains only its permitted
+  integer literal context before selection. A typed receiver's selected signature
+  still owns Rhs context; heterogeneous operators are not forced homogeneous.
+  Retain source result projections, particularly Ord's Ordering -> Bool.
+- The second nominal-field visit must use the same constructionFieldContext as
+  the first. Diagnostic inspection of SourceFacts.setState found a spurious
+  conversion from SourceBodyState to Optional's unbound `T@39`; the completed
+  expression still had SourceBodyState. Do not treat omitted declaration binders
+  as rigid lexical context.
+- Synthetic nominal Make nodes may have a selected name and no annotation term.
+  Resolve that nominal term before field context and aggregate publication. The
+  existing generation directiveargs control exposed the missing aggregate in its
+  synthesized main; no gen-specific bypass or fabricated aggregate is introduced.
+- A conversion requested while its source term is zero is an explicit builder
+  dependency (pendingSource), not failed final evidence. Complete it from the
+  recorded expression fact after default/type refinement and before call closure
+  and owner publication. Never re-infer source syntax in the final reader. Both
+  evidence admission and Mono reject pending requests; post-outcome conversion
+  construction is rejected. Known incompatible evidence remains rejected.
+
+New controls: generic_call_selected_authority, source_operator_literal_context,
+inferred_enum_argument_source_owner and pending_source_conversion_completion.
+The pending-request control and unchanged declaration_conversion_closure reject
+control pass when current compiler source is compiled into the fixture with the
+stable storage-publication carrier. This source-probe evidence is distinct from
+testing the fresh compiler executable.
+
+The `95bd11cb` fresh compiler source check passed. Its AOT slice passed the three
+initial new controls plus retained call-result/substitution/proof/private-provided
+controls before stopping on operator_literal_nested's stale zero-source conversion.
+Its generation gate passed 23 positives and five rejects, failing directiveargs.
+The above pending/nominal fixes address those findings; their fresh product
+rechecks are pending. Full operation storage, callee-evidence and remaining
+Verify/operator/iteration selector migration are still open.
