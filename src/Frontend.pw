@@ -186,9 +186,7 @@ pub struct Comp {
     mut val callTemplateOperandPool: Array[CallArgumentSource] = []
     mut val callTemplateViewPool: Array[ResolvedViewSource] = []
     mut val callTemplateIndexSlots: Array[U64] = []
-    mut val callTemplates: Array[CallTemplate] = []
-    mut val callTemplateSourceOwners: Array[SemanticCompletionOwner] = []
-    mut val selectedCallConstraints: Dictionary[U64, CallConstraintPlanState]
+    mut val callTemplateLocations: Array[SourceCallLocation]
     // Nonfatal diagnostics remain owned by the compilation/session. Only the
     // driver decides how to display them; requesting a body emits no process IO.
     pub mut val pendingDiagnostics: Array[CompileDiagnostic] = []
@@ -378,7 +376,7 @@ pub impl IntTy { factory }
 
 pub impl Comp {
     // External construction starts a fresh session, never an injected success store.
-    factory(arena: Arena = <Arena />) { return <Comp arena=arena selectedCallConstraints=[:] /> }
+    factory(arena: Arena = <Arena />) { return <Comp arena=arena callTemplateLocations=[] /> }
     // Append a file's source bytes onto the arena's combined byte buffer (the loader
     // builds it incrementally: each file's bytes are appended before its items are
     // lowered, so original-offset name spans resolve into it).
@@ -2173,28 +2171,16 @@ fn patternDiagOffset(c: inout Comp, a: PatInfo) -> U64 {
 
 // Index lookup depends only on source call rows and their collision table.
 // Keep the whole compilation session out of this read-only operation.
-fn findSourceCallTemplateIndex(templates: Array[CallTemplate], indexSlots: Array[U64], siteKey: CallSiteKey) -> U64 {
-    val capacity: U64 = indexSlots.count()
-    if capacity == 0U64 { return templates.count() }
-    mut val slot: U64 = siteKey.lookupHash() % capacity
+fn findSourceCallTemplateIndex(locations: Array[SourceCallLocation], indexSlots: Array[U64], siteKey: CallSiteKey) -> U64 {
+    val capacity = indexSlots.count()
+    if capacity == 0U64 { return locations.count() }
+    mut val slot = siteKey.lookupHash() % capacity
     while indexSlots[slot] != 0U64 {
-        val entry: U64 = indexSlots[slot] - 1U64
-        if templates[entry].siteKey.sameKey(other: siteKey) { return entry }
+        val entry = indexSlots[slot] - 1U64
+        if locations[entry].siteKey.sameKey(other: siteKey) { return entry }
         slot = (slot + 1U64) % capacity
     }
-    return templates.count()
-}
-
-fn sourceCallConstraintPlan(states: Dictionary[U64, CallConstraintPlanState], index: U64) -> Optional[SelectedCallConstraints] {
-        match states.get(key: index) {
-            Optional.Some(v: val state) => {
-                match state {
-                    CallConstraintPlanState.Building(plan: val plan) => { return <Optional.Some v=plan /> }
-                    CallConstraintPlanState.Prepared(snapshot: val snapshot) => { return <Optional.Some v=snapshot.constraints() /> }
-                }
-            }
-            Optional.None => { return <Optional.None /> }
-        }
+    return locations.count()
 }
 
 pub impl Comp {
@@ -2270,8 +2256,33 @@ struct SourceExpressionHead {
 }
 impl SourceExpressionHead { factory }
 
+// The session directory navigates identities only. Meaning and constraint
+// state live in the referenced owner's private builder or sealed payload.
+struct SourceCallLocation {
+    val owner: SemanticCompletionOwner
+    val siteKey: CallSiteKey
+    val localIndex: U64
+}
+impl SourceCallLocation { factory }
+
+struct SourceOperationRow {
+    val template: CallTemplate
+    val constraints: Optional[CallConstraintPlanState] = <Optional.None />
+}
+impl SourceOperationRow { factory }
+
+fn readSourceOperationTemplate(rows: Array[SourceOperationRow], index: U64) -> Optional[CallTemplate] {
+    if index >= rows.count() { return <Optional.None /> }
+    return <Optional.Some v=rows[index].template />
+}
+fn readSourceOperationConstraints(rows: Array[SourceOperationRow], index: U64) -> Optional[CallConstraintPlanState] {
+    if index >= rows.count() { return <Optional.None /> }
+    return rows[index].constraints
+}
+
 struct SourceBodyData {
     val owner: SemanticCompletionOwner
+    mut val operations: Array[SourceOperationRow] = []
     mut val parent: Optional[SemanticCompletionOwner] = <Optional.None />
     mut val expressions: Array[SemanticExprType] = []
     mut val expressionKeys: Dictionary[U64, U64] = [:]
@@ -2404,6 +2415,7 @@ pub struct PreparedSemanticFacts {
 impl PreparedSemanticFacts { factory }
 pub impl PreparedSemanticFacts {
     fn belongsToSession(session: U64) -> Bool { return self.session == session }
+    fn operationAt(index: U64) -> Optional[CallTemplate] { return readSourceOperationTemplate(rows: self.payload->operations, index: index) }
     fn expression(exprId: U64) -> Optional[SemanticExprType] { return readSourceRow(rows: self.payload->expressions, keys: self.payload->expressionKeys, key: exprId) }
     fn valueBlock(blockId: U64) -> Optional[SourceValueBlockFact] { return self.payload->valueBlocks.get(key: blockId) }
     fn identifierTarget(exprId: U64) -> Optional[U64] { return self.payload->identifierTargets.get(key: exprId) }

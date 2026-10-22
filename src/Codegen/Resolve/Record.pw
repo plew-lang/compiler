@@ -297,9 +297,9 @@ pub impl Comp {
         if next.kind != 2U64 || !self.sameCallSiteKey(a: next.callSite, b: site) || payload.kind != 4U64 || payload.input != recipe.nextRecipe {
             return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: for source type recipe belongs to another operation") />
         }
-        val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: site)
-        if index < self.callTemplates.count() {
-            match self.callTemplates[index].kind {
+        val index = self.callTemplateIndex(siteKey: site)
+        if index < self.callTemplateLocations.count() {
+            match self.callTemplateAt(index: index).kind {
                 CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: val result) => {
                     match selection {
                         ProtocolSelection.Pending | ProtocolSelection.Identity => { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: for next operation has no selected callable") /> }
@@ -402,9 +402,9 @@ pub impl Comp {
     // families use this boundary once their lexical candidates are exhausted.
     inout fn recordedCallIsSelected(exprId: U64) -> Result[Bool, CompileDiagnostic] {
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
-        val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: site)
-        if index >= self.callTemplates.count() { return <Result.Ok value=false /> }
-        match self.callTemplates[index].kind {
+        val index = self.callTemplateIndex(siteKey: site)
+        if index >= self.callTemplateLocations.count() { return <Result.Ok value=false /> }
+        match self.callTemplateAt(index: index).kind {
             CallTemplateKind.Pending => { return <Result.Ok value=false /> }
             CallTemplateKind.ExpectedValue => { return <Result.Ok value=false /> }
             _ => { return <Result.Ok value=true /> }

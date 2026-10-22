@@ -343,3 +343,36 @@ Declaration evidence reconstruction with the saved selected-call evidence.
 Legitimate first concrete witness formation for an abstract requirement remains
 separate from selecting source syntax again. This plan refines the adopted
 checked-body-storage design without changing language semantics or runtime ABI.
+
+
+## Owner Operation Storage Implementation (WIP)
+
+SourceBodyData owns SourceOperationRow (CallTemplate plus construction/prepared
+constraint state). The session callTemplateLocations stores only CallSiteKey,
+SemanticCompletionOwner and dense local index. Argument/type/operand/view pools
+remain append-only session ranges. The former global callTemplates,
+callTemplateSourceOwners and selectedCallConstraints semantic stores are removed.
+All source, declaration, Mono and Mid callers now read owner rows; rebuilding an
+index uses identity metadata only. Production callTemplateSnapshot scanning is
+removed; the explicit snapshot remains a diagnostic/test inspection copy.
+
+PreparedSemanticFacts exposes a bounded local operation reader over the retained
+immutable payload. Construction mutation checks owner closure and exact site;
+constraint publication still consumes the admitted value before source success.
+Readonly operation queries do not require a mutable compiler merely to read an
+immutable artifact. Verify Comp forks and failed-owner isolation rather than
+sharing a mutable Ref across copies.
+
+The source-imported controls pass publication, retained reader stability, foreign
+session rejection, Comp builder branching, global constraint corruption, selected
+call authority and iteration authority. A diagnostic-continuation control exposed
+a previously overbroad global default-completion walk: a lazy global request must
+complete only its own retained call indices. That repair passes the original
+failure/retry/unrelated-global/cursor expectations unchanged. Origin fallback
+navigation also compares navigation keys before opening a payload; failed
+unrelated owners have no semantic rows to inspect.
+
+These controls compile current algorithms through /Frontend with the previous
+fixed carrier. A fresh compiler, formal cost and full current-candidate gates are
+still required. Exact callee evidence transfer is the next semantic increment;
+physical storage alone does not certify it or phase-three completion.

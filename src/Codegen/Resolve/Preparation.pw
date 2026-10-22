@@ -40,7 +40,7 @@ impl Comp {
         try self.enterGlobalInitializer(target: target)
         try self.verifyStmt(stmtId: stmt)
         self.cur.recordCallTemplates = false
-        if (try self.completeRecordedDefaultCalls()) != 0U64 {
+        if (try self.completeRecordedGlobalDefaultCalls(target: target)) != 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: target, msg: "internal error: global default argument plans are incomplete") />
         }
         try self.completeSourceConversions(owner: <SemanticCompletionOwner.Global target=target />)
@@ -58,7 +58,7 @@ impl Comp {
     // This is a source-stable conservative summary, not a mutable result of a
     // later analysis. Only the successful construction tail may publish it.
     inout fn finalizeSourceCallStorage(index: U64) -> Bool {
-        val template = self.callTemplates[index]
+        val template = self.callTemplateAt(index: index)
         val required = self.recordedCallHasStorageArguments(kind: template.kind)
         if !required {
             self.replaceSourceCallTemplate(index: index, template: <CallTemplate siteKey=template.siteKey resultTypeRecipe=template.resultTypeRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm mayHaveStorageArguments=false />)
@@ -71,7 +71,7 @@ impl Comp {
         mut val row = self.firstLexicalCallTemplate(owner: owner)
         while row != 0U64 {
             val index = row - 1U64
-            val sourceOwner = self.callTemplates[index].siteKey.ownerFnIdx
+            val sourceOwner = self.callTemplateAt(index: index).siteKey.ownerFnIdx
             if !required.getOr(key: sourceOwner, fallback: false) {
                 if self.finalizeSourceCallStorage(index: index) { required[sourceOwner] = true }
             }
@@ -84,7 +84,7 @@ impl Comp {
     inout fn finalizeGlobalCallStorage(target: U64) {
         mut val required: Dictionary[U64, Bool] = [:]
         for index in self.globalCallTemplateOwners.getOr(key: target, fallback: []) {
-            val sourceOwner = self.callTemplates[index].siteKey.ownerFnIdx
+            val sourceOwner = self.callTemplateAt(index: index).siteKey.ownerFnIdx
             if !required.getOr(key: sourceOwner, fallback: false) {
                 if self.finalizeSourceCallStorage(index: index) { required[sourceOwner] = true }
             }

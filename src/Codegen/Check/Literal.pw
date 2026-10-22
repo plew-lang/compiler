@@ -352,9 +352,9 @@ pub impl Comp {
         mut val parameterRef = 0U64
         mut val recorded = false
         val key = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
-        val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: key)
-        if index < self.callTemplates.count() {
-            val template = self.callTemplates[index]
+        val index = self.callTemplateIndex(siteKey: key)
+        if index < self.callTemplateLocations.count() {
+            val template = self.callTemplateAt(index: index)
             match template.kind {
                 CallTemplateKind.Operator(op: _, operands: _, resolution: _, resultTerm: _) => {
                     parameterRef = try self.sourceOperatorParameter(template: template, index: 1U64)

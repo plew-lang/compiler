@@ -406,11 +406,11 @@ pub impl Comp {
         // used by checkSourceMethodVisibility, and from synthetic identity.
         val offset = self.exprOffset(id: exprId)
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
-        val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: site)
-        if index >= self.callTemplates.count() {
+        val index = self.callTemplateIndex(siteKey: site)
+        if index >= self.callTemplateLocations.count() {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: method validation has no recorded source selection") />
         }
-        val template = self.callTemplates[index]
+        val template = self.callTemplateAt(index: index)
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
                 if callee >= self.arena.functionCount() {

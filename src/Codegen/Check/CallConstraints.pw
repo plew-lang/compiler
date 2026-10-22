@@ -5,26 +5,33 @@
 // retained constraint evidence merely to decide whether writing is allowed.
 pub impl Comp {
     fn selectedCallConstraintPlan(index: U64) -> Optional[SelectedCallConstraints] {
-        return sourceCallConstraintPlan(states: self.selectedCallConstraints, index: index)
+        match self.sourceOperationConstraints(index: index) {
+            Optional.Some(v: val state) => {
+                match state {
+                    CallConstraintPlanState.Building(plan: val plan) => { return <Optional.Some v=plan /> }
+                    CallConstraintPlanState.Prepared(snapshot: val snapshot) => { return <Optional.Some v=snapshot.constraints() /> }
+                }
+            }
+            Optional.None => {}
+        }
+        return <Optional.None />
     }
 
     inout fn recordBuildingCallConstraints(index: U64, plan: SelectedCallConstraints) -> Bool {
-        if index >= self.callTemplateSourceOwners.count() { return false }
-        if self.sourceOwnerConstructionClosed(owner: self.callTemplateSourceOwners[index]) { return false }
-        self.selectedCallConstraints[index] = <CallConstraintPlanState.Building plan=plan />
-        return true
+        return self.storeBuildingOperationConstraints(index: index, state: <CallConstraintPlanState.Building plan=plan />)
     }
 
     fn preparedCallConstraints(index: U64) -> Optional[PreparedCallConstraints] {
-        match self.selectedCallConstraints.get(key: index) {
+        match self.sourceOperationConstraints(index: index) {
             Optional.Some(v: val state) => {
                 match state {
                     CallConstraintPlanState.Prepared(snapshot: val snapshot) => { return <Optional.Some v=snapshot /> }
-                    CallConstraintPlanState.Building(plan: _) => { return <Optional.None /> }
+                    CallConstraintPlanState.Building(plan: _) => {}
                 }
             }
-            Optional.None => { return <Optional.None /> }
+            Optional.None => {}
         }
+        return <Optional.None />
     }
 }
 
@@ -32,11 +39,11 @@ pub impl Comp {
 impl Comp {
     inout fn admitSelectedCallConstraints(templateIndex: U64) -> Result[AdmittedCallConstraints, CompileDiagnostic] {
         try self.checkRecordedCallConstraintEvidence(templateIndex: templateIndex)
-        val plan = match sourceCallConstraintPlan(states: self.selectedCallConstraints, index: templateIndex) {
+        val plan = match self.selectedCallConstraintPlan(index: templateIndex) {
             // Admission already checked this plan against its declaration scope.
             Optional.Some(v: val selected) => selected
             Optional.None => {
-                val template = self.callTemplates[templateIndex]
+                val template = self.callTemplateAt(index: templateIndex)
                 val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
                 give <SelectedCallConstraints owner=scope.owner bounds=[] proofs=[] />
             }
@@ -47,13 +54,15 @@ impl Comp {
     inout fn publishPreparedCallConstraints(admitted: AdmittedCallConstraints) {
         // The capability owns the exact admitted value; construction changes
         // cannot replace it between admission and whole-owner success.
-        self.selectedCallConstraints[admitted.templateIndex] = <CallConstraintPlanState.Prepared snapshot=<PreparedCallConstraints plan=admitted.plan /> />
+        if !self.storeBuildingOperationConstraints(index: admitted.templateIndex, state: <CallConstraintPlanState.Prepared snapshot=<PreparedCallConstraints plan=admitted.plan /> />) {
+            panic("internal error: cannot publish constraints after source owner completion")
+        }
     }
 
     inout fn admitRecordedBodyCallConstraints(owner: U64) -> Result[Array[AdmittedCallConstraints], CompileDiagnostic] {
         mut val admitted: Array[AdmittedCallConstraints] = []
         mut val row = self.firstLexicalCallTemplate(owner: owner)
-        while row != 0U64 && row <= self.callTemplates.count() {
+        while row != 0U64 && row <= self.callTemplateLocations.count() {
             val index = row - 1U64
             try self.checkCallTemplateSelection(templateIndex: index)
             admitted.append((try self.admitSelectedCallConstraints(templateIndex: index)))
@@ -76,21 +85,42 @@ impl Comp {
 
 pub impl Comp {
     fn callTemplateIndex(siteKey: CallSiteKey) -> U64 {
-        return findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: siteKey)
+        return findSourceCallTemplateIndex(locations: self.callTemplateLocations, indexSlots: self.callTemplateIndexSlots, siteKey: siteKey)
     }
 }
 
 
 pub impl Comp {
-    fn callTemplateCount() -> U64 { return self.callTemplates.count() }
-    fn callTemplateAt(index: U64) -> CallTemplate { return self.callTemplates[index] }
-    fn callTemplateSnapshot() -> Array[CallTemplate] { return self.callTemplates }
+    fn callTemplateCount() -> U64 { return self.callTemplateLocations.count() }
+    fn callTemplateAt(index: U64) -> CallTemplate {
+        val location = self.callTemplateLocations[index]
+        match self.sourceFacts.operation(owner: location.owner, index: location.localIndex) {
+            Optional.Some(v: val template) => {
+                if template.siteKey.sameKey(other: location.siteKey) { return template }
+            }
+            Optional.None => {}
+        }
+        panic("internal error: source operation navigation has no owner row")
+    }
+    // Explicit inspection copy for diagnostics/tests, never a body reader.
+    fn callTemplateSnapshot() -> Array[CallTemplate] {
+        mut val result: Array[CallTemplate] = []
+        mut val index = 0U64
+        while index < self.callTemplateLocations.count() {
+            result.append(self.callTemplateAt(index: index))
+            index += 1U64
+        }
+        return result
+    }
     // Construction API; successful source publication removes write authority.
     inout fn replaceBuildingCallTemplate(index: U64, template: CallTemplate) -> Bool {
-        if index >= self.callTemplates.count() || index >= self.callTemplateSourceOwners.count() { return false }
-        if self.sourceOwnerConstructionClosed(owner: self.callTemplateSourceOwners[index]) { return false }
-        if !self.callTemplates[index].siteKey.sameKey(other: template.siteKey) { return false }
-        self.callTemplates.set(i: index, value: template)
+        if index >= self.callTemplateLocations.count() { return false }
+        val location = self.callTemplateLocations[index]
+        if self.sourceOwnerConstructionClosed(owner: location.owner) || !location.siteKey.sameKey(other: template.siteKey) { return false }
+        self.sourceFacts.activate(owner: location.owner)
+        if location.localIndex >= self.sourceFacts.activeBuilder.data.operations.count() { return false }
+        val prior = self.sourceFacts.activeBuilder.data.operations[location.localIndex]
+        self.sourceFacts.activeBuilder.data.operations.set(i: location.localIndex, value: <SourceOperationRow template=template constraints=prior.constraints />)
         return true
     }
 }
@@ -141,7 +171,7 @@ impl Comp {
 
 impl Comp {
     inout fn recordGlobalCallTemplateOwner(templateIndex: U64) {
-        match self.lexicalSourceFactOwner(owner: self.callTemplateSourceOwners[templateIndex]) {
+        match self.lexicalSourceFactOwner(owner: self.callTemplateLocations[templateIndex].owner) {
             SemanticCompletionOwner.Global(target: val target) => {
                 mut val indices = self.globalCallTemplateOwners.getOr(key: target, fallback: [])
                 mut val present = false
@@ -155,7 +185,7 @@ impl Comp {
     }
 
     inout fn indexLexicalCallTemplate(templateIndex: U64) {
-        val owner = self.callTemplates[templateIndex].siteKey.ownerFnIdx
+        val owner = self.callTemplateLocations[templateIndex].siteKey.ownerFnIdx
         val root = self.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
         val tail = self.callTemplateBodyTails.getOr(key: root, fallback: 0U64)
         self.callTemplateBodyNext.append(0U64)
@@ -167,4 +197,23 @@ impl Comp {
         self.callTemplateBodyTails[root] = templateIndex + 1U64
     }
 
+}
+
+
+impl Comp {
+    fn sourceOperationConstraints(index: U64) -> Optional[CallConstraintPlanState] {
+        if index >= self.callTemplateLocations.count() { return <Optional.None /> }
+        val location = self.callTemplateLocations[index]
+        return self.sourceFacts.operationConstraints(owner: location.owner, index: location.localIndex)
+    }
+    inout fn storeBuildingOperationConstraints(index: U64, state: CallConstraintPlanState) -> Bool {
+        if index >= self.callTemplateLocations.count() { return false }
+        val location = self.callTemplateLocations[index]
+        if self.sourceOwnerConstructionClosed(owner: location.owner) { return false }
+        self.sourceFacts.activate(owner: location.owner)
+        if location.localIndex >= self.sourceFacts.activeBuilder.data.operations.count() { return false }
+        val prior = self.sourceFacts.activeBuilder.data.operations[location.localIndex]
+        self.sourceFacts.activeBuilder.data.operations.set(i: location.localIndex, value: <SourceOperationRow template=prior.template constraints=<Optional.Some v=state /> />)
+        return true
+    }
 }

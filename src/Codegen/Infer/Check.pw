@@ -177,9 +177,9 @@ pub impl Comp {
     // here is interpretation of its selected signature under its saved proof.
     inout fn recordedSourceOperator(exprId: U64, op: I64) -> Result[CallTemplate, CompileDiagnostic] {
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
-        val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: site)
-        if index < self.callTemplates.count() {
-            val template = self.callTemplates[index]
+        val index = self.callTemplateIndex(siteKey: site)
+        if index < self.callTemplateLocations.count() {
+            val template = self.callTemplateAt(index: index)
             match template.kind {
                 CallTemplateKind.Operator(op: val selected, operands: _, resolution: _, resultTerm: _) => {
                     if selected == op { return <Result.Ok value=template /> }

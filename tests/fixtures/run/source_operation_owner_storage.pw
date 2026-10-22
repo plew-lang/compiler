@@ -1,0 +1,49 @@
+// Operations and their constraints share the owner publication boundary.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplate, CallTemplateKind, SelectedCallConstraints }
+use @Std/Io only { print }
+
+fn owner(compiler: inout Comp, name: String) -> U64 {
+    return compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+}
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="operation-storage.pw" text="trait Q {{}} struct Bad {{}} fn identity(value: I64) -> I64 {{ return value }} fn first() -> I64 {{ return identity(value: 1I64) }} fn second() -> I64 {{ return identity(value: 2I64) }} fn constrained[T](value: T) -> I64 where T: Q {{ return 1I64 }} fn broken() -> I64 {{ return constrained(value: <Bad />) }}" />,
+        sources: <SourceAccess />).unwrap()
+    val first = owner(compiler: inout compiler, name: "first")
+    val second = owner(compiler: inout compiler, name: "second")
+    val broken = owner(compiler: inout compiler, name: "broken")
+    compiler.prepareLexicalBody(fnIdx: first).unwrap()
+    val reader = compiler.preparedFunctionSemanticFacts(fnIdx: first).unwrap()
+    val operation = reader.operationAt(index: 0U64).unwrap()
+    if operation.siteKey.ownerFnIdx != first || reader.operationAt(index: 1U64).isSome() { panic("reader crossed an owner boundary") }
+    val index = compiler.callTemplateIndex(siteKey: operation.siteKey)
+    if compiler.preparedCallConstraints(index: index).isNone() { panic("owner published without constraint admission") }
+    if compiler.replaceBuildingCallTemplate(index: index, template: operation) { panic("sealed operation writer survived") }
+    if compiler.recordBuildingCallConstraints(index: index, plan: <SelectedCallConstraints owner=first bounds=[] proofs=[] />) { panic("sealed constraint writer survived") }
+    compiler.recordParametricFunction(fnIdx: second, recordCallTemplates: true).unwrap()
+    val secondIndex = compiler.firstLexicalCallTemplate(owner: second) - 1U64
+    val secondOperation = compiler.callTemplateAt(index: secondIndex)
+    mut val fork = compiler
+    if !fork.replaceBuildingCallTemplate(index: secondIndex, template: <CallTemplate siteKey=secondOperation.siteKey kind=<CallTemplateKind.Pending /> />) { panic("missing fork writer") }
+    match compiler.callTemplateAt(index: secondIndex).kind {
+        CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {}
+        _ => { panic("fork mutated original operation builder") }
+    }
+    compiler.prepareLexicalBody(fnIdx: second).unwrap()
+    if !reader.operationAt(index: 0U64).unwrap().siteKey.sameKey(other: operation.siteKey) { panic("later publication changed retained reader") }
+    compiler.recordParametricFunction(fnIdx: broken, recordCallTemplates: true).unwrap()
+    val brokenIndex = compiler.firstLexicalCallTemplate(owner: broken) - 1U64
+    val brokenOperation = compiler.callTemplateAt(index: brokenIndex)
+    match compiler.prepareLexicalBody(fnIdx: broken) { Result.Err(error: _) => {} Result.Ok(value: _) => { panic("invalid bound accepted") } }
+    if compiler.replaceBuildingCallTemplate(index: brokenIndex, template: brokenOperation) { panic("failed owner retained an operation writer") }
+    if compiler.recordBuildingCallConstraints(index: brokenIndex, plan: <SelectedCallConstraints owner=broken bounds=[] proofs=[] />) { panic("failed owner retained a constraint writer") }
+    if compiler.preparedCallConstraints(index: brokenIndex).isSome() { panic("failed owner exposed prepared constraints") }
+    match compiler.preparedFunctionSemanticFacts(fnIdx: broken) { Result.Err(error: _) => {} Result.Ok(value: _) => { panic("failed owner published operations") } }
+    if !reader.operationAt(index: 0U64).unwrap().siteKey.sameKey(other: operation.siteKey) { panic("failure changed successful backing") }
+    mut val foreign = <Comp />
+    match foreign.requireSourceFactsSession(facts: reader) { Result.Err(error: _) => {} Result.Ok(value: _) => { panic("foreign session admitted operation reader") } }
+    print("ok")
+}

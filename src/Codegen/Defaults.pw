@@ -8,12 +8,12 @@ pub impl Comp {
     // Return the incomplete count so the pipeline cannot mistake a partial
     // completion for readiness to close its call graph.
     inout fn completeRecordedDefaultCalls() -> Result[U64, CompileDiagnostic] {
-        val limit = self.callTemplates.count()
+        val limit = self.callTemplateLocations.count()
         mut val incomplete: U64 = 0U64
         mut val index: U64 = 0U64
         while index < limit {
             tracePhaseProgress(c: inout self, label: "default-call-completion:template", count: index, stride: 64U64)
-            val template = self.callTemplates[index]
+            val template = self.callTemplateAt(index: index)
             if !(try self.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm)) {
                 incomplete += 1U64
                 tracePhaseCount(c: inout self, label: "default-call-completion:incomplete-owner", count: template.siteKey.ownerFnIdx)
@@ -26,14 +26,26 @@ pub impl Comp {
     // Complete one lexical request, including its closure calls. Freeze the
     // frontier: newly published zero-argument default calls are already whole.
     inout fn completeRecordedBodyDefaultCalls(owner: U64) -> Result[U64, CompileDiagnostic] {
-        val limit = self.callTemplates.count()
+        val limit = self.callTemplateLocations.count()
         mut val incomplete = 0U64
         mut val row = self.firstLexicalCallTemplate(owner: owner)
         while row != 0U64 && row <= limit {
             val index = row - 1U64
-            val template = self.callTemplates[index]
+            val template = self.callTemplateAt(index: index)
             if !(try self.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm)) { incomplete += 1U64 }
             row = self.callTemplateBodyNext[index]
+        }
+        return <Result.Ok value=incomplete />
+    }
+
+    // A lazy initializer request has no authority to inspect or complete
+    // another initializer's operations, especially a failed owner's rows.
+    inout fn completeRecordedGlobalDefaultCalls(target: U64) -> Result[U64, CompileDiagnostic] {
+        val indices = self.globalCallTemplates(target: target)
+        mut val incomplete = 0U64
+        for index in indices {
+            val template = self.callTemplateAt(index: index)
+            if !(try self.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm)) { incomplete += 1U64 }
         }
         return <Result.Ok value=incomplete />
     }
@@ -43,8 +55,8 @@ pub impl Comp {
     // recipe's result in the caller environment, never a fresh name lookup.
     // The parent row is published only once every parameter has an operand.
     inout fn completeRecordedCallableDefaults(templateIndex: U64, receiverTerm: U64) -> Result[Bool, CompileDiagnostic] {
-        if templateIndex >= self.callTemplates.count() { return <Result.Ok value=false />}
-        val template = self.callTemplates[templateIndex]
+        if templateIndex >= self.callTemplateLocations.count() { return <Result.Ok value=false />}
+        val template = self.callTemplateAt(index: templateIndex)
         val selected = match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val arguments, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
                 give (callee: callee, receiver: receiver, arguments: arguments, typeArgs: typeArgs, proof: self.thawStaticConformanceProof(id: proofId))
