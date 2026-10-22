@@ -75,19 +75,23 @@ pub impl Comp {
         return self.sourceFacts.outcome(owner: <SemanticCompletionOwner.Global target=target />).isSome()
     }
 
-    inout fn selectReferencedGlobal(exprId: U64) {
-        if !self.genMode { return }
-        match self.recordedGlobalAddress(exprId: exprId) {
+    // Executable reachability consumes the saved binding decision, including
+    // closure bodies and write-only places. It cannot use a construction cursor.
+    inout fn selectReferencedGlobal(exprId: U64, facts: PreparedSemanticFacts) -> Result[(), CompileDiagnostic] {
+        try self.requireSourceFactsSession(facts: facts)
+        if !self.genMode { return <Result.Ok value=() /> }
+        match facts.globalAddress(exprId: exprId) {
             Optional.Some(v: val address) => {
                 mut val index: U64 = 0U64
                 while index < self.selectedGlobalTargets.count() {
-                    if self.selectedGlobalTargets[index] == address.declarationTarget { return }
+                    if self.selectedGlobalTargets[index] == address.declarationTarget { return <Result.Ok value=() /> }
                     index += 1U64
                 }
                 self.selectedGlobalTargets.append(address.declarationTarget)
             }
             Optional.None => {}
         }
+        return <Result.Ok value=() />
     }
 
     inout fn globalIndexAtUse(start: U64, len: U64) -> U64 {

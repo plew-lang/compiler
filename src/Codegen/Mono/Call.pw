@@ -5580,7 +5580,10 @@ pub impl Comp {
     // Keep value and place traversal distinct; only their binding bookkeeping
     // is shared so assignment indexes are never rewritten as value reads.
     inout fn scanBindingInsts(exprId: U64, start: U64, len: U64) -> Result[(), CompileDiagnostic] {
-        self.selectReferencedGlobal(exprId: exprId)
+        if self.genMode {
+            val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+            try self.selectReferencedGlobal(exprId: exprId, facts: facts)
+        }
         return <Result.Ok value=() />
     }
 
