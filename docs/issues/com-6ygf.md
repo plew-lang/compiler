@@ -1,6 +1,6 @@
 ---
 id: com-6ygf
-status: in_progress
+status: closed
 deps: [com-34wl]
 links: []
 created: 2026-10-13T00:48:29Z
@@ -57,3 +57,7 @@ Layout agreement is implemented in 9fd85bb6, but completion was reopened by [com
 ## Completion Review Correction
 
 The old signature-only negative control actually contained executable code and lacked entry metadata. Its exit failure could be unrelated to DataLayout. Review corrected it to valid declarations with metadata, absent/matching positive registration/lookup and case-local layout diagnostics. Those controls now expose reproducible LLVM20 heap corruption after unexecuted lazy entry teardown, tracked by [com-34wl](com-34wl.md). com-6ygf remains in progress until that prerequisite and the strengthened controls pass. The admission implementation itself has no new blocking finding; earlier saved self-host/CLI evidence is retained at its original scope. No production change was made by this review.
+
+## Strengthened Controls Completed
+
+The prerequisite com-34wl is repaired in `87b382d2`. The unchanged strengthened declaration controls now pass on normal LLVM20 and LLVM22 bridge/host ASan/LSan, including absent/matching registration and lookup without preparation and case-local incompatible-layout rejection. [Repair evidence](../../../evidence/existing-feature-conformance/orc-lifetime/README.md) also records fresh generation-2 fixed point, median 6.211262 seconds and the measured compiler's 43 lazy CLI and seven direct-object checks. This completes the bounded admission/ownership unit; final whole-corpus integration gates remain in com-604k.
