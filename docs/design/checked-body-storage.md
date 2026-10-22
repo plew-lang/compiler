@@ -32,6 +32,14 @@ remains replaceable behind the same successful-owner reader contract; two valid
 layouts do not require leaving the simpler choice undecided. Micro-layout choices
 follow the cost/verification criteria below without reopening semantic authority.
 
+Constraint-plan construction follows the same ownership rule. The raw Building
+writer is private to the frontend module and is called only by the selected
+signature's complete query constructor. A public validator can inspect a local
+malformed value but cannot store it or create admission authority. Immutable
+Prepared values are published only at successful owner admission; final readers
+do not repeat source selection. Tests of malformed evidence use that validator,
+while writer privacy and prepared/failed owner isolation are separate controls.
+
 ## Identity and Stored Fields
 
 The names below specify internal records and operation contracts, not proposed

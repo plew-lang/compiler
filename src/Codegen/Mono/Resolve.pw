@@ -665,7 +665,7 @@ impl Comp {
 }
 
 pub impl Comp {
-    // Existential conformance queries may stop at any proof. Executable
+    // Internal presence queries may stop at any proof. Executable
     // member selection must instead distinguish different terminal witnesses.
     // Paths to the same witness share a body; its own calls select their own
     // witnesses in the declaration environment, not in the caller's path.

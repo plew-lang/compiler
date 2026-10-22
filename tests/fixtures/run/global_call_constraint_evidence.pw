@@ -1,44 +1,25 @@
 // A failed global call plan cannot prevent an unrelated initializer request.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { CallTemplateKind, SelectedCallConstraints }
 use @Std/Io only { print }
 fn main() {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler,
-        input: <FrontendInput.Text text="trait Q {{}} struct Item {{}} impl Item as Q {{}} fn free[Value](value: Value) -> I64 where Value: Q {{ return 1I64 }} val broken: I64 = free(value: <Item />) val good: I64 = free(value: <Item />) fn main() {{}}" path="global-constraints.pw" />,
+        input: <FrontendInput.Text text="trait Q {{}} struct Item {{}} struct NoQ {{}} impl Item as Q {{}} fn free[Value](value: Value) -> I64 where Value: Q {{ return 1I64 }} val broken: I64 = free(value: <NoQ />) val good: I64 = free(value: <Item />) fn main() {{}}" path="global-constraints.pw" />,
         sources: <SourceAccess stdRoot=[] />).unwrap()
     val broken = compiler.arena.globals[0U64].nameStart
     val good = compiler.arena.globals[1U64].nameStart
-    val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "free").nameId)
-    // Construct this owner's plan explicitly. Declaration registration only
-    // discovers global types; successful checks belong to initializer requests.
-    compiler.enterGlobalInitializer(target: broken).unwrap()
-    compiler.cur.recordCallTemplates = true
-    compiler.recordStmt(stmtId: compiler.arena.globals[0U64].letStmt).unwrap()
-    compiler.cur.recordCallTemplates = false
-    compiler.prepareGlobalCallTemplateConstraints(target: broken).unwrap()
-    mut val selected = compiler.callTemplateCount()
-    for index in compiler.globalCallTemplates(target: broken) {
-        match compiler.callTemplateAt(index: index).kind {
-            CallTemplateKind.Direct(callee: val function, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                if function == callee { selected = index }
-            }
-            _ => {}
-        }
-    }
-    if selected == compiler.callTemplateCount() { panic("missing global call membership") }
-    val plan = compiler.selectedCallConstraintPlan(index: selected).unwrap()
-    if !compiler.recordBuildingCallConstraints(index: selected, plan: <SelectedCallConstraints owner=plan.owner bounds=plan.bounds proofs=[] />) { panic("construction plan was already prepared") }
+    // Actual source failure replaces fabricated mutation of the raw proof
+    // store. The private constructor cannot be bypassed by fixture clients.
     compiler.cur.checkFn = 70001U64
     compiler.cur.bodyFnIdx = 70002U64
     compiler.cur.globalInitializerTarget = <Optional.Some v=70003U64 />
     compiler.prepareGlobalInitializer(target: good).unwrap()
     if !compiler.globalInitializerPrepared(target: good) || compiler.globalInitializerPrepared(target: broken) { panic("global readiness was not independent") }
     match compiler.prepareGlobalInitializer(target: broken) {
-        Result.Ok(value: _) => { panic("global with missing constraint evidence was prepared") }
+        Result.Ok(value: _) => { panic("global with an unsatisfied source constraint was prepared") }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "selected call has incomplete constraint evidence" { panic(diagnostic.message) }
+            if diagnostic.message != "type argument does not conform to the trait required by `where`" { panic(diagnostic.message) }
         }
     }
     if compiler.globalInitializerPrepared(target: broken) { panic("failed request published readiness") }

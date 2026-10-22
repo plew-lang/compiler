@@ -17,10 +17,6 @@ pub impl Comp {
         return <Optional.None />
     }
 
-    inout fn recordBuildingCallConstraints(index: U64, plan: SelectedCallConstraints) -> Bool {
-        return self.storeBuildingOperationConstraints(index: index, state: <CallConstraintPlanState.Building plan=plan />)
-    }
-
     inout fn preparedCallConstraints(index: U64) -> Optional[PreparedCallConstraints] {
         match self.sourceOperationConstraints(index: index) {
             Optional.Some(v: val state) => {
@@ -33,6 +29,14 @@ pub impl Comp {
         }
         return <Optional.None />
     }
+}
+
+// Only the source query constructor writes an unprepared constraint plan.
+impl Comp {
+    inout fn recordBuildingCallConstraints(index: U64, plan: SelectedCallConstraints) -> Bool {
+        return self.storeBuildingOperationConstraints(index: index, state: <CallConstraintPlanState.Building plan=plan />)
+    }
+
 }
 
 // Only frontend admission can publish a successful source snapshot.

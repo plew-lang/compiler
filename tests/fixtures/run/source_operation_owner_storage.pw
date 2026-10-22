@@ -1,7 +1,7 @@
 // Operations and their constraints share the owner publication boundary.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { CallTemplate, CallTemplateKind, SelectedCallConstraints, Stmt, InstanceEnvironment }
+use /Ir only { CallTemplate, CallTemplateKind, Stmt, InstanceEnvironment }
 use @Std/Io only { print }
 
 fn owner(compiler: inout Comp, name: String) -> U64 {
@@ -31,7 +31,6 @@ fn main() {
     val index = compiler.callTemplateIndex(siteKey: operation.siteKey)
     if compiler.preparedCallConstraints(index: index).isNone() { panic("owner published without constraint admission") }
     if compiler.replaceBuildingCallTemplate(index: index, template: operation) { panic("sealed operation writer survived") }
-    if compiler.recordBuildingCallConstraints(index: index, plan: <SelectedCallConstraints owner=first bounds=[] proofs=[] />) { panic("sealed constraint writer survived") }
     compiler.recordParametricFunction(fnIdx: second, recordCallTemplates: true).unwrap()
     val secondIndex = compiler.firstLexicalCallTemplate(owner: second) - 1U64
     val secondOperation = compiler.callTemplateAt(index: secondIndex)
@@ -48,7 +47,6 @@ fn main() {
     val brokenOperation = compiler.callTemplateAt(index: brokenIndex)
     match compiler.prepareLexicalBody(fnIdx: broken) { Result.Err(error: _) => {} Result.Ok(value: _) => { panic("invalid bound accepted") } }
     if compiler.replaceBuildingCallTemplate(index: brokenIndex, template: brokenOperation) { panic("failed owner retained an operation writer") }
-    if compiler.recordBuildingCallConstraints(index: brokenIndex, plan: <SelectedCallConstraints owner=broken bounds=[] proofs=[] />) { panic("failed owner retained a constraint writer") }
     if compiler.preparedCallConstraints(index: brokenIndex).isSome() { panic("failed owner exposed prepared constraints") }
     match compiler.preparedFunctionSemanticFacts(fnIdx: broken) { Result.Err(error: _) => {} Result.Ok(value: _) => { panic("failed owner published operations") } }
     if !reader.operationAt(index: 0U64).unwrap().siteKey.sameKey(other: operation.siteKey) { panic("failure changed successful backing") }

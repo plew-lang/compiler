@@ -16,7 +16,7 @@ Reconcile the cumulative candidate before work: historical Direct evidence trans
 
 Remaining closure audit: bind each callee declaration-bound identity to its saved evidence in the explicit instance environment; include those bindings in sameInstanceEnvironment, withLexicalSelfBinding and body identity. Preserve legitimate empty bindings versus missing/unprepared. Source public requirements and chosen implementation obligations are not positional arrays to zip: retain conformance, requirement clause, implementation declaration and derived proof identities. Check Function/Requirement/Conformance/MethodReceiver/TraitSelf/TraitSubject/AssociatedType roots, AssumedBound/AssumedSupertraitPath/AssumedTraitPath, conditional child proofs, projection normalization and ExistentialBox consumers. Declaration worklists (Check/Bounds iteration and Check/Obligations) and execution preparation need explicit environments; ambient Mono Cursor cannot replace them.
 
-Presence evidence does not establish unique member dispatch. Preserve source existence proofs and prepare member uniqueness at the correct boundary without silently privileging a caller path or demanding unused bounds be unique. Conditional WitnessConditionPlan children are not a substitute for complete supertrait derivations. Ground concrete selected evidence without repeating selection; abstract/deferred evidence remains distinct from a missing concrete binding.
+Presence evidence establishes neither source-path admission nor unique member dispatch. Even an unused source bound needs its unique specification-valid path; executable endpoint selection is a further distinct demand. Preserve admitted source proofs without silently privileging a caller path. Conditional WitnessConditionPlan children are not a substitute for complete supertrait derivations. Ground concrete selected evidence without repeating selection; abstract/deferred evidence remains distinct from a missing concrete binding.
 
 Cover Written Direct, Static Requirement/Provided, operator, protocol, try conversion, root/entry, extern/bodyless and synthetic calls. Entry must consume selected body identity. Associated declaration proofs must reach projection prerequisite -> selected conformance -> original clause -> final consumer; do not merely privatize stores. Requirement derivations must handle weaker/reordered impl bounds, supertrait and conformance-where entailment.
 
@@ -229,9 +229,19 @@ same explicit-demand query; ambiguity makes a conditional candidate inapplicable
 whereas malformed proof interpretation remains an error. The new internal output
 control checks bare ambiguity, #C success, #D output mismatch without fallback,
 conditional Wrapper eligibility and stronger versus opaque authored premises.
-Both new query controls pass as current imported algorithms with the old measured
-driver, and whole compiler source checks after the wrapper migration. Fresh
-execution and final-consumer/source-certificate auditing remain required.
+Fresh 2154af1b passes whole-source check, 55 AOT and 36 rejection controls, and
+generation-two fixed point with formal median 6.521807 seconds. Evidence is in
+meta's source-owner-facts/conformance-query-fresh.json and
+conformance-query-self-host.json. These gates do not close final-consumer or
+source-certificate auditing.
+
+The raw Building constraint-plan writer is being made module-private. Its sole
+producer is the complete source-signature/query constructor; admission and final
+readers validate/consume that retained value. Internal corruption controls submit
+bad local plans to the same admission validator without injecting them into the
+real store. This closes this writer's alternate construction route, not every
+raw operation/conversion producer. Preserve separate missing/foreign/clause/scope
+controls and the privacy rejection through a fresh candidate before closure.
 
 Partial-input projected member enumeration remains a presence probe: it has not
 yet selected a complete positional trait instance. Do not label that probe source

@@ -2,7 +2,7 @@
 // is restored, and an unrelated owner remains independently preparable.
 use /Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendDeclarations, spansEqual }
 use /SourceAccess only { SourceAccess }
-use /Ir only { CallSiteKey, CallTemplate, CallTemplateKind, ProtocolSelection, CallTemplateReceiver, SelectedCallConstraints }
+use /Ir only { CallSiteKey, CallTemplate, CallTemplateKind, ProtocolSelection, CallTemplateReceiver }
 use @Std/Io only { print }
 
 fn owner(c: inout Comp, name: String) -> U64 {
@@ -79,9 +79,6 @@ fn main() {
     }
     if c.replaceBuildingCallTemplate(index: failedCallIndex, template: failedTemplate) {
         panic("failed lexical owner reopened a call row")
-    }
-    if c.recordBuildingCallConstraints(index: failedCallIndex, plan: <SelectedCallConstraints owner=closed bounds=[] proofs=[] />) {
-        panic("failed lexical owner reopened its constraints")
     }
     print("ok")
 }

@@ -1,0 +1,6 @@
+use /Frontend only { Comp }
+use /Ir only { SelectedCallConstraints }
+fn main() {
+    mut val compiler = <Comp />
+    compiler.recordBuildingCallConstraints(index: 0U64, plan: <SelectedCallConstraints owner=0U64 bounds=[] proofs=[] />)
+}

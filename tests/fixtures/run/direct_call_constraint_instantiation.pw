@@ -25,8 +25,9 @@ fn main() {
                     }
                     val snapshot = compiler.preparedCallConstraints(index: index).unwrap()
                     val plan = snapshot.constraints()
-                    if compiler.recordBuildingCallConstraints(index: index, plan: <SelectedCallConstraints owner=plan.owner bounds=plan.bounds proofs=[] />) {
-                        panic("construction writer replaced a prepared call plan")
+                    val invalid = <SelectedCallConstraints owner=plan.owner bounds=plan.bounds proofs=[] />
+                    if compiler.checkSelectedCallConstraintPlan(template: template, expected: plan.bounds, plan: invalid).isOk() {
+                        panic("admission accepted an incomplete local plan")
                     }
                     if compiler.preparedCallConstraints(index: index).unwrap().constraints().proofs.count() != plan.proofs.count() {
                         panic("prepared snapshot changed after a rejected construction write")
