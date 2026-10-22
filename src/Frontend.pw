@@ -2237,6 +2237,8 @@ struct SourceBodyData {
     mut val expressionKeys: Dictionary[U64, U64] = [:]
     mut val expressionIds: Array[U64] = []
     mut val requiredExpressions: Array[U64] = []
+    mut val valueBlocks: Dictionary[U64, SourceValueBlockFact] = [:]
+    mut val valueBlockIds: Array[U64] = []
     mut val identifierTargets: Dictionary[U64, U64] = [:]
     mut val globalAddresses: Dictionary[U64, SemanticGlobalAddress] = [:]
     mut val bindings: Array[SourceBindingFact] = []
@@ -2334,6 +2336,15 @@ pub struct SourceBodySignature {
 }
 impl SourceBodySignature { factory }
 
+// A checked block row has no Pending variant. A normal block's source type
+// closes with its parent expression requirement before it can be published.
+pub struct SourceValueBlockFact {
+    val expression: U64
+    pub val completion: SourceCompletion
+    pub val resultTerm: U64
+}
+impl SourceValueBlockFact { factory }
+
 // One lexical binding decision, published with its successful source owner.
 pub struct SourceBindingFact {
     val owner: SemanticCompletionOwner
@@ -2354,6 +2365,7 @@ impl PreparedSemanticFacts { factory }
 pub impl PreparedSemanticFacts {
     fn belongsToSession(session: U64) -> Bool { return self.session == session }
     fn expression(exprId: U64) -> Optional[SemanticExprType] { return self.payload->expression(exprId: exprId) }
+    fn valueBlock(blockId: U64) -> Optional[SourceValueBlockFact] { return self.payload->valueBlocks.get(key: blockId) }
     fn identifierTarget(exprId: U64) -> Optional[U64] { return self.payload->identifierTargets.get(key: exprId) }
     fn globalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] { return self.payload->globalAddresses.get(key: exprId) }
     fn bindingNeedsCaptureCell(sourceFunction: U64, bindingTarget: U64) -> Bool { return self.payload->bindingNeedsCaptureCell(sourceFunction: sourceFunction, bindingTarget: bindingTarget) }

@@ -543,13 +543,11 @@ pub impl Comp {
     inout fn sourceSubjectTypeInfo(exprId: U64) -> Result[TypeInfo, CompileDiagnostic] {
         match self.arena.exprs[exprId] {
             Expr.Sequence(val body) | Expr.Block(val body, offset: _) => {
-                if body < self.arena.semanticValueBlocks.count() {
-                    match self.arena.semanticValueBlocks[body] {
-                        SemanticValueBlockTyping.Checked(completion: _, resultTerm: val diagnosticTerm) => {
-                            if diagnosticTerm != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: diagnosticTerm) /> }
-                        }
-                        _ => {}
+                match self.constructionValueBlock(blockId: body) {
+                    SemanticValueBlockTyping.Checked(completion: _, resultTerm: val diagnosticTerm) => {
+                        if diagnosticTerm != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: diagnosticTerm) /> }
                     }
+                    _ => {}
                 }
             }
             _ => {}
@@ -565,14 +563,12 @@ pub impl Comp {
     // Before Record, every value block still follows the same normal-result
     // rule; a diverging arm never supplies the result of another arm.
     inout fn valueBlockTypeInfo(blockId: U64, chainHoleRef: U64) -> Result[Optional[TypeInfo], CompileDiagnostic] {
-        if blockId < self.arena.semanticValueBlocks.count() {
-            match self.arena.semanticValueBlocks[blockId] {
-                SemanticValueBlockTyping.Checked(val completion, val resultTerm) => {
-                    if !completion.source.normal() || resultTerm == 0U64 { return <Result.Ok value=<Optional.None /> /> }
-                    return <Result.Ok value=<Optional.Some v=self.typeInfoOfRef(ref: resultTerm) /> />
-                }
-                SemanticValueBlockTyping.Pending => {}
+        match self.constructionValueBlock(blockId: blockId) {
+            SemanticValueBlockTyping.Checked(val completion, val resultTerm) => {
+                if !completion.source.normal() || resultTerm == 0U64 { return <Result.Ok value=<Optional.None /> /> }
+                return <Result.Ok value=<Optional.Some v=self.typeInfoOfRef(ref: resultTerm) /> />
             }
+            SemanticValueBlockTyping.Pending => {}
         }
         // Only pre-Record construction queries may infer from syntax. A
         // recorded zero result is not permission to repeat that inference.

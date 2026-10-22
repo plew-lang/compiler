@@ -2179,8 +2179,13 @@ pub impl Comp {
         // This is a construction-time refinement, not a type reader. Reuse
         // recorded completion when present and refresh the result fact after
         // contextualizing the child; parents consume only the published fact.
-        mut val typing: SemanticValueBlockTyping = <SemanticValueBlockTyping.Pending />
-        if blkId < self.arena.semanticValueBlocks.count() { typing = self.arena.semanticValueBlocks[blkId] }
+        match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => {
+                if self.sourceOwnerConstructionClosed(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: completed source owner cannot refine a value block") /> }
+            }
+            Optional.None => {}
+        }
+        val typing = self.constructionValueBlock(blockId: blkId)
         match typing {
             SemanticValueBlockTyping.Checked(val completion, resultTerm: _) => {
                 if !completion.source.normal() { return <Result.Ok value=() /> }
@@ -2196,7 +2201,9 @@ pub impl Comp {
                 SemanticValueBlockTyping.Checked(val completion, val resultTerm) => {
                     mut val refined = self.semanticExprTerm(exprId: value)
                     if refined == 0U64 { refined = resultTerm }
-                    self.arena.semanticValueBlocks.set(i: blkId, value: <SemanticValueBlockTyping.Checked completion=completion resultTerm=refined />)
+                    val owner = self.currentSourceOwner().unwrap()
+                    val fact = self.sourceFacts.valueBlock(owner: owner, blockId: blkId).unwrap()
+                    try self.storeBuildingValueBlock(blockId: blkId, expression: fact.expression, completion: completion, resultTerm: refined)
                 }
                 SemanticValueBlockTyping.Pending => {}
             }

@@ -1096,8 +1096,7 @@ pub impl Comp {
     // Expected-result refinement publishes the block fact before its parent
     // reads it. A reader must not reopen a lexical give in a different scope.
     inout fn recordValueBlockResult(exprId: U64, blockId: U64) -> Bool {
-        if blockId >= self.arena.semanticValueBlocks.count() { return false }
-        match self.arena.semanticValueBlocks[blockId] {
+        match self.constructionValueBlock(blockId: blockId) {
             SemanticValueBlockTyping.Pending => { return false }
             SemanticValueBlockTyping.Checked(val completion, val resultTerm) => {
                 if !completion.source.normal() || resultTerm == 0U64 { return false }
@@ -1123,9 +1122,8 @@ pub impl Comp {
                 self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
             }
         }
-        while self.arena.semanticValueBlocks.count() <= blockId { self.arena.semanticValueBlocks.append(<SemanticValueBlockTyping.Pending />) }
         if !completion.source.normal() { resultTerm = 0U64 }
-        self.arena.semanticValueBlocks.set(i: blockId, value: <SemanticValueBlockTyping.Checked completion=completion resultTerm=resultTerm />)
+        try self.storeBuildingValueBlock(blockId: blockId, expression: exprId, completion: completion, resultTerm: resultTerm)
         self.popLocals(mark: mark)
         return <Result.Ok value=() />
     }
@@ -2238,6 +2236,13 @@ pub impl Comp {
                     }
                 }
                 Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "internal error: typed source obligation has no checked completion") /> }
+            }
+        }
+        self.sourceFacts.activate(owner: owner)
+        for block in self.sourceFacts.activeBuilder.data.valueBlockIds {
+            val fact = self.sourceFacts.activeBuilder.data.valueBlocks.get(key: block).unwrap()
+            if fact.completion.source.normal() && fact.resultTerm == 0U64 && self.sourceFacts.activeBuilder.requiredKeys.contains(fact.expression) {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: fact.expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") />
             }
         }
         return <Result.Ok value=() />

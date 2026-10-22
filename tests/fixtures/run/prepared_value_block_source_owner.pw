@@ -1,0 +1,61 @@
+// Block result/completion rows share the same sealed owner as their expressions.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, Stmt }
+use @Std/Io only { print }
+fn expression(compiler: inout Comp, statement: U64) -> U64 {
+    return match compiler.arena.stmts[statement] {
+        Stmt.Return(value: val value, hasValue: _, offset: _) => value
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val value) => value
+        _ => { panic("missing value expression") }
+    }
+}
+fn blocks(compiler: inout Comp, expression: U64) -> Array[U64] {
+    return match compiler.arena.exprs[expression] {
+        Expr.Block(body: val body, offset: _) => [body]
+        Expr.IfExpr(cond: _, thenBlk: val thenBlock, elseBlk: val elseBlock) | Expr.IfChain(conditions: _, thenBlk: val thenBlock, elseBlk: val elseBlock) => [thenBlock, elseBlock]
+        _ => { panic("missing value block") }
+    }
+}
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="blocks.pw" text="fn first(flag: Bool) -> I64 {{ return if flag {{ give 1I64 }} else {{ give 2I64 }} }} fn second() -> I64 {{ return {{ give 3I64 }} }} fn broken() {{ val value = {{ give [] }} }} val globalFirst = {{ give 4I64 }} val globalSecond = {{ give 5I64 }}" />,
+        sources: <SourceAccess />).unwrap()
+    val first = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "first").nameId)
+    val second = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "second").nameId)
+    val broken = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "broken").nameId)
+    val value = expression(compiler: inout compiler, statement: compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: first).body, index: 0U64))
+    val branches = blocks(compiler: inout compiler, expression: value)
+    compiler.prepareLexicalBody(fnIdx: first).unwrap()
+    val reader = compiler.preparedFunctionSemanticFacts(fnIdx: first).unwrap()
+    val term = reader.expression(exprId: value).unwrap().term
+    for block in branches {
+        val fact = reader.valueBlock(blockId: block).unwrap()
+        if !fact.completion.source.normal() || !compiler.typeRefEq(a: fact.resultTerm, b: term) { panic("block result changed") }
+    }
+    val saved = reader.valueBlock(blockId: branches[0U64]).unwrap().resultTerm
+    compiler.prepareLexicalBody(fnIdx: second).unwrap()
+    val other = compiler.preparedFunctionSemanticFacts(fnIdx: second).unwrap()
+    if other.valueBlock(blockId: branches[0U64]).isSome() { panic("foreign block admitted") }
+    if reader.valueBlock(blockId: 18446744073709551615U64).isSome() { panic("missing block admitted") }
+    compiler.cur.checkFn = first
+    match compiler.recordBlockExpectedResult(blkId: branches[0U64], expectedTerm: term) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("sealed block refined") }
+    }
+    match compiler.prepareLexicalBody(fnIdx: broken) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("unresolved block admitted") }
+    }
+    if compiler.preparedFunctionSemanticFacts(fnIdx: broken).isOk() { panic("failed block published") }
+    for global in compiler.arena.globals {
+        compiler.prepareGlobalInitializer(target: global.nameStart).unwrap()
+        val globalExpression = expression(compiler: inout compiler, statement: global.letStmt)
+        val block = blocks(compiler: inout compiler, expression: globalExpression)[0U64]
+        if compiler.preparedGlobalSemanticFacts(target: global.nameStart).unwrap().valueBlock(blockId: block).unwrap().resultTerm == 0U64 { panic("global block missing") }
+        if reader.valueBlock(blockId: block).isSome() { panic("global block entered function payload") }
+    }
+    if reader.valueBlock(blockId: branches[0U64]).unwrap().resultTerm != saved { panic("later owner changed block reader") }
+    print("ok")
+}

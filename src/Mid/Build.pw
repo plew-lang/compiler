@@ -4,7 +4,7 @@ use ../Diag only { CompileDiagnostic }
 // recovering a place by spelling from the AST.
 
 use ../Frontend only { Comp, PreparedSemanticFacts }
-use ../Ir only { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticExpressionTypeState, SemanticValueBlockTyping, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, ConditionClauseRange, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+use ../Ir only { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticExpressionTypeState, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, ConditionClauseRange, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
 use ../Diag only { eprintU64 }
 use @Std/Io only { eprint }
 use ../Ops only { opAnd, opOr }
@@ -2664,14 +2664,16 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
     }
     match blockResult {
         MidBlockResult.Value(destination: _) => {
-            if blockId >= c.arena.semanticValueBlocks.count() { result = <MidBuildError.MissingSemanticType /> }
-            else {
-                match c.arena.semanticValueBlocks[blockId] {
-                    SemanticValueBlockTyping.Pending => { result = <MidBuildError.MissingSemanticType /> }
-                    SemanticValueBlockTyping.Checked(val completion, resultTerm: _) => {
-                        if !completion.execution.normal() && midCurrentBlockIsOpen(state: state) { result = <MidBuildError.MissingSemanticType /> }
+            match state.sourceFacts {
+                Optional.Some(v: val facts) => {
+                    match facts.valueBlock(blockId: blockId) {
+                        Optional.Some(v: val fact) => {
+                            if !fact.completion.execution.normal() && midCurrentBlockIsOpen(state: state) { result = <MidBuildError.MissingSemanticType /> }
+                        }
+                        Optional.None => { result = <MidBuildError.MissingSemanticType /> }
                     }
                 }
+                Optional.None => { result = <MidBuildError.MissingSemanticType /> }
             }
         }
         _ => {}

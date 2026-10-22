@@ -269,12 +269,16 @@ impl SourceFactDirectory {
     inout fn publish(owner: SemanticCompletionOwner) {
         self.activate(owner: owner)
         if !self.activeBuilder.requested { panic("internal error: source facts have no preparation request") }
+        for block in self.activeBuilder.data.valueBlockIds {
+            val fact = self.activeBuilder.data.valueBlocks.get(key: block).unwrap()
+            if fact.completion.source.normal() && fact.resultTerm == 0U64 { self.activeBuilder.data.valueBlocks.remove(key: block) }
+        }
         self.activeBuilder.data.discardTentativeExpressions()
         val data = self.activeBuilder.data
         self.clearActive(owner: owner)
         if self.measure {
             self.bodiesSealed += 1U64
-            self.rowsSealed += data.expressions.count() + data.bindings.count() + data.statements.count() + data.aggregates.count() + data.tries.count() + data.matches.count() + data.closurePlans.count()
+            self.rowsSealed += data.expressions.count() + data.bindings.count() + data.statements.count() + data.aggregates.count() + data.tries.count() + data.matches.count() + data.closurePlans.count() + data.valueBlocks.count()
         }
         val payload: Ref[SourceBodyData] = <Ref value=data />
         val reader = self.readers.count()
@@ -332,6 +336,20 @@ impl SourceFactDirectory {
         }
         return <Optional.None />
     }
+    inout fn valueBlock(owner: SemanticCompletionOwner, blockId: U64) -> Optional[SourceValueBlockFact] {
+        if self.isActive(owner: owner) { return self.activeBuilder.data.valueBlocks.get(key: blockId) }
+        match self.state(owner: owner) {
+            Optional.Some(v: val state) => {
+                match state {
+                    SourceBodyState.Building => { return self.inactiveBuilder(owner: owner).data.valueBlocks.get(key: blockId) }
+                    SourceBodyState.Succeeded(reader: val reader) => { return self.readers[reader].valueBlock(blockId: blockId) }
+                    _ => {}
+                }
+            }
+            Optional.None => {}
+        }
+        return <Optional.None />
+    }
     inout fn statement(owner: SemanticCompletionOwner, stmtId: U64) -> Optional[SemanticExpressionCompletion] {
         if self.isActive(owner: owner) { return self.activeBuilder.data.statement(stmtId: stmtId) }
         match self.state(owner: owner) {
@@ -353,6 +371,30 @@ impl Comp {
     // Late constraint closure reads the node's registered owner, not the
     // cursor left by another source walk. This is a construction query and
     // does not grant a prepared-body reader.
+    inout fn constructionValueBlock(blockId: U64) -> SemanticValueBlockTyping {
+        match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => {
+                match self.sourceFacts.valueBlock(owner: owner, blockId: blockId) {
+                    Optional.Some(v: val fact) => { return <SemanticValueBlockTyping.Checked completion=fact.completion resultTerm=fact.resultTerm /> }
+                    Optional.None => {}
+                }
+            }
+            Optional.None => {}
+        }
+        return <SemanticValueBlockTyping.Pending />
+    }
+    inout fn storeBuildingValueBlock(blockId: U64, expression: U64, completion: SourceCompletion, resultTerm: U64) -> Result[(), CompileDiagnostic] {
+        val owner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => owner
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "internal error: value block has no source owner") /> }
+        }
+        if self.sourceOwnerConstructionClosed(owner: owner) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "internal error: completed source owner cannot refine a value block") /> }
+        self.sourceFacts.activate(owner: owner)
+        if self.sourceFacts.activeBuilder.data.valueBlocks.get(key: blockId).isNone() { self.sourceFacts.activeBuilder.data.valueBlockIds.append(blockId) }
+        self.sourceFacts.activeBuilder.data.valueBlocks[blockId] = <SourceValueBlockFact expression=expression completion=completion resultTerm=resultTerm />
+        return <Result.Ok value=() />
+    }
     inout fn recordedSourceExpressionTerm(exprId: U64) -> U64 {
         match self.sourceFacts.expressionOwners.get(key: exprId) {
             Optional.Some(v: val owner) => { return self.sourceFacts.expressionHead(owner: owner, exprId: exprId).term }
@@ -664,7 +706,7 @@ impl Comp {
             Optional.Some(v: val state) => {
                 match state {
                     SourceBodyState.Active => { return self.sourceFacts.activeBuilder.data.closure(exprId: exprId) }
-                            SourceBodyState.Building => { return self.sourceFacts.inactiveBuilder(owner: owner).data.closure(exprId: exprId) }
+                    SourceBodyState.Building => { return self.sourceFacts.inactiveBuilder(owner: owner).data.closure(exprId: exprId) }
                     SourceBodyState.Succeeded(reader: val reader) => { return self.sourceFacts.readers[reader].payload->closure(exprId: exprId) }
                     _ => {}
                 }
