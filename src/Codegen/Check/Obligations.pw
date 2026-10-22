@@ -655,9 +655,6 @@ pub impl Comp {
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => {}
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 match selection {
-                    ProtocolSelection.Direct(callee: val callee, proof: _) => {
-                        if !(try self.callConstraintIsRelevant(function: callee, relevant: relevant)) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
-                    }
                     ProtocolSelection.Static(resolution: _) => {}
                     _ => { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
                 }
@@ -701,22 +698,6 @@ pub impl Comp {
                 match selection {
                     ProtocolSelection.Static(resolution: val resolution) => {
                         return self.checkStaticMemberObligation(template: template, resolution: resolution, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
-                    }
-                    ProtocolSelection.Direct(callee: val callee, proof: val selectedProof) => {
-                        if receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
-                        mut val proof = selectedProof
-                        if !self.proofIsMissing(proof: proof) {
-                            val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
-                            match instantiation {
-                                StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no concrete conformance evidence") /> }
-                                StaticProofInstantiation.Deferred => { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
-                                StaticProofInstantiation.Ready(proof: val concrete) => { proof = concrete }
-                            }
-                        }
-                        val arguments = try self.callConstraintTypeArguments(function: self.arena.functionAt(index: callee), receiver: receiver, proof: proof)
-                        if (try self.callConstraintSubstitutionState(function: callee, arguments: arguments, receiver: receiver)).isDeferred() { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
-                        val constraints = try self.selectedCallConstraintEvidence(template: template, callee: callee, proof: proof, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
-                        return self.appendCallConstraintInstance(function: callee, arguments: arguments, receiver: receiver, proof: proof, constraints: constraints, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
                     }
                     _ => {}
                 }
@@ -776,9 +757,6 @@ pub impl Comp {
                         CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                             match selection {
                                 ProtocolSelection.Static(resolution: _) => { needed = true }
-                                ProtocolSelection.Direct(callee: val callee, proof: _) => {
-                                    if callee < owners.count() && owners[callee] < relevant.count() { needed = relevant[owners[callee]] }
-                                }
                                 _ => {}
                             }
                         }
@@ -1171,7 +1149,6 @@ pub impl Comp {
             }
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 match selection {
-                    ProtocolSelection.Direct(callee: val callee, proof: val proof) => { return self.sourceSelectedReceiverBounds(callee: callee, receiverTerm: template.receiverTypeTerm, proof: proof) }
                     ProtocolSelection.Static(resolution: val resolution) => { return self.sourceSelectedStaticSignatureBounds(resolution: resolution, receiverTerm: template.receiverTypeTerm, arguments: [], offset: template.siteKey.originStart) }
                     _ => { return <Result.Ok value=[] /> }
                 }
@@ -1336,10 +1313,6 @@ pub impl Comp {
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
                 match selection {
-                    ProtocolSelection.Direct(callee: val callee, proof: val proof) => {
-                        try self.checkDeclarationCallProof(proof: proof, scope: scope, offset: template.siteKey.originStart)
-                        try self.checkDeclarationDirectCallBoundary(callee: callee, proof: proof, receiverRef: template.receiverTypeTerm, offset: template.siteKey.originStart)
-                    }
                     ProtocolSelection.Static(resolution: val resolution) => { try self.checkDeclarationStaticCallEvidence(resolution: resolution, receiverRef: template.receiverTypeTerm, scope: scope, offset: template.siteKey.originStart) }
                     _ => {}
                 }
@@ -1373,7 +1346,6 @@ pub impl Comp {
             }
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 match selection {
-                    ProtocolSelection.Direct(callee: _, proof: val proof) => { if (try self.declarationProofDependency(proof: proof, scope: scope, offset: offset)) { dependent = true } }
                     ProtocolSelection.Static(resolution: val resolution) => { if (try self.declarationStaticMemberDependency(resolution: resolution, scope: scope, offset: offset)) { dependent = true } }
                     _ => {}
                 }

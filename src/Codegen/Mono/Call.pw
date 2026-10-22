@@ -223,14 +223,6 @@ pub impl Comp {
                 match selection {
                     ProtocolSelection.Identity => { target = <CallTarget.NoCallable />
                         result = receiverRef }
-                    ProtocolSelection.Direct(callee: val selected, proof: val selectedProof) => {
-                        callee = selected
-                        proof = selectedProof
-                        if !self.proofIsMissing(proof: proof) {
-                            proof = try self.concreteStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-                        }
-                        typeArguments = try self.callConstraintTypeArguments(function: self.arena.functionAt(index: callee), receiver: receiverRef, proof: proof)
-                    }
                     ProtocolSelection.Static(resolution: val resolution) => {
                         val selected = try self.selectStaticMethodTemplateCall(exprId: stmtId, methodArguments: [], receiver: <CallTemplateReceiver.Term term=receiverRef />, arguments: [], resolution: resolution, resultTerm: resultTerm)
                         callee = selected.callee
@@ -4017,9 +4009,6 @@ pub impl Comp {
             }
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 match selection {
-                    ProtocolSelection.Direct(callee: val selected, proof: _) => {
-                        if selected != callee { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "protocol evidence belongs to another selected declaration") /> }
-                    }
                     ProtocolSelection.Static(resolution: val resolution) => {
                         return self.selectedMemberConstraintEvidence(template: template, resolution: resolution, callee: callee, proof: proof, environment: environment, selfRef: selfRef, itemRef: itemRef)
                     }

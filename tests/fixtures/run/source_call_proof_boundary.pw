@@ -38,13 +38,11 @@ fn check(family: U64, mode: U64, provided: Bool = false) {
     } else if family == 1U64 {
         give <CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.Term term=actual /> args=arguments calleeTypeArgs=types proofId=compiler.freezeStaticConformanceProof(proof: proof) />
     } else if family == 2U64 {
-        give <CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=actual /> selection=<ProtocolSelection.Direct callee=callee proof=proof /> resultTerm=0U64 />
-    } else if family == 3U64 {
         give <CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=actual /> selection=<ProtocolSelection.Static resolution=resolution /> resultTerm=0U64 />
     } else {
         give <CallTemplateKind.Operator op=0I64 operands=<CallTemplateOperandRange start=0U64 len=0U64 /> resolution=<OperatorSelection.Static resolution=resolution /> resultTerm=0U64 />
     }) />
-    val message = if provided && (family == 0U64 || family == 3U64 || family == 4U64) && (mode == 2U64 || mode == 4U64) { give "internal error: static call has no selected declaration and proof" } else if mode == 2U64 || mode == 4U64 { give "selected call evidence does not match its declaration trait" } else { give "selected call evidence does not match its receiver type" }
+    val message = if provided && (family == 0U64 || family == 2U64 || family == 3U64) && (mode == 2U64 || mode == 4U64) { give "internal error: static call has no selected declaration and proof" } else if mode == 2U64 || mode == 4U64 { give "selected call evidence does not match its declaration trait" } else { give "selected call evidence does not match its receiver type" }
     match compiler.checkCallTemplateEvidence(template: template) {
         Result.Ok(value: _) => { if mode != 0U64 { panic("call accepted a foreign evidence boundary") } }
         Result.Err(error: val diagnostic) => { if mode == 0U64 || diagnostic.message != message { panic(diagnostic.message) } }
@@ -60,7 +58,7 @@ fn check(family: U64, mode: U64, provided: Bool = false) {
 }
 fn main() {
     mut val family = 0U64
-    while family < 5U64 {
+    while family < 4U64 {
         mut val mode = 0U64
         while mode < 4U64 {
             check(family: family, mode: mode)

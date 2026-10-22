@@ -438,3 +438,21 @@ requirement-only experiment exposed missing name IDs and concrete associated
 result normalization; both are fixed at construction. A current-source imported
 frontend probe now accepts the fallback control. Fresh complete slice, canonical
 selection/corruption controls, matching-source cost and full gates remain required.
+
+## Retired Direct Protocol Representation (WIP)
+
+After d0f050fd all authored static protocol operations are selected requirements.
+Remove ProtocolSelection.Direct and its nine consumer branches, including the
+separate declaration-worklist instantiation and Mono enqueue path. Static
+requirements use the shared static-member signature/evidence reader; existential
+operations retain their separate dynamic boundary. No source producer remains
+for the retired alternative.
+
+The internal evidence/boundary matrices retain their positive, missing-condition,
+cycle and foreign-receiver/trait assertions through the remaining Static protocol
+family. Provided-copy proof presence is checked for written Direct and provided
+StaticMethod calls, including selection admission for both. Do not fabricate a
+legacy protocol-provided-copy form just to preserve an obsolete branch count.
+Current-source import tests for all five affected controls and whole-source check
+succeed with the measured 5e1dd64b carrier. Fresh candidate and final parent gates
+remain required; the independent frozen 5e1dd64b normal gate is still running.

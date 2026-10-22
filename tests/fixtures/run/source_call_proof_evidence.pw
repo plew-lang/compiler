@@ -66,8 +66,6 @@ fn check(family: U64, invalid: Bool, cyclic: Bool = false) {
     } else if family == 1U64 {
         give <CallTemplateKind.Direct callee=compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "value").nameId) receiver=<CallTemplateReceiver.Term term=receiver /> args=arguments calleeTypeArgs=types proofId=compiler.freezeStaticConformanceProof(proof: broken) />
     } else if family == 2U64 {
-        give <CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=receiver /> selection=<ProtocolSelection.Direct callee=0U64 proof=broken /> resultTerm=0U64 />
-    } else if family == 3U64 {
         give <CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=receiver /> selection=<ProtocolSelection.Static resolution=resolution /> resultTerm=0U64 />
     } else {
         give <CallTemplateKind.Operator op=0I64 operands=<CallTemplateOperandRange start=0U64 len=0U64 /> resolution=<OperatorSelection.Static resolution=resolution /> resultTerm=0U64 />
@@ -89,7 +87,7 @@ fn check(family: U64, invalid: Bool, cyclic: Bool = false) {
 }
 fn main() {
     mut val family = 0U64
-    while family < 5U64 {
+    while family < 4U64 {
         check(family: family, invalid: false)
         check(family: family, invalid: true)
         check(family: family, invalid: false, cyclic: true)

@@ -1807,8 +1807,6 @@ pub impl Comp {
                 mut val callee = self.arena.functionCount()
                 mut val proof = <StaticConformanceProof.Missing />
                 match selection {
-                    ProtocolSelection.Direct(callee: val selected, proof: val evidence) => { callee = selected
-                        proof = evidence }
                     ProtocolSelection.Static(resolution: val resolution) => {
                         mut val symbolic = <StaticConformanceProof.Missing />
                         match resolution {

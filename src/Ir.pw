@@ -3409,7 +3409,6 @@ pub enum OperatorSelection {
 pub enum ProtocolSelection {
     Pending
     Identity
-    Direct(callee: U64, proof: StaticConformanceProof)
     Static(resolution: StaticMemberResolution)
     Existential(traitIdx: U64, slot: U64)
 }
