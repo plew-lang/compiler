@@ -1,6 +1,6 @@
 ---
 id: com-w4c2
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-21T13:11:10Z
@@ -21,7 +21,7 @@ The user adopted this rule after examining `root_import_type_in_part`. Its posit
 
 Static inspection at compiler `78bd9691` (rechecked without source edits while recording the new contract): Frontend.recordSyntaxImportOrigins registers root and part imports with localModule and source spans. Ir/Modules.registerImportOrigin/firstImportOriginNamed index module plus NameId; Visibility.moduleBindingAt/checkImports and Resolve/Module.visibleFreeFunctions use those module indices. The older isImportedInto helper likewise queries module imports. This module-scoped lookup shape is suitable for the adopted contract; lack of file-scoped binding tables is no longer a defect.
 
-Admission still allows use directives in parts, including generated parts. Syntax's current Hash derive emits `use @Std/Hash only { Hash, Hasher }` into its generated part. Those forms require migration; rejecting them without updating real sources/providers and documenting consumer-root requirements would leave the adopted rule unusable.
+The previous admission accepted use in parts and Syntax derives emitted imports into generated parts. Implementation 8321aa0e and Syntax 0.1.11-dev.30 close that gap, including saved generated sources and explicit consumer-root support bindings.
 
 ## Producer to Final Consumer and Removal
 
@@ -35,7 +35,9 @@ Preserve root_import_type_in_part and add nested/sibling-part controls proving r
 
 Exercise generation with support dependencies explicitly present in the consumer root, and clear failure when a required name is absent. Do not exempt old generated imports merely because a receipt exists or a macro emitted them. Inspect the purpose of existing fixtures invalidated by this approved specification change before migrating them; this is permitted specification-migration work under the goal's stop conditions. The original positive root-import fixture requires no semantic change.
 
-Close only after real root/part/provider migration, final lookup/admission evidence, obsolete-path removal and applicable standard correctness, sanitizer, fixed-point and formal sub-seven-second performance checks. Specification adoption and documentation edits do not complete implementation. The current implementation increment rejects use in the shared parsed part-admission check before edge registration, migrates ten compiler parts to their actual roots, and pins Syntax 0.1.11-dev.30 with import-free Hash/Eq output and explicit consumer bindings. Development build 20261022T000931-build-6b3df2 and six focused run/rejection cases pass. Normal suite 20261022T001250-test-4d2480 was interrupted after locating a remaining use in Syntax's committed _.gen.pw; that artifact has now been regenerated through the public parser/derive APIs, with only the obsolete import prefix changing. The provider test also passes under the strict compiler. Full-suite, fixed-point and performance evidence remain pending. No seed/main promotion has occurred.
+## Outcome
+
+Resolved in compiler 8321aa0e/b02fcda6 with Syntax 0.1.11-dev.30. [Saved evidence](../../../evidence/existing-feature-conformance/root-owned-use/README.md) records the producer-to-reader migration, normal suite skip/fail zero, generation suite skip/fail zero, focused raw-IR ASan/LSan, generation-2 LLVM/runtime fixed point and formal median 6.138237 seconds. The existing root-import positive test is preserved. No file-local import store, generated import hoisting, post-selection visibility filter or macro privilege was added. Main/seed promotion and full integration gates remain outside this closed repair.
 
 ## Existing-Feature Conformance Classification
 
