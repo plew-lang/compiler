@@ -3,10 +3,13 @@ use /SourceAccess only { SourceAccess }
 use /Ir only { Stmt }
 use @Std/Io only { print }
 
-fn main() {
+fn check(boxed: Bool) {
     mut val compiler = <Comp />
+    val source = if boxed {
+        give "trait P {{}} struct Value {{}} impl Value as P {{}} fn make() -> Value {{ return <Value /> }} fn probe() -> any P {{ return make() }}"
+    } else { give "fn probe() -> I64 {{ return 1 }}" }
     analyzeFrontendForRequests(c: inout compiler,
-        input: <FrontendInput.Text path="pending-use.pw" text="fn probe() -> I64 {{ return 1 }}" />,
+        input: <FrontendInput.Text path="pending-use.pw" text=source />,
         sources: <SourceAccess />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     val function = compiler.arena.functionAt(index: owner)
@@ -26,8 +29,10 @@ fn main() {
     }
     compiler.prepareLexicalBody(fnIdx: owner).unwrap()
     compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    if compiler.decls.declarationConversionOwners.getOr(key: owner, fallback: []).count() != 1U64 { panic("source refinement duplicated a conversion use") }
     val recorded = compiler.decls.declarationConversions[index]
-    if recorded.pendingSource.isSome() || !compiler.typeRefEq(a: recorded.source, b: function.retTy) { panic("owner published an unresolved source conversion") }
+    if recorded.pendingSource.isSome() || recorded.source == 0U64 || !compiler.typeRefEq(a: recorded.target, b: function.retTy) { panic("owner published an unresolved source conversion") }
+    if !boxed && !compiler.typeRefEq(a: recorded.source, b: function.retTy) { panic("identity conversion changed its source type") }
     compiler.checkDeclarationConversionEvidence(conversion: recorded).unwrap()
     compiler.cur.checkFn = owner
     compiler.cur.recordCallTemplates = true
@@ -35,5 +40,10 @@ fn main() {
         Result.Err(error: _) => {}
         Result.Ok(value: _) => { panic("published owner reopened conversion construction") }
     }
+}
+
+fn main() {
+    check(boxed: false)
+    check(boxed: true)
     print("ok")
 }

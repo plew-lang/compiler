@@ -60,6 +60,16 @@ pub impl Comp {
         mut val indices = self.decls.declarationConversionOwners.getOr(key: owner, fallback: [])
         for index in indices {
             val prior = self.decls.declarationConversions[index]
+            if source != 0U64 && prior.pendingSource.isSome() && self.sameCallSiteKey(a: prior.site, b: site) && self.typeRefEq(a: prior.target, b: normalizedTarget) {
+                if prior.pendingSource.unwrap() != exprId {
+                    return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: pending conversion changed source identity") />
+                }
+                // Refinement completes this use; it must not append a second
+                // semantic row beside the earlier unresolved request.
+                self.decls.declarationConversions.set(i: index, value: <DeclarationConversion site=site source=source target=normalizedTarget proof=self.freezeValueConversionProof(proof: conversion) />)
+                self.recordGlobalConversionOwner(index: index)
+                return <Result.Ok value=() />
+            }
             if self.sameCallSiteKey(a: prior.site, b: site) && self.typeRefEq(a: prior.source, b: source) && self.typeRefEq(a: prior.target, b: normalizedTarget) {
                 self.recordGlobalConversionOwner(index: index)
                 return <Result.Ok value=() />
