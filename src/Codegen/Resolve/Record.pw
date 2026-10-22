@@ -1834,7 +1834,10 @@ pub impl Comp {
                 while i < fields.len {
                     val field: MakeField = self.makeFieldAt(fields: fields, index: i)
                     val fieldType = (try self.makeFieldType(typeRef: instance, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: field.nameStart, fieldLen: field.nameLen))
-                    val ctxRef = self.typedIrRefOfInfo(ti: fieldType)
+                    // The completion visit obeys the same binder boundary as
+                    // the initial field visit. An omitted constructor argument
+                    // is still a hole, never that declaration's rigid T.
+                    val ctxRef = self.constructionFieldContext(instance: instance, fieldTerm: self.typedIrRefOfInfo(ti: fieldType))
                     mut val value: U64 = field.value
                     if self.recordsFieldDefault(field: field) {
                         value = (try self.recordFieldDefaultCall(field: field, instance: instance, resultTerm: ctxRef))

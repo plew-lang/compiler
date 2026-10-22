@@ -1,0 +1,19 @@
+// Completing fields must not record a conversion to the constructor's own
+// unbound T before a selected parameter supplies Box[State] as context.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="enum-argument.pw" text="enum State {{ Ready }} enum Box[T] {{ Some(value: T) }} struct Holder[T] {{ val marker: T }} impl[T] Holder[T] {{ fn store(value: T) {{}} }} struct Store {{ val holder: Holder[Box[State]] }} impl Store {{ fn save(state: State) {{ self.holder.store(value: <Box.Some value=state />) }} }}" />,
+        sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "save").nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    for index in compiler.decls.declarationConversionOwners.getOr(key: owner, fallback: []) {
+        compiler.checkDeclarationConversionEvidence(conversion: compiler.decls.declarationConversions[index]).unwrap()
+    }
+    print("ok")
+}
