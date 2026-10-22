@@ -259,3 +259,39 @@ new ordinary source fixtures cover ambiguous/mismatching/conditional outputs and
 stronger-premise propagation to execution. Fresh verification remains required
 for this last increment; do not repair the opaque fixture by changing its
 expected diagnostic to the old ambiguity.
+
+### Interface Evidence Implementation Boundary
+
+Use a private immutable interface-evidence node pool in Frontend, referenced by
+an explicit DeclarationBoundRef.Interface kind. A source node owns session,
+semantic owner, exact CallSiteKey/receiver/trait instance, and a fresh rigid
+hidden-Self term. The bound's subject is that hidden term, never the existential
+container and never the enclosing lexical Self. Its constructor is private to
+selected Dynamic/Protocol recording. DeclarationTypeScope admits that one root
+only for the matching saved operation; ordinary static scopes admit none.
+
+At an executable caller body, interpret the same source root under its explicit
+BodyInstance environment, with a fresh hidden binder for that interpretation.
+Retain original-root identity and caller body in the immutable interpretation;
+substitute caller terms and source hidden Self together without capture. Repeated
+use of the same source root/body reuses its interpretation. Independent call
+sites and body instances do not acquire equal hidden types merely by sharing a
+printed trait or source binder. Use existing source-fact session identity and
+body/environment identities, not an unrelated new session registry.
+
+Factor proof substitution and edge/condition/projection replay under a private
+explicit scope. Concrete substitution and universal interface substitution share
+that traversal and retain original declaration/clause roots; the latter permits
+only its exact hidden binder after caller substitution. Keep their public result
+types distinct. Universal completion cannot become StaticProofInstantiation.Ready
+or enter a static callee queue. Missing promised bindings and malformed/foreign
+roots remain errors; an actually open caller is not successful evidence.
+
+The dynamic final descriptor retains the prepared interface-call evidence for
+its exact source root/caller/requirement/receiver. It consumes saved obligations
+without source selection. First-concrete boxing instead substitutes the already
+selected concrete witness and existing conformanceMethodPlan, and distinguishes
+an unavailable unused member from corrupt evidence. Connect these actual readers
+and remove the old bound-dropping/Declaration fallbacks before calling this
+increment complete. Private root storage alone, source rejection alone, or new
+checks without those consumers are not completion.
