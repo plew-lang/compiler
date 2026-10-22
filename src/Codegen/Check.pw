@@ -22,3 +22,5 @@ part ./Check/Return
 
 part ./Check/Obligations
 part ./Check/CallConstraints
+
+part ./Check/InterfaceEvidence

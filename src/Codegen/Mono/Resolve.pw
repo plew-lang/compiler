@@ -341,7 +341,7 @@ pub impl Comp {
         mut val openArguments = traitArgsOpen
         if openArguments {
             val target = self.decls.traitIndexByOffset(offset: traitOwner)
-            if target < self.decls.traitCount() && self.decls.traitAt(index: target).typeParams.count() == 0U64 { openArguments = false }
+            if target < self.decls.traitCount() && self.decls.traitParameterCount(index: target) == 0U64 { openArguments = false }
         }
         if baseRef == 0U64 || baseRef >= self.arena.typeCount() { return <Result.Ok value=<ConformanceProofResult.Missing /> /> }
         if self.arena.typeAt(index: baseRef).assocNameId == 0U64 { return self.traitPatternProofFromFacts(demand: demand, baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: openArguments, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners) }

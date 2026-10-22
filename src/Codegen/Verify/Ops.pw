@@ -437,7 +437,7 @@ pub impl Comp {
             }
             CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
                 match target {
-                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => {
+                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot, interfaceRoot: _) => {
                         if traitIndex >= self.decls.traitCount() || slot == 0U64 || slot > self.decls.traitAt(index: traitIndex).reqs.count() {
                             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected dynamic method has no requirement") />
                         }

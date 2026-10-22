@@ -275,6 +275,8 @@ pub impl Arena {
 pub impl Decls {
     fn traitCount() -> U64 { return self.traits.count() }
     fn traitAt(index: U64) -> TraitDef { return self.traits[index] }
+    // Scalar query callers do not acquire a full declaration value.
+    fn traitParameterCount(index: U64) -> U64 { return self.traits[index].typeParams.len }
     fn traitIndexByOffset(offset: U64) -> U64 {
         val entry = self.traitsByOffset.getOr(key: offset, fallback: 0U64)
         if entry == 0U64 { return self.traits.count() }

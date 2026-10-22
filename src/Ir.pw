@@ -1563,6 +1563,7 @@ pub enum DeclarationBoundRef {
     AssociatedType(index: U64)
     MethodReceiver(index: U64)
     Requirement(index: U64)
+    Interface(index: U64)
 }
 
 // Common read-only semantic view of an authored condition. Storage and source
@@ -2526,6 +2527,8 @@ pub struct DeclarationTypeScope {
     pub val owner: U64
     pub val parameters: FuncBindRange
     pub val selfParameter: U64 = 0U64
+    // One explicitly selected interface proof scope; zero admits no hidden Self.
+    pub val interfaceRoot: U64 = 0U64
 }
 pub impl DeclarationTypeScope { factory }
 
@@ -3420,7 +3423,7 @@ pub impl CallTemplateViewRange { factory }
 pub enum DynamicCallTemplateTarget {
     ClosureLocal(bindingDeclStart: U64, fnTypeTerm: U64)
     ClosureField(fieldIndex: U64, fnTypeTerm: U64)
-    ExistentialRequirement(traitIdx: U64, slot: U64)
+    ExistentialRequirement(traitIdx: U64, slot: U64, interfaceRoot: U64)
 }
 
 // The template is a site-kind sum.  These alternatives deliberately cannot
@@ -3441,7 +3444,7 @@ pub enum ProtocolSelection {
     Pending
     Identity
     Static(resolution: StaticMemberResolution)
-    Existential(traitIdx: U64, slot: U64)
+    Existential(traitIdx: U64, slot: U64, interfaceRoot: U64)
 }
 
 pub enum CallTemplateKind {

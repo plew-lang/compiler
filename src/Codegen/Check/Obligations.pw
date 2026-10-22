@@ -800,26 +800,7 @@ pub impl Comp {
     // Inspect canonical children, including projection receivers and record
     // fields. A foreign binder is not a legitimate reason to defer a check.
     inout fn declarationTypeDependency(ref: U64, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
-        if self.arena.typeIsClosed(ref: ref) { return <Result.Ok value=false /> }
-        if ref >= self.arena.typeTerms.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation has an invalid type term") /> }
-        val term = self.arena.typeTerms[ref]
-        mut val dependent = false
-        if term.paramId != 0U64 {
-            dependent = term.paramId == scope.selfParameter
-            mut val index = 0U64
-            while index < scope.parameters.count() {
-                if self.funcBindAt(binds: scope.parameters, index: index).paramId == term.paramId { dependent = true }
-                index += 1U64
-            }
-            if !dependent { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation refers to a type parameter outside its lexical scope") /> }
-        }
-        mut val index = 0U64
-        while index < self.typeTermRefChildCount(ref: ref) {
-            if (try self.declarationTypeDependency(ref: self.typeTermRefChildRef(ref: ref, index: index), scope: scope, offset: offset)) { dependent = true }
-            index += 1U64
-        }
-        if !dependent { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "unresolved declaration type has no lexical parameter dependency") /> }
-        return <Result.Ok value=true />
+        return <Result.Ok value=(try self.declarationTypeDependencies(ref: ref, scope: scope, offset: offset)).caller />
     }
 
     inout fn declarationBoundDependency(bound: TraitBound, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
@@ -868,6 +849,10 @@ pub impl Comp {
         val owner = match source {
             DeclarationBoundRef.Function(index: val index) => { give self.decls.funcBounds.at(index: index).fnIdx }
             DeclarationBoundRef.MethodReceiver(index: val index) => { give index }
+            DeclarationBoundRef.Interface(index: val index) => {
+                try self.checkInterfaceAssumptionScope(index: index, scope: scope, offset: offset)
+                return <Result.Ok value=() />
+            }
             DeclarationBoundRef.AssociatedType(index: val index) => {
                 for active in self.activeAssumptionAdmission {
                     if active == index { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration assumption prerequisite is cyclic") /> }
@@ -1147,9 +1132,16 @@ pub impl Comp {
                     _ => { return <Result.Ok value=[] /> }
                 }
             }
+            CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
+                match target {
+                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot, interfaceRoot: val root) => { return self.sourceInterfaceSignatureBounds(template: template, root: root, traitIndex: traitIndex, slot: slot) }
+                    _ => { return <Result.Ok value=[] /> }
+                }
+            }
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 match selection {
                     ProtocolSelection.Static(resolution: val resolution) => { return self.sourceSelectedStaticSignatureBounds(resolution: resolution, receiverTerm: template.receiverTypeTerm, arguments: [], offset: template.siteKey.originStart) }
+                    ProtocolSelection.Existential(traitIdx: val traitIndex, slot: val slot, interfaceRoot: val root) => { return self.sourceInterfaceSignatureBounds(template: template, root: root, traitIndex: traitIndex, slot: slot) }
                     _ => { return <Result.Ok value=[] /> }
                 }
             }
@@ -1222,7 +1214,7 @@ pub impl Comp {
     }
 
     inout fn checkSelectedCallConstraintPlan(template: CallTemplate, expected: Array[TraitBound], plan: SelectedCallConstraints) -> Result[(), CompileDiagnostic] {
-        val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
+        val scope = try self.callConstraintScope(template: template)
         if plan.owner != scope.owner || plan.bounds.count() != expected.count() || plan.proofs.count() != expected.count() {
             return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has incomplete constraint evidence") />
         }
@@ -1253,8 +1245,9 @@ pub impl Comp {
         // An empty signature needs no new evidence, but any retained plan
         // must still have matched that exact empty signature above.
         if bounds.count() == 0U64 { return <Result.Ok value=() /> }
-        val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
-        val assumptions = self.functionBoundAssumptions(fnIdx: template.siteKey.ownerFnIdx)
+        val scope = try self.callConstraintScope(template: template)
+        mut val assumptions = self.functionBoundAssumptions(fnIdx: template.siteKey.ownerFnIdx)
+        if scope.interfaceRoot != 0U64 { assumptions.append(<DeclarationBoundRef.Interface index=scope.interfaceRoot - 1U64 />) }
         mut val proofs: Array[U64] = []
         for bound in bounds {
             val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)
@@ -1332,7 +1325,7 @@ pub impl Comp {
     }
 
     inout fn checkDeferredCallDependency(template: CallTemplate) -> Result[(), CompileDiagnostic] {
-        val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
+        val scope = try self.callConstraintScope(template: template)
         val offset = template.siteKey.originStart
         mut val dependent = try self.declarationTypeDependency(ref: template.receiverTypeTerm, scope: scope, offset: offset)
         match template.kind {

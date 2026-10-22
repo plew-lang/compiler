@@ -537,7 +537,7 @@ pub impl Comp {
                 match target {
                     DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: _, fnTypeTerm: val term) => { signature = term }
                     DynamicCallTemplateTarget.ClosureField(fieldIndex: _, fnTypeTerm: val term) => { signature = term }
-                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => {
+                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot, interfaceRoot: _) => {
                         if traitIndex >= self.decls.traitCount() || slot == 0U64 {
                             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected dynamic call has no requirement") />
                         }
@@ -549,7 +549,7 @@ pub impl Comp {
                     }
                 }
                 match target {
-                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: _, slot: _) => {}
+                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: _, slot: _, interfaceRoot: _) => {}
                     _ => {
                         if signature == 0U64 || signature >= self.arena.typeCount() || !self.isFnType(ref: signature) {
                             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected closure call has no function signature") />
@@ -1150,7 +1150,7 @@ pub impl Comp {
             _ => {}
         }
         match target {
-            DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val trait, slot: val slot) => {
+            DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val trait, slot: val slot, interfaceRoot: _) => {
                 if slot > 0U64 {
                     val declaration = self.traitReqAt(reqs: self.decls.traitAt(index: trait).reqs, index: slot - 1U64)
                     val signature = try self.existentialRequirementSignature(target: receiverTerm, traitIndex: trait, requirement: declaration)
@@ -1185,13 +1185,20 @@ pub impl Comp {
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
         val templateArgs: CallTemplateArgumentRange = (try self.directCallTemplateArgs(args: args))
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
+        val selectedTarget = match target {
+            DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot, interfaceRoot: _) => {
+                val root = try self.retainSourceInterfaceRoot(site: siteKey, receiver: receiverTerm, traitIndex: traitIndex)
+                give <DynamicCallTemplateTarget.ExistentialRequirement traitIdx=traitIndex slot=slot interfaceRoot=root />
+            }
+            _ => target,
+        }
         if index < self.callTemplateLocations.count() {
             val prior: CallTemplate = self.callTemplateAt(index: index)
-            self.replaceSourceCallTemplate(index: index, template: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Dynamic receiver=receiver args=templateArgs target=target /> expectedResultTerm=prior.expectedResultTerm />)
+            self.replaceSourceCallTemplate(index: index, template: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Dynamic receiver=receiver args=templateArgs target=selectedTarget /> receiverTypeTerm=receiverTerm expectedResultTerm=prior.expectedResultTerm />)
             self.recordGlobalCallTemplateOwner(templateIndex: index)
             return <Result.Ok value=() />
         }
-        self.appendSourceCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Dynamic receiver=receiver args=templateArgs target=target /> />, resultExpression: <Optional.Some v=exprId />)
+        self.appendSourceCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Dynamic receiver=receiver args=templateArgs target=selectedTarget /> receiverTypeTerm=receiverTerm />, resultExpression: <Optional.Some v=exprId />)
         return <Result.Ok value=() />
     }
 
@@ -1355,7 +1362,7 @@ pub impl Comp {
                 if owner < self.decls.traitCount() && requirementSlot != 0U64 {
                     val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: requirementSlot - 1U64)
                     resultTerm = (try self.anyMemberRetInfo(anyRef: receiverTerm, req: requirement)).ref
-                    selection = <ProtocolSelection.Existential traitIdx=owner slot=requirementSlot />
+                    selection = <ProtocolSelection.Existential traitIdx=owner slot=requirementSlot interfaceRoot=0U64 />
                 } else if slot == 1U64 { selection = <ProtocolSelection.Identity />
                     resultTerm = receiverTerm }
             } else {
@@ -1397,6 +1404,13 @@ pub impl Comp {
         if !self.cur.recordCallTemplates { return <Result.Ok value=resultTerm /> }
         val key = try self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: slot)
         val index = self.callTemplateIndex(siteKey: key)
+        match selection {
+            ProtocolSelection.Existential(traitIdx: val traitIndex, slot: val requirement, interfaceRoot: _) => {
+                val root = try self.retainSourceInterfaceRoot(site: key, receiver: receiverTerm, traitIndex: traitIndex)
+                selection = <ProtocolSelection.Existential traitIdx=traitIndex slot=requirement interfaceRoot=root />
+            }
+            _ => {}
+        }
         val kind = <CallTemplateKind.Protocol receiver=receiver selection=selection resultTerm=resultTerm />
         if index < self.callTemplateLocations.count() {
             val prior = self.callTemplateAt(index: index)
@@ -1979,7 +1993,7 @@ pub impl Comp {
                 match target {
                     DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: _, fnTypeTerm: val term) => { return self.functionTypeReturnsUnit(ref: term) }
                     DynamicCallTemplateTarget.ClosureField(fieldIndex: _, fnTypeTerm: val term) => { return self.functionTypeReturnsUnit(ref: term) }
-                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIdx, slot: val slot) => {
+                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIdx, slot: val slot, interfaceRoot: _) => {
                         if slot == 0U64 { return false }
                         return self.traitRequirementReturnsUnit(traitIdx: traitIdx, reqIdx: slot - 1U64)
                     }

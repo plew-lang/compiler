@@ -1,0 +1,45 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplateKind, DynamicCallTemplateTarget, StaticConformanceProof, DeclarationBoundRef, DeclarationTypeScope }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait Marker {{}} trait Service: Marker {{ fn get() -> I64 where Self: Marker }} fn probe(first: any Service, second: any Service) {{ val firstResult = first.get() val secondResult = second.get() }} fn main() {{}}" path="interface-scope.pw" />, sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    mut val roots: Array[U64] = []
+    mut val subjects: Array[U64] = []
+    mut val evidence: Array[StaticConformanceProof] = []
+    for template in compiler.callTemplateSnapshot() {
+        if template.siteKey.ownerFnIdx == owner {
+            match template.kind {
+                CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
+                    match target {
+                        DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: _, slot: _, interfaceRoot: val root) => {
+                            if root == 0U64 { panic("source operation lost its interface scope") }
+                            val index = compiler.callTemplateIndex(siteKey: template.siteKey)
+                            val plan = compiler.preparedCallConstraints(index: index).unwrap().constraints()
+                            if plan.bounds.count() != 1U64 || plan.proofs.count() != 1U64 { panic("source interface lost its complete public conditions") }
+                            val proof = compiler.thawStaticConformanceProof(id: plan.proofs[0U64])
+                            val scope = <DeclarationTypeScope owner=owner parameters=compiler.arena.functionAt(index: owner).typeParams interfaceRoot=root />
+                            compiler.checkDeclarationCallProof(proof: proof, scope: scope, offset: 0U64).unwrap()
+                            if compiler.declarationTypeDependency(ref: plan.bounds[0U64].subject, scope: scope, offset: 0U64).unwrap() { panic("rigid interface witness became an unresolved caller parameter") }
+                            if compiler.declarationTypeDependency(ref: plan.bounds[0U64].subject, scope: <DeclarationTypeScope owner=owner parameters=compiler.arena.functionAt(index: owner).typeParams />, offset: 0U64).isOk() { panic("hidden witness escaped its selected scope") }
+                            roots.append(root)
+                            subjects.append(plan.bounds[0U64].subject)
+                            evidence.append(proof)
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if roots.count() != 2U64 || roots[0U64] == roots[1U64] || compiler.typeRefEq(a: subjects[0U64], b: subjects[1U64]) { panic("independent erased values acquired the same hidden Self") }
+    if compiler.arena.typeAt(index: subjects[0U64]).paramId == 0U64 || compiler.arena.typeAt(index: subjects[0U64]).paramId == compiler.arena.typeAt(index: subjects[1U64]).paramId { panic("interface scopes did not allocate distinct rigid binder identities") }
+    val firstScope = <DeclarationTypeScope owner=owner parameters=compiler.arena.functionAt(index: owner).typeParams interfaceRoot=roots[0U64] />
+    if compiler.checkDeclarationCallProof(proof: evidence[1U64], scope: firstScope, offset: 0U64).isOk() { panic("foreign interface evidence entered the first operation") }
+    if compiler.checkDeclarationCallProof(proof: <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Interface index=roots[1U64] + 100U64 /> />, scope: firstScope, offset: 0U64).isOk() { panic("missing interface root was repaired by a lookup") }
+    print("interface-source-scope")
+}

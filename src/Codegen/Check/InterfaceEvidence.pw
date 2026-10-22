@@ -1,0 +1,171 @@
+// One immutable proof scope per selected erased-receiver operation. This is
+// not a conformance of the existential container or a source opening feature.
+impl Comp {
+    fn interfaceEvidenceIsValid(index: U64) -> Bool {
+        if index >= self.interfaceEvidence.count() { return false }
+        match self.interfaceEvidence[index]->node {
+            InterfaceEvidenceNode.Source(root: val root) => { return root.session == self.sourceFacts.session }
+            InterfaceEvidenceNode.Instance(root: val root, caller: val caller, bound: _) => {
+                if root == 0U64 || root > self.interfaceEvidence.count() || caller == 0U64 || caller > self.arena.bodyInstanceCount() { return false }
+                match self.interfaceEvidence[root - 1U64]->node {
+                    InterfaceEvidenceNode.Source(root: val source) => { return source.session == self.sourceFacts.session }
+                    InterfaceEvidenceNode.Instance(root: _, caller: _, bound: _) => { return false }
+                }
+            }
+        }
+    }
+
+    fn interfaceEvidenceBound(index: U64) -> TraitBound {
+        if !self.interfaceEvidenceIsValid(index: index) { return self.missingTraitBound() }
+        return match self.interfaceEvidence[index]->node {
+            InterfaceEvidenceNode.Source(root: val root) => root.bound,
+            InterfaceEvidenceNode.Instance(root: _, caller: _, bound: val bound) => bound,
+        }
+    }
+
+    fn interfaceSourceRoot(index: U64) -> U64 {
+        if !self.interfaceEvidenceIsValid(index: index) { return 0U64 }
+        return match self.interfaceEvidence[index]->node {
+            InterfaceEvidenceNode.Source(root: _) => index + 1U64,
+            InterfaceEvidenceNode.Instance(root: val root, caller: _, bound: _) => root,
+        }
+    }
+
+    fn interfaceScopeParameter(scope: DeclarationTypeScope) -> U64 {
+        if scope.interfaceRoot == 0U64 { return 0U64 }
+        val bound = self.interfaceEvidenceBound(index: scope.interfaceRoot - 1U64)
+        if bound.subject == 0U64 || bound.subject >= self.arena.typeCount() { return 0U64 }
+        return self.arena.typeTerms[bound.subject].paramId
+    }
+
+    inout fn checkInterfaceAssumptionScope(index: U64, scope: DeclarationTypeScope, offset: U64) -> Result[(), CompileDiagnostic] {
+        if scope.interfaceRoot != index + 1U64 || !self.interfaceEvidenceIsValid(index: index) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface assumption belongs to another selected operation") />
+        }
+        val root = self.interfaceSourceRoot(index: index)
+        val source = match self.interfaceEvidence[root - 1U64]->node {
+            InterfaceEvidenceNode.Source(root: val source) => source,
+            InterfaceEvidenceNode.Instance(root: _, caller: _, bound: _) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface assumption has no source root") /> },
+        }
+        val lexical = try self.declarationTypeScope(owner: source.site.ownerFnIdx)
+        if lexical.owner != scope.owner {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface assumption is not available in its lexical scope") />
+        }
+        return <Result.Ok value=() />
+    }
+
+    // Only selected source recording calls this constructor. Exact operation
+    // matching and immutable publication, rather than a name lookup, grant use.
+    inout fn createInterfaceEvidenceRoot(site: CallSiteKey, receiver: U64, traitIndex: U64) -> Result[U64, CompileDiagnostic] {
+        if receiver == 0U64 || receiver >= self.arena.typeCount() || !self.arena.typeTerms[receiver].isAny || traitIndex >= self.decls.traitCount() {
+            return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "selected interface has no valid receiver or trait") />
+        }
+        val owner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => owner,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "selected interface has no source owner") /> },
+        }
+        if self.sourceOwnerConstructionClosed(owner: owner) {
+            return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "completed source owner cannot create an interface scope") />
+        }
+        val constraint = self.existentialTraitConstraint(ref: receiver)
+        if constraint.key.owner != self.decls.traitAt(index: traitIndex).nameStart {
+            return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "selected interface belongs to another receiver trait") />
+        }
+        val parameter = self.nextParamId
+        self.nextParamId += 1U64
+        val name = self.internTmpName(prefix: "InterfaceSelf", n: parameter)
+        val subject = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=parameter args=[] />)
+        val root = <InterfaceEvidenceRoot session=self.sourceFacts.session owner=owner site=site receiver=receiver traitIndex=traitIndex bound=<TraitBound subject=subject constraint=constraint offset=site.originStart /> />
+        self.interfaceEvidence.append(<Ref value=<InterfaceEvidenceCell node=<InterfaceEvidenceNode.Source root=root /> /> />)
+        return <Result.Ok value=self.interfaceEvidence.count() />
+    }
+}
+
+impl Comp {
+    inout fn retainSourceInterfaceRoot(site: CallSiteKey, receiver: U64, traitIndex: U64) -> Result[U64, CompileDiagnostic] {
+        val index = self.callTemplateIndex(siteKey: site)
+        if index < self.callTemplateLocations.count() {
+            val root = selectedInterfaceRoot(template: self.callTemplateAt(index: index))
+            if root != 0U64 {
+                try self.requireSourceInterfaceRoot(root: root, site: site, receiver: receiver, traitIndex: traitIndex)
+                return <Result.Ok value=root />
+            }
+        }
+        return self.createInterfaceEvidenceRoot(site: site, receiver: receiver, traitIndex: traitIndex)
+    }
+
+    inout fn requireSourceInterfaceRoot(root: U64, site: CallSiteKey, receiver: U64, traitIndex: U64) -> Result[InterfaceEvidenceRoot, CompileDiagnostic] {
+        if root == 0U64 || !self.interfaceEvidenceIsValid(index: root - 1U64) {
+            return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "selected interface has no retained proof root") />
+        }
+        match self.interfaceEvidence[root - 1U64]->node {
+            InterfaceEvidenceNode.Source(root: val source) => {
+                if !self.sameCallSiteKey(a: source.site, b: site) || !self.typeRefEq(a: source.receiver, b: receiver) || source.traitIndex != traitIndex {
+                    return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "selected interface proof belongs to another operation or receiver") />
+                }
+                val index = self.callTemplateIndex(siteKey: site)
+                if index < self.callTemplateLocations.count() && !semanticCompletionOwnersEqual(recorded: source.owner, prepared: self.callTemplateLocations[index].owner) {
+                    return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "selected interface proof belongs to another source owner") />
+                }
+                return <Result.Ok value=source />
+            }
+            InterfaceEvidenceNode.Instance(root: _, caller: _, bound: _) => { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "source interface cannot use an instantiated proof root") /> }
+        }
+    }
+
+    inout fn callConstraintScope(template: CallTemplate) -> Result[DeclarationTypeScope, CompileDiagnostic] {
+        val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
+        return <Result.Ok value=<DeclarationTypeScope owner=scope.owner parameters=scope.parameters selfParameter=scope.selfParameter interfaceRoot=selectedInterfaceRoot(template: template) /> />
+    }
+
+    inout fn sourceInterfaceSignatureBounds(template: CallTemplate, root: U64, traitIndex: U64, slot: U64) -> Result[Array[TraitBound], CompileDiagnostic] {
+        val source = try self.requireSourceInterfaceRoot(root: root, site: template.siteKey, receiver: template.receiverTypeTerm, traitIndex: traitIndex)
+        val trait = self.decls.traitAt(index: traitIndex)
+        if slot == 0U64 || slot > trait.reqs.count() {
+            return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected interface has no retained requirement") />
+        }
+        val requirement = self.traitReqAt(reqs: trait.reqs, index: slot - 1U64)
+        val proof = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Interface index=root - 1U64 /> />
+        val signature = <SourceCallSignature.Trait bound=source.bound traitIndex=traitIndex environment=<InstanceEnvironment receiverRef=source.bound.subject proof=proof /> />
+        mut val bounds: Array[TraitBound] = []
+        mut val index = 0U64
+        while index < requirement.signatureBounds.len {
+            val clause = self.conformBoundAt(bounds: requirement.signatureBounds, index: index)
+            bounds.append(<TraitBound subject=(try self.sourceCallSignatureParameter(ref: clause.subject, signature: signature)) constraint=(try self.sourceCallSignatureConstraint(constraint: clause.constraint, signature: signature)) offset=clause.offset />)
+            index += 1U64
+        }
+        return <Result.Ok value=bounds />
+    }
+}
+
+
+impl Comp {
+    inout fn declarationTypeDependencies(ref: U64, scope: DeclarationTypeScope, offset: U64) -> Result[DeclarationTypeDependencies, CompileDiagnostic] {
+        if self.arena.typeIsClosed(ref: ref) { return <Result.Ok value=<DeclarationTypeDependencies /> /> }
+        if ref >= self.arena.typeTerms.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation has an invalid type term") /> }
+        val term = self.arena.typeTerms[ref]
+        mut val caller = false
+        mut val interfaceScoped = false
+        // A projection's receiver child owns its binder. The old flat mirror
+        // on a projection is not a second parameter occurrence or authority.
+        if term.paramId != 0U64 && term.assocNameId == 0U64 {
+            caller = term.paramId == scope.selfParameter
+            mut val index = 0U64
+            while index < scope.parameters.count() {
+                if self.funcBindAt(binds: scope.parameters, index: index).paramId == term.paramId { caller = true }
+                index += 1U64
+            }
+            if !caller && scope.interfaceRoot != 0U64 { interfaceScoped = self.interfaceScopeParameter(scope: scope) == term.paramId }
+            if !caller && !interfaceScoped { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation refers to a type parameter outside its lexical scope") /> }
+        }
+        mut val index = 0U64
+        while index < self.typeTermRefChildCount(ref: ref) {
+            val child = try self.declarationTypeDependencies(ref: self.typeTermRefChildRef(ref: ref, index: index), scope: scope, offset: offset)
+            if child.caller { caller = true }
+            if child.interfaceScoped { interfaceScoped = true }
+            index += 1U64
+        }
+        if !caller && !interfaceScoped { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "unresolved declaration type has no lexical parameter dependency") /> }
+        return <Result.Ok value=<DeclarationTypeDependencies caller=caller interfaceScoped=interfaceScoped /> />
+    }
+}

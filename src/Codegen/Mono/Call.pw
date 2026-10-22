@@ -229,7 +229,7 @@ pub impl Comp {
                         proof = selected.proof
                         typeArguments = selected.calleeTypeArgs
                     }
-                    ProtocolSelection.Existential(traitIdx: val owner, slot: val requirement) => {
+                    ProtocolSelection.Existential(traitIdx: val owner, slot: val requirement, interfaceRoot: _) => {
                         target = <CallTarget.ExistentialRequirement traitIdx=owner slot=requirement />
                         result = try self.groundAndRecordBodyType(ref: resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
                     }
@@ -3478,7 +3478,7 @@ pub impl Comp {
                 if fnTy.args.count() > 0U64 && !fnTy.isDiverging { resultRef = self.semanticSourceResultTerm(ref: fnTy.args[0]) }
                 return <Result.Ok value=<CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected resultRef=resultRef target=<CallTarget.ClosureField fieldIndex=fieldIndex fnTypeRef=fnTypeRef /> /> />
             }
-            DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIdx, slot: val slot) => {
+            DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIdx, slot: val slot, interfaceRoot: _) => {
                 if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || traitIdx >= self.decls.traitCount() || slot == 0U64 || slot > self.decls.traitAt(index: traitIdx).reqs.count() {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: existential template has invalid receiver or requirement") />
                 }
@@ -3921,6 +3921,7 @@ pub impl Comp {
                     }
                     DeclarationBoundRef.Conformance(index: val declared) => { return self.retainedConformanceConstraint(declared: declared, environment: environment) }
                     DeclarationBoundRef.AssociatedType(index: val index) => { return self.instantiateAssociatedConstraint(index: index, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
+                    DeclarationBoundRef.Interface(index: _) => { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "interface evidence requires a universal call scope") /> }
                     DeclarationBoundRef.MethodReceiver(index: _) | DeclarationBoundRef.TraitSubject(index: _) => { return self.instantiateReceiverConstraint(bound: bound, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
                 }
             }

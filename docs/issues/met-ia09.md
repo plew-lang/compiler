@@ -295,3 +295,18 @@ an unavailable unused member from corrupt evidence. Connect these actual readers
 and remove the old bound-dropping/Declaration fallbacks before calling this
 increment complete. Private root storage alone, source rejection alone, or new
 checks without those consumers are not completion.
+
+### Source Interface Scope Increment
+
+The source-operation constructor now retains an immutable Interface bound root
+with a fresh rigid hidden Self. Dynamic and existential protocol signatures
+retain all public clauses. Source proof validation checks the exact operation,
+receiver, lexical owner and interface root, while distinguishing universal hidden
+Self from unresolved caller parameters. The imported interface_source_scope
+control succeeds with a real golden output and rejects foreign/missing roots.
+Whole compiler source checking succeeds with the preceding measured carrier.
+
+This is a WIP boundary: executable-body interpretation, shared proof substitution,
+final dynamic consumption and concrete boxing evidence transfer are still open.
+The existing final consumers currently ignore the new root. No full-gate or fresh
+compiler claim is made for this increment.

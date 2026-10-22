@@ -46,7 +46,7 @@ fn main() {
     rejected(c: inout c, message: "missing-static-selection-not-closed")
     c.replaceBuildingCallTemplate(index: 0U64, template: <CallTemplate siteKey=site kind=<CallTemplateKind.Dynamic receiver=<CallTemplateReceiver.None /> args=args target=<DynamicCallTemplateTarget.ClosureLocal bindingDeclStart=0U64 fnTypeTerm=caller /> /> />)
     rejected(c: inout c, message: "non-function-dynamic-call-not-closed")
-    c.replaceBuildingCallTemplate(index: 0U64, template: <CallTemplate siteKey=site kind=<CallTemplateKind.Dynamic receiver=<CallTemplateReceiver.Term term=caller /> args=args target=<DynamicCallTemplateTarget.ExistentialRequirement traitIdx=0U64 slot=0U64 /> /> />)
+    c.replaceBuildingCallTemplate(index: 0U64, template: <CallTemplate siteKey=site kind=<CallTemplateKind.Dynamic receiver=<CallTemplateReceiver.Term term=caller /> args=args target=<DynamicCallTemplateTarget.ExistentialRequirement traitIdx=0U64 slot=0U64 interfaceRoot=0U64 /> /> />)
     rejected(c: inout c, message: "missing-dynamic-requirement-not-closed")
     val operands = c.publishCallTemplateOperands(operands: [c.callArgumentSource(exprId: c.pushExpr(e: <Expr.Int value=1 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)).unwrap()])
     c.replaceBuildingCallTemplate(index: 0U64, template: <CallTemplate siteKey=site kind=<CallTemplateKind.Operator op=0 operands=operands resolution=<OperatorSelection.Pending /> resultTerm=caller /> />)

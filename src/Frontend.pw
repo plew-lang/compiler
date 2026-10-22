@@ -180,9 +180,56 @@ struct TraitProofSelection {
     mut val preferredCompatible: StaticConformanceProof = <StaticConformanceProof.Missing />
 }
 
+// Proof-only rigid scope for one selected operation on an erased receiver.
+// The existential container and enclosing lexical Self are not this subject.
+// Being in scope and still needing caller specialization are independent.
+// A rigid interface witness is valid abstract evidence, not an inference hole.
+struct DeclarationTypeDependencies {
+    val caller: Bool = false
+    val interfaceScoped: Bool = false
+}
+
+struct InterfaceEvidenceRoot {
+    val session: U64
+    val owner: SemanticCompletionOwner
+    val site: CallSiteKey
+    val receiver: U64
+    val traitIndex: U64
+    val bound: TraitBound
+}
+
+enum InterfaceEvidenceNode {
+    Source(root: InterfaceEvidenceRoot)
+    Instance(root: U64, caller: U64, bound: TraitBound)
+}
+
+struct InterfaceEvidenceCell {
+    val node: InterfaceEvidenceNode
+}
+
+fn selectedInterfaceRoot(template: CallTemplate) -> U64 {
+    match template.kind {
+        CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
+            match target {
+                DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: _, slot: _, interfaceRoot: val root) => { return root }
+                _ => {}
+            }
+        }
+        CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
+            match selection {
+                ProtocolSelection.Existential(traitIdx: _, slot: _, interfaceRoot: val root) => { return root }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+    return 0U64
+}
+
 pub struct Comp {
     mut val semanticClosures: Array[SemanticClosure] = []
     mut val sourceFacts: SourceFactDirectory = <SourceFactDirectory />
+    mut val interfaceEvidence: Array[Ref[InterfaceEvidenceCell]] = []
     mut val semanticRecordingStarted: Bool = false
     mut val semanticClosureOwners: Array[SemanticCompletionOwner] = []
     mut val semanticClosureIndexSlots: Array[U64] = []
