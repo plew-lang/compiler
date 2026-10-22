@@ -2496,7 +2496,7 @@ pub impl Comp {
             self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
             self.cur.typeArgs = []
             self.cur.checkFn = fnIdx
-            if !recordCallTemplates { try self.checkDefaultGeneratorRestrictions(fnIdx: fnIdx) }
+            try self.checkDefaultGeneratorRestrictions(fnIdx: fnIdx)
             mut val parameters: Array[SourceBodyParameter] = []
             mut val pi: U64 = 0
             while pi < f.params.count() {
@@ -2519,7 +2519,7 @@ pub impl Comp {
                 try self.recordSourceBodySignature(fnIdx: fnIdx, signature: <SourceBodySignature hasReceiver=f.hasRecv receiverTerm=self.cur.selfRef selfInout=f.selfInout selfMove=f.selfMove isAsync=f.isAsync hasReturnValue=f.hasRet resultTerm=self.semanticBodyReturnContext(fnIdx: fnIdx) block=f.body parameters=parameters />)
             }
             try self.recordBlock(blkId: f.body)
-            if !recordCallTemplates { try self.checkDefaultGenerator(fnIdx: fnIdx) }
+            try self.checkDefaultGenerator(fnIdx: fnIdx)
         }
         return <Result.Ok value=() />
     }

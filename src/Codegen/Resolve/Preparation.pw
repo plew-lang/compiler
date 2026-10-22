@@ -9,11 +9,12 @@ impl Comp {
         self.cur.bodyId = 0U64
         self.cur.bodySelfRef = 0U64
         self.cur.bodyItemRef = 0U64
-        try self.recordParametricFunction(fnIdx: owner, recordCallTemplates: false)
-        try self.checkGenericFunction(fnIdx: owner)
-        try self.verifyFunctionDeclaration(fnIdx: owner)
+        // Construct calls with their source types before compatibility reads
+        // them. Later validation must not reconstruct the chosen member.
         try self.recordParametricFunction(fnIdx: owner, recordCallTemplates: true)
         self.cur.recordCallTemplates = false
+        try self.checkGenericFunction(fnIdx: owner)
+        try self.verifyFunctionDeclaration(fnIdx: owner)
         if (try self.completeRecordedBodyDefaultCalls(owner: owner)) != 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: owner).defOffset, msg: "internal error: lexical body has incomplete default argument plans") />
         }

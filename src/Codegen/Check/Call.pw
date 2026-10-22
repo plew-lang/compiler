@@ -8,6 +8,25 @@
 // (which lower to Expr.Move, not a place) pass. `inoutOk` exempts `inout` args.
 
 pub impl Comp {
+    // Construction-time projection of an already selected operation. This is
+    // not another lookup and cannot invent a concrete witness for a requirement.
+    inout fn recordedSourceCallDeclaration(exprId: U64) -> Result[Optional[Func], CompileDiagnostic] {
+        val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+        val index = findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: site)
+        if index >= self.callTemplates.count() { return <Result.Ok value=<Optional.None /> /> }
+        val template = self.callTemplates[index]
+        match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                if callee >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call has no declaration") /> }
+                return <Result.Ok value=<Optional.Some v=self.arena.functionAt(index: callee) /> />
+            }
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: _, resultTerm: _) => {
+                return <Result.Ok value=<Optional.Some v=(try self.selectedStaticCallDeclaration(resolution: resolution, offset: site.originStart)) /> />
+            }
+            _ => { return <Result.Ok value=<Optional.None /> /> }
+        }
+    }
+
     // Generic bodies are verified against their declared trait bounds.  This
     // deliberately returns a requirement signature, never a concrete witness:
     // the latter belongs to Mono after T is instantiated.  Keeping the two

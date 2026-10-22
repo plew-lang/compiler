@@ -5,7 +5,7 @@
 // currently being checked (`c.cur.checkFn`) — i.e. it is a `self`-typed value in a
 // `pub impl Trait { fn ... }` body, where Self's only members are the trait's
 // requirements (and provided methods / supertraits). Returns the trait's name id
-// via the receiver, so the capability check uses traitProvidesMember.
+// via the receiver. Member checks consume the source-selected operation.
 
 pub impl Comp {
     inout fn checkBoundsConditionChain(conditions: ConditionClauseRange, thenBlk: U64, elseBlk: U64) -> Result[(), CompileDiagnostic] {
@@ -469,85 +469,31 @@ pub impl Comp {
                     try self.checkBoundsExpr(exprId: self.argAt(args: args, index: i).expr)
                     i += 1
                 }
-                val qualifier: U64 = self.symbolicCallQualifierTerm(exprId: exprId, receiverExpr: recv)
+                val qualifier = self.symbolicCallQualifierTerm(exprId: exprId, receiverExpr: recv)
                 if qualifier != 0U64 {
-                    val selected: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args))
-                    match selected {
-                        StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
-                            if !self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx).isAssoc {
-                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a type qualifier can only call an associated function") />
-                            }
-                            try self.checkSymbolicMethodArgs(exprId: exprId, fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args)
-                        }
-                        StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val declaration) => {
-                            if !self.arena.functionAt(index: declaration).isAssoc {
+                    // Qualifier category is checked against the actual selected
+                    // declaration, never another bound/name candidate query.
+                    val declaration = try self.recordedSourceCallDeclaration(exprId: exprId)
+                    match declaration {
+                        Optional.Some(v: val function) => {
+                            if !function.isAssoc {
                                 return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a type qualifier can only call an associated function") />
                             }
                         }
-                        StaticMemberResolution.Missing => {
+                        Optional.None => {
                             return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)") />
                         }
                     }
-                    return <Result.Ok value=() />
                 }
-                // A value whose type is T.Options must be checked against
-                // that projection's evidence, not the spelling of its T head.
-                val semanticReceiver = self.parametricExprTerm(exprId: recv)
-                if (try self.checkSymbolicMethodArgs(exprId: exprId, fnIdx: self.cur.checkFn, receiverRef: semanticReceiver, nameStart: nameStart, nameLen: nameLen, args: args)) {
-                    return <Result.Ok value=() />
-                }
-                val rt: TypeInfo = (try self.typeOf(id: recv))
-                if rt.kind == 2 {
-                    if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
-                        if !(self.boundProvidesMethod(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)) {
-                            return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)") />
-                        }
-                    } else {
-                        if self.isSelfTypeInProvided(start: rt.nameStart, len: rt.nameLen) {
-                            // a method call on `self` (Self) in a trait provided-method: Self's
-                            // members are only the trait's requirements / provided methods /
-                            // supertrait members (spec/08). Anything else is undefined on Self.
-                            val qm: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-                            if !(self.traitProvidesMember(traitOwner: self.arena.functionAt(index: self.cur.checkFn).provTraitOwner, traitArity: self.arena.functionAt(index: self.cur.checkFn).provTraitArity, qName: qm, args: args, depth: 0U64, useMod: self.moduleOf(offset: nameStart))) {
-                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)") />
-                            }
-                        } else {
-                        // a CONCRETE-receiver method: a `T` value passed to a concrete-typed
-                        // parameter is a type error (`s.set(x: a)` where a: T, x: I64). A
-                        // generic-receiver method's grounded param types are handled by the
-                        // backend; here we check the non-generic-receiver case.
-                        // A generic template may call a requirement justified by
-                        // `where Concrete: Trait[T]`.  Do not instead select a
-                        // currently visible concrete witness (e.g. Trait[String])
-                        // and compare it to rigid T; the proof query owns that
-                        // distinction.  Monomorphization resolves the grounded
-                        // witness later.
-                        val staticResolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: (try self.inferType(id: recv)), nameStart: nameStart, nameLen: nameLen, args: args))
-                        mut val staticBoundMember: Bool = false
-                        match staticResolution {
-                            StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
-                                staticBoundMember = true
-                                mut val bk: U64 = 0U64
-                                while bk < args.len {
-                                    val expected: U64 = try self.staticRequirementParamType(resolution: staticResolution, args: args, argIdx: bk)
-                                    if expected != 0U64 {
-                                        try self.checkGenericTypeMatch(expectedRef: expected, valueExpr: self.argAt(args: args, index: bk).expr)
-                                    }
-                                    bk += 1U64
-                                }
-                            }
-                            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
-                                staticBoundMember = true
-                            }
-                            _ => {}
-                        }
-                        if !(staticBoundMember) {
-                            try self.checkRecordedDirectCallArguments(exprId: exprId, args: args)
-                        }
-                        }
-                    }
+                // Record already selected the declaration or requirement. Its
+                // full operand/signature/evidence check runs at source closure;
+                // this walk preserves the contextual generic compatibility checks.
+                val receiver = self.syntheticCallReceiverTerm(exprId: exprId, fallback: self.parametricExprTerm(exprId: recv))
+                if !(try self.checkSymbolicMethodArgs(exprId: exprId, fnIdx: self.cur.checkFn, receiverRef: receiver, nameStart: nameStart, nameLen: nameLen, args: args)) {
+                    try self.checkRecordedDirectCallArguments(exprId: exprId, args: args)
                 }
             }
+
             Expr.Field(val base, val nameStart, val nameLen) => {
                 match self.arena.exprs[base] {
                     Expr.Ident(val start, val len) => {

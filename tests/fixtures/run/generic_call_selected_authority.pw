@@ -1,0 +1,42 @@
+// Generic compatibility reads the source-selected declaration. Poisoning the
+// diagnostic AST name must not trigger another lookup; removing the selection
+// must fail instead of reconstructing it from source syntax.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, Stmt, CallTemplate, CallTemplateKind }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="generic-selection.pw" text="trait Source {{ assoc fn item() -> I64 }} fn probe[T]() -> I64 where T: Source {{ return T.item() }}" />,
+        sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    compiler.recordParametricFunction(fnIdx: owner, recordCallTemplates: true).unwrap()
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: owner).body, index: 0U64)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Return(value: val expression, hasValue: _, offset: _) => expression
+        _ => { panic("missing fixture return") }
+    }
+    val key = compiler.templateCallSiteKey(fnIdx: owner, exprId: expression).unwrap()
+    val index = compiler.callTemplateIndex(siteKey: key)
+    val selected = compiler.callTemplateAt(index: index)
+    val operations = compiler.callTemplateCount()
+    val missing = compiler.internBytes(s: "missingAfterSelection")
+    match compiler.arena.exprs[expression] {
+        Expr.Method(recv: val receiver, nameStart: _, nameLen: _, args: val arguments) => {
+            compiler.arena.exprs.set(i: expression, value: <Expr.Method recv=receiver nameStart=missing.nameStart nameLen=missing.nameLen args=arguments />)
+        }
+        _ => { panic("missing fixture method") }
+    }
+    if !compiler.templateCallSiteKey(fnIdx: owner, exprId: expression).unwrap().sameKey(other: key) { panic("diagnostic edit changed semantic site") }
+    compiler.cur.recordCallTemplates = false
+    compiler.checkGenericFunction(fnIdx: owner).unwrap()
+    if compiler.callTemplateCount() != operations { panic("generic compatibility constructed another operation") }
+    if !compiler.replaceBuildingCallTemplate(index: index, template: <CallTemplate siteKey=selected.siteKey resultTypeRecipe=selected.resultTypeRecipe expectedResultTerm=selected.expectedResultTerm receiverTypeTerm=selected.receiverTypeTerm kind=<CallTemplateKind.Pending /> />) { panic("missing fixture builder") }
+    match compiler.checkGenericFunction(fnIdx: owner) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("missing selection was reconstructed") }
+    }
+    print("ok")
+}

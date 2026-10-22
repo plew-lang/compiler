@@ -102,3 +102,28 @@ of executable/destructor discovery. New controls check precision immediately aft
 a lazy function/global request, post-success writer rejection and stability across
 whole-program closure. This bounded publication repair does not complete source
 operation storage/selection/evidence migration.
+
+## Source Selection Construction Increment (WIP)
+
+After the storage-summary repair, construct function operation rows in the first
+Record walk, disable call construction for Generic/Declaration compatibility, and
+remove the second Record walk. Keep default-generator restriction and result
+validation at the same construction boundary; do not lose checks that were gated
+on the old false/true pass flag. Source-call closure still checks complete selected
+Direct/Static signatures, labels, ownership modes, substitutions, operand/conversion
+plans and admitted bounds/evidence.
+
+Generic method validation reads the selected declaration for qualifier category
+and retains its existing contextual argument checks. Remove its independent
+staticMemberResolution, boundProvidesMethod and traitProvidesMember call paths.
+The old traitProvidesMember helper has an internal owner-identity fixture; migrate
+that control before removing the now test-only helper. Operators/iteration and
+Verify's concrete method queries still require their own saved-operation reader
+migration. Removing a walk alone is not completion of this task.
+
+New generic_call_selected_authority poisons only the method's diagnostic AST name
+after construction while retaining its CallSiteKey: compatibility must use the
+selected requirement, add no operation, and reject a deliberately missing saved
+selection. Ordinary/generic/provided/default/closure/global AOT/JIT/gen and full
+signature rejection controls remain required. This WIP has not been built yet;
+normal verification of the preceding 0793cf02 snapshot is independent.
