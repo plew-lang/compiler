@@ -355,7 +355,7 @@ pub impl Comp {
     // closure.  Keep the declaration path as proof data: the body instance
     // later obtains the concrete target conformance, while Record never has
     // to reopen syntax or pretend that the user authored `T: Super`.
-    inout fn staticMemberInSupertraits(boundRef: DeclarationBoundRef, traitIdx: U64, memberId: U64, args: ArgRange, path: Array[SupertraitRef], depth: U64 = 0U64, requiredTraitOwner: U64 = 0U64, operatorArity: U64 = 0U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
+    inout fn staticMemberInSupertraits(boundRef: DeclarationBoundRef, traitIdx: U64, memberId: U64, args: ArgRange, path: Array[SupertraitRef], depth: U64 = 0U64, requiredTraitOwner: U64 = 0U64, operatorArity: U64 = 0U64, useOffset: U64 = 0U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
         if depth > 64U64 || traitIdx >= self.decls.traitCount() { return <Result.Ok value=<StaticMemberResolution.Missing /> />}
         val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
         mut val si: U64 = 0U64
@@ -374,12 +374,12 @@ pub impl Comp {
                 mut val fi: U64 = self.arena.firstFunctionNamed(nameId: memberId)
                 while fi < self.arena.functionCount() {
                     val candidate: Func = self.arena.functionAt(index: fi)
-                    if operatorArity == 0U64 && (requiredTraitOwner == 0U64 || candidate.provTraitOwner == requiredTraitOwner) && !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == target.nameId && candidate.provTraitOwner == target.nameStart && candidate.nameId == memberId && self.paramsLabelsOk(params: candidate.params, args: args) {
+                    if operatorArity == 0U64 && (requiredTraitOwner == 0U64 || candidate.provTraitOwner == requiredTraitOwner) && !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == target.nameId && candidate.provTraitOwner == target.nameStart && candidate.nameId == memberId && self.methodIsVisible(mf: candidate, offset: useOffset) && self.paramsLabelsOk(params: candidate.params, args: args) {
                         return <Result.Ok value=<StaticMemberResolution.Provided proof=proof traitIdx=nextTrait callee=fi /> />
                     }
                     fi = self.arena.nextFunctionNamed(index: fi)
                 }
-                val nested: StaticMemberResolution = (try self.staticMemberInSupertraits(boundRef: boundRef, traitIdx: nextTrait, memberId: memberId, args: args, path: nextPath, depth: depth + 1U64, requiredTraitOwner: requiredTraitOwner, operatorArity: operatorArity))
+                val nested: StaticMemberResolution = (try self.staticMemberInSupertraits(boundRef: boundRef, traitIdx: nextTrait, memberId: memberId, args: args, path: nextPath, depth: depth + 1U64, requiredTraitOwner: requiredTraitOwner, operatorArity: operatorArity, useOffset: useOffset))
                 match nested {
                     StaticMemberResolution.Missing => {}
                     _ => { return <Result.Ok value=nested />}
@@ -433,7 +433,7 @@ pub impl Comp {
                                 mut val fi: U64 = self.arena.firstFunctionNamed(nameId: memberId)
                                 while fi < self.arena.functionCount() {
                                     val candidate: Func = self.arena.functionAt(index: fi)
-                                    if (requiredTraitOwner == 0U64 || candidate.provTraitOwner == requiredTraitOwner) && !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == traitDef.nameId && candidate.provTraitOwner == traitDef.nameStart && candidate.nameId == memberId && self.paramsLabelsOk(params: candidate.params, args: args) {
+                                    if (requiredTraitOwner == 0U64 || candidate.provTraitOwner == requiredTraitOwner) && !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == traitDef.nameId && candidate.provTraitOwner == traitDef.nameStart && candidate.nameId == memberId && self.methodIsVisible(mf: candidate, offset: nameStart) && self.paramsLabelsOk(params: candidate.params, args: args) {
                                         return <Result.Ok value=<StaticMemberResolution.Provided proof=proof traitIdx=ti callee=fi /> />
                                     }
                                     fi = self.arena.nextFunctionNamed(index: fi)
@@ -461,7 +461,7 @@ pub impl Comp {
                         mut val ti: U64 = 0U64
                         while ti < self.decls.traitCount() {
                             if self.decls.traitAt(index: ti).nameStart == bound.constraint.key.owner && self.traitArityMatches(actual: self.decls.traitAt(index: ti).typeParams.count(), expected: bound.constraint.key.positionalArgs.count()) {
-                                val inherited: StaticMemberResolution = (try self.staticMemberInSupertraits(boundRef: boundRef, traitIdx: ti, memberId: memberId, args: args, path: [], requiredTraitOwner: requiredTraitOwner))
+                                val inherited: StaticMemberResolution = (try self.staticMemberInSupertraits(boundRef: boundRef, traitIdx: ti, memberId: memberId, args: args, path: [], requiredTraitOwner: requiredTraitOwner, useOffset: nameStart))
                                 match inherited {
                                     StaticMemberResolution.Missing => {}
                                     _ => { return <Result.Ok value=inherited />}
@@ -502,7 +502,7 @@ pub impl Comp {
                                         mut val fi: U64 = self.arena.firstFunctionNamed(nameId: memberId)
                                         while fi < self.arena.functionCount() {
                                             val candidate: Func = self.arena.functionAt(index: fi)
-                                            if (requiredTraitOwner == 0U64 || candidate.provTraitOwner == requiredTraitOwner) && !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == traitDef.nameId && candidate.provTraitOwner == traitDef.nameStart && candidate.nameId == memberId && self.paramsLabelsOk(params: candidate.params, args: args) {
+                                            if (requiredTraitOwner == 0U64 || candidate.provTraitOwner == requiredTraitOwner) && !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == traitDef.nameId && candidate.provTraitOwner == traitDef.nameStart && candidate.nameId == memberId && self.methodIsVisible(mf: candidate, offset: nameStart) && self.paramsLabelsOk(params: candidate.params, args: args) {
                                                 return <Result.Ok value=<StaticMemberResolution.Provided proof=proof traitIdx=ti callee=fi /> />
                                             }
                                             fi = self.arena.nextFunctionNamed(index: fi)

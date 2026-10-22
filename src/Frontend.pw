@@ -1986,13 +1986,11 @@ pub fn analyzeFrontendForRequests(c: inout Comp, input: FrontendInput, sources: 
     try c.verifyProgram(includeBodies: false)
     try c.prepareDefaultArgumentGenerators()
     c.prepareFieldDefaultGenerators()
-    try c.recordParametricTypes(recordCallTemplates: true, includeBodies: false)
-    if (try c.completeRecordedDefaultCalls()) != 0U64 {
-        return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: global default argument plans are incomplete") />
-    }
-    try c.checkBodyCallTemplateSelections(owner: 18446744073709551615U64)
-    try c.checkRecordedCallTemplateBounds()
-    try c.checkClosedIterationProtocols()
+    // Initializer type discovery above is private source construction, not
+    // successful body checking. Its operation selection, argument/default
+    // closure and diagnostics belong to prepareGlobalInitializer, just as
+    // function bodies belong to prepareLexicalBody. Registration cannot run
+    // a competing global verifier before those operations exist.
     try c.checkGenericUniqueArgs()
     // Whole-program closure remains false: unrequested closures and bodies
     // must not inherit the initializers' readiness.

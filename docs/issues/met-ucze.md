@@ -196,3 +196,33 @@ the saved selection must fail. It also requests a method-bearing global. The
 current-source AOT probe passes, as does source checking by the stable prior
 compiler; fresh compiler execution remains pending. Operators/iteration, global
 legacy entry points, operation storage and callee evidence remain to close.
+
+
+## Source Owner / Compatibility Closure Follow-up (WIP)
+
+The first-construction checkpoint's full normal gate found four failures: the
+internal source_diagnostic_owner_requests assumption that an annotated return
+produces no conversion rows; a constructor's known binding conflict being reduced
+to unresolved inference (wrong diagnostic); and two private provided-method calls
+accepted through trait/supertrait bounds. Preserve the external reject fixtures.
+
+Source member selection filters provided candidates by authored visibility,
+including inherited bound paths. Static provided-template construction also
+checks that authority at the actual use site; requirement signatures remain
+public interface operations. A definite constructor TypeArgumentMatch.Conflict
+is a type mismatch, not an unresolved inference hole.
+
+Declaration registration discovers global types but no longer runs a competing
+global verifier or closes global operations. Each initializer request constructs
+its selected calls before compatibility, completes defaults/conversions and
+checks evidence/diagnostics before source success. Whole checking and startup
+already request initializers. Keep legacy generation entry points separate and
+audit them, rather than permit a missing-operation lookup fallback in Verify.
+
+The diagnostic-owner control now uses a statement-only invalid unary expression,
+so no destination conversion is incidental to its diagnostic-retention test.
+The global call-constraint fault-injection control explicitly constructs its
+owner's plan before corrupting it. Neither change removes rejection, owner
+independence, cursor restoration or evidence checks. Current-source AOT controls
+for operator selection, diagnostic retention, global constraint evidence and
+concrete selected methods pass. Fresh binary and full gates remain pending.

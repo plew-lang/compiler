@@ -1,4 +1,4 @@
-// A unary mismatch has no conversion row: diagnostic continuation must retain
+// A statement-only unary mismatch has no destination conversion: continuation must retain
 // its failure independently, without blocking an unrelated source owner.
 use /Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, spansEqual }
 use /SourceAccess only { SourceAccess }
@@ -26,7 +26,7 @@ fn expectFailure(result: Result[(), CompileDiagnostic]) {
 fn main() {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler,
-        input: <FrontendInput.Text path="diagnostic-owner.pw" text="fn broken(value: U64) -> U64 {{ return -value }} fn good() -> I64 {{ return 1I64 }} fn main() {{}}" />,
+        input: <FrontendInput.Text path="diagnostic-owner.pw" text="fn broken(value: U64) {{ -value }} fn good() -> I64 {{ return 1I64 }} fn main() {{}}" />,
         sources: <SourceAccess stdRoot=[] />, options: <FrontendOptions tcLog=true />).unwrap()
     val broken = owner(compiler: inout compiler, name: "broken")
     val good = owner(compiler: inout compiler, name: "good")

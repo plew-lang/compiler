@@ -11,6 +11,13 @@ fn main() {
     val broken = compiler.arena.globals[0U64].nameStart
     val good = compiler.arena.globals[1U64].nameStart
     val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "free").nameId)
+    // Construct this owner's plan explicitly. Declaration registration only
+    // discovers global types; successful checks belong to initializer requests.
+    compiler.enterGlobalInitializer(target: broken).unwrap()
+    compiler.cur.recordCallTemplates = true
+    compiler.recordStmt(stmtId: compiler.arena.globals[0U64].letStmt).unwrap()
+    compiler.cur.recordCallTemplates = false
+    compiler.prepareGlobalCallTemplateConstraints(target: broken).unwrap()
     mut val selected = compiler.callTemplateCount()
     for index in compiler.globalCallTemplates(target: broken) {
         match compiler.callTemplateAt(index: index).kind {

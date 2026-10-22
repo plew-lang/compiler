@@ -519,6 +519,17 @@ pub impl Comp {
     // generic bound.  Both ordinary and source-qualified (`#…`) method syntax
     // reach this one finalization point so they cannot diverge by silently
     // treating a view-qualified static call as a closure-field call.
+    inout fn unavailableSourceMethod(receiverTerm: U64, offset: U64, fallback: String) -> CompileDiagnostic {
+        val type = self.typeInfoOfRef(ref: receiverTerm)
+        if self.cur.checkFn < self.arena.functionCount() && self.isTypeParamOf(fnIdx: self.cur.checkFn, start: type.nameStart, len: type.nameLen) {
+            return self.diagnosticAt(offset: offset, msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
+        }
+        if self.isSelfTypeInProvided(start: type.nameStart, len: type.nameLen) {
+            return self.diagnosticAt(offset: offset, msg: "method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)")
+        }
+        return self.diagnosticAt(offset: offset, msg: fallback)
+    }
+
     inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange, resolution: StaticMemberResolution) -> Result[(), CompileDiagnostic] {
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
@@ -547,7 +558,7 @@ pub impl Comp {
                     if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.arena.typeTerms[receiverTerm].isAny {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "method is not part of the existential trait interface") />
                     }
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching method for this argument list") />
+                    return <Result.Err error=self.unavailableSourceMethod(receiverTerm: receiverTerm, offset: self.exprOffset(id: exprId), fallback: "no matching method for this argument list") />
                 }
             }
         }

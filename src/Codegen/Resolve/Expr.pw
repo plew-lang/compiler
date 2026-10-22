@@ -1199,7 +1199,11 @@ pub impl Comp {
                 try self.checkCallDeclarationKind(exprId: exprId, declaration: self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: requirementIndex))
             }
             StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => {
-                try self.checkCallDeclarationKind(exprId: exprId, declaration: self.arena.functionAt(index: callee))
+                val function = self.arena.functionAt(index: callee)
+                if !self.methodIsVisible(mf: function, offset: self.exprOffset(id: exprId)) {
+                    return <Result.Err error=self.unavailableSourceMethod(receiverTerm: receiverTerm, offset: self.exprOffset(id: exprId), fallback: "method is private (callable only in its defining module; put it in a `pub impl`)") />
+                }
+                try self.checkCallDeclarationKind(exprId: exprId, declaration: function)
             }
             _ => {}
         }
@@ -2637,7 +2641,9 @@ pub impl Comp {
             match self.matchTypeArgumentConstraints(pattern: field.ty, argument: argument, params: parameters, values: inout candidate) {
                 TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { args = candidate }
                 TypeArgumentMatch.Mismatch => {}
-                TypeArgumentMatch.Conflict => { return <Result.Ok value=0U64 /> }
+                TypeArgumentMatch.Conflict => {
+                    return <Result.Err error=self.diagnosticAt(offset: typeStart, msg: "type mismatch: this value's type does not match the type required here; constructor fields require conflicting type arguments") />
+                }
             }
             index += 1U64
         }
