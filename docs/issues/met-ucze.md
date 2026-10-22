@@ -317,3 +317,29 @@ nested_array_noeq control; the earlier attribution change alone did not fix it.
 
 Physical operation/constraint storage and exact callee evidence remain open.
 These source compatibility repairs are not phase-three completion.
+
+
+## Next Physical Storage Unit
+
+Keep one session navigation row per CallSiteKey containing only its source owner
+and dense local operation identity. Move the CallTemplate and selected-constraint
+state into SourceBodyData, using the existing private active/inactive builder and
+immutable successful-owner reader. Shared argument/type/operand/view pools remain
+append-only session ranges; they are not a second per-owner semantic store.
+Publication must keep the current admitted-constraint capability and writer
+closure. Replacing the global arrays with owner-aware getters while retaining a
+second semantic copy is not completion.
+
+Migrate exact-site, signature/result, declaration-worklist, Mono and Mid readers;
+retain original site/clause/constraint identities. Production whole-session scans
+iterate navigation rows and acquire the referenced owner data, rather than
+snapshotting every owner's templates. Diagnostic test snapshots may materialize
+an explicit inspection copy. Keep owner/session/missing/failure controls, stable
+retained readers, Comp branching and publication cost measurements. Do not
+reintroduce a full SourceBodyData by-value read for one operation row.
+
+After storage is closed, complete exact callee evidence and replace remaining
+Declaration evidence reconstruction with the saved selected-call evidence.
+Legitimate first concrete witness formation for an abstract requirement remains
+separate from selecting source syntax again. This plan refines the adopted
+checked-body-storage design without changing language semantics or runtime ABI.
