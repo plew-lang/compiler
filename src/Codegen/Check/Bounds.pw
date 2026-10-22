@@ -272,7 +272,7 @@ pub impl Comp {
         return <Result.Ok value=!self.proofIsMissing(proof: (try self.viewedTraitConstraintProof(ref: ref, constraint: constraint, assumptions: assumptions))) />
     }
 
-    inout fn viewedTraitConstraintProof(ref: U64, constraint: TraitConstraint, assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
+    inout fn viewedTraitConstraintProof(ref: U64, constraint: TraitConstraint, assumptions: Array[DeclarationBoundRef] = [], demand: ConformanceProofDemand = <ConformanceProofDemand.Existence />) -> Result[StaticConformanceProof, CompileDiagnostic] {
         if constraint.key.owner == 0U64 { return <Result.Ok value=<StaticConformanceProof.Missing /> />}
         mut val names: Array[U64] = []
         mut val values: Array[U64] = []
@@ -282,7 +282,7 @@ pub impl Comp {
             values.append(constraint.assocPredicates[i].value)
             i += 1U64
         }
-        return <Result.Ok value=(try self.viewedTraitProof(ref: ref, traitStart: constraint.key.owner, traitLen: self.traitNameLenByOwner(owner: constraint.key.owner), traitArgs: constraint.key.positionalArgs, traitArgsOpen: constraint.positionalArgsOpen, assocNames: names, assocValues: values, assumptions: assumptions)) />
+        return <Result.Ok value=(try self.viewedTraitProof(ref: ref, traitStart: constraint.key.owner, traitLen: self.traitNameLenByOwner(owner: constraint.key.owner), traitArgs: constraint.key.positionalArgs, traitArgsOpen: constraint.positionalArgsOpen, assocNames: names, assocValues: values, assumptions: assumptions, demand: demand)) />
     }
 
     // Declaration-time evidence is a separate query from concrete
@@ -301,7 +301,7 @@ pub impl Comp {
     // statically proved for x.
     inout fn staticTraitPatternProof(receiverRef: U64, traitId: U64, traitOwner: U64, traitArgs: Array[U64], patternParams: PatternBindInput) -> Result[StaticConformanceProof, CompileDiagnostic] {
         val assumptions = self.functionBoundAssumptions(fnIdx: self.cur.checkFn)
-        return <Result.Ok value=(try self.traitPatternProof(baseRef: receiverRef, traitId: traitId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: patternParams, assumptions: assumptions)) />
+        return <Result.Ok value=(try self.traitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiverRef, traitId: traitId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: patternParams, assumptions: assumptions)) />
     }
 
     inout fn staticRequirementMatchRank(resolution: StaticMemberResolution, requirement: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
@@ -546,7 +546,7 @@ pub impl Comp {
                     requirementIndex += 1U64
                 }
                 if hasMember {
-                    val proof = (try self.traitPatternProof(baseRef: receiverRef, traitId: declaration.nameId, traitOwner: declaration.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: true, assumptions: assumptions))
+                    val proof = (try self.traitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiverRef, traitId: declaration.nameId, traitOwner: declaration.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: true, assumptions: assumptions))
                     match proof {
                         StaticConformanceProof.Missing => {}
                         _ => {
@@ -997,10 +997,10 @@ pub impl Comp {
         return <Result.Ok value=!self.proofIsMissing(proof: (try self.viewedTraitProof(ref: ref, traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions))) />
     }
 
-    inout fn viewedTraitProof(ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
+    inout fn viewedTraitProof(ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = [], demand: ConformanceProofDemand = <ConformanceProofDemand.Existence />) -> Result[StaticConformanceProof, CompileDiagnostic] {
         if ref == 0U64 || ref >= self.arena.typeCount() || traitStart == 0U64 || self.traitNameLenByOwner(owner: traitStart) != traitLen { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
         val resolved = (try self.resolveTy(tyRef: ref))
-        val proof = (try self.traitPatternProof(baseRef: resolved, traitId: 0U64, traitOwner: traitStart, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions))
+        val proof = (try self.traitPatternProof(demand: demand, baseRef: resolved, traitId: 0U64, traitOwner: traitStart, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions))
         return <Result.Ok value=proof />
     }
 

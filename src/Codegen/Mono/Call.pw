@@ -658,7 +658,7 @@ pub impl Comp {
         for val source in self.typeRefViewSources(ref: receiverRef) {
             if source.traitOwner != 0U64 { sourceOwners.append(source.traitOwner) }
         }
-        val proof = try self.traitPatternProof(baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, assocNames: associatedNames, assocValues: associatedValues, sourceOwners: sourceOwners, requireUniqueWitness: true)
+        val proof = try self.traitPatternProof(demand: <ConformanceProofDemand.MemberDispatch />, baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, assocNames: associatedNames, assocValues: associatedValues, sourceOwners: sourceOwners)
         if self.proofIsMissing(proof: proof) { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
         return <Result.Ok value=<StaticProofInstantiation.Ready proof=proof /> />
     }
@@ -2239,7 +2239,7 @@ pub impl Comp {
                 associatedNames.append(predicate.member)
                 associatedValues.append(predicate.value)
             }
-            val proof = try self.traitPatternProof(baseRef: sourceRef, traitId: trait.nameId, traitOwner: trait.nameStart, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, assocNames: associatedNames, assocValues: associatedValues, assumptions: assumptions)
+            val proof = try self.traitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: sourceRef, traitId: trait.nameId, traitOwner: trait.nameStart, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, assocNames: associatedNames, assocValues: associatedValues, assumptions: assumptions)
             if self.proofIsMissing(proof: proof) { return <Result.Ok value=<ValueConversionProof.Missing /> />}
             return <Result.Ok value=<ValueConversionProof.ExistentialBox sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof /> />
         }

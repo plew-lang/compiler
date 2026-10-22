@@ -1,3 +1,4 @@
+use /Ir only { ConformanceProofDemand }
 use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
@@ -45,7 +46,7 @@ fn main() {
     }
     assert(targetOwner != 0U64)
     val item = compiler.internBytes(s: "Item").nameId
-    val proof = compiler.traitPatternProof(baseRef: abstractBound.subject, traitId: targetId, traitOwner: targetOwner, traitArgs: <PatternTypeInput.Values values=abstractBound.constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: abstractFacts).unwrap()
+    val proof = compiler.traitPatternProof(demand: <ConformanceProofDemand.Existence />, baseRef: abstractBound.subject, traitId: targetId, traitOwner: targetOwner, traitArgs: <PatternTypeInput.Values values=abstractBound.constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: abstractFacts).unwrap()
     match proof {
         StaticConformanceProof.AssumedTraitPath(source: val origin, steps: _, edges: val edges) => {
             assert(compiler.sameDeclarationBound(a: origin, b: abstractFacts[0U64]))
@@ -58,16 +59,16 @@ fn main() {
     assert(compiler.typeRefEq(a: output, b: abstractBound.constraint.key.positionalArgs[0U64]))
     val restored = compiler.thawStaticConformanceProof(id: compiler.freezeStaticConformanceProof(proof: proof))
     assert(compiler.sameStaticConformanceProof(a: proof, b: restored))
-    val rejected = compiler.traitPatternProof(baseRef: wrongBound.subject, traitId: targetId, traitOwner: targetOwner, traitArgs: <PatternTypeInput.Values values=wrongBound.constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: wrongFacts).unwrap()
+    val rejected = compiler.traitPatternProof(demand: <ConformanceProofDemand.Existence />, baseRef: wrongBound.subject, traitId: targetId, traitOwner: targetOwner, traitArgs: <PatternTypeInput.Values values=wrongBound.constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: wrongFacts).unwrap()
     assert(missing(proof: rejected))
     val box = compiler.decls.conformAt(index: conformance(compiler: inout compiler, name: "Box"))
     val receiver = compiler.groundTermInEnvironment(ref: box.subjectTy, params: compiler.copyConformBinds(binds: box.typeParams), values: [bound.subject])
-    val nested = compiler.traitPatternProof(baseRef: receiver, traitId: targetId, traitOwner: targetOwner, traitArgs: <PatternTypeInput.Values values=[bound.subject] />, patternParams: <PatternBindInput.Values values=[] />, assocNames: [item], assocValues: [bound.subject], assumptions: facts).unwrap()
+    val nested = compiler.traitPatternProof(demand: <ConformanceProofDemand.Existence />, baseRef: receiver, traitId: targetId, traitOwner: targetOwner, traitArgs: <PatternTypeInput.Values values=[bound.subject] />, patternParams: <PatternBindInput.Values values=[] />, assocNames: [item], assocValues: [bound.subject], assumptions: facts).unwrap()
     assert(!missing(proof: nested))
     val shrinking = compiler.decls.conformAt(index: conformance(compiler: inout compiler, name: "Shrinking"))
     val shrinkingFacts = compiler.conformanceBoundAssumptions(bounds: shrinking.bounds)
     val shrinkingBound = compiler.declarationBound(source: shrinkingFacts[0U64])
-    val smaller = compiler.traitPatternProof(baseRef: shrinkingBound.subject, traitId: 0U64, traitOwner: shrinkingBound.constraint.key.owner, traitArgs: <PatternTypeInput.Values values=abstractBound.constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: shrinkingFacts).unwrap()
+    val smaller = compiler.traitPatternProof(demand: <ConformanceProofDemand.Existence />, baseRef: shrinkingBound.subject, traitId: 0U64, traitOwner: shrinkingBound.constraint.key.owner, traitArgs: <PatternTypeInput.Values values=abstractBound.constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: shrinkingFacts).unwrap()
     match smaller {
         StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: val edges) => {
             assert(edges.count() == 4U64)

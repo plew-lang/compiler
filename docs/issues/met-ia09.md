@@ -210,5 +210,23 @@ branches remain ambiguous. Caller-owned exact duplicate promises can be
 canonicalized by their checked bound and path, without arbitrary root-ID priority
 or a broader inference solver. Preserve explicit source views and conditional
 applicability before selection; do not make a #C positive ambiguous by dropping
-its selected source while collecting all paths. No such query-policy repair is
-implemented yet. Interface-bound admission must use this same source policy.
+its selected source while collecting all paths. The first bounded query-policy increment is now implemented: explicit
+ConformanceProofDemand at the core query, separate source-path versus terminal
+merging, query-local duplicate-premise comparison, and explicit source preference
+without erasing an unrelated unique conformance. Source call-clause admission,
+protocol/operator proof construction and existential injection request source
+admission. The ordinary ambiguous-empty-trait source is rejected by current
+imported algorithms, and both #C/#D, an unrelated view and duplicate promises
+remain accepted. Whole-source check and seven existing evidence controls plus
+the new query/ordinary-frontend control pass with the old measured driver.
+This is not a fresh candidate or full closure.
+
+Next close associated-output filtering after source/endpoint selection, exact
+opaque-premise priority, and conditional applicability through the stronger
+query. Represent Missing / Found / Ambiguous as query data so a nonconforming
+conditional candidate does not fail unrelated candidates by throwing a source
+use-site diagnostic. Reuse this one query for boolean projections and admitted
+source proofs; audit the remaining compatibility wrappers instead of leaving
+existence as their implicit source-validation default. Interface-bound admission
+must consume this same policy. No final-consumer/source-certificate audit is
+claimed by the focused query tests.

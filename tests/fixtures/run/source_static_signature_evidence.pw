@@ -1,5 +1,6 @@
 // Frozen signature shape/type admission; this does not prove source-place
 // mutability or the remaining ownership checks for a synthetic inout operand.
+use /Ir only { ConformanceProofDemand }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
 use /Ir only { CallTemplate, CallTemplateKind, CallTemplateReceiver, CallSiteKey, CallTemplateArgument, CallArgumentSource, StaticMemberResolution, PatternTypeInput, PatternBindInput }
@@ -16,7 +17,7 @@ fn check(provided: Bool, name: String, label: String, labelled: Bool, inoutArgum
     val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
     val traitIndex = compiler.recordAnyTraitIndex(anyRef: compiler.funcParamAt(params: function.params, index: 2U64).ty)
     val trait = compiler.decls.traitAt(index: traitIndex)
-    val proof = compiler.traitPatternProof(baseRef: receiver, traitId: trait.nameId, traitOwner: trait.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assumptions: compiler.functionBoundAssumptions(fnIdx: owner)).unwrap()
+    val proof = compiler.traitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiver, traitId: trait.nameId, traitOwner: trait.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assumptions: compiler.functionBoundAssumptions(fnIdx: owner)).unwrap()
     val labelSpan = compiler.internBytes(s: label)
     val args = compiler.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=0U64 term=source /> labelStart=labelSpan.nameStart labelLen=labelSpan.nameLen hasLabel=labelled isInout=inoutArgument />])
     val types = compiler.publishCallTemplateTypeArgs(args: [])

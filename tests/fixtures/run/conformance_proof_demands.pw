@@ -1,0 +1,43 @@
+// Presence, source-path uniqueness and endpoint uniqueness are different contracts.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, analyzeFrontend }
+use /SourceAccess only { SourceAccess }
+use /Ir only { ConformanceProofDemand, PatternTypeInput, PatternBindInput, TraitConstraint, TraitInstanceKey }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait C {{}} trait D {{}} trait B {{}} trait A {{}} trait Unrelated {{}} trait Only {{}}\nstruct S {{}}\nimpl S as C {{}} impl S as D {{}} impl C as B {{}} impl D as B {{}} impl B as A {{}}\nimpl S as Unrelated {{}} impl S as Only {{}}\nfn probe(source: S, first: S#C, later: S#D, unrelated: S#Unrelated) {{}}\nfn duplicate[T](source: T) where T: A, T: A {{}}\n" path="proof-demands.pw" />, sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val trait = compiler.decls.traitAt(index: 3U64)
+    val present = compiler.traitPatternProof(demand: <ConformanceProofDemand.Existence />, baseRef: receiver, traitId: trait.nameId, traitOwner: trait.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />).unwrap()
+    if compiler.proofIsMissing(proof: present) { panic("presence required an unambiguous source") }
+    val member = compiler.traitPatternProof(demand: <ConformanceProofDemand.MemberDispatch />, baseRef: receiver, traitId: trait.nameId, traitOwner: trait.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />).unwrap()
+    if compiler.proofIsMissing(proof: member) { panic("equal terminal witness was not executable") }
+    if compiler.traitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiver, traitId: trait.nameId, traitOwner: trait.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />).isOk() { panic("distinct source paths were merged by their endpoint") }
+    val required = <TraitConstraint key=<TraitInstanceKey owner=trait.nameStart positionalArgs=[] /> assocPredicates=[] />
+    for index in [1U64, 2U64] {
+        val viewed = compiler.funcParamAt(params: function.params, index: index).ty
+        val proof = compiler.viewedTraitConstraintProof(ref: viewed, constraint: required, demand: <ConformanceProofDemand.SourceAdmission />).unwrap()
+        if compiler.proofIsMissing(proof: proof) { panic("explicit source path was lost") }
+    }
+    val other = compiler.funcParamAt(params: function.params, index: 3U64).ty
+    val only = <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 5U64).nameStart positionalArgs=[] /> assocPredicates=[] />
+    if compiler.proofIsMissing(proof: compiler.viewedTraitConstraintProof(ref: other, constraint: only, demand: <ConformanceProofDemand.SourceAdmission />).unwrap()) { panic("selector erased an unrelated unique conformance") }
+    val duplicate = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "duplicate").nameId)
+    val generic = compiler.funcParamAt(params: compiler.arena.functionAt(index: duplicate).params, index: 0U64).ty
+    val assumptions = compiler.functionBoundAssumptions(fnIdx: duplicate)
+    if assumptions.count() != 2U64 { panic("duplicate-premise control did not retain both authored promises") }
+    if compiler.proofIsMissing(proof: compiler.viewedTraitConstraintProof(ref: generic, constraint: required, assumptions: assumptions, demand: <ConformanceProofDemand.SourceAdmission />).unwrap()) { panic("identical promises became distinct paths") }
+    // The ordinary source owner must actually use the stronger admission query.
+    mut val rejected = <Comp />
+    match analyzeFrontend(c: inout rejected, input: <FrontendInput.Text text="// Admission needs one conformance path even when no trait member is used.\ntrait C {{}}\ntrait D {{}}\ntrait B {{}}\ntrait A {{}}\nstruct S {{}}\nimpl S as C {{}}\nimpl S as D {{}}\nimpl C as B {{}}\nimpl D as B {{}}\nimpl B as A {{}}\nfn accept[T](value: T) where T: A {{}}\nfn main() {{ accept(value: <S />) }}\n" path="ambiguous-bound.pw" />, sources: <SourceAccess />) {
+        Result.Ok(value: _) => { panic("source admission retained a presence-only proof") }
+        Result.Err(error: val error) => {
+            if error.message != "ambiguous conformance: multiple declaration paths satisfy the source bound" { panic(error.message) }
+        }
+    }
+    mut val accepted = <Comp />
+    analyzeFrontend(c: inout accepted, input: <FrontendInput.Text text="// Exact duplicate premises are not distinct conformance paths; a source view selects one path.\ntrait C {{}}\ntrait D {{}}\ntrait B {{}}\ntrait A {{}}\nstruct S {{}}\nimpl S as C {{}}\nimpl S as D {{}}\nimpl C as B {{}}\nimpl D as B {{}}\nimpl B as A {{}}\nfn accept[T](value: T) where T: A {{}}\nfn duplicate[T](value: T) where T: A, T: A {{ accept(value: value) }}\ntrait Unrelated {{}}\ntrait Only {{}}\nimpl S as Unrelated {{}}\nimpl S as Only {{}}\nfn separate[T](value: T) where T: Only {{}}\nfn main() {{\n    duplicate(value: <S />#C)\n    duplicate(value: <S />#D)\n    separate(value: <S />#Unrelated)\n}}\n" path="selected-bound.pw" />, sources: <SourceAccess />).unwrap()
+    print("proof-demands")
+}

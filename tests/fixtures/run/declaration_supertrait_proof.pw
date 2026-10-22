@@ -1,3 +1,4 @@
+use /Ir only { ConformanceProofDemand }
 use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
@@ -21,7 +22,7 @@ fn query(compiler: inout Comp, assumptions: Array[DeclarationBoundRef], target: 
     while index < compiler.decls.traitOwnerCount() {
         val declaration = compiler.decls.traitOwnerAt(index: index)
         if declaration.nameId == identity {
-            return compiler.traitPatternProof(baseRef: bound.subject, traitId: identity, traitOwner: declaration.nameStart, traitArgs: <PatternTypeInput.Values values=[argument] />, patternParams: <PatternBindInput.Values values=[] />, assocNames: [compiler.internBytes(s: "Item").nameId], assocValues: [output], assumptions: assumptions).unwrap()
+            return compiler.traitPatternProof(demand: <ConformanceProofDemand.Existence />, baseRef: bound.subject, traitId: identity, traitOwner: declaration.nameStart, traitArgs: <PatternTypeInput.Values values=[argument] />, patternParams: <PatternBindInput.Values values=[] />, assocNames: [compiler.internBytes(s: "Item").nameId], assocValues: [output], assumptions: assumptions).unwrap()
         }
         index += 1U64
     }

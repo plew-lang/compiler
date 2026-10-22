@@ -1426,11 +1426,10 @@ pub impl TraitAssocPredicate { factory }
 // verify these output predicates against that selected witness.
 pub struct TraitConstraint {
     pub val key: TraitInstanceKey
-    // `where T: Add` intentionally leaves Add's positional inputs open.  This
-    // cannot be reconstructed from an empty `positionalArgs` array: that same
-    // array is the complete key of an arity-zero trait.  Keep the authored
-    // matching mode with the semantic constraint so a consumer never needs to
-    // consult FuncBound's former parallel fields.
+    // Internal presence queries can leave positional inputs open. Source
+    // bounds require the declared positional arity (spec/06); an empty input
+    // list is also a complete key for an arity-zero trait. Preserve the query
+    // mode rather than reconstructing it from the argument count.
     pub val positionalArgsOpen: Bool = false
     pub val assocPredicates: Array[TraitAssocPredicate]
 }
@@ -1771,6 +1770,29 @@ pub impl FrozenEnumPayloadConversion { factory }
 // final callable and for associated-output grounding.  Keeping this state in
 // IR avoids parallel owner/args/path arrays and is the migration carrier for
 // the eventual canonical ConformanceProof DAG.
+// Query intent is separate from the representation of its retained proof.
+// Presence, source-path admission and executable endpoint selection differ.
+pub enum ConformanceProofDemand {
+    Existence
+    SourceAdmission
+    MemberDispatch
+}
+pub impl ConformanceProofDemand {
+    fn isExistence() -> Bool {
+        return match self {
+            ConformanceProofDemand.Existence => true,
+            ConformanceProofDemand.SourceAdmission | ConformanceProofDemand.MemberDispatch => false,
+        }
+    }
+    fn isSourceAdmission() -> Bool {
+        return match self {
+            ConformanceProofDemand.SourceAdmission => true,
+            ConformanceProofDemand.Existence | ConformanceProofDemand.MemberDispatch => false,
+        }
+    }
+
+}
+
 pub enum TraitProofOrigin {
     Witness
     Assumption(source: DeclarationBoundRef, steps: Array[SupertraitRef])

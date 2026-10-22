@@ -302,7 +302,7 @@ pub impl Comp {
                 }
             }
             if output == 0U64 {
-                val proof: StaticConformanceProof = (try self.traitPatternProof(baseRef: receiver, traitId: p.assocTraitId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions))
+                val proof: StaticConformanceProof = (try self.traitPatternProof(demand: <ConformanceProofDemand.Existence />, baseRef: receiver, traitId: p.assocTraitId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions))
                 selectedProof = proof
                 output = (try self.associatedOutputInProof(proof: proof, traitOwner: traitOwner, assocId: p.assocNameId))
             }

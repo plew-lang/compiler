@@ -11,4 +11,13 @@ impl D as B {}
 impl B as A {}
 fn accept[T](value: T) where T: A {}
 fn duplicate[T](value: T) where T: A, T: A { accept(value: value) }
-fn main() { duplicate(value: <S />#C) }
+trait Unrelated {}
+trait Only {}
+impl S as Unrelated {}
+impl S as Only {}
+fn separate[T](value: T) where T: Only {}
+fn main() {
+    duplicate(value: <S />#C)
+    duplicate(value: <S />#D)
+    separate(value: <S />#Unrelated)
+}

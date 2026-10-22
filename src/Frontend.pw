@@ -4,7 +4,7 @@ use ./Ir only { CallSiteSelection, CallTarget, ResolvedTypeDeclaration }
 use ./Diag only { eprintU64 }
 use ./Ir only { ExistentialRequirementSignature, ExistentialWitnessPlan, SelectedCallableSubstitution, BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, SemanticAccessInput, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticMatchKind, SemanticMatchArm, SemanticMatchPayload, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalStorageResolution, FinalExistentialResolution, FinalForResolution, ValueConversionBoundary, EnumPayloadConversion, ValueConversionProof, BodySignature, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, FinalCallArguments, CallEvaluationArgument }
 use @Plew/Syntax only { StringPartAst }
-use ./Ir only { DynamicCallTemplateTarget }
+use ./Ir only { DynamicCallTemplateTarget, ConformanceProofDemand }
 use ./Ir only { SemanticClosure }
 use ./Ir only { CallableConstraintEvidence, ProjectionNormalizationStep, SelectedCallConstraints, SourceCallSignature, SelectedWitnessInstantiation, WitnessConditionPlan, ExistentialBoxEvidence, DeclarationTypeScope, DeclarationObligationState, CallConstraintInstance, DeclarationConversion, ExistentialImplementation }
 use ./Ir only { SemanticTry, SemanticMatch, MatchSource, ProtocolSelection, OperatorSelection, InvocationCompletion, SemanticExpressionTypeState, SemanticCompletionOwner, SemanticExpressionCompletion, TypeCompatibility, TypeArgumentMatch, ConditionClause, ConditionClauseRange }
@@ -168,6 +168,14 @@ pub impl PreparedCallConstraints {
 enum CallConstraintPlanState {
     Building(plan: SelectedCallConstraints)
     Prepared(snapshot: PreparedCallConstraints)
+}
+
+// Tentative query-local answers, never successful source artifacts.
+struct TraitProofSelection {
+    mut val selected: StaticConformanceProof = <StaticConformanceProof.Missing />
+    mut val ambiguous: Bool = false
+    mut val preferred: StaticConformanceProof = <StaticConformanceProof.Missing />
+    mut val preferredAmbiguous: Bool = false
 }
 
 pub struct Comp {
