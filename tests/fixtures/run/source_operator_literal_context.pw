@@ -5,6 +5,8 @@ use /SourceAccess only { SourceAccess }
 use /Ir only { CallTemplateKind, OperatorSelection }
 use @Std/Io only { print }
 
+fn comparison(value: I64) -> Bool { return 0 < value }
+
 fn main() {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler,
@@ -29,5 +31,8 @@ fn main() {
         }
     }
     if !found { panic("missing operator") }
+    // The real Std Ord witness returns Ordering; the source expression and
+    // emitted result still retain their Bool projection.
+    if !comparison(value: 1I64) { panic("comparison lost its source result projection") }
     print("ok")
 }
