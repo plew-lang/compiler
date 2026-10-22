@@ -1257,7 +1257,7 @@ pub impl Comp {
         val assumptions = self.functionBoundAssumptions(fnIdx: template.siteKey.ownerFnIdx)
         mut val proofs: Array[U64] = []
         for bound in bounds {
-            val proof = try self.viewedTraitConstraintProof(ref: bound.subject, constraint: bound.constraint, assumptions: assumptions, demand: <ConformanceProofDemand.SourceAdmission />)
+            val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)
             if self.proofIsMissing(proof: proof) {
                 // An operator's impl bounds justify that source operation.
                 // Report a missing witness at its retained site, not at a

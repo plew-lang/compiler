@@ -1,0 +1,46 @@
+// Output predicates check the selected path; they must not select that path.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { ConformanceProofDemand, ConformanceProofResult, PatternTypeInput, PatternBindInput }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait Output {{ type Item }}\ntrait C {{}} trait D {{}} trait Gate {{}}\nstruct First {{}} struct Second {{}} struct S {{}} struct Wrapper[T] {{}}\nimpl S as C {{}} impl S as D {{}}\nimpl C as Output {{ type Item = First }}\nimpl D as Output {{ type Item = Second }}\nimpl[T] Wrapper[T] as Gate where T: Output[Item = First] {{}}\nfn probe(source: S, first: S#C, second: S#D, wrapped: Wrapper[S], selected: Wrapper[S#C], firstType: First, secondType: Second) {{}}\nfn opaque[T](value: T) where T: Output, T: C {{}}\nfn stronger[T](value: T) where T: Output, T: Output[Item = First] {{}}\n" path="proof-outputs.pw" />, sources: <SourceAccess />).unwrap()
+    val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: index)
+    val output = compiler.decls.traitAt(index: 0U64)
+    val item = compiler.internBytes(s: "Item").nameId
+    val first = compiler.funcParamAt(params: function.params, index: 5U64).ty
+    for argument in [0U64, 1U64, 2U64] {
+        val receiver = compiler.funcParamAt(params: function.params, index: argument).ty
+        val answer = compiler.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiver, traitId: output.nameId, traitOwner: output.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assocNames: [item], assocValues: [first]).unwrap()
+        match answer {
+            ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { if argument != 0U64 { panic("explicit source remained ambiguous") } }
+            ConformanceProofResult.Found(proof: _) => { if argument != 1U64 { panic("output equality selected a conformance path") } }
+            ConformanceProofResult.Missing => { if argument != 2U64 { panic("selected matching output was lost") } }
+        }
+    }
+    val gate = compiler.decls.traitAt(index: 3U64)
+    for argument in [3U64, 4U64] {
+        val receiver = compiler.funcParamAt(params: function.params, index: argument).ty
+        val answer = compiler.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiver, traitId: gate.nameId, traitOwner: gate.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />).unwrap()
+        match answer {
+            ConformanceProofResult.Missing => { if argument != 3U64 { panic("selected condition became inapplicable") } }
+            ConformanceProofResult.Found(proof: _) => { if argument != 4U64 { panic("ambiguous condition admitted an implementation") } }
+            ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { panic("inapplicable condition escaped as caller ambiguity") }
+        }
+    }
+    for name in ["opaque", "stronger"] {
+        val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+        val declaration = compiler.arena.functionAt(index: owner)
+        val receiver = compiler.funcParamAt(params: declaration.params, index: 0U64).ty
+        val assumptions = compiler.functionBoundAssumptions(fnIdx: owner)
+        val answer = compiler.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiver, traitId: output.nameId, traitOwner: output.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assocNames: [item], assocValues: [first], assumptions: assumptions).unwrap()
+        match answer {
+            ConformanceProofResult.Missing => { if name != "opaque" { panic("stronger exact premise was lost") } }
+            ConformanceProofResult.Found(proof: _) => { if name != "stronger" { panic("opaque premise acquired outputs from another path") } }
+            ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { panic("exact opaque premise competed with derived paths") }
+        }
+    }
+    print("proof-outputs")
+}

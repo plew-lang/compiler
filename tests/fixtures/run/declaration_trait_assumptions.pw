@@ -24,8 +24,8 @@ fn main() {
     val context = compiler.decls.conformAt(index: conformance(compiler: inout compiler, name: "Context"))
     val facts = compiler.conformanceBoundAssumptions(bounds: context.bounds)
     val bound = compiler.declarationBound(source: facts[0U64])
-    assert(compiler.viewedTypeConformsTraitConstraint(ref: bound.subject, constraint: bound.constraint, assumptions: facts).unwrap())
-    assert(!compiler.viewedTypeConformsTraitConstraint(ref: bound.subject, constraint: bound.constraint).unwrap())
+    assert(compiler.viewedTypeConformsTraitConstraint(demand: <ConformanceProofDemand.Existence />, ref: bound.subject, constraint: bound.constraint, assumptions: facts).unwrap())
+    assert(!compiler.viewedTypeConformsTraitConstraint(demand: <ConformanceProofDemand.Existence />, ref: bound.subject, constraint: bound.constraint).unwrap())
     val abstract = compiler.decls.conformAt(index: conformance(compiler: inout compiler, name: "Abstract"))
     val abstractFacts = compiler.conformanceBoundAssumptions(bounds: abstract.bounds)
     val abstractBound = compiler.declarationBound(source: abstractFacts[0U64])
@@ -35,8 +35,8 @@ fn main() {
     val associated = compiler.decls.conformAt(index: conformance(compiler: inout compiler, name: "Associated"))
     val associatedFacts = compiler.conformanceBoundAssumptions(bounds: associated.bounds)
     val associatedBound = compiler.declarationBound(source: associatedFacts[0U64])
-    assert(compiler.viewedTypeConformsTraitConstraint(ref: associatedBound.subject, constraint: associatedBound.constraint, assumptions: associatedFacts).unwrap())
-    assert(!compiler.viewedTypeConformsTraitConstraint(ref: associatedBound.subject, constraint: associatedBound.constraint).unwrap())
+    assert(compiler.viewedTypeConformsTraitConstraint(demand: <ConformanceProofDemand.Existence />, ref: associatedBound.subject, constraint: associatedBound.constraint, assumptions: associatedFacts).unwrap())
+    assert(!compiler.viewedTypeConformsTraitConstraint(demand: <ConformanceProofDemand.Existence />, ref: associatedBound.subject, constraint: associatedBound.constraint).unwrap())
     val targetId = compiler.internBytes(s: "Target").nameId
     mut val targetOwner = 0U64
     mut val index = 0U64

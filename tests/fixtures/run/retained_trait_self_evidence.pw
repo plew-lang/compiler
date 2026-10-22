@@ -1,3 +1,4 @@
+use /Ir only { ConformanceProofDemand }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
 use /Ir only { StaticConformanceProof, StaticProofInstantiation, InstanceEnvironment, TraitConstraint, TraitInstanceKey, DeclarationBoundRef }
@@ -8,11 +9,11 @@ fn main() {
     val context = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "context").nameId)
     val receiver = compiler.funcParamAt(params: compiler.arena.functionAt(index: context).params, index: 0U64).ty
     val trait = compiler.decls.traitAt(index: 0U64)
-    val selected = compiler.viewedTraitConstraintProof(ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=trait.nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+    val selected = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=trait.nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
     val symbolic = <StaticConformanceProof.TraitSelf traitIdx=0U64 receiverRef=compiler.existentialSelfTerm(traitIndex: 0U64).unwrap() traitArgs=[] />
     val provided = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "provided").nameId)
     val environment = compiler.bodyInstanceEnvironment(fnIdx: provided, args: [], recvInstRef: receiver, selectedProof: selected).unwrap()
-    val foreign = compiler.viewedTraitConstraintProof(ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 1U64).nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+    val foreign = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 1U64).nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
     val receiverAssumption = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.MethodReceiver index=provided /> />
     for assumption in [symbolic, receiverAssumption] {
         val instantiated = match compiler.instantiateConstraintProof(proof: assumption, receiverRef: receiver, environment: environment, selfRef: receiver, itemRef: 0U64) {

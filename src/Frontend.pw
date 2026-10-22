@@ -4,7 +4,7 @@ use ./Ir only { CallSiteSelection, CallTarget, ResolvedTypeDeclaration }
 use ./Diag only { eprintU64 }
 use ./Ir only { ExistentialRequirementSignature, ExistentialWitnessPlan, SelectedCallableSubstitution, BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, SemanticAccessInput, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticMatchKind, SemanticMatchArm, SemanticMatchPayload, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalStorageResolution, FinalExistentialResolution, FinalForResolution, ValueConversionBoundary, EnumPayloadConversion, ValueConversionProof, BodySignature, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, FinalCallArguments, CallEvaluationArgument }
 use @Plew/Syntax only { StringPartAst }
-use ./Ir only { DynamicCallTemplateTarget, ConformanceProofDemand }
+use ./Ir only { DynamicCallTemplateTarget, ConformanceProofDemand, ConformanceProofResult }
 use ./Ir only { SemanticClosure }
 use ./Ir only { CallableConstraintEvidence, ProjectionNormalizationStep, SelectedCallConstraints, SourceCallSignature, SelectedWitnessInstantiation, WitnessConditionPlan, ExistentialBoxEvidence, DeclarationTypeScope, DeclarationObligationState, CallConstraintInstance, DeclarationConversion, ExistentialImplementation }
 use ./Ir only { SemanticTry, SemanticMatch, MatchSource, ProtocolSelection, OperatorSelection, InvocationCompletion, SemanticExpressionTypeState, SemanticCompletionOwner, SemanticExpressionCompletion, TypeCompatibility, TypeArgumentMatch, ConditionClause, ConditionClauseRange }
@@ -174,8 +174,10 @@ enum CallConstraintPlanState {
 struct TraitProofSelection {
     mut val selected: StaticConformanceProof = <StaticConformanceProof.Missing />
     mut val ambiguous: Bool = false
+    mut val compatible: StaticConformanceProof = <StaticConformanceProof.Missing />
     mut val preferred: StaticConformanceProof = <StaticConformanceProof.Missing />
     mut val preferredAmbiguous: Bool = false
+    mut val preferredCompatible: StaticConformanceProof = <StaticConformanceProof.Missing />
 }
 
 pub struct Comp {

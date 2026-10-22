@@ -151,7 +151,7 @@ pub impl Comp {
         mut val traitApplies: Bool = false
         if traitNamed {
             if typeRef != 0U64 {
-                traitApplies = (try self.conformsInstance(ref: typeRef, traitStart: srcStart, traitLen: srcLen))
+                traitApplies = (try self.conformsInstance(demand: <ConformanceProofDemand.SourceAdmission />, ref: typeRef, traitStart: srcStart, traitLen: srcLen))
             } else if allowMonomorphicFallback {
                 // Scalars (and other monomorphic receiver heads) carry no
                 // TypeRef in TypeInfo.  Name identity is complete only in

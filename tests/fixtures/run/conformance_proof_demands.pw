@@ -18,17 +18,17 @@ fn main() {
     val required = <TraitConstraint key=<TraitInstanceKey owner=trait.nameStart positionalArgs=[] /> assocPredicates=[] />
     for index in [1U64, 2U64] {
         val viewed = compiler.funcParamAt(params: function.params, index: index).ty
-        val proof = compiler.viewedTraitConstraintProof(ref: viewed, constraint: required, demand: <ConformanceProofDemand.SourceAdmission />).unwrap()
+        val proof = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: viewed, constraint: required).unwrap()
         if compiler.proofIsMissing(proof: proof) { panic("explicit source path was lost") }
     }
     val other = compiler.funcParamAt(params: function.params, index: 3U64).ty
     val only = <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 5U64).nameStart positionalArgs=[] /> assocPredicates=[] />
-    if compiler.proofIsMissing(proof: compiler.viewedTraitConstraintProof(ref: other, constraint: only, demand: <ConformanceProofDemand.SourceAdmission />).unwrap()) { panic("selector erased an unrelated unique conformance") }
+    if compiler.proofIsMissing(proof: compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: other, constraint: only).unwrap()) { panic("selector erased an unrelated unique conformance") }
     val duplicate = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "duplicate").nameId)
     val generic = compiler.funcParamAt(params: compiler.arena.functionAt(index: duplicate).params, index: 0U64).ty
     val assumptions = compiler.functionBoundAssumptions(fnIdx: duplicate)
     if assumptions.count() != 2U64 { panic("duplicate-premise control did not retain both authored promises") }
-    if compiler.proofIsMissing(proof: compiler.viewedTraitConstraintProof(ref: generic, constraint: required, assumptions: assumptions, demand: <ConformanceProofDemand.SourceAdmission />).unwrap()) { panic("identical promises became distinct paths") }
+    if compiler.proofIsMissing(proof: compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: generic, constraint: required, assumptions: assumptions).unwrap()) { panic("identical promises became distinct paths") }
     // The ordinary source owner must actually use the stronger admission query.
     mut val rejected = <Comp />
     match analyzeFrontend(c: inout rejected, input: <FrontendInput.Text text="// Admission needs one conformance path even when no trait member is used.\ntrait C {{}}\ntrait D {{}}\ntrait B {{}}\ntrait A {{}}\nstruct S {{}}\nimpl S as C {{}}\nimpl S as D {{}}\nimpl C as B {{}}\nimpl D as B {{}}\nimpl B as A {{}}\nfn accept[T](value: T) where T: A {{}}\nfn main() {{ accept(value: <S />) }}\n" path="ambiguous-bound.pw" />, sources: <SourceAccess />) {

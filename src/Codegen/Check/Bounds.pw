@@ -199,28 +199,11 @@ pub impl Comp {
                 valid = cursorItem != 0U64 && self.typeRefEq(a: cursorItem, b: item)
             } else {
                 val constraint = <TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=[] /> positionalArgsOpen=false assocPredicates=[<TraitAssocPredicate member=self.internBytes(s: "Item").nameId value=item span=offset />] />
-                valid = try self.viewedTypeConformsTraitConstraint(ref: cursor, constraint: constraint, assumptions: self.functionBoundAssumptions(fnIdx: fnIdx))
+                valid = try self.viewedTypeConformsTraitConstraint(demand: <ConformanceProofDemand.SourceAdmission />, ref: cursor, constraint: constraint, assumptions: self.functionBoundAssumptions(fnIdx: fnIdx))
             }
         }
         if !valid { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "for-loop iterator result must satisfy Iterator with the declared Item type") /> }
         return <Result.Ok value=() />
-    }
-
-    // Compatibility projection for existing bool consumers.  The input is
-    // already canonical; this wrapper deliberately has no spelling fallback.
-    // It is the migration bridge until each consumer receives the selected
-    // ConformanceProof rather than only its truth value.
-    inout fn conformsTraitConstraint(ref: U64, constraint: TraitConstraint) -> Result[Bool, CompileDiagnostic] {
-        if constraint.key.owner == 0U64 { return <Result.Ok value=false />}
-        mut val names: Array[U64] = []
-        mut val values: Array[U64] = []
-        mut val i: U64 = 0U64
-        while i < constraint.assocPredicates.count() {
-            names.append(constraint.assocPredicates[i].member)
-            values.append(constraint.assocPredicates[i].value)
-            i += 1U64
-        }
-        return <Result.Ok value=(try self.conformsInstance(ref: ref, traitStart: constraint.key.owner, traitLen: self.traitNameLenByOwner(owner: constraint.key.owner), traitArgs: constraint.key.positionalArgs, traitArgsOpen: constraint.positionalArgsOpen, assocNames: names, assocValues: values)) />
     }
 
     // Ground every term owned by a constraint through one explicit instance
@@ -268,12 +251,16 @@ pub impl Comp {
     // A view can establish a conformance that the bare receiver does not have.
     // Keep this policy beside the constraint API, rather than asking each
     // generic-bound checker to unpack owner, positional args and predicates.
-    inout fn viewedTypeConformsTraitConstraint(ref: U64, constraint: TraitConstraint, assumptions: Array[DeclarationBoundRef] = []) -> Result[Bool, CompileDiagnostic] {
-        return <Result.Ok value=!self.proofIsMissing(proof: (try self.viewedTraitConstraintProof(ref: ref, constraint: constraint, assumptions: assumptions))) />
+    inout fn viewedTypeConformsTraitConstraint(demand: ConformanceProofDemand, ref: U64, constraint: TraitConstraint, assumptions: Array[DeclarationBoundRef] = []) -> Result[Bool, CompileDiagnostic] {
+        return <Result.Ok value=self.conformanceQueryFound(answer: (try self.queryViewedTraitConstraint(demand: demand, ref: ref, constraint: constraint, assumptions: assumptions))) />
     }
 
-    inout fn viewedTraitConstraintProof(ref: U64, constraint: TraitConstraint, assumptions: Array[DeclarationBoundRef] = [], demand: ConformanceProofDemand = <ConformanceProofDemand.Existence />) -> Result[StaticConformanceProof, CompileDiagnostic] {
-        if constraint.key.owner == 0U64 { return <Result.Ok value=<StaticConformanceProof.Missing /> />}
+    inout fn viewedTraitConstraintProof(demand: ConformanceProofDemand, ref: U64, constraint: TraitConstraint, assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        return self.requireConformanceProof(answer: (try self.queryViewedTraitConstraint(demand: demand, ref: ref, constraint: constraint, assumptions: assumptions)))
+    }
+
+    inout fn queryViewedTraitConstraint(demand: ConformanceProofDemand, ref: U64, constraint: TraitConstraint, assumptions: Array[DeclarationBoundRef] = []) -> Result[ConformanceProofResult, CompileDiagnostic] {
+        if constraint.key.owner == 0U64 { return <Result.Ok value=<ConformanceProofResult.Missing /> />}
         mut val names: Array[U64] = []
         mut val values: Array[U64] = []
         mut val i: U64 = 0U64
@@ -282,7 +269,7 @@ pub impl Comp {
             values.append(constraint.assocPredicates[i].value)
             i += 1U64
         }
-        return <Result.Ok value=(try self.viewedTraitProof(ref: ref, traitStart: constraint.key.owner, traitLen: self.traitNameLenByOwner(owner: constraint.key.owner), traitArgs: constraint.key.positionalArgs, traitArgsOpen: constraint.positionalArgsOpen, assocNames: names, assocValues: values, assumptions: assumptions, demand: demand)) />
+        return <Result.Ok value=(try self.queryViewedTraitProof(demand: demand, ref: ref, traitStart: constraint.key.owner, traitLen: self.traitNameLenByOwner(owner: constraint.key.owner), traitArgs: constraint.key.positionalArgs, traitArgsOpen: constraint.positionalArgsOpen, assocNames: names, assocValues: values, assumptions: assumptions)) />
     }
 
     // Declaration-time evidence is a separate query from concrete
@@ -546,7 +533,7 @@ pub impl Comp {
                     requirementIndex += 1U64
                 }
                 if hasMember {
-                    val proof = (try self.traitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiverRef, traitId: declaration.nameId, traitOwner: declaration.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: true, assumptions: assumptions))
+                    val proof = (try self.traitPatternProof(demand: <ConformanceProofDemand.Existence />, baseRef: receiverRef, traitId: declaration.nameId, traitOwner: declaration.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: true, assumptions: assumptions))
                     match proof {
                         StaticConformanceProof.Missing => {}
                         _ => {
@@ -993,14 +980,21 @@ pub impl Comp {
     // A view is an unordered source set.  Bounds may use any active extension
     // source to establish the requested conformance; the trait selector itself
     // is already validated as singular when the TypeRef/value view is formed.
-    inout fn viewedTypeConforms(ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = []) -> Result[Bool, CompileDiagnostic] {
-        return <Result.Ok value=!self.proofIsMissing(proof: (try self.viewedTraitProof(ref: ref, traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions))) />
+    fn conformanceQueryFound(answer: ConformanceProofResult) -> Bool {
+        return match answer {
+            ConformanceProofResult.Found(proof: _) => true,
+            ConformanceProofResult.Missing | ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => false,
+        }
     }
 
-    inout fn viewedTraitProof(ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = [], demand: ConformanceProofDemand = <ConformanceProofDemand.Existence />) -> Result[StaticConformanceProof, CompileDiagnostic] {
-        if ref == 0U64 || ref >= self.arena.typeCount() || traitStart == 0U64 || self.traitNameLenByOwner(owner: traitStart) != traitLen { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+    inout fn viewedTypeConforms(demand: ConformanceProofDemand, ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = []) -> Result[Bool, CompileDiagnostic] {
+        return <Result.Ok value=self.conformanceQueryFound(answer: (try self.queryViewedTraitProof(demand: demand, ref: ref, traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions))) />
+    }
+
+    inout fn queryViewedTraitProof(demand: ConformanceProofDemand, ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = []) -> Result[ConformanceProofResult, CompileDiagnostic] {
+        if ref == 0U64 || ref >= self.arena.typeCount() || traitStart == 0U64 || self.traitNameLenByOwner(owner: traitStart) != traitLen { return <Result.Ok value=<ConformanceProofResult.Missing /> /> }
         val resolved = (try self.resolveTy(tyRef: ref))
-        val proof = (try self.traitPatternProof(demand: demand, baseRef: resolved, traitId: 0U64, traitOwner: traitStart, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions))
+        val proof = (try self.queryTraitPatternProof(demand: demand, baseRef: resolved, traitId: 0U64, traitOwner: traitStart, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions))
         return <Result.Ok value=proof />
     }
 
@@ -1283,7 +1277,7 @@ pub impl Comp {
                 predicates.append(<TraitAssocPredicate member=predicate.member value=term span=predicate.span />)
             }
             val constraint = <TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates />
-            val proof = try self.viewedTraitConstraintProof(ref: subject, constraint: constraint, assumptions: assumptions)
+            val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: subject, constraint: constraint, assumptions: assumptions)
             if self.proofIsMissing(proof: proof) {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated type does not satisfy its declared trait constraint") />
             }
@@ -1361,7 +1355,7 @@ pub impl Comp {
                     while boundIndex < authoredCount {
                         val bound = self.decls.funcBounds.at(index: boundIndex)
                         if bound.fnIdx == functionIndex {
-                            val proof = try self.viewedTraitConstraintProof(ref: bound.paramTy, constraint: bound.constraint, assumptions: assumptions)
+                            val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.paramTy, constraint: bound.constraint, assumptions: assumptions)
                             if self.proofIsMissing(proof: proof) {
                                 return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation requires a trait constraint not guaranteed by the requirement") />
                             }
@@ -1371,9 +1365,9 @@ pub impl Comp {
                         boundIndex += 1U64
                     }
                     for val bound in required {
-                        if !(try self.viewedTypeConformsTraitConstraint(ref: bound.subject, constraint: bound.constraint, assumptions: self.functionBoundAssumptions(fnIdx: functionIndex))) {
+                        if !(try self.viewedTypeConformsTraitConstraint(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint, assumptions: self.functionBoundAssumptions(fnIdx: functionIndex))) {
                             val subject = self.arena.typeAt(index: bound.subject)
-                            val proof = try self.viewedTraitConstraintProof(ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)
+                            val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)
                             if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "requirement constraint has no retained declaration evidence") /> }
                             implementationIndices.append(self.decls.funcBounds.count())
                             implementationProofs.append(self.freezeStaticConformanceProof(proof: proof))
@@ -1402,7 +1396,7 @@ pub impl Comp {
         while clause < traitDef.supertraits.count() {
             val required = self.traitConstraintAt(constraints: traitDef.supertraits, index: clause)
             val constraint = self.traitConstraintInBound(constraint: required, bound: self.conformanceTraitBound(conformance: conformance), traitIndex: traitIndex)
-            val proof = try self.viewedTraitConstraintProof(ref: conformance.subjectTy, constraint: constraint, assumptions: self.conformanceDeclarationAssumptions(conformIndex: conformIndex))
+            val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: conformance.subjectTy, constraint: constraint, assumptions: self.conformanceDeclarationAssumptions(conformIndex: conformIndex))
             if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: conformance.typeStart, msg: "supertrait not satisfied: this type must also conform to the trait's supertrait") /> }
             proofs.append(self.freezeStaticConformanceProof(proof: proof))
             clause += 1U64
@@ -1561,8 +1555,8 @@ pub impl Comp {
     // Boolean projection of the canonical source-witness proof query. Bare
     // conformance excludes outer views; each source condition is checked under
     // its own witness substitution, including trait-subject path conditions.
-    inout fn conformsInstance(ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = []) -> Result[Bool, CompileDiagnostic] {
-        return <Result.Ok value=(try self.viewedTypeConforms(ref: self.runtimeTypeRef(ref: ref), traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues)) />
+    inout fn conformsInstance(demand: ConformanceProofDemand, ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = []) -> Result[Bool, CompileDiagnostic] {
+        return <Result.Ok value=(try self.viewedTypeConforms(demand: demand, ref: ref, traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues)) />
     }
 
     inout fn typeConformsToName(typeStart: U64, typeLen: U64, traitName: String) -> Bool {
@@ -1610,7 +1604,7 @@ pub impl Comp {
 
     inout fn checkSelectedCallableBounds(fnIdx: U64, environment: InstanceEnvironment, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
         for bound in (try self.groundCallableSignatureBounds(fnIdx: fnIdx, environment: environment)) {
-            if !(try self.viewedTypeConformsTraitConstraint(ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)) {
+            if !(try self.viewedTypeConformsTraitConstraint(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)) {
                 return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "type argument does not conform to the trait required by `where`") />
             }
         }
@@ -1708,7 +1702,7 @@ pub impl Comp {
             }
             CallableConstraintEvidence.Declaration => {
                 for bound in (try self.groundCallableSignatureBounds(fnIdx: fnIdx, environment: environment)) {
-                    val proof = try self.viewedTraitConstraintProof(ref: bound.subject, constraint: bound.constraint)
+                    val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint)
                     if self.proofIsMissing(proof: proof) {
                         return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "type argument does not conform to the trait required by `where`") />
                     }

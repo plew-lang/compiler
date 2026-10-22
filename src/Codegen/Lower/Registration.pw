@@ -795,7 +795,7 @@ pub impl Comp {
         }
         if f.recvId != recvId {
             if f.isProvided && self.methodRecvIsTrait(f: f) && recvRef != 0U64 {
-                return <Result.Ok value=(try self.conformsInstance(ref: recvRef, traitStart: f.recvStart, traitLen: f.recvLen, traitArgs: self.copyFuncTypes(types: f.recvTraitArgs))) />
+                return <Result.Ok value=(try self.conformsInstance(demand: <ConformanceProofDemand.Existence />, ref: recvRef, traitStart: f.recvStart, traitLen: f.recvLen, traitArgs: self.copyFuncTypes(types: f.recvTraitArgs))) />
             }
             return <Result.Ok value=false />
         }

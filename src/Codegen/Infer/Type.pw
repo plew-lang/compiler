@@ -125,7 +125,7 @@ pub impl Comp {
                     // same constraint under the declaration's assumptions.
                     // Conditional impls must retain those assumptions too.
                     val constraint: TraitConstraint = self.existentialTraitConstraint(ref: exp)
-                    if !((try self.viewedTypeConformsTraitConstraint(ref: actual, constraint: constraint, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn)))) {
+                    if !((try self.viewedTypeConformsTraitConstraint(demand: <ConformanceProofDemand.SourceAdmission />, ref: actual, constraint: constraint, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn)))) {
                         return <Result.Ok value=<TypeCompatibility.Incompatible /> />
                     }
                 }

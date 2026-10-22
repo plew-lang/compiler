@@ -68,3 +68,13 @@ remains separately auditable; this does not certify every type producer.
 The new nominal/binder source fixture preserves the old failure as a negative
 carrier control. Current-source imported implicit-call and owner-request controls
 pass after the canonical repair; fresh/full gates remain required.
+
+### Partial-input projected member lookup
+
+projectedMemberResolution currently probes a trait with positionalArgsOpen before
+selecting its requirement. This is an explicitly weak Existence query, not source
+admission of one exact trait instance. Audit enumeration of distinct positional
+instances and preserve the final chosen instance/proof through admission. Do not
+merge different input instances as competing paths to one instance, or accept the
+first instance merely because it was discovered first. Associated-output filters
+must follow source selection under the shared query contract.

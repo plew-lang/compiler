@@ -221,12 +221,19 @@ remain accepted. Whole-source check and seven existing evidence controls plus
 the new query/ordinary-frontend control pass with the old measured driver.
 This is not a fresh candidate or full closure.
 
-Next close associated-output filtering after source/endpoint selection, exact
-opaque-premise priority, and conditional applicability through the stronger
-query. Represent Missing / Found / Ambiguous as query data so a nonconforming
-conditional candidate does not fail unrelated candidates by throwing a source
-use-site diagnostic. Reuse this one query for boolean projections and admitted
-source proofs; audit the remaining compatibility wrappers instead of leaving
-existence as their implicit source-validation default. Interface-bound admission
-must consume this same policy. No final-consumer/source-certificate audit is
-claimed by the focused query tests.
+The next bounded increment separates query outcomes (Missing / Found / Ambiguous)
+from admission diagnostics, checks output compatibility after path selection,
+prioritizes exact opaque premises and makes conditional applicability require
+source-valid conformance. Source proofs and boolean eligibility now share the
+same explicit-demand query; ambiguity makes a conditional candidate inapplicable,
+whereas malformed proof interpretation remains an error. The new internal output
+control checks bare ambiguity, #C success, #D output mismatch without fallback,
+conditional Wrapper eligibility and stronger versus opaque authored premises.
+Both new query controls pass as current imported algorithms with the old measured
+driver, and whole compiler source checks after the wrapper migration. Fresh
+execution and final-consumer/source-certificate auditing remain required.
+
+Partial-input projected member enumeration remains a presence probe: it has not
+yet selected a complete positional trait instance. Do not label that probe source
+admission; met-6e6k retains its exact-instance selection audit. The interface-root
+and dynamic/boxing proof substitution work above is still unimplemented.

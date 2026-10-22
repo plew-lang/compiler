@@ -1,3 +1,4 @@
+use /Ir only { ConformanceProofDemand }
 // The final body gate consumes retained evidence even when a fresh lookup
 // could prove the same trait. Missing evidence must not be silently repaired.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
@@ -54,7 +55,7 @@ fn main() {
                             }
                             val boxed = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "boxed").nameId)
                             val boxedType = compiler.funcParamAt(params: compiler.arena.functionAt(index: boxed).params, index: 0U64).ty
-                            val selected = compiler.viewedTraitConstraintProof(ref: boxedType, constraint: bounds[0U64].constraint).unwrap()
+                            val selected = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: boxedType, constraint: bounds[0U64].constraint).unwrap()
                             val conditional = match selected {
                                 StaticConformanceProof.ConcreteWitness(witness: val witness) => { give witness }
                                 _ => { panic("missing conditional witness") }

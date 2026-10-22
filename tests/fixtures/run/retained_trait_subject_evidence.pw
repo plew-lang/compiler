@@ -1,3 +1,4 @@
+use /Ir only { ConformanceProofDemand }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
 use /Ir only { TraitConstraint, TraitInstanceKey, StaticConformanceProof, StaticProofInstantiation, DeclarationBoundRef, InstanceEnvironment }
@@ -7,7 +8,7 @@ fn main() {
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait Root {{}} trait Target {{}} pub impl Root as Target {{}} struct Item {{}} impl Item as Root {{}} fn context(value: Item) {{}}" path="trait-subject-proof.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val context = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "context").nameId)
     val receiver = compiler.funcParamAt(params: compiler.arena.functionAt(index: context).params, index: 0U64).ty
-    val path = compiler.viewedTraitConstraintProof(ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 1U64).nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+    val path = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 1U64).nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
     val root = match path {
         StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => { give edges[0U64] }
         _ => { panic("missing selected trait path") }

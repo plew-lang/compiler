@@ -290,6 +290,6 @@ pub impl Comp {
         // `T == T` body without a witness.
         if f.originTraitOwner == 0U64 { return <Result.Ok value=false />}
         val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=f.originTraitOwner positionalArgs=self.copyFuncTypes(types: f.recvTraitArgs) /> positionalArgsOpen=false assocPredicates=[] />
-        return <Result.Ok value=(try self.viewedTypeConformsTraitConstraint(ref: instRef, constraint: constraint)) />
+        return <Result.Ok value=(try self.viewedTypeConformsTraitConstraint(demand: <ConformanceProofDemand.SourceAdmission />, ref: instRef, constraint: constraint)) />
     }
 }

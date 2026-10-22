@@ -73,7 +73,7 @@ pub impl Comp {
                         val bound = self.conformBoundAt(bounds: requirement.signatureBounds, index: boundIndex)
                         val subject = self.groundTermInEnvironment(ref: self.traitBoundTypeTerm(ref: bound.subject, bound: traitBound, traitIndex: traitIdx), params: methodParameters, values: methodArguments)
                         val constraint = self.groundTraitConstraintInEnvironment(constraint: self.traitConstraintInBound(constraint: bound.constraint, bound: traitBound, traitIndex: traitIdx), params: methodParameters, args: methodArguments)
-                        if !(try self.viewedTypeConformsTraitConstraint(ref: subject, constraint: constraint, assumptions: self.functionBoundAssumptions(fnIdx: fnIdx))) {
+                        if !(try self.viewedTypeConformsTraitConstraint(demand: <ConformanceProofDemand.SourceAdmission />, ref: subject, constraint: constraint, assumptions: self.functionBoundAssumptions(fnIdx: fnIdx))) {
                             return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "type argument does not conform to the trait required by the method's `where`") />
                         }
                         boundIndex += 1U64

@@ -1793,6 +1793,15 @@ pub impl ConformanceProofDemand {
 
 }
 
+// An unsuccessful search is data until an admission site requires a proof.
+// Conditional implementations can be inapplicable without diagnosing a call
+// that selects a different implementation. Malformed evidence remains an Err.
+pub enum ConformanceProofResult {
+    Missing
+    Found(proof: StaticConformanceProof)
+    Ambiguous(owner: U64, demand: ConformanceProofDemand, selectedSource: Bool)
+}
+
 pub enum TraitProofOrigin {
     Witness
     Assumption(source: DeclarationBoundRef, steps: Array[SupertraitRef])
