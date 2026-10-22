@@ -10,6 +10,7 @@ fn check(family: U64, mode: U64) {
         input: <FrontendInput.Text text="trait Q {{}} trait P {{ fn accept[Value](value: Value) where Value: Q }} pub impl P {{ fn helper[Value](value: Value) where Value: Q {{}} }} fn free[Value](value: Value) where Value: Q {{}} fn probe[T,V,U](receiver: T, value: V, foreign: U, target: any P) where T: P, V: Q, U: Q {{}} fn other[Value](value: Value) where Value: Q {{}}" path="constraint.pw" />,
         sources: <SourceAccess stdRoot=[] />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    compiler.cur.checkFn = owner
     val function = compiler.arena.functionAt(index: owner)
     val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
     val source = compiler.funcParamAt(params: function.params, index: 1U64).ty

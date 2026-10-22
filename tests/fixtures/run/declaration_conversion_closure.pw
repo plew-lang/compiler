@@ -1,6 +1,6 @@
 use @Std/Core only { assert }
 use @Std/Io only { print }
-use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
 use /Ir only { Expr, DeclarationConversion, ValueConversionProof, StaticConformanceProof, InstanceEnvironment }
 
@@ -8,7 +8,7 @@ use /Ir only { Expr, DeclarationConversion, ValueConversionProof, StaticConforma
 // and prevent declaration completion, even without an executable request.
 fn checkFailure(known: Bool) {
     mut val compiler = <Comp />
-    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="trait P {{}}\nstruct Value {{}}\nfn probe(value: Value, target: any P) {{}}\n" path="conversion.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait P {{}}\nstruct Value {{}}\nfn probe(value: Value, target: any P) {{}}\n" path="conversion.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val function = compiler.arena.functionAt(index: 0U64)
     val source = compiler.funcParamAt(params: function.params, index: 0U64).ty
     val target = compiler.funcParamAt(params: function.params, index: 1U64).ty

@@ -10,6 +10,7 @@ fn check(family: U64, invalid: Bool, cyclic: Bool = false) {
         input: <FrontendInput.Text text="trait B[V] {{}} trait Q {{}} trait P {{ fn value() -> I64 }} impl[V] B[V] as P where V: Q {{ fn value() -> I64 {{ return 1I64 }} }} fn probe[T,V](source: T, target: any P) where T: B[V], V: Q {{}}" path="member-proof.pw" />,
         sources: <SourceAccess stdRoot=[] />).unwrap()
     val functionIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    compiler.cur.checkFn = functionIndex
     val function = compiler.arena.functionAt(index: functionIndex)
     val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
     val name = compiler.internBytes(s: "value")

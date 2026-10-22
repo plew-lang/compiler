@@ -23,6 +23,10 @@ fn main() {
         sources: <SourceAccess stdRoot=[] />, options: <FrontendOptions genMode=true />).unwrap()
     val broken = owner(c: inout c, name: "broken")
     val good = owner(c: inout c, name: "good")
+    c.cur.checkFn = good
+    if c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=broken originSerial=9999U64 /> kind=<CallTemplateKind.Pending /> />) {
+        panic("foreign cursor granted call construction authority")
+    }
     // Closing an empty template list must not authorize an unchecked body.
     c.closeCallTemplatesForBody(fnIdx: broken).unwrap()
     c.cur.checkFn = 70001U64
@@ -48,6 +52,7 @@ fn main() {
 
     // Completed success and failure both close construction authority.
     for completedOwner in [good, broken] {
+        c.cur.checkFn = completedOwner
         if c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=completedOwner originSerial=999U64 /> kind=<CallTemplateKind.Pending /> />) {
             panic("completed owner accepted a new call")
         }
@@ -57,6 +62,7 @@ fn main() {
     // A preclosed selection is not proof of constraints. Supply an invalid
     // protocol row for another owner and require its diagnostic on every demand.
     val closed = owner(c: inout c, name: "main")
+    c.cur.checkFn = closed
     c.closeCallTemplatesForBody(fnIdx: closed).unwrap()
     val integer = c.internBytes(s: "I64")
     val term = c.simpleTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)

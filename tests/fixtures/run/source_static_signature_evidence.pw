@@ -10,6 +10,7 @@ fn check(provided: Bool, name: String, label: String, labelled: Bool, inoutArgum
         input: <FrontendInput.Text text="trait P {{ fn integer(value: I64) fn boolean(value: Bool) fn mutable(value: inout I64) fn positional(value~: I64) }} pub impl P {{ fn helper(value: I64) {{}} fn wrongType(value: Bool) {{}} fn mutableHelper(value: inout I64) {{}} fn positionalHelper(value~: I64) {{}} }} fn probe[T](receiver: T, source: I64, target: any P) where T: P {{}}" path="signature.pw" />,
         sources: <SourceAccess stdRoot=[] />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    compiler.cur.checkFn = owner
     val function = compiler.arena.functionAt(index: owner)
     val source = compiler.funcParamAt(params: function.params, index: 1U64).ty
     val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty

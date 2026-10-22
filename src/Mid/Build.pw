@@ -4,7 +4,7 @@ use ../Diag only { CompileDiagnostic }
 // recovering a place by spelling from the AST.
 
 use ../Frontend only { Comp, PreparedSemanticFacts }
-use ../Ir only { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticExpressionTypeState, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, ConditionClauseRange, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+use ../Ir only { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticExpressionTypeState, InvocationCompletion, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, ConditionClauseRange, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
 use ../Diag only { eprintU64 }
 use @Std/Io only { eprint }
 use ../Ops only { opAnd, opOr }
@@ -2245,7 +2245,12 @@ fn buildMidCallInto(c: inout Comp, state: inout MidBuildState, exprId: U64, dest
     // The callee contract was selected by frontend typing. A nonreturning
     // invocation has no writeback, temporary cleanup, or enclosing join edge.
     // Keep the ordinary Call target block but terminate that continuation.
-    if c.invocationDiverges(exprId: exprId) && midCurrentBlockIsOpen(state: state) {
+    val fact = match midSourceSemanticExpression(state: state, exprId: exprId) {
+        Optional.Some(v: val fact) => fact
+        Optional.None => { return <MidBuildError.MissingSemanticType /> }
+    }
+    val diverges = match fact.invocation { InvocationCompletion.Diverges => true _ => false }
+    if diverges && midCurrentBlockIsOpen(state: state) {
         midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />)
     }
     midFinishEvaluationScope(state: inout state, scope: evaluation)

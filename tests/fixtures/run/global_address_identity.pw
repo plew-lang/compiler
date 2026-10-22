@@ -1,31 +1,27 @@
 use @Std/Io only { write }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { Expr, identValueCode, identFnCode }
+use /Ir only { Expr, Stmt, identValueCode, identFnCode }
 
 fn main() {
     mut val c = <Comp />
     analyzeFrontendForRequests(c: inout c,
-        input: <FrontendInput.Text path="global-address.pw" text="val readonly: I64 = 1I64 mut val writable: I64 = 2I64 fn probe() {{ val copy = writable }}" />,
+        input: <FrontendInput.Text path="global-address.pw" text="val readonly: I64 = 1I64 mut val writable: I64 = 2I64 fn helper() {{}} fn probe() {{ val copy = writable val local = copy helper() val immutable = readonly }}" />,
         sources: <SourceAccess stdRoot=[] />).unwrap()
     val readonly = c.arena.globals[0U64].nameStart
     val writable = c.arena.globals[1U64].nameStart
-    mut val expression = c.arena.exprs.count()
-    mut val index = 0U64
-    while index < c.arena.exprs.count() {
-        match c.arena.exprs[index] {
-            Expr.Ident(start: _, len: _) => { expression = index }
-            _ => {}
-        }
-        index += 1U64
-    }
-    if expression >= c.arena.exprs.count() { panic "missing global reference" }
     val owner = c.arena.firstFunctionNamed(nameId: c.internBytes(s: "probe").nameId)
+    val body = c.arena.functionAt(index: owner).body
+    val expression = match c.arena.stmts[c.blockStmtAt(blkId: body, index: 0U64)] { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init _ => { panic("missing global initializer") } }
+    val local = match c.arena.stmts[c.blockStmtAt(blkId: body, index: 1U64)] { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init _ => { panic("missing local initializer") } }
+    val callable = match c.arena.stmts[c.blockStmtAt(blkId: body, index: 2U64)] { Stmt.ExprStmt(expr: val expr) => expr _ => { panic("missing function call") } }
+    val immutable = match c.arena.stmts[c.blockStmtAt(blkId: body, index: 3U64)] { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init _ => { panic("missing readonly initializer") } }
     c.prepareLexicalBody(fnIdx: owner).unwrap()
-    val term = c.semanticExprTerm(exprId: expression)
+    val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    val term = facts.expression(exprId: expression).unwrap().term
     // Changing spelling after Record cannot redirect the selected declaration.
     c.arena.exprs.set(i: expression, value: <Expr.Ident start=readonly len=8U64 />)
-    match c.recordedGlobalAddress(exprId: expression) {
+    match facts.globalAddress(exprId: expression) {
         Optional.Some(v: val address) => {
             if address.declarationTarget == writable && c.typeRefEq(a: address.typeTerm, b: term) && address.mutable { write(s: "exact-declaration\n") }
         }
@@ -34,24 +30,22 @@ fn main() {
     val first = c.arena.globals[0U64]
     c.arena.globals.set(i: 0U64, value: c.arena.globals[1U64])
     c.arena.globals.set(i: 1U64, value: first)
-    match c.recordedGlobalAddress(exprId: expression) {
+    match facts.globalAddress(exprId: expression) {
         Optional.Some(v: val address) => { if address.declarationTarget == writable { write(s: "initialization-order-independent\n") } }
         _ => {}
     }
-    val unrelated = c.internBytes(s: "unrelated")
-    c.typeCache.identTarget.set(i: expression, value: unrelated.nameStart)
-    match c.recordedGlobalAddress(exprId: expression) { Optional.None => { write(s: "local-not-global\n") } _ => {} }
-    c.typeCache.identTarget.set(i: expression, value: writable)
+    match facts.globalAddress(exprId: local) { Optional.None => { write(s: "local-not-global\n") } _ => {} }
+    match facts.globalAddress(exprId: callable) { Optional.None => { write(s: "function-not-global\n") } _ => {} }
+    match facts.globalAddress(exprId: c.arena.exprs.count()) { Optional.None => { write(s: "unrecorded-not-global\n") } _ => {} }
+    match facts.globalAddress(exprId: immutable) { Optional.Some(v: val address) => { if !address.mutable { write(s: "readonly-capability\n") } } _ => {} }
+    // Mutable construction caches cannot redirect a sealed global address.
     c.typeCache.identBind.set(i: expression, value: identFnCode())
-    match c.recordedGlobalAddress(exprId: expression) { Optional.None => { write(s: "function-not-global\n") } _ => {} }
-    match c.recordedGlobalAddress(exprId: c.arena.exprs.count()) { Optional.None => { write(s: "unrecorded-not-global\n") } _ => {} }
-    c.typeCache.identBind.set(i: expression, value: identValueCode())
     c.typeCache.identTarget.set(i: expression, value: readonly)
-    match c.recordedGlobalAddress(exprId: expression) { Optional.Some(v: val address) => { if !address.mutable { write(s: "readonly-capability\n") } } _ => {} }
+    if facts.globalAddress(exprId: expression).unwrap().declarationTarget != writable { panic("construction cache redirected sealed address") }
     // A selected binding alone is not a published type. Use a new expression
     // without a Record result instead of erasing a successful owner's fact.
     val missing = c.pushExpr(e: <Expr.Ident start=writable len=8U64 />)
     while c.typeCache.identBind.count() <= missing { c.typeCache.identBind.append(identValueCode()) }
     while c.typeCache.identTarget.count() <= missing { c.typeCache.identTarget.append(writable) }
-    match c.recordedGlobalAddress(exprId: missing) { Optional.None => { write(s: "missing-type-not-published\n") } _ => {} }
+    match facts.globalAddress(exprId: missing) { Optional.None => { write(s: "missing-type-not-published\n") } _ => {} }
 }

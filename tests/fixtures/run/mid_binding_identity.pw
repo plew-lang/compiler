@@ -1,7 +1,7 @@
 use @Std/Io only { write }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { Expr, identValueCode }
+use /Ir only { Expr, Stmt }
 use /Mid only { MidBuildState, MidBuildError, MidOperand, MidRvalue, MidStatement, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet }
 
 fn main() {
@@ -17,20 +17,20 @@ fn main() {
     val secondBinding = c.blockStmtAt(blkId: function.body, index: 1U64)
     c.prepareLexicalBody(fnIdx: owner).unwrap()
     val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
-    mut val state: MidBuildState = <MidBuildState.initial sourceFunction=0U64 />
-    val firstLocal = addMidLocal(state: inout state, declarationTarget: 10U64, typeTerm: valueTerm, isUnique: true, isParameter: false, ownsAtEntry: false)
-    val secondLocal = addMidLocal(state: inout state, declarationTarget: 20U64, typeTerm: valueTerm, isUnique: true, isParameter: false, ownsAtEntry: false)
-    val outer = midLocalForBinding(state: state, declarationTarget: 10U64)
-    val inner = midLocalForBinding(state: state, declarationTarget: 20U64)
+    val firstTarget = match c.arena.stmts[firstBinding] { Stmt.Let(mutable: _, nameStart: val start, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => start _ => { panic("missing first binding") } }
+    mut val state: MidBuildState = <MidBuildState.initial sourceFunction=owner sourceFacts=<Optional.Some v=facts /> />
+    val firstLocal = addMidLocal(state: inout state, declarationTarget: parameter.nameStart, typeTerm: valueTerm, isUnique: true, isParameter: false, ownsAtEntry: false)
+    val secondLocal = addMidLocal(state: inout state, declarationTarget: firstTarget, typeTerm: valueTerm, isUnique: true, isParameter: false, ownsAtEntry: false)
+    val outer = midLocalForBinding(state: state, declarationTarget: parameter.nameStart)
+    val inner = midLocalForBinding(state: state, declarationTarget: firstTarget)
     val missing = midLocalForBinding(state: state, declarationTarget: 30U64)
-    // Pure Mid binding lookup has explicit local identities and type input.
-    // Its navigation probe does not forge a source semantic result.
-    val bindingProbe = c.pushExpr(e: <Expr.Ident start=parameter.nameStart len=parameter.nameLen />)
-    while c.typeCache.identBind.count() <= bindingProbe { c.typeCache.identBind.append(identValueCode()) }
-    while c.typeCache.identTarget.count() <= bindingProbe { c.typeCache.identTarget.append(20U64) }
+    // Use a real recorded identifier. Mid cannot acquire semantic authority
+    // from a fabricated AST node or a mutable TypeCache row.
+    val initializer = match c.arena.stmts[firstBinding] { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init _ => { panic("missing initializer") } }
+    val bindingProbe = match c.arena.exprs[initializer] { Expr.Move(operand: val operand, isBorrow: _) => operand _ => { panic("missing move") } }
     val place = midPlaceForRecordedIdent(c: inout c, state: state, exprId: bindingProbe, typeTerm: valueTerm)
-    c.typeCache.identTarget.set(i: bindingProbe, value: 30U64)
-    val absentPlace = midPlaceForRecordedIdent(c: inout c, state: state, exprId: bindingProbe, typeTerm: valueTerm)
+    val absentState = <MidBuildState.initial sourceFunction=owner sourceFacts=<Optional.Some v=facts /> />
+    val absentPlace = midPlaceForRecordedIdent(c: inout c, state: absentState, exprId: bindingProbe, typeTerm: valueTerm)
     mut val letState = <MidBuildState.initial sourceFunction=owner sourceFacts=<Optional.Some v=facts /> />
     val input = addMidLocal(state: inout letState, declarationTarget: parameter.nameStart, typeTerm: valueTerm, isUnique: true, isParameter: true, ownsAtEntry: true)
     val letResult = buildMidLet(c: inout c, state: inout letState, stmtId: firstBinding)
@@ -70,7 +70,7 @@ fn main() {
     match letResult { MidBuildError.None => { letBuilt = true } _ => {} }
     mut val moveBuilt: Bool = false
     match moveResult { MidBuildError.None => { moveBuilt = true } _ => {} }
-    if firstLocal == 0U64 && secondLocal == 1U64 && outer.found && outer.local == 0U64 && inner.found && inner.local == 1U64 && !missing.found && place.found && place.place.local == 1U64 && !absentPlace.found && letBuilt && moveBuilt && input == 0U64 && letState.locals.count() == 3U64 && hasAssign && hasMove && letState.locals[1U64].isUnique && letState.locals[2U64].isUnique {
+    if firstLocal == 0U64 && secondLocal == 1U64 && outer.found && outer.local == 0U64 && inner.found && inner.local == 1U64 && !missing.found && place.found && place.place.local == 0U64 && !absentPlace.found && letBuilt && moveBuilt && input == 0U64 && letState.locals.count() == 3U64 && hasAssign && hasMove && letState.locals[1U64].isUnique && letState.locals[2U64].isUnique {
         write(s: "binding-identity\n")
     } else {
         write(s: "wrong-binding\n")

@@ -8,6 +8,7 @@ fn main() {
         input: <FrontendInput.Text text="trait P {{}} pub impl P {{ fn helper() -> I64 {{ return 0I64 }} }} struct A {{}} impl A as P {{}} fn probe(source: A) {{}}" path="provided-presence.pw" />,
         sources: <SourceAccess stdRoot=[] />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    compiler.cur.checkFn = owner
     val function = compiler.arena.functionAt(index: owner)
     val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
     mut val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "helper").nameId)

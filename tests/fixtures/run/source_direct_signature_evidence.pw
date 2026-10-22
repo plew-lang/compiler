@@ -10,6 +10,7 @@ fn check(name: String, label: String, labelled: Bool, inoutArgument: Bool, messa
         input: <FrontendInput.Text text="fn integer(value: I64) {{}} fn boolean(value: Bool) {{}} fn mutable(value: inout I64) {{}} fn positional(value~: I64) {{}} fn probe(source: I64) {{}}" path="signature.pw" />,
         sources: <SourceAccess stdRoot=[] />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    compiler.cur.checkFn = owner
     val source = compiler.funcParamAt(params: compiler.arena.functionAt(index: owner).params, index: 0U64).ty
     val labelSpan = compiler.internBytes(s: label)
     val args = compiler.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=0U64 term=source /> labelStart=labelSpan.nameStart labelLen=labelSpan.nameLen hasLabel=labelled isInout=inoutArgument />])

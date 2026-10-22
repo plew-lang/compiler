@@ -941,6 +941,14 @@ pub impl Comp {
             Optional.None => { return false }
         }
         if self.sourceOwnerConstructionClosed(owner: owner) { return false }
+        // A source cursor cannot grant construction authority to a different
+        // call-site owner. Closure keys and provided aliases use the same
+        // canonicalization as templateCallSiteKey.
+        val siteOwner = match self.semanticBodyOwner(fnIdx: self.cur.checkFn) {
+            Result.Ok(value: val owner) => self.callTemplateOwner(fnIdx: owner)
+            Result.Err(error: _) => { return false }
+        }
+        if template.siteKey.ownerFnIdx != siteOwner { return false }
         if findSourceCallTemplateIndex(templates: self.callTemplates, indexSlots: self.callTemplateIndexSlots, siteKey: template.siteKey) < self.callTemplates.count() { return false }
         self.ensureCallTemplateIndex(nextCount: self.callTemplates.count() + 1U64)
         val resultRecipe = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 callSite=template.siteKey sourceExpression=resultExpression />)

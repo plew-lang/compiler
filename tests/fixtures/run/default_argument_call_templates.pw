@@ -114,9 +114,11 @@ fn main() {
     // deliberately incomplete internal rows do not claim source acceptance.
     val excess = c.publishCallTemplateArguments(args: [explicitArgs[0U64], explicitArgs[0U64]])
     val unrelatedIndex = c.callTemplateCount()
+    c.cur.checkFn = generator
     c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=generator originKind=2U64 originSerial=901U64 />
         kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=excess calleeTypeArgs=selectedTypes proofId=0U64 /> />)
     val closureIndex = c.callTemplateCount()
+    c.cur.checkFn = closureKey
     c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=closureKey originKind=2U64 originSerial=902U64 />
         kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=excess calleeTypeArgs=selectedTypes proofId=0U64 /> />)
     if c.completeRecordedBodyDefaultCalls(owner: 0U64).unwrap() != 1U64 { panic("lexical completion lost closure or included another owner") }
@@ -145,6 +147,7 @@ fn main() {
     c.replaceBuildingCallTemplate(index: unrelatedIndex, template: <CallTemplate siteKey=unrelatedSite kind=completeKind />)
     c.replaceBuildingCallTemplate(index: closureIndex, template: <CallTemplate siteKey=closureSite kind=completeKind />)
     c.checkRecordedBodyCallConstraints(owner: 0U64).unwrap()
+    c.cur.checkFn = generator
     c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=generator originKind=3U64 originSerial=1U64 slot=1U64 />
         kind=<CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=term /> selection=<ProtocolSelection.Pending /> resultTerm=0U64 /> />)
     c.checkRecordedBodyCallConstraints(owner: 0U64).unwrap()
@@ -152,6 +155,7 @@ fn main() {
         Result.Ok(value: _) => { panic("requested invalid iteration was not checked") }
         Result.Err(error: _) => {}
     }
+    c.cur.checkFn = closureKey
     c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=closureKey originKind=3U64 originSerial=1U64 slot=1U64 />
         kind=<CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=term /> selection=<ProtocolSelection.Pending /> resultTerm=0U64 /> />)
     match c.checkRecordedBodyCallConstraints(owner: 0U64) {
