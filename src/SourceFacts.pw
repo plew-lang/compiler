@@ -691,3 +691,37 @@ pub impl Comp {
         return <SourceFactStatistics enabled=self.sourceFacts.measure bodiesSealed=self.sourceFacts.bodiesSealed rowsSealed=self.sourceFacts.rowsSealed acquisitions=self.sourceFacts.acquisitions />
     }
 }
+
+// Construction readers share the owner directory with all other source facts.
+// They take the directory in place; a read never snapshots the directory or
+// its builder maps. Successful owners are read only through their sealed payload.
+impl SourceFactDirectory {
+    inout fn operation(owner: SemanticCompletionOwner, index: U64) -> Optional[CallTemplate] {
+        if self.isActive(owner: owner) { return readSourceOperationTemplate(rows: self.activeBuilder.data.operations, index: index) }
+        match self.state(owner: owner) {
+            Optional.Some(v: val state) => {
+                match state {
+                    SourceBodyState.Succeeded(reader: val reader) => { return self.readers[reader].operationAt(index: index) }
+                    SourceBodyState.Building => { return readSourceOperationTemplate(rows: self.inactiveBuilder(owner: owner).data.operations, index: index) }
+                    _ => {}
+                }
+            }
+            Optional.None => {}
+        }
+        return <Optional.None />
+    }
+    inout fn operationConstraints(owner: SemanticCompletionOwner, index: U64) -> Optional[CallConstraintPlanState] {
+        if self.isActive(owner: owner) { return readSourceOperationConstraints(rows: self.activeBuilder.data.operationConstraints, index: index) }
+        match self.state(owner: owner) {
+            Optional.Some(v: val state) => {
+                match state {
+                    SourceBodyState.Succeeded(reader: val reader) => { return readSourceOperationConstraints(rows: self.readers[reader].payload->operationConstraints, index: index) }
+                    SourceBodyState.Building => { return readSourceOperationConstraints(rows: self.inactiveBuilder(owner: owner).data.operationConstraints, index: index) }
+                    _ => {}
+                }
+            }
+            Optional.None => {}
+        }
+        return <Optional.None />
+    }
+}

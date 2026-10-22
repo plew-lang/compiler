@@ -378,7 +378,7 @@ still required. Exact callee evidence transfer is the next semantic increment;
 physical storage alone does not certify it or phase-three completion.
 
 
-## Operation Read Projection Cost Repair (WIP)
+## Operation Read Cost Repair (WIP)
 
 The first owner-local storage candidate reached a second-generation fixed point
 but regressed to a formal median 7.624807 seconds. The same frozen source measured
@@ -388,14 +388,20 @@ value argument (gm3135 callTemplateAt), rather than only the operation inputs.
 The immutable conversion of SourceFactDirectory state/isActive/inactiveBuilder
 also changed existing hot construction queries.
 
-Restore in-place session queries for construction/read adapters, including the
-actual Mid declaration-access callers. A transient SourceOperationLookup passes
-only operation-related table projections to readonly lookup logic, never Comp,
-SourceFactDirectory or SourceBodyData as an aggregate value. It is an ephemeral
-query input, not a second stored directory or semantic authority. Retained
-PreparedSemanticFacts remains the immutable final reader. Source owner operations
-and constraint states use parallel dense columns under the same local ID; reading
-one template cannot copy and destroy its unrelated constraint state. Their writer
-and publication boundary remains joint and owner-local. No ARC, validation,
-visibility or semantic check is suppressed. Verify output equality, preserved
-owner/constraint/default controls and fresh same-source/formal performance.
+Construction/read adapters and actual Mid declaration-access callers use in-place
+session queries. The first narrowed candidate restores a second-generation fixed
+point at 6.655382 seconds; its matching-source comparison improves 7.665639 to
+6.760961 seconds with identical LLVM. Fresh source check and 30 AOT/17 rejection
+controls pass. The next bounded repair removes the transient multi-table query
+projection and reads through the existing SourceFactDirectory in place instead.
+No second owner-state lookup implementation remains. Cache reuse still checks
+both session and owner; template reads still check the exact CallSiteKey.
+
+Retained PreparedSemanticFacts remains the immutable final reader. Source owner
+operations and constraint states use parallel dense columns under the same local
+ID; reading one template cannot copy and destroy its unrelated constraint state.
+Their writer and publication boundary remains joint and owner-local. No ARC,
+validation, visibility or semantic check is suppressed. The directory simplification
+has passed whole-source checking; its fresh carrier, matching-source performance
+and complete affected gates remain required. Performance and scoped evidence live
+in meta/evidence/existing-feature-conformance/source-owner-facts.

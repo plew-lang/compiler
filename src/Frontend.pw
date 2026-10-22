@@ -2267,39 +2267,6 @@ impl SourceCallLocation { factory }
 
 // Transient read projection, not another semantic store. Do not pass Comp,
 // SourceFactDirectory or SourceBodyData by value to a nontrivial getter.
-struct SourceOperationLookup {
-    val activeOwner: Optional[SemanticCompletionOwner]
-    val activeOperations: Array[CallTemplate]
-    val activeConstraints: Array[Optional[CallConstraintPlanState]]
-    val functions: Array[Optional[SourceBodyState]]
-    val globals: Dictionary[U64, SourceBodyState]
-    val closures: Dictionary[U64, SourceBodyState]
-    val functionBuilders: Dictionary[U64, SourceBodyBuilder]
-    val globalBuilders: Dictionary[U64, SourceBodyBuilder]
-    val closureBuilders: Dictionary[U64, SourceBodyBuilder]
-    val readers: Array[PreparedSemanticFacts]
-    val cachedReader: Optional[U64]
-    val session: U64
-}
-impl SourceOperationLookup { factory }
-
-fn readSourceOperationOwnerState(tables: SourceOperationLookup, owner: SemanticCompletionOwner) -> Optional[SourceBodyState] {
-    match owner {
-        SemanticCompletionOwner.Function(index: val index) => {
-            if index < tables.functions.count() { return tables.functions[index] }
-        }
-        SemanticCompletionOwner.Global(target: val target) => { return tables.globals.get(key: target) }
-        SemanticCompletionOwner.Closure(expression: val expression) => { return tables.closures.get(key: expression) }
-    }
-    return <Optional.None />
-}
-fn readInactiveOperationBuilder(tables: SourceOperationLookup, owner: SemanticCompletionOwner) -> Optional[SourceBodyBuilder] {
-    match owner {
-        SemanticCompletionOwner.Function(index: val index) => { return tables.functionBuilders.get(key: index) }
-        SemanticCompletionOwner.Global(target: val target) => { return tables.globalBuilders.get(key: target) }
-        SemanticCompletionOwner.Closure(expression: val expression) => { return tables.closureBuilders.get(key: expression) }
-    }
-}
 fn cachedSourceOperationReader(readers: Array[PreparedSemanticFacts], index: Optional[U64], session: U64, owner: SemanticCompletionOwner) -> Optional[PreparedSemanticFacts] {
     match index {
         Optional.Some(v: val index) => {
@@ -2320,75 +2287,6 @@ fn readSourceOperationConstraints(rows: Array[Optional[CallConstraintPlanState]]
     if index >= rows.count() { return <Optional.None /> }
     return rows[index]
 }
-fn lookupSourceOperationTemplate(tables: SourceOperationLookup, location: SourceCallLocation) -> Optional[CallTemplate] {
-    match cachedSourceOperationReader(readers: tables.readers, index: tables.cachedReader, session: tables.session, owner: location.owner) {
-        Optional.Some(v: val reader) => { return reader.operationAt(index: location.localIndex) }
-        Optional.None => {}
-    }
-    match tables.activeOwner {
-        Optional.Some(v: val active) => {
-            if semanticCompletionOwnersEqual(recorded: active, prepared: location.owner) { return readSourceOperationTemplate(rows: tables.activeOperations, index: location.localIndex) }
-        }
-        Optional.None => {}
-    }
-    match readSourceOperationOwnerState(tables: tables, owner: location.owner) {
-        Optional.Some(v: val state) => {
-            match state {
-                SourceBodyState.Succeeded(reader: val index) => { return tables.readers[index].operationAt(index: location.localIndex) }
-                SourceBodyState.Building => {
-                    match readInactiveOperationBuilder(tables: tables, owner: location.owner) {
-                        Optional.Some(v: val builder) => { return readSourceOperationTemplate(rows: builder.data.operations, index: location.localIndex) }
-                        Optional.None => {}
-                    }
-                }
-                _ => {}
-            }
-        }
-        Optional.None => {}
-    }
-    return <Optional.None />
-}
-fn lookupSourceOperationConstraints(tables: SourceOperationLookup, location: SourceCallLocation) -> Optional[CallConstraintPlanState] {
-    match cachedSourceOperationReader(readers: tables.readers, index: tables.cachedReader, session: tables.session, owner: location.owner) {
-        Optional.Some(v: val reader) => { return readSourceOperationConstraints(rows: reader.payload->operationConstraints, index: location.localIndex) }
-        Optional.None => {}
-    }
-    match tables.activeOwner {
-        Optional.Some(v: val active) => {
-            if semanticCompletionOwnersEqual(recorded: active, prepared: location.owner) { return readSourceOperationConstraints(rows: tables.activeConstraints, index: location.localIndex) }
-        }
-        Optional.None => {}
-    }
-    match readSourceOperationOwnerState(tables: tables, owner: location.owner) {
-        Optional.Some(v: val state) => {
-            match state {
-                SourceBodyState.Succeeded(reader: val index) => { return readSourceOperationConstraints(rows: tables.readers[index].payload->operationConstraints, index: location.localIndex) }
-                SourceBodyState.Building => {
-                    match readInactiveOperationBuilder(tables: tables, owner: location.owner) {
-                        Optional.Some(v: val builder) => { return readSourceOperationConstraints(rows: builder.data.operationConstraints, index: location.localIndex) }
-                        Optional.None => {}
-                    }
-                }
-                _ => {}
-            }
-        }
-        Optional.None => {}
-    }
-    return <Optional.None />
-}
-fn requiredSourceOperation(tables: SourceOperationLookup, locations: Array[SourceCallLocation], index: U64) -> CallTemplate {
-    val location = locations[index]
-    match lookupSourceOperationTemplate(tables: tables, location: location) {
-        Optional.Some(v: val template) => { if template.siteKey.sameKey(other: location.siteKey) { return template } }
-        Optional.None => {}
-    }
-    panic("internal error: source operation navigation has no owner row")
-}
-fn optionalSourceOperationConstraints(tables: SourceOperationLookup, locations: Array[SourceCallLocation], index: U64) -> Optional[CallConstraintPlanState] {
-    if index >= locations.count() { return <Optional.None /> }
-    return lookupSourceOperationConstraints(tables: tables, location: locations[index])
-}
-
 struct SourceBodyData {
     val owner: SemanticCompletionOwner
     mut val operations: Array[CallTemplate] = []

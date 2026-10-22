@@ -93,7 +93,16 @@ pub impl Comp {
 pub impl Comp {
     fn callTemplateCount() -> U64 { return self.callTemplateLocations.count() }
     inout fn callTemplateAt(index: U64) -> CallTemplate {
-        return requiredSourceOperation(tables: <SourceOperationLookup activeOwner=self.sourceFacts.activeOwner activeOperations=self.sourceFacts.activeBuilder.data.operations activeConstraints=self.sourceFacts.activeBuilder.data.operationConstraints functions=self.sourceFacts.functions globals=self.sourceFacts.globals closures=self.sourceFacts.closures functionBuilders=self.sourceFacts.functionBuilders globalBuilders=self.sourceFacts.globalBuilders closureBuilders=self.sourceFacts.closureBuilders readers=self.sourceFacts.readers cachedReader=self.cur.sourceFactReader session=self.sourceFacts.session />, locations: self.callTemplateLocations, index: index)
+        val location = self.callTemplateLocations[index]
+        val result = match cachedSourceOperationReader(readers: self.sourceFacts.readers, index: self.cur.sourceFactReader, session: self.sourceFacts.session, owner: location.owner) {
+            Optional.Some(v: val reader) => { give reader.operationAt(index: location.localIndex) }
+            Optional.None => { give self.sourceFacts.operation(owner: location.owner, index: location.localIndex) }
+        }
+        match result {
+            Optional.Some(v: val template) => { if template.siteKey.sameKey(other: location.siteKey) { return template } }
+            Optional.None => {}
+        }
+        panic("internal error: source operation navigation has no owner row")
     }
     // Explicit inspection copy for diagnostics/tests, never a body reader.
     inout fn callTemplateSnapshot() -> Array[CallTemplate] {
@@ -194,7 +203,12 @@ impl Comp {
 
 impl Comp {
     inout fn sourceOperationConstraints(index: U64) -> Optional[CallConstraintPlanState] {
-        return optionalSourceOperationConstraints(tables: <SourceOperationLookup activeOwner=self.sourceFacts.activeOwner activeOperations=self.sourceFacts.activeBuilder.data.operations activeConstraints=self.sourceFacts.activeBuilder.data.operationConstraints functions=self.sourceFacts.functions globals=self.sourceFacts.globals closures=self.sourceFacts.closures functionBuilders=self.sourceFacts.functionBuilders globalBuilders=self.sourceFacts.globalBuilders closureBuilders=self.sourceFacts.closureBuilders readers=self.sourceFacts.readers cachedReader=self.cur.sourceFactReader session=self.sourceFacts.session />, locations: self.callTemplateLocations, index: index)
+        if index >= self.callTemplateLocations.count() { return <Optional.None /> }
+        val location = self.callTemplateLocations[index]
+        match cachedSourceOperationReader(readers: self.sourceFacts.readers, index: self.cur.sourceFactReader, session: self.sourceFacts.session, owner: location.owner) {
+            Optional.Some(v: val reader) => { return readSourceOperationConstraints(rows: reader.payload->operationConstraints, index: location.localIndex) }
+            Optional.None => { return self.sourceFacts.operationConstraints(owner: location.owner, index: location.localIndex) }
+        }
     }
     inout fn storeBuildingOperationConstraints(index: U64, state: CallConstraintPlanState) -> Bool {
         if index >= self.callTemplateLocations.count() { return false }
