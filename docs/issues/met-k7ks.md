@@ -49,3 +49,7 @@ added as mandatory scope by this audit.
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
 
 Existing source/generated/instantiated cause provenance, retained request failures and current reporting adapters. Finish cause ownership to renderer, with current multi-file and repeat-failure controls. Rich fix-its, stable error-code catalogs and future embedding services are not required.
+
+## Supporting Observation from Phase-Two Re-review
+
+At compiler production `87b382d2`, the actual Hash derive consumer compiles with root `use @Std/Hash only { Hash, Hasher, SipHasher }`. Removing only Hasher while preserving generated output rejects at `MissingSupport.gen.pw:2` with `implementation requires a trait constraint not guaranteed by the requirement`, rather than naming the missing consumer dependency. [com-io5f](com-io5f.md) preserves the successful/negative pair and [observed diagnostic](../../../evidence/existing-feature-conformance/phase-two-rereview/root-use/hash-missing-support.stderr). Root-use isolation is correct; this is a non-blocking cause-reporting improvement/control for this existing diagnostic task, not an additional phase-two acceptance requirement or prescribed exact wording. Preserve the originating missing binding/constraint cause through final reporting when closing this task.
