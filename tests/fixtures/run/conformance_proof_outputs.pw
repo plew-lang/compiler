@@ -1,11 +1,12 @@
 // Output predicates check the selected path; they must not select that path.
-use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, analyzeFrontend }
 use /SourceAccess only { SourceAccess }
-use /Ir only { ConformanceProofDemand, ConformanceProofResult, PatternTypeInput, PatternBindInput }
+use /Ir only { ConformanceProofDemand, ConformanceProofResult, PatternTypeInput, PatternBindInput, TraitConstraint, TraitInstanceKey, TraitAssocPredicate }
 use @Std/Io only { print }
 fn main() {
+    val program = "trait Output {{ type Item }}\ntrait C {{}} trait D {{}} trait Gate {{}}\nstruct First {{}} struct Second {{}} struct S {{}} struct Wrapper[T] {{}}\nimpl S as C {{}} impl S as D {{}}\nimpl C as Output {{ type Item = First }}\nimpl D as Output {{ type Item = Second }}\nimpl[T] Wrapper[T] as Gate where T: Output[Item = First] {{}}\nfn probe(source: S, first: S#C, second: S#D, wrapped: Wrapper[S], selected: Wrapper[S#C], firstType: First, secondType: Second) {{}}\nfn opaque[T](value: T) where T: Output, T: C {{}}\nfn stronger[T](value: T) where T: Output, T: Output[Item = First] {{}}\n"
     mut val compiler = <Comp />
-    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait Output {{ type Item }}\ntrait C {{}} trait D {{}} trait Gate {{}}\nstruct First {{}} struct Second {{}} struct S {{}} struct Wrapper[T] {{}}\nimpl S as C {{}} impl S as D {{}}\nimpl C as Output {{ type Item = First }}\nimpl D as Output {{ type Item = Second }}\nimpl[T] Wrapper[T] as Gate where T: Output[Item = First] {{}}\nfn probe(source: S, first: S#C, second: S#D, wrapped: Wrapper[S], selected: Wrapper[S#C], firstType: First, secondType: Second) {{}}\nfn opaque[T](value: T) where T: Output, T: C {{}}\nfn stronger[T](value: T) where T: Output, T: Output[Item = First] {{}}\n" path="proof-outputs.pw" />, sources: <SourceAccess />).unwrap()
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=program path="proof-outputs.pw" />, sources: <SourceAccess />).unwrap()
     val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     val function = compiler.arena.functionAt(index: index)
     val output = compiler.decls.traitAt(index: 0U64)
@@ -36,10 +37,27 @@ fn main() {
         val receiver = compiler.funcParamAt(params: declaration.params, index: 0U64).ty
         val assumptions = compiler.functionBoundAssumptions(fnIdx: owner)
         val answer = compiler.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiver, traitId: output.nameId, traitOwner: output.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assocNames: [item], assocValues: [first], assumptions: assumptions).unwrap()
+        val authored = <TraitConstraint key=<TraitInstanceKey owner=output.nameStart positionalArgs=[] /> positionalArgsOpen=true assocPredicates=[<TraitAssocPredicate member=item value=first span=0U64 />] />
+        val viewed = compiler.queryViewedTraitConstraint(demand: <ConformanceProofDemand.SourceAdmission />, ref: receiver, constraint: authored, assumptions: assumptions).unwrap()
+        match viewed {
+            ConformanceProofResult.Missing => { if name != "opaque" { panic("authored empty input lost a stronger premise") } }
+            ConformanceProofResult.Found(proof: _) => { if name != "stronger" { panic("authored empty input bypassed an opaque premise") } }
+            ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { panic("zero-arity declaration became an open input pattern") }
+        }
         match answer {
             ConformanceProofResult.Missing => { if name != "opaque" { panic("stronger exact premise was lost") } }
             ConformanceProofResult.Found(proof: _) => { if name != "stronger" { panic("opaque premise acquired outputs from another path") } }
             ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { panic("exact opaque premise competed with derived paths") }
+        }
+    }
+    // The ordinary source path must retain that same opaque premise,
+    // including the zero-arity declaration behind an omitted input list.
+    mut val rejected = <Comp />
+    val invalid = program + "fn accept[T](source: T) where T: Output[Item = First] {{}}\nfn invalid[T](source: T) where T: Output, T: C {{ accept(source: source) }}\n"
+    match analyzeFrontend(c: inout rejected, input: <FrontendInput.Text text=invalid path="opaque-call.pw" />, sources: <SourceAccess />) {
+        Result.Ok(value: _) => { panic("ordinary call guessed outputs for an opaque premise") }
+        Result.Err(error: val error) => {
+            if error.message != "type argument does not conform to the trait required by `where`" { panic(error.message) }
         }
     }
     print("proof-outputs")

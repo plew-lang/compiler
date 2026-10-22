@@ -1,0 +1,16 @@
+trait Output { type Item }
+trait C {}
+trait D {}
+struct First {}
+struct Second {}
+struct S {}
+impl S as C {}
+impl S as D {}
+impl C as Output { type Item = First }
+impl D as Output { type Item = Second }
+fn accept[T](value: T) where T: Output[Item = First] {}
+trait Gate {}
+struct Wrapper[T] {}
+impl[T] Wrapper[T] as Gate where T: Output[Item = First] {}
+fn requireGate[T](value: T) where T: Gate {}
+fn main() { requireGate(value: <Wrapper[S] />) }

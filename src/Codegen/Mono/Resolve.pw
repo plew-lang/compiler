@@ -335,11 +335,19 @@ pub impl Comp {
     }
 
     inout fn queryTraitPatternProof(demand: ConformanceProofDemand, baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = [], sourceOwners: Array[U64] = []) -> Result[ConformanceProofResult, CompileDiagnostic] {
+        // Omitted inputs are fully known for a zero-arity declaration. An
+        // internal open-input probe must not turn its exact empty instance
+        // into an unresolved pattern or discard an opaque authored premise.
+        mut val openArguments = traitArgsOpen
+        if openArguments {
+            val target = self.decls.traitIndexByOffset(offset: traitOwner)
+            if target < self.decls.traitCount() && self.decls.traitAt(index: target).typeParams.count() == 0U64 { openArguments = false }
+        }
         if baseRef == 0U64 || baseRef >= self.arena.typeCount() { return <Result.Ok value=<ConformanceProofResult.Missing /> /> }
-        if self.arena.typeAt(index: baseRef).assocNameId == 0U64 { return self.traitPatternProofFromFacts(demand: demand, baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners) }
-        for val active in self.activeProjectionProofs { if self.typeRefEq(a: active, b: baseRef) { return self.traitPatternProofFromFacts(demand: demand, baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners) } }
+        if self.arena.typeAt(index: baseRef).assocNameId == 0U64 { return self.traitPatternProofFromFacts(demand: demand, baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: openArguments, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners) }
+        for val active in self.activeProjectionProofs { if self.typeRefEq(a: active, b: baseRef) { return self.traitPatternProofFromFacts(demand: demand, baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: openArguments, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners) } }
         self.activeProjectionProofs.append(baseRef)
-        val result = self.projectedTraitPatternProof(demand: demand, baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners)
+        val result = self.projectedTraitPatternProof(demand: demand, baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: openArguments, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners)
         self.activeProjectionProofs.removeLast()
         return result
     }
@@ -592,7 +600,7 @@ impl Comp {
         if self.sameDeclarationBound(a: a, b: b) { return true }
         val left = self.declarationBound(source: a)
         val right = self.declarationBound(source: b)
-        return self.typeRefEq(a: left.subject, b: right.subject) && left.constraint.key.owner == right.constraint.key.owner && left.constraint.positionalArgsOpen == right.constraint.positionalArgsOpen && self.sameResolvedTypeRefs(a: left.constraint.key.positionalArgs, b: right.constraint.key.positionalArgs)
+        return self.typeRefEq(a: left.subject, b: right.subject) && left.constraint.key.owner == right.constraint.key.owner && self.sameResolvedTypeRefs(a: left.constraint.key.positionalArgs, b: right.constraint.key.positionalArgs)
     }
 
     inout fn sameSourceProofPath(a: StaticConformanceProof, b: StaticConformanceProof) -> Bool {

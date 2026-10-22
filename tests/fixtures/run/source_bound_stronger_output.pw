@@ -1,0 +1,20 @@
+// Exact stronger promises remain usable through generic call instantiation.
+use @Std/Io only { print }
+trait Output { type Item }
+trait C {}
+trait D {}
+struct First {}
+struct Second {}
+struct S {}
+impl S as C {}
+impl S as D {}
+impl C as Output { type Item = First }
+impl D as Output { type Item = Second }
+fn accept[T](value: T) -> I64 where T: Output[Item = First] { return 42I64 }
+fn forward[T](value: T) -> I64 where T: Output, T: Output[Item = First] {
+    return accept(value: value)
+}
+fn main() {
+    print(accept(value: <S />#C))
+    print(forward(value: <S />#C))
+}

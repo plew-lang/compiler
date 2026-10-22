@@ -247,3 +247,15 @@ Partial-input projected member enumeration remains a presence probe: it has not
 yet selected a complete positional trait instance. Do not label that probe source
 admission; met-6e6k retains its exact-instance selection audit. The interface-root
 and dynamic/boxing proof substitution work above is still unimplemented.
+
+The ordinary opaque-output source control exposed another query-boundary gap:
+the parsed constraint retains positionalArgsOpen even for a zero-arity trait.
+An API-only exact query correctly returned Missing, while the source wrapper
+skipped exact-premise priority and diagnosed a competing derived path. Normalize
+that empty input against declaration arity at the common query boundary, and
+exclude query openness from declaration-path root identity. Current imported
+controls cover both the authored wrapper and an actual analyzeFrontend call;
+new ordinary source fixtures cover ambiguous/mismatching/conditional outputs and
+stronger-premise propagation to execution. Fresh verification remains required
+for this last increment; do not repair the opaque fixture by changing its
+expected diagnostic to the old ambiguity.
