@@ -1,0 +1,51 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { TypeRef, TraitConstraint, TraitInstanceKey, ConformanceProofDemand, CallTemplateKind, DynamicCallTemplateTarget, DeclarationTypeScope, InstanceEnvironment, StaticProofInstantiation, Bind }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    val text = "trait Marker {{}} trait Service: Marker {{ fn get() -> I64 where Self: Marker }} struct Wrapper[T] {{}} impl[T] Wrapper[T] as Marker {{}} struct Leaf {{}} fn probe(value: any Service) -> I64 {{ return value.get() }} fn main() {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=text path="interface-nominal-readiness.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    mut val checked = false
+    for template in compiler.callTemplateSnapshot() {
+        if template.siteKey.ownerFnIdx == owner {
+            match template.kind {
+                CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
+                    match target {
+                        DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: _, slot: _, interfaceRoot: val root) => {
+                            val plan = compiler.preparedCallConstraints(index: compiler.callTemplateIndex(siteKey: template.siteKey)).unwrap().constraints()
+                            val hidden = plan.bounds[0U64].subject
+                            val wrapper = compiler.internBytes(s: "Wrapper")
+                            val receiver = compiler.pushType(t: <TypeRef nameStart=wrapper.nameStart nameLen=wrapper.nameLen args=[hidden] />)
+                            val constraint = <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 0U64).nameStart positionalArgs=[] /> />
+                            val proof = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: receiver, constraint: constraint).unwrap()
+                            if compiler.proofIsMissing(proof: proof) { panic("unconditional nominal witness was not selected") }
+                            val scope = <DeclarationTypeScope owner=owner parameters=compiler.arena.functionAt(index: owner).typeParams interfaceRoot=root />
+                            if compiler.checkDeclarationCallProof(proof: proof, scope: scope, offset: 0U64).isOk() { panic("nominal hidden argument became an interface guarantee") }
+                            match compiler.instantiateConstraintProof(proof: proof, receiverRef: receiver, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64).unwrap() {
+                                StaticProofInstantiation.Deferred => {}
+                                _ => { panic("open nominal witness became a concrete callable") }
+                            }
+                            val hiddenType = compiler.arena.typeAt(index: hidden)
+                            val leaf = compiler.internBytes(s: "Leaf")
+                            val concrete = compiler.pushType(t: <TypeRef nameStart=leaf.nameStart nameLen=leaf.nameLen args=[] />)
+                            val environment = <InstanceEnvironment params=[<Bind nameStart=hiddenType.nameStart nameLen=hiddenType.nameLen nameId=hiddenType.nameId paramId=hiddenType.paramId fieldStart=0U64 fieldLen=0U64 />] args=[concrete] />
+                            match compiler.instantiateConstraintProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: 0U64, itemRef: 0U64).unwrap() {
+                                StaticProofInstantiation.Ready(proof: _) => {}
+                                _ => { panic("grounded nominal witness did not become concrete") }
+                            }
+                            checked = true
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if !checked { panic("nominal hidden readiness control was not exercised") }
+    print("interface-nominal-hidden-readiness")
+}
