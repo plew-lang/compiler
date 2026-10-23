@@ -20,7 +20,7 @@ fn main() {
                             val hidden = plan.bounds[0U64].subject
                             val wrapper = compiler.internBytes(s: "Wrapper")
                             val receiver = compiler.pushType(t: <TypeRef nameStart=wrapper.nameStart nameLen=wrapper.nameLen args=[hidden] />)
-                            val constraint = <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 0U64).nameStart positionalArgs=[] /> />
+                            val constraint = <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 0U64).nameStart positionalArgs=[] /> assocPredicates=[] />
                             val proof = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: receiver, constraint: constraint).unwrap()
                             if compiler.proofIsMissing(proof: proof) { panic("unconditional nominal witness was not selected") }
                             val scope = <DeclarationTypeScope owner=owner parameters=compiler.arena.functionAt(index: owner).typeParams interfaceRoot=root />
