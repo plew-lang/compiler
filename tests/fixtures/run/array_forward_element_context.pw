@@ -1,0 +1,42 @@
+use @Std/Io only { print }
+
+fn pair[T](value: T) -> Array[Optional[T]] {
+    val elements = [<Optional.Some v=value />, <Optional.None />]
+    return elements
+}
+
+fn show(value: Optional[U64]) {
+    match value {
+        Optional.Some(v: val number) => { print(number) }
+        Optional.None => { print("none") }
+    }
+}
+
+fn text(prefix: String, suffix: String) -> String { return prefix + suffix }
+
+fn main() {
+    val direct = [<Optional.Some v=1U64 />, <Optional.None />]
+    show(value: direct[0U64])
+    show(value: direct[1U64])
+    val wrapped = [{ give <Optional.Some v=2U64 /> }, { give <Optional.None /> }]
+    show(value: wrapped[0U64])
+    show(value: wrapped[1U64])
+    val branches = [<Optional.Some v=3U64 />, if true { give <Optional.None /> } else { give <Optional.None /> }]
+    show(value: branches[1U64])
+    val matched = [<Optional.Some v=4U64 />, match true { true => <Optional.None />, false => <Optional.None />, }]
+    show(value: matched[1U64])
+    val annotated: Array[Optional[U64]] = [<Optional.None />, <Optional.Some v=5U64 />]
+    show(value: annotated[1U64])
+    val numbers = pair(value: 6U64)
+    show(value: numbers[0U64])
+    show(value: numbers[1U64])
+    val strings = pair(value: text(prefix: "al", suffix: "pha"))
+    match strings[0U64] {
+        Optional.Some(v: val value) => { print(value) }
+        Optional.None => { panic("lost generic string payload") }
+    }
+    if strings[1U64].isSome() { panic("lost second generic array element") }
+    val nested = [[<Optional.Some v=7U64 />, <Optional.None />], []]
+    show(value: nested[0U64][0U64])
+    if nested[1U64].count() != 0U64 { panic("later empty array lost its context") }
+}

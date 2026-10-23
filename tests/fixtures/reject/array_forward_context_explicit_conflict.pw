@@ -1,0 +1,3 @@
+fn main() {
+    val elements = [<Optional[I64].Some v=1I64 />, <Optional[U64].Some v=2U64 />]
+}

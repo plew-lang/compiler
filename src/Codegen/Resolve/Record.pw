@@ -2,6 +2,29 @@
 // checks that require local or pattern bindings. Consumers ground these
 // facts under a BodyInstance; they do not repeat lexical type inference.
 
+impl Comp {
+    // Completeness is independent of concrete closedness: a lexical parameter
+    // or a justified projection is usable context, a bare generic head is not.
+    // This only inspects the saved term's structure and declaration arity; it
+    // neither infers arguments nor asks later expressions for a substitution.
+    inout fn sourceTypeHasCompleteArguments(ref: U64) -> Bool {
+        if ref == 0U64 || ref >= self.arena.typeCount() { return false }
+        val term = self.arena.typeTerms[ref]
+        val structure = self.structIndexForType(ref: ref)
+        if structure < self.arena.structCount() {
+            if term.args.len != self.arena.structAt(index: structure).typeParams.count() { return false }
+        } else {
+            val enumeration = self.enumIndexForType(ref: ref)
+            if enumeration < self.arena.enumCount() && term.args.len != self.arena.enumAt(index: enumeration).typeParams.count() { return false }
+        }
+        mut val index = 0U64
+        while index < self.typeTermRefChildCount(ref: ref) {
+            if !self.sourceTypeHasCompleteArguments(ref: self.typeTermRefChildRef(ref: ref, index: index)) { return false }
+            index += 1U64
+        }
+        return true
+    }
+}
 
 pub impl Comp {
     inout fn requireConstructionContext(ctxRef: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
@@ -1933,7 +1956,15 @@ pub impl Comp {
                 }
                 mut val i: U64 = 0
                 while i < elems.len {
-                    try self.recordExpr(exprId: self.exprAt(exprs: elems, index: i), chainHoleRef: chainHoleRef, expectedTerm: elementContext)
+                    val element = self.exprAt(exprs: elems, index: i)
+                    try self.recordExpr(exprId: element, chainHoleRef: chainHoleRef, expectedTerm: elementContext)
+                    // The first element is the forward inference frontier.
+                    // Its saved type can guide later unresolved elements,
+                    // including lexical T. Later elements never repair it.
+                    if i == 0U64 && elementContext == 0U64 {
+                        val recorded = self.parametricExprTerm(exprId: element)
+                        if self.sourceTypeHasCompleteArguments(ref: recorded) { elementContext = recorded }
+                    }
                     i += 1
                 }
                 // Publish the same Array[E] shape used by declaration inference,

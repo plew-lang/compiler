@@ -1,0 +1,3 @@
+fn main() {
+    val elements = [<Optional.None />, <Optional.Some v=1U64 />]
+}
