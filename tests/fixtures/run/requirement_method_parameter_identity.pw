@@ -18,8 +18,7 @@ impl Worker as Service {
     }
 }
 
-fn invoke[Receiver, Input, Other](receiver: Receiver, first: Input, second: Other) -> I64
-    where Receiver: Service, Input: First, Other: Second {
+fn invoke[Receiver, Input, Other](receiver: Receiver, first: Input, second: Other) -> I64 where Receiver: Service, Input: First, Other: Second {
     return receiver.fetch(first: first, second: second)
 }
 
