@@ -864,49 +864,7 @@ pub impl Comp {
         // body. Admit the grounded signature before deciding body demand.
         val substitution: InstanceEnvironment = (try self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, selectedProof: selectedProof))
         val environment = try self.environmentWithCallableConstraints(fnIdx: fnIdx, environment: substitution, evidence: constraints)
-        if f.isExtern || f.body == 0U64 {
-            if self.traceCodegen && !f.isExtern {
-                eprint(text: "[trace-codegen] no executable body fn=")
-                eprintU64(n: fnIdx)
-                eprint(text: "\n")
-            }
-            return <Result.Ok value=0U64 />
-        }
-        // A concrete `where` clause is a property of the grounded body
-        // instance, not of the old source-walk discovery queue. In particular,
-        // a result-position call such as `val x: Token[Bad] = marker()` learns
-        // T only when this final CallTemplate edge is grounded. Check exactly
-        // here, before the instance becomes reachable by LLVM.
-        val declaration: Func = (try self.lexicalFunction(f: f))
-        // A provided copy has no standalone semantic body: its `Self`,
-        // associated outputs and nested requirements are defined by the
-        // conformance that selected it.  Never materialize one with Missing
-        // evidence; abstract checking records its template, while a concrete
-        // call re-enters here with a reified proof.
-        if (declaration.isProvided || self.methodRecvIsTrait(f: declaration)) && self.proofIsMissing(proof: environment.proof) {
-            if self.traceCodegen {
-                eprint(text: "[trace-codegen] missing executable proof fn=")
-                eprintU64(n: fnIdx)
-                eprint(text: " receiver=")
-                self.traceMonoTypeHead(ref: recvInstRef)
-                eprint(text: "\n")
-            }
-            return <Result.Ok value=0U64 />
-        }
-        mut val adapterTarget: U64 = 0U64
-        val underlying: U64 = self.arena.newtypeUnderlying(ref: environment.receiverRef)
-        if underlying != 0U64 {
-            adapterTarget = (try self.enqueueFinalBody(fnIdx: fnIdx, args: args, recvInstRef: underlying))
-            if adapterTarget == 0U64 {
-                return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "internal error: inherited body has no executable target") />
-            }
-        }
-        val bodyId: U64 = self.internBodyInstance(fnIdx: fnIdx, environment: environment)
-        if adapterTarget != 0U64 { self.arena.setBodyAdapter(bodyId: bodyId, targetBodyId: adapterTarget) }
-        if self.monoWork.containsBody(bodyId: bodyId) { return <Result.Ok value=bodyId /> }
-        self.monoWork.appendBody(bodyId: bodyId)
-        try self.prepareFinalCallableSignature(bodyId: bodyId)
-        return <Result.Ok value=bodyId />
+        return self.enqueuePreparedFinalBody(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, environment: environment)
     }
 
     // The selected conformance edge owns provided-body binders. Match its
@@ -2354,7 +2312,15 @@ pub impl Comp {
                 try self.enqueueFinalDestruction(typeRef: target)
             }
             ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val traitIdx, proof: val proof) => {
-                if self.finalExistentialIndex(sourceRef: sourceRef, targetRef: targetRef) < self.arena.finalExistentials.count() { return <Result.Ok value=() /> }
+                val existing = self.finalExistentialIndex(sourceRef: sourceRef, targetRef: targetRef)
+                if existing < self.arena.finalExistentials.count() {
+                    val selected = self.arena.finalExistentials[existing]
+                    if selected.traitIdx != traitIdx || !self.sameStaticConformanceProof(a: selected.proof, b: proof) {
+                        return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential conversion replaced its selected conformance evidence") />
+                    }
+                    return <Result.Ok value=() />
+                }
+                try self.checkConversionProofEvidence(proof: conversion, offset: 0U64)
                 val index: U64 = self.arena.finalExistentials.count()
                 self.arena.finalExistentials.append(<FinalExistentialResolution sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof />)
                 val trait: TraitDef = self.decls.traitAt(index: traitIdx)
@@ -2373,7 +2339,7 @@ pub impl Comp {
                                 Optional.Some(v: val plan) => {
                                     val admitted = try self.existentialImplementationEnvironment(implementation: selected, evidence: evidence, constraints: constraints)
                                     try self.checkPreparedExistentialWitnessSignature(plan: plan, function: selected.function, environment: admitted)
-                                    val bodyId = try self.enqueueFinalBody(fnIdx: selected.function, args: selected.arguments, recvInstRef: sourceRef, selectedProof: proof, constraints: constraints)
+                                    val bodyId = try self.enqueuePreparedFinalBody(fnIdx: selected.function, args: selected.arguments, recvInstRef: sourceRef, environment: admitted)
                                     if bodyId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: req.nameStart, msg: "internal error: existential implementation has no executable body") /> }
                                     try self.finalizeConversionDependencies(conversion: plan.resultConversion)
                                     try self.scanType(ref: plan.sourceResultType)
@@ -6230,5 +6196,56 @@ impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: function).nameStart, msg: "existential witness signature does not match its selected requirement") />
         }
         return <Result.Ok value=() />
+    }
+}
+
+impl Comp {
+    // Admission owns the proof interpretation. Signature checking and worklist
+    // publication consume that same environment; neither replays its clauses.
+    inout fn enqueuePreparedFinalBody(fnIdx: U64, args: Array[U64], recvInstRef: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
+        val f = self.arena.functionAt(index: fnIdx)
+        if f.isExtern || f.body == 0U64 {
+            if self.traceCodegen && !f.isExtern {
+                eprint(text: "[trace-codegen] no executable body fn=")
+                eprintU64(n: fnIdx)
+                eprint(text: "\n")
+            }
+            return <Result.Ok value=0U64 />
+        }
+        // A concrete `where` clause is a property of the grounded body
+        // instance, not of the old source-walk discovery queue. In particular,
+        // a result-position call such as `val x: Token[Bad] = marker()` learns
+        // T only when this final CallTemplate edge is grounded. Check exactly
+        // here, before the instance becomes reachable by LLVM.
+        val declaration: Func = (try self.lexicalFunction(f: f))
+        // A provided copy has no standalone semantic body: its `Self`,
+        // associated outputs and nested requirements are defined by the
+        // conformance that selected it.  Never materialize one with Missing
+        // evidence; abstract checking records its template, while a concrete
+        // call re-enters here with a reified proof.
+        if (declaration.isProvided || self.methodRecvIsTrait(f: declaration)) && self.proofIsMissing(proof: environment.proof) {
+            if self.traceCodegen {
+                eprint(text: "[trace-codegen] missing executable proof fn=")
+                eprintU64(n: fnIdx)
+                eprint(text: " receiver=")
+                self.traceMonoTypeHead(ref: recvInstRef)
+                eprint(text: "\n")
+            }
+            return <Result.Ok value=0U64 />
+        }
+        mut val adapterTarget: U64 = 0U64
+        val underlying: U64 = self.arena.newtypeUnderlying(ref: environment.receiverRef)
+        if underlying != 0U64 {
+            adapterTarget = (try self.enqueueFinalBody(fnIdx: fnIdx, args: args, recvInstRef: underlying))
+            if adapterTarget == 0U64 {
+                return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "internal error: inherited body has no executable target") />
+            }
+        }
+        val bodyId: U64 = self.internBodyInstance(fnIdx: fnIdx, environment: environment)
+        if adapterTarget != 0U64 { self.arena.setBodyAdapter(bodyId: bodyId, targetBodyId: adapterTarget) }
+        if self.monoWork.containsBody(bodyId: bodyId) { return <Result.Ok value=bodyId /> }
+        self.monoWork.appendBody(bodyId: bodyId)
+        try self.prepareFinalCallableSignature(bodyId: bodyId)
+        return <Result.Ok value=bodyId />
     }
 }

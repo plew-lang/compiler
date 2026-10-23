@@ -179,9 +179,13 @@ hidden type arguments may have no interface-assumption child. The blanket
 declarationWitnessDependency refusal and interfaceProofRoot-only classification
 must not be assumed to cover that case. Check source admission, unavailable
 member classification and both proof interpretations with real controls before
-calling the universal predicate surface complete. Reuse admitted environments
-between signature validation and enqueue rather than interpreting the same
-requirement-to-implementation mapping twice.
+calling the universal predicate surface complete. Signature validation and both worklists now consume the same privately admitted
+environment instead of interpreting the requirement-to-implementation mapping
+twice. Cached final boxing rejects missing/replaced proof or foreign interface
+evidence; an existing source/target key is not authority to repair that input.
+The explicit-source-table control exercises distinct #First/#Second paths and
+retains their distinct runtime results. Imported and fresh controls cover the
+cached negative cases and real body use.
 
 If a necessary case cannot preserve its admitted evidence without a new runtime
 ABI/semantic decision, reproduce it and request that judgment rather than adding
@@ -470,3 +474,15 @@ with generic output, and a caller-authored bound. New sole-path/collision reject
 fixtures are retained for the next fresh compiler. The relevance seed check is
 folded into the existing declaration fixed-point walk, removing its extra full
 call traversal. Fresh/performance and final dynamic proof transport remain open.
+
+### Inherited Receiver Reproduction
+
+`existential_newtype_condition_witness` currently rejects during declaration
+member-obligation closure: Service: Marker and get where Self: Marker work for
+Value, but boxing its Wrapped/Outer newtypes reports a selected-condition
+signature mismatch. Selected supertrait replay returns a concrete Marker proof
+with original Value Self instead of the inherited public Self. This is separate
+from the later enqueue recursion's Declaration fallback. Preserve both explicit
+interpretations: inherited public signature/proof versus original physical body.
+Do not reselect a conformance or substitute every same-shaped concrete Value term
+in the body. The regression remains red until that boundary is closed.

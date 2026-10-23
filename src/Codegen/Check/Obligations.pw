@@ -492,7 +492,7 @@ pub impl Comp {
                                         Optional.Some(v: val plan) => {
                                             val admitted = try self.existentialImplementationEnvironment(implementation: selected, evidence: box, constraints: constraints)
                                             try self.checkPreparedExistentialWitnessSignature(plan: plan, function: selected.function, environment: admitted)
-                                            if (try self.appendCallConstraintInstance(function: selected.function, arguments: selected.arguments, receiver: receiver, proof: evidence, constraints: constraints, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() { completion = <DeclarationObligationState.Deferred /> }
+                                            if (try self.appendPreparedCallConstraintInstance(function: selected.function, arguments: selected.arguments, receiver: receiver, environment: admitted, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() { completion = <DeclarationObligationState.Deferred /> }
                                         }
                                         Optional.None => {}
                                     }
@@ -546,26 +546,10 @@ pub impl Comp {
         // Their lexical owner, not the new row number, owns body obligations.
         val owner = try self.semanticBodyOwner(fnIdx: function)
         if owner >= relevant.count() || !relevant[owner] { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
-        val declaration = self.arena.functionAt(index: function)
         if (try self.callConstraintSubstitutionState(function: function, arguments: arguments, receiver: receiver)).isDeferred() { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
         val substitution = try self.bodyInstanceEnvironment(fnIdx: function, args: arguments, recvInstRef: receiver, selectedProof: proof)
         val environment = try self.environmentWithCallableConstraints(fnIdx: function, environment: substitution, evidence: constraints)
-        if declaration.isExtern || declaration.body == 0U64 { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
-        mut val previous = heads.getOr(key: owner, fallback: 0U64)
-        while previous != 0U64 {
-            val prior = requests[previous - 1U64]
-            if self.sameInstanceEnvironment(a: prior.environment, b: environment) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
-            previous = prior.next
-        }
-        // Reject unbounded semantic request expansion rather than silently
-        // accepting an unchecked recursive substitution. This is an execution
-        // resource limit, not a restriction on recursion in the language.
-        if depth > 64U64 {
-            return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "static call constraint expansion limit exceeded") />
-        }
-        requests.append(<CallConstraintInstance function=owner environment=environment depth=depth next=heads.getOr(key: owner, fallback: 0U64) />)
-        heads[owner] = requests.count()
-        return <Result.Ok value=<DeclarationObligationState.Complete /> />
+        return self.appendPreparedCallConstraintInstance(function: function, arguments: arguments, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
     }
 
     // A selected method's receiver binders are shared by ordinary static
@@ -1532,4 +1516,31 @@ impl Comp {
         return <Result.Ok value=false />
     }
 
+}
+
+impl Comp {
+    // Private handoff from admission: retain the exact condition environment
+    // already used to validate the selected signature.
+    inout fn appendPreparedCallConstraintInstance(function: U64, arguments: Array[U64], receiver: U64, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[DeclarationObligationState, CompileDiagnostic] {
+        val owner = try self.semanticBodyOwner(fnIdx: function)
+        if owner >= relevant.count() || !relevant[owner] { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
+        if (try self.callConstraintSubstitutionState(function: function, arguments: arguments, receiver: receiver)).isDeferred() { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
+        val declaration = self.arena.functionAt(index: function)
+        if declaration.isExtern || declaration.body == 0U64 { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
+        mut val previous = heads.getOr(key: owner, fallback: 0U64)
+        while previous != 0U64 {
+            val prior = requests[previous - 1U64]
+            if self.sameInstanceEnvironment(a: prior.environment, b: environment) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
+            previous = prior.next
+        }
+        // Reject unbounded semantic request expansion rather than silently
+        // accepting an unchecked recursive substitution. This is an execution
+        // resource limit, not a restriction on recursion in the language.
+        if depth > 64U64 {
+            return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "static call constraint expansion limit exceeded") />
+        }
+        requests.append(<CallConstraintInstance function=owner environment=environment depth=depth next=heads.getOr(key: owner, fallback: 0U64) />)
+        heads[owner] = requests.count()
+        return <Result.Ok value=<DeclarationObligationState.Complete /> />
+    }
 }

@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+trait First {}
+trait Second {}
+trait Service { fn get() -> I64 }
+struct Value {}
+impl Value as First {}
+impl Value as Second {}
+impl First as Service { fn get() -> I64 { return 1I64 } }
+impl Second as Service { fn get() -> I64 { return 2I64 } }
+fn read(value: any Service) -> I64 { return value.get() }
+fn main() {
+    print(read(value: <Value />#First))
+    print(read(value: <Value />#Second))
+}
