@@ -1,6 +1,6 @@
 ---
 id: met-6e6k
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-13T01:40:08Z
@@ -123,3 +123,22 @@ ArrayForwardContextGap.pw retains the input; the field-inference control uses an
 explicit Optional[U64].None to isolate this distinct producer boundary. Audit
 forward context without inferring backwards, treating unresolved generic heads
 as complete or replacing explicit incompatible element types.
+
+### Current Increment Closure Inventory
+
+This is step 3A of the [phase-three execution plan](met-si6j.md#phase-three-execution-plan).
+It closes field-driven enum inference, not this issue's other producer/descriptor
+audits in 3C. Results below are the recorded scope, not new executions.
+
+| Boundary | Current result | Next action / closure evidence |
+|---|---|---|
+| Selected declaration/payload fields -> shared argument matcher -> saved nominal construction -> native array use | Shared inference is implemented; de0a645a fresh positive/reject controls pass. The subsequent nongeneric early return has source-check evidence only. | Build the current source once after test cleanup. Verify explicit arguments remain committed; inferred literal/pattern/block/multifield payloads succeed; inconsistent or missing arguments reject. Record current revision and fresh binary. |
+| Old ordinary implicit-enum array reject -> successful layout/value/cleanup coverage | Migration approved; fixture files unchanged. The new runtime case already covers multiple elements and heap String payloads. | Consolidate safety coverage without duplicate tests; remove the obsolete ordinary reject and verify current native values and cleanup. |
+| Old unused valid-input reject -> genuine unused-body invalidity controls | Redundant valid-input test removal approved; existing invalid unused-body coverage not reconciled for this increment. | Remove the redundant fixture/expectation; identify a genuine invalid unused-body control and its whole-check result. Add coverage only if this contract is otherwise uncovered. Lazy omission of unrequested bodies is not a defect. |
+| Array/heap-payload ownership -> sanitizer checks | Runtime controls exist; latest-source sanitizer execution is not established. | Register appropriate coverage in the E ownership manifest and retain it for the final candidate's required sanitizer gate. Registration alone is not a sanitizer pass. |
+| Public/shared source inference -> requested Mid / final native consumer | Earlier File-input imported analysis and requested Mid pass; native controls use the earlier fresh compiler. | Reuse matching results and run affected fresh controls for the final increment. Distinguish current-source imported execution from standalone fresh execution. |
+| Forward element context / raw type / conversion / descriptor paths | Separate remaining work, not discharged by Some inference. | Keep the observed forward-context gap and the broader path inventory for 3C; do not expand 3A or close this issue from its focused success. |
+
+Before handing off to 3B, replace the corresponding pending actions with exact
+implementation/removal locations and evidence references. Whole-parent gates
+remain 3G; a new failure or changed input can require earlier milestone gates.
