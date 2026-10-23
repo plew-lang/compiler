@@ -14,6 +14,7 @@ fn probe(owner: Owner) {
     }
     consume(value: selected)
 }
+fn combined(prefix: String, suffix: String) -> String { return prefix + suffix }
 fn unused() { val values = [<Optional.Some v=9U64 />] }
 fn main() {
     val direct = <Optional.Some v=1U64 />
@@ -33,7 +34,7 @@ fn main() {
     consume(value: elements[0U64])
     consume(value: elements[1U64])
     consume(value: elements[2U64])
-    val texts = [<Optional.Some v="alpha" />, <Optional.Some v="beta" />]
+    val texts = [<Optional.Some v=combined(prefix: "al", suffix: "pha") />, <Optional.Some v=combined(prefix: "be", suffix: "ta") />]
     match texts[1U64] {
         Optional.Some(v: val text) => { print(text) }
         Optional.None => { panic("lost string payload") }

@@ -2656,17 +2656,19 @@ pub impl Comp {
         if isEnum {
             val enumeration = self.arena.enumIndexByOffset(offset: declaration.nameStart)
             if enumeration >= self.arena.enumCount() { return <Result.Ok value=0U64 /> }
+            typeParameters = self.arena.enumAt(index: enumeration).typeParams
+            if typeParameters.count() == 0U64 { return <Result.Ok value=0U64 /> }
             val variant = self.variantIndexInDeclaration(enumIndex: enumeration, nameStart: variantStart, nameLen: variantLen)
             if variant >= self.arena.enumAt(index: enumeration).variants.count() { return <Result.Ok value=0U64 /> }
-            typeParameters = self.arena.enumAt(index: enumeration).typeParams
             declaredFields = self.arena.enumVariantAt(enumIndex: enumeration, variantIndex: variant).fields
         } else {
             val structure = self.arena.structIndexByOffset(offset: declaration.nameStart)
             if structure >= self.arena.structCount() { return <Result.Ok value=0U64 /> }
             typeParameters = self.arena.structAt(index: structure).typeParams
+            if typeParameters.count() == 0U64 { return <Result.Ok value=0U64 /> }
             declaredFields = self.arena.structAt(index: structure).fields
         }
-        if typeParameters.count() == 0U64 || declaredFields.count() == 0U64 { return <Result.Ok value=0U64 /> }
+        if declaredFields.count() == 0U64 { return <Result.Ok value=0U64 /> }
         mut val args: Array[U64] = []
         while args.count() < typeParameters.count() { args.append(0U64) }
         val parameters = <PatternBindInput.Values values=typeParameters />
