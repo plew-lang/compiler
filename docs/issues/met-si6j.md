@@ -53,10 +53,11 @@ restart design, and [com-gyup](com-gyup.md) the closed bounded ownership study.
 
 **3A is complete** through [com-g2qg](com-g2qg.md), with the existing
 [closure record](met-6e6k.md#current-increment-closure-inventory) and
-[independent review](com-h4pz.md#outcome). The next selected task is
-**[B0: reconcile eight current callable paths](com-qehq.md)**. Its output
-selects a concrete next repair or verifies a path already closed; it does not
-restart implemented storage, selection or proof handoff.
+[independent review](com-h4pz.md#outcome). [B0](com-qehq.md) has completed the eight-path reconciliation. Its
+[current table](met-ucze.md#current-eight-path-reconciliation) selects
+**[B1: verify written static calls](com-qb05.md)**, starting with the remaining
+free-call Verify name rescan. Existing storage, selection and proof handoff
+are preserved; B0 closure does not certify the assigned repairs.
 
 The [work-breakdown review](com-hxtr.md#outcome) is addressed by separating
 milestones 3B–3F from their real child tickets. The tickets name actual entry

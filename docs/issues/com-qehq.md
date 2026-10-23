@@ -1,6 +1,6 @@
 ---
 id: com-qehq
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-10-23T10:41:58Z
@@ -37,3 +37,27 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Outcome
+
+Investigated at **4c78bb38**, source/fixtures equal **09e5a277**. The
+[eight-row reconciliation](met-ucze.md#current-eight-path-reconciliation)
+records exact producers, saved identities, instance environments and final
+Mid/LLVM consumers. The
+[static receipt](https://github.com/plew-lang/meta/blob/main/evidence/existing-feature-conformance/source-owner-facts/phase3b-call-path-inventory.json)
+pins inspected source/control hashes and the unchanged saved candidate. No
+compiler, test or performance process was run for this investigation.
+
+The first concrete residual is the live free-call Verify name rescan in
+`Verify/Call.pw::checkCallArgCategories`, owned by B1. B2/C4 retain the
+operator zero-result/projection closure; B3 retains clause/ParamId/physical-Self
+and provided-proof completion; B4 retains universal versus concrete interface
+proof admission. D2/D3 and C6 own the explicitly linked source-domain, writer
+and descriptor boundaries. Existing source/final call handoffs are preserved,
+not scheduled for reinvention. Every row has a required owner; no new repair
+bucket or unassigned path was added.
+
+Closing B0 means its finite inventory is complete. It does not close B1–B4,
+the selection epic, other phase-three areas or final-candidate gates. Next:
+B1, beginning with removing the competing free-call Verify selector while
+retaining complete selected-signature validation.
