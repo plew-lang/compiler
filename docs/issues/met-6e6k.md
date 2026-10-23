@@ -88,20 +88,20 @@ also rejects, while a generic struct constructed from the same pattern payload
 succeeds. This is a missing enum construction producer, not evidence that the
 pattern binding lost its declared U64 type.
 
-The working increment routes struct and enum payload fields through one
+The completed 3A increment routes struct and enum payload fields through one
 inferMakeInstance / matchTypeArgumentConstraints path in Record and the gen
 source prepass. It retains the selected nominal identity and uses recorded field
 argument types; canonical input terms also retain their views when rebuilt.
 Explicit/committed type arguments are not overwritten. The legacy unstamped
 source-header adapter remains part of the broader producer audit above.
 
-The new generic_enum_field_inference source covers a literal, pattern payload,
+The generic_enum_field_inference source covers a literal, pattern payload,
 block, multi-field variant, array payload and arrays with multiple enum elements
-and String payloads. A source-imported compiler using FrontendInput.File and an
-explicit standard root accepts it and both old guard inputs through actual Mid.
-This is not target-native execution or a fresh standalone compiler gate.
-FrontendInput.Text is one unified source and does not load imports; earlier
-virtual-input setup failures do not establish compiler defects.
+and String payloads. Current fresh native execution also reads both heap String
+elements. Earlier source-imported File-input analysis/requested Mid diagnostics
+are retained as scoped evidence; the new fresh gates below establish actual
+native execution. FrontendInput.Text is one unified source and does not load
+imports; earlier virtual-input setup failures do not establish compiler defects.
 
 The approved test cleanup retains the safety purpose of
 generic_enum_array_implicit in the existing successful runtime coverage: verify
@@ -110,8 +110,10 @@ applicable sanitizer checks. Remove unused_generic_enum_array_implicit rather
 than duplicating the same now-valid input in an unused positive body. Check that
 whole-body validation remains covered by genuinely invalid unused-body inputs;
 retain rejection of constructions with no information to infer their arguments.
-The fixture files have not yet been changed. Their creation commits b27ce52c and
-c552ebda guarded unresolved generic heads, silent 8-byte array stride corruption,
+Revision 09e5a277 applies this cleanup, adds the genuinely uninferred empty-variant
+reject generic_enum_field_inference_unresolved and removes the redundant unused
+positive body from the runtime fixture. Creation commits b27ce52c and c552ebda
+guarded unresolved generic heads, silent 8-byte array stride corruption,
 stack overflow and unchecked unused bodies; they did not establish a language
 ban on field-driven enum inference. Preserve these safety obligations rather
 than weakening checks merely to make the suite green.
@@ -127,18 +129,24 @@ as complete or replacing explicit incompatible element types.
 ### Current Increment Closure Inventory
 
 This is step 3A of the [phase-three execution plan](met-si6j.md#phase-three-execution-plan).
-It closes field-driven enum inference, not this issue's other producer/descriptor
-audits in 3C. Results below are the recorded scope, not new executions.
+**3A is complete** at compiler/test revision 09e5a277 (implementation 108355cc),
+using fresh bin/plewc-phase3a-final, SHA256
+dac32dca0bbb99c8e1da5469035ae67fca18e50fde4b04fcaec25855a964345b.
+The [closure receipt](https://github.com/plew-lang/meta/blob/main/evidence/existing-feature-conformance/source-owner-facts/phase3a-completion.json)
+records native6/reject8, LLVM22 generated-program ASan/LSan2, whole compiler source
+check and standard gen24/reject5 with zero skip/failure. It closes field-driven
+enum inference, not this issue's other producer/descriptor audits in 3C.
 
-| Boundary | Current result | Next action / closure evidence |
+| Boundary | Current result | Closure evidence / retained limitation |
 |---|---|---|
-| Selected declaration/payload fields -> shared argument matcher -> saved nominal construction -> native array use | Shared inference is implemented; de0a645a fresh positive/reject controls pass. The subsequent nongeneric early return has source-check evidence only. | Build the current source once after test cleanup. Verify explicit arguments remain committed; inferred literal/pattern/block/multifield payloads succeed; inconsistent or missing arguments reject. Record current revision and fresh binary. |
-| Old ordinary implicit-enum array reject -> successful layout/value/cleanup coverage | Migration approved; fixture files unchanged. The new runtime case already covers multiple elements and heap String payloads. | Consolidate safety coverage without duplicate tests; remove the obsolete ordinary reject and verify current native values and cleanup. |
-| Old unused valid-input reject -> genuine unused-body invalidity controls | Redundant valid-input test removal approved; existing invalid unused-body coverage not reconciled for this increment. | Remove the redundant fixture/expectation; identify a genuine invalid unused-body control and its whole-check result. Add coverage only if this contract is otherwise uncovered. Lazy omission of unrequested bodies is not a defect. |
-| Array/heap-payload ownership -> sanitizer checks | Runtime controls exist; latest-source sanitizer execution is not established. | Register appropriate coverage in the E ownership manifest and retain it for the final candidate's required sanitizer gate. Registration alone is not a sanitizer pass. |
-| Public/shared source inference -> requested Mid / final native consumer | Earlier File-input imported analysis and requested Mid pass; native controls use the earlier fresh compiler. | Reuse matching results and run affected fresh controls for the final increment. Distinguish current-source imported execution from standalone fresh execution. |
+| Selected declaration/payload fields -> shared argument matcher -> saved nominal construction -> native array use | Record and gen prepass use inferMakeInstance / matchTypeArgumentConstraints in Resolve/Expr; Record's old struct-only gate is removed. Canonical declaration identity and views are retained by rebuildTypeTerm; explicit/committed arguments bypass inference. The nongeneric setup shortcut is in the tested fresh compiler. | Standard build 20261023T092930-build-857b7b exits0 with unchanged inputs. generic_enum_field_inference, generic_enum_array, generic_ctor_infer and generic_constructor_nested_constraints execute with golden output. Conflict/payload/field-width/arity/uninferred controls reject with expected diagnostics. |
+| Old ordinary implicit-enum array reject -> successful layout/value/cleanup coverage | Obsolete reject removed; generic_enum_field_inference covers multiple enum elements and both heap String payload values. | Native and LLVM22 instrumented execution match the golden; no sanitizer errors. Existing generic_enum_array provides the explicit-argument/chain-result contrast. |
+| Old unused valid-input reject -> genuine unused-body invalidity controls | Obsolete fixture/expectation and redundant unused positive body removed. Existing unused_struct_required_array_field and unused_generic_argument_bound reject in whole --check with their existing diagnostics; unused_generic_enum_context is accepted. | Fresh reject controls exit1; successful native unused-body context contrast and fresh whole compiler --check exit0. No extra duplicate unused test was added. Lazy omission of unrequested bodies remains permitted. |
+| Array/heap-payload ownership -> sanitizer checks | E manifest registers generic_enum_field_inference; entries exist and are unique. Two generated-program controls pass LLVM22 ASan/LSan with leak detection and verified inserted ASan calls. | Generation is instrumented before optimization via opt -passes=asan and linked with the same LLVM22 compiler/runtime. Full compiler-instrumented A/B/E and full C/D remain final-parent gates in 3G; this is not a claim that E has run. |
+| Public/shared source inference -> requested Mid / final native consumer | Fresh inferred_enum_argument_source_owner executes its frontend source-owner/conversion checks successfully; native lowering/execution controls pass. Standard gen tests exercise the shared prepass without regression. | Gen 20261023T093344-gen-52bbe8 exits0, pass24/reject5/skip0/fail0, plus gen-input-ast, with unchanged inputs. Earlier actual File-input requested-Mid evidence remains separately scoped; the fresh whole compiler --check also succeeds. |
 | Forward element context / raw type / conversion / descriptor paths | Separate remaining work, not discharged by Some inference. | Keep the observed forward-context gap and the broader path inventory for 3C; do not expand 3A or close this issue from its focused success. |
 
-Before handing off to 3B, replace the corresponding pending actions with exact
-implementation/removal locations and evidence references. Whole-parent gates
-remain 3G; a new failure or changed input can require earlier milestone gates.
+The 3A exit items are discharged; proceed to 3B's selection/evidence inventory.
+Keep this issue in_progress for 3C. Whole-parent normal/deps/full sanitizer and
+current formal performance gates remain 3G; prior f67c8fce gates are not assigned
+to this fresh binary. A new failure or changed input can require earlier gates.

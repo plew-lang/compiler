@@ -57,13 +57,15 @@ action, current source/carrier and active validation handles. Do not maintain a
 second status list in meta. The labels 3A–3G are local steps, not new tickets,
 statuses or language-design decisions.
 
-At this reconciliation, none of the seven steps is certified complete. This
-does not mean their implementation is untouched: owner storage, selection and
-evidence handoff already have substantial implementation and scoped successes.
-The missing work is to discharge the finite remaining boundaries with evidence,
-not restart the migration or mark unchecked paths complete by inference. Start
-with 3A, then use the order below; repair a prerequisite discovered later in its
-owning issue without creating a parallel authority.
+Step **3A is complete** at compiler/test revision `09e5a277`: its
+[closure inventory](met-6e6k.md#current-increment-closure-inventory) and
+[receipt](https://github.com/plew-lang/meta/blob/main/evidence/existing-feature-conformance/source-owner-facts/phase3a-completion.json)
+identify the exact fresh controls and remaining gate limits. Steps 3B–3G are not
+certified complete. They already contain substantial implemented increments;
+the remaining work is to discharge their finite boundaries with evidence, not
+restart the migration or mark unchecked paths complete by inference. Next is 3B;
+repair a discovered prerequisite in its owning issue without creating a parallel
+authority. Completion of 3A does not close met-6e6k's remaining 3C scope.
 
 | Step | Owning issues and existing progress | Remaining work and exit condition |
 |---|---|---|
