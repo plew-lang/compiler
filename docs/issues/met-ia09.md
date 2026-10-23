@@ -126,6 +126,33 @@ user judgment.
 
 ### Internal Implementation Sequence
 
+#### Remaining Concrete Boxing Boundary
+
+Give interface-contract interpretation its own explicit provenance. A contract
+for a selected boxing conversion/requirement is not an invented source call,
+and must not borrow a CallSiteKey or ambient caller merely to use an existing
+checker. Source-call and contract scopes cannot authorize each other's rows.
+Normalize public clauses with the same trait-signature machinery and query them
+from the exact interface/associated guarantees and concrete target terms.
+An unavailable member is distinct from an invalid derivation for an admitted
+member. Do not swallow proof errors as a missing optional table slot.
+
+The shared interpreter needs a concrete-root interpretation supplied by the
+already selected boxing witness, alongside its abstract-root interpretation for
+dynamic calls. Retain the associated/supertrait clause and selected conformance
+workers introduced above. An abstract interface result cannot become static
+Ready by changing a tag; a concrete interpretation must establish and validate
+the actual selected witnesses.
+
+Reuse the retained conformanceMethodPlan for requirement-to-implementation
+transfer, including weaker/reordered implementation conditions. Pass Requirement
+evidence into witness body preparation; remove its Declaration default path.
+Cover unavailable-unused members, available conditional bodies, inherited and
+associated guarantees, explicit source views and malformed promised evidence.
+If a necessary case cannot preserve its admitted evidence without a new runtime
+ABI/semantic decision, reproduce it and request that judgment rather than adding
+a new implicit selector or silently changing the accepted condition.
+
 The retained interface interpretation now has an explicit declaration or body
 owner and a fresh hidden binder when its condition set is nonempty. Its result
 is distinct from concrete static evidence. Final dynamic call rows retain a
