@@ -224,7 +224,8 @@ pub impl Comp {
                     ProtocolSelection.Identity => { target = <CallTarget.NoCallable />
                         result = receiverRef }
                     ProtocolSelection.Static(resolution: val resolution) => {
-                        val selected = try self.selectStaticMethodTemplateCall(exprId: stmtId, methodArguments: [], receiver: <CallTemplateReceiver.Term term=receiverRef />, arguments: [], resolution: resolution, resultTerm: resultTerm)
+                        val selected = try self.selectStaticMethodTemplateCall(exprId: stmtId, methodArguments: [], receiver: <CallTemplateReceiver.Term term=receiverRef />, arguments: [], resolution: resolution, resultTerm: resultTerm, expectedResultTerm: template.expectedResultTerm, slot: slot)
+                        result = selected.resultRef
                         callee = selected.callee
                         proof = selected.proof
                         typeArguments = selected.calleeTypeArgs
@@ -1096,7 +1097,7 @@ pub impl Comp {
             val template = try self.callTemplateForCurrentBody(exprId: exprId, slot: 1U64)
             val selection = match template.kind {
                 CallTemplateKind.StaticMethod(val receiver, args: val arguments, val resolution, val methodTypeArgs, val resultTerm) => {
-                    give try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: self.callTemplateTypeArgs(range: methodTypeArgs), receiver: receiver, arguments: self.callTemplateArguments(range: arguments), resolution: resolution, resultTerm: resultTerm, slot: 1U64, expectedResultTerm: template.expectedResultTerm)
+                    give try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: self.callTemplateTypeArgs(range: methodTypeArgs), receiver: receiver, arguments: self.callTemplateArguments(range: arguments), resolution: resolution, resultTerm: resultTerm, expectedResultTerm: template.expectedResultTerm, slot: 1U64)
                 }
                 _ => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: error conversion has no recorded call template") /> }
             }
@@ -1244,19 +1245,19 @@ pub impl Comp {
         val template: CallTemplate = (try self.callTemplateForCurrentBody(exprId: exprId))
         mut val op: I64 = 0
         mut val operands: Array[CallArgumentSource] = []
-        mut val resultTerm: U64 = 0U64
         mut val resolution: OperatorSelection = <OperatorSelection.Pending />
         match template.kind {
-            CallTemplateKind.Operator(op: val storedOp, operands: val storedOperands, resolution: val storedResolution, resultTerm: val storedResult) => {
+            CallTemplateKind.Operator(op: val storedOp, operands: val storedOperands, resolution: val storedResolution, resultTerm: _) => {
                 op = storedOp
                 resolution = storedResolution
+                if storedOperands.start > self.callTemplateOperandPool.count() || storedOperands.len > self.callTemplateOperandPool.count() - storedOperands.start {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: selected operator has an invalid operand range") />
+                }
                 mut val operandIndex: U64 = 0U64
                 while operandIndex < storedOperands.len {
-                    if storedOperands.start + operandIndex >= self.callTemplateOperandPool.count() { return <Result.Ok value=() /> }
                     operands.append(self.callTemplateOperandPool[storedOperands.start + operandIndex])
                     operandIndex += 1U64
                 }
-                resultTerm = storedResult
             }
             _ => {
                 // Collection runs once to establish concrete type instances
@@ -1269,14 +1270,16 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: operator CallTemplate was not recorded") />
             }
         }
-        // A primitive operator may contain only contextual literals, hence no
-        // operand TypeTerm of its own.  Its enclosing annotation is already a
-        // semantic CallTemplate input and is the authoritative type in that
-        // case; never fall back to Mono's AST/type-cache recovery.
-        mut val expectedResultRef: U64 = 0U64
-        if template.expectedResultTerm != 0U64 {
-            expectedResultRef = (try self.groundAndRecordBodyType(ref: template.expectedResultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
+        // Source closure already completed literal context and the operator's
+        // source result, including Ord's Bool projection. Instantiate that
+        // canonical expression fact just as Direct calls do; neither a parent
+        // expectation nor an operand type may repair a missing result here.
+        val result = try self.preparedBodyExpression(bodyId: self.currentBodyInstanceId(), exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)
+        val resultTerm = result.term
+        if resultTerm == 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: selected operator has no recorded source result") />
         }
+        val selectedResultRef = try self.groundAndRecordBodyType(ref: resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
         mut val operandRefs: Array[U64] = []
         mut val oi: U64 = 0U64
         while oi < operands.count() {
@@ -1285,7 +1288,9 @@ pub impl Comp {
         }
         mut val selectedReceiverRef: U64 = 0U64
         if operandRefs.count() > 0U64 { selectedReceiverRef = operandRefs[0] }
-        if selectedReceiverRef == 0U64 { selectedReceiverRef = expectedResultRef }
+        if selectedReceiverRef == 0U64 || selectedResultRef == 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: selected operator types were not finalized") />
+        }
         mut val argumentSources: Array[CallTemplateArgument] = []
         mut val sourceIndex = 0U64
         while sourceIndex < operands.count() {
@@ -1305,27 +1310,12 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: operator selection was not completed before materialization") />
             }
             OperatorSelection.Static(resolution: val selectedResolution) => {
-                val selected = try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: [], receiver: <CallTemplateReceiver.Term term=selectedReceiverRef />, arguments: argumentSources, resolution: selectedResolution, resultTerm: resultTerm)
+                val selected = try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: [], receiver: <CallTemplateReceiver.Term term=selectedReceiverRef />, arguments: argumentSources, resolution: selectedResolution, resultTerm: resultTerm, expectedResultTerm: template.expectedResultTerm)
                 callee = selected.callee
                 selectedProof = selected.proof
                 typeArguments = selected.calleeTypeArgs
             }
         }
-        mut val selectedResultRef: U64 = 0U64
-        if resultTerm != 0U64 {
-            selectedResultRef = (try self.groundAndRecordBodyType(ref: resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
-        }
-        if selectedResultRef == 0U64 { selectedResultRef = expectedResultRef }
-        // `Ord.compare` is the carrier selected for ordering syntax, but the
-        // source expression is Bool even in an abstract std/generic body whose
-        // template has not retained a result term.  This is selection semantics
-        // (the same rule as Record's operator template), never a backend type
-        // recovery.
-        if selectedResultRef == 0U64 && (op == opLt() || op == opLe() || op == opGt() || op == opGe()) {
-            val boolName: Bind = self.kwSpan(kw: "Bool", kwLen: 4U64)
-            selectedResultRef = self.simpleTypeRef(nameStart: boolName.nameStart, nameLen: boolName.nameLen)
-        }
-        if callee >= self.arena.functionCount() && selectedResultRef == 0U64 { selectedResultRef = selectedReceiverRef }
         mut val target: CallTarget = <CallTarget.NoCallable />
         if callee < self.arena.functionCount() { target = <CallTarget.Direct /> }
         mut val resultProjection: CallResultProjection = <CallResultProjection.Identity />
@@ -3576,13 +3566,13 @@ pub impl Comp {
         return <Result.Ok value=selected />
     }
 
-    inout fn selectStaticMethodTemplateCall(exprId: U64, methodArguments: Array[U64], receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], resolution: StaticMemberResolution, resultTerm: U64, slot: U64 = 0U64, expectedResultTerm: U64 = 0U64) -> Result[CallSiteSelection, CompileDiagnostic] {
+    inout fn selectStaticMethodTemplateCall(exprId: U64, methodArguments: Array[U64], receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], resolution: StaticMemberResolution, resultTerm: U64, expectedResultTerm: U64, slot: U64 = 0U64) -> Result[CallSiteSelection, CompileDiagnostic] {
         val noCallee: U64 = self.arena.functionCount()
         val receiverRef: U64 = (try self.groundCallTemplateReceiver(receiver: receiver))
         val args: ArgRange = self.templateArgumentRangeFromValues(arguments: arguments)
         val expected = if expectedResultTerm != 0U64 {
             give try self.groundAndRecordBodyType(ref: expectedResultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
-        } else { give try self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef) }
+        } else { give 0U64 }
         mut val resultRef: U64 = (try self.groundAndRecordBodyType(ref: resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
         if resultRef == 0U64 { resultRef = expected }
         match resolution {
@@ -3986,7 +3976,7 @@ pub impl Comp {
                 return <Result.Ok value=selection.callee />
             }
             CallTemplateKind.StaticMethod(receiver: val receiver, args: val arguments, resolution: val resolution, methodTypeArgs: val methodTypeArgs, resultTerm: val resultTerm) => {
-                val selection: CallSiteSelection = (try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: self.callTemplateTypeArgs(range: methodTypeArgs), receiver: receiver, arguments: self.callTemplateArguments(range: arguments), resolution: resolution, resultTerm: resultTerm))
+                val selection: CallSiteSelection = (try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: self.callTemplateTypeArgs(range: methodTypeArgs), receiver: receiver, arguments: self.callTemplateArguments(range: arguments), resolution: resolution, resultTerm: resultTerm, expectedResultTerm: template.expectedResultTerm))
                 try self.recordSelectedBodyCallee(selection: selection)
                 try self.enqueueSelectedCallee(selection: selection, template: template)
                 return <Result.Ok value=selection.callee />

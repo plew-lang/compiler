@@ -1,0 +1,41 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Ir only { CallTemplateKind, InstanceEnvironment, Stmt }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    val sources = <SourceAccess stdRoot="plew:std/".bytes() resources=[
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64 }} pub enum Optional[T] {{ Some(v: T) None }}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 }} pub trait Iterator {{ type Item inout fn next() -> Optional[Item] }} pub trait Iterable {{ type Item type Iter: Iterator[Item=Item] fn iterator() -> Iter }}" />,
+        <SourceResource path="plew:std/Probe.pw".bytes() text="use @Std/Core only {{ Iterator }} struct Cursor {{}} impl Cursor as Iterator {{ type Item = I64 inout fn next() -> Optional[I64] {{ return <Optional.None /> }} }} fn probe(cursor: Cursor) {{ for val item in cursor {{}} }}" />,
+    ] />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="plew:std/Probe.pw" />, sources: sources).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    val function = compiler.arena.functionAt(index: owner)
+    val statement = compiler.blockStmtAt(blkId: function.body, index: 0U64)
+    match compiler.arena.stmts[statement] {
+        Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, iter: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {}
+        _ => { panic("missing iteration statement") }
+    }
+    val key = compiler.templateProtocolSiteKey(fnIdx: owner, stmtId: statement, slot: 2U64).unwrap()
+    val template = compiler.callTemplateAt(index: compiler.callTemplateIndex(siteKey: key))
+    val result = match template.kind {
+        CallTemplateKind.Protocol(receiver: _, selection: _, resultTerm: val result) => result
+        _ => { panic("missing protocol selection") }
+    }
+    val receiver = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val environment = <InstanceEnvironment />
+    compiler.cur.bodyId = compiler.internBodyInstance(fnIdx: owner, environment: environment)
+    compiler.cur.bodyFnIdx = owner
+    compiler.cur.bodyEnvironment = environment
+    val selected = compiler.selectedProtocolTemplateCall(template: template, stmtId: statement, slot: 2U64, receiverRef: receiver).unwrap()
+    if selected.resultRef == 0U64 || !compiler.typeRefEq(a: selected.resultRef, b: result) {
+        panic("protocol final selection discarded its source result")
+    }
+    if !selected.siteIsStmt || selected.slot != 2U64 || !selected.siteKey.sameKey(other: key) {
+        panic("protocol final selection lost its statement slot")
+    }
+    print("ok")
+}

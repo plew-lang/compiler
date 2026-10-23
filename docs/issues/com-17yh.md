@@ -1,6 +1,6 @@
 ---
 id: com-17yh
-status: open
+status: in_progress
 deps: [com-qehq]
 links: []
 created: 2026-10-23T10:41:58Z
@@ -37,3 +37,24 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Current Increment
+
+At fd4bf676, the selected operator finalizer still synthesized a missing result
+from a parent expectation, Bool for ordering, or the left operand. It now
+instantiates the prepared source expression result, as Direct calls do. Its
+operand-range error also replaces a silent success for a corrupt range; the
+new `operator_invalid_operand_range` control covers overflowing start/length.
+
+The static branch of `selectedProtocolTemplateCall` discarded
+`selectStaticMethodTemplateCall`'s resultRef and published zero to its caller.
+It now retains that result. The static helper receives the expected result
+explicitly from every source template; zero means no expectation. It cannot
+look up expression context by a protocol statement's numerical ID. The new
+`protocol_selected_result_authority` control checks the retained result and
+statement slot before the actual caller/Mid/LLVM controls below.
+
+These are instance handoff/removal changes, not new source inference or a
+language rule. Operator result projections remain explicit. Fresh validation
+of operator/protocol/try families and full compiler source is pending. C4
+still owns the general recipe/result audit and B3 the real callee environments.

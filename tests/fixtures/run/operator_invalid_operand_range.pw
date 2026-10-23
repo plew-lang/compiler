@@ -1,0 +1,43 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Stmt, CallTemplate, CallTemplateKind, CallTemplateOperandRange }
+use @Std/Io only { print }
+
+fn check(start: U64, length: U64) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="operator-range.pw" text="fn probe() -> I64 {{ return 1I64 + 2I64 }}" />,
+        sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    compiler.recordParametricFunction(fnIdx: owner, recordCallTemplates: true).unwrap()
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: owner).body, index: 0U64)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Return(value: val expression, hasValue: _, offset: _) => expression
+        _ => { panic("missing operator return") }
+    }
+    val key = compiler.templateCallSiteKey(fnIdx: owner, exprId: expression).unwrap()
+    val index = compiler.callTemplateIndex(siteKey: key)
+    val template = compiler.callTemplateAt(index: index)
+    val broken = match template.kind {
+        CallTemplateKind.Operator(op: val op, operands: _, resolution: val selection, resultTerm: val result) => {
+            give <CallTemplateKind.Operator op=op operands=<CallTemplateOperandRange start=start len=length /> resolution=selection resultTerm=result />
+        }
+        _ => { panic("missing operator selection") }
+    }
+    if !compiler.replaceBuildingCallTemplate(index: index, template: <CallTemplate siteKey=template.siteKey resultTypeRecipe=template.resultTypeRecipe kind=broken receiverTypeTerm=template.receiverTypeTerm expectedResultTerm=template.expectedResultTerm />) {
+        panic("missing operator builder")
+    }
+    compiler.cur.bodyFnIdx = owner
+    match compiler.recordBodyOperatorCallee(exprId: expression) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "internal error: selected operator has an invalid operand range" { panic(diagnostic.message) }
+        }
+        Result.Ok(value: _) => { panic("invalid operator range silently accepted") }
+    }
+}
+
+fn main() {
+    check(start: 18446744073709551615U64, length: 2U64)
+    check(start: 0U64, length: 18446744073709551615U64)
+    print("ok")
+}
