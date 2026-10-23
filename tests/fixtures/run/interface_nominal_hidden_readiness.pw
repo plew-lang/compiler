@@ -33,7 +33,8 @@ fn main() {
                             val leaf = compiler.internBytes(s: "Leaf")
                             val concrete = compiler.pushType(t: <TypeRef nameStart=leaf.nameStart nameLen=leaf.nameLen args=[] />)
                             val environment = <InstanceEnvironment params=[<Bind nameStart=hiddenType.nameStart nameLen=hiddenType.nameLen nameId=hiddenType.nameId paramId=hiddenType.paramId fieldStart=0U64 fieldLen=0U64 />] args=[concrete] />
-                            match compiler.instantiateConstraintProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: 0U64, itemRef: 0U64).unwrap() {
+                            val grounded = compiler.groundTermForBody(ref: receiver, environment: environment, selfRef: 0U64, itemRef: 0U64).unwrap()
+                            match compiler.instantiateConstraintProof(proof: proof, receiverRef: grounded, environment: environment, selfRef: 0U64, itemRef: 0U64).unwrap() {
                                 StaticProofInstantiation.Ready(proof: _) => {}
                                 _ => { panic("grounded nominal witness did not become concrete") }
                             }
