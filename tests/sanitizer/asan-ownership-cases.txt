@@ -94,3 +94,6 @@ tests/fixtures/run/conditional_move_continuations.pw
 
 # Existential guarantee erasure preserves owned boxes and borrowed payloads.
 tests/fixtures/run/any_sendable_erasure.pw
+
+# Inferred generic enum payloads retain array stride and heap String ownership.
+tests/fixtures/run/generic_enum_field_inference.pw

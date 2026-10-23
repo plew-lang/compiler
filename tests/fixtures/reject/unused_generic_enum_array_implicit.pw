@@ -1,7 +1,0 @@
-use @Std/Core
-
-fn unused() {
-    val values = [<Optional.Some v=1I64 />]
-}
-
-fn main() {}

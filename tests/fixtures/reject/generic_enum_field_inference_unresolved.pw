@@ -1,0 +1,4 @@
+// An empty variant supplies no field from which to infer its type argument.
+fn main() {
+    val value = <Optional.None />
+}
