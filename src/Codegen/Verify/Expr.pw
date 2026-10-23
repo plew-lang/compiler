@@ -195,9 +195,12 @@ pub impl Comp {
                 }
                 try self.verifyExpr(id: recv)
             }
-            Expr.Call(val nameStart, val nameLen, val args) => {
+            Expr.Call(nameStart: _, nameLen: _, val args) => {
                 try self.verifyArgs(args: args)
-                try self.checkCallArgCategories(nameStart: nameStart, nameLen: nameLen, args: args)
+                // Record owns the callable selection, including a lexical
+                // closure that shadows a free function. Source-call closure
+                // checks its saved signature and evidence before publication;
+                // this walk checks operands without selecting another name.
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 // enum variant construction (`<E.A x=1 />`) must specify EVERY payload

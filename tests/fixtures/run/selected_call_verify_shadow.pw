@@ -1,0 +1,25 @@
+use @Std/Io only { print }
+
+// Each lexical closure selection must survive verification even though a
+// same-named free function has a different parameter and result signature.
+fn transform(value: String) -> String { return value }
+
+fn through(transform: fn(value: I64) -> I64) -> I64 {
+    return transform(value: 21I64)
+}
+
+fn throughGeneric[Element](transform: fn(value: Element) -> Element, value: Element) -> Element {
+    return transform(value: value)
+}
+
+fn main() {
+    print(through(transform: fn(value: I64) -> I64 { return value * 2I64 }))
+    print(throughGeneric(transform: fn(value: I64) -> I64 { return value + 1I64 }, value: 6I64))
+    print(transform(value: "global"))
+    val transform = fn(value: Bool) -> Bool { return !value }
+    print(transform(value: false))
+    val nested = fn(transform: fn(value: I64) -> I64) -> I64 {
+        return transform(value: 7I64)
+    }
+    print(nested(transform: fn(value: I64) -> I64 { return value + 1I64 }))
+}

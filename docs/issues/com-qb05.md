@@ -1,6 +1,6 @@
 ---
 id: com-qb05
-status: open
+status: in_progress
 deps: [com-qehq]
 links: []
 created: 2026-10-23T10:41:58Z
@@ -37,3 +37,27 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Current Increment
+
+B0 identified the live `Verify/Call.pw::checkCallArgCategories` rescan. Its
+ordinary-call caller re-enumerates visible free functions instead of reading
+the selected call; in particular it can check a lexical closure invocation
+against an unrelated free function with the same spelling. The existing
+`resolvedCallee` source selector already explicitly gives a lexical function
+binding precedence, so preserving that decision needs no new shadowing rule.
+
+The new `selected_call_verify_shadow` run control fails with saved 3A compiler
+SHA256 `dac32dca0bbb99c8e1da5469035ae67fca18e50fde4b04fcaec25855a964345b`
+at the callback parameter's invocation, exit 1/type mismatch. It covers a
+callback parameter, generic callback, a local function value, a nested closure
+and an actual unshadowed free call. Raw pre-change output is in
+`tmp/phase3b-static-calls/fixture-before.stderr`.
+
+Remove the competing Verify helper/call. Keep operand traversal and the existing
+selected template admission (`checkCallTemplateSelection`,
+`checkSourceDirectCallArguments` / `checkSourceStaticCallArguments`, constraints),
+which validates the full chosen signature before owner publication. This is
+not a claim that the deletion alone closes B1: fresh normal/method/factory
+positive, label/type/passing/bound and missing-fact controls plus final-reader
+inspection remain required. No Mid/LLVM selection implementation is replaced.
