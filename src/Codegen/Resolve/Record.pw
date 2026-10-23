@@ -1961,7 +1961,7 @@ pub impl Comp {
                     // The first element is the forward inference frontier.
                     // Its saved type can guide later unresolved elements,
                     // including lexical T. Later elements never repair it.
-                    if i == 0U64 && elementContext == 0U64 {
+                    if i == 0U64 && elems.len > 1U64 && elementContext == 0U64 {
                         val recorded = self.parametricExprTerm(exprId: element)
                         if self.sourceTypeHasCompleteArguments(ref: recorded) { elementContext = recorded }
                     }
