@@ -2,7 +2,7 @@
 id: com-nucu
 status: in_progress
 deps: []
-links: []
+links: [com-4kti]
 created: 2026-10-23T10:41:58Z
 type: task
 priority: 1
@@ -37,3 +37,35 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Investigated Boundary
+
+At production 51e19101, projectedMemberResolution asks traitPatternProof for
+Existence with open positional inputs. traitPatternProofFromFacts returns the
+first matching assumption/path under that demand. selectStaticRequirement then
+ranks only requirements within that one already-chosen trait input instance.
+The stored operation retains that exact proof; integrity/scope checking and
+later instantiation do not enumerate the discarded instances or establish
+source uniqueness retroactively. Associated-output mismatch checking remains
+active, but cannot repair this earlier loss.
+
+Eight watched fresh-compiler source checks are retained in
+`meta/evidence/existing-feature-conformance/source-owner-facts/phase3c-projected-member-audit.json`:
+
+| Contrast | Current result | Disposition |
+| --- | --- | --- |
+| One Convert[I64] instance | accepts | valid control |
+| Convert[I64], Convert[Bool], Bool operand | rejects mismatch | wrong first-instance selection |
+| Same bounds, I64 operand | accepts | does not prove complete enumeration |
+| Reverse bounds, Bool operand | accepts | order dependence confirms discarded candidate |
+| Exact duplicate Convert[I64] premise | accepts | preserve source-premise deduplication |
+| Two no-operand Convert input instances | accepts | missing instance ambiguity |
+| Independent Left/Right trait-subject routes to Convert[I64] | accepts | weak Existence used without full source-path admission |
+| Associated Output=I64 but Bool return | rejects | output checking still active |
+
+This is the anticipated repair disposition in this investigation's Exit, not
+completion of an unperformed fix. Required child [com-4kti](com-4kti.md) owns
+finite instance enumeration, normal applicability and full selected proof
+admission through final use. It depends on this classification; met-6e6k and
+G1 explicitly depend on the repair. No area/parent closure or compiler rewrite
+is inferred from the investigation. Independent classification review is pending.
