@@ -1,16 +1,34 @@
 ---
 id: met-ia09
 status: open
-deps: []
+deps: [com-v2xk, com-yojf]
 links: []
 created: 2026-10-13T01:40:08Z
-type: task
+type: epic
 priority: 1
 assignee: Koji Murata
 parent: met-si6j
 tags: [frontend, generics, verification]
 ---
 # Close saved constraint evidence through callee environments and final use
+
+## Bounded Execution and Gate Ownership
+
+This is an area epic, not one executable multi-week task. Its current bounded
+work and real prerequisites are tk dependencies under the
+[parent policy](met-si6j.md#bounded-task-policy):
+
+- [B3](com-v2xk.md): exact callee clause/ParamId/inherited environment closure.
+- [B4](com-yojf.md): bounded universal nominal proof disposition.
+
+Close this area's exact existing contract after required children/repairs and
+their scoped fresh verification. The final frozen candidate normal/gen/deps/full
+sanitizer/fixed-point/performance obligation is explicitly owned by
+[G2a](com-p5um.md)/[G2b](com-9l3b.md) and cannot be waived when this
+area closes. Historical checkpoint gates are not current-candidate certification.
+Earlier current/next/WIP observations refer to their named revisions; the bounded
+children reconcile what actually remains before any repair. No new meaning or
+unsupported feature is authorized by this allocation.
 
 ## Scope and Completion
 
@@ -120,37 +138,20 @@ separate positive controls.
 
 ## Current Boundary and Remaining Work
 
-The saved inherited-boundary increment connects the bounded static/dynamic/
-inherited controls. The subsequent availability increment also has fresh 28
-positive/10 reject successes, including source-owner, retained-constraint and
-real Mid controls. Worklog/evidence identify exact revisions and carriers;
-latest full gates remain required. These results do not close this issue or its
-parent.
+Inherited-receiver and availability/integrity increments are implemented and
+have scoped fresh/static/dynamic controls; the exact source, carrier and gate
+scope remain in the worklog/evidence index. B3 reconciles their actual final
+call paths; B4 isolates the stronger universal nominal predicate question.
+These successes do not establish all hidden substitutions or whole-parent
+readiness. Do not relabel a nominal hidden-Self witness universal merely because
+it has no explicit interface-assumption child. Missing/malformed/foreign evidence
+must not become an unavailable slot by error-string handling.
 
-1. The current working increment gives scope analysis a typed distinction between
-   invalid evidence and an unguaranteed interface condition. All scope/integrity
-   checks still run; only the latter result can make a table slot unavailable.
-   Nominal hidden-Self conditions previously rejected even unused formation.
-   Source-imported and fresh controls include that formation and actual session
-   Mid. Latest formal/full gates remain required.
-2. Audit stronger universal nominal predicates separately. A nominal witness with
-   hidden arguments may have no interface-assumption child; root classification
-   and the former blanket witness refusal alone do not prove universal admission.
-   Do not relabel such a proof static or universal optimistically. Scope flags
-   repair availability classification, not an additional theorem/uniqueness
-   guarantee over all hidden substitutions. Reproduce any necessary new semantic
-   or ABI judgment and ask before changing the accepted guarantee.
-3. Finish the producer-to-final-consumer and source-certificate audit across the
-   call kinds above, including actual AOT/JIT, differing evidence with equal ABI,
-   required-fact deletion and missing/foreign/clause/path/replacement controls.
-   Retained static increments are existing evidence to audit, not unimplemented
-   tasks to restart. Public writer success is not semantic admission.
-4. Coordinate partial-input projected member enumeration and raw type/conversion
-   producers with [met-6e6k](met-6e6k.md), and API/write authority with
-   [met-acfl](met-acfl.md). A presence probe without a complete positional trait
-   instance is not SourceAdmission.
-5. Complete matching latest normal/gen/deps/ASan-LSan/fixed-point/performance gates
-   and synchronize parent/worklog state. Old and focused gates do not substitute.
+Coordinate partial-input enumeration and raw/conversion/descriptor producers
+with [met-6e6k](met-6e6k.md) and write authority with [met-acfl](met-acfl.md).
+SourceAdmission requires the exact complete trait instance; a positional presence
+probe is not that certificate. Full final candidate gates remain the parent
+G2a/G2b obligation, separate from this area's scoped closure.
 
 ## Reference Boundaries
 

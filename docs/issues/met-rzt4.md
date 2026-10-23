@@ -1,16 +1,38 @@
 ---
 id: met-rzt4
 status: open
-deps: []
+deps: [com-d57o, com-vrvl]
 links: []
 created: 2026-10-13T01:40:08Z
-type: task
+type: epic
 priority: 2
 assignee: Koji Murata
 parent: met-si6j
 tags: [frontend, jit, diagnostics]
 ---
 # Recheck historical parser recovery and compiler-session JIT stalls
+
+## Bounded Execution and Gate Ownership
+
+This is an area epic, not one executable multi-week task. Its current bounded
+work and real prerequisites are tk dependencies under the
+[parent policy](met-si6j.md#bounded-task-policy):
+
+- [F2](com-d57o.md): finite historical parser observations.
+- [F3](com-vrvl.md): current isolated normal-CLI session progress disposition.
+
+Close this area's exact existing contract after required children/repairs and
+their scoped fresh verification. The final frozen candidate normal/gen/deps/full
+sanitizer/fixed-point/performance obligation is explicitly owned by
+[G2a](com-p5um.md)/[G2b](com-9l3b.md) and cannot be waived when this
+area closes. Historical checkpoint gates are not current-candidate certification.
+Earlier current/next/WIP observations refer to their named revisions; the bounded
+children reconcile what actually remains before any repair. No new meaning or
+unsupported feature is authorized by this allocation.
+
+[F1](com-4bib.md) separately owns requested-body mode parity, and
+[F4](com-s248.md) owns six historical/risk dispositions. They are direct
+parent tasks, not missing acceptance work silently added to this parser/CLI area.
 
 Retained independent investigation from type-checking remediation. Historical reserved-identifier/match/trait recovery could stall until the 60-second watchdog; a compiler InternalSession JIT execution aborted after the selected-body/final-call authority migration. Neither is established as a current-tree defect by the documentation migration.
 

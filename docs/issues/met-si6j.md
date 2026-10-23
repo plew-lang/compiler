@@ -1,10 +1,10 @@
 ---
 id: met-si6j
 status: in_progress
-deps: [met-ucze, met-ia09, met-acfl, met-6e6k, com-gyup, met-rzt4, com-fuo8]
+deps: [met-ucze, met-ia09, met-acfl, met-6e6k, com-gyup, met-rzt4, com-fuo8, com-4bib, com-s248, com-lzpe]
 links: []
 created: 2026-10-13T01:29:29Z
-type: task
+type: epic
 priority: 1
 assignee: Koji Murata
 tags: [frontend, generics, verification]
@@ -39,128 +39,143 @@ Each item requires implementation locations and scoped verification records, not
 
 ## Work Units
 
-- [met-j9mv](met-j9mv.md)
-- [met-ucze](met-ucze.md)
-- [met-ia09](met-ia09.md)
-- [met-acfl](met-acfl.md)
-- [met-6e6k](met-6e6k.md)
-- [met-rzt4](met-rzt4.md)
-
-Completion-flow work also uses [com-tijs](com-tijs.md) and the existing control-flow audit [com-gyup](com-gyup.md). [com-uutc](com-uutc.md) is a retained adjacent acceptance audit, not an automatic expansion of this parent's required scope. Unsupported unique/capture shapes keep their separate tasks.
+The original area issues are epics for their exact existing contracts:
+[selection](met-ucze.md), [callee/interface evidence](met-ia09.md),
+[type/conversion/descriptor consumers](met-6e6k.md),
+[source publication](met-acfl.md) with [owner storage](com-kp3y.md),
+[completion](com-fuo8.md), and [retained parser/CLI observations](met-rzt4.md).
+Their required work is expressed by actual tk dependencies. The bounded tasks
+below own executable actions and scoped evidence; no second mutable status list
+is kept in this document. [met-j9mv](met-j9mv.md) remains the closed adopted
+restart design, and [com-gyup](com-gyup.md) the closed bounded ownership study.
 
 ## Phase Three Execution Plan
 
-This section owns phase-three ordering and exit boundaries. Child issues own
-their detailed path inventories, implementation findings and closure evidence;
-tk metadata owns issue status. The meta worklog owns the single selected next
-action, current source/carrier and active validation handles. Do not maintain a
-second status list in meta. The labels 3A–3G are local steps, not new tickets,
-statuses or language-design decisions.
+**3A is complete** through [com-g2qg](com-g2qg.md), with the existing
+[closure record](met-6e6k.md#current-increment-closure-inventory) and
+[independent review](com-h4pz.md#outcome). The next selected task is
+**[B0: reconcile eight current callable paths](com-qehq.md)**. Its output
+selects a concrete next repair or verifies a path already closed; it does not
+restart implemented storage, selection or proof handoff.
 
-Step **3A is complete** at compiler/test revision `09e5a277`: its
-[closure inventory](met-6e6k.md#current-increment-closure-inventory) and
-[receipt](https://github.com/plew-lang/meta/blob/main/evidence/existing-feature-conformance/source-owner-facts/phase3a-completion.json)
-identify the exact fresh controls and remaining gate limits. Steps 3B–3G are not
-certified complete. They already contain substantial implemented increments;
-the remaining work is to discharge their finite boundaries with evidence, not
-restart the migration or mark unchecked paths complete by inference. Next is 3B;
-repair a discovered prerequisite in its owning issue without creating a parallel
-authority. Completion of 3A does not close met-6e6k's remaining 3C scope.
-The [independent completion review](com-h4pz.md#outcome) also accepts 3A's
-closure; it does not discharge any later step.
+The [work-breakdown review](com-hxtr.md#outcome) is addressed by separating
+milestones 3B–3F from their real child tickets. The tickets name actual entry
+files/functions, finite deliverables, existing control inputs and exit criteria.
+An uncertain mechanism is a bounded investigation, not a fictional specified
+implementation. The table is routing, not a copied issue-state index; use tk for
+open/in_progress/closed and real prerequisites.
 
-**Work-breakdown review: replanning required before further implementation.**
-The [independent task-granularity review](com-hxtr.md#outcome) finds that 3B–3F
-are still broad workstreams, not executable few-day child tasks. Their rows below
-retain scope/ordering obligations but are not a sufficiently concrete backlog.
-First reconcile 3B's current path inventory and define its first bounded closure
-task; do the same for later areas before editing them. Actual task dependencies,
-mode/historical evidence ownership and slice versus final-gate obligations must
-be made explicit. Do not infer that all tasks are adequately cut from the
-eleven-criterion mapping alone. 3A completion and the eleven criteria stand.
-
-| Step | Owning issues and existing progress | Remaining work and exit condition |
+| Unit | Action owner / deliverable | Work kind |
 |---|---|---|
-| 3A. Finish the current enum-construction increment | [met-6e6k](met-6e6k.md#field-driven-enum-construction-inference). Shared struct/enum field inference and focused native positive/reject controls exist. | Apply the approved test cleanup: consolidate ordinary array safety in runtime coverage, remove the redundant unused valid-input guard, retain genuinely invalid unused-body and uninferred-construction rejection. Register applicable sanitizer coverage. Build the latest source and verify inferred/explicit/conflicting/unresolved cases, multiple elements and String cleanup. Do not attribute the earlier fresh binary to subsequent source edits. |
-| 3B. Close selection and evidence handoff | [met-ucze](met-ucze.md), [met-ia09](met-ia09.md). Saved selection, scoped proof interpretation, inherited receivers and final descriptors have implemented controls. | Reconcile ordinary/method/factory/operator/protocol/implicit/adapted/dynamic paths. Finish the stronger universal-nominal/source-certificate audit, exact requirement-to-implementation clause/parameter mapping and actual callee environments. Check differing proofs with equal ABI, missing/foreign/replaced evidence and unavailable versus malformed members. Remove migrated reselection; retain explicit concrete instantiation. Unresolved semantic/ABI choices require a user decision. |
-| 3C. Close remaining type, conversion and descriptor producers/readers | [met-6e6k](met-6e6k.md). Canonical grounded-argument and nominal receiver fixes are retained. | Inventory raw/unstamped type construction, result recipes, projections, conversions, closure/dynamic descriptors and partial-input member enumeration. Trace selected identity and evidence through actual final use, replacing name/cursor fallbacks only with matching producer migration. Resolve/classify the recorded forward array-context gap under the adopted inference policy; preserve explicit/committed types and reject genuine conflicts. Verify direct/wrapped forms and prior-result identity controls. |
-| 3D. Close publication and API write authority | [met-acfl](met-acfl.md), [com-kp3y](com-kp3y.md). Owner-local immutable payloads and declaration-facet batch publication exist. | Reconcile all remaining writer and final-reader families after 3B/3C: headers, expression/binding/completion, operations/constraints, globals/closures/default/generated domains, conversions/descriptors and nominal facets. Distinguish construction queries from successful-owner readers. Demonstrate failure/foreign-owner/missing-fact rejection, post-outcome write refusal, retained-reader stability and removal of replaced tables/readers. Close the storage component only when its final revision has the required scoped evidence. |
-| 3E. Close completion and expression consistency | [com-fuo8](com-fuo8.md), supported by [com-gyup](com-gyup.md). SourceCompletion/isDiverging and continuation-ownership increments are retained. | Trace shared normal results/exit targets through block/if/match/short-circuit to Mid cleanup and LLVM. Cover direct/wrapped values, expected types, empty match, nested exits, diverging callable values/invocations/conversions, following-code errors and analytical-loop warnings. Reconcile affected historical tests with the approved semantics. Remove remaining last-statement/AST/name-based competing decisions. Preserve the bounded closed ownership investigation; new syntax is excluded. |
-| 3F. Close requested-body mode and historical controls | [met-rzt4](met-rzt4.md), with the current-subset controls routed from [com-uutc](com-uutc.md) to the owners above. | Reconcile check/build/run/gen for equivalent requested bodies, including global/default/provided/generated and unused-body boundaries. Finish the bounded parser/normal-CLI InternalSession controls or record and repair an evidenced blocker; traced embedded execution does not establish normal CLI completion. Map every retained D1–D6 class to its current path/control and disposition. Do not turn missing features or every untested combination into new mandatory work. |
-| 3G. Discharge the parent and final candidate gates | This parent, using the implementation/evidence from 3A–3F. Earlier matching gates remain scoped evidence. | Verify all eleven criteria above have explicit implementation/removal/control evidence; close remaining in-scope child obligations. Freeze one candidate and run normal/gen/deps/LLVM22 ASan-LSan, fixed point and formal median below 7 seconds. Reconcile evidence applicability after any edits, synchronize docs/issues/worklog, and meet normal integration requirements. Main integration belongs to the whole conformance plan, not a unilateral phase-three merge. |
+| A (3A) | [com-g2qg](com-g2qg.md): Close enum field inference and approved fixture cleanup | Completed implementation increment |
+| B0 (3B) | [com-qehq](com-qehq.md): Reconcile the eight current callable paths and remaining closure sites | Bounded investigation |
+| B1 (3B) | [com-qb05](com-qb05.md): Verify written static calls consume one saved source selection | Bounded closure verification |
+| B2 (3B) | [com-17yh](com-17yh.md): Verify operator protocol iteration and try calls keep selected requirements | Bounded closure verification |
+| B3 (3B) | [com-v2xk](com-v2xk.md): Verify requirement clauses and inherited receivers reach the real callee environment | Bounded closure verification |
+| B4 (3B) | [com-yojf](com-yojf.md): Resolve the stronger universal nominal proof audit with bounded counterexamples | Bounded investigation |
+| C1 (3C) | [com-nplw](com-nplw.md): Propagate a committed earlier array element type to later elements | Known local implementation gap |
+| C2 (3C) | [com-nucu](com-nucu.md): Close partial-input projected member enumeration before source admission | Bounded investigation of one query boundary |
+| C3 (3C) | [com-m0bf](com-m0bf.md): Classify remaining unstamped nominal producers and paired legacy readers | Bounded producer inventory |
+| C4 (3C) | [com-e9l2](com-e9l2.md): Verify saved result recipes and projection identity at final reads | Bounded closure verification |
+| C5 (3C) | [com-loyb](com-loyb.md): Verify source conversion proofs retain exact endpoints and ownership | Bounded closure verification |
+| C6 (3C) | [com-3q2n](com-3q2n.md): Verify closure and dynamic descriptors retain semantic dependencies | Bounded closure verification |
+| D1 (3D) | [com-rv13](com-rv13.md): Reconcile owner payload publication and core final-reader closure | Bounded closure verification of implemented storage |
+| D2 (3D) | [com-vkw3](com-vkw3.md): Verify closure global default and provided source-domain ownership | Bounded source-owner verification |
+| D3 (3D) | [com-wqa0](com-wqa0.md): Close operation and constraint API write authority after semantic selection | Bounded API/removal verification |
+| D4 (3D) | [com-m3c6](com-m3c6.md): Verify nominal facet batch publication remains one-way | Bounded API/removal verification |
+| E1 (3E) | [com-2suv](com-2suv.md): Verify block branch and short-circuit completion use one result authority | Bounded semantic closure verification |
+| E2 (3E) | [com-0ssn](com-0ssn.md): Verify explicit transfer errors remain distinct from loop reachability warnings | Bounded diagnostic/flow verification |
+| E3 (3E) | [com-9tau](com-9tau.md): Verify diverging callable types survive value storage and invocation | Bounded callable-contract verification |
+| E4 (3E) | [com-gnj9](com-gnj9.md): Verify saved exit targets drive Mid cleanup and final lowering | Bounded final-consumer verification |
+| F1 (3F) | [com-4bib](com-4bib.md): Assign and verify requested-body semantics across command modes | Bounded mode-parity investigation and controls |
+| F2 (3F) | [com-d57o](com-d57o.md): Close the finite retained parser recovery observations | Bounded historical investigation |
+| F3 (3F) | [com-vrvl](com-vrvl.md): Isolate normal CLI InternalSession progress before changing JIT policy | Bounded isolated investigation |
+| F4 (3F) | [com-s248](com-s248.md): Assign D1 through D6 to current controls and responsible closure tasks | Finite evidence-disposition task |
+| G1 (3G) | [com-61jt](com-61jt.md): Reconcile all phase three closure evidence before freezing a candidate | Final evidence admission |
+| G2a (3G) | [com-p5um](com-p5um.md): Verify the frozen candidate fixed point and formal self compilation time | Final standard gate |
+| G2b (3G) | [com-9l3b](com-9l3b.md): Run all final correctness and sanitizer gates on the measured compiler | Final standard gates |
+| G3 (3G) | [com-lzpe](com-lzpe.md): Synchronize phase three parents and discharge the eleven criteria | Final closure and handoff |
 
-The order expresses closure dependencies, not permission to leave existing
-consumers broken until a later step. A scoped increment needs appropriate fresh
-controls before proceeding. Heavy whole-candidate gates run at meaningful
-milestones and in 3G; they are not required after every inventory row. New
-failures or changed inputs determine which earlier evidence must be refreshed.
+Recommended order is B0, then its actual residual callable paths, followed by the
+remaining type/publication/completion/mode work. This is not an artificial
+whole-area dependency: independent bounded tasks may be ready. Hard tk edges
+are only required outputs (B0 -> its call-path closures, selected-call closure ->
+operation API final closure, nominal-producer classification -> facet closure,
+saved completion -> final cleanup). Current selection belongs in worklog.
 
-### Per-issue Closure Inventory
+### Bounded Task Policy
 
-Before editing the next path in an owning issue, reconcile its existing records
-into a finite inventory. Reuse existing evidence and source locations; do not
-append another historical checkpoint for every attempt. Each row records:
-
-- The admitted input/call/owner/mode family and the exact design contract.
-- Producer -> saved/publication fact -> explicit instance environment -> final
-  consumer, including failure or cleanup where relevant.
-- The replaced writer/reselection/reinference/fallback and its removal location,
-  or why a retained construction/instantiation query is legitimate.
-- What current source actually implements, what is still uninspected or known
-  broken, and the next bounded action. Investigation is not a proven defect.
-- Implementation revision and decisive positive/reject/corruption controls,
-  evidence path, tested compiler/source and any remaining gate limitation.
-
-Inventory closure must account for every family already named in that issue's
-scope. Do not require an exhaustive Cartesian product of language features.
-Use representative controls at the actual boundary; split out an evidenced
-independent defect only when the existing issue cannot own it coherently.
-Newly discovered in-scope work must update the owning row, its effect on the
-exit condition and any real dependency before changing the selected task.
-Out-of-scope work needs a reason and owner, not silent deferral.
+- Aim for roughly one or two active human working days per bounded child. This
+  is a granularity target, not a deadline or a promise about an unknown repair.
+  If a task exposes a larger independent change, name it and create a child with
+  exact entry/exit instead of silently widening the original scope.
+- Investigations finish a finite disposition: every named row is supported by
+  applicable existing evidence, a verified limitation, or a specifically owned
+  required repair. An unresolved in-scope question is not classified away. Add
+  every mandatory repair as a dependency of its area and G1; reopen a closed
+  area when necessary. A closed investigation never implies its repairs passed.
+- Implementation/closure verification records producer -> saved fact/publication
+  -> explicit instance environment -> final consumer, removed competing decisions,
+  revision, positive/reject/corruption controls and tested input/carrier. Existing
+  correct code closes by evidence, not by inventing a rewrite. Conditional local
+  repairs must preserve the same end-to-end contract; adding checks alone is not
+  completion. Ambiguous language/ABI judgments retain the stop conditions below.
+- Use actual tk statuses and dependencies. Area epics are not scheduled as one
+  enormous executable task. A source-contract child and its area can close with
+  applicable fresh scoped validation after all required repairs; their closure
+  does not certify a whole-candidate release. Final normal/gen/deps/full ASan-LSan,
+  fixed-point and formal-performance obligations remain mandatory here through
+  G2a/G2b. This explicit allocation replaces repeated per-area final-gate waits;
+  it removes no required check and attributes no old gate to a new binary.
+- G1 joins the completed area contracts, F1/F4 and all required descendants. It
+  checks finite coverage and absence of known unfinished implementation **before**
+  final gates. G2a produces the measured/fixed-point compiler; G2b tests that
+  artifact with matching frozen inputs. G3 synchronizes evidence and discharges
+  this parent. Main/seed/carrier integration remains the whole conformance plan's
+  later boundary, not an automatic action on phase-three closure.
+- A new gate failure returns to a named owning task/area and invalidates affected
+  admission/gate evidence. G1/G2/G3 cannot become anonymous residual source-fixing
+  buckets. Preserve unchanged valid results, rerun affected gates and never weaken
+  verifier, tests, watchdogs or the seven-second target.
 
 ### Mapping to the Eleven Criteria
 
-The numbered checklist above remains the only parent completion checklist.
-These links identify where evidence must come from, not additional checkboxes.
+The original checklist above is unchanged and remains the only parent acceptance
+checklist. These task links assign evidence, not another set of checkboxes. G1
+must confirm each row has current decisive proof/removal/control evidence; G2a/G2b
+and G3 discharge final gate/synchronization obligations. Unclassified owner/state/
+mode paths or unfinished mandatory descendants prevent closure even if every
+initially issued investigation has finished.
 
-| Criterion | Primary steps / decisive evidence |
-|---|---|
-| 1. Expected types preserve meaning | 3A/3C/3E: producer and direct/wrapped compatibility controls |
-| 2. Distinct states; no unresolved publication | 3C/3D/3E: state/API audit and missing/deferred/value/Unit/completion controls |
-| 3. One authority through final use | 3B/3C/3D: path inventory and actual Mid/backend evidence |
-| 4. Complete callable validity | 3B/3C: signature, labels, ownership, bounds and implicit-call controls |
-| 5. Expression wrapping and joins | 3C/3E: same-context direct/block/if/match controls |
-| 6. Approved divergence | 3E: saved completion, diagnostics, cleanup and callable controls |
-| 7. Requested-body semantics across modes | 3F, with the shared paths from 3B–3E |
-| 8. Remove obsolete authorities | 3B/3C/3D/3E: removal/API audit and forbidden-write controls |
-| 9. Historical D1–D6 | 3F: explicit disposition linked to current owning rows and controls |
-| 10. Matching final gates/performance | 3G: frozen candidate, exact artifacts and gate receipts |
-| 11. Synchronization and unresolved scope | 3G: child closure, criteria evidence and document reconciliation |
+| Criterion | Required evidence tasks | Acceptance evidence |
+|---|---|---|
+| 1 | [A](com-g2qg.md), [C1](com-nplw.md), [C3](com-m0bf.md), [E1](com-2suv.md), [G1](com-61jt.md) | Context may refine unknowns, never overwrite committed shape/type; direct and wrapped controls. |
+| 2 | [C1](com-nplw.md), [C3](com-m0bf.md), [C4](com-e9l2.md), [C5](com-loyb.md), [C6](com-3q2n.md), [D1](com-rv13.md), [D2](com-vkw3.md), [D3](com-wqa0.md), [D4](com-m3c6.md), [E1](com-2suv.md), [E2](com-0ssn.md), [E3](com-9tau.md), [G1](com-61jt.md) | Explicit state/owner/recipe distinctions and successful publication without unresolved source obligations. |
+| 3 | [A](com-g2qg.md), [B0](com-qehq.md), [B1](com-qb05.md), [B2](com-17yh.md), [B3](com-v2xk.md), [B4](com-yojf.md), [C1](com-nplw.md), [C2](com-nucu.md), [C3](com-m0bf.md), [C4](com-e9l2.md), [C5](com-loyb.md), [C6](com-3q2n.md), [D1](com-rv13.md), [D2](com-vkw3.md), [D3](com-wqa0.md), [D4](com-m3c6.md), [E4](com-gnj9.md), [G1](com-61jt.md) | Exact producer, published fact, explicit environment and actual Mid/backend consumer. |
+| 4 | [A](com-g2qg.md), [B0](com-qehq.md), [B1](com-qb05.md), [B2](com-17yh.md), [B3](com-v2xk.md), [B4](com-yojf.md), [C2](com-nucu.md), [C5](com-loyb.md), [E3](com-9tau.md), [G1](com-61jt.md) | Full signature/labels/passing/bounds, including implicit calls; existence is not validity. |
+| 5 | [C1](com-nplw.md), [E1](com-2suv.md), [E2](com-0ssn.md), [E4](com-gnj9.md), [G1](com-61jt.md) | Equivalent available context for direct/block/if/match/short-circuit and correct live joins. |
+| 6 | [E1](com-2suv.md), [E2](com-0ssn.md), [E3](com-9tau.md), [E4](com-gnj9.md), [G1](com-61jt.md) | Approved value/divergence/diagnostic rules and final cleanup/targets. |
+| 7 | [D2](com-vkw3.md), [F1](com-4bib.md), [F2](com-d57o.md), [F3](com-vrvl.md), [G1](com-61jt.md) | Equivalent requested bodies across modes; unused omission and separate gen program are intentional. |
+| 8 | [A](com-g2qg.md), [B0](com-qehq.md), [B1](com-qb05.md), [B2](com-17yh.md), [B3](com-v2xk.md), [B4](com-yojf.md), [C1](com-nplw.md), [C2](com-nucu.md), [C3](com-m0bf.md), [C4](com-e9l2.md), [C5](com-loyb.md), [C6](com-3q2n.md), [D1](com-rv13.md), [D2](com-vkw3.md), [D3](com-wqa0.md), [D4](com-m3c6.md), [E1](com-2suv.md), [E2](com-0ssn.md), [E3](com-9tau.md), [E4](com-gnj9.md), [G1](com-61jt.md) | Removed competing decision/writer/fallback sites and post-outcome/foreign-owner controls. |
+| 9 | [F2](com-d57o.md), [F3](com-vrvl.md), [F4](com-s248.md), [G1](com-61jt.md) | Six concrete current historical/risk dispositions, linked to actual owners/controls. |
+| 10 | [G2a](com-p5um.md), [G2b](com-9l3b.md) | Frozen candidate, complete standard gates, fixed point and formal median below seven seconds. |
+| 11 | [F1](com-4bib.md), [F4](com-s248.md), [G1](com-61jt.md), [G3](com-lzpe.md) | Complete evidence assignment, current issue state and synchronized closure/handoff. |
 
-Historical identifiers retain the meaning in the
-[migration record](https://github.com/plew-lang/meta/blob/main/evidence/typechecking-remediation/design-migration.md):
-D1 expected-array overwrite; D4 partial operator validity; D5 flow/ownership;
-D2 downstream reinference, D3 state conflation and D6 partial duplicated checks
-are risk classes. Their presence in this list is not a current reproduction.
+Historical D1/D4/D5 are expected-array overwrite, partial operator validity and
+flow/ownership controls; D2/D3/D6 are downstream reinference, state conflation and
+partial duplicated checks as risk classes. [F4](com-s248.md) owns the finite
+current-input/consumer/task/evidence mapping from the retained migration record.
+No class is presumed to be a newly reproduced current defect.
 
-### Updating Progress and Closing a Step
+### Updating Progress
 
-On each bounded increment, update the owning inventory row with the actual
-result, remaining work and evidence, then update worklog only if the selected
-action/candidate/handle changes. Use tk to start/close the actual issue; preserve
-existing in-progress work without implying simultaneous executions. Before
-moving to the next step, account for every exit item in the owning issues and
-record the closure rationale and its evidence there; update the reconciliation
-statement above when it no longer holds. A step finishes only its stated boundary; a
-partial implementation or a green focused test is not issue/parent completion.
-
-Report progress as the selected step, implemented boundaries, remaining exit
-items, evidence scope and next action. Do not compute a percentage from issue
-counts, checklist counts, commits or repeated validation runs. If a requirement
-is already discharged, cite and reuse the matching record instead of restarting
-it. If it is not, leave it explicitly uncompleted. This management reconciliation
-adds no new implementation or validation success.
+Update the bounded ticket with actual implementation/removal/evidence and close
+it only at its stated exit. An area closes after its required descendants and
+scoped contract evidence; parent final gates are still independent obligations.
+Use tk dep tree/ready/blocked for state, and worklog for the one selected next
+action and current candidate/handles. Keep current findings, not cumulative WIP
+attempts; Git and existing evidence retain past checkpoints. No progress percent
+is computed from tickets, commits or repeated validation runs.
 
 ## Stop Conditions
 

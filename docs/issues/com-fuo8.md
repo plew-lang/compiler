@@ -1,16 +1,36 @@
 ---
 id: com-fuo8
 status: open
-deps: []
+deps: [com-2suv, com-0ssn, com-9tau, com-gnj9]
 links: []
 created: 2026-10-21T15:16:01Z
-type: task
+type: epic
 priority: 1
 assignee: Koji Murata
 parent: com-tijs
 tags: [design, verification]
 ---
 # Close saved completion and divergence for admitted expression forms
+
+## Bounded Execution and Gate Ownership
+
+This is an area epic, not one executable multi-week task. Its current bounded
+work and real prerequisites are tk dependencies under the
+[parent policy](met-si6j.md#bounded-task-policy):
+
+- [E1](com-2suv.md): normal-result and exit composition.
+- [E2](com-0ssn.md): transfer errors versus loop warnings.
+- [E3](com-9tau.md): diverging callable type/value/invocation.
+- [E4](com-gnj9.md): saved exits through Mid cleanup/final use.
+
+Close this area's exact existing contract after required children/repairs and
+their scoped fresh verification. The final frozen candidate normal/gen/deps/full
+sanitizer/fixed-point/performance obligation is explicitly owned by
+[G2a](com-p5um.md)/[G2b](com-9l3b.md) and cannot be waived when this
+area closes. Historical checkpoint gates are not current-candidate certification.
+Earlier current/next/WIP observations refer to their named revisions; the bounded
+children reconcile what actually remains before any repair. No new meaning or
+unsupported feature is authorized by this allocation.
 
 ## Existing-Feature Conformance Scope
 

@@ -1,16 +1,36 @@
 ---
 id: met-acfl
 status: open
-deps: [com-kp3y]
+deps: [com-kp3y, com-vkw3, com-wqa0, com-m3c6]
 links: []
 created: 2026-10-13T01:40:08Z
-type: task
+type: epic
 priority: 1
 assignee: Koji Murata
 parent: met-si6j
 tags: [frontend, generics, verification]
 ---
 # Finish semantic-fact publication and final reader closure
+
+## Bounded Execution and Gate Ownership
+
+This is an area epic, not one executable multi-week task. Its current bounded
+work and real prerequisites are tk dependencies under the
+[parent policy](met-si6j.md#bounded-task-policy):
+
+- [D1](com-rv13.md): core owner payload component under com-kp3y.
+- [D2](com-vkw3.md): closure/global/default/provided/generated source domains.
+- [D3](com-wqa0.md): operation/constraint write authority.
+- [D4](com-m3c6.md): nominal facet publication.
+
+Close this area's exact existing contract after required children/repairs and
+their scoped fresh verification. The final frozen candidate normal/gen/deps/full
+sanitizer/fixed-point/performance obligation is explicitly owned by
+[G2a](com-p5um.md)/[G2b](com-9l3b.md) and cannot be waived when this
+area closes. Historical checkpoint gates are not current-candidate certification.
+Earlier current/next/WIP observations refer to their named revisions; the bounded
+children reconcile what actually remains before any repair. No new meaning or
+unsupported feature is authorized by this allocation.
 
 Retain the cumulative semantic expression/completion, binding, closure, pattern, try and aggregate migrations rather than reopening earlier public-array issues without checking current source. Their focused successes do not establish owner-wide closure. Physical storage is adopted; the parent restart gate retains reconciliation and fresh baseline validation.
 
@@ -32,20 +52,14 @@ Mid operand/place/condition/call readers distinguish successful Value, Unit, NoN
 
 Field default generators reuse the authored field.defaultVal ExprId. Earlier inspection counted 24 direct type/flow writer fixtures; this is a historical audit count, not current coverage certification. Reconcile each fixture's normal producer intent. Do not turn owner failure into a bool/sentinel meaning only an optimization is unavailable, or add repeated prepare-result copying to every expression.
 
-## Detailed Audit Additions
+## Current Publication Boundary
 
-[com-nsxb](com-nsxb.md), compiler `78bd9691`, rechecks rather than discards the
-existing prepared function/global/closure readers. `recordSourceBodySignature`
-can replace its row without a completed-owner guard; physical header sealing
-must close that writer too, without claiming a production overwrite reproduction.
-`SemanticCompletionOwner` currently has Function/Global only. `putSemanticClosure`
-retains its parent's completion owner and Record checks the closure inline;
-a separate Mono bodyKey does not supply the adopted independent closure-body
-request/publication. Migrate closure construction versus body success explicitly.
-`Ir/Types.resolveTypeDeclaration` can replace an existing term's declaration
-facets; its inspected caller is declaration registration in resolveTypeDeclIdentities.
-Preserve legal pre-publication resolution, while making the immutable-term
-publication boundary structural; no later overwrite was demonstrated.
+Owner-local header/closure/global storage and declaration-facet batch publication
+are implemented increments, not fresh unresolved findings from the original
+78bd9691 audit. Reconcile their current producer/API/reader paths in D1/D2/D4;
+do not reintroduce a per-row writer or claim an old overwrite reproduction.
+The exact remaining operation/evidence/domain closure belongs to D3 and its
+semantic prerequisites. A sealed component does not finish this whole area.
 
 ## Existing-Feature Conformance Classification
 
@@ -69,8 +83,8 @@ oracles now publish their initial construction batch through this API. Preserve
 their original lookup/metadata/copy/matching assertions; do not expose a test-only
 writer. The new publication control covers invalid/duplicate batches, stable
 parallel representations, post-success rejection, later append rejection and
-independent Arena branches. Whole-source checking and all ten current-source imported controls succeed at
-8f054757. Fresh compiler and full gates remain required.
+independent Arena branches. Earlier 8f054757 whole-source/imported controls remain
+scoped evidence; D4 reconciles current fresh proof and G2a/G2b own the final gates.
 
 This closes the declaration-facet writer boundary, not every canonical type
 producer or late legacy name/ambient read. The source/header/closure owner storage

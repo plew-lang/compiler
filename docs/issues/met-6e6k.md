@@ -1,16 +1,39 @@
 ---
 id: met-6e6k
 status: in_progress
-deps: []
+deps: [com-g2qg, com-nplw, com-nucu, com-m0bf, com-e9l2, com-loyb, com-3q2n]
 links: []
 created: 2026-10-13T01:40:08Z
-type: task
+type: epic
 priority: 1
 assignee: Koji Murata
 parent: met-si6j
 tags: [frontend, generics, verification]
 ---
 # Audit saved conversions, descriptors and first-concrete consumer boundaries
+
+## Bounded Execution and Gate Ownership
+
+This is an area epic, not one executable multi-week task. Its current bounded
+work and real prerequisites are tk dependencies under the
+[parent policy](met-si6j.md#bounded-task-policy):
+
+- [A](com-g2qg.md): already completed 3A inference/fixture cleanup.
+- [C1](com-nplw.md): forward array context.
+- [C2](com-nucu.md): partial-input projected member enumeration.
+- [C3](com-m0bf.md): unstamped nominal producer inventory.
+- [C4](com-e9l2.md): result recipe/projection readers.
+- [C5](com-loyb.md): source conversion endpoints.
+- [C6](com-3q2n.md): closure/dynamic descriptor dependencies.
+
+Close this area's exact existing contract after required children/repairs and
+their scoped fresh verification. The final frozen candidate normal/gen/deps/full
+sanitizer/fixed-point/performance obligation is explicitly owned by
+[G2a](com-p5um.md)/[G2b](com-9l3b.md) and cannot be waived when this
+area closes. Historical checkpoint gates are not current-candidate certification.
+Earlier current/next/WIP observations refer to their named revisions; the bounded
+children reconcile what actually remains before any repair. No new meaning or
+unsupported feature is authorized by this allocation.
 
 Complete the consumer audit adjacent to source publication and callee proof transfer. Saved source result/signature/conversion/projection facts and descriptor dependencies must be interpreted with explicit source and instance identity; declaration dependency scope is not runtime descriptor reachability. Construction of first concrete evidence is permitted only within the source-selected requirement; final readers must not return to AST/type-name/ambient-cursor selection.
 

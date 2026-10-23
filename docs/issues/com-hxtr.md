@@ -153,3 +153,32 @@ first actual remaining closure, and cut its bounded tk task. Subsequent 3C–3F
 areas need the same finite assignment before implementation. Keep overall scope
 and all acceptance obligations; no new management tool or status system is needed.
 
+## Planning Follow-up
+
+The task arrangement now materializes 28 bounded tickets in the
+[parent execution plan](met-si6j.md#phase-three-execution-plan): the already
+completed 3A unit, 23 remaining investigation/implementation/verification units
+and four final admission/gate/closure units. The next task is
+[B0](com-qehq.md), not an anonymous remaining 3B path.
+
+Area issues are epics with required child dependencies. Current selection WIP
+and owner-storage histories were replaced by current contracts and task routing;
+other contracts retain their semantic obligations and explicit child routing.
+Each bounded task has actual entry files, actions, exit evidence and starting
+controls. Unknown repairs require a specifically owned blocking follow-up.
+Final full-gate obligations are retained by G2a/G2b at the parent; bounded task
+and area closure do not certify the final candidate. G1 waits for complete area
+contracts and remaining mode/historical tasks before final verification.
+
+This records implementation of the planning recommendations, not a new
+independent acceptance of the revised breakdown. Compiler source/tests/candidate
+and existing validation evidence were not changed by task arrangement.
+
+
+Planning consistency checks: all 28 bounded IDs are reachable from the parent
+dependency graph; completed 3A alone is closed, the other 27 remain open. The
+original eleven acceptance criteria are byte-for-byte unchanged. tk reports no
+dependency cycle; all changed/new issue links resolve. Entry files and starting
+fixture names exist. Original focused compiler/source/test inputs still match
+the saved 3A hashes. These are management/source-integrity checks, not new
+compiler execution or independent review of the revised plan.
