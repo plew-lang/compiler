@@ -1,0 +1,205 @@
+// One proof interpretation frontier. Static clients can obtain only concrete
+// results; an interface's universally scoped guarantee cannot become Ready.
+pub impl Comp {
+    inout fn instantiateConstraintProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+        match (try self.replayConstraintProof(proof: proof, receiver: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, context: <Optional.None />)) {
+            ConstraintProofReplay.Missing => { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
+            ConstraintProofReplay.Deferred => { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+            ConstraintProofReplay.Concrete(proof: val proof) => { return <Result.Ok value=<StaticProofInstantiation.Ready proof=proof /> /> }
+            ConstraintProofReplay.Universal(proof: _) => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "universal interface evidence cannot authorize a static callable") /> }
+        }
+    }
+}
+
+impl Comp {
+    inout fn replayConstraintProof(proof: StaticConformanceProof, receiver: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, context: Optional[InterfaceProofContext]) -> Result[ConstraintProofReplay, CompileDiagnostic] {
+        val root = try self.interfaceProofRoot(proof: proof)
+        if root != 0U64 {
+            val scope = match context {
+                Optional.Some(v: val scope) => scope,
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface evidence requires a universal call scope") /> },
+            }
+            if root != scope.sourceRoot { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface proof belongs to another selected operation") /> }
+            return <Result.Ok value=<ConstraintProofReplay.Universal proof=(try self.rebaseInterfaceProof(proof: proof, context: scope, selfRef: selfRef, itemRef: itemRef)) /> />
+        }
+        match (try self.instantiateConcreteConstraintProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
+            StaticProofInstantiation.Missing => { return <Result.Ok value=<ConstraintProofReplay.Missing /> /> }
+            StaticProofInstantiation.Deferred => { return <Result.Ok value=<ConstraintProofReplay.Deferred /> /> }
+            StaticProofInstantiation.Ready(proof: val proof) => { return <Result.Ok value=<ConstraintProofReplay.Concrete proof=proof /> /> }
+        }
+    }
+
+    inout fn rebaseInterfaceAssumption(source: DeclarationBoundRef, context: InterfaceProofContext, selfRef: U64, itemRef: U64) -> Result[DeclarationBoundRef, CompileDiagnostic] {
+        match source {
+            DeclarationBoundRef.Interface(index: val index) => {
+                if index + 1U64 != context.sourceRoot { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface assumption belongs to another selected operation") /> }
+                return <Result.Ok value=<DeclarationBoundRef.Interface index=context.instanceRoot - 1U64 /> />
+            }
+            DeclarationBoundRef.AssociatedType(index: val index) => {
+                if !self.declarationBoundIsValid(source: source) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface condition has no retained associated clause") /> }
+                val saved = self.arena.associatedBoundEvidenceAt(index: index)
+                val prerequisite = try self.rebaseInterfaceProof(proof: saved.prerequisite, context: context, selfRef: selfRef, itemRef: itemRef)
+                // Preserve the projection as provenance; its equation and
+                // selected output are interpreted from the rebased prerequisite.
+                val projection = self.groundTermInEnvironment(ref: saved.projection, params: context.environment.params, values: context.environment.args, selfRef: selfRef, itemRef: itemRef)
+                val bound = try self.associatedClauseBound(projectionRef: projection, clauseIndex: saved.clause, prerequisite: prerequisite, offset: saved.bound.offset)
+                return <Result.Ok value=self.registerAssociatedBoundEvidence(evidence: <AssociatedBoundEvidence projection=projection clause=saved.clause prerequisite=prerequisite bound=bound />) />
+            }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface condition lost its declaration provenance") /> }
+        }
+    }
+
+    inout fn rebaseInterfaceProof(proof: StaticConformanceProof, context: InterfaceProofContext, selfRef: U64, itemRef: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        match proof {
+            StaticConformanceProof.AssumedBound(source: val source) => { return <Result.Ok value=<StaticConformanceProof.AssumedBound source=(try self.rebaseInterfaceAssumption(source: source, context: context, selfRef: selfRef, itemRef: itemRef)) /> /> }
+            StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => { return <Result.Ok value=<StaticConformanceProof.AssumedSupertraitPath source=(try self.rebaseInterfaceAssumption(source: source, context: context, selfRef: selfRef, itemRef: itemRef)) steps=steps /> /> }
+            StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
+                mut val grounded: Array[WitnessMatch] = []
+                for edge in edges {
+                    match (try self.groundSelectedWitness(witness: edge, receiverRef: self.groundTermInEnvironment(ref: edge.selfRef, params: context.environment.params, values: context.environment.args, selfRef: selfRef, itemRef: itemRef), environment: context.environment, selfRef: selfRef, itemRef: itemRef)) {
+                        SelectedWitnessInstantiation.Ready(witness: val witness) => { grounded.append(witness) }
+                        _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface condition retains an unresolved trait edge") /> }
+                    }
+                }
+                return <Result.Ok value=<StaticConformanceProof.AssumedTraitPath source=(try self.rebaseInterfaceAssumption(source: source, context: context, selfRef: selfRef, itemRef: itemRef)) steps=steps edges=grounded /> />
+            }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface condition has no retained abstract derivation") /> }
+        }
+    }
+
+    inout fn createInterfaceProofContext(source: InterfaceEvidenceRoot, sourceRoot: U64, owner: InterfaceEvidenceOwner, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[InterfaceProofContext, CompileDiagnostic] {
+        val parameter = self.nextParamId
+        self.nextParamId += 1U64
+        val name = self.internTmpName(prefix: "InterfaceInstanceSelf", n: parameter)
+        val subject = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=parameter args=[] />)
+        val original = self.arena.typeAt(index: source.bound.subject)
+        mut val parameters = environment.params
+        mut val values = environment.args
+        parameters.append(<Bind nameStart=original.nameStart nameLen=original.nameLen nameId=original.nameId paramId=original.paramId fieldStart=0U64 fieldLen=0U64 />)
+        values.append(subject)
+        val substitution = <InstanceEnvironment params=parameters args=values receiverRef=environment.receiverRef proof=environment.proof constraints=environment.constraints />
+        val bound = try self.groundCallableBound(bound: source.bound, environment: substitution, selfRef: selfRef, itemRef: itemRef)
+        self.interfaceEvidence.append(<Ref value=<InterfaceEvidenceCell node=<InterfaceEvidenceNode.Instance root=sourceRoot owner=owner bound=bound /> /> />)
+        return <Result.Ok value=<InterfaceProofContext sourceRoot=sourceRoot instanceRoot=self.interfaceEvidence.count() environment=substitution /> />
+    }
+
+    inout fn instantiateInterfaceCall(template: CallTemplate, owner: InterfaceEvidenceOwner, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[Optional[U64], CompileDiagnostic] {
+        val root = selectedInterfaceRoot(template: template)
+        if root == 0U64 { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "dynamic call has no retained interface root") /> }
+        val traitAndSlot = match template.kind {
+            CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
+                give match target {
+                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot, interfaceRoot: _) => <InterfaceRequirementKey traitIndex=traitIndex slot=slot />,
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "dynamic call is not an interface requirement") /> },
+                }
+            }
+            CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
+                give match selection {
+                    ProtocolSelection.Existential(traitIdx: val traitIndex, slot: val slot, interfaceRoot: _) => <InterfaceRequirementKey traitIndex=traitIndex slot=slot />,
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "protocol call is not an interface requirement") /> },
+                }
+            }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call is not an interface requirement") /> },
+        }
+        val source = try self.requireSourceInterfaceRoot(root: root, site: template.siteKey, receiver: template.receiverTypeTerm, traitIndex: traitAndSlot.traitIndex)
+        if !(try self.semanticCompletionOwnerPrepared(owner: source.owner)) { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "dynamic interface source owner is not prepared") /> }
+        match owner {
+            InterfaceEvidenceOwner.Body(index: val bodyId) => {
+                if bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "dynamic call has no caller body instance") /> }
+                val body = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+                if !self.sameInstanceEnvironment(a: body.environment, b: environment) { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "interface substitution belongs to another caller environment") /> }
+                val global: Optional[U64] = match source.owner { SemanticCompletionOwner.Global(target: val target) => <Optional.Some v=target />, _ => <Optional.None />, }
+                if !semanticCompletionOwnersEqual(recorded: source.owner, prepared: (try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: global))) { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "interface substitution belongs to another lexical source owner") /> }
+            }
+            InterfaceEvidenceOwner.Declaration(environment: val declared) => {
+                if !self.sameInstanceEnvironment(a: declared, b: environment) { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "interface declaration substitution belongs to another environment") /> }
+            }
+        }
+        val receiver = try self.groundTermForBody(ref: source.receiver, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        if !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<Optional.None /> /> }
+        val index = self.callTemplateIndex(siteKey: template.siteKey)
+        val snapshot = match self.preparedCallConstraints(index: index) {
+            Optional.Some(v: val snapshot) => snapshot,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "dynamic call has no prepared source constraints") /> },
+        }
+        val plan = snapshot.constraints()
+        if plan.proofs.count() != plan.bounds.count() { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "dynamic call has incomplete source constraints") /> }
+        // No hidden binder is interpreted by an empty condition set. Retain
+        // its source provenance without manufacturing an unused fresh scope.
+        if plan.bounds.count() == 0U64 {
+            self.interfaceCalls.append(<Ref value=<InterfaceCallEvidenceCell evidence=<InterfaceCallEvidence sourceRoot=root instanceRoot=root owner=owner receiver=receiver traitIndex=traitAndSlot.traitIndex slot=traitAndSlot.slot bounds=[] proofs=[] /> /> />)
+            return <Result.Ok value=<Optional.Some v=self.interfaceCalls.count() /> />
+        }
+        val context = try self.createInterfaceProofContext(source: source, sourceRoot: root, owner: owner, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        val lexical = try self.callConstraintScope(template: template)
+        val scope = <DeclarationTypeScope owner=lexical.owner parameters=<FuncBindRange start=0U64 len=0U64 /> interfaceRoot=context.instanceRoot />
+        mut val bounds: Array[TraitBound] = []
+        mut val proofs: Array[U64] = []
+        for position in 0U64..<plan.bounds.count() {
+            val original = plan.bounds[position]
+            val bound = try self.groundCallableBound(bound: original, environment: context.environment, selfRef: selfRef, itemRef: itemRef)
+            val proof = self.thawStaticConformanceProof(id: plan.proofs[position])
+            if !self.typeTermContainsParameter(ref: bound.subject, parameter: self.interfaceScopeParameter(scope: scope)) {
+                try self.checkFirstConcreteSourcePath(bound: original, proof: proof, receiverRef: bound.subject, environment: environment, selfRef: selfRef, itemRef: itemRef)
+            }
+            val replay = try self.replayConstraintProof(proof: proof, receiver: bound.subject, environment: environment, selfRef: selfRef, itemRef: itemRef, context: <Optional.Some v=context />)
+            val instantiated = match replay {
+                ConstraintProofReplay.Universal(proof: val proof) | ConstraintProofReplay.Concrete(proof: val proof) => proof,
+                _ => { return <Result.Err error=self.diagnosticAt(offset: original.offset, msg: "dynamic call retains an unresolved condition") /> },
+            }
+            try self.checkDeclarationCallProof(proof: instantiated, scope: scope, offset: original.offset)
+            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: instantiated, offset: original.offset)
+            bounds.append(bound)
+            proofs.append(self.freezeStaticConformanceProof(proof: instantiated))
+        }
+        self.interfaceCalls.append(<Ref value=<InterfaceCallEvidenceCell evidence=<InterfaceCallEvidence sourceRoot=root instanceRoot=context.instanceRoot owner=owner receiver=receiver traitIndex=traitAndSlot.traitIndex slot=traitAndSlot.slot bounds=bounds proofs=proofs /> /> />)
+        return <Result.Ok value=<Optional.Some v=self.interfaceCalls.count() /> />
+    }
+}
+
+// Validate the immutable capability at publication and its actual consumers.
+// No where-clause solver or source lookup can replace an absent capability.
+pub impl Comp {
+    inout fn checkFinalInterfaceEvidence(resolution: CallResolution) -> Result[(), CompileDiagnostic] {
+        val requirement = match resolution.target {
+            CallTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => <InterfaceRequirementKey traitIndex=traitIndex slot=slot />,
+            _ => {
+                if resolution.interfaceEvidence != 0U64 { return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "non-interface call has interface evidence") /> }
+                return <Result.Ok value=() />
+            },
+        }
+        if resolution.interfaceEvidence == 0U64 || resolution.interfaceEvidence > self.interfaceCalls.count() {
+            return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "dynamic call has no interpreted interface evidence") />
+        }
+        val evidence = self.interfaceCalls[resolution.interfaceEvidence - 1U64]->evidence
+        match evidence.owner {
+            InterfaceEvidenceOwner.Body(index: val body) => { if body != resolution.bodyId { return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "interface evidence belongs to another caller body") /> } }
+            InterfaceEvidenceOwner.Declaration(environment: _) => { return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "declaration interface evidence cannot authorize execution") /> }
+        }
+        if evidence.instanceRoot == 0U64 || !self.interfaceEvidenceIsValid(index: evidence.instanceRoot - 1U64) || evidence.traitIndex != requirement.traitIndex || evidence.slot != requirement.slot || !self.typeRefEq(a: evidence.receiver, b: resolution.recvTypeRef) {
+            return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "dynamic interface evidence has a different receiver or requirement") />
+        }
+        val index = self.callTemplateIndex(siteKey: resolution.siteKey)
+        if index >= self.callTemplateLocations.count() { return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "dynamic interface evidence has no source operation") /> }
+        val template = self.callTemplateAt(index: index)
+        if selectedInterfaceRoot(template: template) != evidence.sourceRoot || !self.sameCallSiteKey(a: template.siteKey, b: resolution.siteKey) {
+            return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "interface evidence belongs to another selected operation") />
+        }
+        try self.requireSourceInterfaceRoot(root: evidence.sourceRoot, site: resolution.siteKey, receiver: template.receiverTypeTerm, traitIndex: requirement.traitIndex)
+        return <Result.Ok value=() />
+    }
+}
+
+impl Comp {
+    inout fn checkInterfaceDeclarationCall(template: CallTemplate, environment: InstanceEnvironment) -> Result[DeclarationObligationState, CompileDiagnostic] {
+        val index = self.callTemplateIndex(siteKey: template.siteKey)
+        match self.preparedCallConstraints(index: index) {
+            Optional.Some(v: val snapshot) => { if snapshot.constraints().bounds.count() == 0U64 { return <Result.Ok value=<DeclarationObligationState.Complete /> /> } }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "interface declaration call has no prepared source constraints") /> }
+        }
+        match (try self.instantiateInterfaceCall(template: template, owner: <InterfaceEvidenceOwner.Declaration environment=environment />, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)) {
+            Optional.Some(v: _) => { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
+            Optional.None => { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
+        }
+    }
+}

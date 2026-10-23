@@ -671,6 +671,7 @@ pub impl Comp {
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 match selection {
                     ProtocolSelection.Static(resolution: _) => {}
+                    ProtocolSelection.Existential(traitIdx: _, slot: _, interfaceRoot: _) => { return self.checkInterfaceDeclarationCall(template: template, environment: environment) }
                     _ => { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
                 }
             }
@@ -681,6 +682,12 @@ pub impl Comp {
                         if !(try self.callConstraintIsRelevant(function: callee, relevant: relevant)) && !(try self.selectedCallHasDeferredConstraints(template: template)) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
                     }
                     _ => {}
+                }
+            }
+            CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
+                match target {
+                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: _, slot: _, interfaceRoot: _) => { return self.checkInterfaceDeclarationCall(template: template, environment: environment) }
+                    _ => { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
                 }
             }
             _ => { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }

@@ -1411,6 +1411,7 @@ fn midSelectedSignature(c: inout Comp, selected: CallResolution) -> MidSelectedS
             hasReceiver = true
         }
         CallTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => {
+            if c.checkFinalInterfaceEvidence(resolution: selected).isErr() { return <MidSelectedSignature.Invalid /> }
             if traitIndex >= c.decls.traitCount() || slot == 0U64 || slot > c.decls.traitAt(index: traitIndex).reqs.count() { return <MidSelectedSignature.Invalid /> }
             return <MidSelectedSignature.Declaration function=c.traitReqAt(reqs: c.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64) hasReceiver=true />
         }

@@ -126,6 +126,21 @@ user judgment.
 
 ### Internal Implementation Sequence
 
+The retained interface interpretation now has an explicit declaration or body
+owner and a fresh hidden binder when its condition set is nonempty. Its result
+is distinct from concrete static evidence. Final dynamic call rows retain a
+private immutable evidence capability, preserved by the resolution pool and
+checked at publication, Mid signature materialization and LLVM preflight.
+`interface_final_evidence` exercises real session Mid preparation and rejects
+missing, nonexistent, foreign-body and substituted-operation capabilities. The
+static adapter also rejects a universal interface assumption.
+
+This is a bounded connected increment, not issue completion: conditional witness
+children/projection normalization still need the shared interpretation context;
+concrete boxing still needs retained requirement-to-implementation evidence and
+unavailable-member separation. Fresh focused checks do not replace the parent
+fixed-point/performance and whole-suite gates.
+
 Keep this work in the existing evidence domain rather than introducing a second
 body checker or a runtime trait solver. The representation below is an internal
 plan, not a new source-level opening feature or a claim of implementation.

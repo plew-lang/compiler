@@ -1767,6 +1767,7 @@ pub impl LlvmCtx {
         val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         match selected.target {
             CallTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => {
+                try c.checkFinalInterfaceEvidence(resolution: selected)
                 if traitIndex >= c.decls.traitCount() || slot == 0U64 || slot > c.decls.traitAt(index: traitIndex).reqs.count() { return <Result.Ok value=<MidCallPreflight.Callee /> /> }
                 val requirement: Func = c.traitReqAt(reqs: c.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
                 if requirement.isAsync { return <Result.Ok value=<MidCallPreflight.Async /> /> }

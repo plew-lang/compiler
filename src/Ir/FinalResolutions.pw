@@ -192,7 +192,7 @@ pub impl Arena {
             }
             Optional.None => {}
         }
-        self.finalCallees.append(<CallResolution bodyId=row.bodyId calleeBodyId=row.calleeBodyId siteKey=row.siteKey exprId=row.exprId siteIsStmt=row.siteIsStmt slot=row.slot callee=row.callee receiverPassing=row.receiverPassing recvTypeRef=row.recvTypeRef resultTypeRef=row.resultTypeRef resultProjection=row.resultProjection target=row.target calleeTypeArgs=types parameterTypeRefs=parameters argumentConversions=conversionRange argumentPassings=passingRange arguments=argumentRange />)
+        self.finalCallees.append(<CallResolution bodyId=row.bodyId calleeBodyId=row.calleeBodyId interfaceEvidence=row.interfaceEvidence siteKey=row.siteKey exprId=row.exprId siteIsStmt=row.siteIsStmt slot=row.slot callee=row.callee receiverPassing=row.receiverPassing recvTypeRef=row.recvTypeRef resultTypeRef=row.resultTypeRef resultProjection=row.resultProjection target=row.target calleeTypeArgs=types parameterTypeRefs=parameters argumentConversions=conversionRange argumentPassings=passingRange arguments=argumentRange />)
         self.finalCalleeIndexSlots.set(i: slot, value: self.finalCalleeCount())
         return true
     }

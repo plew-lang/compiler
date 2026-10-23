@@ -1560,12 +1560,14 @@ pub impl Comp {
         return true
     }
 
-    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64, arguments: Array[CallTemplateArgument] = [], argumentSourceTypes: Array[U64] = [], calleeTypeArgs: Array[U64] = [], parameterTypeRefs: Array[U64] = [], argumentConversions: Array[ValueConversionProof] = [], receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />, argumentPassings: Array[CallArgumentPassing] = [], resultProjection: CallResultProjection = <CallResultProjection.Identity />, target: CallTarget = <CallTarget.Direct />, calleeBodyId: U64 = 0U64, generatedSite: CallSiteKey = <CallSiteKey />) -> Result[(), CompileDiagnostic] {
+    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64, arguments: Array[CallTemplateArgument] = [], argumentSourceTypes: Array[U64] = [], calleeTypeArgs: Array[U64] = [], parameterTypeRefs: Array[U64] = [], argumentConversions: Array[ValueConversionProof] = [], receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />, argumentPassings: Array[CallArgumentPassing] = [], resultProjection: CallResultProjection = <CallResultProjection.Identity />, target: CallTarget = <CallTarget.Direct />, calleeBodyId: U64 = 0U64, generatedSite: CallSiteKey = <CallSiteKey />, interfaceEvidence: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         val bodyId: U64 = self.currentBodyInstanceId()
         mut val siteKey: CallSiteKey = generatedSite
         if siteKey.originKind == 0U64 { siteKey = (try self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)) }
         val evaluationArguments = self.prepareFinalCalleeArguments(arguments: arguments, parameterTypes: parameterTypeRefs, sourceTypes: argumentSourceTypes)
-        if !self.arena.publishFinalCallee(row: <CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee receiverPassing=receiverPassing recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target />, typeArguments: calleeTypeArgs, parameterTypes: parameterTypeRefs, conversions: argumentConversions, passings: argumentPassings, arguments: <Optional.Some v=evaluationArguments />) {
+        val row = <CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee receiverPassing=receiverPassing recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target interfaceEvidence=interfaceEvidence />
+        try self.checkFinalInterfaceEvidence(resolution: row)
+        if !self.arena.publishFinalCallee(row: row, typeArguments: calleeTypeArgs, parameterTypes: parameterTypeRefs, conversions: argumentConversions, passings: argumentPassings, arguments: <Optional.Some v=evaluationArguments />) {
             return <Result.Err error=self.diagnosticAt(offset: siteKey.originStart, msg: "final call occurrence is already published") />
         }
         // A call's result recipe is part of the selected call contract, even
@@ -1613,6 +1615,7 @@ pub impl Comp {
         mut val receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />
         mut val functionType: U64 = 0U64
         mut val dynamic: Bool = false
+        mut val interfaceEvidence = 0U64
         match selection.target {
             CallTarget.ClosureLocal(bindingDeclStart: _, fnTypeRef: val ref) => {
                 functionType = ref
@@ -1627,6 +1630,18 @@ pub impl Comp {
                 dynamic = true
                 if traitIndex >= self.decls.traitCount() || requirementSlot == 0U64 || requirementSlot > self.decls.traitAt(index: traitIndex).reqs.count() || selection.receiverRef == 0U64 || selection.receiverRef >= self.arena.typeCount() {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: invalid dynamic requirement signature") />
+                }
+                val key = try self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+                val templateIndex = self.callTemplateIndex(siteKey: key)
+                if templateIndex >= self.callTemplateLocations.count() { return <Result.Err error=self.diagnosticAt(offset: key.originStart, msg: "dynamic call has no selected source template") /> }
+                val prior = try self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+                if prior < self.arena.finalCalleeCount() {
+                    interfaceEvidence = self.arena.finalCalleeAt(index: prior).interfaceEvidence
+                } else {
+                    interfaceEvidence = match (try self.instantiateInterfaceCall(template: self.callTemplateAt(index: templateIndex), owner: <InterfaceEvidenceOwner.Body index=self.currentBodyInstanceId() />, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)) {
+                        Optional.Some(v: val evidence) => evidence,
+                        Optional.None => { return <Result.Err error=self.diagnosticAt(offset: key.originStart, msg: "executable interface call retains an unresolved caller substitution") /> },
+                    }
                 }
                 val requirement: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: requirementSlot - 1U64)
                 try self.checkExistentialRequirementCall(req: requirement, target: selection.receiverRef, traitIndex: traitIndex, requirement: requirementSlot - 1U64, offset: self.exprOffset(id: exprId))
@@ -1671,7 +1686,7 @@ pub impl Comp {
             }
             return <Result.Ok value=() />
         }
-        try self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: selection.receiverRef, resultTypeRef: selection.resultRef, arguments: selection.argumentSources, argumentSourceTypes: sourceTypes, parameterTypeRefs: parameterTypes, argumentConversions: conversions, receiverPassing: receiverPassing, argumentPassings: passings, resultProjection: selection.resultProjection, target: selection.target)
+        try self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: selection.receiverRef, resultTypeRef: selection.resultRef, arguments: selection.argumentSources, argumentSourceTypes: sourceTypes, parameterTypeRefs: parameterTypes, argumentConversions: conversions, receiverPassing: receiverPassing, argumentPassings: passings, resultProjection: selection.resultProjection, target: selection.target, interfaceEvidence: interfaceEvidence)
         return <Result.Ok value=() />
     }
 
@@ -1939,7 +1954,9 @@ pub impl Comp {
     inout fn bodyCalleeIndex(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         val bodyId: U64 = self.currentBodyInstanceId()
         val siteKey: CallSiteKey = (try self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
-        return <Result.Ok value=self.arena.finalCalleeIndexForKey(bodyId: bodyId, siteKey: siteKey) />
+        val index = self.arena.finalCalleeIndexForKey(bodyId: bodyId, siteKey: siteKey)
+        if index < self.arena.finalCalleeCount() { try self.checkFinalInterfaceEvidence(resolution: self.arena.finalCalleeAt(index: index)) }
+        return <Result.Ok value=index />
     }
 
     // A call in a body without substitutions is instance-invariant.  Its
@@ -3886,7 +3903,10 @@ pub impl Comp {
         }
     }
 
-    inout fn instantiateConstraintProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+}
+
+impl Comp {
+    inout fn instantiateConcreteConstraintProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         if receiverRef == 0U64 || !self.arena.typeIsClosed(ref: receiverRef) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
         match proof {
             StaticConformanceProof.TraitSelf(traitIdx: val owner, receiverRef: _, traitArgs: _) => {
@@ -3937,6 +3957,9 @@ pub impl Comp {
         return self.instantiateStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
     }
 
+}
+
+pub impl Comp {
     inout fn instantiateBodyCallConstraints(template: CallTemplate) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
         return self.instantiateSelectedCallConstraints(template: template, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
     }

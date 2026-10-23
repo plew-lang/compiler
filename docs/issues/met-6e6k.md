@@ -78,3 +78,30 @@ instances and preserve the final chosen instance/proof through admission. Do not
 merge different input instances as competing paths to one instance, or accept the
 first instance merely because it was discovered first. Associated-output filters
 must follow source selection under the shared query contract.
+
+### Match Payload Binder as a Generic Construction Input
+
+During interface evidence closure, measured 6c77f6f1 rejects this source at the
+Some construction with cannot infer generic arguments:
+
+```plew
+use /Ir only { SemanticCompletionOwner }
+fn consume(value: Optional[U64]) {}
+fn probe(owner: SemanticCompletionOwner) {
+    val selected = match owner {
+        SemanticCompletionOwner.Global(target: val target) => <Optional.Some v=target />,
+        _ => <Optional.None />,
+    }
+    consume(value: selected)
+}
+fn main() {}
+```
+
+The payload is declared U64, so investigate its source binding publication and
+construction inference, not later-use backward inference. An explicit
+Optional[U64] annotation on the intermediate binding permits the current internal
+implementation to proceed, but is not evidence that the unannotated producer is
+correct. Retain this as an in-scope producer audit; remove the need for that
+annotation only after the inferred payload is available at source construction.
+Diagnostic source: compiler/tmp/phase3-owner-facts/InterfaceOwnerInference.pw;
+carrier bin/plewc-interface-guarantees-measured.

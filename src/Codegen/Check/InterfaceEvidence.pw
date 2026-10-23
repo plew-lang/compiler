@@ -5,11 +5,15 @@ impl Comp {
         if index >= self.interfaceEvidence.count() { return false }
         match self.interfaceEvidence[index]->node {
             InterfaceEvidenceNode.Source(root: val root) => { return root.session == self.sourceFacts.session }
-            InterfaceEvidenceNode.Instance(root: val root, caller: val caller, bound: _) => {
-                if root == 0U64 || root > self.interfaceEvidence.count() || caller == 0U64 || caller > self.arena.bodyInstanceCount() { return false }
+            InterfaceEvidenceNode.Instance(root: val root, owner: val owner, bound: _) => {
+                if root == 0U64 || root > self.interfaceEvidence.count() { return false }
+                match owner {
+                    InterfaceEvidenceOwner.Body(index: val body) => { if body == 0U64 || body > self.arena.bodyInstanceCount() { return false } }
+                    InterfaceEvidenceOwner.Declaration(environment: _) => {}
+                }
                 match self.interfaceEvidence[root - 1U64]->node {
                     InterfaceEvidenceNode.Source(root: val source) => { return source.session == self.sourceFacts.session }
-                    InterfaceEvidenceNode.Instance(root: _, caller: _, bound: _) => { return false }
+                    InterfaceEvidenceNode.Instance(root: _, owner: _, bound: _) => { return false }
                 }
             }
         }
@@ -19,7 +23,7 @@ impl Comp {
         if !self.interfaceEvidenceIsValid(index: index) { return self.missingTraitBound() }
         return match self.interfaceEvidence[index]->node {
             InterfaceEvidenceNode.Source(root: val root) => root.bound,
-            InterfaceEvidenceNode.Instance(root: _, caller: _, bound: val bound) => bound,
+            InterfaceEvidenceNode.Instance(root: _, owner: _, bound: val bound) => bound,
         }
     }
 
@@ -27,7 +31,7 @@ impl Comp {
         if !self.interfaceEvidenceIsValid(index: index) { return 0U64 }
         return match self.interfaceEvidence[index]->node {
             InterfaceEvidenceNode.Source(root: _) => index + 1U64,
-            InterfaceEvidenceNode.Instance(root: val root, caller: _, bound: _) => root,
+            InterfaceEvidenceNode.Instance(root: val root, owner: _, bound: _) => root,
         }
     }
 
@@ -45,7 +49,7 @@ impl Comp {
         val root = self.interfaceSourceRoot(index: index)
         val source = match self.interfaceEvidence[root - 1U64]->node {
             InterfaceEvidenceNode.Source(root: val source) => source,
-            InterfaceEvidenceNode.Instance(root: _, caller: _, bound: _) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface assumption has no source root") /> },
+            InterfaceEvidenceNode.Instance(root: _, owner: _, bound: _) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface assumption has no source root") /> },
         }
         val lexical = try self.declarationTypeScope(owner: source.site.ownerFnIdx)
         if lexical.owner != scope.owner {
@@ -109,7 +113,7 @@ impl Comp {
                 }
                 return <Result.Ok value=source />
             }
-            InterfaceEvidenceNode.Instance(root: _, caller: _, bound: _) => { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "source interface cannot use an instantiated proof root") /> }
+            InterfaceEvidenceNode.Instance(root: _, owner: _, bound: _) => { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "source interface cannot use an instantiated proof root") /> }
         }
     }
 

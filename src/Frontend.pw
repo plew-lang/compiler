@@ -198,10 +198,42 @@ struct InterfaceEvidenceRoot {
     val bound: TraitBound
 }
 
+enum InterfaceEvidenceOwner {
+    Declaration(environment: InstanceEnvironment)
+    Body(index: U64)
+}
+
 enum InterfaceEvidenceNode {
     Source(root: InterfaceEvidenceRoot)
-    Instance(root: U64, caller: U64, bound: TraitBound)
+    Instance(root: U64, owner: InterfaceEvidenceOwner, bound: TraitBound)
 }
+
+struct InterfaceRequirementKey { val traitIndex: U64 val slot: U64 }
+
+struct InterfaceProofContext {
+    val sourceRoot: U64
+    val instanceRoot: U64
+    val environment: InstanceEnvironment
+}
+
+enum ConstraintProofReplay {
+    Missing
+    Deferred
+    Concrete(proof: StaticConformanceProof)
+    Universal(proof: StaticConformanceProof)
+}
+
+struct InterfaceCallEvidence {
+    val sourceRoot: U64
+    val instanceRoot: U64
+    val owner: InterfaceEvidenceOwner
+    val receiver: U64
+    val traitIndex: U64
+    val slot: U64
+    val bounds: Array[TraitBound]
+    val proofs: Array[U64]
+}
+struct InterfaceCallEvidenceCell { val evidence: InterfaceCallEvidence }
 
 struct InterfaceEvidenceCell {
     val node: InterfaceEvidenceNode
@@ -230,6 +262,7 @@ pub struct Comp {
     mut val semanticClosures: Array[SemanticClosure] = []
     mut val sourceFacts: SourceFactDirectory = <SourceFactDirectory />
     mut val interfaceEvidence: Array[Ref[InterfaceEvidenceCell]] = []
+    mut val interfaceCalls: Array[Ref[InterfaceCallEvidenceCell]] = []
     mut val semanticRecordingStarted: Bool = false
     mut val semanticClosureOwners: Array[SemanticCompletionOwner] = []
     mut val semanticClosureIndexSlots: Array[U64] = []

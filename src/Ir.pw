@@ -2171,6 +2171,9 @@ pub struct CallResolution {
     // placement/source proofs. LLVM must consume this identity rather than
     // reconstructing a body environment from ABI arguments.
     pub val calleeBodyId: U64 = 0U64
+    // Session-owned, immutable interpreted interface evidence. Zero only for
+    // calls that do not dispatch through an existential requirement.
+    pub val interfaceEvidence: U64 = 0U64
     // Semantic identity of the call occurrence. `exprId` below is retained
     // solely as the backend navigation anchor; it is not a semantic key.
     pub val siteKey: CallSiteKey = <CallSiteKey />
