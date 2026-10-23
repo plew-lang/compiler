@@ -482,14 +482,17 @@ pub impl Comp {
                         val trait = self.decls.traitAt(index: traitIndex)
                         mut val index = 0U64
                         while index < trait.reqs.count() {
-                            match (try self.existentialImplementation(receiver: receiver, target: targetType, traitIndex: traitIndex, requirement: index, proof: evidence)) {
-                                Optional.Some(v: val selected) => {
-                                    val box = <ExistentialBoxEvidence sourceRef=receiver targetRef=targetType traitIdx=traitIndex proof=evidence />
+                            val box = <ExistentialBoxEvidence sourceRef=receiver targetRef=targetType traitIdx=traitIndex proof=evidence />
+                            match (try self.selectExistentialMember(evidence: box, requirement: index)) {
+                                Optional.Some(v: val member) => {
+                                    val selected = member.implementation
+                                    val constraints = member.constraints
                                     val sourceReceiver = self.canonicalBodyReceiverRef(fnIdx: selected.function, recvInstRef: receiver)
                                     match (try self.existentialWitnessPlan(evidence: box, requirement: index, sourceReceiver: sourceReceiver)) {
                                         Optional.Some(v: val plan) => {
-                                            try self.checkExistentialWitnessSignature(plan: plan, implementation: selected, evidence: box)
-                                            if (try self.appendCallConstraintInstance(function: selected.function, arguments: selected.arguments, receiver: receiver, proof: evidence, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() { completion = <DeclarationObligationState.Deferred /> }
+                                            val admitted = try self.existentialImplementationEnvironment(implementation: selected, evidence: box, constraints: constraints)
+                                            try self.checkPreparedExistentialWitnessSignature(plan: plan, function: selected.function, environment: admitted)
+                                            if (try self.appendCallConstraintInstance(function: selected.function, arguments: selected.arguments, receiver: receiver, proof: evidence, constraints: constraints, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)).isDeferred() { completion = <DeclarationObligationState.Deferred /> }
                                         }
                                         Optional.None => {}
                                     }
@@ -1486,6 +1489,15 @@ impl Comp {
 impl Comp {
     inout fn admitDeclarationAssumptionScope(source: DeclarationBoundRef, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
         if !self.declarationBoundIsValid(source: source) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no valid trait bound") /> }
+        match scope.origin {
+            DeclarationScopeOrigin.InterfaceContract => {
+                match source {
+                    DeclarationBoundRef.Interface(index: _) | DeclarationBoundRef.AssociatedType(index: _) => {}
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface contract cannot borrow a caller declaration premise") /> }
+                }
+            }
+            DeclarationScopeOrigin.Lexical => {}
+        }
         val owner = match source {
             DeclarationBoundRef.Function(index: val index) => { give self.decls.funcBounds.at(index: index).fnIdx }
             DeclarationBoundRef.MethodReceiver(index: val index) => { give index }

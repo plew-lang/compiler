@@ -1,3 +1,4 @@
+use ./Ir only { DeclarationScopeOrigin }
 use @Std/Core only { Ref }
 use ./Ir only { SemanticTypeRecipe, CallTemplateArgumentRange, CallTemplateTypeArgumentRange, CallTemplateOperandRange, CallTemplateViewRange }
 use ./Ir only { CallSiteSelection, CallTarget, ResolvedTypeDeclaration }
@@ -198,6 +199,14 @@ struct InterfaceEvidenceRoot {
     val bound: TraitBound
 }
 
+struct InterfaceContractRoot {
+    val session: U64
+    val receiver: U64
+    val traitIndex: U64
+    val slot: U64
+    val bound: TraitBound
+}
+
 enum InterfaceEvidenceOwner {
     Declaration(environment: InstanceEnvironment)
     Body(index: U64)
@@ -205,14 +214,31 @@ enum InterfaceEvidenceOwner {
 
 enum InterfaceEvidenceNode {
     Source(root: InterfaceEvidenceRoot)
+    Contract(root: InterfaceContractRoot)
     Instance(root: U64, owner: InterfaceEvidenceOwner, bound: TraitBound)
+}
+
+struct ExistentialMemberSelection {
+    val implementation: ExistentialImplementation
+    val constraints: CallableConstraintEvidence
+}
+
+struct ExistentialMethodConditions {
+    val root: U64
+    val bounds: Array[TraitBound]
+    val proofs: Array[U64]
 }
 
 struct InterfaceRequirementKey { val traitIndex: U64 val slot: U64 }
 
+enum InterfaceRootInterpretation {
+    Universal(root: U64)
+    Concrete(proof: StaticConformanceProof)
+}
+
 struct InterfaceProofContext {
     val sourceRoot: U64
-    val instanceRoot: U64
+    val interpretation: InterfaceRootInterpretation
     val environment: InstanceEnvironment
 }
 

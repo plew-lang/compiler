@@ -2322,12 +2322,7 @@ pub impl Comp {
 
     inout fn checkExistentialWitnessSignature(plan: ExistentialWitnessPlan, implementation: ExistentialImplementation, evidence: ExistentialBoxEvidence) -> Result[(), CompileDiagnostic] {
         val environment = try self.bodyInstanceEnvironment(fnIdx: implementation.function, args: implementation.arguments, recvInstRef: evidence.sourceRef, selectedProof: evidence.proof)
-        val parameters = try self.groundedSelectedCalleeParameterTypes(callee: implementation.function, environment: environment)
-        val result = try self.groundedSelectedCalleeReturn(callee: implementation.function, environment: environment)
-        if !self.sameResolvedTypeRefs(a: parameters, b: plan.signature.parameterTypes) || !self.callableResultTypesEqual(a: result, b: plan.sourceResultType) || !self.sameCallReceiverPassing(a: self.selectedReceiverPassing(callee: implementation.function), b: plan.signature.receiverPassing) || !self.sameCallArgumentPassings(a: self.selectedArgumentPassings(callee: implementation.function), b: plan.signature.argumentPassings) {
-            return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: implementation.function).nameStart, msg: "existential witness signature does not match its selected requirement") />
-        }
-        return <Result.Ok value=() />
+        return self.checkPreparedExistentialWitnessSignature(plan: plan, function: implementation.function, environment: environment)
     }
 
     // Consume the selected conformance evidence without reconstructing the
@@ -2369,13 +2364,16 @@ pub impl Comp {
                     val req: Func = self.traitReqAt(reqs: trait.reqs, index: requirement)
                     mut val member = <FinalExistentialMember />
                     val evidence = <ExistentialBoxEvidence sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof />
-                    match (try self.existentialImplementation(receiver: sourceRef, target: targetRef, traitIndex: traitIdx, requirement: requirement, proof: proof)) {
-                        Optional.Some(v: val selected) => {
+                    match (try self.selectExistentialMember(evidence: evidence, requirement: requirement)) {
+                        Optional.Some(v: val memberSelection) => {
+                            val selected = memberSelection.implementation
+                            val constraints = memberSelection.constraints
                             val sourceReceiver = self.canonicalBodyReceiverRef(fnIdx: selected.function, recvInstRef: sourceRef)
                             match (try self.existentialWitnessPlan(evidence: evidence, requirement: requirement, sourceReceiver: sourceReceiver)) {
                                 Optional.Some(v: val plan) => {
-                                    try self.checkExistentialWitnessSignature(plan: plan, implementation: selected, evidence: evidence)
-                                    val bodyId = try self.enqueueFinalBody(fnIdx: selected.function, args: selected.arguments, recvInstRef: sourceRef, selectedProof: proof)
+                                    val admitted = try self.existentialImplementationEnvironment(implementation: selected, evidence: evidence, constraints: constraints)
+                                    try self.checkPreparedExistentialWitnessSignature(plan: plan, function: selected.function, environment: admitted)
+                                    val bodyId = try self.enqueueFinalBody(fnIdx: selected.function, args: selected.arguments, recvInstRef: sourceRef, selectedProof: proof, constraints: constraints)
                                     if bodyId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: req.nameStart, msg: "internal error: existential implementation has no executable body") /> }
                                     try self.finalizeConversionDependencies(conversion: plan.resultConversion)
                                     try self.scanType(ref: plan.sourceResultType)
@@ -3986,14 +3984,7 @@ pub impl Comp {
     }
 
     inout fn requirementCallConstraintEvidence(template: CallTemplate, callee: U64, proof: StaticConformanceProof, traitIndex: U64, requirement: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
-        val witness = self.proofWitnessForTrait(proof: proof, traitIdx: traitIndex)
-        if witness.conformIdx == 0U64 { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "requirement call has no selected conformance") /> }
-        val function = self.arena.functionAt(index: callee)
-        val implementation = if function.sourceWitnessFuncId != 0U64 { give function.sourceWitnessFuncId - 1U64 } else { give callee }
-        val plan = match self.arena.conformanceMethodPlan(conformance: witness.conformIdx - 1U64, traitIndex: traitIndex, requirement: requirement, implementation: implementation) {
-            Optional.Some(v: val plan) => { give plan }
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "requirement call has no retained implementation evidence") /> }
-        }
+        val plan = try self.selectedRequirementImplementationPlan(callee: callee, proof: proof, traitIndex: traitIndex, requirement: requirement, offset: template.siteKey.originStart)
         match (try self.instantiateSelectedCallConstraints(template: template, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
             CallableConstraintEvidence.Recorded(bounds: val bounds, proofs: val proofs) => { return <Result.Ok value=<CallableConstraintEvidence.Requirement plan=plan bounds=bounds proofs=proofs /> /> }
             _ => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "requirement call has no retained public evidence") /> }
@@ -6217,5 +6208,27 @@ pub impl Comp {
         val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: globalInitializerTarget)
         val body = self.arena.bodyInstanceAt(index: bodyId - 1U64)
         return <Result.Ok value=facts.tryDecomposition(ownerFnIdx: (try self.semanticBodyOwner(fnIdx: body.fnIdx)), exprId: exprId) />
+    }
+}
+
+impl Comp {
+    inout fn selectedRequirementImplementationPlan(callee: U64, proof: StaticConformanceProof, traitIndex: U64, requirement: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
+        val witness = self.proofWitnessForTrait(proof: proof, traitIdx: traitIndex)
+        if witness.conformIdx == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "requirement call has no selected conformance") /> }
+        val function = self.arena.functionAt(index: callee)
+        val implementation = if function.sourceWitnessFuncId != 0U64 { give function.sourceWitnessFuncId - 1U64 } else { give callee }
+        return match self.arena.conformanceMethodPlan(conformance: witness.conformIdx - 1U64, traitIndex: traitIndex, requirement: requirement, implementation: implementation) {
+            Optional.Some(v: val plan) => <Result.Ok value=plan />,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "requirement call has no retained implementation evidence") /> },
+        }
+    }
+
+    inout fn checkPreparedExistentialWitnessSignature(plan: ExistentialWitnessPlan, function: U64, environment: InstanceEnvironment) -> Result[(), CompileDiagnostic] {
+        val parameters = try self.groundedSelectedCalleeParameterTypes(callee: function, environment: environment)
+        val result = try self.groundedSelectedCalleeReturn(callee: function, environment: environment)
+        if !self.sameResolvedTypeRefs(a: parameters, b: plan.signature.parameterTypes) || !self.callableResultTypesEqual(a: result, b: plan.sourceResultType) || !self.sameCallReceiverPassing(a: self.selectedReceiverPassing(callee: function), b: plan.signature.receiverPassing) || !self.sameCallArgumentPassings(a: self.selectedArgumentPassings(callee: function), b: plan.signature.argumentPassings) {
+            return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: function).nameStart, msg: "existential witness signature does not match its selected requirement") />
+        }
+        return <Result.Ok value=() />
     }
 }

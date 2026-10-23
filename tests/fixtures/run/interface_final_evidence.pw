@@ -2,7 +2,7 @@ use /Frontend only { Comp, FrontendInput, analyzeFrontend }
 use /SourceAccess only { SourceAccess }
 use /Diag only { emitDiagnostic }
 use /CheckedProgram only { CompilerSession, CompilerSessionResult }
-use /Ir only { CallTarget, CallResolution, StaticConformanceProof, DeclarationBoundRef, InstanceEnvironment, CallTemplateKind, DynamicCallTemplateTarget }
+use /Ir only { DeclarationScopeOrigin, DeclarationTypeScope, FuncBindRange, CallTarget, CallResolution, StaticConformanceProof, DeclarationBoundRef, InstanceEnvironment, CallTemplateKind, DynamicCallTemplateTarget }
 use @Std/Io only { print }
 fn replaced(row: CallResolution, body: U64, evidence: U64) -> CallResolution {
     return <CallResolution bodyId=body exprId=row.exprId siteKey=row.siteKey callee=row.callee recvTypeRef=row.recvTypeRef target=row.target interfaceEvidence=evidence />
@@ -47,6 +47,8 @@ fn main() {
                 match target {
                     DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: _, slot: _, interfaceRoot: val root) => {
                         if compiler.instantiateConstraintProof(proof: <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Interface index=root - 1U64 /> />, receiverRef: template.receiverTypeTerm, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64).isOk() { panic("universal interface evidence escaped through the static adapter") }
+                        val contractScope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.InterfaceContract /> owner=0U64 parameters=<FuncBindRange start=0U64 len=0U64 /> interfaceRoot=root />
+                        if compiler.checkDeclarationAssumptionScope(source: <DeclarationBoundRef.Interface index=root - 1U64 />, scope: contractScope, offset: 0U64).isOk() { panic("source-call evidence authorized a table-member contract") }
                         escaped = true
                     }
                     _ => {}

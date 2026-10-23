@@ -126,7 +126,15 @@ impl Comp {
                 Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface evidence requires a universal call scope") /> },
             }
             if root != scope.sourceRoot { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface proof belongs to another selected operation") /> }
-            return <Result.Ok value=<ConstraintProofReplay.Universal proof=(try self.rebaseInterfaceProof(proof: proof, context: scope, selfRef: selfRef, itemRef: itemRef)) /> />
+            val replayed = try self.rebaseInterfaceProof(proof: proof, context: scope, selfRef: selfRef, itemRef: itemRef)
+            match scope.interpretation {
+                InterfaceRootInterpretation.Universal(root: _) => { return <Result.Ok value=<ConstraintProofReplay.Universal proof=replayed /> /> }
+                InterfaceRootInterpretation.Concrete(proof: _) => {
+                    if (try self.interfaceProofRoot(proof: replayed)) != 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "concrete interface interpretation retains an abstract proof root") /> }
+                    try self.checkStaticProofEvidence(proof: replayed, offset: 0U64)
+                    return <Result.Ok value=<ConstraintProofReplay.Concrete proof=replayed /> />
+                }
+            }
         }
         val concrete = if projection {
             give try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: selfRef, itemRef: itemRef)
@@ -144,7 +152,10 @@ impl Comp {
         match source {
             DeclarationBoundRef.Interface(index: val index) => {
                 if index + 1U64 != context.sourceRoot { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface assumption belongs to another selected operation") /> }
-                return <Result.Ok value=<StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Interface index=context.instanceRoot - 1U64 /> /> />
+                match context.interpretation {
+                    InterfaceRootInterpretation.Universal(root: val root) => { return <Result.Ok value=<StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Interface index=root - 1U64 /> /> /> }
+                    InterfaceRootInterpretation.Concrete(proof: val proof) => { return <Result.Ok value=proof /> }
+                }
             }
             DeclarationBoundRef.AssociatedType(index: val index) => {
                 if !self.declarationBoundIsValid(source: source) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface condition has no retained associated clause") /> }
@@ -266,7 +277,7 @@ impl Comp {
         val substitution = <InstanceEnvironment params=parameters args=values receiverRef=environment.receiverRef proof=environment.proof constraints=environment.constraints />
         val bound = try self.groundCallableBound(bound: source.bound, environment: substitution, selfRef: selfRef, itemRef: itemRef)
         self.interfaceEvidence.append(<Ref value=<InterfaceEvidenceCell node=<InterfaceEvidenceNode.Instance root=sourceRoot owner=owner bound=bound /> /> />)
-        return <Result.Ok value=<InterfaceProofContext sourceRoot=sourceRoot instanceRoot=self.interfaceEvidence.count() environment=substitution /> />
+        return <Result.Ok value=<InterfaceProofContext sourceRoot=sourceRoot interpretation=<InterfaceRootInterpretation.Universal root=self.interfaceEvidence.count() /> environment=substitution /> />
     }
 
     inout fn instantiateInterfaceCall(template: CallTemplate, owner: InterfaceEvidenceOwner, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[Optional[U64], CompileDiagnostic] {
@@ -317,8 +328,12 @@ impl Comp {
             return <Result.Ok value=<Optional.Some v=self.interfaceCalls.count() /> />
         }
         val context = try self.createInterfaceProofContext(source: source, sourceRoot: root, owner: owner, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        val instanceRoot = match context.interpretation {
+            InterfaceRootInterpretation.Universal(root: val root) => root,
+            InterfaceRootInterpretation.Concrete(proof: _) => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "dynamic call cannot borrow a concrete boxing interpretation") /> },
+        }
         val lexical = try self.callConstraintScope(template: template)
-        val scope = <DeclarationTypeScope owner=lexical.owner parameters=<FuncBindRange start=0U64 len=0U64 /> interfaceRoot=context.instanceRoot />
+        val scope = <DeclarationTypeScope owner=lexical.owner parameters=<FuncBindRange start=0U64 len=0U64 /> interfaceRoot=instanceRoot />
         mut val bounds: Array[TraitBound] = []
         mut val proofs: Array[U64] = []
         for position in 0U64..<plan.bounds.count() {
@@ -338,7 +353,7 @@ impl Comp {
             bounds.append(bound)
             proofs.append(self.freezeStaticConformanceProof(proof: instantiated))
         }
-        self.interfaceCalls.append(<Ref value=<InterfaceCallEvidenceCell evidence=<InterfaceCallEvidence sourceRoot=root instanceRoot=context.instanceRoot owner=owner receiver=receiver traitIndex=traitAndSlot.traitIndex slot=traitAndSlot.slot bounds=bounds proofs=proofs /> /> />)
+        self.interfaceCalls.append(<Ref value=<InterfaceCallEvidenceCell evidence=<InterfaceCallEvidence sourceRoot=root instanceRoot=instanceRoot owner=owner receiver=receiver traitIndex=traitAndSlot.traitIndex slot=traitAndSlot.slot bounds=bounds proofs=proofs /> /> />)
         return <Result.Ok value=<Optional.Some v=self.interfaceCalls.count() /> />
     }
 }
@@ -387,5 +402,66 @@ impl Comp {
             Optional.Some(v: _) => { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
             Optional.None => { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
         }
+    }
+}
+
+impl Comp {
+    inout fn concreteInterfaceConditions(conditions: ExistentialMethodConditions, evidence: ExistentialBoxEvidence, requirement: U64) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
+        if conditions.bounds.count() != conditions.proofs.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface contract has incomplete public evidence") /> }
+        if conditions.bounds.count() == 0U64 {
+            if conditions.root != 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "empty interface contract unexpectedly owns a proof scope") /> }
+            return <Result.Ok value=<CallableConstraintEvidence.Recorded bounds=[] proofs=[] /> />
+        }
+        if conditions.root == 0U64 || !self.interfaceEvidenceIsValid(index: conditions.root - 1U64) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface contract has no admitted root") /> }
+        val contract = match self.interfaceEvidence[conditions.root - 1U64]->node {
+            InterfaceEvidenceNode.Contract(root: val root) => root,
+            _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "boxing cannot borrow a source-call interface scope") /> },
+        }
+        if contract.traitIndex != evidence.traitIdx || contract.slot != requirement + 1U64 || !self.typeRefEq(a: contract.receiver, b: evidence.targetRef) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface contract belongs to another boxing target or requirement") /> }
+        try self.checkConversionProofEvidence(proof: <ValueConversionProof.ExistentialBox sourceRef=evidence.sourceRef targetRef=evidence.targetRef traitIdx=evidence.traitIdx proof=evidence.proof />, offset: contract.bound.offset)
+        val binder = self.arena.typeAt(index: contract.bound.subject)
+        val environment = <InstanceEnvironment params=[<Bind nameStart=binder.nameStart nameLen=binder.nameLen nameId=binder.nameId paramId=binder.paramId fieldStart=0U64 fieldLen=0U64 />] args=[evidence.sourceRef] receiverRef=evidence.sourceRef proof=evidence.proof />
+        val context = <InterfaceProofContext sourceRoot=conditions.root interpretation=<InterfaceRootInterpretation.Concrete proof=evidence.proof /> environment=environment />
+        mut val bounds: Array[TraitBound] = []
+        mut val proofs: Array[StaticConformanceProof] = []
+        for index in 0U64..<conditions.bounds.count() {
+            val original = conditions.bounds[index]
+            val bound = try self.groundCallableBound(bound: original, environment: environment, selfRef: evidence.sourceRef, itemRef: 0U64)
+            val proof = match (try self.replayConstraintProof(proof: self.thawStaticConformanceProof(id: conditions.proofs[index]), receiver: bound.subject, environment: environment, selfRef: evidence.sourceRef, itemRef: 0U64, context: <Optional.Some v=context />)) {
+                ConstraintProofReplay.Concrete(proof: val proof) => proof,
+                _ => { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "promised interface member has no concrete condition evidence") /> },
+            }
+            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: bound.offset)
+            bounds.append(bound)
+            proofs.append(proof)
+        }
+        return <Result.Ok value=<CallableConstraintEvidence.Recorded bounds=bounds proofs=proofs /> />
+    }
+}
+
+impl Comp {
+    inout fn selectExistentialMember(evidence: ExistentialBoxEvidence, requirement: U64) -> Result[Optional[ExistentialMemberSelection], CompileDiagnostic] {
+        if evidence.traitIdx >= self.decls.traitCount() || requirement >= self.decls.traitAt(index: evidence.traitIdx).reqs.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential member has no selected declaration") /> }
+        val requested = self.traitReqAt(reqs: self.decls.traitAt(index: evidence.traitIdx).reqs, index: requirement)
+        if !(try self.existentialRequirementIsDispatchable(req: requested, target: evidence.targetRef, traitIndex: evidence.traitIdx)) { return <Result.Ok value=<Optional.None /> /> }
+        val conditions = match (try self.interfaceMethodConditions(target: evidence.targetRef, traitIndex: evidence.traitIdx, requirement: requirement)) {
+            Optional.Some(v: val conditions) => conditions,
+            Optional.None => { return <Result.Ok value=<Optional.None /> /> },
+        }
+        val implementation = match (try self.existentialImplementation(receiver: evidence.sourceRef, target: evidence.targetRef, traitIndex: evidence.traitIdx, requirement: requirement, proof: evidence.proof)) {
+            Optional.Some(v: val implementation) => implementation,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: requested.nameStart, msg: "admitted interface member lost its selected implementation") /> },
+        }
+        val publicEvidence = try self.concreteInterfaceConditions(conditions: conditions, evidence: evidence, requirement: requirement)
+        val plan = try self.selectedRequirementImplementationPlan(callee: implementation.function, proof: evidence.proof, traitIndex: evidence.traitIdx, requirement: requirement, offset: self.arena.functionAt(index: implementation.function).nameStart)
+        match publicEvidence {
+            CallableConstraintEvidence.Recorded(bounds: val bounds, proofs: val proofs) => { return <Result.Ok value=<Optional.Some v=<ExistentialMemberSelection implementation=implementation constraints=<CallableConstraintEvidence.Requirement plan=plan bounds=bounds proofs=proofs /> /> /> /> }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface member has no retained public condition evidence") /> }
+        }
+    }
+
+    inout fn existentialImplementationEnvironment(implementation: ExistentialImplementation, evidence: ExistentialBoxEvidence, constraints: CallableConstraintEvidence) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        val substitution = try self.bodyInstanceEnvironment(fnIdx: implementation.function, args: implementation.arguments, recvInstRef: evidence.sourceRef, selectedProof: evidence.proof)
+        return self.environmentWithCallableConstraints(fnIdx: implementation.function, environment: substitution, evidence: constraints)
     }
 }

@@ -126,7 +126,25 @@ user judgment.
 
 ### Internal Implementation Sequence
 
-#### Remaining Concrete Boxing Boundary
+#### Concrete Boxing Boundary and Remaining Audit
+
+The working increment now distinguishes source-call and interface-contract
+scopes, reuses signature normalization, and interprets the latter with its exact
+selected boxing witness. Both declaration and execution worklists select the
+available member through the same private entry and pass Requirement evidence
+through conformanceMethodPlan. Actual signature checking uses the admitted
+implementation environment. A source-call root cannot authorize a contract.
+Fresh controls cover unavailable unused members, actual condition-using bodies,
+reordered public/implementation predicates, missing/foreign/replaced evidence,
+and real session Mid preparation. Main/full gates are not implied.
+
+An existing conformance comparison also compared an implementation's raw Self
+subject/trait arguments against receiver-substituted public clauses. The
+increment applies the same explicit receiver interpretation as the signature's
+result, using pure substitution rather than associated-type re-selection.
+Original clause identities and the contextual Self contract remain intact.
+The dedicated conformance_method_self_conditions control includes Self inside
+the required trait's arguments.
 
 Give interface-contract interpretation its own explicit provenance. A contract
 for a selected boxing conversion/requirement is not an invented source call,
@@ -149,6 +167,22 @@ transfer, including weaker/reordered implementation conditions. Pass Requirement
 evidence into witness body preparation; remove its Declaration default path.
 Cover unavailable-unused members, available conditional bodies, inherited and
 associated guarantees, explicit source views and malformed promised evidence.
+The inherited/newtype target recursion inside enqueueFinalBody still calls the
+Declaration default when it changes the receiver. Audit its retained proof and
+bound mapping before closure; the new concrete-boxing call's explicit evidence
+alone does not prove that nested adapter boundary preserves it. Also inspect
+finalExistentialIndex's source/target-only cache against differing selected proof
+identity, including the early successful return on a cached conversion.
+
+Audit universally scoped nominal predicates separately: a nominal witness with
+hidden type arguments may have no interface-assumption child. The blanket
+declarationWitnessDependency refusal and interfaceProofRoot-only classification
+must not be assumed to cover that case. Check source admission, unavailable
+member classification and both proof interpretations with real controls before
+calling the universal predicate surface complete. Reuse admitted environments
+between signature validation and enqueue rather than interpreting the same
+requirement-to-implementation mapping twice.
+
 If a necessary case cannot preserve its admitted evidence without a new runtime
 ABI/semantic decision, reproduce it and request that judgment rather than adding
 a new implicit selector or silently changing the accepted condition.

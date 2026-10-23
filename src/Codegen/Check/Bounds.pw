@@ -215,18 +215,18 @@ pub impl Comp {
     // map.  This is the sole substitution boundary for a bound's trait key
     // and associated-output predicates; callers must not separately ground
     // the old `traitArgs` / `traitAssocValues` arrays.
-    inout fn groundTraitConstraintInEnvironment(constraint: TraitConstraint, params: Array[Bind], args: Array[U64]) -> TraitConstraint {
+    inout fn groundTraitConstraintInEnvironment(constraint: TraitConstraint, params: Array[Bind], args: Array[U64], selfRef: U64 = 0U64) -> TraitConstraint {
         mut val positional: Array[U64] = []
         mut val i: U64 = 0U64
         while i < constraint.key.positionalArgs.count() {
-            positional.append(self.groundTermInEnvironment(ref: constraint.key.positionalArgs[i], params: params, values: args))
+            positional.append(self.groundTermInEnvironment(ref: constraint.key.positionalArgs[i], params: params, values: args, selfRef: selfRef))
             i += 1U64
         }
         mut val predicates: Array[TraitAssocPredicate] = []
         i = 0U64
         while i < constraint.assocPredicates.count() {
             val predicate: TraitAssocPredicate = constraint.assocPredicates[i]
-            predicates.append(<TraitAssocPredicate member=predicate.member value=self.groundTermInEnvironment(ref: predicate.value, params: params, values: args) span=predicate.span />)
+            predicates.append(<TraitAssocPredicate member=predicate.member value=self.groundTermInEnvironment(ref: predicate.value, params: params, values: args, selfRef: selfRef) span=predicate.span />)
             i += 1U64
         }
         return <TraitConstraint key=<TraitInstanceKey owner=constraint.key.owner positionalArgs=positional /> positionalArgsOpen=constraint.positionalArgsOpen assocPredicates=predicates />
@@ -1360,7 +1360,12 @@ pub impl Comp {
                     while boundIndex < authoredCount {
                         val bound = self.decls.funcBounds.at(index: boundIndex)
                         if bound.fnIdx == functionIndex {
-                            val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.paramTy, constraint: bound.constraint, assumptions: assumptions)
+                            // Compare complete signatures under the same
+                            // explicit receiver interpretation as results and
+                            // public clauses; authored clause IDs stay intact.
+                            val subject = self.traitBoundTypeTerm(ref: self.groundTermInEnvironment(ref: bound.paramTy, params: [], values: [], selfRef: traitBound.subject), bound: traitBound, traitIndex: traitIndex)
+                            val constraint = self.traitConstraintInBound(constraint: self.groundTraitConstraintInEnvironment(constraint: bound.constraint, params: [], args: [], selfRef: traitBound.subject), bound: traitBound, traitIndex: traitIndex)
+                            val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: subject, constraint: constraint, assumptions: assumptions)
                             if self.proofIsMissing(proof: proof) {
                                 return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation requires a trait constraint not guaranteed by the requirement") />
                             }

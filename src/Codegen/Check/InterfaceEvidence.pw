@@ -5,6 +5,9 @@ impl Comp {
         if index >= self.interfaceEvidence.count() { return false }
         match self.interfaceEvidence[index]->node {
             InterfaceEvidenceNode.Source(root: val root) => { return root.session == self.sourceFacts.session }
+            InterfaceEvidenceNode.Contract(root: val root) => {
+                return root.session == self.sourceFacts.session && root.traitIndex < self.decls.traitCount() && root.slot != 0U64 && root.slot <= self.decls.traitAt(index: root.traitIndex).reqs.count() && root.bound.constraint.key.owner == self.decls.traitAt(index: root.traitIndex).nameStart
+            }
             InterfaceEvidenceNode.Instance(root: val root, owner: val owner, bound: _) => {
                 if root == 0U64 || root > self.interfaceEvidence.count() { return false }
                 match owner {
@@ -13,7 +16,7 @@ impl Comp {
                 }
                 match self.interfaceEvidence[root - 1U64]->node {
                     InterfaceEvidenceNode.Source(root: val source) => { return source.session == self.sourceFacts.session }
-                    InterfaceEvidenceNode.Instance(root: _, owner: _, bound: _) => { return false }
+                    InterfaceEvidenceNode.Contract(root: _) | InterfaceEvidenceNode.Instance(root: _, owner: _, bound: _) => { return false }
                 }
             }
         }
@@ -23,6 +26,7 @@ impl Comp {
         if !self.interfaceEvidenceIsValid(index: index) { return self.missingTraitBound() }
         return match self.interfaceEvidence[index]->node {
             InterfaceEvidenceNode.Source(root: val root) => root.bound,
+            InterfaceEvidenceNode.Contract(root: val root) => root.bound,
             InterfaceEvidenceNode.Instance(root: _, owner: _, bound: val bound) => bound,
         }
     }
@@ -30,7 +34,7 @@ impl Comp {
     fn interfaceSourceRoot(index: U64) -> U64 {
         if !self.interfaceEvidenceIsValid(index: index) { return 0U64 }
         return match self.interfaceEvidence[index]->node {
-            InterfaceEvidenceNode.Source(root: _) => index + 1U64,
+            InterfaceEvidenceNode.Source(root: _) | InterfaceEvidenceNode.Contract(root: _) => index + 1U64,
             InterfaceEvidenceNode.Instance(root: val root, owner: _, bound: _) => root,
         }
     }
@@ -48,7 +52,22 @@ impl Comp {
         }
         val root = self.interfaceSourceRoot(index: index)
         val source = match self.interfaceEvidence[root - 1U64]->node {
-            InterfaceEvidenceNode.Source(root: val source) => source,
+            InterfaceEvidenceNode.Source(root: val source) => {
+                match scope.origin {
+                    DeclarationScopeOrigin.Lexical => {}
+                    DeclarationScopeOrigin.InterfaceContract => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "source-call evidence cannot authorize an interface contract") /> }
+                }
+                give source
+            }
+            InterfaceEvidenceNode.Contract(root: _) => {
+                match scope.origin {
+                    DeclarationScopeOrigin.InterfaceContract => {
+                        if scope.owner != 0U64 || scope.parameters.len != 0U64 || scope.selfParameter != 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface contract borrowed a lexical declaration scope") /> }
+                        return <Result.Ok value=() />
+                    }
+                    DeclarationScopeOrigin.Lexical => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface-contract evidence cannot authorize a source call") /> }
+                }
+            }
             InterfaceEvidenceNode.Instance(root: _, owner: _, bound: _) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface assumption has no source root") /> },
         }
         val lexical = try self.declarationTypeScope(owner: source.site.ownerFnIdx)
@@ -113,7 +132,7 @@ impl Comp {
                 }
                 return <Result.Ok value=source />
             }
-            InterfaceEvidenceNode.Instance(root: _, owner: _, bound: _) => { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "source interface cannot use an instantiated proof root") /> }
+            InterfaceEvidenceNode.Contract(root: _) | InterfaceEvidenceNode.Instance(root: _, owner: _, bound: _) => { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "source interface requires its original source-call proof root") /> }
         }
     }
 
@@ -124,13 +143,17 @@ impl Comp {
 
     inout fn sourceInterfaceSignatureBounds(template: CallTemplate, root: U64, traitIndex: U64, slot: U64) -> Result[Array[TraitBound], CompileDiagnostic] {
         val source = try self.requireSourceInterfaceRoot(root: root, site: template.siteKey, receiver: template.receiverTypeTerm, traitIndex: traitIndex)
+        return self.interfaceSignatureBounds(root: root, bound: source.bound, traitIndex: traitIndex, slot: slot, offset: template.siteKey.originStart)
+    }
+
+    inout fn interfaceSignatureBounds(root: U64, bound: TraitBound, traitIndex: U64, slot: U64, offset: U64) -> Result[Array[TraitBound], CompileDiagnostic] {
         val trait = self.decls.traitAt(index: traitIndex)
         if slot == 0U64 || slot > trait.reqs.count() {
-            return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected interface has no retained requirement") />
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected interface has no retained requirement") />
         }
         val requirement = self.traitReqAt(reqs: trait.reqs, index: slot - 1U64)
         val proof = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Interface index=root - 1U64 /> />
-        val signature = <SourceCallSignature.Trait bound=source.bound traitIndex=traitIndex environment=<InstanceEnvironment receiverRef=source.bound.subject proof=proof /> />
+        val signature = <SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=<InstanceEnvironment receiverRef=bound.subject proof=proof /> />
         mut val bounds: Array[TraitBound] = []
         mut val index = 0U64
         while index < requirement.signatureBounds.len {
@@ -276,5 +299,48 @@ impl Comp {
             superIndex += 1U64
         }
         return <Result.Ok value=() />
+    }
+}
+
+// A table member's public contract has no enclosing source-call owner. Its
+// explicit scope admits only the interface and its declared associated facts.
+impl Comp {
+    inout fn createInterfaceContractRoot(target: U64, traitIndex: U64, slot: U64) -> Result[U64, CompileDiagnostic] {
+        if target == 0U64 || target >= self.arena.typeCount() || !self.arena.typeTerms[target].isAny || !self.arena.typeIsClosed(ref: target) || traitIndex >= self.decls.traitCount() || slot == 0U64 || slot > self.decls.traitAt(index: traitIndex).reqs.count() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface member contract has no closed target or requirement") />
+        }
+        val constraint = self.existentialTraitConstraint(ref: target)
+        if constraint.key.owner != self.decls.traitAt(index: traitIndex).nameStart { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface member contract belongs to another trait") /> }
+        val parameter = self.nextParamId
+        self.nextParamId += 1U64
+        val name = self.internTmpName(prefix: "InterfaceContractSelf", n: parameter)
+        val subject = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=parameter args=[] />)
+        val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
+        val bound = <TraitBound subject=subject constraint=constraint offset=requirement.nameStart />
+        self.interfaceEvidence.append(<Ref value=<InterfaceEvidenceCell node=<InterfaceEvidenceNode.Contract root=<InterfaceContractRoot session=self.sourceFacts.session receiver=target traitIndex=traitIndex slot=slot bound=bound /> /> /> />)
+        return <Result.Ok value=self.interfaceEvidence.count() />
+    }
+
+    inout fn interfaceMethodConditions(target: U64, traitIndex: U64, requirement: U64) -> Result[Optional[ExistentialMethodConditions], CompileDiagnostic] {
+        if traitIndex >= self.decls.traitCount() || requirement >= self.decls.traitAt(index: traitIndex).reqs.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface member has no selected requirement") /> }
+        val declaration = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: requirement)
+        if declaration.signatureBounds.len == 0U64 { return <Result.Ok value=<Optional.Some v=<ExistentialMethodConditions root=0U64 bounds=[] proofs=[] /> /> /> }
+        val root = try self.createInterfaceContractRoot(target: target, traitIndex: traitIndex, slot: requirement + 1U64)
+        val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.InterfaceContract /> owner=0U64 parameters=<FuncBindRange start=0U64 len=0U64 /> interfaceRoot=root />
+        val bounds = try self.interfaceSignatureBounds(root: root, bound: self.interfaceEvidenceBound(index: root - 1U64), traitIndex: traitIndex, slot: requirement + 1U64, offset: declaration.nameStart)
+        val source = <DeclarationBoundRef.Interface index=root - 1U64 />
+        mut val assumptions: Array[DeclarationBoundRef] = [source]
+        try self.appendInterfaceAssociatedAssumptions(source: source, steps: [], assumptions: inout assumptions)
+        mut val proofs: Array[U64] = []
+        for bound in bounds {
+            val proof = match (try self.queryViewedTraitConstraint(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)) {
+                ConformanceProofResult.Found(proof: val proof) => proof,
+                ConformanceProofResult.Missing | ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { return <Result.Ok value=<Optional.None /> /> },
+            }
+            try self.checkDeclarationCallProof(proof: proof, scope: scope, offset: bound.offset)
+            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: bound.offset)
+            proofs.append(self.freezeStaticConformanceProof(proof: proof))
+        }
+        return <Result.Ok value=<Optional.Some v=<ExistentialMethodConditions root=root bounds=bounds proofs=proofs /> /> />
     }
 }
