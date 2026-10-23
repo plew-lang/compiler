@@ -69,3 +69,36 @@ finite instance enumeration, normal applicability and full selected proof
 admission through final use. It depends on this classification; met-6e6k and
 G1 explicitly depend on the repair. No area/parent closure or compiler rewrite
 is inferred from the investigation. Independent classification review is pending.
+
+## Independent Classification Review and Stop
+
+`/root/c2_classification_review` reviewed 80cebe44 disposition and the saved
+checks, independently matching all eight input hashes, carrier and four source
+files. Verdict: projected-path classification is valid; it does not certify the
+unperformed repair. The planned projected repair child/dependencies are correct.
+
+An additional ordinary generic receiver contrast found the same first-instance
+selection without an associated projection:
+
+```plew
+trait Convert[Input] { fn convert(value: Input) -> I64 }
+fn probe[T](value: T) -> I64 where T: Convert[I64], T: Convert[Bool] {
+    return value.convert(value: true)
+}
+fn main() {}
+```
+
+The fresh compiler rejects this with a type mismatch. Bounds.staticMemberResolution
+returns the first assumption's selectStaticRequirement result, even its fallback
+rank, without reconciling later input instances. The reviewer confirms that B1's
+saved-reader boundary, B3/B4 and the projected-only C2/repair allocation do not
+own the complete ordinary source-candidate frontier. This is a newly evidenced
+mandatory task-allocation omission, distinct from C2's anticipated projected
+repair disposition. Under the user's explicit stop condition, implementation
+has stopped before widening a task or introducing a second solver.
+
+met-ucze is reopened; met-6e6k/G1 remain blocked on com-4kti and the unresolved
+allocation. C2 stays in_progress until the required disposition is fully owned.
+The proposed correction is recorded in com-4kti for user review; no compiler
+source was changed during this investigation. Existing valid child evidence is
+preserved and no final parent/gate acceptance is claimed.

@@ -42,3 +42,39 @@ Recheck existing associated_projection_constraint_identity and
 source_selected_witness_owner_evidence. Record actual removed first-hit paths,
 fresh source/candidate/input hashes, and independent completion review here.
 Final normal/gen/deps/sanitizer/fixed-point/performance gates remain G2a/G2b.
+
+## Proposed Scope Correction — Awaiting User Decision
+
+**Do not implement the projected-only fix before this allocation is resolved.**
+C2's independent review found the same first-candidate source bug on ordinary
+opaque generic receivers in staticMemberResolution. That frontier was omitted
+from the current bounded task ownership; this is the user's task-plan stop
+condition. Existing projected-only scope above is not silently expanded.
+
+Recommended correction: one bounded repair owns the shared source-candidate
+frontier for ordinary and associated-projection receivers:
+
+1. Form the finite set of distinct complete positional trait instances available
+   for receiver/member under the explicit lexical premises, selected sources and
+   retained associated/supertrait prerequisites. An Existence probe cannot choose
+   the one instance that supplies all later call meaning.
+2. Apply common callable applicability to the candidates using available argument
+   types/labels/modes; reject indistinguishable input-instance alternatives. Do
+   not filter independent source ambiguity away by associated output expectations.
+3. Admit the selected complete instance through the common SourceAdmission path,
+   preserving exact opaque premises, duplicate-premise equivalence, selected
+   views and independent-path ambiguity. Publish that declaration/instance/proof
+   once; both worklists and final Mid/backend use it.
+4. Replace both first-return source frontiers. Verify both receiver families with
+   bound-order inversions, unique typed operands, no-operand ambiguity, duplicate
+   premises, independent trait-subject paths, output mismatch and an actual
+   concrete native result. Retain fresh input/candidate fingerprints and an
+   independent completion review.
+
+No language-specification or ABI change is proposed. The change is to execution
+task ownership and shared implementation scope. Before resuming, approve/update
+this task's entry/action/acceptance and connect it to reopened met-ucze as well as
+met-6e6k/G1; leave B1/B3/B4's valid narrower evidence intact. If implementation
+analysis cannot keep this as one finite shared-frontier repair, stop to split
+concrete independently closable changes rather than turn it into a new solver
+redesign. Current compiler production remains 51e19101.
