@@ -1,6 +1,6 @@
 ---
 id: com-qb05
-status: in_progress
+status: closed
 deps: [com-qehq]
 links: []
 created: 2026-10-23T10:41:58Z
@@ -38,45 +38,71 @@ current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
 
-## Current Increment
+## Outcome
 
-B0 identified the live `Verify/Call.pw::checkCallArgCategories` rescan. Its
-ordinary-call caller re-enumerates visible free functions instead of reading
-the selected call; in particular it can check a lexical closure invocation
-against an unrelated free function with the same spelling. The existing
-`resolvedCallee` source selector already explicitly gives a lexical function
-binding precedence, so preserving that decision needs no new shadowing rule.
+Resolved the scoped written-call boundary at source/test **2d7e4d2f**.
+[The receipt](https://github.com/plew-lang/meta/blob/main/evidence/existing-feature-conformance/source-owner-facts/phase3b-static-call-closure.json)
+pins the saved fresh compiler SHA256
+`62ded91b39e3cfe348e370d4587074899b4c0647da464b4c70f30ef7b536aa16`,
+source/control hashes, both pre-change counterexamples, standard build,
+scoped execution results and remaining gate scope.
 
-The new `selected_call_verify_shadow` run control fails with saved 3A compiler
-SHA256 `dac32dca0bbb99c8e1da5469035ae67fca18e50fde4b04fcaec25855a964345b`
-at the callback parameter's invocation, exit 1/type mismatch. It covers a
-callback parameter, generic callback, a local function value, a nested closure
-and an actual unshadowed free call. Raw pre-change output is in
-`tmp/phase3b-static-calls/fixture-before.stderr`.
+### Removed Competing Decisions
 
-Remove the competing Verify helper/call. Keep operand traversal and the existing
-selected template admission (`checkCallTemplateSelection`,
-`checkSourceDirectCallArguments` / `checkSourceStaticCallArguments`, constraints),
-which validates the full chosen signature before owner publication. This is
-not a claim that the deletion alone closes B1: fresh normal/method/factory
-positive, label/type/passing/bound and missing-fact controls plus final-reader
-inspection remain required. No Mid/LLVM selection implementation is replaced.
+- `Verify/Expr.pw::verifyExpr` now traverses free-call operands without calling
+  the removed `Verify/Call.pw::checkCallArgCategories`. That helper enumerated
+  visible same-named free functions after Record had selected a lexical closure;
+  it could reject a valid callback against the unrelated free signature.
+- `Check/Call.pw::checkMethodArgs` no longer assigns Dictionary argument types
+  from receiver spelling and the labels `key` / `value` / `fallback`. A valid
+  Dictionary conformance can declare `echo(key: I64)` even if its Key is String.
+  Its selected method environment is the authority, just as for other receivers.
 
-The first fresh build (`20261023T115201-build-f00e74`, a1516944) succeeded,
-but the newly authored shadow fixture incorrectly expected Bool `print` to
-spell `true`. Its program exited 0 and produced the correct callback results;
-the fixture now checks that Bool directly and prints a neutral marker. This
-new, never-green fixture correction changes no language rule.
+Both are actual reproduced false rejections, not hypothetical cleanup. The new
+run fixtures `selected_call_verify_shadow` and
+`dictionary_selected_method_signature` execute the corrected behavior. The
+newly authored shadow fixture initially guessed Bool output text incorrectly;
+its final form tests the returned Bool directly and prints a neutral marker.
+No existing test's input, expected outcome or diagnostic was weakened.
 
-Further B1 inspection found `Check/Call.pw::checkMethodArgs` inferring
-Dictionary argument types from `key` / `value` / `fallback` labels. A valid
-`impl[Key, Value] Dictionary[Key, Value] as NumberKey` with `echo(key: I64)`
-is rejected for `Dictionary[String, I64]`, even though its selected signature
-explicitly takes I64. The a1516944 fresh compiler reproduces the rejection
-(exit 1/type mismatch); the raw control is
-`tmp/phase3b-static-calls/DictionarySelectedMethod.pw` and `dictionary-before.stderr`.
-Remove that spelling/label special case and use the already grounded selected
-method environment. `dictionary_selected_method_signature` protects this
-conformance plus ordinary `getOr` typing; existing Dictionary key/value rejects
-remain mandatory controls. This is a second competing signature authority,
-within B1's existing method boundary, not a new feature or a new work bucket.
+### Producer Through Final Use
+
+| Written family | Source admission and saved authority | Instance and final consumption | Decisive controls |
+|---|---|---|---|
+| Ordinary | `Record.pw::recordFreeCallExpression` / `recordParametricFreeCall` → `Resolve/Expr.pw::recordSemanticExprCall` retain declaration, argument mapping and caller-owned substitution/result. Generic reads `checkRecordedDirectCallArguments`. `checkCallTemplateSelection` plus `checkSourceDirectCallArguments` and source constraint admission validate the chosen signature before owner publication. | `Mono/Call.pw::resolveBodyCallee` → `selectDirectTemplateCall` grounds saved terms; `enqueueSelectedCallee` passes retained constraints to the actual body; `completeStaticBodyCallee` consumes its prepared signature and checks conversions/result projection. Mid and LLVM use the final site/resolution, never another source name search. | New same-name closure control; `prepared_call_expression_source`; wrong labels in called/unused/generic-unused bodies; concrete wrong types, missing bounds and unique/inout rejects. |
+| Method / view | `recordParametricMethodCall` / `recordUnresolvedMethodTemplate` commit Direct or selected StaticMethod. Generic's `checkSymbolicMethodArgs` and Verify's `verifyRecordedMethodCall` read the selected declaration/requirement. `recordedDirectCallEnvironment` / source static signature admission retain impl/method substitution. Source mode/place checking remains `checkArgInoutMode` / `checkUniqueArgModes`; no Dictionary-label type override survives. | `selectDirectTemplateCall` / `selectStaticMethodTemplateCall` instantiate the saved target. Exact requirement implementation selection is legitimate first concrete realization, not another overload competition. The same prepared BodySignature/final CallResolution feeds Mid/LLVM. | `verify_call_selected_authority` changes method/view spelling after selection and rejects a missing selection; `generic_call_selected_authority`; `recorded_method_result_authority`; new Dictionary conformance control plus ordinary Dictionary key/value rejects; method label/type/bound and receiver-mode controls. |
+| Factory / default | `Resolve/Global.pw::prepareFactoryConstruction` records a selected synthetic factory call, then uses the same method admission. Pure memberwise/enum aggregates remain a separate construction. `Defaults.pw::recordDefaultArgumentCall` produces selected generator calls with distinct origins and lexical environment. | The static tail above prepares the actual factory/generator. `Mid/Build.pw::buildMidCallEvaluation` consumes saved parameter mapping/evaluation order; `Mid/Instantiate.pw::instantiateCanonicalCallTarget` resolves the saved site; `Backend/Llvm/Mid.pw::midCanonicalEmitDirectCall` emits the recorded callee/signature. | `factory_type_overload`, `factory_receiver_type_overload`, `generic_factory_default_selector`, `default_argument_call_templates`, `default_eval_order_method`; supplemental conditional-conformance factory with valid/missing bound, wrong label/type and valid borrow/bare-unique rejects, including actual native results. |
+
+`prepareLexicalBodyUncached` still performs one Record construction, generic
+compatibility and Verify operand/receiver checks, then complete defaults,
+conversions, call signatures/constraints and source obligations before owner
+success. Those compatibility/operand walks retain their checks; none may
+select a different callable. D3 retains the separate write-authority audit.
+`source_call_proof_boundary`, `source_call_constraint_evidence`,
+`source_call_proof_evidence`, `call_template_seal` and
+`source_operation_owner_storage` verify malformed/missing/foreign evidence,
+unresolved or absent selections, and post-success/failure write rejection.
+`finalStaticCalleeIsComplete` checks final descriptor closure; it is not the
+source checker. No new AST/name fallback or public writer was added.
+
+### Scoped Verification and Remaining Ownership
+
+Standard build **20261023T115854-build-8e602a**: exit 0, unchanged inputs.
+The exact saved fresh compiler passes **20 native golden controls**, **34
+expected rejects** (no internal diagnostics), and `--check src/_.pw` (exit 0).
+The main focused batch has 18 native/27 rejects; a supplemental factory/label
+batch adds 2 native/7 rejects. All 260 focused fingerprints and 5,760 recorded
+build input files still match after execution, including pinned dependencies.
+Every child process was watched through the existing watchdog and collected.
+Raw artifacts: `tmp/phase3b-static-calls/`; saved compiler:
+`bin/plewc-phase3b-signatures`. Test selection is diagnostic because the standard
+suite entry has no per-case filter; it substitutes for no final gate.
+
+This closes B1's three written-call paths, not the whole type checker. B2 owns
+operator/protocol/try projections; B3 owns retained clause/ParamId/physical-Self
+and provided-proof completion; B4 owns universal interface admission; C4/C6
+own their result/descriptor boundaries; D3 owns final operation API audit.
+Normal/gen/deps/full ASan-LSan and fixed-point/formal performance remain G2a/G2b.
+No timing was measured or attributed to this candidate; the f67c8fce formal
+6.815672-second median remains a historical baseline. Main/seed/carrier are
+unchanged. Next selection belongs to worklog, not this closed task.
