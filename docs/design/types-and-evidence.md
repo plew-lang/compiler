@@ -73,6 +73,16 @@ View-dependent queries preserve the normalized extension source set and separate
 
 Runtime existential evidence supports dynamic dispatch. It is not static entailment for an arbitrary generic bound. Boxing a concrete value into `any P` retains the exact static conformance used to build its runtime evidence; backend witness construction must consume that selection rather than perform another source search.
 
+An existential interface's hidden Self is a rigid, universally scoped subject.
+Its exact interface premise, declared supertraits and associated constraints are
+retained guarantees; caller-owned types and premises remain explicit and separate.
+Erasing to any P is not a #P selector for other traits. A trait-subject edge
+impl P as Q alone does not guarantee a unique Q conformance for every possible
+hidden conformer: another subject path may compete. Such an edge cannot silently
+satisfy a hidden-Self method condition. Declaring P:Q makes that Q promise part of
+the interface contract and requires conformers to establish it. Unavailable
+members do not prevent existential formation.
+
 ### Capability and Conditional-Selection Contracts
 
 The [language capability rules](https://github.com/plew-lang/spec/blob/main/spec/02-type-system/06-generics.md) for copyable / unique / allowunique extend the same evidence pipeline. They do not authorize a second source selector in Mid or the backend.

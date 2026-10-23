@@ -117,6 +117,16 @@ At existential injection, conformance preparation fixes the concrete witness and
 
 This closes the semantic producer-to-consumer handoff. Runtime-only opened Self additionally requires the [prepared execution bridge](#runtime-opened-self-execution-bridge); semantic evidence alone is not executable code.
 
+For an existential method's conditions, distinguish a universally guaranteed
+hidden Self from an ordinary generic subject awaiting concrete substitution.
+Existential erasure grants no implicit trait-source preference. Consume the exact
+interface/supertrait/associated guarantees rather than treating an arbitrary
+trait-subject derivation as a universal uniqueness certificate. Body instantiation
+must preserve that scope; boxing maps guarantees through its selected witness and
+retained requirement-to-implementation derivation. It must neither turn an
+unavailable member into an unconditional body request nor use Declaration as a
+fallback for a promised member's missing evidence.
+
 ## 6. Signatures, Adapters, and Returns
 
 Instance body construction reads the saved source-body receiver, parameters and logical result contract under the instance environment. The declaration's callable interface remains a separate input for call-boundary checking. A dispatch receiver pattern is not automatically the body receiver type, and a logical source result need not equal a carrier's ABI result.
