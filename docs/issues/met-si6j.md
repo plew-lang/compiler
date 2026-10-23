@@ -69,6 +69,16 @@ authority. Completion of 3A does not close met-6e6k's remaining 3C scope.
 The [independent completion review](com-h4pz.md#outcome) also accepts 3A's
 closure; it does not discharge any later step.
 
+**Work-breakdown review: replanning required before further implementation.**
+The [independent task-granularity review](com-hxtr.md#outcome) finds that 3B–3F
+are still broad workstreams, not executable few-day child tasks. Their rows below
+retain scope/ordering obligations but are not a sufficiently concrete backlog.
+First reconcile 3B's current path inventory and define its first bounded closure
+task; do the same for later areas before editing them. Actual task dependencies,
+mode/historical evidence ownership and slice versus final-gate obligations must
+be made explicit. Do not infer that all tasks are adequately cut from the
+eleven-criterion mapping alone. 3A completion and the eleven criteria stand.
+
 | Step | Owning issues and existing progress | Remaining work and exit condition |
 |---|---|---|
 | 3A. Finish the current enum-construction increment | [met-6e6k](met-6e6k.md#field-driven-enum-construction-inference). Shared struct/enum field inference and focused native positive/reject controls exist. | Apply the approved test cleanup: consolidate ordinary array safety in runtime coverage, remove the redundant unused valid-input guard, retain genuinely invalid unused-body and uninferred-construction rejection. Register applicable sanitizer coverage. Build the latest source and verify inferred/explicit/conflicting/unresolved cases, multiple elements and String cleanup. Do not attribute the earlier fresh binary to subsequent source edits. |
