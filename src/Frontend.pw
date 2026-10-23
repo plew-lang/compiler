@@ -190,6 +190,20 @@ struct DeclarationTypeDependencies {
     val interfaceScoped: Bool = false
 }
 
+// Scope integrity is fallible; lack of a universally promised condition is a
+// separate result, so it cannot turn legal existential formation into failure.
+struct DeclarationProofDependencies {
+    val caller: Bool = false
+    val unguaranteedInterface: Bool = false
+}
+impl DeclarationProofDependencies {
+    factory
+    fn merged(other: DeclarationProofDependencies) -> DeclarationProofDependencies {
+        return <DeclarationProofDependencies caller=(self.caller || other.caller) unguaranteedInterface=(self.unguaranteedInterface || other.unguaranteedInterface) />
+    }
+}
+
+
 struct InterfaceEvidenceRoot {
     val session: U64
     val owner: SemanticCompletionOwner

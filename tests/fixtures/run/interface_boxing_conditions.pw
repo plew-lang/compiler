@@ -5,13 +5,14 @@ use /Diag only { emitDiagnostic }
 use /Ir only { TraitBound, StaticConformanceProof, DeclarationBoundRef, ValueConversionProof }
 use @Std/Io only { print }
 fn main() {
-    val program = "trait Marker {{ fn number() -> I64 }}\ntrait Flag {{ fn flag(number: I64) -> I64 }}\nstruct Value {{}}\nimpl Value as Marker {{ fn number() -> I64 {{ return 42I64 }} }}\nstruct Enabled {{}}\nimpl Enabled as Flag {{ fn flag(number: I64) -> I64 {{ return number }} }}\ntrait Service: Marker {{ fn get() -> I64 where Self: Marker }}\nimpl Value as Service {{ fn get() -> I64 where Self: Marker {{ return self.number() }} }}\nnewtype Wrapped = Value\nnewtype Outer = Wrapped\ntrait Absent {{}}\ntrait Unavailable {{ fn get() -> I64 where Self: Absent }}\nstruct Other {{}}\nimpl Other as Unavailable {{ fn get() -> I64 {{ return 0I64 }} }}\ntrait Items {{ type Item: Marker fn get(item: Item) -> I64 where Item: Marker }}\nstruct Storage[T] {{}}\nimpl[T] Storage[T] as Items where T: Marker {{\n    type Item = T\n    fn get(item: T) -> I64 where T: Marker {{ return item.number() }}\n}}\ntrait PairService {{\n    type Left\n    type Right\n    fn get(left: Left, right: Right) -> I64 where Left: Marker, Right: Flag\n}}\nstruct Pair[L,R] {{}}\nimpl[L,R] Pair[L,R] as PairService {{\n    type Left = L\n    type Right = R\n    fn get(left: L, right: R) -> I64 where R: Flag, L: Marker {{ return right.flag(number: left.number()) }}\n}}\nfn service(value: any Service) -> I64 {{ return value.get() }}\nfn item(value: any Items[Item=Value]) -> I64 {{ return value.get(item: <Value />) }}\nfn pair(value: any PairService[Left=Value,Right=Enabled]) -> I64 {{ return value.get(left: <Value />, right: <Enabled />) }}\nfn main() {{\n    val unavailable: any Unavailable = <Other />\n    val first = service(value: <Value />)\n    val wrapped = <Value /> as Wrapped\n    val secondWrapper = wrapped as Outer\n    val inherited = service(value: wrapped)\n    val nestedInherited = service(value: secondWrapper)\n    val second = item(value: <Storage[Value] />)\n    val third = pair(value: <Pair[Value,Enabled] />)\n}}\n"
+    val program = "trait Marker {{ fn number() -> I64 }}\ntrait Flag {{ fn flag(number: I64) -> I64 }}\nstruct Value {{}}\nimpl Value as Marker {{ fn number() -> I64 {{ return 42I64 }} }}\nstruct Enabled {{}}\nimpl Enabled as Flag {{ fn flag(number: I64) -> I64 {{ return number }} }}\ntrait Service: Marker {{ fn get() -> I64 where Self: Marker }}\nimpl Value as Service {{ fn get() -> I64 where Self: Marker {{ return self.number() }} }}\nnewtype Wrapped = Value\nnewtype Outer = Wrapped\ntrait Absent {{}}\ntrait Unavailable {{ fn get() -> I64 where Self: Absent }}\nstruct Other {{}}\nimpl Other as Unavailable {{ fn get() -> I64 {{ return 0I64 }} }}\nstruct Envelope[T] {{}}\nimpl[T] Envelope[T] as Marker {{ fn number() -> I64 {{ return 42I64 }} }}\ntrait NominalUnavailable {{ fn getNominal() -> I64 where Envelope[Self]: Marker }}\nimpl Other as NominalUnavailable {{ fn getNominal() -> I64 {{ return 0I64 }} }}\ntrait Items {{ type Item: Marker fn get(item: Item) -> I64 where Item: Marker }}\nstruct Storage[T] {{}}\nimpl[T] Storage[T] as Items where T: Marker {{\n    type Item = T\n    fn get(item: T) -> I64 where T: Marker {{ return item.number() }}\n}}\ntrait PairService {{\n    type Left\n    type Right\n    fn get(left: Left, right: Right) -> I64 where Left: Marker, Right: Flag\n}}\nstruct Pair[L,R] {{}}\nimpl[L,R] Pair[L,R] as PairService {{\n    type Left = L\n    type Right = R\n    fn get(left: L, right: R) -> I64 where R: Flag, L: Marker {{ return right.flag(number: left.number()) }}\n}}\nfn service(value: any Service) -> I64 {{ return value.get() }}\nfn item(value: any Items[Item=Value]) -> I64 {{ return value.get(item: <Value />) }}\nfn pair(value: any PairService[Left=Value,Right=Enabled]) -> I64 {{ return value.get(left: <Value />, right: <Enabled />) }}\nfn main() {{\n    val unavailable: any Unavailable = <Other />\n    val nominalUnavailable: any NominalUnavailable = <Other />\n    val first = service(value: <Value />)\n    val wrapped = <Value /> as Wrapped\n    val secondWrapper = wrapped as Outer\n    val inherited = service(value: wrapped)\n    val nestedInherited = service(value: secondWrapper)\n    val second = item(value: <Storage[Value] />)\n    val third = pair(value: <Pair[Value,Enabled] />)\n}}\n"
     mut val compiler = <Comp />
     match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text=program path="boxing-conditions.pw" />, sources: <SourceAccess />) {
         Result.Ok(value: _) => {}
         Result.Err(error: val error) => { emitDiagnostic(diagnostic: error) panic(error.message) }
     }
     val unavailable = compiler.internBytes(s: "Unavailable").nameId
+    val nominalUnavailable = compiler.internBytes(s: "NominalUnavailable").nameId
     mut val inactive = 0U64
     mut val active = 0U64
     for resolution in compiler.arena.finalExistentials {
@@ -20,7 +21,7 @@ fn main() {
         if compiler.finalizeConversionDependencies(conversion: <ValueConversionProof.ExistentialBox sourceRef=resolution.sourceRef targetRef=resolution.targetRef traitIdx=resolution.traitIdx proof=<StaticConformanceProof.Missing /> />).isOk() { panic("cached boxing repaired missing conformance evidence") }
         if compiler.finalizeConversionDependencies(conversion: <ValueConversionProof.ExistentialBox sourceRef=resolution.sourceRef targetRef=resolution.targetRef traitIdx=compiler.decls.traitCount() proof=resolution.proof />).isOk() { panic("cached boxing accepted a foreign interface") }
         for member in resolution.members {
-            if declaration.nameId == unavailable {
+            if declaration.nameId == unavailable || declaration.nameId == nominalUnavailable {
                 if member.bodyId != 0U64 || member.adapterBodyId != 0U64 { panic("unavailable member requested an executable body") }
                 inactive += 1U64
             } else {
@@ -81,7 +82,7 @@ fn main() {
             }
         }
     }
-    if inactive != 1U64 || active != 5U64 { panic("boxing condition controls did not cover each member") }
+    if inactive != 2U64 || active != 5U64 { panic("boxing condition controls did not cover each member") }
     val main = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
     match CompilerSession.open(input: <FrontendInput.Text text=program path="boxing-conditions-mid.pw" />, sources: <SourceAccess />) {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) panic(diagnostic.message) }

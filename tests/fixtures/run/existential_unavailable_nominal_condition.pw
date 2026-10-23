@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+struct Envelope[T] {}
+trait Marker {}
+impl[T] Envelope[T] as Marker {}
+trait Service { fn get() -> I64 where Envelope[Self]: Marker }
+struct Value {}
+impl Value as Service { fn get() -> I64 { return 42I64 } }
+fn main() {
+    val value: any Service = <Value />
+    print("boxed")
+}
