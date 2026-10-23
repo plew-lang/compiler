@@ -1,6 +1,6 @@
 ---
 id: com-17yh
-status: in_progress
+status: closed
 deps: [com-qehq]
 links: []
 created: 2026-10-23T10:41:58Z
@@ -56,5 +56,29 @@ statement slot before the actual caller/Mid/LLVM controls below.
 
 These are instance handoff/removal changes, not new source inference or a
 language rule. Operator result projections remain explicit. Fresh validation
-of operator/protocol/try families and full compiler source is pending. C4
+of operator/protocol/try families and full compiler source succeeded. C4
 still owns the general recipe/result audit and B3 the real callee environments.
+
+## Outcome
+
+Closed at source/test revision a0e04c49. Evidence is
+`meta/evidence/existing-feature-conformance/source-owner-facts/phase3b-implicit-call-closure.json`.
+The fresh candidate `bin/plewc-phase3b-implicit` has SHA256
+`f9ee3c792d47d2fb302e2254e1030ab54ee4be5375523de1cb2d26aa3262615b`.
+Standard build 20261023T122609-build-f6ff5b and fresh full compiler `--check`
+passed. All 31 native golden and 26 expected-rejection controls passed; reject
+controls emitted no internal errors. All 290 scoped and 5,764 build input
+fingerprints still matched after execution. Build/source-check/focused sessions
+74165/70853/29318 were recovered through exit zero.
+
+| Family | Producer and final readers | Decisive controls |
+| --- | --- | --- |
+| Operators | Resolve/Expr recordOperatorTemplate and prepared source expression; Check/Infer saved operator signature; Mono recordBodyOperatorCallee; Mid canonical call target; LLVM explicit result projection | distinct/nested Output and heterogeneous Rhs, generic bound/trait identity, ambiguity/range rejection, custom Ord/Ne, corrupt operand pool range |
+| Iteration | Resolve/Record For recipes and protocol slots 1/2; Check/Bounds closed nominal requirement; Mono selectedProtocolTemplateCall and saved receiver dependency; Mid For recipe/target | saved concrete result and statement slot, generic/associated Item, conditional bounds, existential iteration; structural next-only/unbound/mismatched Item rejection |
+| try | Resolve/Expr recordTryExpression saves Result decomposition and optional From slot 1; Verify consumes saved fact; Mono registerTryConversion; Mid materializeMidTry/canonical target | identity, overload selection, generic From and error argument; missing/wrong obligation and error type rejection |
+
+The source audit confirms no ProtocolSelection.Direct path remains. No candidate
+name search is introduced by these implicit finalizers. Statement-key identity
+and result projections are retained. General result-recipe audit belongs to C4,
+actual callee/provided environments to B3, universal dynamic evidence to B4.
+No formal timing, fixed point, whole-suite or sanitizer completion is claimed.
