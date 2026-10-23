@@ -24,11 +24,11 @@ included. Split or block a newly evidenced larger repair before widening this ta
 
 Entry points: `src/Codegen/Resolve/Record.pw`; `src/Codegen/Resolve/Expr.pw`.
 
-At Record.recordExpr Expr.Array, retain an incoming valid element expectation; otherwise use a successfully recorded concrete earlier element as context for subsequent children. Do not read later elements to repair an earlier unknown, use an argument-less generic head as a completed type, or overwrite explicit/committed child types. Save the same Array[E] aggregate result and let ordinary compatibility reject conflicts.
+At Record.recordExpr Expr.Array, retain an incoming valid element expectation; otherwise use a successfully recorded, committed earlier element type as context for subsequent children, including a known type containing rigid lexical generic parameters. Do not read later elements to repair an earlier unknown, use an argument-less generic head as a completed type, or overwrite explicit/committed child types. Save the same Array[E] aggregate result and let ordinary compatibility reject conflicts.
 
 ## Exit and Evidence
 
-Add or consolidate controls: inferred Some then None succeeds; None first without incoming context rejects; annotated array permits None first; conflicting explicit element type rejects; direct versus block-wrapped elements agree under the same context. Verify actual multiple-element native values/layout and the saved aggregate path. A need to change the approved forward inference rule is a stop, not permission to broaden inference.
+Add or consolidate controls: inferred Some then None succeeds; None first without incoming context rejects; annotated array permits None first; conflicting explicit element type rejects; direct versus block-wrapped elements agree under the same context; a generic payload T still propagates Optional[T] without treating rigid T as an unresolved inference hole. Verify actual multiple-element native values/layout and the saved aggregate path. A need to change the approved forward inference rule is a stop, not permission to broaden inference.
 
 Existing starting controls: `generic_enum_field_inference`, `generic_enum_array`, `generic_enum_field_inference_unresolved`
 
