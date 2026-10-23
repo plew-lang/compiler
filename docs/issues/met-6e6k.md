@@ -147,6 +147,9 @@ enum inference, not this issue's other producer/descriptor audits in 3C.
 | Forward element context / raw type / conversion / descriptor paths | Separate remaining work, not discharged by Some inference. | Keep the observed forward-context gap and the broader path inventory for 3C; do not expand 3A or close this issue from its focused success. |
 
 The 3A exit items are discharged; proceed to 3B's selection/evidence inventory.
+The [independent three-reviewer completion audit](com-h4pz.md#outcome) accepts
+this scoped closure without blocking findings. General gen regression is not
+a dedicated forced-branch test for enum inference in the gen prepass.
 Keep this issue in_progress for 3C. Whole-parent normal/deps/full sanitizer and
 current formal performance gates remain 3G; prior f67c8fce gates are not assigned
 to this fresh binary. A new failure or changed input can require earlier gates.

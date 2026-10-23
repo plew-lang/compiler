@@ -66,6 +66,8 @@ the remaining work is to discharge their finite boundaries with evidence, not
 restart the migration or mark unchecked paths complete by inference. Next is 3B;
 repair a discovered prerequisite in its owning issue without creating a parallel
 authority. Completion of 3A does not close met-6e6k's remaining 3C scope.
+The [independent completion review](com-h4pz.md#outcome) also accepts 3A's
+closure; it does not discharge any later step.
 
 | Step | Owning issues and existing progress | Remaining work and exit condition |
 |---|---|---|
