@@ -1,0 +1,28 @@
+use @Std/Io only { print }
+
+trait First { fn read() -> I64 }
+trait Second { fn readOther() -> I64 }
+trait Service {
+    fn fetch[Left, Right](first: Left, second: Right) -> I64 where Left: First, Right: Second
+}
+
+struct FirstValue {}
+impl FirstValue as First { fn read() -> I64 { return 11I64 } }
+struct SecondValue {}
+impl SecondValue as Second { fn readOther() -> I64 { return 31I64 } }
+struct Worker {}
+impl Worker as Service {
+    // Both the binder names and the constraint order differ from the requirement.
+    fn fetch[Alpha, Beta](first: Alpha, second: Beta) -> I64 where Beta: Second, Alpha: First {
+        return first.read() + second.readOther()
+    }
+}
+
+fn invoke[Receiver, Input, Other](receiver: Receiver, first: Input, second: Other) -> I64
+    where Receiver: Service, Input: First, Other: Second {
+    return receiver.fetch(first: first, second: second)
+}
+
+fn main() {
+    print(invoke(receiver: <Worker />, first: <FirstValue />, second: <SecondValue />))
+}
