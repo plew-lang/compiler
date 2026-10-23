@@ -1,0 +1,1 @@
+trait Q {} trait P { fn get() -> I64 where Self: Q } impl P as Q {} fn probe(value: any P) -> I64 { return value.get() } fn main() {}

@@ -365,3 +365,21 @@ Rust's [coherence rules](https://doc.rust-lang.org/reference/items/implementatio
 reject overlapping impls rather than selecting competing paths. Plew preserves
 its explicit source selectors instead of importing either language's coherence
 model or introducing an implicit source choice at erasure.
+
+### Explicit Guarantee Admission Increment
+
+The common proof query does not extend universal interface premises through
+trait-subject edges. Integrity validation also rejects a forged universal
+trait-subject path or concrete witness for the rigid hidden subject. Explicit
+supertraits remain available. Associated declaration promises retain their
+original projection, prerequisite and clause even when Item=T normalizes the
+obligation subject to caller T. The common associated-clause interpretation
+recognizes that an abstract declared premise can promise a known output's bound;
+concrete witnesses cannot self-authorize from a declaration schema.
+
+Whole compiler source checking and the imported interface_declared_guarantees
+control pass: implicit-path rejection, explicit supertrait, associated guarantee
+with generic output, and a caller-authored bound. New sole-path/collision reject
+fixtures are retained for the next fresh compiler. The relevance seed check is
+folded into the existing declaration fixed-point walk, removing its extra full
+call traversal. Fresh/performance and final dynamic proof transport remain open.

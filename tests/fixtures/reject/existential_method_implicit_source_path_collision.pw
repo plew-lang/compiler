@@ -1,0 +1,10 @@
+trait Q {}
+trait P { fn get() -> I64 where Self: Q }
+trait R {}
+struct S {}
+impl S as P { fn get() -> I64 { return 1I64 } }
+impl S as R {}
+impl P as Q {}
+impl R as Q {}
+fn probe(value: any P) -> I64 { return value.get() }
+fn main() { val result = probe(value: <S />) }

@@ -1,0 +1,18 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontend }
+use /SourceAccess only { SourceAccess }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler0 = <Comp />
+    val result0 = analyzeFrontend(c: inout compiler0, input: <FrontendInput.Text text="trait Q {{}} trait P {{ fn get() -> I64 where Self: Q }} impl P as Q {{}} fn probe(value: any P) -> I64 {{ return value.get() }} fn main() {{}}" path="interface-guarantee-0.pw" />, sources: <SourceAccess />)
+    if result0.isOk() { panic("erasure implicitly chose a trait-subject source") }
+    mut val compiler1 = <Comp />
+    val result1 = analyzeFrontend(c: inout compiler1, input: <FrontendInput.Text text="trait Q {{}} trait P: Q {{ fn get() -> I64 where Self: Q }} fn probe(value: any P) -> I64 {{ return value.get() }} fn main() {{}}" path="interface-guarantee-1.pw" />, sources: <SourceAccess />)
+    match result1 { Result.Ok(value: _) => {} Result.Err(error: val error) => { panic("case 1: " + error.message) } }
+    mut val compiler2 = <Comp />
+    val result2 = analyzeFrontend(c: inout compiler2, input: <FrontendInput.Text text="trait Q {{}} trait P {{ type Item: Q fn get() -> I64 where Item: Q }} fn probe[T](value: any P[Item = T]) -> I64 {{ return value.get() }} fn main() {{}}" path="interface-guarantee-2.pw" />, sources: <SourceAccess />)
+    match result2 { Result.Ok(value: _) => {} Result.Err(error: val error) => { panic("case 2: " + error.message) } }
+    mut val compiler3 = <Comp />
+    val result3 = analyzeFrontend(c: inout compiler3, input: <FrontendInput.Text text="trait Q {{}} trait P {{ type Item fn get() -> I64 where Item: Q }} fn probe[T](value: any P[Item = T]) -> I64 where T: Q {{ return value.get() }} fn main() {{}}" path="interface-guarantee-3.pw" />, sources: <SourceAccess />)
+    match result3 { Result.Ok(value: _) => {} Result.Err(error: val error) => { panic("case 3: " + error.message) } }
+    print("interface-declared-guarantees")
+}

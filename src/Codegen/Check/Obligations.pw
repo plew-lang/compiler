@@ -756,13 +756,6 @@ pub impl Comp {
             val owner = self.callTemplateLexicalRoots.getOr(key: conversion.site.ownerFnIdx, fallback: conversion.site.ownerFnIdx)
             if owner < relevant.count() { relevant[owner] = true }
         }
-        for templateIndex in 0U64..<self.callTemplateCount() {
-            val template = self.callTemplateAt(index: templateIndex)
-            if (try self.selectedCallHasDeferredConstraints(template: template)) {
-                val owner = self.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
-                if owner < relevant.count() { relevant[owner] = true }
-            }
-        }
         mut val changed = true
         while changed {
             changed = false
@@ -770,7 +763,8 @@ pub impl Comp {
                 val template = self.callTemplateAt(index: templateIndex)
                 val owner = self.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
                 if owner < relevant.count() && !relevant[owner] {
-                    mut val needed = false
+                    mut val needed = try self.selectedCallHasDeferredConstraints(template: template)
+                    if !needed {
                     match template.kind {
                         CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => { needed = true }
                         CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
@@ -792,6 +786,7 @@ pub impl Comp {
                             }
                         }
                         _ => {}
+                    }
                     }
                     if needed { relevant[owner] = true
                         changed = true }
@@ -838,7 +833,9 @@ pub impl Comp {
     }
 
     inout fn declarationWitnessDependency(witness: WitnessMatch, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
-        mut val dependent = try self.declarationTypeDependency(ref: witness.selfRef, scope: scope, offset: offset)
+        val dependency = try self.declarationTypeDependencies(ref: witness.selfRef, scope: scope, offset: offset)
+        if dependency.interfaceScoped { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential member condition is not guaranteed by its interface") /> }
+        mut val dependent = dependency.caller
         for binding in witness.binds {
             if (try self.declarationTypeDependency(ref: binding.term, scope: scope, offset: offset)) { dependent = true }
         }
@@ -920,6 +917,7 @@ pub impl Comp {
             }
             StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
                 try self.checkDeclarationAssumptionScope(source: source, scope: scope, offset: offset)
+                if try self.interfaceAssumptionIsUniversal(source: source, subject: self.assumedSupertraitBound(source: source, steps: steps).subject) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential member condition is not guaranteed by its interface") /> }
                 dependent = try self.declarationBoundDependency(bound: self.assumedSupertraitBound(source: source, steps: steps), scope: scope, offset: offset)
                 for edge in edges { if (try self.declarationWitnessDependency(witness: edge, scope: scope, offset: offset)) { dependent = true } }
             }
@@ -1269,7 +1267,11 @@ pub impl Comp {
         if bounds.count() == 0U64 { return <Result.Ok value=() /> }
         val scope = try self.callConstraintScope(template: template)
         mut val assumptions = self.functionBoundAssumptions(fnIdx: template.siteKey.ownerFnIdx)
-        if scope.interfaceRoot != 0U64 { assumptions.append(<DeclarationBoundRef.Interface index=scope.interfaceRoot - 1U64 />) }
+        if scope.interfaceRoot != 0U64 {
+            val source = <DeclarationBoundRef.Interface index=scope.interfaceRoot - 1U64 />
+            assumptions.append(source)
+            try self.appendInterfaceAssociatedAssumptions(source: source, steps: [], assumptions: inout assumptions)
+        }
         mut val proofs: Array[U64] = []
         for bound in bounds {
             val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)

@@ -438,9 +438,9 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption does not match its receiver prerequisite") />
         }
         val output = try self.associatedOutputInProof(proof: prerequisite, traitOwner: owner, assocId: projection.assocNameId)
-        if output != 0U64 && !self.typeRefEq(a: output, b: projectionRef) {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption does not match its selected output") />
-        }
+        // A declared abstract premise promises its associated conditions even
+        // when an equality fixes the output. The projection retains provenance;
+        // the obligation subject is its selected output, not a second type.
         mut val predicates: Array[TraitAssocPredicate] = []
         mut val index = 0U64
         while index < declaration.assocTypes.count() {
@@ -450,7 +450,7 @@ pub impl Comp {
             index += 1U64
         }
         val context = <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=projection.assocTraitArgs /> positionalArgsOpen=false assocPredicates=predicates /> offset=projection.siteOffset />
-        return <Result.Ok value=<TraitBound subject=projectionRef constraint=self.traitConstraintInBound(constraint: clause.constraint, bound: context, traitIndex: traitIndex) offset=clause.offset /> />
+        return <Result.Ok value=<TraitBound subject=if output != 0U64 { give output } else { give projectionRef } constraint=self.traitConstraintInBound(constraint: clause.constraint, bound: context, traitIndex: traitIndex) offset=clause.offset /> />
     }
 
     inout fn registerAssociatedBoundEvidence(evidence: AssociatedBoundEvidence) -> DeclarationBoundRef {
@@ -560,8 +560,16 @@ pub impl Comp {
                     TraitProofOrigin.Witness => {}
                 }
             }
+            // Erasure retains declared guarantees, not an implicit #P source
+            // selector for another trait. Caller-owned premises still use the
+            // ordinary first-concrete admission path.
+            mut val extendSubjects = true
+            match state.origin {
+                TraitProofOrigin.Assumption(source: val source, steps: _) => { extendSubjects = !(try self.interfaceAssumptionIsUniversal(source: source, subject: baseRef)) }
+                TraitProofOrigin.Witness => {}
+            }
             ci = 0U64
-            while ci < self.decls.traitSubjectConformCount() {
+            while extendSubjects && ci < self.decls.traitSubjectConformCount() {
                 val edgeIndex = self.decls.traitSubjectConformIndexAt(index: ci)
                 val edge: Conform = self.decls.conformAt(index: edgeIndex)
                 if edge.subjectTraitOwner != 0U64 && edge.typeStart == state.traitOwner && edge.typeId == state.traitId && self.proofSourceIsActive(baseRef: baseRef, extId: edge.extId) {

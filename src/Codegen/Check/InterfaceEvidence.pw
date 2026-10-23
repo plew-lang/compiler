@@ -169,3 +169,73 @@ impl Comp {
         return <Result.Ok value=<DeclarationTypeDependencies caller=caller interfaceScoped=interfaceScoped /> />
     }
 }
+
+// Interface provenance is followed through authored associated constraints,
+// never inferred from a type name or an ambient body cursor.
+impl Comp {
+    inout fn interfaceProofRoot(proof: StaticConformanceProof, depth: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
+        if depth > 64U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface proof provenance expansion limit exceeded") /> }
+        match proof {
+            StaticConformanceProof.AssumedBound(source: val source) | StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: _) | StaticConformanceProof.AssumedTraitPath(source: val source, steps: _, edges: _) => {
+                match source {
+                    DeclarationBoundRef.Interface(index: val index) => {
+                        if !self.interfaceEvidenceIsValid(index: index) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface proof has no retained root") /> }
+                        return <Result.Ok value=index + 1U64 />
+                    }
+                    DeclarationBoundRef.AssociatedType(index: val index) => {
+                        if !self.declarationBoundIsValid(source: source) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface proof has no retained associated clause") /> }
+                        return self.interfaceProofRoot(proof: self.arena.associatedBoundEvidenceAt(index: index).prerequisite, depth: depth + 1U64)
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=0U64 />
+    }
+
+    inout fn interfaceAssumptionIsUniversal(source: DeclarationBoundRef, subject: U64) -> Result[Bool, CompileDiagnostic] {
+        val root = try self.interfaceProofRoot(proof: <StaticConformanceProof.AssumedBound source=source />)
+        if root == 0U64 { return <Result.Ok value=false /> }
+        val bound = self.interfaceEvidenceBound(index: root - 1U64)
+        return <Result.Ok value=self.typeTermContainsParameter(ref: subject, parameter: self.arena.typeTerms[bound.subject].paramId) />
+    }
+}
+
+impl Comp {
+    // Schema promises stay attached to the exact interface and original clause,
+    // including when Item=T has already normalized the projection to caller T.
+    inout fn appendInterfaceAssociatedAssumptions(source: DeclarationBoundRef, steps: Array[SupertraitRef], assumptions: inout Array[DeclarationBoundRef], depth: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        if depth > 64U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface guarantee expansion limit exceeded") /> }
+        val parent = self.assumedSupertraitBound(source: source, steps: steps)
+        val traitIndex = self.decls.traitIndexByOffset(offset: parent.constraint.key.owner)
+        if traitIndex >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface guarantee has no retained trait declaration") /> }
+        val trait = self.decls.traitAt(index: traitIndex)
+        val prerequisite = if steps.count() == 0U64 { give <StaticConformanceProof.AssumedBound source=source /> } else { give <StaticConformanceProof.AssumedSupertraitPath source=source steps=steps /> }
+        mut val clauseIndex = 0U64
+        while clauseIndex < trait.assocBounds.len {
+            val clause = self.traitAssociatedBoundAt(bounds: trait.assocBounds, index: clauseIndex)
+            mut val memberIndex = 0U64
+            while memberIndex < trait.assocTypes.count() {
+                val member = self.traitBindAt(binds: trait.assocTypes, index: memberIndex)
+                if member.nameId == clause.member {
+                    val subject = self.arena.typeAt(index: parent.subject)
+                    val projection = self.pushType(t: <TypeRef nameStart=subject.nameStart nameLen=subject.nameLen paramId=subject.paramId args=[] projectionReceiver=parent.subject assocTraitStart=trait.nameStart assocTraitLen=trait.nameLen assocTraitId=trait.nameId assocTraitArgs=parent.constraint.key.positionalArgs assocNameStart=member.nameStart assocNameLen=member.nameLen assocNameId=member.nameId hasAssocTraitDecl=true assocTraitDeclOffset=trait.nameStart />)
+                    val index = trait.assocBounds.start + clauseIndex
+                    val bound = try self.associatedClauseBound(projectionRef: projection, clauseIndex: index, prerequisite: prerequisite, offset: clause.offset)
+                    assumptions.append(self.registerAssociatedBoundEvidence(evidence: <AssociatedBoundEvidence projection=projection clause=index prerequisite=prerequisite bound=bound />))
+                }
+                memberIndex += 1U64
+            }
+            clauseIndex += 1U64
+        }
+        mut val superIndex = 0U64
+        while superIndex < trait.supertraits.count() {
+            mut val path = steps
+            path.append(<SupertraitRef traitIndex=traitIndex boundIndex=superIndex />)
+            try self.appendInterfaceAssociatedAssumptions(source: source, steps: path, assumptions: inout assumptions, depth: depth + 1U64)
+            superIndex += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+}
