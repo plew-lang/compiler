@@ -5,7 +5,8 @@
 [body checking](body-checking.md), [instantiation](generics.md),
 [ABI](representation-and-abi.md), and [driver](driver-and-execution.md) chapters.
 They are not a declaration that every current implementation path satisfies them.
-The adopted [physical storage contract](checked-body-storage.md) awaits implementation;
+Implementation of the adopted [physical storage contract](checked-body-storage.md)
+is tracked in [the boundary-closure task](../issues/met-si6j.md);
 private arrays or successful focused probes do not establish whole-owner sealing.
 
 ## 1. Guarantees and Request Ownership

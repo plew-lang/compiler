@@ -177,25 +177,60 @@ impl Comp {
 // Interface provenance is followed through authored associated constraints,
 // never inferred from a type name or an ambient body cursor.
 impl Comp {
+    inout fn mergeInterfaceProofRoots(first: U64, second: U64) -> Result[U64, CompileDiagnostic] {
+        if first != 0U64 && second != 0U64 && first != second {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "condition evidence combines different interface scopes") />
+        }
+        return <Result.Ok value=if first != 0U64 { give first } else { give second } />
+    }
+
+    inout fn interfaceAssumptionRoot(source: DeclarationBoundRef, depth: U64) -> Result[U64, CompileDiagnostic] {
+        match source {
+            DeclarationBoundRef.Interface(index: val index) => {
+                if !self.interfaceEvidenceIsValid(index: index) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface proof has no retained root") /> }
+                return <Result.Ok value=index + 1U64 />
+            }
+            DeclarationBoundRef.AssociatedType(index: val index) => {
+                if !self.declarationBoundIsValid(source: source) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface proof has no retained associated clause") /> }
+                return self.interfaceProofRoot(proof: self.arena.associatedBoundEvidenceAt(index: index).prerequisite, depth: depth + 1U64)
+            }
+            _ => { return <Result.Ok value=0U64 /> }
+        }
+    }
+
+    inout fn interfaceWitnessRoot(witness: WitnessMatch, depth: U64) -> Result[U64, CompileDiagnostic] {
+        if witness.conditions == 0U64 { return <Result.Ok value=0U64 /> }
+        if witness.conditions > self.arena.witnessConditionPlanCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected conformance has an invalid condition plan") /> }
+        val plan = self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
+        mut val root = 0U64
+        for proof in plan.proofs {
+            root = try self.mergeInterfaceProofRoots(first: root, second: (try self.interfaceProofRoot(proof: self.thawStaticConformanceProof(id: proof), depth: depth + 1U64)))
+        }
+        for step in plan.normalizations {
+            root = try self.mergeInterfaceProofRoots(first: root, second: (try self.interfaceProofRoot(proof: self.thawStaticConformanceProof(id: step.proof), depth: depth + 1U64)))
+        }
+        return <Result.Ok value=root />
+    }
+
     inout fn interfaceProofRoot(proof: StaticConformanceProof, depth: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         if depth > 64U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface proof provenance expansion limit exceeded") /> }
         match proof {
-            StaticConformanceProof.AssumedBound(source: val source) | StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: _) | StaticConformanceProof.AssumedTraitPath(source: val source, steps: _, edges: _) => {
-                match source {
-                    DeclarationBoundRef.Interface(index: val index) => {
-                        if !self.interfaceEvidenceIsValid(index: index) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface proof has no retained root") /> }
-                        return <Result.Ok value=index + 1U64 />
-                    }
-                    DeclarationBoundRef.AssociatedType(index: val index) => {
-                        if !self.declarationBoundIsValid(source: source) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface proof has no retained associated clause") /> }
-                        return self.interfaceProofRoot(proof: self.arena.associatedBoundEvidenceAt(index: index).prerequisite, depth: depth + 1U64)
-                    }
-                    _ => {}
-                }
+            StaticConformanceProof.AssumedBound(source: val source) | StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: _) => {
+                return self.interfaceAssumptionRoot(source: source, depth: depth)
             }
-            _ => {}
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => { return self.interfaceWitnessRoot(witness: witness, depth: depth) }
+            StaticConformanceProof.AssumedTraitPath(source: val source, steps: _, edges: val edges) => {
+                mut val root = try self.interfaceAssumptionRoot(source: source, depth: depth)
+                for edge in edges { root = try self.mergeInterfaceProofRoots(first: root, second: (try self.interfaceWitnessRoot(witness: edge, depth: depth))) }
+                return <Result.Ok value=root />
+            }
+            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
+                mut val root = 0U64
+                for edge in edges { root = try self.mergeInterfaceProofRoots(first: root, second: (try self.interfaceWitnessRoot(witness: edge, depth: depth))) }
+                return <Result.Ok value=root />
+            }
+            _ => { return <Result.Ok value=0U64 /> }
         }
-        return <Result.Ok value=0U64 />
     }
 
     inout fn interfaceAssumptionIsUniversal(source: DeclarationBoundRef, subject: U64) -> Result[Bool, CompileDiagnostic] {

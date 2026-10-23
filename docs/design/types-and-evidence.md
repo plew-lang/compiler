@@ -83,6 +83,17 @@ satisfy a hidden-Self method condition. Declaring P:Q makes that Q promise part 
 the interface contract and requires conformers to establish it. Unavailable
 members do not prevent existential formation.
 
+An associated-clause proof owns its symbolic projection through the exact
+prerequisite and original clause. Dependency checking follows those retained
+facts; an unresolved projection is not an unbound source type merely because
+its receiver has no free lexical parameter. When a caller fixes that receiver,
+first-concrete admission determines its conformance. Associated outputs and
+child obligations then come from that selected conformance's retained evidence,
+not a fresh name search or a copied lower-level declaration mirror. Interpret
+condition children and projection normalization through the same explicit scope
+as their parent proof. A universal interface premise cannot escape a static
+adapter by being nested inside an otherwise concrete conformance.
+
 ### Capability and Conditional-Selection Contracts
 
 The [language capability rules](https://github.com/plew-lang/spec/blob/main/spec/02-type-system/06-generics.md) for copyable / unique / allowunique extend the same evidence pipeline. They do not authorize a second source selector in Mid or the backend.

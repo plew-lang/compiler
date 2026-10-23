@@ -1,0 +1,17 @@
+use @Std/Io only { print }
+trait Marker {}
+struct Element {}
+impl Element as Marker {}
+trait Family { type Child: Marker }
+struct Parent {}
+impl Parent as Family { type Child = Element }
+struct Wrapper2[T] {}
+impl[T] Wrapper2[T] as Marker where T: Family, T#Family.Child: Marker {}
+trait Source2 { type Item: Family fn inspect() -> I64 where Wrapper2[Item]: Marker }
+struct Holder2 {}
+impl Holder2 as Source2 { type Item = Parent fn inspect() -> I64 { return 43I64 } }
+fn read2[T](value: any Source2[Item=T]) -> I64 { return value.inspect() }
+fn main() {
+    val nested: any Source2[Item=Parent] = <Holder2 />
+    print(read2(value: nested))
+}

@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+trait Marker {}
+trait Base[T] {}
+trait Derived {}
+impl[T] Base[T] as Derived where T: Marker {}
+struct Element {}
+impl Element as Marker {}
+struct Concrete {}
+impl Concrete as Base[Element] {}
+trait Items[C] { type Item: Marker fn get() -> I64 where C: Derived }
+struct Storage {}
+impl Storage as Items[Concrete] { type Item = Element fn get() -> I64 { return 44I64 } }
+fn read[T,C](value: any Items[C,Item=T]) -> I64 where C: Base[T] { return value.get() }
+fn main() { val erased: any Items[Concrete,Item=Element] = <Storage /> print(read(value: erased)) }

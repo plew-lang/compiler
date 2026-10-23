@@ -135,11 +135,21 @@ checked at publication, Mid signature materialization and LLVM preflight.
 missing, nonexistent, foreign-body and substituted-operation capabilities. The
 static adapter also rejects a universal interface assumption.
 
-This is a bounded connected increment, not issue completion: conditional witness
-children/projection normalization still need the shared interpretation context;
-concrete boxing still needs retained requirement-to-implementation evidence and
-unavailable-member separation. Fresh focused checks do not replace the parent
-fixed-point/performance and whole-suite gates.
+Conditional witness children, projection normalization and retained trait edges
+now share that explicit interpretation context. Associated-clause dependency
+admission follows its prerequisite instead of reclassifying its projected type
+as an unbound source parameter. Fixed caller outputs receive first-concrete
+source admission; later outputs/child conditions use the retained conformance
+clause. Concrete and abstract supertrait/associated interpretation reuse the same
+selected-evidence workers. Scope admission returns its dependency result so an
+associated chain is not recursively admitted twice at each level.
+
+Fresh controls cover the compound condition, nested associated normalization,
+a caller-authored root combined with an interface-derived edge condition,
+original source ownership refusal and real Mid preparation. This is still a
+bounded increment: concrete boxing needs retained requirement-to-implementation
+evidence and unavailable-member separation. Fresh focused checks do not replace
+the parent fixed-point/performance and whole-suite gates.
 
 Keep this work in the existing evidence domain rather than introducing a second
 body checker or a runtime trait solver. The representation below is an internal
@@ -186,12 +196,13 @@ plan, not a new source-level opening feature or a claim of implementation.
    only as these replacement paths become connected; do not call a source-only
    rejection the completed fix.
 
-New red controls cover unproved Self, unproved Item, and an enclosing unrelated
-Self that does have the desired trait. Positive controls cover supertrait and
-associated guarantees, an unrelated enclosing Self, and forming a box whose
-conditional member is unused/unavailable. They are implementation targets, not
-currently green gates. Add scoped missing/foreign/replacement controls at the
-actual final readers before closure.
+Fresh reject controls cover unproved Self, unproved Item, implicit trait-source
+preference and an enclosing unrelated Self that does have the desired trait.
+Positive controls cover supertrait/associated/compound guarantees and an
+unrelated enclosing Self. Missing/foreign/replacement controls reach the final
+descriptor and real Mid preparation. Formation of a box with an unavailable,
+unused conditional member remains a required repair target; do not merge that
+pending behavior into the successful focused set.
 
 References for representation, not imported source rules:
 [Swift SE-0352](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0352-implicit-open-existentials.md)

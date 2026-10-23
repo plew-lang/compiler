@@ -827,17 +827,16 @@ pub impl Comp {
         return <Result.Ok value=(try self.declarationTypeDependencies(ref: ref, scope: scope, offset: offset)).caller />
     }
 
+
+
     inout fn declarationBoundDependency(bound: TraitBound, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
         if bound.subject == 0U64 || bound.constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no valid trait bound") /> }
-        mut val dependent = try self.declarationTypeDependency(ref: bound.subject, scope: scope, offset: offset)
-        for argument in bound.constraint.key.positionalArgs {
-            if (try self.declarationTypeDependency(ref: argument, scope: scope, offset: offset)) { dependent = true }
-        }
-        for predicate in bound.constraint.assocPredicates {
-            if (try self.declarationTypeDependency(ref: predicate.value, scope: scope, offset: offset)) { dependent = true }
-        }
-        return <Result.Ok value=dependent />
+        val subject = try self.declarationTypeDependency(ref: bound.subject, scope: scope, offset: offset)
+        val arguments = try self.declarationConstraintDependency(constraint: bound.constraint, scope: scope, offset: offset)
+        return <Result.Ok value=subject || arguments />
     }
+
+
 
     inout fn declarationWitnessDependency(witness: WitnessMatch, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
         val dependency = try self.declarationTypeDependencies(ref: witness.selfRef, scope: scope, offset: offset)
@@ -871,38 +870,7 @@ pub impl Comp {
     // Binder compatibility does not authorize another body's assumptions.
     // Canonical source owners preserve legitimate closure/provided aliases.
     inout fn checkDeclarationAssumptionScope(source: DeclarationBoundRef, scope: DeclarationTypeScope, offset: U64) -> Result[(), CompileDiagnostic] {
-        if !self.declarationBoundIsValid(source: source) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no valid trait bound") /> }
-        val owner = match source {
-            DeclarationBoundRef.Function(index: val index) => { give self.decls.funcBounds.at(index: index).fnIdx }
-            DeclarationBoundRef.MethodReceiver(index: val index) => { give index }
-            DeclarationBoundRef.Interface(index: val index) => {
-                try self.checkInterfaceAssumptionScope(index: index, scope: scope, offset: offset)
-                return <Result.Ok value=() />
-            }
-            DeclarationBoundRef.AssociatedType(index: val index) => {
-                for active in self.activeAssumptionAdmission {
-                    if active == index { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration assumption prerequisite is cyclic") /> }
-                }
-                self.activeAssumptionAdmission.append(index)
-                val result = self.declarationProofDependency(proof: self.arena.associatedBoundEvidenceAt(index: index).prerequisite, scope: scope, offset: offset)
-                self.activeAssumptionAdmission.removeLast()
-                try result
-                val evidence = self.arena.associatedBoundEvidenceAt(index: index)
-                val expected = try self.associatedClauseBound(projectionRef: evidence.projection, clauseIndex: evidence.clause, prerequisite: evidence.prerequisite, offset: offset)
-                if !self.typeRefEq(a: evidence.bound.subject, b: expected.subject) || !self.sameTraitConstraint(a: evidence.bound.constraint, b: expected.constraint) {
-                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption does not match its declaration clause") />
-                }
-                return <Result.Ok value=() />
-            }
-            // Function bodies receive impl/requirement conditions as FuncBound
-            // facts. Declaration checking's pool references are not their
-            // authority, even when the subjects happen to match.
-            _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration assumption is not available in its lexical scope") /> }
-        }
-        val lexical = self.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
-        if owner >= self.arena.functionCount() || (try self.semanticBodyOwner(fnIdx: lexical)) != scope.owner {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration assumption is not available in its lexical scope") />
-        }
+        try self.admitDeclarationAssumptionScope(source: source, scope: scope, offset: offset)
         return <Result.Ok value=() />
     }
 
@@ -915,17 +883,17 @@ pub impl Comp {
                 for edge in edges { if (try self.declarationWitnessDependency(witness: edge, scope: scope, offset: offset)) { dependent = true } }
             }
             StaticConformanceProof.AssumedBound(source: val source) => {
-                try self.checkDeclarationAssumptionScope(source: source, scope: scope, offset: offset)
-                return self.declarationBoundDependency(bound: self.declarationBound(source: source), scope: scope, offset: offset)
+                val prerequisiteDependent = try self.admitDeclarationAssumptionScope(source: source, scope: scope, offset: offset)
+                return self.declarationAssumptionDependency(source: source, prerequisiteDependent: prerequisiteDependent, bound: self.declarationBound(source: source), scope: scope, offset: offset)
             }
             StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => {
-                try self.checkDeclarationAssumptionScope(source: source, scope: scope, offset: offset)
-                return self.declarationBoundDependency(bound: self.assumedSupertraitBound(source: source, steps: steps), scope: scope, offset: offset)
+                val prerequisiteDependent = try self.admitDeclarationAssumptionScope(source: source, scope: scope, offset: offset)
+                return self.declarationAssumptionDependency(source: source, prerequisiteDependent: prerequisiteDependent, bound: self.assumedSupertraitBound(source: source, steps: steps), scope: scope, offset: offset)
             }
             StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
-                try self.checkDeclarationAssumptionScope(source: source, scope: scope, offset: offset)
+                val prerequisiteDependent = try self.admitDeclarationAssumptionScope(source: source, scope: scope, offset: offset)
                 if try self.interfaceAssumptionIsUniversal(source: source, subject: self.assumedSupertraitBound(source: source, steps: steps).subject) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential member condition is not guaranteed by its interface") /> }
-                dependent = try self.declarationBoundDependency(bound: self.assumedSupertraitBound(source: source, steps: steps), scope: scope, offset: offset)
+                dependent = try self.declarationAssumptionDependency(source: source, prerequisiteDependent: prerequisiteDependent, bound: self.assumedSupertraitBound(source: source, steps: steps), scope: scope, offset: offset)
                 for edge in edges { if (try self.declarationWitnessDependency(witness: edge, scope: scope, offset: offset)) { dependent = true } }
             }
             StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: val receiver, traitArgs: val arguments) => {
@@ -1479,4 +1447,77 @@ pub impl Comp {
         tracePhaseCount(c: inout self, label: "member-obligations:instances:done", count: requests.count())
         return <Result.Ok value=() />
     }
+}
+
+impl Comp {
+    inout fn declarationConstraintDependency(constraint: TraitConstraint, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
+        mut val dependent = false
+        for argument in constraint.key.positionalArgs {
+            if (try self.declarationTypeDependency(ref: argument, scope: scope, offset: offset)) { dependent = true }
+        }
+        for predicate in constraint.assocPredicates {
+            if (try self.declarationTypeDependency(ref: predicate.value, scope: scope, offset: offset)) { dependent = true }
+        }
+        return <Result.Ok value=dependent />
+    }
+
+    // An admitted associated-clause proof owns its projection. Its unresolved
+    // output is not an unbound source type: follow the retained prerequisite
+    // and canonical free inputs instead of reinferring the projected subject.
+    inout fn declarationAssumptionDependency(source: DeclarationBoundRef, prerequisiteDependent: Bool, bound: TraitBound, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
+        match source {
+            DeclarationBoundRef.AssociatedType(index: val index) => {
+                val saved = self.arena.associatedBoundEvidenceAt(index: index)
+                val projection = self.arena.typeAt(index: saved.projection)
+                mut val dependent = prerequisiteDependent
+                if (try self.declarationTypeDependency(ref: self.typeTermProjectionReceiver(t: projection), scope: scope, offset: offset)) { dependent = true }
+                for argument in projection.assocTraitArgs { if (try self.declarationTypeDependency(ref: argument, scope: scope, offset: offset)) { dependent = true } }
+                if !self.typeRefEq(a: bound.subject, b: saved.projection) {
+                    if (try self.declarationTypeDependency(ref: bound.subject, scope: scope, offset: offset)) { dependent = true }
+                }
+                if (try self.declarationConstraintDependency(constraint: bound.constraint, scope: scope, offset: offset)) { dependent = true }
+                return <Result.Ok value=dependent />
+            }
+            _ => { return self.declarationBoundDependency(bound: bound, scope: scope, offset: offset) }
+        }
+    }
+}
+
+impl Comp {
+    inout fn admitDeclarationAssumptionScope(source: DeclarationBoundRef, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
+        if !self.declarationBoundIsValid(source: source) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no valid trait bound") /> }
+        val owner = match source {
+            DeclarationBoundRef.Function(index: val index) => { give self.decls.funcBounds.at(index: index).fnIdx }
+            DeclarationBoundRef.MethodReceiver(index: val index) => { give index }
+            DeclarationBoundRef.Interface(index: val index) => {
+                try self.checkInterfaceAssumptionScope(index: index, scope: scope, offset: offset)
+                return <Result.Ok value=false />
+            }
+            DeclarationBoundRef.AssociatedType(index: val index) => {
+                for active in self.activeAssumptionAdmission {
+                    if active == index { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration assumption prerequisite is cyclic") /> }
+                }
+                self.activeAssumptionAdmission.append(index)
+                val result = self.declarationProofDependency(proof: self.arena.associatedBoundEvidenceAt(index: index).prerequisite, scope: scope, offset: offset)
+                self.activeAssumptionAdmission.removeLast()
+                val dependent = try result
+                val evidence = self.arena.associatedBoundEvidenceAt(index: index)
+                val expected = try self.associatedClauseBound(projectionRef: evidence.projection, clauseIndex: evidence.clause, prerequisite: evidence.prerequisite, offset: offset)
+                if !self.typeRefEq(a: evidence.bound.subject, b: expected.subject) || !self.sameTraitConstraint(a: evidence.bound.constraint, b: expected.constraint) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption does not match its declaration clause") />
+                }
+                return <Result.Ok value=dependent />
+            }
+            // Function bodies receive impl/requirement conditions as FuncBound
+            // facts. Declaration checking's pool references are not their
+            // authority, even when the subjects happen to match.
+            _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration assumption is not available in its lexical scope") /> }
+        }
+        val lexical = self.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
+        if owner >= self.arena.functionCount() || (try self.semanticBodyOwner(fnIdx: lexical)) != scope.owner {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration assumption is not available in its lexical scope") />
+        }
+        return <Result.Ok value=false />
+    }
+
 }

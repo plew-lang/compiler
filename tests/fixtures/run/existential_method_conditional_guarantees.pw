@@ -1,0 +1,22 @@
+use @Std/Io only { print }
+trait Marker {}
+struct Wrapper[T] {}
+impl[T] Wrapper[T] as Marker where T: Marker {}
+trait Source {
+    type Item: Marker
+    fn inspect() -> I64 where Wrapper[Item]: Marker
+}
+struct Element {}
+impl Element as Marker {}
+struct Holder {}
+impl Holder as Source {
+    type Item = Element
+    fn inspect() -> I64 { return 42I64 }
+}
+fn read[T](value: any Source[Item = T]) -> I64 {
+    return value.inspect()
+}
+fn main() {
+    val boxed: any Source[Item = Element] = <Holder />
+    print(read(value: boxed))
+}
