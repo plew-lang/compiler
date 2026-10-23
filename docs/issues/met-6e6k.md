@@ -79,29 +79,43 @@ merge different input instances as competing paths to one instance, or accept th
 first instance merely because it was discovered first. Associated-output filters
 must follow source selection under the shared query contract.
 
-### Match Payload Binder as a Generic Construction Input
+### Field-driven Enum Construction Inference
 
-During interface evidence closure, measured 6c77f6f1 rejects this source at the
-Some construction with cannot infer generic arguments:
+The f67c8fce measured carrier reproduces the previously recorded Optional.Some
+failure with both an imported SemanticCompletionOwner payload and an ordinary
+local enum's U64 payload. A standalone val value = <Optional.Some v=1U64 />
+also rejects, while a generic struct constructed from the same pattern payload
+succeeds. This is a missing enum construction producer, not evidence that the
+pattern binding lost its declared U64 type.
 
-```plew
-use /Ir only { SemanticCompletionOwner }
-fn consume(value: Optional[U64]) {}
-fn probe(owner: SemanticCompletionOwner) {
-    val selected = match owner {
-        SemanticCompletionOwner.Global(target: val target) => <Optional.Some v=target />,
-        _ => <Optional.None />,
-    }
-    consume(value: selected)
-}
-fn main() {}
-```
+The working increment routes struct and enum payload fields through one
+inferMakeInstance / matchTypeArgumentConstraints path in Record and the gen
+source prepass. It retains the selected nominal identity and uses recorded field
+argument types; canonical input terms also retain their views when rebuilt.
+Explicit/committed type arguments are not overwritten. The legacy unstamped
+source-header adapter remains part of the broader producer audit above.
 
-The payload is declared U64, so investigate its source binding publication and
-construction inference, not later-use backward inference. An explicit
-Optional[U64] annotation on the intermediate binding permits the current internal
-implementation to proceed, but is not evidence that the unannotated producer is
-correct. Retain this as an in-scope producer audit; remove the need for that
-annotation only after the inferred payload is available at source construction.
-Diagnostic source: compiler/tmp/phase3-owner-facts/InterfaceOwnerInference.pw;
-carrier bin/plewc-interface-guarantees-measured.
+The new generic_enum_field_inference source covers a literal, pattern payload,
+block, multi-field variant, array payload and arrays with multiple enum elements
+and String payloads. A source-imported compiler using FrontendInput.File and an
+explicit standard root accepts it and both old guard inputs through actual Mid.
+This is not target-native execution or a fresh standalone compiler gate.
+FrontendInput.Text is one unified source and does not load imports; earlier
+virtual-input setup failures do not establish compiler defects.
+
+Existing reject fixtures generic_enum_array_implicit and
+unused_generic_enum_array_implicit remain unchanged pending user judgment.
+Their creation commits b27ce52c and c552ebda guard unresolved generic heads,
+silent 8-byte array stride corruption, stack overflow and unchecked unused
+bodies. Once field inference completes, those typed inputs are accepted. Proposed
+migration preserves the safety purpose with successful runtime values, multiple
+elements, String payload cleanup and applicable sanitizer checks. Do not delete
+or weaken those guards merely to make the suite green.
+
+Separate observed context gap: after an inferred Some fixes an array's element
+type, a following argument-less None still receives no forward element context.
+Record's array loop applies only its incoming context to every child. The scratch
+ArrayForwardContextGap.pw retains the input; the field-inference control uses an
+explicit Optional[U64].None to isolate this distinct producer boundary. Audit
+forward context without inferring backwards, treating unresolved generic heads
+as complete or replacing explicit incompatible element types.

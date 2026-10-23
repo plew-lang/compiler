@@ -1,0 +1,2 @@
+enum Segment[T] { Span(start: T, end: T) }
+fn main() { val segment = <Segment.Span start=1I64 end="text" /> }

@@ -2533,22 +2533,18 @@ pub impl Comp {
     // grounded top-down during lowering (`val b = <Box v=1I32 />` — no annotation /
     // return / field context). The independent gen pipeline uses this flat walk
     // before collectGenerationBodyTypes. Ordinary bodies infer during Record.
-    // For each un-grounded generic-struct Make, bind every type parameter from a field
-    // whose declared type IS that bare parameter, using the field value's concrete type;
-    // if every parameter is pinned consistently, rewrite Make.ty to the grounded instance.
-    // Otherwise leave it un-grounded — a top-down context (backend expectedTy) may still
-    // ground it, and a genuinely un-inferable construction is reported at construction.
+    // Match selected nominal fields against recorded argument terms with the
+    // same declaration-owned constraint matcher as Record. Only a complete
+    // consistent substitution refines Make.ty; a missing context stays missing.
     inout fn inferConstructTypeArgs() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.exprs.count() {
             match self.arena.exprs[i] {
                 Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
-                    if !isEnum {
-                        if !(self.isGenericInst(ref: ty)) {
-                            val inferred: U64 = (try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, typeRef: ty, fields: fields))
-                            if inferred != 0U64 {
-                                self.arena.exprs.set(i: i, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=inferred fields=fields />)
-                            }
+                    if !(self.isGenericInst(ref: ty)) {
+                        val inferred = try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, typeRef: ty, isEnum: isEnum, variantStart: variantStart, variantLen: variantLen, fields: fields)
+                        if inferred != 0U64 {
+                            self.arena.exprs.set(i: i, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=inferred fields=fields />)
                         }
                     }
                 }
@@ -2598,9 +2594,9 @@ pub impl Comp {
         return <Result.Ok value=(try self.recordTypeTerm(name: rnm, fieldNames: names, fieldTerms: terms)) />
     }
 
-    // The grounded TypeRef inferred for a generic-struct construction, or 0 when it can't
-    // be inferred: not a generic struct, a parameter no bare field pins, or a field value
-    // that is untyped / an array element / conflicts with another field's binding.
+    // Infer a selected struct/enum from its declared field terms. Missing
+    // argument information leaves the construction unresolved; conflicting
+    // constraints are diagnosed by the shared structural matcher.
     // Only declaration-owned parameters missing from this construction are
     // inference variables. Enclosing lexical parameters remain valid context.
     inout fn typeTermUsesOpenParameters(ref: U64, parameters: Array[Bind], boundCount: U64) -> Bool {
@@ -2645,7 +2641,7 @@ pub impl Comp {
         return fieldTerm
     }
 
-    inout fn inferMakeInstance(typeStart: U64, typeLen: U64, typeRef: U64, fields: MakeFieldRange) -> Result[U64, CompileDiagnostic] {
+    inout fn inferMakeInstance(typeStart: U64, typeLen: U64, typeRef: U64, isEnum: Bool, variantStart: U64, variantLen: U64, fields: MakeFieldRange) -> Result[U64, CompileDiagnostic] {
         // Argument inference refines the selected declaration; it cannot
         // replace it with a same-spelled generic from another module.
         mut val declaration = <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
@@ -2655,23 +2651,28 @@ pub impl Comp {
         }
         if declaration.nameLen == 0U64 { declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen) }
         if declaration.nameLen == 0U64 { return <Result.Ok value=0U64 /> }
-        val sidx = self.arena.structIndexByOffset(offset: declaration.nameStart)
-        if sidx >= self.arena.structCount() {
-            return <Result.Ok value=0U64 />
+        mut val typeParameters: Array[Bind] = []
+        mut val declaredFields: Array[FieldDef] = []
+        if isEnum {
+            val enumeration = self.arena.enumIndexByOffset(offset: declaration.nameStart)
+            if enumeration >= self.arena.enumCount() { return <Result.Ok value=0U64 /> }
+            val variant = self.variantIndexInDeclaration(enumIndex: enumeration, nameStart: variantStart, nameLen: variantLen)
+            if variant >= self.arena.enumAt(index: enumeration).variants.count() { return <Result.Ok value=0U64 /> }
+            typeParameters = self.arena.enumAt(index: enumeration).typeParams
+            declaredFields = self.arena.enumVariantAt(enumIndex: enumeration, variantIndex: variant).fields
+        } else {
+            val structure = self.arena.structIndexByOffset(offset: declaration.nameStart)
+            if structure >= self.arena.structCount() { return <Result.Ok value=0U64 /> }
+            typeParameters = self.arena.structAt(index: structure).typeParams
+            declaredFields = self.arena.structAt(index: structure).fields
         }
-        val sd: StructDef = self.arena.structAt(index: sidx)
-        if sd.typeParams.count() == 0U64 {
-            return <Result.Ok value=0U64 />
-        }
-        if sd.fields.count() == 0U64 {
-            return <Result.Ok value=0U64 />
-        }
+        if typeParameters.count() == 0U64 || declaredFields.count() == 0U64 { return <Result.Ok value=0U64 /> }
         mut val args: Array[U64] = []
-        while args.count() < sd.typeParams.count() { args.append(0U64) }
-        val parameters = <PatternBindInput.Values values=sd.typeParams />
+        while args.count() < typeParameters.count() { args.append(0U64) }
+        val parameters = <PatternBindInput.Values values=typeParameters />
         mut val index = 0U64
-        while index < sd.fields.count() {
-            val field = sd.fields[index]
+        while index < declaredFields.count() {
+            val field = declaredFields[index]
             val argument = try self.makeFieldArgRef(fieldNameId: field.nameId, fields: fields)
             mut val candidate = args
             match self.matchTypeArgumentConstraints(pattern: field.ty, argument: argument, params: parameters, values: inout candidate) {
@@ -2687,7 +2688,11 @@ pub impl Comp {
         // Inference selects the arguments of this declaration; it must not
         // erase its nominal identity. Mid ownership classification and later
         // substitutions consume that identity without repeating name lookup.
-        return <Result.Ok value=self.pushType(t: <TypeRef nameStart=typeStart nameLen=typeLen hasDecl=true declOffset=sd.defOffset args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />) />
+        if typeRef != 0U64 && typeRef < self.arena.typeCount() && self.arena.typeAt(index: typeRef).hasDecl {
+            val selected = self.arena.typeAt(index: typeRef)
+            return <Result.Ok value=self.rebuildTypeTerm(t: selected, args: args, assocTraitArgs: selected.assocTraitArgs) />
+        }
+        return <Result.Ok value=self.pushType(t: <TypeRef nameStart=typeStart nameLen=typeLen hasDecl=true declOffset=declaration.nameStart args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />) />
     }
 
     // Field values use the same lexical type authority as call arguments.

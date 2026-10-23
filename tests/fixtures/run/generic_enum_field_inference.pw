@@ -1,0 +1,41 @@
+use @Std/Io only { print }
+enum Owner { Global(target: U64), Other }
+enum Segment[T] { Span(start: T, end: T) }
+fn consume(value: Optional[U64]) {
+    match value {
+        Optional.Some(v: val number) => { print(number) }
+        Optional.None => { print("none") }
+    }
+}
+fn probe(owner: Owner) {
+    val selected = match owner {
+        Owner.Global(target: val target) => <Optional.Some v=target />,
+        _ => <Optional.None />,
+    }
+    consume(value: selected)
+}
+fn unused() { val values = [<Optional.Some v=9U64 />] }
+fn main() {
+    val direct = <Optional.Some v=1U64 />
+    consume(value: direct)
+    probe(owner: <Owner.Global target=42U64 />)
+    probe(owner: <Owner.Other />)
+    val block = { give <Optional.Some v=3U64 /> }
+    consume(value: block)
+    val array = <Optional.Some v=[4U64] />
+    match array {
+        Optional.Some(v: val values) => { print(values[0U64]) }
+        Optional.None => { panic("lost array payload") }
+    }
+    val segment = <Segment.Span start=5U64 end=6U64 />
+    match segment { Segment.Span(start: val start, end: val end) => { print(start) print(end) } }
+    val elements = [<Optional.Some v=8U64 />, <Optional.Some v=9U64 />, <Optional[U64].None />]
+    consume(value: elements[0U64])
+    consume(value: elements[1U64])
+    consume(value: elements[2U64])
+    val texts = [<Optional.Some v="alpha" />, <Optional.Some v="beta" />]
+    match texts[1U64] {
+        Optional.Some(v: val text) => { print(text) }
+        Optional.None => { panic("lost string payload") }
+    }
+}
