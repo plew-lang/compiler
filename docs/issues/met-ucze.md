@@ -1,6 +1,6 @@
 ---
 id: met-ucze
-status: in_progress
+status: closed
 deps: [com-qehq, com-qb05, com-17yh]
 links: []
 created: 2026-10-13T01:40:08Z
