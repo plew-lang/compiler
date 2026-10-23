@@ -107,6 +107,11 @@ saved completion -> final cleanup). Current selection belongs in worklog.
 
 ### Bounded Task Policy
 
+- Each bounded task requires an independent subagent completion review before
+  closing. Record the reviewed revision, scope, evidence and disposition in that
+  task; fix in-scope findings and re-review affected conclusions. Final parent
+  review does not substitute for these task reviews.
+
 - Aim for roughly one or two active human working days per bounded child. This
   is a granularity target, not a deadline or a promise about an unknown repair.
   If a task exposes a larger independent change, name it and create a child with
@@ -180,6 +185,10 @@ attempts; Git and existing evidence retain past checkpoints. No progress percent
 is computed from tickets, commits or repeated validation runs.
 
 ## Stop Conditions
+
+Stop and report an evidenced task omission, erroneous allocation or other required
+plan correction before continuing under a silently revised plan. An in-scope
+implementation bug already covered by a task is not by itself a plan error.
 
 Stop for an unapproved specification change; a language-specific design decision not derivable from adopted policy/Rust/Swift references; tooling/environment failure preventing necessary validation after diagnosis; or self-compilation at least 7 seconds when repair is judged difficult. A threshold crossing alone does not establish irreparable cost: investigate with matching-source comparisons. Do not weaken validators, checks, test expectations or performance conditions to continue.
 

@@ -37,3 +37,32 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Closure Reconciliation
+
+Source at a0e04c49 retains the following finite identity maps. B3 changes only
+an additional binder-renaming regression fixture; it does not add another
+proof producer or a declaration-mode fallback.
+
+| Edge | Saved identity and interpreter | Final consumer |
+| --- | --- | --- |
+| Public requirement to implementation | Check/Bounds conformance method preparation publishes RequirementBoundEvidence with original clause ID and ConformanceMethodEvidence with implementation function, method ParamId alpha map and each implementation bound's derivation | instantiateRequirementCallConstraints validates selected implementation/conformance, reinterprets original public clause with selected logical Self and saved method map, then derives each original implementation bound by ID |
+| Provided body | selectedMemberConstraintEvidence validates exact placement and semanticBodyOwner; instantiateSelectedCallConstraints replays saved source operands/conditions | environmentWithCallableConstraints binds the original body's declaration indices; bodyInstanceEnvironment retains placement proof and withLexicalSelfBinding |
+| Declaration and execution requests | checkStaticMemberObligation and enqueueSelectedCallee share selectedCallConstraintEvidence and callable constraint admission | appendPreparedCallConstraintInstance and enqueuePreparedFinalBody consume the admitted environment; signature checking and body interning share it |
+| Inherited logical/physical Self | inheritedBodyEnvironment requires exact immediate newtype edge and admitted source conditions, matches each original DeclarationBoundRef.Function and replays its proof for physical Self | both worklists recurse through the same interpreter; executable adapter's CallResolution targets the original body and Mid/LLVM consume its prepared signature |
+| Boxing | selectExistentialMember retains the exact requirement-to-implementation plan; existentialImplementationEnvironment uses the same admission | final concrete body/adapters retain implementation bound identities; dynamic universal admissibility remains B4 |
+
+Reordered/weaker bounds, requirement/implementation binder alpha-renaming,
+provided/associated/supertrait clauses, two-layer inheritance and Self in trait
+arguments have scoped controls. interface_boxing_conditions also exercises
+missing/foreign/replaced plan/proof rejection and actual prepared Mid targets.
+The final-candidate whole-suite gates remain G2a/G2b.
+
+Fresh execution at test revision 262bc8bc passed: 20 native golden controls and
+12 expected rejects, no internal diagnostics, session68530 exit zero.
+Carrier/production source are unchanged from the successful B2 build, verified
+against its saved input fingerprints. Evidence is
+`meta/evidence/existing-feature-conformance/source-owner-facts/phase3b-callee-environments.json`.
+Independent completion review is pending. The new fixture's first attempt placed a `where`
+clause on a separate line unsupported by the parser; that never-green fixture
+was corrected without changing compiler behavior or existing expected outputs.

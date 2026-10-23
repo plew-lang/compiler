@@ -1,6 +1,6 @@
 ---
 id: com-17yh
-status: closed
+status: in_progress
 deps: [com-qehq]
 links: []
 created: 2026-10-23T10:41:58Z
