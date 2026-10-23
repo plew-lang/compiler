@@ -300,38 +300,10 @@ pub impl Comp {
         // (typeOf, cached: read via kind==2 then .ref — a receiver is never the width-less
         // int form, so this matches exprType exactly.)
         val rt: TypeInfo = (try self.typeOf(id: recv))
-        // `dict.insert(key:, value:)` on a Dictionary[K, V] (also how a `[k: v]` literal
-        // lowers): the generic-receiver arg grounding is incomplete, so check key->K and
-        // value->V directly here (mirrors checkIndexKeyType for subscripts). spec/02.
-        if rt.kind == 2 {
-            if rt.ref != 0U64 {
-                if rt.ref < self.arena.typeCount() {
-                    val drt: TypeRef = self.arena.typeAt(index: rt.ref)
-                    if rangeEquals(bytes: self.arena.bytes, start: drt.nameStart, len: drt.nameLen, kw: "Dictionary") {
-                        if drt.args.count() >= 2U64 {
-                            // the generic-receiver arg grounding is incomplete, so check the
-                            // Dictionary's key/value args directly by LABEL: a `key` arg must
-                            // be K, a `value`/`fallback` arg must be V. Covers insert / get /
-                            // getOr / contains / at / remove (`d.get(key: 5I64)` on a
-                            // Dictionary[String,_]). spec/02.
-                            mut val dai: U64 = 0
-                            while dai < args.len {
-                                val arg: Arg = self.argAt(args: args, index: dai)
-                                if arg.hasLabel {
-                                    if rangeEquals(bytes: self.arena.bytes, start: arg.labelStart, len: arg.labelLen, kw: "key") {
-                                        try self.tcCheckValue(expectedRef: drt.args[0], valueExpr: arg.expr, pos: "dict key")
-                                    }
-                                    if rangeEquals(bytes: self.arena.bytes, start: arg.labelStart, len: arg.labelLen, kw: "value") || rangeEquals(bytes: self.arena.bytes, start: arg.labelStart, len: arg.labelLen, kw: "fallback") {
-                                        try self.tcCheckValue(expectedRef: drt.args[1], valueExpr: arg.expr, pos: "dict value")
-                                    }
-                                }
-                                dai += 1
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // The selected callable's full substitution supplies every argument
+        // type below. Container spelling and labels cannot override it: a
+        // Dictionary conformance may legitimately declare `key: I64` even
+        // when its own Key parameter is String.
         if rt.kind == 2 {
             // The abstract checker validates a bound receiver against its
             // requirement signature.  Concrete witness selection belongs to

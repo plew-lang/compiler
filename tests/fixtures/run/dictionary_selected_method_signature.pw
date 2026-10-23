@@ -1,0 +1,15 @@
+use @Std/Io only { print }
+
+// A method's labels do not imply a relationship to its receiver's type
+// parameters. The selected signature determines their meaning.
+trait NumberKey { fn echo(key: I64) -> I64 }
+
+impl[Key, Value] Dictionary[Key, Value] as NumberKey {
+    fn echo(key: I64) -> I64 { return key }
+}
+
+fn main() {
+    val table: Dictionary[String, I64] = [:]
+    print(table.echo(key: 7I64))
+    print(table.getOr(key: "missing", fallback: 9I64))
+}

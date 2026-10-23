@@ -17,7 +17,8 @@ fn main() {
     print(throughGeneric(transform: fn(value: I64) -> I64 { return value + 1I64 }, value: 6I64))
     print(transform(value: "global"))
     val transform = fn(value: Bool) -> Bool { return !value }
-    print(transform(value: false))
+    if !transform(value: false) { panic("local closure result was lost") }
+    print("local")
     val nested = fn(transform: fn(value: I64) -> I64) -> I64 {
         return transform(value: 7I64)
     }

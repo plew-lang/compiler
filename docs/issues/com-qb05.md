@@ -61,3 +61,22 @@ which validates the full chosen signature before owner publication. This is
 not a claim that the deletion alone closes B1: fresh normal/method/factory
 positive, label/type/passing/bound and missing-fact controls plus final-reader
 inspection remain required. No Mid/LLVM selection implementation is replaced.
+
+The first fresh build (`20261023T115201-build-f00e74`, a1516944) succeeded,
+but the newly authored shadow fixture incorrectly expected Bool `print` to
+spell `true`. Its program exited 0 and produced the correct callback results;
+the fixture now checks that Bool directly and prints a neutral marker. This
+new, never-green fixture correction changes no language rule.
+
+Further B1 inspection found `Check/Call.pw::checkMethodArgs` inferring
+Dictionary argument types from `key` / `value` / `fallback` labels. A valid
+`impl[Key, Value] Dictionary[Key, Value] as NumberKey` with `echo(key: I64)`
+is rejected for `Dictionary[String, I64]`, even though its selected signature
+explicitly takes I64. The a1516944 fresh compiler reproduces the rejection
+(exit 1/type mismatch); the raw control is
+`tmp/phase3b-static-calls/DictionarySelectedMethod.pw` and `dictionary-before.stderr`.
+Remove that spelling/label special case and use the already grounded selected
+method environment. `dictionary_selected_method_signature` protects this
+conformance plus ordinary `getOr` typing; existing Dictionary key/value rejects
+remain mandatory controls. This is a second competing signature authority,
+within B1's existing method boundary, not a new feature or a new work bucket.
