@@ -103,14 +103,18 @@ This is not target-native execution or a fresh standalone compiler gate.
 FrontendInput.Text is one unified source and does not load imports; earlier
 virtual-input setup failures do not establish compiler defects.
 
-Existing reject fixtures generic_enum_array_implicit and
-unused_generic_enum_array_implicit remain unchanged pending user judgment.
-Their creation commits b27ce52c and c552ebda guard unresolved generic heads,
-silent 8-byte array stride corruption, stack overflow and unchecked unused
-bodies. Once field inference completes, those typed inputs are accepted. Proposed
-migration preserves the safety purpose with successful runtime values, multiple
-elements, String payload cleanup and applicable sanitizer checks. Do not delete
-or weaken those guards merely to make the suite green.
+The approved test cleanup retains the safety purpose of
+generic_enum_array_implicit in the existing successful runtime coverage: verify
+multiple enum elements, correct values/layout, String payload cleanup and
+applicable sanitizer checks. Remove unused_generic_enum_array_implicit rather
+than duplicating the same now-valid input in an unused positive body. Check that
+whole-body validation remains covered by genuinely invalid unused-body inputs;
+retain rejection of constructions with no information to infer their arguments.
+The fixture files have not yet been changed. Their creation commits b27ce52c and
+c552ebda guarded unresolved generic heads, silent 8-byte array stride corruption,
+stack overflow and unchecked unused bodies; they did not establish a language
+ban on field-driven enum inference. Preserve these safety obligations rather
+than weakening checks merely to make the suite green.
 
 Separate observed context gap: after an inferred Some fixes an array's element
 type, a following argument-less None still receives no forward element context.
