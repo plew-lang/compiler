@@ -64,7 +64,8 @@ impl Comp {
             val value = try self.groundTermForBody(ref: binding.term, environment: environment, selfRef: selfRef, itemRef: itemRef)
             bindings.append(<WitnessBind binder=binding.binder paramId=binding.paramId term=value />)
         }
-        val receiver = if witness.selfRef == 0U64 { give receiverRef } else { give try self.groundTermForBody(ref: witness.selfRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
+        mut val receiver = if witness.selfRef == 0U64 { give receiverRef } else { give try self.groundTermForBody(ref: witness.selfRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
+        receiver = self.selectedWitnessReceiver(declared: receiver, requested: receiverRef)
         val grounded = <WitnessMatch conformIdx=witness.conformIdx binds=bindings selfRef=receiver />
         if witness.conditions == 0U64 { return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=grounded /> /> }
         if witness.conditions > self.arena.witnessConditionPlanCount() || witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected conformance has an invalid condition plan") /> }

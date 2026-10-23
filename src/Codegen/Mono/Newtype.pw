@@ -42,3 +42,58 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 }
+
+impl Comp {
+    // A selected conformance has a logical Self as well as its physical
+    // declaration subject. Inheritance changes the former without selecting
+    // another declaration. An unrelated receiver never changes saved evidence.
+    inout fn selectedWitnessReceiver(declared: U64, requested: U64) -> U64 {
+        if declared == requested || requested == 0U64 || self.typeRefEq(a: declared, b: requested) { return declared }
+        if self.arena.newtypeUnderlying(ref: declared) == 0U64 && self.arena.newtypeUnderlying(ref: requested) == 0U64 { return declared }
+        if self.typeRefEq(a: self.conformancePhysicalSubject(typeRef: declared), b: self.conformancePhysicalSubject(typeRef: requested)) { return requested }
+        return declared
+    }
+
+    // The inherited public body and original implementation share declaration
+    // identities, not a receiver-only search. Interpret each admitted binding
+    // for the physical body and preserve its selected conformance derivation.
+    inout fn inheritedBodyEnvironment(function: U64, arguments: Array[U64], source: InstanceEnvironment, receiver: U64) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        if receiver == 0U64 || !self.typeRefEq(a: self.arena.newtypeUnderlying(ref: source.receiverRef), b: receiver) {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "inherited body has no selected newtype boundary") />
+        }
+        val stored = match source.constraints {
+            Optional.Some(v: val stored) => stored,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "inherited body lost its admitted constraints") /> },
+        }
+        val substitution = try self.bodyInstanceEnvironment(fnIdx: function, args: arguments, recvInstRef: receiver, selectedProof: source.proof)
+        mut val proof = source.proof
+        if !self.proofIsMissing(proof: proof) {
+            proof = match (try self.instantiateConstraintProof(proof: proof, receiverRef: receiver, environment: substitution, selfRef: receiver, itemRef: 0U64)) {
+                StaticProofInstantiation.Ready(proof: val selected) => selected,
+                _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "inherited body lost its selected conformance") /> },
+            }
+            try self.checkStaticProofEvidence(proof: proof, offset: 0U64)
+        }
+        val target = <InstanceEnvironment params=substitution.params args=substitution.args receiverRef=substitution.receiverRef proof=proof />
+        val indices = self.sourceDeclarationCallBoundIndices(functionIndex: function)
+        if indices.count() != self.arena.callableConstraintCount(evidence: stored) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "inherited body has incomplete admitted constraints") /> }
+        mut val bounds: Array[TraitBound] = []
+        mut val proofs: Array[StaticConformanceProof] = []
+        for index in indices {
+            val source = <DeclarationBoundRef.Function index=index />
+            mut val binding = 0U64
+            while binding < self.arena.callableConstraintCount(evidence: stored) && !self.sameDeclarationBound(a: source, b: self.arena.callableConstraintSourceAt(evidence: stored, index: binding)) { binding += 1U64 }
+            if binding >= self.arena.callableConstraintCount(evidence: stored) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "inherited body constraint belongs to another declaration") /> }
+            val bound = try self.groundCallableBound(bound: self.declarationBound(source: source), environment: target, selfRef: receiver, itemRef: 0U64)
+            val selected = match (try self.instantiateConstraintProof(proof: self.thawStaticConformanceProof(id: self.arena.callableConstraintProofAt(evidence: stored, index: binding)), receiverRef: bound.subject, environment: target, selfRef: receiver, itemRef: 0U64)) {
+                StaticProofInstantiation.Ready(proof: val selected) => selected,
+                _ => { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "inherited body constraint lost its retained evidence") /> },
+            }
+            try self.checkStaticProofEvidence(proof: selected, offset: bound.offset)
+            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: selected, offset: bound.offset)
+            bounds.append(bound)
+            proofs.append(selected)
+        }
+        return self.environmentWithCallableConstraints(fnIdx: function, environment: target, evidence: <CallableConstraintEvidence.Recorded bounds=bounds proofs=proofs />)
+    }
+}

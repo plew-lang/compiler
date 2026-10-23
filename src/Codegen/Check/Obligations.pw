@@ -1527,6 +1527,14 @@ impl Comp {
         if (try self.callConstraintSubstitutionState(function: function, arguments: arguments, receiver: receiver)).isDeferred() { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
         val declaration = self.arena.functionAt(index: function)
         if declaration.isExtern || declaration.body == 0U64 { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
+        // A public inherited signature is not the original body. Follow the
+        // same retained boundary as executable preparation before inspecting
+        // the body's saved operations.
+        val underlying = self.arena.newtypeUnderlying(ref: environment.receiverRef)
+        if underlying != 0U64 {
+            val target = try self.inheritedBodyEnvironment(function: function, arguments: arguments, source: environment, receiver: underlying)
+            return self.appendPreparedCallConstraintInstance(function: function, arguments: arguments, receiver: underlying, environment: target, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
+        }
         mut val previous = heads.getOr(key: owner, fallback: 0U64)
         while previous != 0U64 {
             val prior = requests[previous - 1U64]

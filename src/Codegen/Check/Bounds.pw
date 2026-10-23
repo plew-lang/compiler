@@ -1384,7 +1384,7 @@ pub impl Comp {
                             self.decls.funcBounds.append(<FuncBound fnIdx=functionIndex paramStart=subject.nameStart paramLen=subject.nameLen paramNameId=subject.nameId paramTy=bound.subject constraint=bound.constraint />)
                         }
                     }
-                    if !self.arena.publishConformanceMethodEvidence(evidence: <ConformanceMethodEvidence conformance=conformIndex traitIndex=traitIndex requirement=requirementIndex implementation=functionIndex requirements=requirementSources indices=implementationIndices proofs=implementationProofs />) {
+                    if !self.arena.publishConformanceMethodEvidence(evidence: <ConformanceMethodEvidence conformance=conformIndex traitIndex=traitIndex requirement=requirementIndex implementation=functionIndex methodParameters=parameters methodArguments=arguments requirements=requirementSources indices=implementationIndices proofs=implementationProofs />) {
                         return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation constraint evidence was already published or is incomplete") />
                     }
                 }
@@ -1644,7 +1644,16 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "requirement evidence has a foreign clause identity") />
             }
             val position = source.clause - requirement.signatureBounds.start
-            val expected = try self.groundCallableBound(bound: source.bound, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+            // The declaration's entailment bound uses its original receiver.
+            // The public signature instead uses the selected logical Self,
+            // including a newtype's inherited surface. Retain the checked
+            // method alpha map rather than reconstructing it positionally.
+            if plan.methodParameters.count() != requirement.typeParams.count() || plan.methodArguments.count() != plan.methodParameters.count() { return <Result.Err error=self.diagnosticAt(offset: source.bound.offset, msg: "requirement evidence has an incomplete method substitution") /> }
+            val clause = self.conformBoundAt(bounds: requirement.signatureBounds, index: position)
+            val selected = try self.staticProofBound(proof: environment.proof, traitIdx: plan.traitIndex)
+            val subject = self.groundTermInEnvironment(ref: self.traitBoundTypeTerm(ref: clause.subject, bound: selected, traitIndex: plan.traitIndex), params: plan.methodParameters, values: plan.methodArguments)
+            val constraint = self.groundTraitConstraintInEnvironment(constraint: self.traitConstraintInBound(constraint: clause.constraint, bound: selected, traitIndex: plan.traitIndex), params: plan.methodParameters, args: plan.methodArguments)
+            val expected = try self.groundCallableBound(bound: <TraitBound subject=subject constraint=constraint offset=clause.offset />, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
             if !self.typeRefEq(a: expected.subject, b: bounds[position].subject) || !self.sameTraitConstraint(a: expected.constraint, b: bounds[position].constraint) {
                 return <Result.Err error=self.diagnosticAt(offset: source.bound.offset, msg: "requirement evidence has a different public substitution") />
             }

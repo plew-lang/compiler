@@ -167,12 +167,16 @@ transfer, including weaker/reordered implementation conditions. Pass Requirement
 evidence into witness body preparation; remove its Declaration default path.
 Cover unavailable-unused members, available conditional bodies, inherited and
 associated guarantees, explicit source views and malformed promised evidence.
-The inherited/newtype target recursion inside enqueueFinalBody still calls the
-Declaration default when it changes the receiver. Audit its retained proof and
-bound mapping before closure; the new concrete-boxing call's explicit evidence
-alone does not prove that nested adapter boundary preserves it. Also inspect
-finalExistentialIndex's source/target-only cache against differing selected proof
-identity, including the early successful return on a cached conversion.
+Both declaration and execution worklists now follow inherited/newtype targets
+with an explicit environment interpreted from the same admitted declaration
+bindings. The original requirement clause and retained method alpha map supply
+the inherited public signature; the declaration-normalized entailment bound is
+not reused as that signature. Selected witness replay preserves the logical
+receiver through validated newtype inheritance while keeping the chosen
+conformance/path. No Declaration fallback remains on that adapter edge.
+The source/target cache also compares retained trait and proof identity before
+reuse; missing/replaced evidence is not a successful cached conversion.
+
 
 Audit universally scoped nominal predicates separately: a nominal witness with
 hidden type arguments may have no interface-assumption child. The blanket
@@ -475,14 +479,14 @@ fixtures are retained for the next fresh compiler. The relevance seed check is
 folded into the existing declaration fixed-point walk, removing its extra full
 call traversal. Fresh/performance and final dynamic proof transport remain open.
 
-### Inherited Receiver Reproduction
+### Inherited Receiver Controls
 
-`existential_newtype_condition_witness` currently rejects during declaration
-member-obligation closure: Service: Marker and get where Self: Marker work for
-Value, but boxing its Wrapped/Outer newtypes reports a selected-condition
-signature mismatch. Selected supertrait replay returns a concrete Marker proof
-with original Value Self instead of the inherited public Self. This is separate
-from the later enqueue recursion's Declaration fallback. Preserve both explicit
-interpretations: inherited public signature/proof versus original physical body.
-Do not reselect a conformance or substitute every same-shaped concrete Value term
-in the body. The regression remains red until that boundary is closed.
+The new existential_newtype_condition_witness exercises Service: Marker and
+get where Self: Marker through Value, Wrapped and Outer. The source-imported
+interface_boxing_conditions checks actual table members, their inherited adapter
+chains, original implementation-bound bindings and real session Mid preparation.
+Declaration worklists inspect the original physical body under that same
+retained boundary rather than reinterpreting its source as the public wrapper.
+Generic method alpha-renaming, original source clause ownership, explicit source
+selection and existing concrete Self arguments have separate controls. Focused
+success does not close universal nominal predicates or the parent gates.

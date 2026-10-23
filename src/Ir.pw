@@ -1610,6 +1610,10 @@ pub struct ConformanceMethodEvidence {
     pub val traitIndex: U64
     pub val requirement: U64
     pub val implementation: U64
+    // Declaration-checked alpha-renaming from requirement method binders to
+    // implementation terms; public Self is interpreted at the instance edge.
+    pub val methodParameters: Array[Bind]
+    pub val methodArguments: Array[U64]
     pub val requirements: Array[U64]
     pub val indices: Array[U64]
     pub val proofs: Array[U64]

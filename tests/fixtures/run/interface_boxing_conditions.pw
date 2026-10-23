@@ -5,7 +5,7 @@ use /Diag only { emitDiagnostic }
 use /Ir only { TraitBound, StaticConformanceProof, DeclarationBoundRef, ValueConversionProof }
 use @Std/Io only { print }
 fn main() {
-    val program = "trait Marker {{ fn number() -> I64 }}\ntrait Flag {{ fn flag(number: I64) -> I64 }}\nstruct Value {{}}\nimpl Value as Marker {{ fn number() -> I64 {{ return 42I64 }} }}\nstruct Enabled {{}}\nimpl Enabled as Flag {{ fn flag(number: I64) -> I64 {{ return number }} }}\ntrait Service: Marker {{ fn get() -> I64 where Self: Marker }}\nimpl Value as Service {{ fn get() -> I64 where Self: Marker {{ return self.number() }} }}\ntrait Absent {{}}\ntrait Unavailable {{ fn get() -> I64 where Self: Absent }}\nstruct Other {{}}\nimpl Other as Unavailable {{ fn get() -> I64 {{ return 0I64 }} }}\ntrait Items {{ type Item: Marker fn get(item: Item) -> I64 where Item: Marker }}\nstruct Storage[T] {{}}\nimpl[T] Storage[T] as Items where T: Marker {{\n    type Item = T\n    fn get(item: T) -> I64 where T: Marker {{ return item.number() }}\n}}\ntrait PairService {{\n    type Left\n    type Right\n    fn get(left: Left, right: Right) -> I64 where Left: Marker, Right: Flag\n}}\nstruct Pair[L,R] {{}}\nimpl[L,R] Pair[L,R] as PairService {{\n    type Left = L\n    type Right = R\n    fn get(left: L, right: R) -> I64 where R: Flag, L: Marker {{ return right.flag(number: left.number()) }}\n}}\nfn service(value: any Service) -> I64 {{ return value.get() }}\nfn item(value: any Items[Item=Value]) -> I64 {{ return value.get(item: <Value />) }}\nfn pair(value: any PairService[Left=Value,Right=Enabled]) -> I64 {{ return value.get(left: <Value />, right: <Enabled />) }}\nfn main() {{\n    val unavailable: any Unavailable = <Other />\n    val first = service(value: <Value />)\n    val second = item(value: <Storage[Value] />)\n    val third = pair(value: <Pair[Value,Enabled] />)\n}}\n"
+    val program = "trait Marker {{ fn number() -> I64 }}\ntrait Flag {{ fn flag(number: I64) -> I64 }}\nstruct Value {{}}\nimpl Value as Marker {{ fn number() -> I64 {{ return 42I64 }} }}\nstruct Enabled {{}}\nimpl Enabled as Flag {{ fn flag(number: I64) -> I64 {{ return number }} }}\ntrait Service: Marker {{ fn get() -> I64 where Self: Marker }}\nimpl Value as Service {{ fn get() -> I64 where Self: Marker {{ return self.number() }} }}\nnewtype Wrapped = Value\nnewtype Outer = Wrapped\ntrait Absent {{}}\ntrait Unavailable {{ fn get() -> I64 where Self: Absent }}\nstruct Other {{}}\nimpl Other as Unavailable {{ fn get() -> I64 {{ return 0I64 }} }}\ntrait Items {{ type Item: Marker fn get(item: Item) -> I64 where Item: Marker }}\nstruct Storage[T] {{}}\nimpl[T] Storage[T] as Items where T: Marker {{\n    type Item = T\n    fn get(item: T) -> I64 where T: Marker {{ return item.number() }}\n}}\ntrait PairService {{\n    type Left\n    type Right\n    fn get(left: Left, right: Right) -> I64 where Left: Marker, Right: Flag\n}}\nstruct Pair[L,R] {{}}\nimpl[L,R] Pair[L,R] as PairService {{\n    type Left = L\n    type Right = R\n    fn get(left: L, right: R) -> I64 where R: Flag, L: Marker {{ return right.flag(number: left.number()) }}\n}}\nfn service(value: any Service) -> I64 {{ return value.get() }}\nfn item(value: any Items[Item=Value]) -> I64 {{ return value.get(item: <Value />) }}\nfn pair(value: any PairService[Left=Value,Right=Enabled]) -> I64 {{ return value.get(left: <Value />, right: <Enabled />) }}\nfn main() {{\n    val unavailable: any Unavailable = <Other />\n    val first = service(value: <Value />)\n    val wrapped = <Value /> as Wrapped\n    val secondWrapper = wrapped as Outer\n    val inherited = service(value: wrapped)\n    val nestedInherited = service(value: secondWrapper)\n    val second = item(value: <Storage[Value] />)\n    val third = pair(value: <Pair[Value,Enabled] />)\n}}\n"
     mut val compiler = <Comp />
     match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text=program path="boxing-conditions.pw" />, sources: <SourceAccess />) {
         Result.Ok(value: _) => {}
@@ -28,6 +28,21 @@ fn main() {
                 val body = compiler.arena.bodyInstanceAt(index: member.bodyId - 1U64)
                 val constraints = body.environment.constraints.unwrap()
                 if compiler.arena.callableConstraintCount(evidence: constraints) == 0U64 { panic("promised member lost its implementation condition bindings") }
+                mut val implementationBody = body
+                while implementationBody.adapterTargetBodyId != 0U64 {
+                    implementationBody = compiler.arena.bodyInstanceAt(index: implementationBody.adapterTargetBodyId - 1U64)
+                    val retained = implementationBody.environment.constraints.unwrap()
+                    if compiler.arena.callableConstraintCount(evidence: retained) == 0U64 { panic("newtype target lost admitted conditions") }
+                    for index in 0U64..<compiler.arena.callableConstraintCount(evidence: retained) {
+                        val bound = compiler.groundCallableBound(bound: compiler.declarationBound(source: compiler.arena.callableConstraintSourceAt(evidence: retained, index: index)), environment: implementationBody.environment, selfRef: implementationBody.environment.receiverRef, itemRef: 0U64).unwrap()
+                        val proof = compiler.thawStaticConformanceProof(id: compiler.arena.callableConstraintProofAt(evidence: retained, index: index))
+                        if !compiler.selectedCallConstraintMatches(expected: bound, proof: proof).unwrap() { panic("newtype target changed its condition declaration") }
+                    }
+                }
+                // The declaration-normalized public clauses below describe
+                // the original receiver. Inherited tables are checked through
+                // their actual retained target bindings above instead.
+                if body.adapterTargetBodyId != 0U64 { active += 1U64 continue }
                 val function = compiler.arena.functionAt(index: body.fnIdx)
                 val implementation = if function.sourceWitnessFuncId != 0U64 { give function.sourceWitnessFuncId - 1U64 } else { give body.fnIdx }
                 mut val planIndex = 0U64
@@ -66,7 +81,7 @@ fn main() {
             }
         }
     }
-    if inactive != 1U64 || active != 3U64 { panic("boxing condition controls did not cover each member") }
+    if inactive != 1U64 || active != 5U64 { panic("boxing condition controls did not cover each member") }
     val main = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
     match CompilerSession.open(input: <FrontendInput.Text text=program path="boxing-conditions-mid.pw" />, sources: <SourceAccess />) {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) panic(diagnostic.message) }

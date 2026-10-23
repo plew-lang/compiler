@@ -859,7 +859,6 @@ pub impl Comp {
     // final call selections recorded.
     inout fn enqueueFinalBody(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />, constraints: CallableConstraintEvidence = <CallableConstraintEvidence.Declaration />) -> Result[U64, CompileDiagnostic] {
         if fnIdx >= self.arena.functionCount() { return <Result.Ok value=0U64 />}
-        val f: Func = self.arena.functionAt(index: fnIdx)
         // A call contract exists even when its implementation has no Plew
         // body. Admit the grounded signature before deciding body demand.
         val substitution: InstanceEnvironment = (try self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, selectedProof: selectedProof))
@@ -3801,7 +3800,16 @@ impl Comp {
                                 mut val index = 0U64
                                 while index < self.arena.callableConstraintCount(evidence: evidence) {
                                     if self.sameDeclarationBound(a: self.arena.callableConstraintSourceAt(evidence: evidence, index: index), b: source) {
-                                        return <Result.Ok value=<StaticProofInstantiation.Ready proof=self.thawStaticConformanceProof(id: self.arena.callableConstraintProofAt(evidence: evidence, index: index)) /> />
+                                        val selected = self.thawStaticConformanceProof(id: self.arena.callableConstraintProofAt(evidence: evidence, index: index))
+                                        match self.selectedConstraintWitness(proof: selected) {
+                                            Optional.Some(v: val witness) => {
+                                                if self.selectedWitnessReceiver(declared: witness.selfRef, requested: receiverRef) != witness.selfRef {
+                                                    return self.instantiateStaticMemberProof(proof: selected, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                                                }
+                                            }
+                                            Optional.None => {}
+                                        }
+                                        return <Result.Ok value=<StaticProofInstantiation.Ready proof=selected /> />
                                     }
                                     index += 1U64
                                 }
@@ -6236,7 +6244,8 @@ impl Comp {
         mut val adapterTarget: U64 = 0U64
         val underlying: U64 = self.arena.newtypeUnderlying(ref: environment.receiverRef)
         if underlying != 0U64 {
-            adapterTarget = (try self.enqueueFinalBody(fnIdx: fnIdx, args: args, recvInstRef: underlying))
+            val target = try self.inheritedBodyEnvironment(function: fnIdx, arguments: args, source: environment, receiver: underlying)
+            adapterTarget = try self.enqueuePreparedFinalBody(fnIdx: fnIdx, args: args, recvInstRef: underlying, environment: target)
             if adapterTarget == 0U64 {
                 return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "internal error: inherited body has no executable target") />
             }

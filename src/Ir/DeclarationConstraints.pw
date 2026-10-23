@@ -19,6 +19,12 @@ pub impl Arena {
     inout fn publishConformanceMethodEvidence(evidence: ConformanceMethodEvidence) -> Bool {
         if self.conformanceMethodPlan(conformance: evidence.conformance, traitIndex: evidence.traitIndex, requirement: evidence.requirement, implementation: evidence.implementation).isSome() { return false }
         if evidence.indices.count() != evidence.proofs.count() { return false }
+        if evidence.methodParameters.count() != evidence.methodArguments.count() { return false }
+        for index in 0U64..<evidence.methodParameters.count() {
+            val parameter = evidence.methodParameters[index]
+            if parameter.paramId == 0U64 || evidence.methodArguments[index] == 0U64 || evidence.methodArguments[index] >= self.typeCount() { return false }
+            for previous in 0U64..<index { if evidence.methodParameters[previous].paramId == parameter.paramId { return false } }
+        }
         for proof in evidence.proofs { if !self.hasStaticConformanceProof(id: proof) { return false } }
         for index in evidence.requirements {
             if index >= self.requirementBoundEvidence.count() { return false }

@@ -52,6 +52,17 @@ including weaker/reordered implementation bounds and supertrait/where entailment
 The final body receives implementation-bound identities; intermediate requirement
 bindings are not themselves proof that the body environment is complete.
 
+The method derivation retains the checked alpha-renaming from requirement method
+ParamIds to implementation terms. Its declaration-normalized bound is an
+entailment premise for the original receiver, not a substitute for the public
+signature of every inherited receiver. Interpret the original requirement clause
+with that saved map and the selected trait instance at the call boundary.
+Signature validation and worklist publication consume the same admitted
+environment. Newtype adapters interpret its retained declaration bindings for
+the original physical body; they do not reselect those conditions from its name.
+Changing logical Self within a validated newtype inheritance boundary preserves
+the conformance declaration/path and concrete spelling in its authored terms.
+
 Source-bound admission first requires the unique path described in [conformance evidence](types-and-evidence.md#5-conformance-evidence), even if no member is used. A weaker internal existence obligation cannot stand in for that admission. Presence obligations do not automatically demand unique member dispatch. A saved
 existence proof cannot silently choose a caller path as a shared callee's dispatch
 priority. Prepare the evidence actually demanded by saved member/conversion/
