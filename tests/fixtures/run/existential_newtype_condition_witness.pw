@@ -6,10 +6,17 @@ impl Value as Marker { fn number() -> I64 { return 42I64 } }
 impl Value as Service { fn get() -> I64 where Self: Marker { return self.number() } }
 newtype Wrapped = Value
 newtype Outer = Wrapped
+trait Related[Input] { fn same() -> I64 }
+trait RelatedService: Related[Self] { fn getRelated() -> I64 where Self: Related[Self] }
+impl Value as Related[Self] { fn same() -> I64 { return 42I64 } }
+impl Value as RelatedService { fn getRelated() -> I64 where Self: Related[Self] { return self.same() } }
+fn related(value: any RelatedService) -> I64 { return value.getRelated() }
 fn read(value: any Service) -> I64 { return value.get() }
 fn main() {
     val wrapped = <Value /> as Wrapped
     val outer = wrapped as Outer
     print(read(value: wrapped))
     print(read(value: outer))
+    print(related(value: wrapped))
+    print(related(value: outer))
 }
