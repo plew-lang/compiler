@@ -1,6 +1,6 @@
 ---
 id: com-nplw
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-23T10:41:58Z
@@ -67,3 +67,34 @@ no internal diagnostics and all captured inputs unchanged. Evidence:
 `meta/evidence/existing-feature-conformance/source-owner-facts/phase3c-array-context.json`.
 Independent completion review is pending;
 whole final gates remain G2a/G2b.
+
+## Independent Review
+
+`/root/c1_completion_review` reviewed ff038420/114b5377 through c8488400 and the
+fresh focused evidence. Verdict: scoped completion is justified, with no source
+semantics bug or task-plan error. The review confirmed forward-only context,
+lexical T versus incomplete heads, explicit conflicts and retained aggregate
+ownership. A non-blocking local cost improvement is to skip the completeness
+walk when elems.len == 1: no subsequent element can use its answer. This is
+being incorporated before final task closure. The already-running formal
+self-host 20261023T130735-self-host-5cd196 remains input-fixed; its result is
+not yet known and is not invalidated by documentation-only updates.
+
+## Final Scoped Outcome
+
+Closed after review refinement 51e19101: completeness is queried only when at
+least two elements can use it. The independent reviewer's follow-up confirmed
+this preserves the original conclusion, conditional on fresh checks below.
+
+Standard build 20261023T131404-build-081b48, fresh all-compiler source checking
+and all eight native / nineteen reject controls passed; no internal diagnostics,
+all scoped/build inputs rehashed unchanged, sessions76209/4457/43105 recovered
+through exit zero. Candidate `bin/plewc-phase3c-array-final` and its SHA256 are
+pinned in the evidence receipt's final_after_review section. No old gate is
+attributed to this new artifact.
+
+The prior 114b5377 checkpoint reached a generation-two fixed point and formal
+median 6.676334s (20261023T130735-self-host-5cd196, input unchanged, exit zero).
+`meta/evidence/existing-feature-conformance/source-owner-facts/phase3c-array-self-host.json`
+retains all three measured values/material hashes. This is not a same-source
+speedup claim or the final G2a performance certificate after 51e19101.
