@@ -869,7 +869,18 @@ pub impl Comp {
         self.recordNamespaceUse(name: <Span start=bufN.nameStart end=bufN.nameStart + bufN.nameLen />, moduleId: self.modules.coreModule)
         val newN: Bind = self.internBytes(s: "new")
         val typeArgs: Array[U64] = [elemRef]
-        val receiverTerm: U64 = self.pushType(t: <TypeRef nameStart=bufN.nameStart nameLen=bufN.nameLen args=typeArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+        val receiverTerm: U64 = if self.arena.typeDeclarationResolutionComplete() {
+            val declaration = self.typeDeclIdentityInModule(mod: self.modules.coreModule, start: bufN.nameStart, len: bufN.nameLen)
+            val selected = self.declaredTypeRef(nameStart: bufN.nameStart, nameLen: bufN.nameLen, args: typeArgs, declaration: declaration)
+            if selected == 0U64 {
+                return <Result.Err error=self.diagnosticAt(offset: bufN.nameStart, msg: "internal error: synthetic Buffer construction requires its Core declaration") />
+            }
+            give selected
+        } else {
+            // This private construction term enters the ordinary one-time
+            // declaration batch through its selected qualified-use provenance.
+            give self.pushType(t: <TypeRef nameStart=bufN.nameStart nameLen=bufN.nameLen args=typeArgs />)
+        }
         val recv: U64 = self.pushExpr(e: <Expr.Ident start=bufN.nameStart len=bufN.nameLen />)
         val noArgs: Array[Arg] = []
         val call: U64 = self.pushExpr(e: <Expr.Method recv=recv nameStart=newN.nameStart nameLen=newN.nameLen args=self.pushArgs(args: noArgs) />)

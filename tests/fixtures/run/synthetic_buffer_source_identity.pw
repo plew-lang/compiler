@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+
+// Generated Buffer receivers must keep Core ownership despite this local name.
+struct Buffer { count: I64 }
+impl Buffer { factory }
+
+fn dictionary[T](value: T) -> Dictionary[String, T] {
+    return ["key": value]
+}
+
+fn main() {
+    val local = <Buffer count=9I64 />
+    val nested = dictionary(value: [42I64, 43I64])
+    val values = nested["key"]
+    val empty: Dictionary[String, Array[I64]] = [:]
+    print("value {values[0U64]}")
+    print(nested.count())
+    print(empty.count())
+    print(local.count)
+}

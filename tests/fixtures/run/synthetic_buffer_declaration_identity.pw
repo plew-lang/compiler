@@ -1,0 +1,89 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { TypeRef, StructDef, Bind, ResolvedViewSource }
+
+fn receiver(compiler: Comp, expression: U64) -> U64 {
+    return compiler.decls.syntheticCallSites[compiler.syntheticCallSiteIndex(exprId: expression)].receiverTerm
+}
+
+fn registerBuffer(compiler: inout Comp, offset: U64, module: U64) -> Bind {
+    val name = compiler.internBytes(s: "Buffer")
+    val parameters = compiler.lowerTypeParamNames(names: ["Element"], anchor: offset).unwrap()
+    compiler.modules.registerSourceFile(start: offset, length: 10U64, moduleId: module, path: "Buffer.pw")
+    compiler.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=parameters fields=[] isUnique=false isExtern=false defOffset=offset />)
+    return compiler.typeDeclIdentityInModule(mod: module, start: name.nameStart, len: name.nameLen)
+}
+
+fn checkMissingCore() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    compiler.modules.coreModule = 3U64
+    val foreign = registerBuffer(compiler: inout compiler, offset: 200U64, module: 2U64)
+    val name = compiler.internBytes(s: "I64")
+    val element = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen />)
+    assert(compiler.arena.finishTypeDeclarationResolution(resolutions: []))
+    val count = compiler.arena.typeCount()
+    val sites = compiler.decls.syntheticCallSites.count()
+    assert(compiler.synthBufferNew(elemRef: element).isErr())
+    assert(compiler.arena.typeCount() == count)
+    assert(compiler.decls.syntheticCallSites.count() == sites)
+    assert(foreign.nameStart == 200U64)
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    compiler.modules.coreModule = 1U64
+    val elementName = compiler.internBytes(s: "Item")
+    compiler.modules.registerSourceFile(start: 300U64, length: 10U64, moduleId: 3U64, path: "Item.pw")
+    compiler.arena.registerStruct(<StructDef nameStart=elementName.nameStart nameLen=elementName.nameLen nameId=elementName.nameId typeParams=[] fields=[] isUnique=false isExtern=false defOffset=300U64 />)
+    val itemOwner = compiler.typeDeclIdentityInModule(mod: 3U64, start: elementName.nameStart, len: elementName.nameLen)
+    val element = compiler.declaredTypeRef(nameStart: elementName.nameStart, nameLen: elementName.nameLen, args: [], declaration: itemOwner)
+    val earlyExpression = compiler.synthBufferNew(elemRef: element).unwrap()
+    val early = receiver(compiler: compiler, expression: earlyExpression)
+    assert(!compiler.arena.typeAt(index: early).hasDecl)
+    assert(compiler.arena.typeAt(index: early).args[0U64] == element)
+    // Register the selected Core declaration after the early constructor.
+    val foreignOwner = registerBuffer(compiler: inout compiler, offset: 200U64, module: 2U64)
+    val coreOwner = registerBuffer(compiler: inout compiler, offset: 100U64, module: 1U64)
+    compiler.resolveTypeDeclIdentities().unwrap()
+    assert(compiler.arena.typeDeclarationResolutionComplete())
+    assert(compiler.arena.typeAt(index: early).hasDecl)
+    assert(compiler.arena.typeAt(index: early).declOffset == coreOwner.nameStart)
+    assert(compiler.arena.typeTerms[early].declOffset == coreOwner.nameStart)
+    val publishedCount = compiler.arena.typeCount()
+    val lateExpression = compiler.synthBufferNew(elemRef: element).unwrap()
+    val late = receiver(compiler: compiler, expression: lateExpression)
+    assert(late >= publishedCount)
+    assert(compiler.arena.typeAt(index: late).hasDecl)
+    assert(compiler.typeRefEq(a: early, b: late))
+    val name = compiler.internBytes(s: "Buffer")
+    val foreign = compiler.declaredTypeRef(nameStart: name.nameStart, nameLen: name.nameLen, args: [element], declaration: foreignOwner)
+    assert(!compiler.typeRefEq(a: late, b: foreign))
+    val nestedExpression = compiler.synthBufferNew(elemRef: late).unwrap()
+    val nested = receiver(compiler: compiler, expression: nestedExpression)
+    assert(compiler.arena.typeAt(index: nested).args[0U64] == late)
+    val parameters = compiler.lowerTypeParamNames(names: ["Value"], anchor: 400U64).unwrap()
+    val parameter = parameters[0U64]
+    val rigid = compiler.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId paramId=parameter.paramId />)
+    val genericExpression = compiler.synthBufferNew(elemRef: rigid).unwrap()
+    val generic = receiver(compiler: compiler, expression: genericExpression)
+    assert(compiler.arena.typeAt(index: generic).args[0U64] == rigid)
+    assert(compiler.arena.typeAt(index: rigid).paramId == parameter.paramId)
+    val viewed = compiler.typeRefWithViewSources(ref: element, sources: [<ResolvedViewSource surfaceId=elementName.nameId traitOwner=500U64 />])
+    val viewedExpression = compiler.synthBufferNew(elemRef: viewed).unwrap()
+    val viewedReceiver = receiver(compiler: compiler, expression: viewedExpression)
+    assert(compiler.arena.typeAt(index: viewedReceiver).args[0U64] == viewed)
+    assert(!compiler.typeRefEq(a: viewedReceiver, b: late))
+    compiler.modules.registerSourceFile(start: 600U64, length: 10U64, moduleId: 6U64, path: "OtherItem.pw")
+    compiler.arena.registerStruct(<StructDef nameStart=elementName.nameStart nameLen=elementName.nameLen nameId=elementName.nameId typeParams=[] fields=[] isUnique=false isExtern=false defOffset=600U64 />)
+    val otherOwner = compiler.typeDeclIdentityInModule(mod: 6U64, start: elementName.nameStart, len: elementName.nameLen)
+    val other = compiler.declaredTypeRef(nameStart: elementName.nameStart, nameLen: elementName.nameLen, args: [], declaration: otherOwner)
+    val otherExpression = compiler.synthBufferNew(elemRef: other).unwrap()
+    assert(!compiler.typeRefEq(a: receiver(compiler: compiler, expression: otherExpression), b: late))
+    assert(compiler.arena.typeAt(index: early).declOffset == coreOwner.nameStart)
+    assert(!compiler.arena.finishTypeDeclarationResolution(resolutions: []))
+    checkMissingCore()
+    print("synthetic-buffer-declaration-identity")
+}
