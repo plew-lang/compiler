@@ -1,0 +1,11 @@
+use ./Left only { Pair as LeftPair }
+use ./Right only { Pair as RightPair }
+use @Std/Io only { print }
+fn main() {
+    val left: LeftPair[U8, I16] = LeftPair.made(first: 250, second: -300)
+    val right: RightPair[U16, I32] = RightPair.made(first: 60000, second: -70000)
+    print(left.first)
+    print(left.second)
+    print(right.first)
+    print(right.second)
+}

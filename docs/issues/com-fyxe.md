@@ -129,3 +129,19 @@ shared typeDeclName projection. It never treats an identity offset as a spelling
 concreteTypeQualifierTerm then queries that span in its defining module. This
 preserves the owner into both the bare-head filter and concrete receiver path;
 no postselection recovery or result matching weakening is introduced.
+
+### Saved Source Closure and Planned Body Repair Handoff
+
+14153136 fresh6 passes the compiler source check and focused-3 native19/reject11
+with unchanged inputs. The real-module alias trace now records distinct callees,
+complete receiver terms and exact reordered binders, and seals them successfully.
+Its native finalization exposes the already planned com-6paa unowned body
+receiver. The new explicit Pair[B,A] return variant proceeds through Concrete Mid
+but fails physical type representation for the same registered receiver family.
+These are retained failures, not successful evidence. The original Self variant
+is permanent body_receiver_alias_identity. No further shape workaround is used.
+
+Keep this task in_progress pending final native controls and final independent
+review. Its source-side producer/reader repair is ready for com-6paa's planned
+implementation prerequisite; that task now proceeds without declaring this
+native exit complete or weakening the final parent gate.

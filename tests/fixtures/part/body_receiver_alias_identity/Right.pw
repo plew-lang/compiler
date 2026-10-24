@@ -1,0 +1,7 @@
+pub struct Pair[First, Second] { pub val first: First pub val second: Second }
+pub impl[First, Second] Pair[First, Second] { factory }
+pub impl[A, B] Pair[B, A] {
+    assoc fn made(first: B, second: A) -> Self {
+        return <Pair[B, A] first=first second=second />
+    }
+}

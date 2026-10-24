@@ -1,6 +1,6 @@
 ---
 id: com-6paa
-status: open
+status: in_progress
 deps: [com-m0bf, com-nqjd, com-fyxe]
 links: []
 created: 2026-10-24T02:29:50Z
@@ -72,3 +72,16 @@ actual associated literal-context error. Recheck this against the existing
 parametricSelfRef/registered receiver identity repair; it is a recorded boundary
 observation, not proof of a new language rule. fyxe keeps the explicit receiver
 construction so its context controls isolate the selected signature.
+
+### Registered Self Alias Regression
+
+The permanent part fixture body_receiver_alias_identity preserves the initial
+Self-returning associated_literal_owner_context input. Fresh6 (14153136,
+SHA6087bdc59fc8bb7dcfc0da488154fd835ae77ed6207fdfbeee779364dc10e4b1)
+selects distinct left/right callees361/362 and seals complete receivers/binders,
+but finalizes the left Self result with carrier-decl=0 versus source-decl=100685.
+Raw receipt: tmp/phase3c-associated-context/part-focused-3 and owner-trace-6.stderr.
+This is the planned canonicalBodyReceiverRef/selectedCallableSubstitution/body
+signature boundary, not a new selection or inference issue. fyxe's new fixture
+uses an explicit Pair[B,A] return to isolate associated parameter context. This
+Self variant remains a required native success control for this task.
