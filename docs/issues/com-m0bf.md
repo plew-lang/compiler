@@ -1,6 +1,6 @@
 ---
 id: com-m0bf
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-10-23T10:41:58Z
@@ -42,8 +42,8 @@ waived by a bounded child closing.
 
 Inspected production code at **c056e658** (documentation checkpoint e6ef8918).
 The inventory below records the inspected entries; its original completeness
-claim was reopened after the late synthetic Buffer omission described below.
-The added row assigns that producer explicitly. Rebuild/view/
+claim was reopened after the Buffer and pre-rewrite Chain omissions below.
+The added rows assign both producers explicitly. Rebuild/view/
 substitution helpers preserve existing identity; they are not new spelling
 producers. Classification is not the completion of the paired repairs.
 
@@ -59,6 +59,7 @@ producers. Classification is not the completion of the paired repairs.
 | Registered receiver: `Call::canonicalBodyReceiverRef`, `selectedCallableSubstitution`; fallback `Record::parametricSelfRef` | Missing explicit receiver is reconstructed by simpleTypeRef even when Func.recvTy is complete; selectedCallableSubstitution similarly reconstructs its receiver instead of preserving the declaration term. ParametricSelfRef's main recvTy lane is correct; fallback rebuilds type parameters without ParamId and the nominal head without owner. | internBodyInstance -> body signature / final callable / Mid lookup. Internal diagnostic confirms identity loss and mixed known/unknown key equivalence; mandatory 6paa. |
 | Body/signature Self bridges: `Ground::assocItemRef`, `setSelfItemEnv`, `setSelfItemEnvForBody` | simpleTypeRef still rebuilds a receiver when recvInstRef is absent. `collectDeclarationTypes` can take this lane even when f.recvTy exists. | Declaration signature collection and Call final body environment, then recorded/body types. Assigned to 6paa together with parametricSelfRef and canonicalBodyReceiverRef; preserve the valid retained Item/proof environment. |
 | Chain-generated registration: `Call::chainStageResultRef`, `registerChainSiteInsts` | Existing head rebuild retains identity. Missing continuation ref appends a naked nominal name; Optional[V/U] registrations also omit owner. | scanType, chain result/rewritten call facts, worklist registration -> final descriptors; mandatory nqjd. |
+| Pre-rewrite chain source result: `Locals::optChainResultRef` via `ExprType::constructExprTypeWithChainHole`, captured by `Record::recordExpr(OptChain)` | Rebuilds Optional[U] and a missing continuation ref without owner, then records that nonzero result before rewrite and expected-result/conversion checking. Later canonical ChainSite production cannot repair this earlier commitment. | Saved semantic result/conversion -> generated MatchExpr / ChainSite -> both worklists -> final Mid/LLVM; mandatory [com-i62n](com-i62n.md). Separate from nqjd's listed late registration changes, qbwg's Buffer construction and 6paa's registered body keys. |
 | Dual-stage synthetic construction: `Lower/Types::synthBufferNew`, called by `Lower/String::beginStringInterpolation` and `Record::synthEmptyDict` | Early construction records fixed Core-module provenance for ordinary declaration resolution. The same helper appends an unowned Buffer[elemRef] after publication for Dictionary's keys/values/hashes/buckets. That late branch is not covered by the one-time declaration batch. | SyntheticCallSite.receiverTerm -> complete signature -> both worklists -> body environment/key/signature -> final callee -> Mid/LLVM; mandatory [com-qbwg](com-qbwg.md). This new producer entry is separate from nqjd's reviewed bounded closure and 6paa's body-key migration. |
 | Rigid/structural helpers | chainValueArgIndex creates declaration-owned ParamId leaves; semanticSourceResultTerm creates Unit; closureFnTypeRef creates a function structure; reserveTypeSentinel reserves absence. Primitive literal contexts are explicit builtin atoms. | Legitimate non-nominal/construction representations. Do not invent nominal declarations or infer binders from matching printed names. |
 | Rebuild/publication helpers: `Frontend::pushType`, `Arena::registerType`, `finishTypeDeclarationResolution`; Ground rebuild/view helpers | pushType interns names and preserves supplied identity; registerType synchronizes rows/terms. The one-time declaration batch resolves source-site rows; it cannot stamp later appends or act as mutable post-publication repair. | Scalar/owning rows, typeIsClosed, grounding and runtime signature readers. D4 remains the separate publication audit; nqjd/6paa must supply late identity at production. |
@@ -186,16 +187,29 @@ producer changes and their historical scoped evidence stay valid, but they do
 not certify this unassigned pre-rewrite source path. qbwg/fyxe/6paa stay
 in_progress. User task-omission stop condition applies.
 
-Pending plan proposal: explicitly assign the pre-rewrite chain source producer
-and its saved fact/conversion/rewritten-call readers. Retain the complete
-selected carrier and continuation child at production, then trace one semantic
-result through source recording, rewrite, both worklists and Mid/LLVM. Verify
-Optional/generic/projected chains, distinct same-spelled owners, nested children,
-missing identity and direct/wrapped source results. Reconcile the C3 row and
-mandatory closure dependencies before implementation; do not put this into
-G1 as an unspecified residual repair.
+The user approved task addition: [com-i62n](com-i62n.md) now owns the pre-rewrite
+chain source producer and paired saved-fact/conversion/rewritten-call readers,
+including fresh scoped validation and independent completion review. Required
+tk dependencies connect it to qbwg/fyxe/6paa closure, met-6e6k and G1. It depends
+only on C3 classification, not on those repairs closing first. C3's added row
+records this disposition; classification re-review is distinct from the new
+task's unperformed implementation. The planning approval wait is resolved.
 
 Durable receipt: meta evidence/existing-feature-conformance/source-owner-facts/
 phase3c-synthetic-buffer-partial.json. Raw results stay under
 compiler/tmp/phase3c-synthetic-buffer. Current formal performance/full G2 gates
 have not run. This is another inventory stop, not phase-three completion.
+
+### Optional-chain Reclassification Outcome
+
+Independent read-only review by /root/body_receiver_completion_review inspected
+the task-addition diff on **7af9781f** against the previously traced source path.
+It confirms that the added inventory row and mandatory com-i62n own pre-rewrite
+source-result production/storage, conversion/rewrite and final consumption;
+nqjd/qbwg/6paa/C4/C5 retain distinct responsibilities. All targets/edges exist,
+are acyclic, and block qbwg/fyxe/6paa, met-6e6k and G1 appropriately; D4's
+existing prerequisites reach the new repair transitively.
+**Classification and task allocation complete, no blocking findings.** C3
+closes this reconciliation only. The new repair remains open, qbwg/fyxe/6paa
+remain in_progress, and their actual implementation/control/review exits plus
+final G2 gates remain required. No source/test/verification relaxation was made.

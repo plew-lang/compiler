@@ -1,7 +1,7 @@
 ---
 id: com-6paa
 status: in_progress
-deps: [com-m0bf, com-nqjd, com-fyxe, com-qbwg]
+deps: [com-m0bf, com-nqjd, com-fyxe, com-qbwg, com-i62n]
 links: []
 created: 2026-10-24T02:29:50Z
 type: bug
@@ -202,3 +202,5 @@ source producer. It also fails with pre-Buffer fresh5 on identical source.
 The [current C3 stop](com-m0bf.md#scope-stop-unassigned-pre-rewrite-optional-chain-producer)
 owns the finding/proposed disposition. Keep this task in_progress; do not weaken
 type identity or absorb another producer into the registered body-key repair.
+The approved [com-i62n](com-i62n.md) is now its explicit required prerequisite;
+this task retains its own fresh control and independent completion review exit.

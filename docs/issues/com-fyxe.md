@@ -1,7 +1,7 @@
 ---
 id: com-fyxe
 status: in_progress
-deps: [com-m0bf, com-qbwg]
+deps: [com-m0bf, com-qbwg, com-i62n]
 links: []
 created: 2026-10-24T02:30:52Z
 type: task
@@ -162,3 +162,5 @@ withheld: the required focused suite stops at optional_chain, a separately
 unassigned pre-rewrite producer. See the current
 [C3 stop](com-m0bf.md#scope-stop-unassigned-pre-rewrite-optional-chain-producer).
 No newly required repair is silently included here.
+The approved [com-i62n](com-i62n.md) now owns that producer as a required
+completion prerequisite; rerun this task's own controls/review after the repair.

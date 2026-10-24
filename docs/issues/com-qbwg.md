@@ -1,7 +1,7 @@
 ---
 id: com-qbwg
 status: in_progress
-deps: [com-m0bf]
+deps: [com-m0bf, com-i62n]
 links: []
 created: 2026-10-24T05:12:48Z
 type: bug
@@ -151,8 +151,10 @@ Complete that work and rerun affected fresh controls after the planning stop.
 **Completion hold:** optional_chain exposes another unassigned source producer,
 not a Buffer regression. Its canonical finding and pending plan are in
 [C3](com-m0bf.md#scope-stop-unassigned-pre-rewrite-optional-chain-producer).
-Stop under the user's task-omission condition; do not close qbwg from partial
-success or implicitly absorb the new producer. Durable partial receipt:
+The approved [com-i62n](com-i62n.md) is now an explicit prerequisite for the
+interrupted closure controls. Keep this task in_progress; do not close it from
+partial success or absorb that producer. Its own sentinel guard/control and
+final validation/review still remain. Durable partial receipt:
 meta evidence/existing-feature-conformance/source-owner-facts/
 phase3c-synthetic-buffer-partial.json.
 

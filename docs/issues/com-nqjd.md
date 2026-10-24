@@ -17,7 +17,8 @@ historical controls remain valid. It does not certify every Chain source
 producer: the unassigned pre-rewrite Locals::optChainResultRef path is now a
 [C3 scope stop](com-m0bf.md#scope-stop-unassigned-pre-rewrite-optional-chain-producer).
 Its disposition must be reconciled before claiming Chain-family/parent closure;
-it is not silently added to this completed finite task.
+it is not silently added to this completed finite task. The approved separate
+repair is [com-i62n](com-i62n.md).
 
 ## Boundary and Entry
 
