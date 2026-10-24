@@ -1,0 +1,146 @@
+// Representation-equivalence probe for canonical local result indexing.
+// These synthetic rows deliberately assign abstract types repeatedly, include
+// Unit-typed integer operands, and name projected roots outside source.locals.
+// They are not executable/source-valid Mid and make no verifier-admission claim.
+// Only the existing public canonical instantiation result is inspected.
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use /Frontend only { Comp }
+use /Ir only { TypeRef, InstanceEnvironment }
+use /Mid only { MidCanonicalArena, MidBody, MidBlock, MidScope, MidLocalDecl, MidPlace, MidProjection, MidOperand, MidConstant, MidRvalue, MidStatement, MidTerminator, MidInstantiateError, instantiateCanonicalMidBody }
+
+fn assignment(local: U64, typeTerm: U64, projected: Bool = false, capture: Bool = false) -> MidStatement {
+    mut val destination = <MidPlace local=local typeTerm=typeTerm />
+    if projected {
+        destination = <MidPlace local=local typeTerm=typeTerm projections=[<MidProjection.Field index=0U64 typeTerm=typeTerm isBoxed=false />] />
+    }
+    val value = <MidRvalue.Use operand=<MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=false typeTerm=typeTerm /> /> />
+    if capture { return <MidStatement.InitializeCaptureCell destination=destination value=value /> }
+    return <MidStatement.Assign destination=destination value=value />
+}
+
+fn assertSourceUnchanged(compiler: Comp, snapshot: MidCanonicalArena) {
+    mut val index = 0U64
+    while index < snapshot.locals.count() {
+        val before = snapshot.locals[index]
+        val after = compiler.mid.locals[index]
+        assert(after.typeTerm == before.typeTerm && after.typeRecipe == before.typeRecipe)
+        assert(after.sourceNameStart == before.sourceNameStart && after.isParameter == before.isParameter)
+        assert(after.isCaptureCell == before.isCaptureCell)
+        index += 1U64
+    }
+    index = 0U64
+    while index < snapshot.places.count() {
+        val before = snapshot.places[index]
+        val after = compiler.mid.places[index]
+        assert(after.local == before.local && after.typeTerm == before.typeTerm && after.typeRecipe == before.typeRecipe)
+        assert(after.projections.start == before.projections.start && after.projections.len == before.projections.len)
+        index += 1U64
+    }
+    index = 0U64
+    while index < snapshot.operands.count() {
+        assert(compiler.mid.operands[index].typeTerm == snapshot.operands[index].typeTerm)
+        index += 1U64
+    }
+    index = 0U64
+    while index < snapshot.statements.count() {
+        val before = snapshot.statements[index]
+        val after = compiler.mid.statements[index]
+        assert(after.tag == before.tag && after.destination == before.destination && after.value == before.value)
+        index += 1U64
+    }
+    index = 0U64
+    while index < snapshot.bodies.count() {
+        val before = snapshot.bodies[index]
+        val after = compiler.mid.bodies[index]
+        assert(after.locals.start == before.locals.start && after.locals.len == before.locals.len)
+        assert(after.blocks.start == before.blocks.start && after.blocks.len == before.blocks.len)
+        assert(after.bodyInstance == before.bodyInstance)
+        index += 1U64
+    }
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val firstName = compiler.internBytes(s: "First")
+    val secondName = compiler.internBytes(s: "Second")
+    val otherName = compiler.internBytes(s: "Other")
+    val bindingName = compiler.internBytes(s: "retained")
+    val parameterName = compiler.internBytes(s: "T")
+    val parameters = compiler.lowerTypeParamNames(names: ["T"], anchor: parameterName.nameStart).unwrap()
+    val parameter = parameters[0U64]
+    val term = compiler.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId paramId=parameter.paramId args=[] />)
+    val firstType = compiler.pushType(t: <TypeRef nameStart=firstName.nameStart nameLen=firstName.nameLen args=[] />)
+    val secondType = compiler.pushType(t: <TypeRef nameStart=secondName.nameStart nameLen=secondName.nameLen args=[] />)
+    val otherType = compiler.pushType(t: <TypeRef nameStart=otherName.nameStart nameLen=otherName.nameLen args=[] />)
+    val firstBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment params=parameters args=[firstType] />)
+    val secondBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment params=parameters args=[secondType] />)
+    val recipe = compiler.semanticTypeRecipeTerm(term: term)
+    compiler.arena.setBodyTypeRecipeResult(bodyId: firstBody, recipeId: recipe, resultType: firstType)
+    compiler.arena.setBodyTypeRecipeResult(bodyId: secondBody, recipeId: recipe, resultType: secondType)
+    val source = compiler.mid.store(body: <MidBody locals=[
+        <MidLocalDecl typeTerm=otherType sourceScope=0U64 isUnique=false isParameter=false />,
+        <MidLocalDecl typeTerm=term sourceScope=0U64 isUnique=false isParameter=false sourceNameStart=bindingName.nameStart />,
+        <MidLocalDecl typeTerm=term sourceScope=0U64 isUnique=false isParameter=true />,
+        <MidLocalDecl typeTerm=0U64 typeRecipe=recipe sourceScope=0U64 isUnique=false isParameter=false />,
+        <MidLocalDecl typeTerm=term sourceScope=0U64 isUnique=false isParameter=false />,
+        <MidLocalDecl typeTerm=otherType sourceScope=0U64 isUnique=false isParameter=false isCaptureCell=true />
+    ] scopes=[<MidScope firstLocal=0U64 localCount=6U64 />] blocks=[
+        <MidBlock statements=[
+            assignment(local: 0U64, typeTerm: otherType),
+            assignment(local: 0U64, typeTerm: 0U64),
+            assignment(local: 1U64, typeTerm: otherType),
+            assignment(local: 2U64, typeTerm: otherType),
+            assignment(local: 3U64, typeTerm: otherType),
+            assignment(local: 4U64, typeTerm: otherType, projected: true),
+            assignment(local: 5U64, typeTerm: otherType, capture: true),
+            assignment(local: 8U64, typeTerm: otherType)
+        ] terminator=<MidTerminator.Goto target=1U64 /> />,
+        <MidBlock statements=[
+            assignment(local: 0U64, typeTerm: term),
+            assignment(local: 5U64, typeTerm: term, capture: true),
+            assignment(local: 8U64, typeTerm: term)
+        ] terminator=<MidTerminator.Goto target=2U64 /> />,
+        <MidBlock statements=[
+            assignment(local: 0U64, typeTerm: 0U64),
+            assignment(local: 5U64, typeTerm: 0U64, capture: true),
+            assignment(local: 8U64, typeTerm: 0U64),
+            assignment(local: 4U64, typeTerm: otherType, projected: true),
+            assignment(local: 10U64, typeTerm: otherType, projected: true)
+        ] terminator=<MidTerminator.Return /> />
+    ] />)
+    val snapshot = compiler.mid
+    val bodies = [firstBody, secondBody]
+    val expected = [firstType, secondType]
+    mut val localStarts: Array[U64] = []
+    mut val index = 0U64
+    while index < bodies.count() {
+        // Ambient navigation must not choose the substitution environment.
+        compiler.cur.bodyId = bodies[1U64 - index]
+        val result = instantiateCanonicalMidBody(c: inout compiler, body: source, bodyId: bodies[index])
+        match result.error { MidInstantiateError.None => {} _ => { panic "synthetic local result instantiation failed" } }
+        val output = compiler.mid.bodies[result.body.body - 1U64]
+        assert(output.bodyInstance == bodies[index] && output.locals.len == 9U64)
+        localStarts.append(output.locals.start)
+        mut val local = 0U64
+        while local < 6U64 {
+            assert(compiler.mid.locals[output.locals.start + local].typeTerm == expected[index])
+            assert(compiler.mid.locals[output.locals.start + local].typeRecipe == 0U64)
+            local += 1U64
+        }
+        // Gaps default to Unit; only a whole destination extends the table.
+        assert(compiler.mid.locals[output.locals.start + 6U64].typeTerm == 0U64)
+        assert(compiler.mid.locals[output.locals.start + 7U64].typeTerm == 0U64)
+        assert(compiler.mid.locals[output.locals.start + 8U64].typeTerm == expected[index])
+        assert(compiler.mid.locals[output.locals.start + 1U64].sourceNameStart == bindingName.nameStart)
+        assert(compiler.mid.locals[output.locals.start + 2U64].isParameter)
+        assert(compiler.mid.locals[output.locals.start + 5U64].isCaptureCell)
+        assertSourceUnchanged(compiler: compiler, snapshot: snapshot)
+        index += 1U64
+    }
+    assert(compiler.mid.locals[localStarts[0U64]].typeTerm == firstType)
+    assert(compiler.mid.locals[localStarts[0U64] + 8U64].typeTerm == firstType)
+    assert(compiler.mid.locals[localStarts[1U64]].typeTerm == secondType)
+    print("mid-instantiated-local-result-index-ok")
+}
