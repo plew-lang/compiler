@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+
+struct Pair[First, Second] { val first: First val second: Second }
+impl[First, Second] Pair[First, Second] { factory }
+impl[A, B] Pair[B, A] {
+    assoc fn made(first: B, second: A) -> Self {
+        return <Pair[B, A] first=first second=second />
+    }
+    assoc fn marked[Marker](first: B, second: A, marker: Marker) -> Self {
+        return <Pair[B, A] first=first second=second />
+    }
+}
+struct Envelope[T] { val value: T }
+impl[T] Envelope[T] { factory }
+impl[T] Envelope[Array[T]] {
+    assoc fn made(value: Array[T]) -> Self { return <Envelope[Array[T]] value=value /> }
+}
+fn main() {
+    val value: Pair[U8, I16] = if true { give Pair.made(first: 256, second: -300) } else { give Pair.made(first: 1, second: -300) }
+}

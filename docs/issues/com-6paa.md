@@ -59,3 +59,16 @@ missing/foreign identity controls. Reuse `mid_type_recipe_instances`,
 `mid_unique_type_identity` and existing source owner/static signature controls.
 Fresh scoped native/reject controls, exact removal/consumer locations, pinned
 inputs and independent completion review required; final gates stay in G2.
+
+## Paired Self-construction Observation
+
+While preparing com-fyxe controls with fixed candidate
+8e0f0329887a5386a6a1bdda84328217e64da57ee083a7bc514b35cb6df6a7cf,
+`impl[A, B] Pair[B, A] { assoc fn made(first: B, second: A) -> Self {
+return <Self first=first second=second /> } }` was rejected as having no
+memberwise factory, even after an explicit `impl[A, B] Pair[A, B] { factory }`.
+The same body using `<Pair[B, A] first=first second=second />` proceeds to the
+actual associated literal-context error. Recheck this against the existing
+parametricSelfRef/registered receiver identity repair; it is a recorded boundary
+observation, not proof of a new language rule. fyxe keeps the explicit receiver
+construction so its context controls isolate the selected signature.
