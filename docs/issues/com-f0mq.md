@@ -74,11 +74,22 @@ final whole-candidate normal/gen/deps/ASan-LSan gates remain G2a/G2b.
 
 ## Current Implementation and Verification
 
-Production `63372a7c` and adopted contract `fbab88b5` implement the shared policy;
-controls `1b3e0520` exercise both entries including initial expected-result
-commitment, binding/provisional distinction, retained ArrayRepack and Comp forks.
-No final consumer reads the progress Set. Fixed prior-carrier preflight3 and
-fresh compiler sourcecheck/native33/reject20 all pass with fixed inputs.
-Standard fresh build `20261024T112642-build-b6309c`, meta receipt
-`phase3e-result-authority.json`. Formal checkpoint and independent final admission
-remain pending; E1/G1 dependencies remain open until those pass.
+Initial policy production `63372a7c`, contract `fbab88b5`, controls `1b3e0520`.
+The exact-scope fresh sourcecheck/native33/reject20 succeeded at initial policy
+and again at `c428f54b`, which removes duplicate scope/template construction.
+Formal generation2 fixed points were reached, but medians7.069296 and7.109320s
+missed the below7s target; no completion admission follows from these runs.
+Meta `phase3e-context-self-host-initial.json` and
+`phase3e-context-self-host-scope.json` retain unsuccessful performance checkpoints,
+same-source diagnostic comparison, and CPU/symbol diagnosis separately.
+
+Production `66d84b81` memoizes only the successful lexical base scope inside the
+builder, keyed by actual function input and current lexical root. Unregistered
+functions/roots/receivers, synthetic scopes and failures are not cached;
+interface proof roots are recomposed per call. All argument-completeness,
+owner/selection and type dependency checks remain. Independent static review
+found no blocker. Standard build `20261024T120241-build-aa05ff` succeeded;
+fresh sourcecheck succeeded and native33/reject20 are running. The final
+functional receipt is `phase3e-result-authority.json`; until updated it names
+the previous candidate and must not certify66d84b81. Formal performance and
+independent final admission remain pending. E1/G1 dependencies remain open.

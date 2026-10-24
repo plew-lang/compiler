@@ -137,6 +137,14 @@ scope; incomplete selected calls remain eligible for ordinary completion. A
 binding commits its initializer's source result, never copies the slot's type
 over it. This progress is discarded with the builder on success or failure;
 Mid and Mono consume the existing published facts, not an additional marker.
+A builder may memoize its successful lexical base scope under the actual
+function input and current lexical root. Only registered functions/roots and
+already established receiver terms qualify: an absent root or receiver can
+change through later registration. Failed and synthetic incomplete scopes are
+not memoized. Call-specific interface proof roots are always composed from the
+selected call, and argument completeness, owner/selection and type dependencies
+remain checked for each commitment. This derived memo has the builder's lifetime
+and is not another published authority.
 
 Expected compatibility, lookup and first concrete witness construction remain
 separate named operations of the existing checking/type/evidence boundaries.
