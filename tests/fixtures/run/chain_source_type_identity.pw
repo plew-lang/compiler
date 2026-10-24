@@ -24,10 +24,10 @@ fn main() {
             match compiler.preparedBodyExpression(bodyId: body, exprId: site.exprId) {
                 Result.Err(error: _) => {}
                 Result.Ok(value: val expression) => {
-                    assert(expression.term != 0U64)
-                    assert(compiler.arena.typeAt(index: expression.term).hasDecl)
-                    assert(compiler.typeRefEq(a: expression.term, b: result))
-                    assert(compiler.typeRefEq(a: expression.term, b: site.stageRef))
+                    if expression.term == 0U64 { panic("chain expression has no saved term") }
+                    if !compiler.arena.typeAt(index: expression.term).hasDecl { panic("chain expression lost its owner") }
+                    if !compiler.typeRefEq(a: expression.term, b: result) { panic("chain expression differs from its return type") }
+                    if !compiler.typeRefEq(a: expression.term, b: site.stageRef) { panic("chain expression differs from its stage") }
                     match compiler.callArgumentConversion(sourceRef: expression.term, targetRef: result).unwrap() {
                         ValueConversionProof.Identity => {}
                         _ => { panic("matching chain endpoints lost identity conversion") }
@@ -38,7 +38,7 @@ fn main() {
                 }
             }
         }
-        assert(found == 1U64)
+        if found != 1U64 { panic("chain source has an unexpected site count") }
         for conversion in compiler.decls.declarationConversions {
             if conversion.site.ownerFnIdx == function {
                 match compiler.thawValueConversionProof(id: conversion.proof) {
@@ -61,14 +61,14 @@ fn requireSuccess(result: Result[(), CompileDiagnostic], context: String) {
 fn checkStageInputs(compiler: inout Comp, result: U64) {
     val shape = compiler.arena.typeAt(index: result)
     val hole = compiler.pushExpr(e: <Expr.ChainHole />)
-    assert(compiler.typeRefEq(a: compiler.chainStageResultRef(baseRef: result, cont: hole).unwrap(), b: result))
+    if !compiler.typeRefEq(a: compiler.chainStageResultRef(baseRef: result, cont: hole).unwrap(), b: result) { panic("chain stage changed an identity continuation") }
     val alias = compiler.internBytes(s: "Maybe")
     val aliased = compiler.pushType(t: <TypeRef nameStart=alias.nameStart nameLen=alias.nameLen args=shape.args hasDecl=true declOffset=shape.declOffset />)
-    assert(compiler.typeRefEq(a: compiler.chainStageResultRef(baseRef: aliased, cont: hole).unwrap(), b: result))
+    if !compiler.typeRefEq(a: compiler.chainStageResultRef(baseRef: aliased, cont: hole).unwrap(), b: result) { panic("chain stage lost an aliased owner") }
     assert(compiler.chainStageResultRef(baseRef: 0U64, cont: hole).unwrap() == 0U64)
     val unowned = compiler.pushType(t: <TypeRef nameStart=shape.nameStart nameLen=shape.nameLen args=shape.args />)
     val missing = compiler.chainStageResultRef(baseRef: unowned, cont: hole)
-    assert(missing.isErr() || missing.unwrap() == 0U64)
+    if !(missing.isErr() || missing.unwrap() == 0U64) { panic("chain stage accepted a missing nominal owner") }
     val carrierName = compiler.internBytes(s: "Optional")
     val carrierOffset = carrierName.nameStart
     compiler.modules.registerSourceFile(start: carrierOffset, length: carrierName.nameLen, moduleId: 778U64, path: "ForeignOptional.pw")
@@ -78,7 +78,7 @@ fn checkStageInputs(compiler: inout Comp, result: U64) {
     val foreignCarrier = compiler.declaredTypeRef(nameStart: shape.nameStart, nameLen: shape.nameLen, args: shape.args, declaration: foreignOwner)
     assert(foreignCarrier != 0U64 && !compiler.typeRefEq(a: foreignCarrier, b: result))
     val foreignStage = compiler.chainStageResultRef(baseRef: foreignCarrier, cont: hole)
-    assert(foreignStage.isErr() || foreignStage.unwrap() == 0U64)
+    if !(foreignStage.isErr() || foreignStage.unwrap() == 0U64) { panic("chain stage accepted a foreign carrier") }
     val child = compiler.arena.typeAt(index: shape.args[0U64])
     val childName = compiler.internBytes(s: "Item")
     val offset = childName.nameStart

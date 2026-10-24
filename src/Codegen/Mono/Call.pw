@@ -5418,6 +5418,9 @@ pub impl Comp {
             return <Result.Ok value=0 />
         }
         val gt: TypeRef = self.arena.typeAt(index: g)
+        // A stage selects an existing nominal carrier. An unowned construction
+        // cannot enter legacy name-based declaration readers as a real type.
+        if !gt.hasDecl { return <Result.Ok value=0U64 /> }
         if gt.args.count() < 1 {
             return <Result.Ok value=0 />
         }
