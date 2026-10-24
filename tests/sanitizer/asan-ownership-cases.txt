@@ -55,6 +55,7 @@ tests/fixtures/run/trait_via_ownership.pw
 tests/fixtures/run/string_interpolation_order.pw
 tests/fixtures/run/string_interpolation_lifetime.pw
 tests/fixtures/run/string_interpolation_options_lifetime.pw
+tests/fixtures/run/optchain_projected_result.pw
 
 # Value blocks leaving before their result binding or interpolation write.
 tests/fixtures/run/standalone_block_return.pw
