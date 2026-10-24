@@ -1402,10 +1402,8 @@ pub impl Comp {
     inout fn lowerTrait(t: TraitAst) -> Result[(), CompileDiagnostic] {
         val nameStart: U64 = t.nameSpan.start
         val nameLen: U64 = t.nameSpan.end - t.nameSpan.start
-        // collect the trait's binders BEFORE lowering reqs: its type params `[Rhs]` AND its
-        // associated types `Item` are both in scope inside the requirement signatures (`-> Item`,
-        // `(rhs: Rhs)`) and are binders, not module-scoped types — put them in the lowering-time
-        // scope so lowerType skips those heads. (`Self` has no global decl, so it self-skips.)
+        // Self/type parameters are lexical binders; associated names resolve
+        // through the selected trait's projection authority in requirements.
         mut val assocTypes: Array[Bind] = []
         mut val ai: U64 = 0
         while ai < t.assocTypes.count() {
@@ -1430,6 +1428,9 @@ pub impl Comp {
             sai += 1
         }
         self.cur.typeParams = scopeTP
+        val savedAssociatedOwner = self.lowerAssociatedOwner
+        val savedAssociatedArgs = self.lowerAssociatedArgs
+        self.setLowerAssociatedTrait(owner: nameStart, parameters: typeParams)
         mut val reqs: Array[Func] = []
         mut val ri: U64 = 0
         while ri < t.reqs.count() {
@@ -1451,6 +1452,8 @@ pub impl Comp {
             if constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declared.span.start, msg: "unknown supertrait or incompatible trait arguments") /> }
             supertraits.append(constraint)
         }
+        self.lowerAssociatedOwner = savedAssociatedOwner
+        self.lowerAssociatedArgs = savedAssociatedArgs
         self.cur.typeParams = savedTP
         self.decls.registerTrait(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitConstraints(constraints: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         // attach pending `@[...]` directives to this trait (a macro on a trait);
@@ -1494,6 +1497,9 @@ pub impl Comp {
             i += 1U64
         }
         self.cur.typeParams = scope
+        val savedAssociatedOwner = self.lowerAssociatedOwner
+        val savedAssociatedArgs = self.lowerAssociatedArgs
+        self.setLowerAssociatedTrait(owner: t.name.start, parameters: typeParams)
         mut val reqs: Array[Func] = []
         i = 0U64
         while i < syntaxTraitReqCount(file: self.syntax, trait: t) {
@@ -1525,6 +1531,8 @@ pub impl Comp {
             supertraits.append(constraint)
             i += 1U64
         }
+        self.lowerAssociatedOwner = savedAssociatedOwner
+        self.lowerAssociatedArgs = savedAssociatedArgs
         self.cur.typeParams = savedTP
         self.decls.registerTrait(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitConstraints(constraints: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         self.drainDerives(typeStart: t.name.start, typeLen: t.name.end - t.name.start, isEnum: false, declStart: t.span.start, declEnd: t.span.end)

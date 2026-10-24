@@ -67,6 +67,16 @@ pub impl Comp {
     }
 
     // Bare associated names are lexical declarations, not nominal type names.
+    // Requirement signatures use the same selected lexical associated-type
+    // authority as provided bodies. Name-only scope entries are not ParamIds.
+    inout fn setLowerAssociatedTrait(owner: U64, parameters: Array[Bind]) {
+        self.lowerAssociatedOwner = owner
+        self.lowerAssociatedArgs = []
+        for parameter in parameters {
+            self.lowerAssociatedArgs.append(self.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId paramId=parameter.paramId args=[] />))
+        }
+    }
+
     // Explicit method binders win before this lookup; the owner was selected
     // at the impl boundary and is independent of source declaration order.
     inout fn lowerLexicalAssociatedType(nameStart: U64, nameLen: U64, paramId: U64) -> U64 {

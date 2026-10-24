@@ -2,9 +2,10 @@ use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess, SourceResource }
-use /Ir only { CallTemplateKind }
+use /Ir only { CallTemplateKind, StructDef, InstanceEnvironment }
 
 fn main() {
+    checkEarlyReceiver()
     mut val compiler = <Comp />
     val source = "struct Options {{ pub val count: I64 }} impl Options {{ factory() {{ return <Options count=42I64 /> }} }} trait Configuration {{ type Options fn configure(options: Options) -> I64 }} struct Item {{}} impl Item as Configuration {{ type Options = Options fn configure(options: Options) -> I64 {{ return options.count }} }} fn direct(value: Item) -> I64 {{ return value.configure(options: </>) }} fn block(value: Item) -> I64 {{ return value.configure(options: {{ give </> }}) }} fn branch(value: Item, flag: Bool) -> I64 {{ return value.configure(options: if flag {{ give </> }} else {{ give </> }}) }}"
     val path = "plew:std/FactoryProbe.pw"
@@ -14,6 +15,7 @@ fn main() {
     val method = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "configure").nameId))
     val parameter = compiler.arena.typeAt(index: compiler.funcParamAt(params: method.params, index: 0U64).ty)
     if !parameter.hasDecl || parameter.declOffset != declaration.defOffset { panic("factory context lost its selected nominal declaration") }
+    mut val selectedFactory = compiler.arena.functionCount()
     for name in ["direct", "block", "branch"] {
         val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
         compiler.prepareLexicalBody(fnIdx: function).unwrap()
@@ -26,6 +28,7 @@ fn main() {
                     CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                         val selected = compiler.arena.functionAt(index: callee)
                         if selected.isAssoc {
+                            selectedFactory = callee
                             val receiver = compiler.arena.typeAt(index: template.receiverTypeTerm)
                             if !receiver.hasDecl || receiver.declOffset != declaration.defOffset { panic("factory signature lost its selected receiver") }
                             found += 1U64
@@ -44,5 +47,30 @@ fn main() {
     assert(compiler.factoryConstructionReceiver(writtenTerm: receiver, typeStart: declaration.nameStart, typeLen: declaration.nameLen, offset: declaration.defOffset).unwrap() == receiver)
     val missing = compiler.internBytes(s: "MissingFactoryReceiver")
     assert(compiler.factoryConstructionReceiver(writtenTerm: 0U64, typeStart: missing.nameStart, typeLen: missing.nameLen, offset: declaration.defOffset).isErr())
+    val foreignSource = compiler.internBytes(s: "struct Options {}")
+    val foreignStart = foreignSource.nameStart + 7U64
+    compiler.modules.registerSourceFile(start: foreignSource.nameStart, length: foreignSource.nameLen, moduleId: 777U64, path: "ForeignFactory.pw")
+    compiler.arena.registerStruct(<StructDef nameStart=foreignStart nameLen=7U64 nameId=optionsName typeParams=[] fields=[] isUnique=false isExtern=false defOffset=foreignStart />)
+    val foreign = compiler.factoryConstructionReceiver(writtenTerm: 0U64, typeStart: foreignStart, typeLen: 7U64, offset: foreignStart).unwrap()
+    assert(compiler.arena.typeAt(index: foreign).declOffset == foreignStart)
+    assert(!compiler.typeRefEq(a: receiver, b: foreign))
+    assert(selectedFactory < compiler.arena.functionCount())
+    assert(!compiler.bodyReceiverMatchesDeclaration(function: compiler.arena.functionAt(index: selectedFactory), environment: <InstanceEnvironment receiverRef=foreign />))
     print("factory-source-declaration-identity")
+}
+
+fn checkEarlyReceiver() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val source = compiler.internBytes(s: "struct Early {}")
+    val start = source.nameStart + 7U64
+    val name = compiler.internBytes(s: "Early").nameId
+    compiler.modules.registerSourceFile(start: source.nameStart, length: source.nameLen, moduleId: 1U64, path: "Early.pw")
+    val receiver = compiler.factoryConstructionReceiver(writtenTerm: 0U64, typeStart: start, typeLen: 5U64, offset: start).unwrap()
+    assert(!compiler.arena.typeAt(index: receiver).hasDecl)
+    assert(compiler.arena.typeAt(index: receiver).siteOffset == start)
+    compiler.arena.registerStruct(<StructDef nameStart=start nameLen=5U64 nameId=name typeParams=[] fields=[] isUnique=false isExtern=false defOffset=start />)
+    compiler.resolveTypeDeclIdentities().unwrap()
+    assert(compiler.arena.typeAt(index: receiver).hasDecl)
+    assert(compiler.arena.typeAt(index: receiver).declOffset == start)
 }

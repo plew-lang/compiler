@@ -648,6 +648,9 @@ pub impl Comp {
         match self.arena.exprs[exprId] {
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 if self.arena.resolvedMemberwiseFactories.contains(exprId) { return <Result.Ok value=() /> }
+                // A record literal has no nominal factory receiver. Record owns
+                // its structural field/context checking through the normal path.
+                if typeLen == 0U64 && ty == 0U64 { return <Result.Ok value=() /> }
                 val candidates = self.anonymousConstructionCandidates(typeStart: typeStart, typeLen: typeLen)
                 val receiver = try self.factoryConstructionReceiver(writtenTerm: ty, typeStart: typeStart, typeLen: typeLen, offset: self.exprOffset(id: exprId))
                 val abstractReceiver = receiver != 0U64 && receiver < self.arena.typeCount() && (self.arena.typeTerms[receiver].paramId != 0U64 || self.arena.typeTerms[receiver].assocNameId != 0U64)
