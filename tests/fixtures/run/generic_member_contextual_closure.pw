@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+trait Apply[Input] { fn apply(callback: fn(value: Input) -> I64) -> I64 }
+struct Parser {}
+pub impl Parser { factory }
+impl Parser as Apply[I64] { fn apply(callback: fn(value: I64) -> I64) -> I64 { return callback(value: 1I64) } }
+impl Parser as Apply[Bool] { fn apply(callback: fn(value: Bool) -> I64) -> I64 { return callback(value: true) } }
+trait Source { type Item }
+struct Root {}
+pub impl Root { factory }
+impl Root as Source { type Item = Parser }
+fn ordinary[T](value: T) -> I64 where T: Apply[I64] {
+    return value.apply(callback: fn(value) -> I64 { return value + 60I64 })
+}
+fn projected[T](root: T, value: T#Source.Item) -> I64 where T: Source, T#Source.Item: Apply[Bool] {
+    return value.apply(callback: fn(value) -> I64 { return if value { give 62I64 } else { give 0I64 } })
+}
+fn main() {
+    print(ordinary(value: <Parser />))
+    print(projected(root: <Root />, value: <Parser />))
+}

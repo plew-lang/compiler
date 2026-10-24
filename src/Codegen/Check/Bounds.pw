@@ -346,7 +346,7 @@ pub impl Comp {
             mut val expected = try self.groundKnownCallTypeArguments(ref: signature, params: requirement.typeParams, values: values, receiver: bound.subject)
             if expected == 0U64 || expected >= self.arena.typeCount() { return <Result.Ok value=1U64 /> }
             val expression = self.argAt(args: args, index: index).expr
-            if self.expressionNeedsTypeContext(exprId: expression, allowPartialFunction: true) {
+            if self.expressionNeedsTypeContext(exprId: expression) {
                 if !(try self.contextualArgumentMatchesType(exprId: expression, expected: expected)) { return <Result.Ok value=1U64 /> }
             } else {
                 // Uncommitted numeric syntax may adapt to a numeric parameter;
