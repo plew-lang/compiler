@@ -1,0 +1,75 @@
+// A binding commits an independently inferred source type. The same array
+// before binding remains a probe that its first parameter context may finish.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Ir only { Stmt, ValueConversionProof }
+use @Std/Io only { print }
+
+fn check(binding: Bool, entry: U64) {
+    mut val compiler = <Comp />
+    val resources = [
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub struct Array[T] {{}}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="" />,
+        <SourceResource path="plew:std/BindingProbe.pw".bytes() text="trait Shape {{}} struct Square {{}} pub impl Square {{ factory }} pub impl Square as Shape {{}} fn probe(target: Array[any Shape]) {{ val values = [<Square />] }}" />,
+    ]
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.File path="plew:std/BindingProbe.pw" />,
+        sources: <SourceAccess stdRoot="plew:std/".bytes() resources=resources />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    val target = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    if !compiler.isLangArrayType(ref: target) { panic("missing target Array setup") }
+    val statement = compiler.blockStmtAt(blkId: function.body, index: 0U64)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init
+        _ => { panic("missing source binding") }
+    }
+    compiler.cur.checkFn = owner
+    compiler.cur.recordCallTemplates = true
+    if binding { compiler.recordStmt(stmtId: statement).unwrap() }
+    else { compiler.recordExpr(exprId: expression).unwrap() }
+    val source = compiler.semanticExprTerm(exprId: expression)
+    if !compiler.isLangArrayType(ref: source) || compiler.typeRefEq(a: source, b: target) { panic("source probe was not Array[Square]") }
+    if entry == 0U64 { compiler.recordExpr(exprId: expression, expectedTerm: target).unwrap() }
+    else { compiler.recordSemanticExprExpectedResult(exprId: expression, expectedTerm: target).unwrap() }
+    val expectedSource = if binding { give source } else { give target }
+    if !compiler.typeRefEq(a: compiler.semanticExprTerm(exprId: expression), b: expectedSource) { panic("binding and provisional context were not distinguished") }
+    // Ordinary use may erase the element type through a saved conversion;
+    // that does not authorize rewriting the binding's source Array[Square].
+    compiler.tcCheckValue(expectedRef: target, valueExpr: expression, pos: "binding-context").unwrap()
+    match compiler.callArgumentConversion(sourceRef: expectedSource, targetRef: target).unwrap() {
+        ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: _) => {
+            if !binding { panic("contextual carrier required a second array repack") }
+        }
+        ValueConversionProof.Identity => {
+            if binding { panic("binding erasure lost its array repack") }
+        }
+        _ => { panic("unexpected array conversion") }
+    }
+    compiler.recordDeclarationConversion(exprId: expression, target: target).unwrap()
+    val site = compiler.templateCallSiteKey(fnIdx: owner, exprId: expression).unwrap()
+    mut val found = false
+    for conversion in compiler.decls.declarationConversions {
+        if conversion.site.sameKey(other: site) && compiler.typeRefEq(a: conversion.target, b: target) {
+            if !compiler.typeRefEq(a: conversion.source, b: expectedSource) { panic("conversion replaced its source boundary") }
+            compiler.checkDeclarationConversionEvidence(conversion: conversion).unwrap()
+            match compiler.thawValueConversionProof(id: conversion.proof) {
+                ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: _) => {}
+                _ => { panic("retained conversion lost its array repack") }
+            }
+            found = true
+        }
+    }
+    // Identity needs no saved conversion row. Erasure of the committed
+    // source value does need its admitted ArrayRepack evidence.
+    if found != binding { panic("wrong retained array conversion boundary") }
+    if !compiler.typeRefEq(a: compiler.semanticExprTerm(exprId: expression), b: expectedSource) { panic("compatibility changed the source type") }
+}
+
+fn main() {
+    for entry in [0U64, 1U64] {
+        check(binding: false, entry: entry)
+        check(binding: true, entry: entry)
+    }
+    print("value-control-binding-context")
+}

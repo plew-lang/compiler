@@ -5,7 +5,15 @@ use /SourceAccess only { SourceAccess, SourceResource }
 use /Ir only { Expr, Stmt, SemanticExpressionTypeState }
 use @Std/Io only { print }
 
-fn check(mode: U64) -> Bool {
+fn revisit(compiler: inout Comp, expression: U64, expected: U64, entry: U64) {
+    if entry == 0U64 {
+        match compiler.recordExpr(exprId: expression, expectedTerm: expected) { Result.Ok(value: _) => {} Result.Err(error: _) => {} }
+    } else {
+        match compiler.recordSemanticExprExpectedResult(exprId: expression, expectedTerm: expected) { Result.Ok(value: _) => {} Result.Err(error: _) => {} }
+    }
+}
+
+fn check(mode: U64, entry: U64) -> Bool {
     mut val compiler = <Comp />
     val resources = [
         <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I8, I16 }} pub struct Array[T] {{}}" />,
@@ -37,6 +45,9 @@ fn check(mode: U64) -> Bool {
     val child = if wrapped { give compiler.blockGiveExpr(blkId: block) } else { give expression }
     compiler.cur.checkFn = owner
     compiler.cur.recordCallTemplates = true
+    // Copy before either branch receives context. One branch must not grant
+    // or constrain the other's construction progress.
+    mut val independent = compiler
     compiler.recordExpr(exprId: expression, expectedTerm: narrow).unwrap()
     compiler.tcCheckValue(expectedRef: narrow, valueExpr: expression, pos: "initial-context").unwrap()
     val saved = compiler.sourceSemanticExprTypeAt(index: expression)
@@ -47,9 +58,18 @@ fn check(mode: U64) -> Bool {
         val blockType = compiler.valueBlockTypeInfo(blockId: block, chainHoleRef: 0U64).unwrap().unwrap()
         if !compiler.typeRefEq(a: compiler.typedIrRefOfInfo(ti: blockType), b: narrow) { panic("initial block result setup failed") }
     }
+    val forks = mode == 3U64 && entry == 0U64
+    if forks {
+        independent.recordExpr(exprId: expression, expectedTerm: wide).unwrap()
+        independent.tcCheckValue(expectedRef: wide, valueExpr: expression, pos: "independent-context").unwrap()
+        if !independent.typeRefEq(a: independent.semanticExprTerm(exprId: expression), b: wide) { panic("pre-context fork shared construction progress") }
+        if !compiler.typeRefEq(a: compiler.semanticExprTerm(exprId: expression), b: narrow) { panic("independent context changed the original branch") }
+    }
+    // A copy after commitment must retain that progress as well as the type.
+    mut val retained = compiler
     // As with an explicit scalar suffix, construction may return Ok while
     // preserving the source type. It need not reject at this API boundary.
-    match compiler.recordExpr(exprId: expression, expectedTerm: wide) { Result.Ok(value: _) => {} Result.Err(error: _) => {} }
+    revisit(compiler: inout compiler, expression: expression, expected: wide, entry: entry)
     val after = compiler.sourceSemanticExprTypeAt(index: expression)
     val afterChild = compiler.sourceSemanticExprTypeAt(index: child)
     mut val unchanged = compiler.typeRefEq(a: after.term, b: saved.term) && after.shape == saved.shape && compiler.typeRefEq(a: afterChild.term, b: savedChild.term) && afterChild.shape == savedChild.shape
@@ -59,10 +79,18 @@ fn check(mode: U64) -> Bool {
         if !compiler.typeRefEq(a: compiler.typedIrRefOfInfo(ti: blockType), b: narrow) { unchanged = false }
     }
     val incompatible = compiler.tcCheckValue(expectedRef: wide, valueExpr: expression, pos: "repeated-context").isErr()
+    if forks {
+        revisit(compiler: inout retained, expression: expression, expected: wide, entry: 1U64)
+        if !retained.typeRefEq(a: retained.semanticExprTerm(exprId: expression), b: narrow) { panic("post-context fork lost construction progress") }
+        if retained.tcCheckValue(expectedRef: wide, valueExpr: expression, pos: "retained-context").isOk() { panic("post-context fork accepted an incompatible type") }
+        if !independent.typeRefEq(a: independent.semanticExprTerm(exprId: expression), b: wide) { panic("retained narrow context changed the wide branch") }
+        if !compiler.typeRefEq(a: compiler.semanticExprTerm(exprId: expression), b: narrow) { panic("retained fork changed the original source type") }
+    }
     if !unchanged || !incompatible {
         val label = if mode == 0U64 { give "scalar-direct" } else if mode == 1U64 { give "scalar-block" } else if mode == 2U64 { give "array-direct" } else { give "array-block" }
-        if !unchanged { print(label + ": saved type changed") }
-        if !incompatible { print(label + ": incompatible context accepted") }
+        val boundary = if entry == 0U64 { give "record" } else { give "expected" }
+        if !unchanged { print(boundary + "/" + label + ": saved type changed") }
+        if !incompatible { print(boundary + "/" + label + ": incompatible context accepted") }
         return false
     }
     return true
@@ -70,9 +98,11 @@ fn check(mode: U64) -> Bool {
 
 fn main() {
     mut val passed = 0U64
-    for mode in [0U64, 1U64, 2U64, 3U64] {
-        if check(mode: mode) { passed += 1U64 }
+    for entry in [0U64, 1U64] {
+        for mode in [0U64, 1U64, 2U64, 3U64] {
+            if check(mode: mode, entry: entry) { passed += 1U64 }
+        }
     }
-    if passed != 4U64 { panic("repeated context changed an established source value") }
+    if passed != 8U64 { panic("repeated context changed an established source value") }
     print("value-control-context-authority")
 }
