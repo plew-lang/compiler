@@ -160,3 +160,15 @@ foreign or missing receiver and require rejection. Fresh2286dbe6 sourcecheck
 passes; its native module control reaches a receiver/declaration inconsistency
 in Array.overBuffer. A trace-only diagnostic records pattern/expected/actual
 receivers to identify that producer; no accepted comparison is weakened.
+
+### Completed Signature Receiver at Finalization
+
+Freshb4f0d160's trace isolates Array.overBuffer: saved source signature is
+Array[U8], but selectDirectTemplateCall grounds the evaluation recipe's bare
+Array term, dropping the completed receiverTypeTerm. The finalizer now receives
+that saved complete signature term explicitly, grounding it in the caller body
+environment for selected callable/body identity. The receiver recipe continues
+to own evaluation and dependency provenance. No result/name reconstruction or
+receiver inference is reintroduced. The old owning head comparison's remaining
+internal client mid_nominal_alias_identity is migrated to the scalar ref reader;
+its same-owner alias intent is unchanged.

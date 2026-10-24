@@ -15,7 +15,7 @@ fn main() {
     assert(compiler.typeRefEq(a: original, b: renamed))
     assert(compiler.typeRefEq(a: renamed, b: original))
     assert(!compiler.typeRefEq(a: original, b: distinct))
-    assert(compiler.typeTermSameHead(a: compiler.arena.typeAt(index: original), b: compiler.arena.typeAt(index: renamed)))
+    assert(compiler.typeTermRefSameHead(a: original, b: renamed))
     val container = compiler.internTmpName(prefix: "Container", n: 0U64)
     val originalContainer = compiler.pushType(t: <TypeRef nameStart=container.nameStart nameLen=container.nameLen args=[original] />)
     val aliasContainer = compiler.pushType(t: <TypeRef nameStart=container.nameStart nameLen=container.nameLen args=[renamed] />)

@@ -3328,10 +3328,15 @@ pub impl Comp {
     // remains a navigation anchor for backend value emission, but callee,
     // receiver, argument shape, substitutions, and expected result all come
     // from frontend semantic facts recorded before BodyInstance finalization.
-    inout fn selectDirectTemplateCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[CallSiteSelection, CompileDiagnostic] {
+    inout fn selectDirectTemplateCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, receiverTypeTerm: U64, arguments: Array[CallTemplateArgument], proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[CallSiteSelection, CompileDiagnostic] {
         val expected: U64 = (try self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         val calleeArgs: Array[U64] = (try self.groundSemanticCallTypeArgs(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
-        val receiverRef: U64 = (try self.groundCallTemplateReceiver(receiver: receiver))
+        // The receiver recipe retains evaluation/dependency provenance. Its
+        // Term may still be a bare associated qualifier. The saved signature's
+        // completed receiver term owns type substitution and body identity.
+        val receiverRef: U64 = if receiverTypeTerm != 0U64 {
+            give try self.groundAndRecordBodyType(ref: receiverTypeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.currentBodyInstanceId())
+        } else { give try self.groundCallTemplateReceiver(receiver: receiver) }
         mut val concreteProof: StaticConformanceProof = proof
         // A Direct template has already selected its callable.  When that
         // callable is a provided copy, the template must nevertheless carry
@@ -3964,7 +3969,7 @@ pub impl Comp {
         match template.kind {
             CallTemplateKind.Direct(callee: val storedCallee, receiver: val receiver, args: val arguments, calleeTypeArgs: _, proofId: val proofId) => {
                 if storedCallee < self.arena.functionCount() {
-                    val selection: CallSiteSelection = (try self.selectDirectTemplateCall(exprId: exprId, callee: storedCallee, receiver: receiver, arguments: self.callTemplateArguments(range: arguments), proof: self.thawStaticConformanceProof(id: proofId)))
+                    val selection: CallSiteSelection = (try self.selectDirectTemplateCall(exprId: exprId, callee: storedCallee, receiver: receiver, receiverTypeTerm: template.receiverTypeTerm, arguments: self.callTemplateArguments(range: arguments), proof: self.thawStaticConformanceProof(id: proofId)))
                     try self.recordSelectedBodyCallee(selection: selection)
                     try self.enqueueSelectedCallee(selection: selection, template: template)
                     return <Result.Ok value=storedCallee />
