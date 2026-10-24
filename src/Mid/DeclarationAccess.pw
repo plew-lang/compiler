@@ -105,7 +105,8 @@ impl DeclarationAccessState {
                     self.graph.statement(arena: c.mid, body: index, statement: statement)
                     if statement.tag == 2U64 || statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 10U64 {
                         val place = c.mid.places[statement.destination - 1U64]
-                        self.destruction(c: c, caller: index, term: place.typeTerm, recipe: place.typeRecipe)
+                        val deferred = place.typeRecipe != 0U64 || (place.typeTerm != 0U64 && !c.arena.typeIsClosed(ref: place.typeTerm))
+                        self.destruction(caller: index, term: place.typeTerm, recipe: place.typeRecipe, deferred: deferred)
                     }
                     if statement.value != 0U64 {
                         val value = c.mid.rvalues[statement.value - 1U64]
@@ -161,8 +162,10 @@ impl DeclarationAccessState {
         return <Result.Ok value=() />
     }
 
-    inout fn destruction(c: Comp, caller: U64, term: U64, recipe: U64) {
-        if recipe != 0U64 || (term != 0U64 && !c.arena.typeIsClosed(ref: term)) {
+    // Classify against the current arena before mutating this graph. Only
+    // scalar inputs cross this boundary; no whole Comp snapshot is needed.
+    inout fn destruction(caller: U64, term: U64, recipe: U64, deferred: Bool) {
+        if deferred {
             self.obligations.append(<DeclarationAccessObligation.Destruction body=caller typeTerm=term typeRecipe=recipe />)
             return
         }
@@ -182,11 +185,9 @@ impl DeclarationAccessState {
         }
         mut val child = 0U64
         while child < dependencies.children.count() {
-            // Resolve the independent child ID before passing the compiler
-            // view. Indexing is a call, so placing it after c would require a
-            // snapshot of the whole compiler across that argument evaluation.
             val childType = dependencies.children[child]
-            self.destruction(c: c, caller: node, term: childType, recipe: 0U64)
+            val deferred = childType != 0U64 && !c.arena.typeIsClosed(ref: childType)
+            self.destruction(caller: node, term: childType, recipe: 0U64, deferred: deferred)
             child += 1U64
         }
         return <Result.Ok value=() />
