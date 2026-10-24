@@ -817,7 +817,7 @@ fn canonicalMidCopyIdentityTerminator(arena: inout MidCanonicalArena, terminator
 // identities are preserved for declaration-time analysis. Such an output is
 // not executable: the typed preparation pipeline still requires instantiation,
 // access elaboration, and verification before issuing an executable token.
-fn measuredElaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: MidCanonicalBody) -> MidCanonicalBody {
+pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: MidCanonicalBody) -> MidCanonicalBody {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return <MidCanonicalBody body=0U64 /> }
     val source: MidBodyNode = arena.bodies[canonical.body - 1U64]
     val ownership: Array[MidOwnershipStates] = analyzeCanonicalMidOwnership(arena: arena, canonical: canonical)
@@ -1079,19 +1079,4 @@ fn midJoinOwnershipStates(states: inout MidOwnershipStates, incoming: MidOwnersh
 
 fn midJoinAccessibilityStates(states: inout MidAccessibilityStates, incoming: MidAccessibilityStates) -> Bool {
     return states.join(incoming: incoming)
-}
-
-use @Std/Io only { eprint }
-
-// Temporary CPU-cost diagnostic only; removed after the measured execution.
-extern(c) { fn clock() -> U64 }
-fn reportMidCost(label: String, ticks: U64, calls: U64 = 0U64) {
-    eprint(text: "[mid-cost] {label} ticks={ticks} calls={calls}\n")
-}
-
-pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: MidCanonicalBody) -> MidCanonicalBody {
-    val started = clock()
-    val result = measuredElaborateCanonicalMidDrops(arena: inout arena, canonical: canonical)
-    reportMidCost(label: "drop", ticks: clock() - started)
-    return result
 }

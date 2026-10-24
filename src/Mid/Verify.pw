@@ -393,7 +393,7 @@ fn canonicalMidSamePlace(arena: MidCanonicalArena, leftId: U64, rightId: U64) ->
     return true
 }
 
-fn measuredVerifyCanonicalMidFlagInitialization(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> MidVerification {
+fn verifyCanonicalMidFlagInitialization(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> MidVerification {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
     val body: MidBodyNode = arena.bodies[canonical.body - 1U64]
     mut val flags: Array[U64] = []
@@ -811,7 +811,7 @@ fn verifyCanonicalMidFlagOwnership(arena: MidCanonicalArena, body: MidBodyNode) 
     return <MidVerification />
 }
 
-fn measuredVerifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage: MidVerificationStage) -> MidVerification {
+fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage: MidVerificationStage) -> MidVerification {
     val executable = stage.isExecutable()
     if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
     if !c.mid.isWellFormed(body: canonical) { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
@@ -1086,27 +1086,4 @@ fn measuredVerifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBod
     // trust an authored absence flag to bypass capability verification.
     if executable && hasAccessScopes && !canonicalMidAccessScopesValid(arena: c.mid, body: body) { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
     return verifyCanonicalMidFlagOwnership(arena: c.mid, body: body)
-}
-
-use @Std/Io only { eprint }
-
-// Temporary CPU-cost diagnostic only; removed after the measured execution.
-extern(c) { fn clock() -> U64 }
-fn reportMidCost(label: String, ticks: U64, calls: U64 = 0U64) {
-    eprint(text: "[mid-cost] {label} ticks={ticks} calls={calls}\n")
-}
-
-fn verifyCanonicalMidFlagInitialization(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> MidVerification {
-    val started = clock()
-    val result = measuredVerifyCanonicalMidFlagInitialization(arena: arena, canonical: canonical)
-    reportMidCost(label: "flags", ticks: clock() - started)
-    return result
-}
-fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage: MidVerificationStage) -> MidVerification {
-    val started = clock()
-    val result = measuredVerifyCanonicalMidBodyStage(c: inout c, canonical: canonical, stage: stage)
-    val elapsed = clock() - started
-    val label = if stage.isExecutable() { give "verify-executable" } else if stage.isDeclaration() { give "verify-declaration" } else { give "verify-instantiated" }
-    reportMidCost(label: label, ticks: elapsed)
-    return result
 }
