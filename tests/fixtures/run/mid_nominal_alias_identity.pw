@@ -1,5 +1,5 @@
 use /Frontend only { Comp }
-use /Ir only { TypeRef }
+use /Ir only { TypeRef, ResolvedViewSource }
 use @Std/Core only { assert }
 use @Std/Io only { print }
 
@@ -24,5 +24,37 @@ fn main() {
     assert(!compiler.typeRefEq(a: originalContainer, b: distinctContainer))
     val viewed = compiler.pushType(t: <TypeRef nameStart=alias.nameStart nameLen=alias.nameLen args=[] hasDecl=true declOffset=name.nameStart viewExtId=1U64 viewIds=[1U64] />)
     assert(!compiler.typeRefEq(a: original, b: viewed))
+    // Every view representation must independently prevent the empty-view
+    // fast path, on either side. Legacy mirrors retain their source semantics.
+    val extensionView = compiler.pushType(t: <TypeRef nameStart=alias.nameStart nameLen=alias.nameLen args=[] hasDecl=true declOffset=name.nameStart viewExtId=1U64 />)
+    val identifiers = compiler.pushType(t: <TypeRef nameStart=alias.nameStart nameLen=alias.nameLen args=[] hasDecl=true declOffset=name.nameStart viewIds=[1U64] />)
+    val sources = compiler.pushType(t: <TypeRef nameStart=alias.nameStart nameLen=alias.nameLen args=[] hasDecl=true declOffset=name.nameStart viewSources=[<ResolvedViewSource surfaceId=1U64 />] />)
+    for val selected in [extensionView, identifiers, sources] {
+        assert(!compiler.typeTermRefSameHead(a: original, b: selected))
+        assert(!compiler.typeTermRefSameHead(a: selected, b: original))
+        assert(compiler.typeTermRefSameHead(a: viewed, b: selected))
+        assert(compiler.typeTermRefSameHead(a: selected, b: viewed))
+    }
+    val ordered = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=name.nameStart viewSources=[<ResolvedViewSource surfaceId=1U64 />, <ResolvedViewSource traitOwner=2U64 />] />)
+    val reversed = compiler.pushType(t: <TypeRef nameStart=alias.nameStart nameLen=alias.nameLen args=[] hasDecl=true declOffset=name.nameStart viewSources=[<ResolvedViewSource traitOwner=2U64 />, <ResolvedViewSource surfaceId=1U64 />] />)
+    assert(compiler.typeTermRefSameHead(a: ordered, b: reversed))
+    assert(compiler.typeTermRefSameHead(a: reversed, b: ordered))
+    val traitView = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=name.nameStart viewSources=[<ResolvedViewSource traitOwner=1U64 />] />)
+    assert(!compiler.typeTermRefSameHead(a: sources, b: traitView))
+    assert(!compiler.typeTermRefSameHead(a: traitView, b: sources))
+    // Empty outer views never establish recursive equality of the children.
+    val viewedContainer = compiler.pushType(t: <TypeRef nameStart=container.nameStart nameLen=container.nameLen args=[viewed] />)
+    assert(compiler.typeTermRefSameHead(a: originalContainer, b: viewedContainer))
+    assert(!compiler.typeRefEq(a: originalContainer, b: viewedContainer))
+    val binder = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] paramId=1U64 />)
+    val foreignBinder = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] paramId=2U64 />)
+    assert(!compiler.typeTermRefSameHead(a: binder, b: foreignBinder))
+    val projection = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] projectionReceiver=original assocTraitId=1U64 assocNameId=1U64 />)
+    val otherProjection = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] projectionReceiver=original assocTraitId=1U64 assocNameId=2U64 />)
+    assert(!compiler.typeTermRefSameHead(a: projection, b: otherProjection))
+    val invalid = compiler.arena.typeTermCount()
+    assert(!compiler.typeTermRefSameHead(a: invalid, b: invalid))
+    assert(!compiler.typeTermRefSameHead(a: invalid, b: original))
+    assert(!compiler.typeTermRefSameHead(a: original, b: invalid))
     print("ok")
 }

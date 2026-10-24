@@ -458,7 +458,8 @@ pub impl Comp {
             mut val found = false
             mut val other = 0U64
             while other < count {
-                if self.semanticViewSourceEq(a: wanted, b: self.typeTermViewSourceAt(ref: b, index: other)) { found = true }
+                if self.semanticViewSourceEq(a: wanted, b: self.typeTermViewSourceAt(ref: b, index: other)) { found = true
+                    break }
                 other += 1U64
             }
             if !found { return false }
@@ -482,8 +483,12 @@ pub impl Comp {
             return false
         }
         if ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.paramId != tb.paramId { return false }
-        if !(self.sameTypeTermViewIds(a: a, b: b)) { return false }
-        if (ta.hasDecl && tb.hasDecl && ta.declOffset != tb.declOffset) || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId { return false }
+        // All three empty representations give a zero source count. Both
+        // empty sets therefore match without re-reading the same term rows.
+        if ta.viewExtId != 0U64 || ta.viewIds.len != 0U64 || ta.viewSources.len != 0U64 || tb.viewExtId != 0U64 || tb.viewIds.len != 0U64 || tb.viewSources.len != 0U64 {
+            if !(self.sameTypeTermViewIds(a: a, b: b)) { return false }
+        }
+        if ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId { return false }
         return true
     }
 
