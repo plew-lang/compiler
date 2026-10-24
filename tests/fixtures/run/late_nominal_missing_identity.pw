@@ -1,0 +1,53 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { Bind, TypeRef, TypeInfo, Func, FieldDef, Expr, InstanceEnvironment }
+
+fn main() {
+    for configured in [false, true] {
+        mut val compiler = <Comp />
+        compiler.arena.reserveTypeSentinel()
+        if configured { compiler.modules.langModule = 0U64 }
+        val integerName = compiler.internBytes(s: "I64")
+        val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
+        val before = compiler.arena.typeCount()
+        assert(compiler.arrayRefOfElem(elemRef: integer) == 0U64)
+        assert(compiler.langTypeRef(name: "Promise", args: [integer]) == 0U64)
+        assert(compiler.langTypeRef(name: "Optional", args: [integer]) == 0U64)
+        assert(compiler.langTypeRef(name: "String", args: []) == 0U64)
+        assert(compiler.arena.typeCount() == before)
+        assert(compiler.sourceArrayTypeRef(elemRef: integer, offset: 0U64).isErr())
+        val name = compiler.internBytes(s: "missing")
+        val declaration = <Func nameStart=name.nameStart nameLen=name.nameLen hasRet=true retStart=name.nameStart retLen=name.nameLen retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />
+        compiler.arena.registerFunction(declaration)
+        assert(compiler.groundedSelectedCalleeReturn(callee: 0U64, environment: <InstanceEnvironment />).isErr())
+        val field = <FieldDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId tyStart=name.nameStart tyLen=name.nameLen tyNameId=name.nameId tyIsArray=false ty=0U64 isMut=false hasDefault=false defaultVal=0U64 />
+        assert(compiler.arcFieldTy(f: field).isErr())
+        val qualifier = compiler.pushExpr(e: <Expr.Ident start=name.nameStart len=name.nameLen />)
+        val count = compiler.arena.typeCount()
+        assert(compiler.concreteTypeQualifierTerm(exprId: qualifier).unwrap() == 0U64)
+        assert(compiler.arena.typeCount() == count)
+        val literal = compiler.pushExpr(e: <Expr.Str start=name.nameStart len=name.nameLen />)
+        match compiler.recordExpr(exprId: literal) {
+            Result.Err(error: val error) => { assert(error.message == "string literal requires the ambient String declaration") }
+            Result.Ok(value: _) => { panic("missing String admitted") }
+        }
+        val asynchronous = <Func nameStart=name.nameStart nameLen=name.nameLen hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=true isExtern=false />
+        compiler.arena.registerFunction(asynchronous)
+        assert(compiler.checkImplicitCallableResultTypes().isErr())
+        assert(compiler.groundedSelectedCalleeReturn(callee: 1U64, environment: <InstanceEnvironment />).isErr())
+    }
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "Item")
+    val first = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=100U64 />)
+    val second = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=200U64 />)
+    val parameter = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] paramId=1U64 />)
+    compiler.monoWork.arrayElems.append(<Bind nameStart=name.nameStart nameLen=name.nameLen fieldStart=first fieldLen=0U64 />)
+    compiler.monoWork.arrayElems.append(<Bind nameStart=name.nameStart nameLen=name.nameLen fieldStart=second fieldLen=0U64 />)
+    compiler.monoWork.arrayElems.append(<Bind nameStart=name.nameStart nameLen=name.nameLen fieldStart=parameter fieldLen=0U64 />)
+    val count = compiler.arena.typeCount()
+    assert(compiler.typedIrRefOfInfo(ti: <TypeInfo kind=3 nameStart=name.nameStart nameLen=name.nameLen ref=0U64 />) == 0U64)
+    assert(compiler.arena.typeCount() == count)
+    print("late-nominal-missing-identity")
+}

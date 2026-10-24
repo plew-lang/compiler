@@ -332,7 +332,11 @@ pub impl Comp {
     inout fn groundedSelectedCalleeReturn(callee: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
         if callee >= self.arena.functionCount() { return <Result.Ok value=0U64 />}
         val f: Func = self.arena.functionAt(index: callee)
-        if f.isAsync && !f.hasRet { return <Result.Ok value=self.semanticCallableReturnTerm(function: f) /> }
+        if f.isAsync && !f.hasRet {
+            val result = self.semanticCallableReturnTerm(function: f)
+            if result == 0U64 { return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: f), msg: "async declaration requires the ambient Promise declaration") /> }
+            return <Result.Ok value=result />
+        }
         if !(f.hasRet) { return <Result.Ok value=0U64 />}
         if f.retTy == 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: f), msg: "internal error: selected callable has no annotated result term") />

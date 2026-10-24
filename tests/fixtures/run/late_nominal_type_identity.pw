@@ -2,14 +2,14 @@ use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { Bind, Stmt, Expr, InstanceEnvironment }
+use /Ir only { Bind, Stmt, Expr, InstanceEnvironment, TypeRef, ResolvedViewSource }
 
 fn main() {
     mut val compiler = <Comp />
     // A minimal declaration client supplies its own ambient fixture. There is
     // no implicit library owner to guess from an arbitrary printed type name.
     compiler.modules.langModule = 0U64
-    val source = "extern(plewIntrinsic) {{ struct Promise[T] }} struct Array[T] {{}} enum Optional[T] {{ Some(value: T), None }} struct Item {{}} struct Other {{}} fn first(values: [Item]) -> Item {{ return values[0U64] }} async fn task() {{}}"
+    val source = "extern(plewIntrinsic) {{ struct Promise[T] struct String struct I64 struct U64 struct Bool }} struct Array[T] {{}} enum Optional[T] {{ Some(value: T), None }} struct Item {{}} struct Other {{}} struct Facet {{}} trait Named {{}} fn literal() -> String {{ return \"held\" }} fn number() -> I64 {{ return 4I64 }} fn boolean() -> Bool {{ return true }} fn first(values: [Item]) -> Item {{ return values[0U64] }} async fn task() {{}}"
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="late-types.pw" />, sources: <SourceAccess />).unwrap()
     val first = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "first").nameId)
     compiler.prepareLexicalBody(fnIdx: first).unwrap()
@@ -23,6 +23,20 @@ fn main() {
     assert(compiler.arena.typeAt(index: term).hasDecl)
     val result = compiler.preparedFunctionBodySignature(fnIdx: first).unwrap().resultTerm
     assert(compiler.typeRefEq(a: term, b: result))
+    val literals = ["literal", "number", "boolean"]
+    for name in literals {
+        val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+        compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+        val literalBody = compiler.internBodyInstance(fnIdx: owner, environment: <InstanceEnvironment />)
+        val statement = compiler.arena.stmts[compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: owner).body, index: 0U64)]
+        val value = match statement {
+            Stmt.Return(value: val value, hasValue: _, offset: _) => value
+            _ => { panic("missing literal return") }
+        }
+        val literal = compiler.preparedBodyExpression(bodyId: literalBody, exprId: value).unwrap().term
+        assert(literal != 0U64 && compiler.arena.typeAt(index: literal).hasDecl)
+        assert(compiler.typeRefEq(a: literal, b: compiler.preparedFunctionBodySignature(fnIdx: owner).unwrap().resultTerm))
+    }
     val task = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "task").nameId)
     val promise = compiler.semanticCallableReturnTerm(function: compiler.arena.functionAt(index: task))
     assert(promise != 0U64)
@@ -31,6 +45,11 @@ fn main() {
     assert(optional != 0U64)
     assert(compiler.arena.typeAt(index: optional).hasDecl)
     assert(compiler.arena.typeAt(index: optional).args[0U64] == term)
+    val optionalName = compiler.internBytes(s: "Optional")
+    val optionalOwner = compiler.typeDeclIdentityInModule(mod: 0U64, start: optionalName.nameStart, len: optionalName.nameLen)
+    val beforePartial = compiler.arena.typeCount()
+    assert(compiler.declaredTypeRef(nameStart: optionalName.nameStart, nameLen: optionalName.nameLen, args: [], declaration: optionalOwner) == 0U64)
+    assert(compiler.arena.typeCount() == beforePartial)
     val item = compiler.internBytes(s: "Item")
     val other = compiler.internBytes(s: "Other")
     val itemOwner = compiler.typeDeclIdentityInModule(mod: 0U64, start: item.nameStart, len: item.nameLen)
@@ -41,6 +60,17 @@ fn main() {
     val right = compiler.declaredTypeRef(nameStart: item.nameStart, nameLen: item.nameLen, args: [], declaration: otherOwner)
     assert(!compiler.typeRefEq(a: left, b: right))
     assert(compiler.arena.typeAt(index: right).declOffset == otherOwner.nameStart)
+    val facet = compiler.internBytes(s: "Facet")
+    val facetOwner = compiler.typeDeclIdentityInModule(mod: 0U64, start: facet.nameStart, len: facet.nameLen)
+    val named = compiler.internBytes(s: "Named")
+    val namedOwner = compiler.typeDeclIdentityInModule(mod: 0U64, start: named.nameStart, len: named.nameLen)
+    val viewed = compiler.pushType(t: <TypeRef nameStart=facet.nameStart nameLen=facet.nameLen args=[] hasDecl=true declOffset=facetOwner.nameStart viewSources=[<ResolvedViewSource traitOwner=namedOwner.nameStart />] />)
+    val plain = compiler.declaredTypeRef(nameStart: facet.nameStart, nameLen: facet.nameLen, args: [], declaration: facetOwner)
+    assert(plain != viewed)
+    assert(compiler.arena.typeAt(index: plain).viewSources.count() == 0U64)
+    val unchanged = compiler.arena.typeCount()
+    assert(compiler.declaredTypeRef(nameStart: facet.nameStart, nameLen: facet.nameLen, args: [], declaration: facetOwner) == plain)
+    assert(compiler.arena.typeCount() == unchanged)
     val missing = compiler.internBytes(s: "MissingNominal")
     val count = compiler.arena.typeCount()
     assert(compiler.findOrAddTypeRef(nameStart: missing.nameStart, nameLen: missing.nameLen) == 0U64)

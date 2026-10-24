@@ -351,6 +351,8 @@ pub struct Comp {
     // the use-name / chain-result caches.
     pub mut val decls: Decls = <Decls />
     pub mut val keywordSpans: KeywordSpans = <KeywordSpans.empty />
+    // Canonical late, zero-arity nominal terms, keyed by resolved owner.
+    mut val lateBareNominalRefs: Dictionary[U64, U64] = [:]
     // parse-time scratch, reset at each impl/decl boundary (see `ParseScratch`).
     pub mut val parseScratch: ParseScratch = <ParseScratch />
     // the per-body codegen / lowering / verify cursor (see `Cursor`).
@@ -1915,6 +1917,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     // offsets so type recovery can name `String`/`U64`/`Array`/… without scanning
     // the source. Before any analysis (which calls kwSpan via exprType).
     c.buildKwCache()
+    try c.checkImplicitCallableResultTypes()
     // assoc-val reads (spec/05): rewrite `Type.NAME` (a Field on a type that owns an
     // `assoc fn NAME`) into a zero-arg assoc-fn call, before any analysis sees it.
     c.resolveLexicalModuleNames()

@@ -7,6 +7,7 @@ use @Std/Io only { print }
 
 fn main() {
     mut val compiler = <Comp />
+    compiler.modules.langModule = 0U64
     analyzeFrontendForRequests(c: inout compiler,
         input: <FrontendInput.Text path="fact-probe.pw" text="struct Array[T] {{}} fn probe() {{}}" />,
         sources: <SourceAccess stdRoot=[] />).unwrap()

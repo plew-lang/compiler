@@ -91,3 +91,25 @@ cover late carrier owner, same-head distinct declaration construction, missing
 nominal non-creation, saved array element type and nested nominal execution.
 Fresh candidate, affected old controls, negative/corruption controls, final reader
 trace and independent completion review are still required.
+
+### Static Review Corrections in Progress
+
+The first static review of 95032393 does not certify closure. It identified the
+actual Record literal producer (not just its ExprType fallback), the ref-less
+Array reconstruction through the name-keyed element registry, missing ambient
+Array/String, and incomplete bare-cache facet filtering. Those paths are now
+migrated in the pending source increment: Record uses fixed Lang terms, missing
+String/Array produces a diagnostic before publication, a ref-less array stays
+unresolved, and missing implicit async Promise is rejected at declaration
+admission and the retained final reader. Registered numeric primitive atoms for
+minimal declaration clients remain distinct from ordinary nominal String.
+
+Late zero-arity nominal terms are cached by resolved declaration owner, using
+that declaration's canonical spelling; the old raw-name index is only a validated
+initial reuse probe. This prevents repeated append after a non-bare first row.
+The producer validates actual nominal kind and arity, so an absent owner, plain
+trait or missing generic argument vector does not become a closed nominal term.
+New controls inspect saved literal owners, trait-only first-cache rows and stable
+repeated lookups, missing ambient carriers, annotated result/field/qualifier
+absence, and ref-less array input with competing owner/ParamId element rows.
+All remain pending fresh execution and independent re-review.

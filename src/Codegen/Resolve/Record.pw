@@ -795,7 +795,7 @@ pub impl Comp {
         match self.arena.exprs[exprId] {
             Expr.Array(elems: val elems) => {
                 val context = self.arena.typeAt(index: ctxRef)
-                if context.args.count() != 1U64 || self.typeInfoOfRef(ref: ctxRef).kind != 3I64 {
+                if context.args.count() != 1U64 || !self.isLangArrayType(ref: ctxRef) {
                     if elems.len == 0U64 && self.semanticExprTerm(exprId: exprId) == 0U64 {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "cannot infer an empty array's element type from a non-array context (spec/02)") />
                     }
@@ -809,7 +809,7 @@ pub impl Comp {
                     try self.tcCheckValue(expectedRef: element, valueExpr: expression, pos: "element")
                     index += 1U64
                 }
-                self.recordSemanticExprTerm(exprId: exprId, term: self.arrayRefOfElem(elemRef: element))
+                self.recordSemanticExprTerm(exprId: exprId, term: (try self.sourceArrayTypeRef(elemRef: element, offset: self.exprOffset(id: exprId))))
                 try self.recordSemanticAggregate(exprId: exprId)
             }
             _ => {}
@@ -1598,22 +1598,24 @@ pub impl Comp {
             Expr.Int(value: _, offset: _, val isBool, val tyStart, val tyLen, isNeg: _) => {
                 if isBool {
                     val boolName: Bind = self.kwSpan(kw: "Bool", kwLen: 4U64)
-                    self.recordSemanticExprTerm(exprId: exprId, term: self.simpleTypeRef(nameStart: boolName.nameStart, nameLen: boolName.nameLen))
+                    self.recordSemanticExprTerm(exprId: exprId, term: self.langTypeRefAt(nameStart: boolName.nameStart, nameLen: boolName.nameLen, args: []))
                 } else if tyLen != 0U64 {
-                    self.recordSemanticExprTerm(exprId: exprId, term: self.simpleTypeRef(nameStart: tyStart, nameLen: tyLen))
+                    self.recordSemanticExprTerm(exprId: exprId, term: self.langTypeRefAt(nameStart: tyStart, nameLen: tyLen, args: []))
                 }
             }
             Expr.Float(start: _, len: _, val tyStart, val tyLen) => {
                 if tyLen != 0U64 {
-                    self.recordSemanticExprTerm(exprId: exprId, term: self.simpleTypeRef(nameStart: tyStart, nameLen: tyLen))
+                    self.recordSemanticExprTerm(exprId: exprId, term: self.langTypeRefAt(nameStart: tyStart, nameLen: tyLen, args: []))
                 } else {
                     val floatName: Bind = self.kwSpan(kw: "F64", kwLen: 3U64)
-                    self.recordSemanticExprTerm(exprId: exprId, term: self.simpleTypeRef(nameStart: floatName.nameStart, nameLen: floatName.nameLen))
+                    self.recordSemanticExprTerm(exprId: exprId, term: self.langTypeRefAt(nameStart: floatName.nameStart, nameLen: floatName.nameLen, args: []))
                 }
             }
             Expr.Str(start: _, len: _) => {
                 val stringName: Bind = self.kwSpan(kw: "String", kwLen: 6U64)
-                self.recordSemanticExprTerm(exprId: exprId, term: self.simpleTypeRef(nameStart: stringName.nameStart, nameLen: stringName.nameLen))
+                val string = self.langTypeRefAt(nameStart: stringName.nameStart, nameLen: stringName.nameLen, args: [])
+                if string == 0U64 { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "string literal requires the ambient String declaration") /> }
+                self.recordSemanticExprTerm(exprId: exprId, term: string)
             }
             // A local binding's declared TypeRef is the lexical source of
             // truth for an identifier. Record it directly after the legacy
@@ -1953,7 +1955,7 @@ pub impl Comp {
                 mut val elementContext = 0U64
                 if normalizedContext != 0U64 && normalizedContext < self.arena.typeCount() {
                     val context = self.arena.typeAt(index: normalizedContext)
-                    if context.args.count() == 1U64 && self.typeInfoOfRef(ref: normalizedContext).kind == 3I64 { elementContext = context.args[0U64] }
+                    if context.args.count() == 1U64 && self.isLangArrayType(ref: normalizedContext) { elementContext = context.args[0U64] }
                 }
                 mut val i: U64 = 0
                 while i < elems.len {
@@ -1975,11 +1977,11 @@ pub impl Comp {
                     val eRef: U64 = self.parametricExprTerm(exprId: self.exprAt(exprs: elems, index: 0U64))
                     if eRef != 0U64 {
                         if exprId < self.arena.exprs.count() {
-                            self.recordSemanticExprTerm(exprId: exprId, term: self.arrayRefOfElem(elemRef: eRef))
+                            self.recordSemanticExprTerm(exprId: exprId, term: (try self.sourceArrayTypeRef(elemRef: eRef, offset: self.exprOffset(id: exprId))))
                         }
                     }
                 } else if elementContext != 0U64 {
-                    self.recordSemanticExprTerm(exprId: exprId, term: self.arrayRefOfElem(elemRef: elementContext))
+                    self.recordSemanticExprTerm(exprId: exprId, term: (try self.sourceArrayTypeRef(elemRef: elementContext, offset: self.exprOffset(id: exprId))))
                 }
                 try self.recordSemanticAggregate(exprId: exprId)
             }

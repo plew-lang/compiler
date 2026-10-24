@@ -49,18 +49,57 @@ pub impl Comp {
         return 0U64
     }
 
-    // A late nominal append receives the selected declaration. The old
-    // bare-name cache is only reusable when its semantic identity agrees.
+    // A late nominal append receives the selected declaration. Use its
+    // canonical spelling only as a legacy shape projection, never as identity.
     inout fn declaredTypeRef(nameStart: U64, nameLen: U64, args: Array[U64], declaration: Bind) -> U64 {
         if declaration.nameLen == 0U64 { return 0U64 }
         if args.count() == 0U64 {
-            val prior = self.arena.firstBareTypeNamed(nameId: intern(c: inout self, start: nameStart, len: nameLen))
-            if prior < self.arena.typeCount() {
-                val term = self.arena.typeTerms[prior]
-                if term.hasDecl && term.declOffset == declaration.nameStart && term.paramId == 0U64 && term.assocNameId == 0U64 && !term.isRecord { return prior }
+            val cached = self.lateBareNominalRefs.getOr(key: declaration.nameStart, fallback: 0U64)
+            if cached != 0U64 { return cached }
+        }
+        mut val canonicalStart = nameStart
+        mut val canonicalLength = 0U64
+        val structure = self.arena.structIndexByOffset(offset: declaration.nameStart)
+        val enumeration = self.arena.enumIndexByOffset(offset: declaration.nameStart)
+        if structure < self.arena.structCount() {
+            val nominal = self.arena.structAt(index: structure)
+            if args.count() != nominal.typeParams.count() { return 0U64 }
+            canonicalStart = nominal.nameStart
+            canonicalLength = nominal.nameLen
+        } else if enumeration < self.arena.enumCount() {
+            val nominal = self.arena.enumAt(index: enumeration)
+            if args.count() != nominal.typeParams.count() { return 0U64 }
+            canonicalStart = nominal.nameStart
+            canonicalLength = nominal.nameLen
+        } else {
+            match self.arena.newtypeNameByOffset(offset: declaration.nameStart) {
+                Optional.Some(v: val name) => {
+                    if args.count() != 0U64 { return 0U64 }
+                    canonicalStart = name.start
+                    canonicalLength = name.len
+                }
+                Optional.None => { return 0U64 }
             }
         }
-        return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=args hasDecl=true declOffset=declaration.nameStart />)
+        if args.count() == 0U64 {
+            val prior = self.arena.firstBareTypeNamed(nameId: intern(c: inout self, start: canonicalStart, len: canonicalLength))
+            if prior < self.arena.typeCount() {
+                val term = self.arena.typeTerms[prior]
+                if term.hasDecl && term.declOffset == declaration.nameStart && self.typeTermIsBareNominal(ref: prior) {
+                    self.lateBareNominalRefs[declaration.nameStart] = prior
+                    return prior
+                }
+            }
+        }
+        val result = self.pushType(t: <TypeRef nameStart=canonicalStart nameLen=canonicalLength args=args hasDecl=true declOffset=declaration.nameStart />)
+        if args.count() == 0U64 { self.lateBareNominalRefs[declaration.nameStart] = result }
+        return result
+    }
+
+    fn typeTermIsBareNominal(ref: U64) -> Bool {
+        if ref == 0U64 || ref >= self.arena.typeTerms.count() { return false }
+        val term = self.arena.typeTerms[ref]
+        return term.args.len == 0U64 && term.paramId == 0U64 && term.assocNameId == 0U64 && term.projectionReceiver == 0U64 && !term.isRecord && !term.isAny && !term.isSendable && !term.isDiverging && term.viewExtId == 0U64 && term.viewIds.len == 0U64 && term.viewSources.len == 0U64 && term.assocTraitId == 0U64 && term.assocTraitLen == 0U64 && !term.hasAssocTraitDecl && term.assocTraitArgs.len == 0U64 && term.assocTraitArgLabels.len == 0U64 && term.argLabels.len == 0U64 && term.recordFieldLabels.len == 0U64 && term.recordFieldTerms.len == 0U64
     }
 
     // Syntax-generated carriers select the ambient declaration surface once,
@@ -72,11 +111,11 @@ pub impl Comp {
         }
         // Declaration-only clients may construct primitive atoms without a
         // library graph. Nominal carriers still require a declaration owner.
-        if args.count() != 0U64 || !(self.isPrimType(start: nameStart, len: nameLen) || rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "String")) { return 0U64 }
+        if args.count() != 0U64 || !self.isPrimType(start: nameStart, len: nameLen) { return 0U64 }
         val prior = self.arena.firstBareTypeNamed(nameId: intern(c: inout self, start: nameStart, len: nameLen))
         if prior < self.arena.typeCount() {
             val term = self.arena.typeTerms[prior]
-            if !term.hasDecl && term.paramId == 0U64 && term.assocNameId == 0U64 && !term.isRecord { return prior }
+            if !term.hasDecl && self.typeTermIsBareNominal(ref: prior) { return prior }
         }
         return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=[] />)
     }
@@ -84,6 +123,33 @@ pub impl Comp {
     inout fn langTypeRef(name: String, args: Array[U64]) -> U64 {
         val spelling = self.internBytes(s: name)
         return self.langTypeRefAt(nameStart: spelling.nameStart, nameLen: spelling.nameLen, args: args)
+    }
+
+    // The public callable result of an implicit-Unit async declaration is
+    // Promise[Unit]. Admit its carrier before any signature/proof can use it.
+    inout fn checkImplicitCallableResultTypes() -> Result[(), CompileDiagnostic] {
+        mut val index = 0U64
+        while index < self.arena.functionCount() {
+            val function = self.arena.functionAt(index: index)
+            if function.isAsync && !function.hasRet && self.semanticCallableReturnTerm(function: function) == 0U64 {
+                return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: function), msg: "async declaration requires the ambient Promise declaration") />
+            }
+            index += 1U64
+        }
+        index = 0U64
+        while index < self.decls.traitCount() {
+            val declaration = self.decls.traitAt(index: index)
+            mut val requirementIndex = 0U64
+            while requirementIndex < declaration.reqs.count() {
+                val requirement = self.traitReqAt(reqs: declaration.reqs, index: requirementIndex)
+                if requirement.isAsync && !requirement.hasRet && self.semanticCallableReturnTerm(function: requirement) == 0U64 {
+                    return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: requirement), msg: "async declaration requires the ambient Promise declaration") />
+                }
+                requirementIndex += 1U64
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=() />
     }
 
     // Array syntax and conversion select the declared lang item, not a

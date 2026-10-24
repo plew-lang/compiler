@@ -316,33 +316,21 @@ pub impl Comp {
         return <Result.Ok value=t />
     }
 
-    // The structured TypeRef for a recovered TypeInfo, for the typed-IR store: like
-    // tyRefOfInfo but RECONSTRUCTING an array's full `Array[E]` form from the kind-3
-    // element-name view when the producer carried no ref. tyRefOfInfo itself keeps
-    // kind-3 -> 0 (its generic-type-arg callers defer arrays deliberately); the store
-    // needs the full form — the struct-idx facet its consumers see. The element name
-    // resolves via the registered array-element table (a mangled nested/compound
-    // element included) or interns as a plain head name (a type-param element `T`
-    // stays parametric and grounds per instance).
-    // The `Array[E]` TypeRef for an element ref.
+    // Array syntax owns a complete element term and the fixed Lang carrier.
     inout fn arrayRefOfElem(elemRef: U64) -> U64 {
-        val ab: Bind = self.kwSpan(kw: "Array", kwLen: 5)
-        mut val args: Array[U64] = []
-        args.append(elemRef)
-        val identity = self.langArrayIdentity()
-        return self.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen nameId=ab.nameId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] hasDecl=identity.nameLen != 0U64 declOffset=identity.nameStart />)
+        if elemRef == 0U64 { return 0U64 }
+        return self.langTypeRef(name: "Array", args: [elemRef])
     }
 
+    inout fn sourceArrayTypeRef(elemRef: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
+        val term = self.arrayRefOfElem(elemRef: elemRef)
+        if term == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "array construction requires the ambient Array declaration") /> }
+        return <Result.Ok value=term />
+    }
+
+    // A ref-less array is unresolved, even if a same-spelled element was
+    // registered elsewhere. Its child identity cannot be recovered by name.
     inout fn typedIrRefOfInfo(ti: TypeInfo) -> U64 {
-        if ti.ref == 0U64 && ti.kind == 3 && ti.nameLen > 0U64 {
-            mut val er: U64 = self.arrayElemRef(start: ti.nameStart, len: ti.nameLen)
-            if er == 0U64 {
-                er = self.findOrAddTypeRef(nameStart: ti.nameStart, nameLen: ti.nameLen)
-            }
-            if er != 0U64 {
-                return self.arrayRefOfElem(elemRef: er)
-            }
-        }
         return self.tyRefOfInfo(ti: ti)
     }
 
