@@ -1,6 +1,6 @@
 ---
 id: com-3q2n
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-23T10:41:58Z
