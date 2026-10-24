@@ -1,0 +1,78 @@
+// An available context completes an unknown value once. Recontextualizing
+// that same construction must preserve its type; compatibility rejects it.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Ir only { Expr, Stmt, SemanticExpressionTypeState }
+use @Std/Io only { print }
+
+fn check(mode: U64) -> Bool {
+    mut val compiler = <Comp />
+    val resources = [
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I8, I16 }} pub struct Array[T] {{}}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I8 struct I16 }}" />,
+        <SourceResource path="plew:std/ContextProbe.pw".bytes() text="fn probe(narrow: I8, wide: I16, narrowArray: Array[I8], wideArray: Array[I16]) {{ val scalar = 1 val block = {{ give 1 }} val array = [] val arrayBlock = {{ give [] }} }}" />,
+    ]
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.File path="plew:std/ContextProbe.pw" />,
+        sources: <SourceAccess stdRoot="plew:std/".bytes() resources=resources />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    val parameter = if mode < 2U64 { give 0U64 } else { give 2U64 }
+    val narrow = compiler.funcParamAt(params: function.params, index: parameter).ty
+    val wide = compiler.funcParamAt(params: function.params, index: parameter + 1U64).ty
+    if narrow == 0U64 || wide == 0U64 || compiler.typeRefEq(a: narrow, b: wide) { panic("invalid context setup") }
+    if mode >= 2U64 && (!compiler.isLangArrayType(ref: narrow) || !compiler.isLangArrayType(ref: wide)) { panic("missing ambient Array setup") }
+    val statement = compiler.blockStmtAt(blkId: function.body, index: mode)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init
+        _ => { panic("missing source initializer") }
+    }
+    val wrapped = mode == 1U64 || mode == 3U64
+    val block = if wrapped {
+        give match compiler.arena.exprs[expression] {
+            Expr.Block(body: val body, offset: _) => body
+            _ => { panic("missing source block") }
+        }
+    } else { give 0U64 }
+    val child = if wrapped { give compiler.blockGiveExpr(blkId: block) } else { give expression }
+    compiler.cur.checkFn = owner
+    compiler.cur.recordCallTemplates = true
+    compiler.recordExpr(exprId: expression, expectedTerm: narrow).unwrap()
+    compiler.tcCheckValue(expectedRef: narrow, valueExpr: expression, pos: "initial-context").unwrap()
+    val saved = compiler.sourceSemanticExprTypeAt(index: expression)
+    val savedChild = compiler.sourceSemanticExprTypeAt(index: child)
+    match saved.typeState { SemanticExpressionTypeState.Value => {} _ => { panic("initial context did not produce a value") } }
+    if !compiler.typeRefEq(a: saved.term, b: narrow) || !compiler.typeRefEq(a: savedChild.term, b: narrow) { panic("initial context setup produced a different type") }
+    if wrapped {
+        val blockType = compiler.valueBlockTypeInfo(blockId: block, chainHoleRef: 0U64).unwrap().unwrap()
+        if !compiler.typeRefEq(a: compiler.typedIrRefOfInfo(ti: blockType), b: narrow) { panic("initial block result setup failed") }
+    }
+    // As with an explicit scalar suffix, construction may return Ok while
+    // preserving the source type. It need not reject at this API boundary.
+    match compiler.recordExpr(exprId: expression, expectedTerm: wide) { Result.Ok(value: _) => {} Result.Err(error: _) => {} }
+    val after = compiler.sourceSemanticExprTypeAt(index: expression)
+    val afterChild = compiler.sourceSemanticExprTypeAt(index: child)
+    mut val unchanged = compiler.typeRefEq(a: after.term, b: saved.term) && after.shape == saved.shape && compiler.typeRefEq(a: afterChild.term, b: savedChild.term) && afterChild.shape == savedChild.shape
+    match after.typeState { SemanticExpressionTypeState.Value => {} _ => { unchanged = false } }
+    if wrapped {
+        val blockType = compiler.valueBlockTypeInfo(blockId: block, chainHoleRef: 0U64).unwrap().unwrap()
+        if !compiler.typeRefEq(a: compiler.typedIrRefOfInfo(ti: blockType), b: narrow) { unchanged = false }
+    }
+    val incompatible = compiler.tcCheckValue(expectedRef: wide, valueExpr: expression, pos: "repeated-context").isErr()
+    if !unchanged || !incompatible {
+        val label = if mode == 0U64 { give "scalar-direct" } else if mode == 1U64 { give "scalar-block" } else if mode == 2U64 { give "array-direct" } else { give "array-block" }
+        if !unchanged { print(label + ": saved type changed") }
+        if !incompatible { print(label + ": incompatible context accepted") }
+        return false
+    }
+    return true
+}
+
+fn main() {
+    mut val passed = 0U64
+    for mode in [0U64, 1U64, 2U64, 3U64] {
+        if check(mode: mode) { passed += 1U64 }
+    }
+    if passed != 4U64 { panic("repeated context changed an established source value") }
+    print("value-control-context-authority")
+}
