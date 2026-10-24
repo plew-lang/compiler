@@ -64,7 +64,7 @@ pub impl Comp {
     inout fn checkRecordedCallLiteralArguments(exprId: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
         val selected = match (try self.recordedCallParameterState(exprId: exprId)) {
             SourceCallParameterState.Selected(function: val function, signature: val signature) => { give (function: function, signature: signature) }
-            SourceCallParameterState.Incomplete => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: selected call has incomplete type arguments") /> }
+            SourceCallParameterState.Incomplete => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "cannot infer all type arguments for this call") /> }
             SourceCallParameterState.Unselected | SourceCallParameterState.NotApplicable => { return <Result.Ok value=false /> }
         }
         if !self.paramsLabelsOk(params: selected.function.params, args: args) {

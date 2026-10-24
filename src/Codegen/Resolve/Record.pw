@@ -1444,7 +1444,7 @@ pub impl Comp {
         mut val index = 0U64
         while index < args.len {
             val argument = self.argAt(args: args, index: index).expr
-            if self.semanticExprTerm(exprId: argument) == 0U64 && self.expressionNeedsTypeContext(exprId: argument) { break }
+            if self.semanticExprTerm(exprId: argument) == 0U64 { break }
             index += 1U64
         }
         if index == args.len { return <Result.Ok value=() /> }
@@ -1455,7 +1455,7 @@ pub impl Comp {
         if !self.paramsLabelsOk(params: selected.function.params, args: args) { return <Result.Ok value=() /> }
         while index < args.len {
             val argument = self.argAt(args: args, index: index).expr
-            if self.semanticExprTerm(exprId: argument) == 0U64 && self.expressionNeedsTypeContext(exprId: argument) {
+            if self.semanticExprTerm(exprId: argument) == 0U64 {
                 val position = self.paramIndexForArg(params: selected.function.params, args: args, argIdx: index)
                 val parameter = self.funcParamAt(params: selected.function.params, index: position)
                 val expected = try self.sourceCallSignatureParameter(ref: parameter.ty, signature: selected.signature)

@@ -1,0 +1,5 @@
+struct Holder[T] { val value: T }
+impl[T] Holder[T] {
+    assoc fn empty() -> Self { panic("unused") }
+}
+fn main() { val unresolved = Holder.empty() }

@@ -87,3 +87,16 @@ with exact parameter context in their lexical scope; completed operands are
 never reinterpreted, and a fast scan avoids signature/environment work for
 already-complete operands. The validation reader rejects incomplete selections.
 All source checks pass, but fresh execution and independent review are pending.
+
+### Contextual Operand Recording Correction
+
+5adff7cc source-checks successfully with its fresh candidate. The reordered
+receiver and method-owned binder controls progress, but nested Array arguments
+expose a missing saved expression term at source-constraint closure. Numeric
+literals are not expressionNeedsTypeContext shapes; testing that predicate before
+using the selected parameter skipped arrays containing only such literals.
+The correction records every still-unresolved operand with the selected expected
+term, rather than using a syntax-based contextual-shape gate. Completed terms
+remain untouched. An incomplete user call now reports the established cannot
+infer all type arguments diagnostic; corrupt explicit reader requests still
+fail without reconstruction. A no-context associated call reject is added.
