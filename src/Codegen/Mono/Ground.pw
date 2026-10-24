@@ -394,25 +394,6 @@ pub impl Comp {
     // terms and their labels are deliberately left to the shared traversal so
     // equality, matching and canonicalization cannot disagree about a record
     // field, existential output binding or projection receiver.
-    inout fn typeTermSameHead(a: TypeRef, b: TypeRef) -> Bool {
-        if a.isRecord || b.isRecord { return a.isRecord && b.isRecord && a.isSendable == b.isSendable && a.isDiverging == b.isDiverging }
-        if a.hasDecl != b.hasDecl { return false }
-        if a.hasDecl && b.hasDecl {
-            if a.declOffset != b.declOffset { return false }
-        } else if a.nameId != 0U64 && b.nameId != 0U64 {
-            if a.nameId != b.nameId { return false }
-        } else if !(spansEqual(c: inout self, aStart: a.nameStart, aLen: a.nameLen, bStart: b.nameStart, bLen: b.nameLen)) {
-            return false
-        }
-        if a.isAny != b.isAny || a.isSendable != b.isSendable || a.isDiverging != b.isDiverging { return false }
-        if a.paramId != 0U64 || b.paramId != 0U64 {
-            if a.paramId != b.paramId { return false }
-        }
-        if a.viewExtId != b.viewExtId || !(self.sameViewIdSet(a: a.viewIds, b: b.viewIds)) { return false }
-        if (a.hasDecl && b.hasDecl && a.declOffset != b.declOffset) || a.assocTraitId != b.assocTraitId || (a.hasAssocTraitDecl && b.hasAssocTraitDecl && a.assocTraitDeclOffset != b.assocTraitDeclOffset) || a.assocNameId != b.assocNameId { return false }
-        return true
-    }
-
     // Ref-based counterparts for the hot structural traversals.  `TypeRef`
     // remains a migration mirror and is allowed only at construction/adaptor
     // boundaries; equality must not copy its Array payload at every recursive
@@ -469,20 +450,19 @@ pub impl Comp {
 
     inout fn sameTypeTermViewIds(a: U64, b: U64) -> Bool {
         if a >= self.arena.typeTerms.count() || b >= self.arena.typeTerms.count() { return false }
-        val ta = self.arena.typeTerms[a]
-        val tb = self.arena.typeTerms[b]
-        if ta.viewIds.len != tb.viewIds.len { return false }
-        mut val i: U64 = 0U64
-        while i < ta.viewIds.len {
-            val wanted: U64 = self.arena.typeViewIdPool[ta.viewIds.start + i]
-            mut val found: Bool = false
-            mut val j: U64 = 0U64
-            while j < tb.viewIds.len {
-                if wanted == self.arena.typeViewIdPool[tb.viewIds.start + j] { found = true }
-                j += 1U64
+        val count = self.typeTermViewSourceCount(ref: a)
+        if count != self.typeTermViewSourceCount(ref: b) { return false }
+        mut val index = 0U64
+        while index < count {
+            val wanted = self.typeTermViewSourceAt(ref: a, index: index)
+            mut val found = false
+            mut val other = 0U64
+            while other < count {
+                if self.semanticViewSourceEq(a: wanted, b: self.typeTermViewSourceAt(ref: b, index: other)) { found = true }
+                other += 1U64
             }
             if !found { return false }
-            i += 1U64
+            index += 1U64
         }
         return true
     }
@@ -502,7 +482,7 @@ pub impl Comp {
             return false
         }
         if ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.paramId != tb.paramId { return false }
-        if ta.viewExtId != tb.viewExtId || !(self.sameTypeTermViewIds(a: a, b: b)) { return false }
+        if !(self.sameTypeTermViewIds(a: a, b: b)) { return false }
         if (ta.hasDecl && tb.hasDecl && ta.declOffset != tb.declOffset) || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId { return false }
         return true
     }

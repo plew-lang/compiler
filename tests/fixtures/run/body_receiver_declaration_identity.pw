@@ -1,7 +1,7 @@
 use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp }
-use /Ir only { TypeRef, StructDef, Func, InstanceEnvironment, CallResolution }
+use /Ir only { TypeRef, StructDef, Func, InstanceEnvironment, CallResolution, TraitDef, TraitOwner, ResolvedViewSource }
 fn main() {
     mut val compiler = <Comp />
     compiler.arena.reserveTypeSentinel()
@@ -25,7 +25,6 @@ fn main() {
     val unowned = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
     assert(!compiler.sameBodyRuntimeRef(a: first, b: unowned))
     assert(!compiler.typeTermRefSameHead(a: first, b: unowned))
-    assert(!compiler.typeTermSameHead(a: compiler.arena.typeAt(index: first), b: compiler.arena.typeAt(index: unowned)))
     val defaultEnvironment = compiler.bodyInstanceEnvironment(fnIdx: 0U64, args: [], recvInstRef: 0U64).unwrap()
     val suppliedEnvironment = compiler.bodyInstanceEnvironment(fnIdx: 0U64, args: [], recvInstRef: first).unwrap()
     val firstKey = compiler.internBodyInstance(fnIdx: 0U64, environment: defaultEnvironment)
@@ -45,5 +44,39 @@ fn main() {
     assert(!compiler.finalStaticCalleeIsComplete(e: <CallResolution bodyId=firstKey exprId=0U64 callee=0U64 recvTypeRef=unowned calleeBodyId=firstKey />).unwrap())
     assert(!compiler.finalStaticCalleeIsComplete(e: <CallResolution bodyId=firstKey exprId=0U64 callee=0U64 recvTypeRef=second />).unwrap())
     assert(!compiler.finalStaticCalleeIsComplete(e: <CallResolution bodyId=firstKey exprId=0U64 callee=0U64 recvTypeRef=unowned />).unwrap())
+    compiler.arena.setBodySignature(bodyId: firstKey, parameters: [], passings: [], result: 0U64, receiverType: second)
+    assert(!compiler.finalStaticCalleeIsComplete(e: <CallResolution bodyId=firstKey exprId=0U64 callee=0U64 recvTypeRef=first calleeBodyId=firstKey />).unwrap())
+    compiler.arena.setBodySignature(bodyId: firstKey, parameters: [], passings: [], result: 0U64, receiverType: 0U64)
+    assert(!compiler.finalStaticCalleeIsComplete(e: <CallResolution bodyId=firstKey exprId=0U64 callee=0U64 recvTypeRef=first calleeBodyId=firstKey />).unwrap())
+    checkNestedViews(compiler: inout compiler, element: first)
     print("body-receiver-declaration-identity")
+}
+
+fn checkNestedViews(compiler: inout Comp, element: U64) {
+    val traitName = compiler.internBytes(s: "Facet")
+    val otherStart = compiler.arena.bytes.count()
+    for byte in "Facet".bytes() { compiler.arena.bytes.append(byte) }
+    compiler.decls.registerTraitOwner(<TraitOwner sourceModule=1U64 nameStart=traitName.nameStart nameLen=traitName.nameLen nameId=traitName.nameId arity=0U64 />)
+    compiler.decls.registerTraitOwner(<TraitOwner sourceModule=2U64 nameStart=otherStart nameLen=traitName.nameLen nameId=traitName.nameId arity=0U64 />)
+    compiler.decls.registerTrait(<TraitDef nameStart=traitName.nameStart nameLen=traitName.nameLen nameId=traitName.nameId reqs=compiler.pushTraitReqs(reqs: []) />)
+    compiler.decls.registerTrait(<TraitDef nameStart=otherStart nameLen=traitName.nameLen nameId=traitName.nameId reqs=compiler.pushTraitReqs(reqs: []) />)
+    val first = compiler.typeRefWithViewSources(ref: element, sources: [<ResolvedViewSource surfaceId=traitName.nameId traitOwner=traitName.nameStart />])
+    val second = compiler.typeRefWithViewSources(ref: element, sources: [<ResolvedViewSource surfaceId=traitName.nameId traitOwner=otherStart />])
+    assert(!compiler.typeRefEq(a: first, b: second))
+    assert(compiler.typeRefEq(a: compiler.canonicalBodyReceiverRef(fnIdx: 0U64, recvInstRef: first), b: element))
+    val name = compiler.internBytes(s: "Wrapper")
+    val binds = compiler.lowerTypeParamNames(names: ["Element"], anchor: name.nameStart).unwrap()
+    compiler.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=binds fields=[] isUnique=false isExtern=false defOffset=300U64 />)
+    compiler.modules.registerSourceFile(start: 300U64, length: 10U64, moduleId: 3U64, path: "Wrapper.pw")
+    val owner = compiler.typeDeclIdentityInModule(mod: 3U64, start: name.nameStart, len: name.nameLen)
+    val parameter = compiler.pushType(t: <TypeRef nameStart=binds[0U64].nameStart nameLen=binds[0U64].nameLen nameId=binds[0U64].nameId paramId=binds[0U64].paramId args=[] />)
+    val pattern = compiler.declaredTypeRef(nameStart: name.nameStart, nameLen: name.nameLen, args: [parameter], declaration: owner)
+    val left = compiler.declaredTypeRef(nameStart: name.nameStart, nameLen: name.nameLen, args: [first], declaration: owner)
+    val right = compiler.declaredTypeRef(nameStart: name.nameStart, nameLen: name.nameLen, args: [second], declaration: owner)
+    val method = compiler.internBytes(s: "nested")
+    val function = compiler.arena.functionCount()
+    compiler.arena.registerFunction(<Func nameStart=method.nameStart nameLen=method.nameLen typeParams=compiler.pushFuncBinds(binds: binds) hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=true recvStart=name.nameStart recvLen=name.nameLen recvTy=pattern selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    val firstEnvironment = compiler.bodyInstanceEnvironment(fnIdx: function, args: [first], recvInstRef: left).unwrap()
+    val secondEnvironment = compiler.bodyInstanceEnvironment(fnIdx: function, args: [second], recvInstRef: right).unwrap()
+    assert(compiler.internBodyInstance(fnIdx: function, environment: firstEnvironment) != compiler.internBodyInstance(fnIdx: function, environment: secondEnvironment))
 }

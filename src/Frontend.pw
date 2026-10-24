@@ -951,20 +951,28 @@ pub impl Comp {
         return a.surfaceId == b.surfaceId
     }
 
+    fn typeTermViewSourceCount(ref: U64) -> U64 {
+        if ref == 0U64 || ref >= self.arena.typeCount() { return 0U64 }
+        val term = self.arena.typeTerms[ref]
+        if term.viewSources.len != 0U64 { return term.viewSources.len }
+        if term.viewIds.len != 0U64 { return term.viewIds.len }
+        return if term.viewExtId != 0U64 { give 1U64 } else { give 0U64 }
+    }
+
+    fn typeTermViewSourceAt(ref: U64, index: U64) -> ResolvedViewSource {
+        val term = self.arena.typeTerms[ref]
+        if term.viewSources.len != 0U64 { return self.arena.typeViewSourcePool[term.viewSources.start + index] }
+        if term.viewIds.len != 0U64 { return <ResolvedViewSource surfaceId=self.arena.typeViewIdPool[term.viewIds.start + index] /> }
+        return <ResolvedViewSource surfaceId=term.viewExtId />
+    }
+
     inout fn typeRefViewSources(ref: U64) -> Array[ResolvedViewSource] {
         mut val out: Array[ResolvedViewSource] = []
-        if ref == 0U64 || ref >= self.arena.typeCount() { return out }
-        val term = self.arena.typeTerms[ref]
-        if term.viewSources.len == 0U64 && term.viewIds.len == 0U64 && term.viewExtId == 0U64 { return out }
-        val t: TypeRef = self.arena.typeAt(index: ref)
-        out = t.viewSources
-        if out.count() != 0U64 { return out }
-        mut val ids: Array[U64] = t.viewIds
-        if ids.count() == 0U64 && t.viewExtId != 0U64 { ids.append(t.viewExtId) }
-        mut val i: U64 = 0U64
-        while i < ids.count() {
-            out.append(<ResolvedViewSource surfaceId=ids[i] />)
-            i += 1U64
+        val count = self.typeTermViewSourceCount(ref: ref)
+        mut val index = 0U64
+        while index < count {
+            out.append(self.typeTermViewSourceAt(ref: ref, index: index))
+            index += 1U64
         }
         return out
     }

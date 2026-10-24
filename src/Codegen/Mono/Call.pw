@@ -737,6 +737,21 @@ pub impl Comp {
         val function = self.arena.functionAt(index: fnIdx)
         val complete = try self.withLexicalSelfBinding(f: function, environment: environment)
         if !self.bodyReceiverMatchesDeclaration(function: function, environment: complete) {
+            if self.traceCodegen {
+                eprint(text: "[trace-codegen] body-receiver mismatch function=")
+                eprintU64(n: fnIdx)
+                eprint(text: " pattern=")
+                self.traceMonoTypeHead(ref: function.recvTy)
+                eprint(text: " actual=")
+                self.traceMonoTypeHead(ref: complete.receiverRef)
+                eprint(text: " expected=")
+                self.traceMonoTypeHead(ref: self.groundTermInEnvironment(ref: self.parametricSelfRef(f: function), params: complete.params, values: complete.args, selfRef: complete.receiverRef))
+                eprint(text: " actual-decl=")
+                if complete.receiverRef < self.arena.typeCount() { eprintU64(n: self.arena.typeTerms[complete.receiverRef].declOffset) }
+                eprint(text: " pattern-decl=")
+                if function.recvTy < self.arena.typeCount() { eprintU64(n: self.arena.typeTerms[function.recvTy].declOffset) }
+                eprint(text: "\n")
+            }
             return <Result.Err error=self.diagnosticAt(offset: function.nameStart, msg: "internal error: body receiver does not match its selected declaration") />
         }
         return <Result.Ok value=complete />
@@ -3081,6 +3096,12 @@ pub impl Comp {
         return <Result.Ok value=carrierRef />
     }
 
+    inout fn bodySignatureReceiverMatches(function: Func, environment: InstanceEnvironment, signature: BodySignature) -> Bool {
+        if !function.hasRecv { return signature.receiverType == 0U64 }
+        if signature.receiverType == 0U64 { return false }
+        return self.sameBodyReceiver(a: signature.receiverType, b: environment.receiverRef)
+    }
+
     inout fn finalCallBodyEnvironmentMatches(callee: U64, receiver: U64, arguments: Array[U64], bodyId: U64) -> Bool {
         if callee >= self.arena.functionCount() || bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() { return false }
         val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
@@ -3119,6 +3140,10 @@ pub impl Comp {
             val prepared = self.arena.bodySignature(bodyId: calleeBodyId)
             if !prepared.ready {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: final call requires a prepared callable signature") />
+            }
+            val instance = self.arena.bodyInstanceAt(index: calleeBodyId - 1U64)
+            if !self.bodySignatureReceiverMatches(function: self.arena.functionAt(index: callee), environment: instance.environment, signature: prepared) {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: prepared signature receiver does not match its body environment") />
             }
             give prepared
         } else {
@@ -4316,6 +4341,8 @@ pub impl Comp {
             if !self.arena.bodySignature(bodyId: e.calleeBodyId).ready || !self.finalCallBodyEnvironmentMatches(callee: e.callee, receiver: e.recvTypeRef, arguments: self.copyFinalCalleeTypeArgs(args: e.calleeTypeArgs), bodyId: e.calleeBodyId) {
                 return <Result.Ok value=false />
             }
+            val instance = self.arena.bodyInstanceAt(index: e.calleeBodyId - 1U64)
+            if !self.bodySignatureReceiverMatches(function: f, environment: instance.environment, signature: self.arena.bodySignature(bodyId: e.calleeBodyId)) { return <Result.Ok value=false /> }
         } else if f.hasRecv || f.isAssoc {
             val environment = try self.withLexicalSelfBinding(f: f, environment: <InstanceEnvironment receiverRef=e.recvTypeRef params=self.copyFuncBinds(binds: f.typeParams) args=self.copyFinalCalleeTypeArgs(args: e.calleeTypeArgs) />)
             if !self.bodyReceiverMatchesDeclaration(function: f, environment: environment) { return <Result.Ok value=false /> }

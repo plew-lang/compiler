@@ -141,3 +141,22 @@ validate their explicit declaration environment without selecting a new proof.
 The registered-owner regression includes wrong/missing receiver, swapped body,
 prepared foreign signature and bodyless-descriptor controls. Fresh verification
 and reviewer follow-up remain pending.
+
+### Semantic View Identity and Signature Receiver
+
+Independent follow-up requires nested resolved trait-owner views to distinguish
+keys even when their compatibility surface IDs coincide. Scalar normalized view
+source readers now serve both ordinary view projection and common ref-based
+identity. The dead owning typeTermSameHead mirror has no production caller and
+is removed. typeTermRefSameHead compares semantic source sets, not redundant
+viewExtId/viewIds mirrors. The registered-owner regression adds two registered
+homonymous trait owners below Wrapper[Element], key separation and outer-view
+normalization reuse.
+
+The prepared BodySignature's receiver is also compared with its selected body
+environment by one shared check. Associated-only callables keep the existing
+receiverType=0 contract. New controls forge a ready same-body signature with a
+foreign or missing receiver and require rejection. Fresh2286dbe6 sourcecheck
+passes; its native module control reaches a receiver/declaration inconsistency
+in Array.overBuffer. A trace-only diagnostic records pattern/expected/actual
+receivers to identify that producer; no accepted comparison is weakened.
