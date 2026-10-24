@@ -1,0 +1,19 @@
+use @Std/Io only { print }
+trait Source { type Output fn read() -> Output }
+struct Number {}
+struct Text {}
+impl Number as Source { type Output = I64 fn read() -> I64 { print("number") return 42I64 } }
+impl Text as Source { type Output = String fn read() -> String { print("text") return "value" } }
+fn projected[T](value: Optional[T]) -> Optional[T#Source.Output] where T: Source { return value?.read() }
+fn projectedBlock[T](value: Optional[T]) -> Optional[T#Source.Output] where T: Source { return { give value?.read() } }
+fn projectedBranch[T](value: Optional[T], flag: Bool) -> Optional[T#Source.Output] where T: Source { return if flag { give value?.read() } else { give <Optional[T#Source.Output].None /> } }
+fn main() {
+    val number: Optional[Number] = <Optional.Some v=<Number /> />
+    val text: Optional[Text] = <Optional.Some v=<Text /> />
+    print(projected(value: number).unwrap())
+    print(projected(value: text).unwrap())
+    print(projected(value: <Optional[Number].None />).isNone())
+    print(projectedBlock(value: text).unwrap())
+    print(projectedBranch(value: number, flag: true).unwrap())
+    print(projectedBranch(value: number, flag: false).isNone())
+}

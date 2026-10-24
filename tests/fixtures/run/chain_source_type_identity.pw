@@ -7,14 +7,14 @@ use /Ir only { InstanceEnvironment, ValueConversionProof, TypeRef, StructDef, Bi
 
 fn main() {
     mut val compiler = <Comp />
-    val source = "struct Item {{ pub val count: I64 }} pub impl Item {{ factory }} struct Box[T] {{ pub val item: T }} pub impl[T] Box[T] {{ factory }} fn direct(value: Optional[Box[Item]]) -> Optional[Item] {{ return value?.item }} fn block(value: Optional[Box[Item]]) -> Optional[Item] {{ return {{ give value?.item }} }} fn branch(value: Optional[Box[Item]], flag: Bool) -> Optional[Item] {{ return if flag {{ give value?.item }} else {{ give <Optional[Item].None /> }} }} fn generic[T](value: Optional[Box[T]]) -> Optional[T] {{ return value?.item }} fn nested(value: Optional[Box[Box[Item]]]) -> Optional[Box[Item]] {{ return value?.item }} fn unrelated() {{}}"
+    val source = "struct Item {{ pub val count: I64 }} pub impl Item {{ factory }} struct Box[T] {{ pub val item: T }} pub impl[T] Box[T] {{ factory }} fn direct(value: Optional[Box[Item]]) -> Optional[Item] {{ return value?.item }} fn block(value: Optional[Box[Item]]) -> Optional[Item] {{ return {{ give value?.item }} }} fn branch(value: Optional[Box[Item]], flag: Bool) -> Optional[Item] {{ return if flag {{ give value?.item }} else {{ give <Optional[Item].None /> }} }} fn generic[T](value: Optional[Box[T]]) -> Optional[T] {{ return value?.item }} fn nested(value: Optional[Box[Box[Item]]]) -> Optional[Box[Item]] {{ return value?.item }} trait Source {{ type Output fn read() -> Output }} fn projected[T](value: Optional[T]) -> Optional[T#Source.Output] where T: Source {{ return value?.read() }} fn projectedBlock[T](value: Optional[T]) -> Optional[T#Source.Output] where T: Source {{ return {{ give value?.read() }} }} fn projectedBranch[T](value: Optional[T], flag: Bool) -> Optional[T#Source.Output] where T: Source {{ return if flag {{ give value?.read() }} else {{ give <Optional[T#Source.Output].None /> }} }} fn unrelated() {{}}"
     val path = "plew:std/ChainProbe.pw"
     val sources = <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path=path.bytes() text=source />] />
     requireSuccess(result: analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=path />, sources: sources), context: "analysis")
     val unrelated = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "unrelated").nameId)
     requireSuccess(result: compiler.prepareLexicalBody(fnIdx: unrelated), context: "unrelated")
     val foreign = compiler.internBodyInstance(fnIdx: unrelated, environment: <InstanceEnvironment />)
-    for name in ["direct", "block", "branch", "generic", "nested"] {
+    for name in ["direct", "block", "branch", "generic", "nested", "projected", "projectedBlock", "projectedBranch"] {
         val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
         requireSuccess(result: compiler.prepareLexicalBody(fnIdx: function), context: name)
         val body = compiler.internBodyInstance(fnIdx: function, environment: <InstanceEnvironment />)
@@ -33,6 +33,10 @@ fn main() {
                         _ => { panic("matching chain endpoints lost identity conversion") }
                     }
                     assert(compiler.preparedBodyExpression(bodyId: foreign, exprId: site.exprId).isErr())
+                    if name == "projected" || name == "projectedBlock" || name == "projectedBranch" {
+                        val child = compiler.arena.typeAt(index: compiler.arena.typeAt(index: expression.term).args[0U64])
+                        if child.assocNameLen == 0U64 || child.assocTraitId == 0U64 { panic("chain source erased its associated output") }
+                    }
                     if name == "direct" { checkStageInputs(compiler: inout compiler, result: expression.term) }
                     found += 1U64
                 }
