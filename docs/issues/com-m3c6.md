@@ -1,6 +1,6 @@
 ---
 id: com-m3c6
-status: in_progress
+status: closed
 deps: [com-m0bf, com-nqjd, com-6paa, com-qbwg, com-s5k5]
 links: []
 created: 2026-10-23T10:41:58Z
@@ -40,7 +40,8 @@ waived by a bounded child closing.
 
 ## Publication Reconciliation
 
-Runtime production remains `c1b731bd`; no new facet resolver is introduced.
+Production `9b4652a3` encapsulates canonical storage without changing source
+semantics; `3c37252c` synchronizes comments/design. No new facet resolver is introduced.
 
 | Boundary | Actual authority / retained consumers |
 |---|---|
@@ -61,12 +62,38 @@ completion. `type_declaration_writer_private` guards the private mutation API.
 Existing closedness/projection/name-index/unification and C3 nominal controls
 exercise preserved metadata and downstream identity.
 
-## Required Raw-storage Repair
+## Outcome
 
-Independent review found public mutable `typeTerms` and8 child pools bypass the
-otherwise closed batch. Do not claim this whole API closed before
-[com-s5k5](com-s5k5.md) passes. Its finite allocation was independently approved,
-and D4/G1 depend on it. The before control `type_term_rows_private` was accepted
-(exit0) by the c1b731bd fixed compiler/source, a decisive privacy failure. The
-new source dependency fixture's earlier body-zero setup failure is separate;
-after reserving block zero it passes both negative and positive source paths.
+Closed with required repair [com-s5k5](com-s5k5.md), production `9b4652a3` and
+contract/comment synchronization `3c37252c`. Independent review found the
+previously public mutable scalar/child arrays bypassed the dedicated batch API;
+the repair hides all9 arrays behind scalar/element readers. No public raw alias
+or external per-row writer remains. The original facet batch, legal append,
+metadata and selected nominal source domains are preserved.
+
+Receipts in meta's `evidence/existing-feature-conformance/source-owner-facts/`:
+`phase3d-nominal-storage-before.json`, `phase3d-nominal-storage.json` and
+`phase3d-nominal-storage-self-host.json`. The before raw row mutation compiled
+exit0. New dependency fixture body-zero setup failures are recorded separately
+from that decisive API defect.
+
+Standard build `20261024T104423-build-8e5a45`, fresh all-source check and
+normal17/reject12 passed with immutable inputs. Fresh carrier SHA256
+`fa45a269e36932f2e1830059b7495829cbf0de5734311ac503a0e0e64e04a964`.
+Formal `20261024T104921-self-host-920e54` reached generation2 fixed point;
+7.304837/6.752248/6.762261 seconds give median **6.762261 seconds**, exit0 and
+frozen inputs. Measured WIP `bin/plewc-phase3d-type-storage-fixed` SHA256
+`380d649e240dd71e366323a4167ac39200dc77a0993fcec4cc5cda1dd8822275`.
+No same-source speedup is claimed.
+
+Independent reviewer `/root/body_receiver_completion_review` accepted both D4
+and its repair: inverse-normalized40-file read migration has no unexplained
+behavior differences; functional245 and formal5900 current inputs match; all
+receipt/binary hashes match. All run sessions including91165/60041/84680/2285/
+8284/15255/18703/76943 were recovered through actual exit codes. Source dependency
+negative/positive, reverse batch, private apply and every raw pool family are
+covered separately.
+
+D4 does not certify runtime layout, future unsupported producers, final G2
+whole-candidate gates, area/parent reconciliation or main/seed/adopted-carrier
+promotion. Those obligations remain separately owned.

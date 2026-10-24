@@ -1,6 +1,6 @@
 ---
 id: com-s5k5
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T10:42:22Z
@@ -58,3 +58,19 @@ private apply writer alone cannot prove this stronger backing invariant.
 
 D4 and G1 require this repair. This child does not depend on its parent and
 creates no graph cycle. Surface language/spec semantics are unchanged.
+
+## Outcome
+
+Resolved at production `9b4652a3`, contract/comment sync `3c37252c`. All9 canonical
+arrays are private to Ir; scalar/count/element readers preserve existing indices,
+bounds and metadata.40 external files were mechanically migrated with no
+whole-pool snapshots or mutable alias exposure. Exact writer search leaves
+normal registration append and private initial batch application only.
+
+The paired before admission failure and current fresh/metadata/source/
+privacy controls, formal fixed point/performance, exact hashes and independent
+review are recorded in [D4's outcome](com-m3c6.md#outcome) and its three meta
+evidence receipts. Fresh17/reject12 passed; formal generation2 median6.762261s
+is below7s. Reviewer `/root/body_receiver_completion_review` accepted this exact
+finite exit, preserving separate G2 whole-candidate obligations. D4 and G1 now
+have the required completed dependency rather than an unassigned API bypass.
