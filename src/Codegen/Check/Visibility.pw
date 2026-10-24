@@ -538,24 +538,32 @@ pub impl Comp {
         }
     }
 
-    inout fn declIdentityHasName(identity: Bind, start: U64, len: U64) -> Bool {
+    // Project a declaration identity to its defining name span. A use alias's
+    // source selector is not a definition and cannot carry its module owner.
+    inout fn typeDeclName(identity: Bind) -> Bind {
+        if identity.nameLen == 0U64 { return self.missingDeclIdentity() }
         match self.arena.structNameByOffset(offset: identity.nameStart) {
-            Optional.Some(v: val name) => { return spansEqual(c: inout self, aStart: name.start, aLen: name.len, bStart: start, bLen: len) }
+            Optional.Some(v: val name) => { return <Bind nameStart=name.start nameLen=name.len fieldStart=0 fieldLen=0 /> }
             Optional.None => {}
         }
         match self.arena.enumNameByOffset(offset: identity.nameStart) {
-            Optional.Some(v: val name) => { return spansEqual(c: inout self, aStart: name.start, aLen: name.len, bStart: start, bLen: len) }
+            Optional.Some(v: val name) => { return <Bind nameStart=name.start nameLen=name.len fieldStart=0 fieldLen=0 /> }
             Optional.None => {}
         }
         match self.decls.traitNameByOffset(offset: identity.nameStart) {
-            Optional.Some(v: val name) => { return spansEqual(c: inout self, aStart: name.start, aLen: name.len, bStart: start, bLen: len) }
+            Optional.Some(v: val name) => { return <Bind nameStart=name.start nameLen=name.len fieldStart=0 fieldLen=0 /> }
             Optional.None => {}
         }
         match self.arena.newtypeNameByOffset(offset: identity.nameStart) {
-            Optional.Some(v: val name) => { return spansEqual(c: inout self, aStart: name.start, aLen: name.len, bStart: start, bLen: len) }
+            Optional.Some(v: val name) => { return <Bind nameStart=name.start nameLen=name.len fieldStart=0 fieldLen=0 /> }
             Optional.None => {}
         }
-        return false
+        return self.missingDeclIdentity()
+    }
+
+    inout fn declIdentityHasName(identity: Bind, start: U64, len: U64) -> Bool {
+        val name = self.typeDeclName(identity: identity)
+        return name.nameLen != 0U64 && spansEqual(c: inout self, aStart: name.nameStart, aLen: name.nameLen, bStart: start, bLen: len)
     }
 
     inout fn resolveTypeDeclIdentities() -> Result[(), CompileDiagnostic] {

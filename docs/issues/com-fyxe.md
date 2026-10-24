@@ -117,3 +117,15 @@ select by expected result, change body keys, or add an inference solver. Interna
 raw name-only clients with no declaration keep their existing probe behavior;
 source qualifiers with a known owner cannot cross to another owner. Fresh
 execution and final independent review of this increment remain pending.
+
+### Alias Identity Projection
+
+Fresh5 still rejects the right-side alias despite the owner predicate: the
+qualifier adapter used aliasReal to return the use selector's source token,
+which belongs to the importing module and is not itself an imported binding.
+The source identity query must run on the original alias. assocRecvName now
+projects that identity to the defining declaration's real name span using the
+shared typeDeclName projection. It never treats an identity offset as a spelling.
+concreteTypeQualifierTerm then queries that span in its defining module. This
+preserves the owner into both the bare-head filter and concrete receiver path;
+no postselection recovery or result matching weakening is introduced.
