@@ -57,12 +57,16 @@ impl SourceBodyData {
             }
         }
     }
-    inout fn putTransfer(fact: SourceTransferFact) {
+    inout fn putTransfer(fact: SourceTransferFact) -> Bool {
         match self.transferKeys.get(key: fact.statementId) {
-            Optional.Some(v: val index) => { self.transfers.set(i: index, value: fact) }
+            Optional.Some(v: val index) => {
+                val prior = self.transfers[index]
+                return semanticCompletionOwnersEqual(recorded: prior.owner, prepared: fact.owner) && prior.matches(transfer: fact.transfer) && prior.target.matches(target: fact.target)
+            }
             Optional.None => {
                 self.transferKeys[fact.statementId] = self.transfers.count()
                 self.transfers.append(fact)
+                return true
             }
         }
     }
