@@ -1120,16 +1120,15 @@ fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U6
         Result.Err(error: val error) => { return <MidOperandBuild.Error error=error /> }
     }
     val term = sourceType.typeTerm()
-    val invocation = match midSourceSemanticExpression(state: state, exprId: exprId) {
-        Optional.Some(v: val fact) => fact.invocation
-        Optional.None => { return <MidOperandBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
-    }
-    // A nonvalue source fact may retain a diagnostic Unit annotation. It is
-    // never the payload of a diverging invocation: the frozen call recipe owns
-    // that ABI result (zero), just as it owns ordinary typed call results.
-    val returnsUnit = c.callTemplateReturnsUnit(template: template) && match invocation {
-        InvocationCompletion.Diverges => false
-        _ => true
+    mut val returnsUnit = c.callTemplateReturnsUnit(template: template)
+    if returnsUnit {
+        val invocation = match midSourceSemanticExpression(state: state, exprId: exprId) {
+            Optional.Some(v: val fact) => fact.invocation
+            Optional.None => { return <MidOperandBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
+        }
+        // Diagnostic Unit is not a diverging call's ABI payload. Only this
+        // normal-Unit lane can bypass the frozen call-result recipe.
+        match invocation { InvocationCompletion.Diverges => { returnsUnit = false } _ => {} }
     }
     if !returnsUnit && template.resultTypeRecipe == 0U64 {
         if c.traceCodegen {
@@ -1155,12 +1154,18 @@ fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U6
     val scope = state.currentScope
     val local: U64 = addMidTemporary(state: inout state, typeTerm: sourceTerm)
     val place: MidPlace = <MidPlace local=local typeTerm=sourceTerm typeRecipe=recipe />
-    val built: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: exprId, destination: place)
-    match built { MidBuildError.None => {} _ => { return <MidOperandBuild.Error error=built /> } }
+    val reached = match buildMidCallInto(c: inout c, state: inout state, exprId: exprId, destination: place) {
+        Result.Ok(value: val reached) => reached
+        Result.Err(error: val error) => { return <MidOperandBuild.Error error=error /> }
+    }
+    // A callee can close the continuation after its Call was emitted. That
+    // destination still requires its recipe; an exit in the inputs does not.
+    if reached {
+        state.locals.set(i: local, value: <MidLocalDecl typeTerm=sourceTerm typeRecipe=recipe sourceScope=scope isUnique=ownsUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 />)
+    }
     if !midCurrentBlockIsOpen(state: state) {
         return <MidOperandBuild.NoContinuation />
     }
-    state.locals.set(i: local, value: <MidLocalDecl typeTerm=sourceTerm typeRecipe=recipe sourceScope=scope isUnique=ownsUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 />)
     state.callValues.append(<MidCallValue siteKey=siteKey place=place />)
     // A call result has the same ownership as a freshly built aggregate.
     // Never let a unique result enter a consuming call as a Copy.
@@ -2272,27 +2277,26 @@ fn midSourceCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64,
 // A source call is a terminator in Mid. Its semantic target and argument
 // provenance come entirely from the frozen CallTemplate; source Expr ids are
 // used only to materialize those already-selected value operands.
-fn buildMidCallInto(c: inout Comp, state: inout MidBuildState, exprId: U64, destination: MidPlace) -> MidBuildError {
+// Ok(true) means the actual Call was emitted, independently of whether the
+// selected callee has a continuation. Ok(false) means its inputs exited first.
+fn buildMidCallInto(c: inout Comp, state: inout MidBuildState, exprId: U64, destination: MidPlace) -> Result[Bool, MidBuildError] {
+    val fact = match midSourceSemanticExpression(state: state, exprId: exprId) {
+        Optional.Some(v: val fact) => fact
+        Optional.None => { return <Result.Err error=<MidBuildError.MissingSemanticType /> /> }
+    }
     val parentCalls: Array[MidCallValue] = state.callValues
     val parentAggregates: Array[MidAggregateValue] = state.aggregateValues
     state.callValues = []
     state.aggregateValues = []
-    // The result home belongs to the enclosing evaluation. Argument and
-    // receiver temporaries belong to this call, including nested calls and
-    // synthesized default-argument forwarding. Drop elaboration closes their
-    // ownership after the call (and access writeback), before its consumer.
+    // Input temporaries end at the call; its result home is in the parent.
     val evaluation = midOpenScope(state: inout state)
-    val built: MidBuildError = buildMidCallEvaluation(c: inout c, state: inout state, exprId: exprId, destination: destination)
-    // The callee contract was selected by frontend typing. A nonreturning
-    // invocation has no writeback, temporary cleanup, or enclosing join edge.
-    // Keep the ordinary Call target block but terminate that continuation.
-    val fact = match midSourceSemanticExpression(state: state, exprId: exprId) {
-        Optional.Some(v: val fact) => fact
-        Optional.None => { return <MidBuildError.MissingSemanticType /> }
-    }
-    val diverges = match fact.invocation { InvocationCompletion.Diverges => true _ => false }
-    if diverges && midCurrentBlockIsOpen(state: state) {
-        midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />)
+    val built = buildMidCallEvaluation(c: inout c, state: inout state, exprId: exprId, destination: destination)
+    match built {
+        Result.Ok(value: val reached) => {
+            val diverges = match fact.invocation { InvocationCompletion.Diverges => true _ => false }
+            if reached && diverges { midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />) }
+        }
+        Result.Err(error: _) => {}
     }
     midFinishEvaluationScope(state: inout state, scope: evaluation)
     state.callValues = parentCalls
@@ -2300,10 +2304,10 @@ fn buildMidCallInto(c: inout Comp, state: inout MidBuildState, exprId: U64, dest
     return built
 }
 
-fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64, destination: MidPlace) -> MidBuildError {
-    val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return <MidBuildError.Frontend diagnostic=diagnostic /> } })
+fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64, destination: MidPlace) -> Result[Bool, MidBuildError] {
+    val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return <Result.Err error=<MidBuildError.Frontend diagnostic=diagnostic /> /> } })
     if !midTemplateIsCallable(template: template) {
-        match template.kind { CallTemplateKind.Pending => { return <MidBuildError.MissingCallTemplate /> } _ => { return <MidBuildError.UnsupportedCallTemplate /> } }
+        match template.kind { CallTemplateKind.Pending => { return <Result.Err error=<MidBuildError.MissingCallTemplate /> /> } _ => { return <Result.Err error=<MidBuildError.UnsupportedCallTemplate /> /> } }
     }
     val parameters: Array[CallTemplateArgument] = midTemplateArguments(c: c, template: template)
     mut val sources = parameters
@@ -2321,8 +2325,8 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
         while parameterIndex < parameters.count() {
             val parameter = parameters[parameterIndex]
             val order = if parameter.evaluationOrder == 0U64 { give parameterIndex } else { give parameter.evaluationOrder - 1U64 }
-            if order >= parameters.count() { return <MidBuildError.UnsupportedCallTemplate /> }
-            if occupied[order] { return <MidBuildError.UnsupportedCallTemplate /> }
+            if order >= parameters.count() { return <Result.Err error=<MidBuildError.UnsupportedCallTemplate /> /> }
+            if occupied[order] { return <Result.Err error=<MidBuildError.UnsupportedCallTemplate /> /> }
             occupied.set(i: order, value: true)
             sources.set(i: order, value: parameter)
             parameterIndex += 1U64
@@ -2331,8 +2335,8 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
     val receiver: MidReceiverBuild = midCallReceiver(c: inout c, state: inout state, exprId: exprId, template: template)
     val receiverValue: MidCallReceiver = match receiver {
         MidReceiverBuild.Value(receiver: val value) => { give value }
-        MidReceiverBuild.NoContinuation => { return <MidBuildError.None /> }
-        MidReceiverBuild.Error(error: val error) => { return error }
+        MidReceiverBuild.NoContinuation => { return <Result.Ok value=false /> }
+        MidReceiverBuild.Error(error: val error) => { return <Result.Err error=error /> }
     }
     mut val hasInoutArgument: Bool = false
     mut val delayedAccess = false
@@ -2370,8 +2374,8 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
             val argument: MidOperandBuild = midTemplateArgumentOperand(c: inout c, state: inout state, argument: sources[ordinaryI], captureValue: captures[ordinaryI])
             val argumentValue: MidOperand = match argument {
                 MidOperandBuild.Value(operand: val value) => { give value }
-                MidOperandBuild.NoContinuation => { return <MidBuildError.None /> }
-                MidOperandBuild.Error(error: val error) => { return error }
+                MidOperandBuild.NoContinuation => { return <Result.Ok value=false /> }
+                MidOperandBuild.Error(error: val error) => { return <Result.Err error=error /> }
             }
             ordinaryArgs.append(argumentValue)
             ordinaryI += 1U64
@@ -2387,7 +2391,7 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
         val ordinaryNext: U64 = midNewBlock(state: inout state)
         midSetTerminator(state: inout state, terminator: <MidTerminator.Call callee=<MidCallTarget.Template site=template.siteKey /> receiver=receiverValue args=parameterArgs destination=destination target=ordinaryNext />)
         state.currentBlock = ordinaryNext
-        return <MidBuildError.None />
+        return <Result.Ok value=true />
     }
     mut val args: Array[MidCallArgument] = []
     mut val i: U64 = 0U64
@@ -2396,20 +2400,20 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
             val argument: MidNormalizedCallArgumentBuild = midTemplateInoutCallArgument(c: inout c, state: inout state, argument: sources[i])
             val argumentValue: MidCallArgument = match argument {
                 MidNormalizedCallArgumentBuild.Value(argument: val value) => { give value }
-                MidNormalizedCallArgumentBuild.NoContinuation => { return <MidBuildError.None /> }
-                MidNormalizedCallArgumentBuild.Error(error: val error) => { return error }
+                MidNormalizedCallArgumentBuild.NoContinuation => { return <Result.Ok value=false /> }
+                MidNormalizedCallArgumentBuild.Error(error: val error) => { return <Result.Err error=error /> }
             }
             args.append(argumentValue)
         } else {
             val argument: MidOperandBuild = midTemplateArgumentOperand(c: inout c, state: inout state, argument: sources[i], captureValue: captures[i])
             val argumentValue: MidOperand = match argument {
                 MidOperandBuild.Value(operand: val value) => { give value }
-                MidOperandBuild.NoContinuation => { return <MidBuildError.None /> }
-                MidOperandBuild.Error(error: val error) => { return error }
+                MidOperandBuild.NoContinuation => { return <Result.Ok value=false /> }
+                MidOperandBuild.Error(error: val error) => { return <Result.Err error=error /> }
             }
             args.append(midNormalizeCallArgument(state: inout state, operand: argumentValue))
         }
-        if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
+        if !midCurrentBlockIsOpen(state: state) { return <Result.Ok value=false /> }
         i += 1U64
     }
     mut val parameterArgs = args
@@ -2423,7 +2427,7 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
     val next: U64 = midNewBlock(state: inout state)
     midSetTerminator(state: inout state, terminator: <MidTerminator.NormalizedCall callee=<MidCallTarget.Template site=template.siteKey /> receiver=receiverValue args=parameterArgs destination=destination target=next />)
     state.currentBlock = next
-    return <MidBuildError.None />
+    return <Result.Ok value=true />
 }
 
 // First source builder slice: an already recorded `val`/`mut val` becomes one

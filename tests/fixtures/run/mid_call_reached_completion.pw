@@ -1,0 +1,28 @@
+// Call emission and call continuation are distinct lowering outcomes.
+use @Std/Io only { print }
+fn identity(value: I64) -> I64 { return value }
+fn sink(value: I64) { print(value) }
+fn update(counter: inout I64, value: I64) { counter += value }
+diverge fn stop(value: I64) { panic("unexpected stop") }
+fn analytical(flag: Bool) -> I64 {
+    if flag { return identity(value: { while true {} give 1I64 }) }
+    return 42I64
+}
+fn analyticalUnit(flag: Bool) {
+    if flag { sink(value: { while true {} give 1I64 }) }
+    print("unit")
+}
+fn analyticalInout(flag: Bool) -> I64 {
+    mut val counter = 7I64
+    if flag { update(counter: inout counter, value: { while true {} give 1I64 }) }
+    return counter
+}
+fn argumentReturn(flag: Bool) -> I64 {
+    stop(value: if flag { return 11I64 } else { give 1I64 })
+}
+fn main() {
+    print(analytical(flag: false))
+    analyticalUnit(flag: false)
+    print(analyticalInout(flag: false))
+    print(argumentReturn(flag: true))
+}
