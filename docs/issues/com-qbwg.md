@@ -130,7 +130,7 @@ that failure is retained, not counted as successful validation.
 Fresh sourcecheck passes. part-focused-1 passes all4 native controls.
 focused-4 at **ce98f5f4** passes native19, including both new Buffer controls
 and the formerly failing associated authority case, then stops at optional_chain;
-the remaining native23/reject11 are unexecuted. The new internal fixture
+the remaining native22/reject11 are unexecuted. The new internal fixture
 corrections preserve its original purpose: required args fields, ordered source
 range registration, valid view owner and the source control's val field syntax.
 All scoped inputs remain unchanged. No full gate/performance success is claimed.

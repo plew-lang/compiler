@@ -164,7 +164,7 @@ plewc-phase3c-synthetic-buffer-1 passes compiler-source checking, module native4
 and the first **19** focused native cases, including both new Buffer controls
 and associated_literal_signature_authority. The next case, optional_chain,
 fails source checking with "source value does not satisfy the required
-conversion"; remaining native23 and reject11 are unexecuted, not successful.
+conversion"; remaining native22 and reject11 are unexecuted, not successful.
 The focused and module input maps remain unchanged. On the identical source,
 pre-Buffer fresh5 also fails and nqjd's fixed8e0f0329 succeeds. The Buffer
 producer change is not the origin of this regression.
