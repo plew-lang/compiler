@@ -945,21 +945,25 @@ pub impl Comp {
         return self.checkSourceCallArguments(template: template, function: function, arguments: arguments, signature: <SourceCallSignature.Direct environment=environment />)
     }
 
-    inout fn checkSourceStaticCallArguments(template: CallTemplate, function: Func, arguments: CallTemplateArgumentRange, typeArgs: CallTemplateTypeArgumentRange, resolution: StaticMemberResolution) -> Result[(), CompileDiagnostic] {
-        if arguments.len == 0U64 { return <Result.Ok value=() /> }
+    inout fn selectedStaticCallSignature(template: CallTemplate, function: Func, typeArgs: CallTemplateTypeArgumentRange, resolution: StaticMemberResolution) -> Result[SourceCallSignature, CompileDiagnostic] {
         match resolution {
             StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIndex, reqIdx: _) => {
                 val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
                 val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: function.typeParams) args=self.callTemplateTypeArgs(range: typeArgs) receiverRef=template.receiverTypeTerm proof=proof />
-                return self.checkSourceCallArguments(template: template, function: function, arguments: arguments, signature: <SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=environment />)
+                return <Result.Ok value=<SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=environment /> />
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: val traitIndex, callee: _) => {
                 val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
                 val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: proof)
-                return self.checkSourceCallArguments(template: template, function: function, arguments: arguments, signature: <SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=environment />)
+                return <Result.Ok value=<SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=environment /> />
             }
             StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "deferred declaration obligation has no selected member") /> }
         }
+    }
+
+    inout fn checkSourceStaticCallArguments(template: CallTemplate, function: Func, arguments: CallTemplateArgumentRange, typeArgs: CallTemplateTypeArgumentRange, resolution: StaticMemberResolution) -> Result[(), CompileDiagnostic] {
+        if arguments.len == 0U64 { return <Result.Ok value=() /> }
+        return self.checkSourceCallArguments(template: template, function: function, arguments: arguments, signature: (try self.selectedStaticCallSignature(template: template, function: function, typeArgs: typeArgs, resolution: resolution)))
     }
 
     inout fn sourceCallSignatureParameter(ref: U64, signature: SourceCallSignature) -> Result[U64, CompileDiagnostic] {

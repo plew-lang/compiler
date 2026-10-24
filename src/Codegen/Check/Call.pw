@@ -27,6 +27,51 @@ pub impl Comp {
         }
     }
 
+    // Selected source calls are read before any syntax/cache lookup. A
+    // partially saved selection is an error, never an unselected probe.
+    inout fn checkRecordedCallLiteralArguments(exprId: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
+        val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+        val index = self.callTemplateIndex(siteKey: site)
+        if index >= self.callTemplateLocations.count() { return <Result.Ok value=false /> }
+        val template = self.callTemplateAt(index: index)
+        val selected = match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                if callee >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call has no declaration") /> }
+                val environment = match (try self.recordedDirectCallEnvironmentAt(exprId: exprId, callee: callee)) {
+                    Optional.Some(v: val environment) => { give environment }
+                    Optional.None => { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call has no parameter bindings") /> }
+                }
+                give (function: self.arena.functionAt(index: callee), signature: <SourceCallSignature.Direct environment=environment />)
+            }
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
+                val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: site.originStart)
+                val arguments = self.callTemplateTypeArgs(range: typeArgs)
+                if typeArgs.len != arguments.count() || arguments.count() != function.typeParams.count() || (arguments.count() != 0U64 && !self.fnArgsAllResolved(args: arguments)) {
+                    return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call has incomplete type arguments") />
+                }
+                give (function: function, signature: (try self.selectedStaticCallSignature(template: template, function: function, typeArgs: typeArgs, resolution: resolution)))
+            }
+            _ => { return <Result.Ok value=false /> }
+        }
+        if !self.paramsLabelsOk(params: selected.function.params, args: args) {
+            return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "selected call arguments do not match its parameter labels") />
+        }
+        mut val index = 0U64
+        while index < args.len {
+            val position = self.paramIndexForArg(params: selected.function.params, args: args, argIdx: index)
+            val parameter = self.funcParamAt(params: selected.function.params, index: position)
+            val argument = self.argAt(args: args, index: index)
+            try self.checkArgInoutMode(p: parameter, arg: argument)
+            val expected = try self.sourceCallSignatureParameter(ref: parameter.ty, signature: selected.signature)
+            if expected == 0U64 { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call has no parameter type") /> }
+            val type = self.typeInfoOfRef(ref: expected)
+            try self.checkLitSpanCtx(id: argument.expr, tyStart: type.nameStart, tyLen: type.nameLen, isArray: type.kind == 3, ctxRef: expected)
+            try self.tcCheckValue(expectedRef: expected, valueExpr: argument.expr, pos: "arg")
+            index += 1U64
+        }
+        return <Result.Ok value=true />
+    }
+
     // Generic bodies are verified against their declared trait bounds.  This
     // deliberately returns a requirement signature, never a concrete witness:
     // the latter belongs to Mono after T is instantiated.  Keeping the two
@@ -230,6 +275,7 @@ pub impl Comp {
 
     inout fn checkCallArgs(id: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         try self.checkUniqueArgModes(args: args)
+        if (try self.checkRecordedCallLiteralArguments(exprId: id, args: args)) { return <Result.Ok value=() /> }
         val fi: U64 = (try self.resolvedCallee(id: id))
         if fi == self.arena.functionCount() {
             // calling a function VALUE (`val f: fn(x: I64)->I64 = …; f(x: true)`): the name
@@ -291,6 +337,7 @@ pub impl Comp {
 
     inout fn checkMethodArgs(exprId: U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         try self.checkUniqueArgModes(args: args)
+        if (try self.checkRecordedCallLiteralArguments(exprId: exprId, args: args)) { return <Result.Ok value=() /> }
         try self.checkLitCtx(id: recv, eKind: 0, eBits: 0, eSgn: false)
         mut val receiverTerm = self.parametricExprTerm(exprId: recv)
         if receiverTerm == 0U64 { receiverTerm = (try self.inferType(id: recv)) }

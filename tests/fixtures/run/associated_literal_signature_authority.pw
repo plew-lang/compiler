@@ -1,0 +1,54 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, Arg, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource }
+
+fn check(mode: U64) {
+    mut val compiler = <Comp />
+    val source = "struct Holder[T] {{}} impl[T] Holder[T] {{ assoc fn made(value: T) -> T {{ return value }} }} fn foreign[T](value: T) -> T {{ return value }} fn probe(value: I8) {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="signature-authority.pw" />, sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "made").nameId)
+    val foreign = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreign").nameId)
+    compiler.cur.checkFn = owner
+    val integer = compiler.funcParamAt(params: compiler.arena.functionAt(index: owner).params, index: 0U64).ty
+    val function = compiler.arena.functionAt(index: callee)
+    val receiver = compiler.groundTermInEnvironment(ref: function.recvTy, params: compiler.copyFuncBinds(binds: function.typeParams), values: [integer])
+    val literal = compiler.pushExpr(e: <Expr.Int value=7U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    compiler.recordExpr(exprId: literal, expectedTerm: integer).unwrap()
+    val label = compiler.internBytes(s: "value")
+    val arguments = compiler.pushArgs(args: [<Arg expr=literal isInout=false labelStart=label.nameStart labelLen=label.nameLen hasLabel=true />])
+    // This qualifier has no declaration. A selected-call consumer must not
+    // reopen its syntax instead of reading the complete stored receiver.
+    val missing = compiler.internBytes(s: "UnselectedName")
+    val qualifier = compiler.pushExpr(e: <Expr.Ident start=missing.nameStart len=missing.nameLen />)
+    val expression = compiler.pushExpr(e: <Expr.Method recv=qualifier nameStart=function.nameStart nameLen=function.nameLen args=arguments />)
+    if mode == 4U64 {
+        assert(!compiler.checkRecordedCallLiteralArguments(exprId: expression, args: arguments).unwrap())
+        assert(compiler.constructCallParameterEnvironment(exprId: expression, callee: callee, receiverRef: receiver, args: arguments).isOk())
+        return
+    }
+    val operands = compiler.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=literal term=integer /> isInout=false labelStart=label.nameStart labelLen=label.nameLen hasLabel=true />])
+    val types = compiler.publishCallTemplateTypeArgs(args: if mode == 1U64 { give [] } else { give [integer] })
+    val site = compiler.templateCallSiteKey(fnIdx: owner, exprId: expression).unwrap()
+    assert(compiler.appendCallTemplate(template: <CallTemplate siteKey=site receiverTypeTerm=receiver kind=<CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.Term term=receiver /> args=operands calleeTypeArgs=types proofId=0U64 /> />))
+    if mode == 1U64 {
+        assert(compiler.callParameterEnvironment(exprId: expression, callee: callee, receiverRef: receiver, args: arguments).isErr())
+        assert(compiler.checkRecordedCallLiteralArguments(exprId: expression, args: arguments).isErr())
+    } else if mode == 2U64 {
+        assert(compiler.callParameterEnvironment(exprId: expression, callee: foreign, receiverRef: receiver, args: arguments).isErr())
+    } else if mode == 3U64 {
+        assert(compiler.constructCallParameterEnvironment(exprId: expression, callee: callee, receiverRef: receiver, args: arguments).isErr())
+    } else {
+        assert(compiler.checkRecordedCallLiteralArguments(exprId: expression, args: arguments).unwrap())
+        compiler.checkMethodArgs(exprId: expression, recv: qualifier, nameStart: function.nameStart, nameLen: function.nameLen, args: arguments).unwrap()
+        val environment = compiler.callParameterEnvironment(exprId: expression, callee: callee, receiverRef: 0U64, args: arguments).unwrap()
+        assert(compiler.typeRefEq(a: environment.receiverRef, b: receiver))
+        assert(compiler.typeRefEq(a: environment.args[0U64], b: integer))
+    }
+}
+fn main() {
+    for mode in [0U64, 1U64, 2U64, 3U64, 4U64] { check(mode: mode) }
+    print("associated-literal-signature-authority")
+}

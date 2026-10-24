@@ -49,3 +49,23 @@ controls where the migrated boundary needs them. Pin fresh source/carrier/input
 hashes, actual execution/rejection receipts and independent completion review.
 General defaults/conformance-solver redesign is outside scope. Final G2 gates
 remain mandatory.
+
+## Implementation Checkpoint
+
+58fdf37a removes the associated literal helper's name reselection and positional
+receiver-argument map. Fresh candidate phase3c-associated-context-1 was built by
+20261024T033516-build-ef3316 (exit 0, unchanged inputs). The direct reordered
+receiver control progressed beyond the old incorrect range rejection, but the
+method-owned-binder case still lacked literal context. This is not closure.
+
+Independent static review identified the paired mixed API: checkMethodArgs could
+run resolvedCallee before reading saved selection, and
+recordedDirectCallEnvironmentAt treated foreign callee/incomplete substitutions
+as absent selection. The next source increment reads Direct/Static saved
+signatures before any syntax query, shares static signature projection with
+source constraint checking, rejects malformed selected substitutions, and
+separates constructCallParameterEnvironment with an explicit selected-row guard.
+A new internal control covers saved receiver use despite an unresolvable
+qualifier, missing substitutions, cross-callee requests, forbidden construction
+after selection, and a real unselected construction query. New sources pass the
+old fixed carrier's full source check; fresh execution/review remain pending.

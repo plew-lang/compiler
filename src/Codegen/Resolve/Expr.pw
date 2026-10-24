@@ -1720,13 +1720,19 @@ pub impl Comp {
         }
     }
 
-    // During body construction some call families still publish late. Every
-    // migrated caller consumes its recorded substitution; the temporary
-    // construction fallback is centralized here until all families seal.
+    // Read selected bindings first. Only an actually unselected occurrence
+    // may enter the explicit source-construction query below.
     inout fn callParameterEnvironment(exprId: U64, callee: U64, receiverRef: U64, args: ArgRange) -> Result[InstanceEnvironment, CompileDiagnostic] {
         match (try self.recordedDirectCallEnvironmentAt(exprId: exprId, callee: callee)) {
             Optional.Some(v: val environment) => { return <Result.Ok value=environment /> }
             Optional.None => {}
+        }
+        return self.constructCallParameterEnvironment(exprId: exprId, callee: callee, receiverRef: receiverRef, args: args)
+    }
+
+    inout fn constructCallParameterEnvironment(exprId: U64, callee: U64, receiverRef: U64, args: ArgRange) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        if (try self.recordedCallIsSelected(exprId: exprId)) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: selected call cannot reconstruct parameter bindings") />
         }
         val function = self.arena.functionAt(index: callee)
         val selectedReceiver = self.syntheticCallReceiverTerm(exprId: exprId, fallback: receiverRef)
@@ -1762,14 +1768,11 @@ pub impl Comp {
         val template = self.callTemplateAt(index: index)
         match template.kind {
             CallTemplateKind.Direct(callee: val selected, receiver: val receiver, args: _, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
-                if selected != callee || selected >= self.arena.functionCount() { return <Result.Ok value=<Optional.None /> /> }
+                if selected != callee || selected >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call declaration does not match its parameter request") /> }
                 val function = self.arena.functionAt(index: selected)
                 val arguments = self.callTemplateTypeArgs(range: typeArgs)
-                // This construction-time query returns an environment only
-                // when every selected binder has a value. A published partial
-                // call row is not a proof-complete signature.
-                if arguments.count() != function.typeParams.count() || (arguments.count() != 0U64 && !self.fnArgsAllResolved(args: arguments)) {
-                    return <Result.Ok value=<Optional.None /> />
+                if typeArgs.len != arguments.count() || arguments.count() != function.typeParams.count() || (arguments.count() != 0U64 && !self.fnArgsAllResolved(args: arguments)) {
+                    return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call has incomplete type arguments") />
                 }
                 val environment = try self.recordedDirectCallEnvironment(function: self.arena.functionAt(index: selected), receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: self.thawStaticConformanceProof(id: proofId))
                 if self.traceCodegen {
