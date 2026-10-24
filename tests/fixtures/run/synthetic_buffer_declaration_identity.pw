@@ -1,7 +1,7 @@
 use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp }
-use /Ir only { TypeRef, StructDef, Bind, ResolvedViewSource, TraitOwner, TraitDef }
+use /Ir only { TypeRef, StructDef, Bind, ResolvedViewSource, TraitOwner, TraitDef, Func, InstanceEnvironment }
 
 fn receiver(compiler: Comp, expression: U64) -> U64 {
     return compiler.decls.syntheticCallSites[compiler.syntheticCallSiteIndex(exprId: expression)].receiverTerm
@@ -22,7 +22,15 @@ fn checkMissingCore() {
     val foreign = registerBuffer(compiler: inout compiler, offset: 200U64, module: 2U64)
     val name = compiler.internBytes(s: "I64")
     val element = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen />)
-    assert(compiler.arena.finishTypeDeclarationResolution(resolutions: []))
+    val earlyExpression = compiler.synthBufferNew(elemRef: element).unwrap()
+    val early = receiver(compiler: compiler, expression: earlyExpression)
+    compiler.resolveTypeDeclIdentities().unwrap()
+    assert(!compiler.arena.typeAt(index: early).hasDecl)
+    val buffer = compiler.internBytes(s: "Buffer")
+    val foreignReceiver = compiler.declaredTypeRef(nameStart: buffer.nameStart, nameLen: buffer.nameLen, args: [element], declaration: foreign)
+    val method = compiler.internBytes(s: "new")
+    val function = <Func nameStart=method.nameStart nameLen=method.nameLen hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=true recvStart=buffer.nameStart recvLen=buffer.nameLen recvTy=foreignReceiver selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />
+    assert(!compiler.bodyReceiverMatchesDeclaration(function: function, environment: <InstanceEnvironment receiverRef=early />))
     val count = compiler.arena.typeCount()
     val sites = compiler.decls.syntheticCallSites.count()
     assert(compiler.synthBufferNew(elemRef: element).isErr())
