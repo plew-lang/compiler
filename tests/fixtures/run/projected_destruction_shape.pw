@@ -1,0 +1,132 @@
+// Shape queries normalize fields without discovering executable bodies or layouts.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Ir only { TypeRef, StructDef, FieldDef, DestructionShape, InstanceEnvironment }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+struct Counts {
+    val bodies: U64
+    val work: U64
+    val instances: U64
+    val functionInstances: U64
+    val structures: U64
+    val destructions: U64
+}
+pub impl Counts { factory }
+
+fn counts(compiler: inout Comp) -> Counts {
+    return <Counts bodies=compiler.arena.bodyInstanceCount() work=compiler.monoWork.bodyCount()
+        instances=compiler.monoWork.genInsts.count() functionInstances=compiler.monoWork.fnInsts.count() structures=compiler.arena.structCount()
+        destructions=compiler.arena.finalDestructions.count() />
+}
+
+fn unchanged(compiler: inout Comp, before: Counts) {
+    assert(compiler.arena.bodyInstanceCount() == before.bodies)
+    assert(compiler.monoWork.bodyCount() == before.work)
+    assert(compiler.monoWork.genInsts.count() == before.instances)
+    assert(compiler.monoWork.fnInsts.count() == before.functionInstances)
+    assert(compiler.arena.structCount() == before.structures)
+    assert(compiler.arena.finalDestructions.count() == before.destructions)
+}
+
+fn parameter(compiler: inout Comp, function: U64, index: U64) -> U64 {
+    return compiler.funcParamAt(params: compiler.arena.functionAt(index: function).params, index: index).ty
+}
+
+fn checkedShape(compiler: inout Comp, term: U64) -> DestructionShape {
+    val before = counts(compiler: inout compiler)
+    val shape = compiler.closedDestructionShape(typeRef: term).unwrap()
+    assert(compiler.arena.typeIsClosed(ref: shape.underlying))
+    for field in shape.fieldTypes { assert(compiler.arena.typeIsClosed(ref: field)) }
+    val dependencies = compiler.closedDestructionDependencies(typeRef: term).unwrap()
+    for child in dependencies.children { assert(compiler.arena.typeIsClosed(ref: child)) }
+    unchanged(compiler: inout compiler, before: before)
+    return shape
+}
+
+fn rejectedShape(compiler: inout Comp, term: U64) {
+    val before = counts(compiler: inout compiler)
+    assert(compiler.finalDestructionIndex(typeRef: term) == 0U64)
+    assert(compiler.closedDestructionShape(typeRef: term).isErr())
+    unchanged(compiler: inout compiler, before: before)
+    assert(compiler.closedDestructionDependencies(typeRef: term).isErr())
+    unchanged(compiler: inout compiler, before: before)
+    assert(compiler.collectFinalDestruction(typeRef: term).isErr())
+    assert(compiler.finalDestructionIndex(typeRef: term) == 0U64)
+    unchanged(compiler: inout compiler, before: before)
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    val resources = [
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64 }}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 }}" />,
+        <SourceResource path="plew:std/ShapeProbe.pw".bytes() text="trait Source {{ type Item }}\nstruct Provider {{}}\nimpl Provider as Source {{ type Item=I64 }}\nstruct Holder {{ val value: Provider#Source.Item }}\nenum Choice {{ Value(value: Provider#Source.Item) Empty }}\nstruct Wrapper[T] {{ val value: T val projected: Provider#Source.Item }}\nnewtype Wrapped=Holder\nfn roots(holder: Holder, choice: Choice, generic: Wrapper[I64], wrapped: Wrapped, provider: Provider) {{}}" />,
+    ]
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.File path="plew:std/ShapeProbe.pw" />,
+        sources: <SourceAccess stdRoot="plew:std/".bytes() resources=resources />).unwrap()
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "roots").nameId)
+    assert(function < compiler.arena.functionCount())
+    val holder = parameter(compiler: inout compiler, function: function, index: 0U64)
+    val choice = parameter(compiler: inout compiler, function: function, index: 1U64)
+    val generic = parameter(compiler: inout compiler, function: function, index: 2U64)
+    val wrapped = parameter(compiler: inout compiler, function: function, index: 3U64)
+    val provider = parameter(compiler: inout compiler, function: function, index: 4U64)
+    val integer = compiler.arena.typeAt(index: generic).args[0U64]
+
+    val holderShape = checkedShape(compiler: inout compiler, term: holder)
+    assert(holderShape.fieldTypes.count() == 1U64)
+    assert(compiler.typeRefEq(a: holderShape.fieldTypes[0U64], b: integer))
+    val choiceShape = checkedShape(compiler: inout compiler, term: choice)
+    assert(choiceShape.fieldTypes.count() == 1U64)
+    assert(choiceShape.variantFieldStarts.count() == 3U64)
+    assert(compiler.typeRefEq(a: choiceShape.fieldTypes[0U64], b: integer))
+    val genericShape = checkedShape(compiler: inout compiler, term: generic)
+    assert(genericShape.fieldTypes.count() == 2U64)
+    assert(compiler.typeRefEq(a: genericShape.fieldTypes[0U64], b: integer))
+    assert(compiler.typeRefEq(a: genericShape.fieldTypes[1U64], b: integer))
+    val wrappedShape = checkedShape(compiler: inout compiler, term: wrapped)
+    assert(compiler.typeRefEq(a: wrappedShape.underlying, b: holder))
+
+    // A concrete projection is still an open root until its caller normalizes
+    // it. A generic declaration head without its arguments is also inadmissible.
+    val holderIndex = compiler.structIndexForType(ref: holder)
+    val projection = compiler.arena.structFieldAt(structIndex: holderIndex, fieldIndex: 0U64).ty
+    assert(compiler.arena.typeTermAt(index: projection).assocNameId != 0U64)
+    rejectedShape(compiler: inout compiler, term: projection)
+    val incomplete = compiler.rebuildTypeTerm(t: compiler.arena.typeAt(index: generic), args: [], assocTraitArgs: [])
+    rejectedShape(compiler: inout compiler, term: incomplete)
+
+    // Missing proof identity makes the canonical normalization API return Ok
+    // with the same projection. The shape boundary must reject that open field
+    // before allocating a final-contract placeholder, rather than classifying
+    // the projection as Scalar. This is an internal malformed-state control.
+    val item = compiler.internBytes(s: "Item")
+    val providerType = compiler.arena.typeAt(index: provider)
+    val unresolved = compiler.pushType(t: <TypeRef nameStart=providerType.nameStart nameLen=providerType.nameLen nameId=providerType.nameId args=[]
+        assocNameStart=item.nameStart assocNameLen=item.nameLen assocNameId=item.nameId projectionReceiver=provider />)
+    val normalized = compiler.closeBodyProjectionTerms(ref: unresolved, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64).unwrap()
+    assert(normalized == unresolved && !compiler.arena.typeIsClosed(ref: normalized))
+    rejectedShape(compiler: inout compiler, term: unresolved)
+    val name = compiler.internBytes(s: "MissingProjectionShape")
+    val field = compiler.internBytes(s: "payload")
+    val offset = 9000000U64
+    compiler.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[]
+        fields=[<FieldDef nameStart=field.nameStart nameLen=field.nameLen nameId=field.nameId
+            tyStart=providerType.nameStart tyLen=providerType.nameLen tyNameId=providerType.nameId
+            tyIsArray=false ty=unresolved isMut=false hasDefault=false defaultVal=0U64 />]
+        isUnique=false isExtern=false defOffset=offset />)
+    val malformed = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId args=[] hasDecl=true declOffset=offset />)
+    assert(compiler.arena.typeIsClosed(ref: malformed))
+    rejectedShape(compiler: inout compiler, term: malformed)
+
+    // Publication consumes exactly the successful normalized shape.
+    compiler.enqueueFinalDestruction(typeRef: holder).unwrap()
+    val contract = compiler.arena.finalDestructions[compiler.checkedFinalDestruction(typeRef: holder).unwrap() - 1U64]
+    assert(contract.fieldTypes.count() == holderShape.fieldTypes.count())
+    assert(compiler.typeRefEq(a: contract.fieldTypes[0U64], b: holderShape.fieldTypes[0U64]))
+    assert(compiler.arena.typeIsClosed(ref: contract.fieldTypes[0U64]))
+    print("projected-destruction-shape")
+}

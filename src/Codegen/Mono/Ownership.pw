@@ -218,7 +218,7 @@ pub impl Comp {
         if typeRef == 0U64 || !self.arena.typeIsClosed(ref: typeRef) {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: destruction dependency query requires a closed type") />
         }
-        val shape = self.closedDestructionShape(typeRef: typeRef)
+        val shape = try self.closedDestructionShape(typeRef: typeRef)
         mut val children = shape.fieldTypes
         mut val dynamicPayload = false
         if shape.underlying != 0U64 { children = [shape.underlying] }
@@ -235,9 +235,13 @@ pub impl Comp {
         return <Result.Ok value=<DestructionDependencies destructorDeclaration=shape.destructorDeclaration children=children hasDynamicPayload=dynamicPayload /> />
     }
 
-    inout fn closedDestructionShape(typeRef: U64) -> DestructionShape {
-        if typeRef == 0U64 { return <DestructionShape /> }
+    inout fn closedDestructionShape(typeRef: U64) -> Result[DestructionShape, CompileDiagnostic] {
+        if typeRef == 0U64 { return <Result.Ok value=<DestructionShape /> /> }
+        if typeRef >= self.arena.typeCount() || !self.arena.typeIsClosed(ref: typeRef) {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: destruction shape requires a closed type") />
+        }
         val type = self.arena.typeAt(index: typeRef)
+        mut val environment = <InstanceEnvironment receiverRef=typeRef />
         mut val fields: Array[U64] = []
         mut val boxed: Array[Bool] = []
         mut val variantStarts: Array[U64] = []
@@ -258,6 +262,7 @@ pub impl Comp {
                 val structure = self.structIndexForType(ref: typeRef)
                 if structure < self.arena.structCount() {
                     val declaration = self.arena.structAt(index: structure)
+                    environment = <InstanceEnvironment params=declaration.typeParams args=type.args receiverRef=typeRef />
                     structureDeclaration = structure + 1U64
                     isOpaquePointer = declaration.isCExtern || (declaration.isExtern && type.args.count() > 0U64)
                     hasStructStorage = !declaration.isExtern && !declaration.isCExtern
@@ -275,6 +280,7 @@ pub impl Comp {
                     val enumeration = self.enumIndexForType(ref: typeRef)
                     if enumeration < self.arena.enumCount() {
                         val declaration = self.arena.enumAt(index: enumeration)
+                        environment = <InstanceEnvironment params=declaration.typeParams args=type.args receiverRef=typeRef />
                         variantStarts.append(fields.count())
                         mut val variant = 0U64
                         while variant < declaration.variants.count() {
@@ -291,12 +297,35 @@ pub impl Comp {
                 }
             }
         }
-        return <DestructionShape structureDeclaration=structureDeclaration destructorDeclaration=destructorDeclaration hasStructStorage=hasStructStorage isOpaquePointer=isOpaquePointer underlying=underlying fieldTypes=fields fieldBoxed=boxed variantFieldStarts=variantStarts />
+        // A newtype's declared underlying identity also supplies uniqueness
+        // and ARC classification elsewhere. It must already be closed; this
+        // query cannot privately reinterpret it for physical layout alone.
+        if !self.arena.typeIsClosed(ref: underlying) {
+            return <Result.Err error=self.diagnosticAt(offset: type.nameStart, msg: "internal error: destruction underlying type is not closed") />
+        }
+        // Structural children are part of the parent's canonical closedness
+        // proof. Nominal declaration fields are not, so close them under this
+        // exact instance environment before either consumer receives the shape.
+        if !type.isRecord {
+            mut val field = 0U64
+            while field < fields.count() {
+                val original = fields[field]
+                if self.arena.typeContainsAssociatedProjection(ref: original) {
+                    fields.set(i: field, value: (try self.closeBodyProjectionTerms(ref: original, environment: environment, selfRef: typeRef, itemRef: 0U64)))
+                }
+                if !self.arena.typeIsClosed(ref: fields[field]) {
+                    return <Result.Err error=self.diagnosticAt(offset: type.nameStart, msg: "internal error: destruction field type is not closed") />
+                }
+                field += 1U64
+            }
+        }
+        return <Result.Ok value=<DestructionShape structureDeclaration=structureDeclaration destructorDeclaration=destructorDeclaration hasStructStorage=hasStructStorage isOpaquePointer=isOpaquePointer underlying=underlying fieldTypes=fields fieldBoxed=boxed variantFieldStarts=variantStarts /> />
     }
 
     inout fn collectFinalDestruction(typeRef: U64) -> Result[(), CompileDiagnostic] {
         if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
         if self.finalDestructionIndex(typeRef: typeRef) != 0U64 { return <Result.Ok value=() /> }
+        val shape = try self.closedDestructionShape(typeRef: typeRef)
         val type = self.arena.typeAt(index: typeRef)
         val term = self.arena.typeTermAt(index: typeRef)
         mut val bucket = term.nameId
@@ -314,7 +343,6 @@ pub impl Comp {
         while self.arena.finalDestructionIds.count() <= typeRef { self.arena.finalDestructionIds.append(0U64) }
         self.arena.finalDestructionIds[typeRef] = contract
         val ownershipClass = (try self.arcClassOfRef(ref: typeRef))
-        val shape = self.closedDestructionShape(typeRef: typeRef)
         mut val destructor = 0U64
         mut val structLayout = 0U64
         if type.isRecord {

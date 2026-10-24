@@ -1,0 +1,37 @@
+// Associated outputs remain ordinary physical fields after concrete selection.
+use @Std/Io only { print }
+
+trait Source { type Item }
+struct Provider {}
+impl Provider as Source { type Item = I64 }
+
+struct Holder { val value: Provider#Source.Item }
+pub impl Holder { factory }
+enum Choice { Value(value: Provider#Source.Item) Empty }
+struct Wrapper[T] { val value: T val projected: Provider#Source.Item }
+pub impl Wrapper { factory }
+newtype Wrapped = Holder
+
+fn read(choice: Choice) -> I64 {
+    match choice {
+        Choice.Value(val value) => { return value }
+        Choice.Empty => { return 0I64 }
+    }
+}
+
+fn main() {
+    val holder = <Holder value=11I64 />
+    val retained = holder
+    print(retained.value)
+    val choice = <Choice.Value value=22I64 />
+    print(read(choice: choice))
+    val generic = <Wrapper[I64] value=33I64 projected=44I64 />
+    print(generic.value)
+    print(generic.projected)
+    val wrapped: Wrapped = <Holder value=55I64 /> as Wrapped
+    print((wrapped as Holder).value)
+    val nested = <Wrapper[Choice] value=<Choice.Value value=66I64 /> projected=77I64 />
+    val copied = nested
+    print(read(choice: copied.value))
+    print(copied.projected)
+}

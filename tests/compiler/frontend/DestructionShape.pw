@@ -19,7 +19,7 @@ fn main() {
     mut val index = 1U64
     while index < types {
         if compiler.arena.typeIsClosed(ref: index) {
-            val shape = compiler.closedDestructionShape(typeRef: index)
+            val shape = compiler.closedDestructionShape(typeRef: index).unwrap()
             if shape.destructorDeclaration != 0U64 { destructors += 1U64 }
             val contractId = compiler.finalDestructionIndex(typeRef: index)
             if contractId != 0U64 {
