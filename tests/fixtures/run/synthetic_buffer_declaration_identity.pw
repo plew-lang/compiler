@@ -10,7 +10,6 @@ fn receiver(compiler: Comp, expression: U64) -> U64 {
 fn registerBuffer(compiler: inout Comp, offset: U64, module: U64) -> Bind {
     val name = compiler.internBytes(s: "Buffer")
     val parameters = compiler.lowerTypeParamNames(names: ["Element"], anchor: offset).unwrap()
-    compiler.modules.registerSourceFile(start: offset, length: 10U64, moduleId: module, path: "Buffer.pw")
     compiler.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=parameters fields=[] isUnique=false isExtern=false defOffset=offset />)
     return compiler.typeDeclIdentityInModule(mod: module, start: name.nameStart, len: name.nameLen)
 }
@@ -19,6 +18,7 @@ fn checkMissingCore() {
     mut val compiler = <Comp />
     compiler.arena.reserveTypeSentinel()
     compiler.modules.coreModule = 3U64
+    compiler.modules.registerSourceFile(start: 200U64, length: 10U64, moduleId: 2U64, path: "ForeignBuffer.pw")
     val foreign = registerBuffer(compiler: inout compiler, offset: 200U64, module: 2U64)
     val name = compiler.internBytes(s: "I64")
     val element = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
@@ -43,8 +43,11 @@ fn main() {
     mut val compiler = <Comp />
     compiler.arena.reserveTypeSentinel()
     compiler.modules.coreModule = 1U64
-    val elementName = compiler.internBytes(s: "Item")
+    compiler.modules.registerSourceFile(start: 100U64, length: 10U64, moduleId: 1U64, path: "Core.pw")
+    compiler.modules.registerSourceFile(start: 200U64, length: 10U64, moduleId: 2U64, path: "ForeignBuffer.pw")
     compiler.modules.registerSourceFile(start: 300U64, length: 10U64, moduleId: 3U64, path: "Item.pw")
+    compiler.modules.registerSourceFile(start: 600U64, length: 10U64, moduleId: 6U64, path: "OtherItem.pw")
+    val elementName = compiler.internBytes(s: "Item")
     compiler.arena.registerStruct(<StructDef nameStart=elementName.nameStart nameLen=elementName.nameLen nameId=elementName.nameId typeParams=[] fields=[] isUnique=false isExtern=false defOffset=300U64 />)
     val itemOwner = compiler.typeDeclIdentityInModule(mod: 3U64, start: elementName.nameStart, len: elementName.nameLen)
     val element = compiler.declaredTypeRef(nameStart: elementName.nameStart, nameLen: elementName.nameLen, args: [], declaration: itemOwner)
@@ -87,7 +90,6 @@ fn main() {
     val viewedReceiver = receiver(compiler: compiler, expression: viewedExpression)
     assert(compiler.arena.typeAt(index: viewedReceiver).args[0U64] == viewed)
     assert(!compiler.typeRefEq(a: viewedReceiver, b: late))
-    compiler.modules.registerSourceFile(start: 600U64, length: 10U64, moduleId: 6U64, path: "OtherItem.pw")
     compiler.arena.registerStruct(<StructDef nameStart=elementName.nameStart nameLen=elementName.nameLen nameId=elementName.nameId typeParams=[] fields=[] isUnique=false isExtern=false defOffset=600U64 />)
     val otherOwner = compiler.typeDeclIdentityInModule(mod: 6U64, start: elementName.nameStart, len: elementName.nameLen)
     val other = compiler.declaredTypeRef(nameStart: elementName.nameStart, nameLen: elementName.nameLen, args: [], declaration: otherOwner)
