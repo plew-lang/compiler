@@ -146,3 +146,29 @@ no-operand ambiguity. Additional new controls exposed the provided impl-binder
 substitution and duplicate witness surfaces; their in-scope corrections await a
 fresh candidate and controls. Preserve the failed and successful scoped receipts
 under compiler scratch until the final revision and evidence are pinned.
+
+### First Implementation Review
+
+`/root/shared_member_completion_review` reviewed 963352ac and the fresh scoped
+candidate (`phase3c-member-selection-2`, SHA256
+`1dc20154f88627dc649326167f738465e8b2b43b0d51ca75f3bf44dfcf9a3e6d`).
+The consumer chain and shared-instance/admission structure are sound, but the
+review does **not** certify completion. Two blockers require corrections:
+
+- A method binder in part of a parameter must not make its known structure
+  automatically applicable. Use one tentative directional substitution map per
+  candidate for `Pair[Input, Other]` and repeated method variables; preserve
+  known trait input arguments and keep outer parameters rigid.
+- A diagnostic rank-1 member cannot flow into ordinary publication. Legal value
+  conversions (notably concrete-to-existential boxing) must participate in real
+  applicability, and a failed/ambiguous conversion stays candidate-local so a
+  later unique applicable candidate remains selectable. No applicable candidate
+  means an error, not a saved diagnostic selection without SourceAdmission.
+
+These fixes and additional positive/reject controls are in progress. The reviewer
+also requires fresh saved-proof/source-path/static-signature and operator arity/
+result controls; these are added to the scoped run, not replaced by old evidence.
+The all-trait scan and repeated proof traversal are performance risks to measure;
+no optimization or slowdown is claimed without a matching-source measurement.
+`focused-5` has native 8/reject 8 success and unchanged input hashes, before the
+two review corrections. It is not evidence for the corrected source.

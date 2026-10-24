@@ -1,0 +1,25 @@
+use @Std/Io only { print }
+struct Pair[First, Second] { pub val first: First pub val second: Second }
+pub impl[First, Second] Pair[First, Second] { factory }
+struct Parser {}
+pub impl Parser { factory }
+trait Handle[Input] { fn handle[Other](callback: fn(value: Input) -> Other) -> Other }
+impl Parser as Handle[I64] { fn handle[Other](callback: fn(value: I64) -> Other) -> Other { return callback(value: 1I64) } }
+impl Parser as Handle[Bool] { fn handle[Other](callback: fn(value: Bool) -> Other) -> Other { return callback(value: true) } }
+trait Record[Input] { fn record[Other](value: (fixed: Input, other: Other)) -> Other }
+impl Parser as Record[I64] { fn record[Other](value: (fixed: I64, other: Other)) -> Other { return value.other } }
+impl Parser as Record[Bool] { fn record[Other](value: (fixed: Bool, other: Other)) -> Other { return value.other } }
+trait ArrayRead[Input] { fn arrayRead(value: Array[Input]) -> I64 }
+impl Parser as ArrayRead[Pair[I64, String]] { fn arrayRead(value: Array[Pair[I64, String]]) -> I64 { return 51I64 } }
+impl Parser as ArrayRead[Pair[Bool, String]] { fn arrayRead(value: Array[Pair[Bool, String]]) -> I64 { return 52I64 } }
+fn function[T](value: T, callback: fn(value: I64) -> String) -> String where T: Handle[Bool], T: Handle[I64] { return value.handle(callback: callback) }
+fn record[T](value: T, item: (fixed: Bool, other: String)) -> String where T: Record[I64], T: Record[Bool] { return value.record(value: item) }
+fn array[T](value: T, items: Array[Pair[I64, String]]) -> I64 where T: ArrayRead[Pair[Bool, String]], T: ArrayRead[Pair[I64, String]] { return value.arrayRead(value: items) }
+fn main() {
+    val callback = fn(value: I64) -> String { return "function" }
+    print(function(value: <Parser />, callback: callback))
+    print(record(value: <Parser />, item: (fixed: true, other: "record")))
+    val pair: Pair[I64, String] = <Pair first=1I64 second="array" />
+    val items: Array[Pair[I64, String]] = [pair]
+    print(array(value: <Parser />, items: items))
+}

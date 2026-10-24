@@ -79,7 +79,8 @@ pub impl Comp {
         }
     }
 
-    inout fn inferFnArgs(f: Func, args: ArgRange) -> Result[Array[U64], CompileDiagnostic] {
+    inout fn inferFnArgs(f: Func, args: ArgRange, parameterTypes: Array[U64] = []) -> Result[Array[U64], CompileDiagnostic] {
+        if parameterTypes.count() != 0U64 && parameterTypes.count() != f.params.count() { return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "internal error: selected callable has an incomplete parameter type vector") /> }
         mut val out: Array[U64] = []
         if f.typeParams.count() == 0U64 { return <Result.Ok value=out /> }
         while out.count() < f.typeParams.count() { out.append(0U64) }
@@ -91,7 +92,7 @@ pub impl Comp {
                 val expression = self.argAt(args: args, index: supplied).expr
                 if !self.expressionNeedsTypeContext(exprId: expression, allowPartialFunction: true) {
                     val argument = try self.inferenceArgumentType(exprId: expression)
-                    out = try self.extendCallTypeArguments(pattern: parameter.ty, argument: argument, params: f.typeParams, values: out, offset: self.exprOffset(id: expression))
+                    out = try self.extendCallTypeArguments(pattern: if parameterTypes.count() != 0U64 { give parameterTypes[index] } else { give parameter.ty }, argument: argument, params: f.typeParams, values: out, offset: self.exprOffset(id: expression))
                 }
             }
             index += 1U64

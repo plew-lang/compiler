@@ -1224,7 +1224,7 @@ pub impl Comp {
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: val owner, reqIdx: val index) => {
                 val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: index)
-                methodArguments = try self.inferFnArgs(f: requirement, args: args)
+                methodArguments = try self.staticRequirementCallArguments(resolution: resolution, args: args)
                 selectedEnvironment = <InstanceEnvironment params=self.copyFuncBinds(binds: requirement.typeParams) args=methodArguments />
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {

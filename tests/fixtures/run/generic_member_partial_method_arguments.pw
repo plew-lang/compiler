@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+struct Pair[First, Second] { pub val first: First pub val second: Second }
+pub impl[First, Second] Pair[First, Second] { factory }
+trait Combine[Input] { fn combine[Other](pair: Pair[Input, Other]) -> Other }
+trait Source { type Item }
+struct Root {}
+pub impl Root { factory }
+impl Root as Source { type Item = Parser }
+struct Parser {}
+pub impl Parser { factory }
+impl Parser as Combine[I64] { fn combine[Other](pair: Pair[I64, Other]) -> Other { return pair.second } }
+impl Parser as Combine[Bool] { fn combine[Other](pair: Pair[Bool, Other]) -> Other { return pair.second } }
+fn ordinary[T](value: T, pair: Pair[I64, String]) -> String where T: Combine[Bool], T: Combine[I64] { return value.combine(pair: pair) }
+fn projected[T](root: T, value: T#Source.Item, pair: Pair[Bool, String]) -> String where T: Source, T#Source.Item: Combine[I64], T#Source.Item: Combine[Bool] { return value.combine(pair: pair) }
+fn main() {
+    val pair: Pair[I64, String] = <Pair first=1I64 second="one" />
+    val other: Pair[Bool, String] = <Pair first=true second="two" />
+    print(ordinary(value: <Parser />, pair: pair))
+    print(projected(root: <Root />, value: <Parser />, pair: other))
+}

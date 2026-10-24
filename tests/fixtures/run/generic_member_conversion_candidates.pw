@@ -1,0 +1,29 @@
+use @Std/Io only { print }
+trait Marker {}
+trait OtherMarker {}
+trait Left {}
+trait Right {}
+pub impl Left as Marker {}
+pub impl Right as Marker {}
+struct Token {}
+pub impl Token { factory }
+impl Token as Left {}
+impl Token as Right {}
+impl Token as OtherMarker {}
+trait Read[Input] { fn read(value: Input) -> I64 }
+trait Source { type Item }
+struct Root {}
+pub impl Root { factory }
+impl Root as Source { type Item = Parser }
+struct Parser {}
+pub impl Parser { factory }
+impl Parser as Read[any Marker] { fn read(value: any Marker) -> I64 { return 0I64 } }
+impl Parser as Read[any OtherMarker] { fn read(value: any OtherMarker) -> I64 { return 41I64 } }
+fn ordinary[T](value: T) -> I64 where T: Read[any Marker], T: Read[any OtherMarker] { return value.read(value: <Token />) }
+fn reverse[T](value: T) -> I64 where T: Read[any OtherMarker], T: Read[any Marker] { return value.read(value: <Token />) }
+fn projected[T](root: T, value: T#Source.Item) -> I64 where T: Source, T#Source.Item: Read[any Marker], T#Source.Item: Read[any OtherMarker] { return value.read(value: <Token />) }
+fn main() {
+    print(ordinary(value: <Parser />))
+    print(reverse(value: <Parser />))
+    print(projected(root: <Root />, value: <Parser />))
+}

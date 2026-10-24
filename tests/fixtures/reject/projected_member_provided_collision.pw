@@ -1,0 +1,7 @@
+trait First {}
+trait Second {}
+pub impl First { fn number() -> I64 { return 10I64 } }
+pub impl Second { fn number() -> I64 { return 20I64 } }
+trait Source { type Item }
+fn probe[T](value: T#Source.Item) -> I64 where T: Source, T#Source.Item: First, T#Source.Item: Second { return value.number() }
+fn main() {}

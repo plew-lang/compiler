@@ -303,35 +303,71 @@ pub impl Comp {
         }
     }
 
+    // A tentative map contains holes, unlike a complete instance environment.
+    // Substitute only known slots; zero must not erase an unbound method term.
+    inout fn groundKnownCallTypeArguments(ref: U64, params: FuncBindRange, values: Array[U64], receiver: U64) -> Result[U64, CompileDiagnostic] {
+        if values.count() != params.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: candidate type argument map has the wrong size") /> }
+        mut val knownParams: Array[Bind] = []
+        mut val knownValues: Array[U64] = []
+        mut val index = 0U64
+        while index < values.count() {
+            if values[index] != 0U64 { knownParams.append(self.funcBindAt(binds: params, index: index)) knownValues.append(values[index]) }
+            index += 1U64
+        }
+        return <Result.Ok value=self.groundTermInEnvironment(ref: ref, params: knownParams, values: knownValues, selfRef: receiver) />
+    }
+
     inout fn staticMemberMatchRank(proof: StaticConformanceProof, traitIdx: U64, requirement: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
-        if !self.paramsLabelsOk(params: requirement.params, args: args) { return <Result.Ok value=0U64 />}
+        if !self.paramsLabelsOk(params: requirement.params, args: args) { return <Result.Ok value=0U64 /> }
         val bound = try self.staticProofBound(proof: proof, traitIdx: traitIdx)
         if bound.subject == 0U64 { return <Result.Ok value=0U64 /> }
-        // Provided declarations own impl binders distinct from the trait's
-        // binders. Match their receiver arguments under this candidate only.
-        mut val substitutions: Array[UnifyBind] = []
-        mut val input = 0U64
-        while input < requirement.recvTraitArgs.count() {
-            if input >= bound.constraint.key.positionalArgs.count() || !self.unifyPatterns(a: self.funcTypeAt(types: requirement.recvTraitArgs, index: input), aSide: 0U64, b: bound.constraint.key.positionalArgs[input], bSide: 1U64, aParams: <PatternBindInput.Function range=requirement.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout substitutions) { return <Result.Ok value=0U64 /> }
-            input += 1U64
+        val parameters = self.copyFuncBinds(binds: requirement.typeParams)
+        mut val values: Array[U64] = []
+        while values.count() < parameters.count() { values.append(0U64) }
+        // Provided impl binders differ from trait binders. The ordinary call
+        // matcher supplies their candidate-local receiver substitution too.
+        mut val index = 0U64
+        while index < requirement.recvTraitArgs.count() {
+            if index >= bound.constraint.key.positionalArgs.count() { return <Result.Ok value=0U64 /> }
+            match self.matchCallTypeArguments(pattern: self.funcTypeAt(types: requirement.recvTraitArgs, index: index), argument: bound.constraint.key.positionalArgs[index], params: requirement.typeParams, values: inout values) {
+                TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => {}
+                _ => { return <Result.Ok value=0U64 /> }
+            }
+            index += 1U64
         }
-        val receiverMatch = self.witnessMatchFromUnify(conformIdx: 0U64, typeParams: <PatternBindInput.Function range=requirement.typeParams />, binds: substitutions)
-        mut val argument: U64 = 0U64
-        while argument < args.len {
-            val parameterIndex: U64 = self.paramIndexForArg(params: requirement.params, args: args, argIdx: argument)
-            if parameterIndex >= requirement.params.count() { return <Result.Ok value=1U64 />}
-            val original: Param = self.funcParamAt(params: requirement.params, index: parameterIndex)
-            val receiverType = try self.groundWitnessTypeTerm(ref: original.ty, params: <PatternBindInput.Function range=requirement.typeParams />, matchResult: receiverMatch)
-            mut val ref: U64 = self.traitBoundTypeTerm(ref: receiverType, bound: bound, traitIndex: traitIdx)
-            if ref == 0U64 { ref = original.ty }
-            if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=1U64 />}
-            if self.typeTermUsesOpenParameters(ref: ref, parameters: self.copyFuncBinds(binds: requirement.typeParams), boundCount: 0U64) { argument += 1U64 continue }
-            val term: TypeRef = self.arena.typeAt(index: ref)
-            val isArray: Bool = rangeEquals(bytes: self.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "Array") && term.args.count() == 1U64
-            val head: TypeRef = if isArray { give self.arena.typeAt(index: term.args[0U64]) } else { give term }
-            val parameter: Param = <Param nameStart=original.nameStart nameLen=original.nameLen nameId=original.nameId tyStart=head.nameStart tyLen=head.nameLen tyNameId=head.nameId tyIsArray=isArray ty=ref isInout=original.isInout isMove=original.isMove isBorrow=original.isBorrow noLabel=original.noLabel hasDefault=original.hasDefault defaultExpr=original.defaultExpr />
-            if !(try self.argMatchesParam(argExpr: self.argAt(args: args, index: argument).expr, p: parameter)) { return <Result.Ok value=1U64 />}
-            argument += 1U64
+        val receiverValues = values
+        index = 0U64
+        while index < args.len {
+            val parameter = self.paramIndexForArg(params: requirement.params, args: args, argIdx: index)
+            if parameter >= requirement.params.count() { return <Result.Ok value=1U64 /> }
+            val original = self.funcParamAt(params: requirement.params, index: parameter)
+            val traitType = self.traitBoundTypeTerm(ref: original.ty, bound: bound, traitIndex: traitIdx)
+            val signature = try self.groundKnownCallTypeArguments(ref: traitType, params: requirement.typeParams, values: receiverValues, receiver: bound.subject)
+            mut val expected = try self.groundKnownCallTypeArguments(ref: signature, params: requirement.typeParams, values: values, receiver: bound.subject)
+            if expected == 0U64 || expected >= self.arena.typeCount() { return <Result.Ok value=1U64 /> }
+            val expression = self.argAt(args: args, index: index).expr
+            if self.expressionNeedsTypeContext(exprId: expression, allowPartialFunction: true) {
+                if !(try self.contextualArgumentMatchesType(exprId: expression, expected: expected)) { return <Result.Ok value=1U64 /> }
+            } else {
+                // Uncommitted numeric syntax may adapt to a numeric parameter;
+                // a saved typed value never passes via a head-name shortcut.
+                val term = self.arena.typeAt(index: expected)
+                if self.semanticExprTerm(exprId: expression) == 0U64 && contextualNumericExpression(self.arena.exprs, exprId: expression) {
+                    if self.isFloatType(start: term.nameStart, len: term.nameLen) || ((try self.argIsUntypedIntLit(argExpr: expression)) && self.isIntType(start: term.nameStart, len: term.nameLen)) { index += 1U64 continue }
+                }
+                val actual = try self.inferenceArgumentType(exprId: expression)
+                mut val candidate = values
+                match self.matchCallTypeArguments(pattern: signature, argument: actual, params: requirement.typeParams, values: inout candidate) {
+                    TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { values = candidate }
+                    TypeArgumentMatch.Mismatch => {}
+                    TypeArgumentMatch.Conflict => { return <Result.Ok value=1U64 /> }
+                }
+                expected = try self.groundKnownCallTypeArguments(ref: signature, params: requirement.typeParams, values: values, receiver: bound.subject)
+                // Includes complete arrays/functions/records and legal boxing.
+                // Errors remain tentative until the candidate frontier closes.
+                if !(try self.typesCompatible(expected: expected, inferred: actual)) { return <Result.Ok value=1U64 /> }
+            }
+            index += 1U64
         }
         return <Result.Ok value=2U64 />
     }
@@ -412,6 +448,9 @@ pub impl Comp {
             if !hasPremise { return <Result.Ok value=<StaticMemberResolution.Missing /> /> }
         }
         mut val candidates: Array[StaticMemberResolution] = []
+        mut val preferredCandidates: Array[StaticMemberResolution] = []
+        mut val sourceOwners: Array[U64] = []
+        for source in self.typeRefViewSources(ref: receiverRef) { if source.traitOwner != 0U64 { sourceOwners.append(source.traitOwner) } }
         mut val traitIndex = 0U64
         while traitIndex < self.decls.traitCount() {
             val declaration = self.decls.traitAt(index: traitIndex)
@@ -431,7 +470,14 @@ pub impl Comp {
                     index = self.arena.nextFunctionNamed(index: index)
                 }
                 if requirements.count() != 0U64 || provided.count() != 0U64 {
-                    val proofs = try self.traitMemberInstanceProofs(baseRef: receiverRef, traitId: declaration.nameId, traitOwner: declaration.nameStart, assumptions: assumptions)
+                    val discovered = try self.traitMemberInstanceProofs(baseRef: receiverRef, traitId: declaration.nameId, traitOwner: declaration.nameStart, assumptions: assumptions)
+                    mut val proofs: Array[StaticConformanceProof] = []
+                    // Put preferred paths first before instance deduplication;
+                    // another path to that instance cannot erase provenance.
+                    if sourceOwners.count() != 0U64 {
+                        for proof in discovered { if self.traitProofMatchesSources(proof: proof, traitOwner: declaration.nameStart, sourceOwners: sourceOwners) { proofs.append(proof) } }
+                    }
+                    for proof in discovered { if sourceOwners.count() == 0U64 || !self.traitProofMatchesSources(proof: proof, traitOwner: declaration.nameStart, sourceOwners: sourceOwners) { proofs.append(proof) } }
                     mut val instances: Array[TraitBound] = []
                     for proof in proofs {
                         val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
@@ -442,33 +488,52 @@ pub impl Comp {
                         }
                         if duplicate { continue }
                         instances.append(bound)
-                        for requirement in requirements { candidates.append(<StaticMemberResolution.Requirement proof=proof traitIdx=traitIndex reqIdx=requirement />) }
-                        for function in provided { candidates.append(<StaticMemberResolution.Provided proof=proof traitIdx=traitIndex callee=function />) }
+                        val preferred = sourceOwners.count() != 0U64 && self.traitProofMatchesSources(proof: proof, traitOwner: declaration.nameStart, sourceOwners: sourceOwners)
+                        for requirement in requirements {
+                            val candidate = <StaticMemberResolution.Requirement proof=proof traitIdx=traitIndex reqIdx=requirement />
+                            candidates.append(candidate)
+                            if preferred { preferredCandidates.append(candidate) }
+                        }
+                        for function in provided {
+                            val candidate = <StaticMemberResolution.Provided proof=proof traitIdx=traitIndex callee=function />
+                            candidates.append(candidate)
+                            if preferred { preferredCandidates.append(candidate) }
+                        }
                     }
                 }
             }
             traitIndex += 1U64
         }
+        // Views choose the source of this selector, while unrelated members
+        // remain available when the selected source does not provide it.
+        if preferredCandidates.count() != 0U64 { candidates = preferredCandidates }
         mut val selected: StaticMemberResolution = <StaticMemberResolution.Missing />
-        mut val diagnostic: StaticMemberResolution = <StaticMemberResolution.Missing />
+        mut val mismatch = false
+        mut val failure: Optional[CompileDiagnostic] = <Optional.None />
         mut val found = false
         for candidate in candidates {
-            val rank = match candidate {
-                StaticMemberResolution.Requirement(proof: val proof, traitIdx: val owner, reqIdx: val requirement) => { give try self.staticMemberMatchRank(proof: proof, traitIdx: owner, requirement: self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: requirement), args: args) },
-                StaticMemberResolution.Provided(proof: val proof, traitIdx: val owner, callee: val function) => { give try self.staticMemberMatchRank(proof: proof, traitIdx: owner, requirement: self.arena.functionAt(index: function), args: args) },
-                StaticMemberResolution.Missing => 0U64,
+            val ranking = match candidate {
+                StaticMemberResolution.Requirement(proof: val proof, traitIdx: val owner, reqIdx: val requirement) => { give self.staticMemberMatchRank(proof: proof, traitIdx: owner, requirement: self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: requirement), args: args) },
+                StaticMemberResolution.Provided(proof: val proof, traitIdx: val owner, callee: val function) => { give self.staticMemberMatchRank(proof: proof, traitIdx: owner, requirement: self.arena.functionAt(index: function), args: args) },
+                StaticMemberResolution.Missing => <Result.Ok value=0U64 />,
+            }
+            val rank = match ranking {
+                Result.Ok(value: val rank) => rank,
+                Result.Err(error: val diagnostic) => { failure = <Optional.Some v=diagnostic /> give 0U64 },
             }
             if rank == 2U64 {
                 if found { return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous call: multiple trait member instances match the arguments") /> }
                 selected = candidate
                 found = true
             } else if rank == 1U64 {
-                // Retain a signature solely to produce the ordinary argument
-                // mismatch diagnostic when no candidate is applicable.
-                diagnostic = candidate
+                mismatch = true
             }
         }
-        if !found { return <Result.Ok value=diagnostic /> }
+        if !found {
+            match failure { Optional.Some(v: val diagnostic) => { return <Result.Err error=diagnostic /> } Optional.None => {} }
+            if mismatch { return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "type mismatch: no trait member matches these arguments") /> }
+            return <Result.Ok value=<StaticMemberResolution.Missing /> />
+        }
         return self.admitStaticMemberInstance(resolution: selected, receiverRef: receiverRef, assumptions: assumptions)
     }
 
@@ -884,13 +949,29 @@ pub impl Comp {
     // Trait instance substitution and method binder substitution are distinct.
     // The latter belongs to this call, including associated projections rooted
     // in a method parameter (for example Output.Error).
+    inout fn staticRequirementCallArguments(resolution: StaticMemberResolution, args: ArgRange) -> Result[Array[U64], CompileDiagnostic] {
+        match resolution {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: val owner, reqIdx: val index) => {
+                val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: index)
+                mut val parameterTypes: Array[U64] = []
+                mut val parameter = 0U64
+                while parameter < requirement.params.count() {
+                    parameterTypes.append(try self.staticRequirementParamTypeAt(resolution: resolution, paramIdx: parameter))
+                    parameter += 1U64
+                }
+                return self.inferFnArgs(f: requirement, args: args, parameterTypes: parameterTypes)
+            }
+            _ => { return <Result.Ok value=[] /> }
+        }
+    }
+
     inout fn staticRequirementCallResultType(resolution: StaticMemberResolution, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         val result = try self.staticRequirementResultType(resolution: resolution)
         match resolution {
             StaticMemberResolution.Requirement(proof: _, val traitIdx, val reqIdx) => {
                 val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
                 if requirement.typeParams.count() != 0U64 {
-                    val arguments = try self.inferFnArgs(f: requirement, args: args)
+                    val arguments = try self.staticRequirementCallArguments(resolution: resolution, args: args)
                     val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: requirement.typeParams) args=arguments />
                     return self.groundTermForBody(ref: result, environment: environment, selfRef: 0U64, itemRef: 0U64)
                 }

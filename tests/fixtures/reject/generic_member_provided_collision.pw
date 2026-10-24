@@ -1,0 +1,6 @@
+trait First {}
+trait Second {}
+pub impl First { fn number() -> I64 { return 10I64 } }
+pub impl Second { fn number() -> I64 { return 20I64 } }
+fn probe[T](value: T) -> I64 where T: First, T: Second { return value.number() }
+fn main() {}

@@ -1,0 +1,11 @@
+trait Marker {}
+struct Token {}
+pub impl Token { factory }
+impl Token as Marker {}
+trait Read[Input] { fn read(value: any Marker) -> I64 }
+trait Left {}
+trait Right {}
+pub impl Left as Read[I64] { fn read(value: any Marker) -> I64 { return 1I64 } }
+pub impl Right as Read[I64] { fn read(value: any Marker) -> I64 { return 2I64 } }
+fn probe[T](value: T) -> I64 where T: Left, T: Right { return value.read(value: <Token />) }
+fn main() {}

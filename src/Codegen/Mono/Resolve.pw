@@ -112,10 +112,17 @@ pub impl Comp {
 
     // A member source selector constrains the proof path, not whether the
     // underlying type conforms. Keep declaration identity through every edge.
-    fn traitProofStateMatchesSources(state: TraitProofState, sourceOwners: Array[U64]) -> Bool {
+    inout fn traitProofStateMatchesSources(state: TraitProofState, sourceOwners: Array[U64]) -> Bool {
         if sourceOwners.count() == 0U64 { return true }
         for val owner in sourceOwners {
             if state.traitOwner == owner { return true }
+            match state.origin {
+                TraitProofOrigin.Assumption(source: val source, steps: val steps) => {
+                    if self.declarationBoundIsValid(source: source) && self.declarationBound(source: source).constraint.key.owner == owner { return true }
+                    for step in steps { if step.traitIndex < self.decls.traitCount() && self.decls.traitAt(index: step.traitIndex).nameStart == owner { return true } }
+                }
+                TraitProofOrigin.Witness => {}
+            }
             for val witness in state.edges {
                 if witness.conformIdx != 0U64 && witness.conformIdx <= self.decls.conformCount() {
                     val edge = self.decls.conformAt(index: witness.conformIdx - 1U64)
@@ -124,6 +131,20 @@ pub impl Comp {
             }
         }
         return false
+    }
+
+    inout fn traitProofMatchesSources(proof: StaticConformanceProof, traitOwner: U64, sourceOwners: Array[U64]) -> Bool {
+        mut val origin = <TraitProofOrigin.Witness />
+        mut val edges: Array[WitnessMatch] = []
+        match proof {
+            StaticConformanceProof.AssumedBound(source: val source) => { origin = <TraitProofOrigin.Assumption source=source steps=[] /> }
+            StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => { origin = <TraitProofOrigin.Assumption source=source steps=steps /> }
+            StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val path) => { origin = <TraitProofOrigin.Assumption source=source steps=steps /> edges = path }
+            StaticConformanceProof.TraitPath(edges: val path, terminalConformIdx: _) => { edges = path }
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => { edges.append(witness) }
+            _ => {}
+        }
+        return self.traitProofStateMatchesSources(state: <TraitProofState origin=origin traitOwner=traitOwner traitId=0U64 traitArgs=[] edges=edges />, sourceOwners: sourceOwners)
     }
 
     inout fn traitProofStateSeen(states: Array[TraitProofState], candidate: TraitProofState) -> Bool {

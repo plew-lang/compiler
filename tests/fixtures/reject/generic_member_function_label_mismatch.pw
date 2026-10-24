@@ -1,0 +1,3 @@
+trait Handle[Input] { fn handle[Other](callback: fn(value: Input) -> Other) -> Other }
+fn probe[T](value: T, callback: fn(other: I64) -> String) -> String where T: Handle[I64] { return value.handle(callback: callback) }
+fn main() {}

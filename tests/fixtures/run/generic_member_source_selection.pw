@@ -1,0 +1,29 @@
+use @Std/Io only { print }
+trait First {}
+trait Second {}
+trait Child: First {}
+pub impl First { fn number() -> I64 { return 10I64 } }
+pub impl Second { fn number() -> I64 { return 20I64 } fn other() -> I64 { return 30I64 } }
+struct Parser {}
+pub impl Parser { factory }
+impl Parser as First {}
+impl Parser as Second {}
+impl Parser as Child {}
+trait Source { type Item }
+struct Root {}
+pub impl Root { factory }
+impl Root as Source { type Item = Parser }
+fn ordinary[T](value: T) -> I64 where T: First, T: Second { return value#First.number() + value#Second.number() }
+fn inherited[T](value: T) -> I64 where T: Child, T: Second { return value#Child.number() }
+fn unrelated[T](value: T) -> I64 where T: First, T: Second { return value#First.other() }
+fn projected[T](root: T, value: T#Source.Item) -> I64 where T: Source, T#Source.Item: First, T#Source.Item: Second { return value#First.number() + value#Second.number() }
+fn projectedInherited[T](root: T, value: T#Source.Item) -> I64 where T: Source, T#Source.Item: Child, T#Source.Item: Second { return value#Child.number() }
+fn projectedUnrelated[T](root: T, value: T#Source.Item) -> I64 where T: Source, T#Source.Item: First, T#Source.Item: Second { return value#First.other() }
+fn main() {
+    print(ordinary(value: <Parser />))
+    print(inherited(value: <Parser />))
+    print(unrelated(value: <Parser />))
+    print(projected(root: <Root />, value: <Parser />))
+    print(projectedInherited(root: <Root />, value: <Parser />))
+    print(projectedUnrelated(root: <Root />, value: <Parser />))
+}

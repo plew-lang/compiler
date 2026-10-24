@@ -1,0 +1,4 @@
+trait Convert[Input] { type Output fn convert(value: Input) -> Output }
+trait Source { type Item }
+fn probe[T](value: T#Source.Item) -> Bool where T: Source, T#Source.Item: Convert[I64, Output=I64] { return value.convert(value: 1I64) }
+fn main() {}

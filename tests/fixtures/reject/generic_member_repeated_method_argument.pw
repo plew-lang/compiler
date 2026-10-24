@@ -1,0 +1,3 @@
+trait Check { fn check[Other](first: Other, second: Other) -> I64 }
+fn probe[T](value: T) -> I64 where T: Check { return value.check(first: 1I64, second: true) }
+fn main() {}
