@@ -35,3 +35,13 @@ Use existing default_argument_call_templates and prepared/source constraint
 controls plus full sourcecheck. Freeze fresh input, compare old/new on identical
 source serially with LLVM equality, then independent bounded-task admission.
 This task does not alone certify formal <6s or main/G2 completion.
+
+## Selected Protocol
+
+Retain arbitrary positive rebuild capacities: a private bucket projection uses
+mask only when capacity is a power of two, otherwise the former modulo. Probes
+advance by one and wrap at capacity, equivalent for all positive capacities.
+Do not narrow this internal API to powers of two. Extend the existing default
+argument fixture for127/128 rebuild, exact key lookup, intentional equal-hash
+serial collisions and missing keys. Prepared constraint projection is siteKey
+plus count/subject scalar getters; prepared admission and closedness stay intact.
