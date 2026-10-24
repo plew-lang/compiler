@@ -1,0 +1,2 @@
+async diverge fn stop() { panic("stop") }
+fn main() {}

@@ -1,0 +1,2 @@
+fn invoke[T](callback: T) { callback() }
+fn main() {}
