@@ -1,0 +1,48 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Ir only { CallTemplateKind }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "struct Options {{ pub val count: I64 }} impl Options {{ factory() {{ return <Options count=42I64 /> }} }} trait Configuration {{ type Options fn configure(options: Options) -> I64 }} struct Item {{}} impl Item as Configuration {{ type Options = Options fn configure(options: Options) -> I64 {{ return options.count }} }} fn direct(value: Item) -> I64 {{ return value.configure(options: </>) }} fn block(value: Item) -> I64 {{ return value.configure(options: {{ give </> }}) }} fn branch(value: Item, flag: Bool) -> I64 {{ return value.configure(options: if flag {{ give </> }} else {{ give </> }}) }}"
+    val path = "plew:std/FactoryProbe.pw"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path=path.bytes() text=source />] />).unwrap()
+    val optionsName = compiler.internBytes(s: "Options").nameId
+    val declaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: optionsName))
+    val method = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "configure").nameId))
+    val parameter = compiler.arena.typeAt(index: compiler.funcParamAt(params: method.params, index: 0U64).ty)
+    if !parameter.hasDecl || parameter.declOffset != declaration.defOffset { panic("factory context lost its selected nominal declaration") }
+    for name in ["direct", "block", "branch"] {
+        val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+        compiler.prepareLexicalBody(fnIdx: function).unwrap()
+        mut val found = 0U64
+        mut val index = 0U64
+        while index < compiler.callTemplateCount() {
+            val template = compiler.callTemplateAt(index: index)
+            if template.siteKey.ownerFnIdx == function {
+                match template.kind {
+                    CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                        val selected = compiler.arena.functionAt(index: callee)
+                        if selected.isAssoc {
+                            val receiver = compiler.arena.typeAt(index: template.receiverTypeTerm)
+                            if !receiver.hasDecl || receiver.declOffset != declaration.defOffset { panic("factory signature lost its selected receiver") }
+                            found += 1U64
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            index += 1U64
+        }
+        assert(found == if name == "branch" { give 2U64 } else { give 1U64 })
+    }
+    val receiver = compiler.factoryConstructionReceiver(writtenTerm: 0U64, typeStart: declaration.nameStart, typeLen: declaration.nameLen, offset: declaration.defOffset).unwrap()
+    assert(compiler.arena.typeAt(index: receiver).hasDecl)
+    assert(compiler.arena.typeAt(index: receiver).declOffset == declaration.defOffset)
+    assert(compiler.factoryConstructionReceiver(writtenTerm: receiver, typeStart: declaration.nameStart, typeLen: declaration.nameLen, offset: declaration.defOffset).unwrap() == receiver)
+    val missing = compiler.internBytes(s: "MissingFactoryReceiver")
+    assert(compiler.factoryConstructionReceiver(writtenTerm: 0U64, typeStart: missing.nameStart, typeLen: missing.nameLen, offset: declaration.defOffset).isErr())
+    print("factory-source-declaration-identity")
+}

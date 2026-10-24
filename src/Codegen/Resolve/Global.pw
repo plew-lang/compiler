@@ -349,6 +349,20 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // A factory rewrite produces a semantic receiver, not just a method-shaped
+    // spelling. Preserve an existing complete construction term. Early missing
+    // terms join ordinary declaration resolution; late construction resolves
+    // once in its selected source domain before any call fact is published.
+    inout fn factoryConstructionReceiver(writtenTerm: U64, typeStart: U64, typeLen: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
+        if writtenTerm != 0U64 { return <Result.Ok value=writtenTerm /> }
+        if !self.arena.typeDeclarationResolutionComplete() {
+            return <Result.Ok value=self.lowerConstructionType(nameStart: typeStart, nameLen: typeLen, args: [], siteOffset: offset) />
+        }
+        val declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
+        if declaration.nameLen == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "factory construction requires a resolved receiver declaration") /> }
+        return <Result.Ok value=self.declaredTypeRef(nameStart: typeStart, nameLen: typeLen, args: [], declaration: declaration) />
+    }
+
     // Post-load rewrite (spec/05): a named factory call `<Type.name attrs/>` parses as a
     // Make node (isEnum, variant=name). When `name` is NOT an enum variant but a named
     // factory (an assoc fn on Type), rewrite it to the assoc-fn call `Type.name(labels:
@@ -368,7 +382,7 @@ pub impl Comp {
                             fi += 1
                         }
                         self.arena.exprs[exprId] = <Expr.Method recv=recv nameStart=variantStart nameLen=variantLen args=self.pushArgs(args: args) />
-                        val receiverTerm: U64 = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen) }
+                        val receiverTerm: U64 = try self.factoryConstructionReceiver(writtenTerm: ty, typeStart: typeStart, typeLen: typeLen, offset: self.exprOffset(id: exprId))
                         val originSerial: U64 = self.nextExprOriginSerial
                         self.nextExprOriginSerial += 1U64
                         try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=originSerial receiverTerm=receiverTerm receiverIsType=true />)
@@ -397,7 +411,7 @@ pub impl Comp {
                         mut val cargs: Array[Arg] = []
                         cargs.append(<Arg expr=operand isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
                         self.arena.exprs[i] = <Expr.Method recv=recv nameStart=fromN.nameStart nameLen=fromN.nameLen args=self.pushArgs(args: cargs) />
-                        val receiverTerm = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: tyStart, nameLen: tyLen) }
+                        val receiverTerm = try self.factoryConstructionReceiver(writtenTerm: ty, typeStart: tyStart, typeLen: tyLen, offset: self.exprOffset(id: i))
                         val origin = self.nextExprOriginSerial
                         self.nextExprOriginSerial += 1U64
                         try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=i kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=receiverTerm receiverIsType=true />)
@@ -635,7 +649,7 @@ pub impl Comp {
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 if self.arena.resolvedMemberwiseFactories.contains(exprId) { return <Result.Ok value=() /> }
                 val candidates = self.anonymousConstructionCandidates(typeStart: typeStart, typeLen: typeLen)
-                val receiver = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen) }
+                val receiver = try self.factoryConstructionReceiver(writtenTerm: ty, typeStart: typeStart, typeLen: typeLen, offset: self.exprOffset(id: exprId))
                 val abstractReceiver = receiver != 0U64 && receiver < self.arena.typeCount() && (self.arena.typeTerms[receiver].paramId != 0U64 || self.arena.typeTerms[receiver].assocNameId != 0U64)
                 if isEnum && !abstractReceiver { return <Result.Ok value=() /> }
                 if candidates.count() == 0U64 && !abstractReceiver {

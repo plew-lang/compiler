@@ -91,6 +91,9 @@ pub impl Comp {
 
     // Construction heads retain the same lexical identity as written type
     // annotations, including when their explicit argument list is empty.
+    // Associated-name entries are not lexical parameters: only a real ParamId
+    // suppresses nominal declaration resolution. Lexical projections have their
+    // own selected owner in lowerLexicalAssociatedType.
     inout fn lowerConstructionType(nameStart: U64, nameLen: U64, args: Array[U64], siteOffset: U64) -> U64 {
         if nameLen == 0U64 { return 0U64 }
         mut val paramId: U64 = 0U64
@@ -98,7 +101,7 @@ pub impl Comp {
         mut val index: U64 = 0U64
         while index < self.cur.typeParams.count() {
             val parameter = self.cur.typeParams[index]
-            if spansEqual(c: inout self, aStart: parameter.nameStart, aLen: parameter.nameLen, bStart: nameStart, bLen: nameLen) {
+            if parameter.paramId != 0U64 && spansEqual(c: inout self, aStart: parameter.nameStart, aLen: parameter.nameLen, bStart: nameStart, bLen: nameLen) {
                 paramId = parameter.paramId
                 site = 0U64
             }
@@ -562,7 +565,7 @@ pub impl Comp {
             // not send `T#Trait.Item` through module type-name resolution just
             // because the outer term is a projection: during declaration-time
             // checks its receiver is a symbolic Param, not a concrete witness.
-            if spansEqual(c: inout self, aStart: tp.nameStart, aLen: tp.nameLen, bStart: nm.nameStart, bLen: nm.nameLen) {
+            if tp.paramId != 0U64 && spansEqual(c: inout self, aStart: tp.nameStart, aLen: tp.nameLen, bStart: nm.nameStart, bLen: nm.nameLen) {
                 site = 0U64
                 paramId = tp.paramId
             }
@@ -747,7 +750,7 @@ pub impl Comp {
         mut val tpi: U64 = 0U64
         while tpi < self.cur.typeParams.count() {
             val param: Bind = self.cur.typeParams[tpi]
-            if spansEqual(c: inout self, aStart: param.nameStart, aLen: param.nameLen, bStart: name.nameStart, bLen: name.nameLen) {
+            if param.paramId != 0U64 && spansEqual(c: inout self, aStart: param.nameStart, aLen: param.nameLen, bStart: name.nameStart, bLen: name.nameLen) {
                 site = 0U64
                 paramId = param.paramId
             }
