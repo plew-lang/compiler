@@ -1,6 +1,6 @@
 ---
 id: com-9tau
-status: in_progress
+status: closed
 deps: [com-fbqh, com-px0e, com-o7ul]
 links: []
 created: 2026-10-23T10:41:58Z
@@ -37,3 +37,19 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Outcome
+
+Lower/Types and TypeTerm identity preserve isDiverging through closure/generic/associated storage. Record saves normalized field/binding callable signature and invocation completion; Mono stores exact final call/result recipe. Mid commits result metadata at actual Call emission, then consumes saved divergence as Unreachable. LLVM uses those selected descriptors. Both forbidden function-contract conversion directions and adopted async/FFI boundaries remain rejected.
+
+Independent completion admission by /root/body_receiver_completion_review:
+production771150e1, contracts6e119a73. Meta evidence source-owner-facts/
+phase3e-callable-authority.json records fresh35 normal/4 panic/21 reject, two
+DestructionShape inputs, whole sourcecheck and standard build success. Inputs
+305/190 match current source. phase3e-callable-authority-self-host.json records
+generation2 LLVM/runtime fixed point;7.467912/6.978049/6.943662s, median6.978049s
+(<7), exit0,5926 unchanged formal inputs and matching measured/saved compiler
+SHA b2f2c229f04b738de42541b31ef440921043d92efde8c3baeca0bdd991e35168.
+The functional compiler's separate identity remains explicit in the receipt.
+E4's missing saved source exit identities are separately required work; no E4,
+G2, main, seed or adopted-carrier completion follows from this admission.

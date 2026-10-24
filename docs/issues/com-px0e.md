@@ -1,6 +1,6 @@
 ---
 id: com-px0e
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T13:22:40Z
@@ -41,3 +41,19 @@ parameter does not become callable through instantiation. Pair with com-o7ul for
 end-to-end original panic success; no isolated source success certifies E3. Fresh
 sourcecheck, fixed point, formal median below7s and independent completion review
 are required. E3/G1/E4 retain explicit dependencies.
+
+## Outcome
+
+fieldTypeRefOfReceiver preserves groundUnderInst receiver-binder precedence, then uses canonical projection closure before any field reader records a type. recordDynamicLocalCall uses existing normalizedValueType; selected fieldIndex/bindingDeclStart and fnTypeTerm remain frozen through final dynamic calls. Generic projected receivers execute for I64/String; raw unbounded T remains noncallable. No new isFnType rule or later LLVM/source-name recovery.
+
+Independent completion admission by /root/body_receiver_completion_review:
+production771150e1, contracts6e119a73. Meta evidence source-owner-facts/
+phase3e-callable-authority.json records fresh35 normal/4 panic/21 reject, two
+DestructionShape inputs, whole sourcecheck and standard build success. Inputs
+305/190 match current source. phase3e-callable-authority-self-host.json records
+generation2 LLVM/runtime fixed point;7.467912/6.978049/6.943662s, median6.978049s
+(<7), exit0,5926 unchanged formal inputs and matching measured/saved compiler
+SHA b2f2c229f04b738de42541b31ef440921043d92efde8c3baeca0bdd991e35168.
+The functional compiler's separate identity remains explicit in the receipt.
+E4's missing saved source exit identities are separately required work; no E4,
+G2, main, seed or adopted-carrier completion follows from this admission.

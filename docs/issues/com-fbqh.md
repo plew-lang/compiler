@@ -1,6 +1,6 @@
 ---
 id: com-fbqh
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T12:54:50Z
@@ -73,3 +73,19 @@ not run after the first compile failure and are not claimed as successes.
   synchronized design/E3/E4/G1/worklog. Full final-candidate suites remain G2.
 
 E3/G1/E4 require this repair; it does not depend on its unfinished parent.
+
+## Outcome
+
+closedDestructionShape now returns Result, closes associated nominal fields under explicit instance substitutions and rejects remaining open fields before publication. Both dependency queries and final destruction use it. Shape failure precedes placeholder insertion; query controls show no body/instance/layout/final-row side effects. Numeric struct/enum, generic I64/String receiver projections, heap ownership and original callable storage pass. Newtype underlying stays under its existing shared ARC/unique identity contract. Internal probe includes every published final contract; only incomplete declaration heads are excluded.
+
+Independent completion admission by /root/body_receiver_completion_review:
+production771150e1, contracts6e119a73. Meta evidence source-owner-facts/
+phase3e-callable-authority.json records fresh35 normal/4 panic/21 reject, two
+DestructionShape inputs, whole sourcecheck and standard build success. Inputs
+305/190 match current source. phase3e-callable-authority-self-host.json records
+generation2 LLVM/runtime fixed point;7.467912/6.978049/6.943662s, median6.978049s
+(<7), exit0,5926 unchanged formal inputs and matching measured/saved compiler
+SHA b2f2c229f04b738de42541b31ef440921043d92efde8c3baeca0bdd991e35168.
+The functional compiler's separate identity remains explicit in the receipt.
+E4's missing saved source exit identities are separately required work; no E4,
+G2, main, seed or adopted-carrier completion follows from this admission.
