@@ -1,7 +1,7 @@
 ---
 id: com-gnj9
-status: open
-deps: [com-2suv, com-fbqh, com-px0e, com-o7ul]
+status: in_progress
+deps: [com-2suv, com-fbqh, com-px0e, com-o7ul, com-tl9c]
 links: []
 created: 2026-10-23T10:41:58Z
 type: task
@@ -37,3 +37,12 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Current Boundary Finding
+
+E3 and its three repairs are independently closed at771150e1 with a6.978049s
+formal checkpoint. Current E4 controls execute correctly, but exact source target
+identities are not saved. body-checking/checked-body-storage require them; relative
+completion tags and Mid lexical stacks do not discharge that contract.
+The independently reviewed finite paired repair com-tl9c owns the producer,
+publication and actual Mid mapping. E4 remains incomplete until it is admitted.
