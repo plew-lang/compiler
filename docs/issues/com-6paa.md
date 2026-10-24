@@ -185,37 +185,11 @@ covered by direct_receiver_signature_dependency. No AST order alone proves the
 prior operation completed. Freshfc183c6b already passes full compiler sourcecheck
 and all four part controls (explicit result, Self result and namespace controls).
 
-## Scope Stop: Unassigned Late Synthetic Buffer Producer
+## Completion Hold: Unassigned Producer
 
-At production39c3e27f, fresh phase3c-body-receivers-5
-(SHA239e64e562ce4aceae76f222c5e2ec082eabc3b0f9f7f9915e44a01fd45972a3)
-passes full compiler-source checking and all four module native controls. The
-focused suite stops after its first success: associated_literal_signature_authority
-fails compiling Core Buffer.new. The trace records actual Buffer[U64] decl0,
-expected Buffer[U64] from selected Buffer declaration53232. This is not a surface
-test error or a license to relax nominal equality.
-
-The source is Lower/Types::synthBufferNew: its raw Buffer term is valid before
-declaration facet resolution, but the same helper is called by
-Record::elaborateDictionaryValues -> synthEmptyDict after that publication.
-The late term flows through SyntheticCallSite.receiverTerm, saved signature,
-both call worklists and final body admission without an owner. The C3 inventory
-did not assign this early/late dual-use producer. Independent scope review by
-/root/body_receiver_completion_review classifies this as a C3 task-disposition
-omission, outside the implicitly permitted extra repair of registered body keys.
-
-The user explicitly requires stopping when task omissions/errors are found.
-No Buffer producer code fix or owner-recovery fallback has been added. C3 is
-reopened for reconciliation; fyxe and 6paa remain in_progress, not completed.
-Next plan proposal, pending approval: explicitly assign a finite early/late
-synthetic producer repair, retain early construction until ordinary declaration
-publication, construct late Buffer[elemRef] from its fixed Core owner and complete
-child, and verify missing/foreign owner, String/Dictionary callers, saved
-signature and native final consumption. Link that repair as a prerequisite of
-these closures, reconcile C3, then rerun fresh scoped controls and reviews.
-
-Durable receipt: meta evidence/existing-feature-conformance/source-owner-facts/
-phase3c-receiver-producer-scope-stop.json. Raw failed focused-5 and
-signature-trace-5 plus successful part-focused-5 remain under
-compiler/tmp/phase3c-body-receivers. No current formal performance or full G2 gate
-is claimed; the earlier6.827440s checkpoint remains distinct.
+The fresh39c3e27f module controls4 and compiler-source check pass, but the
+mandatory internal authority fixture fails on an ownerless late Buffer[U64].
+Independent review identifies an unassigned C3 producer, not another body-key
+repair. Keep this task in_progress and stop at the user's task-omission condition.
+The canonical finding, trace, receipt and pending plan proposal are in
+[C3 scope reconciliation](com-m0bf.md#scope-stop-unassigned-late-synthetic-buffer-producer).

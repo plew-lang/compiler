@@ -109,12 +109,12 @@ it. The planned three repairs remain open until their own evidence/review closes
 
 ## Scope Stop: Unassigned Late Synthetic Buffer Producer
 
-At production39c3e27f, fresh phase3c-body-receivers-5
+At production **39c3e27f**, fresh phase3c-body-receivers-5
 (SHA239e64e562ce4aceae76f222c5e2ec082eabc3b0f9f7f9915e44a01fd45972a3)
 passes full compiler-source checking and all four module native controls. The
 focused suite stops after its first success: associated_literal_signature_authority
 fails compiling Core Buffer.new. The trace records actual Buffer[U64] decl0,
-expected Buffer[U64] from selected Buffer declaration53232. This is not a surface
+expected Buffer[U64] from selected Buffer declaration **53232**. This is not a surface
 test error or a license to relax nominal equality.
 
 The source is Lower/Types::synthBufferNew: its raw Buffer term is valid before
@@ -140,4 +140,4 @@ Durable receipt: meta evidence/existing-feature-conformance/source-owner-facts/
 phase3c-receiver-producer-scope-stop.json. Raw failed focused-5 and
 signature-trace-5 plus successful part-focused-5 remain under
 compiler/tmp/phase3c-body-receivers. No current formal performance or full G2 gate
-is claimed; the earlier6.827440s checkpoint remains distinct.
+is claimed; the earlier **6.827440s** checkpoint remains distinct.
