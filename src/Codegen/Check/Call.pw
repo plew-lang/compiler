@@ -35,17 +35,14 @@ pub impl Comp {
         if index >= self.callTemplateLocations.count() { return <Result.Ok value=<SourceCallParameterState.Unselected /> /> }
         val template = self.callTemplateAt(index: index)
         match template.kind {
-            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val typeArgs, proofId: _) => {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
                 if callee >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call has no declaration") /> }
                 val function = self.arena.functionAt(index: callee)
                 val arguments = self.callTemplateTypeArgs(range: typeArgs)
                 if typeArgs.len != arguments.count() || arguments.count() != function.typeParams.count() || (arguments.count() != 0U64 && !self.fnArgsAllResolved(args: arguments)) {
                     return <Result.Ok value=<SourceCallParameterState.Incomplete /> />
                 }
-                val environment = match (try self.recordedDirectCallEnvironmentAt(exprId: exprId, callee: callee)) {
-                    Optional.Some(v: val environment) => { give environment }
-                    Optional.None => { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call has no parameter bindings") /> }
-                }
+                val environment = try self.recordedDirectCallEnvironmentForExpression(exprId: exprId, callee: callee, function: function, receiverTerm: template.receiverTypeTerm, typeArgs: arguments, proof: self.thawStaticConformanceProof(id: proofId))
                 return <Result.Ok value=<SourceCallParameterState.Selected function=function signature=<SourceCallSignature.Direct environment=environment /> /> />
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
