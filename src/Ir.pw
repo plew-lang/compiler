@@ -1857,6 +1857,15 @@ pub enum SourceCallSignature {
     Trait(bound: TraitBound, traitIndex: U64, environment: InstanceEnvironment)
 }
 
+// A transient projection of the one saved operation during construction.
+// Consumers must distinguish an unselected probe from an incomplete selection.
+pub enum SourceCallParameterState {
+    Unselected
+    NotApplicable
+    Incomplete
+    Selected(function: Func, signature: SourceCallSignature)
+}
+
 // Ordered signature obligations and their selected proofs belong to one
 // source owner. The bounds are a substitution snapshot, not fresh queries.
 pub struct SelectedCallConstraints {

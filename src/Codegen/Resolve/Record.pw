@@ -636,12 +636,18 @@ pub impl Comp {
         // generic associated factory).  Do not discard that source selection.
         if receiverTerm == 0U64 {
             if f.isAssoc {
-                val inferredReceiver = (try self.associatedReceiverFromArguments(f: f, args: args))
-                if inferredReceiver != 0U64 {
-                    try self.recordParametricMethodCall(exprId: exprId, callee: callee, receiverSource: <CallTemplateReceiver.Term term=inferredReceiver />, receiverTerm: inferredReceiver, args: args)
-                    return <Result.Ok value=() />
+                val inferred = try self.inferFnArgs(f: f, args: args)
+                if f.recvTy != 0U64 && self.fnArgsAllResolved(args: inferred) {
+                    val inferredReceiver = self.groundTermInEnvironment(ref: f.recvTy, params: self.copyFuncBinds(binds: f.typeParams), values: inferred)
+                    if inferredReceiver != 0U64 {
+                        try self.recordParametricMethodCall(exprId: exprId, callee: callee, receiverSource: <CallTemplateReceiver.Term term=inferredReceiver />, receiverTerm: inferredReceiver, args: args)
+                        return <Result.Ok value=() />
+                    }
                 }
-                try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [], resultTerm: self.semanticCallableReturnTerm(function: f))
+                // A partial receiver does not erase a method-owned binder
+                // already determined by an explicit argument. Result context
+                // can complete only the remaining declared unknowns.
+                try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: inferred, resultTerm: self.semanticCallableReturnTerm(function: f))
                 return <Result.Ok value=() />
             }
             // A compiler-internal receiver such as `Comp` has no language
@@ -1426,6 +1432,36 @@ pub impl Comp {
                 }
                 mk += 1U64
             }
+        }
+        return <Result.Ok value=() />
+    }
+
+    // After result-context completion, supply unresolved children with the
+    // exact selected parameter terms while Record still owns their scope.
+    inout fn recordSelectedCallArgumentContexts(exprId: U64, args: ArgRange, chainHoleRef: U64) -> Result[(), CompileDiagnostic] {
+        // Most calls already have complete operands. Avoid creating an
+        // environment or copying a signature unless context is still needed.
+        mut val index = 0U64
+        while index < args.len {
+            val argument = self.argAt(args: args, index: index).expr
+            if self.semanticExprTerm(exprId: argument) == 0U64 && self.expressionNeedsTypeContext(exprId: argument) { break }
+            index += 1U64
+        }
+        if index == args.len { return <Result.Ok value=() /> }
+        val selected = match (try self.recordedCallParameterState(exprId: exprId)) {
+            SourceCallParameterState.Selected(function: val function, signature: val signature) => { give (function: function, signature: signature) }
+            SourceCallParameterState.Incomplete | SourceCallParameterState.Unselected | SourceCallParameterState.NotApplicable => { return <Result.Ok value=() /> }
+        }
+        if !self.paramsLabelsOk(params: selected.function.params, args: args) { return <Result.Ok value=() /> }
+        while index < args.len {
+            val argument = self.argAt(args: args, index: index).expr
+            if self.semanticExprTerm(exprId: argument) == 0U64 && self.expressionNeedsTypeContext(exprId: argument) {
+                val position = self.paramIndexForArg(params: selected.function.params, args: args, argIdx: index)
+                val parameter = self.funcParamAt(params: selected.function.params, index: position)
+                val expected = try self.sourceCallSignatureParameter(ref: parameter.ty, signature: selected.signature)
+                if expected != 0U64 { try self.recordExpr(exprId: argument, chainHoleRef: chainHoleRef, expectedTerm: expected) }
+            }
+            index += 1U64
         }
         return <Result.Ok value=() />
     }
@@ -2252,6 +2288,12 @@ pub impl Comp {
         }
         if normalizedContext != 0U64 {
             try self.recordSemanticExprExpectedResult(exprId: exprId, expectedTerm: normalizedContext)
+        }
+        match self.arena.exprs[exprId] {
+            Expr.Call(nameStart: _, nameLen: _, args: val arguments) | Expr.Method(recv: _, nameStart: _, nameLen: _, args: val arguments) | Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: val arguments) => {
+                try self.recordSelectedCallArgumentContexts(exprId: exprId, args: arguments, chainHoleRef: chainHoleRef)
+            }
+            _ => {}
         }
         // Record only after child terms and fallback literal adapters are
         // available. The template is the unique semantic input for operator

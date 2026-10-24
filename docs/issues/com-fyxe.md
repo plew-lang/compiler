@@ -69,3 +69,21 @@ A new internal control covers saved receiver use despite an unresolvable
 qualifier, missing substitutions, cross-callee requests, forbidden construction
 after selection, and a real unselected construction query. New sources pass the
 old fixed carrier's full source check; fresh execution/review remain pending.
+
+### Producer Completion Paired with the Reader
+
+The 63aa7b4e fresh candidate passes compiler-source checking and reports the
+method-binder loss as an incomplete saved substitution instead of falling back.
+The next increment retains partial inferFnArgs results when an associated
+receiver cannot yet close. Existing result-pattern matching can therefore fill
+receiver binders without discarding a method binder learned from an explicit
+argument. No new inference direction or candidate solver is introduced.
+
+A transient SourceCallParameterState distinguishes unselected, non-applicable
+dynamic/protocol families, incomplete static selection and a complete selected
+signature. Record and literal validation project the same stored operation.
+After result completion, Record supplies still-unresolved child expressions
+with exact parameter context in their lexical scope; completed operands are
+never reinterpreted, and a fast scan avoids signature/environment work for
+already-complete operands. The validation reader rejects incomplete selections.
+All source checks pass, but fresh execution and independent review are pending.

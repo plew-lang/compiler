@@ -27,34 +27,48 @@ pub impl Comp {
         }
     }
 
-    // Selected source calls are read before any syntax/cache lookup. A
-    // partially saved selection is an error, never an unselected probe.
-    inout fn checkRecordedCallLiteralArguments(exprId: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
+    // Construction and validation interpret the same saved operation. This
+    // projection performs no lookup or argument inference.
+    inout fn recordedCallParameterState(exprId: U64) -> Result[SourceCallParameterState, CompileDiagnostic] {
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
         val index = self.callTemplateIndex(siteKey: site)
-        if index >= self.callTemplateLocations.count() { return <Result.Ok value=false /> }
+        if index >= self.callTemplateLocations.count() { return <Result.Ok value=<SourceCallParameterState.Unselected /> /> }
         val template = self.callTemplateAt(index: index)
-        val selected = match template.kind {
-            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+        match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val typeArgs, proofId: _) => {
                 if callee >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call has no declaration") /> }
+                val function = self.arena.functionAt(index: callee)
+                val arguments = self.callTemplateTypeArgs(range: typeArgs)
+                if typeArgs.len != arguments.count() || arguments.count() != function.typeParams.count() || (arguments.count() != 0U64 && !self.fnArgsAllResolved(args: arguments)) {
+                    return <Result.Ok value=<SourceCallParameterState.Incomplete /> />
+                }
                 val environment = match (try self.recordedDirectCallEnvironmentAt(exprId: exprId, callee: callee)) {
                     Optional.Some(v: val environment) => { give environment }
                     Optional.None => { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call has no parameter bindings") /> }
                 }
-                give (function: self.arena.functionAt(index: callee), signature: <SourceCallSignature.Direct environment=environment />)
+                return <Result.Ok value=<SourceCallParameterState.Selected function=function signature=<SourceCallSignature.Direct environment=environment /> /> />
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
                 val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: site.originStart)
                 val arguments = self.callTemplateTypeArgs(range: typeArgs)
                 if typeArgs.len != arguments.count() || arguments.count() != function.typeParams.count() || (arguments.count() != 0U64 && !self.fnArgsAllResolved(args: arguments)) {
-                    return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call has incomplete type arguments") />
+                    return <Result.Ok value=<SourceCallParameterState.Incomplete /> />
                 }
-                give (function: function, signature: (try self.selectedStaticCallSignature(template: template, function: function, typeArgs: typeArgs, resolution: resolution)))
+                return <Result.Ok value=<SourceCallParameterState.Selected function=function signature=(try self.selectedStaticCallSignature(template: template, function: function, typeArgs: typeArgs, resolution: resolution)) /> />
             }
-            _ => { return <Result.Ok value=false /> }
+            CallTemplateKind.Pending | CallTemplateKind.ExpectedValue => { return <Result.Ok value=<SourceCallParameterState.Unselected /> /> }
+            _ => { return <Result.Ok value=<SourceCallParameterState.NotApplicable /> /> }
+        }
+    }
+
+    inout fn checkRecordedCallLiteralArguments(exprId: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
+        val selected = match (try self.recordedCallParameterState(exprId: exprId)) {
+            SourceCallParameterState.Selected(function: val function, signature: val signature) => { give (function: function, signature: signature) }
+            SourceCallParameterState.Incomplete => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: selected call has incomplete type arguments") /> }
+            SourceCallParameterState.Unselected | SourceCallParameterState.NotApplicable => { return <Result.Ok value=false /> }
         }
         if !self.paramsLabelsOk(params: selected.function.params, args: args) {
-            return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "selected call arguments do not match its parameter labels") />
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "selected call arguments do not match its parameter labels") />
         }
         mut val index = 0U64
         while index < args.len {
@@ -63,7 +77,7 @@ pub impl Comp {
             val argument = self.argAt(args: args, index: index)
             try self.checkArgInoutMode(p: parameter, arg: argument)
             val expected = try self.sourceCallSignatureParameter(ref: parameter.ty, signature: selected.signature)
-            if expected == 0U64 { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call has no parameter type") /> }
+            if expected == 0U64 { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: selected call has no parameter type") /> }
             val type = self.typeInfoOfRef(ref: expected)
             try self.checkLitSpanCtx(id: argument.expr, tyStart: type.nameStart, tyLen: type.nameLen, isArray: type.kind == 3, ctxRef: expected)
             try self.tcCheckValue(expectedRef: expected, valueExpr: argument.expr, pos: "arg")
