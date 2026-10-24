@@ -369,7 +369,6 @@ impl Comp {
             _ => { return }
         }
         if !self.sourceTypeHasCompleteArguments(ref: fact.term) { return }
-        mut val scope = match self.declarationTypeScope(owner: self.cur.checkFn) { Result.Ok(value: val scope) => scope Result.Err(error: _) => { return } }
         val site = match self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) { Result.Ok(value: val site) => site Result.Err(error: _) => { return } }
         val index = self.callTemplateIndex(siteKey: site)
         if index < self.callTemplateLocations.count() {
@@ -385,7 +384,13 @@ impl Comp {
                 }
                 _ => {}
             }
-            scope = match self.callConstraintScope(template: template) { Result.Ok(value: val scope) => scope Result.Err(error: _) => { return } }
+        }
+        // Both paths validate the lexical owner. Build its scope once; a
+        // selected call also supplies its own interface proof scope.
+        val scope = if index < self.callTemplateLocations.count() {
+            give match self.callConstraintScope(template: self.callTemplateAt(index: index)) { Result.Ok(value: val scope) => scope Result.Err(error: _) => { return } }
+        } else {
+            give match self.declarationTypeScope(owner: self.cur.checkFn) { Result.Ok(value: val scope) => scope Result.Err(error: _) => { return } }
         }
         match self.declarationTypeDependencies(ref: fact.term, scope: scope, offset: self.exprOffset(id: exprId)) {
             Result.Ok(value: _) => {}
