@@ -2,11 +2,11 @@ use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { InstanceEnvironment, ValueConversionProof }
+use /Ir only { InstanceEnvironment, ValueConversionProof, TypeRef, StructDef, Bind, Expr }
 
 fn main() {
     mut val compiler = <Comp />
-    val source = "use @Std/Core only {{ Optional as Maybe }} struct Optional {{}} struct Item {{ pub val count: I64 }} pub impl Item {{ factory }} struct Box[T] {{ pub val item: T }} pub impl[T] Box[T] {{ factory }} fn direct(value: Maybe[Box[Item]]) -> Maybe[Item] {{ return value?.item }} fn block(value: Maybe[Box[Item]]) -> Maybe[Item] {{ return {{ give value?.item }} }} fn branch(value: Maybe[Box[Item]], flag: Bool) -> Maybe[Item] {{ return if flag {{ give value?.item }} else {{ give <Maybe[Item].None /> }} }} fn generic[T](value: Maybe[Box[T]]) -> Maybe[T] {{ return value?.item }} fn nested(value: Maybe[Box[Box[Item]]]) -> Maybe[Box[Item]] {{ return value?.item }} fn unrelated() {{}}"
+    val source = "use @Std/Core only {{ Optional as Maybe }} struct Optional[T] {{}} struct Item {{ pub val count: I64 }} pub impl Item {{ factory }} struct Box[T] {{ pub val item: T }} pub impl[T] Box[T] {{ factory }} fn direct(value: Maybe[Box[Item]]) -> Maybe[Item] {{ return value?.item }} fn block(value: Maybe[Box[Item]]) -> Maybe[Item] {{ return {{ give value?.item }} }} fn branch(value: Maybe[Box[Item]], flag: Bool) -> Maybe[Item] {{ return if flag {{ give value?.item }} else {{ give <Maybe[Item].None /> }} }} fn generic[T](value: Maybe[Box[T]]) -> Maybe[T] {{ return value?.item }} fn nested(value: Maybe[Box[Box[Item]]]) -> Maybe[Box[Item]] {{ return value?.item }} fn unrelated() {{}}"
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="chain-source-types.pw" />, sources: <SourceAccess />).unwrap()
     val unrelated = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "unrelated").nameId)
     compiler.prepareLexicalBody(fnIdx: unrelated).unwrap()
@@ -26,6 +26,7 @@ fn main() {
                     assert(compiler.typeRefEq(a: expression.term, b: result))
                     assert(compiler.typeRefEq(a: expression.term, b: site.stageRef))
                     assert(compiler.preparedBodyExpression(bodyId: foreign, exprId: site.exprId).isErr())
+                    if name == "direct" { checkStageInputs(compiler: inout compiler, result: expression.term) }
                     found += 1U64
                 }
             }
@@ -41,4 +42,31 @@ fn main() {
         }
     }
     print("chain-source-type-identity")
+}
+
+fn checkStageInputs(compiler: inout Comp, result: U64) {
+    val shape = compiler.arena.typeAt(index: result)
+    val hole = compiler.pushExpr(e: <Expr.ChainHole />)
+    assert(compiler.typeRefEq(a: compiler.chainStageResultRef(baseRef: result, cont: hole).unwrap(), b: result))
+    assert(compiler.chainStageResultRef(baseRef: 0U64, cont: hole).unwrap() == 0U64)
+    val unowned = compiler.pushType(t: <TypeRef nameStart=shape.nameStart nameLen=shape.nameLen args=shape.args />)
+    val missing = compiler.chainStageResultRef(baseRef: unowned, cont: hole)
+    assert(missing.isErr() || missing.unwrap() == 0U64)
+    val foreignOwner = compiler.typeDeclIdentityInModule(mod: 0U64, start: shape.nameStart, len: shape.nameLen)
+    val foreignCarrier = compiler.declaredTypeRef(nameStart: shape.nameStart, nameLen: shape.nameLen, args: shape.args, declaration: foreignOwner)
+    assert(foreignCarrier != 0U64 && !compiler.typeRefEq(a: foreignCarrier, b: result))
+    val foreignStage = compiler.chainStageResultRef(baseRef: foreignCarrier, cont: hole)
+    assert(foreignStage.isErr() || foreignStage.unwrap() == 0U64)
+    val child = compiler.arena.typeAt(index: shape.args[0U64])
+    val offset = compiler.arena.bytes.count() + 20U64
+    compiler.modules.registerSourceFile(start: offset, length: 1U64, moduleId: 777U64, path: "ForeignItem.pw")
+    compiler.arena.registerStruct(<StructDef nameStart=child.nameStart nameLen=child.nameLen nameId=child.nameId typeParams=[] fields=[] isUnique=false isExtern=false defOffset=offset />)
+    val otherChild = compiler.declaredTypeRef(nameStart: child.nameStart, nameLen: child.nameLen, args: [], declaration: <Bind nameStart=offset nameLen=1U64 fieldStart=0U64 fieldLen=0U64 />)
+    val other = compiler.rebuildTypeTerm(t: shape, args: [otherChild], assocTraitArgs: shape.assocTraitArgs)
+    val otherStage = compiler.chainStageResultRef(baseRef: other, cont: hole).unwrap()
+    assert(!compiler.typeRefEq(a: otherStage, b: result))
+    match compiler.callArgumentConversion(sourceRef: otherStage, targetRef: result).unwrap() {
+        ValueConversionProof.Missing => {}
+        _ => { panic("chain conversion merged foreign nominal children") }
+    }
 }
