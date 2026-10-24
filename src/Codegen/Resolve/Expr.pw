@@ -2261,10 +2261,8 @@ pub impl Comp {
     // expected terms never replace the expression's independent meaning.
     inout fn recordSemanticExprExpectedResult(exprId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
         // Normalize at the context boundary before inspecting expression shape.
-        mut val normalizedContext = expectedTerm
-        if self.arena.typeContainsAssociatedProjection(ref: normalizedContext) {
-            normalizedContext = try self.normalizedValueType(ref: normalizedContext)
-        }
+        val requestedContext = try self.normalizedSourceTypeContext(expectedTerm: expectedTerm)
+        val normalizedContext = try self.effectiveSourceTypeContext(exprId: exprId, requested: requestedContext)
         if normalizedContext == 0U64 || normalizedContext >= self.arena.typeCount() { return <Result.Ok value=() /> }
         if self.expressionNeedsTypeContext(exprId: exprId) { try self.recordExpr(exprId: exprId, expectedTerm: normalizedContext) }
         val prior: SemanticExprType = self.constructionExpression(exprId: exprId)
@@ -2396,7 +2394,8 @@ pub impl Comp {
             }
             _ => {}
         }
-        try self.recordDeclarationConversion(exprId: exprId, target: normalizedContext)
+        try self.recordDeclarationConversion(exprId: exprId, target: requestedContext)
+        self.commitSourceTypeContext(exprId: exprId)
         return <Result.Ok value=() />
     }
 

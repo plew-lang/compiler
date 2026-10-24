@@ -319,7 +319,83 @@ impl SourceFactDirectory {
     }
 }
 
+impl SourceFactDirectory {
+    inout fn contextCommitted(owner: SemanticCompletionOwner, exprId: U64) -> Bool {
+        if self.isActive(owner: owner) { return self.activeBuilder.contextualValues.contains(exprId) }
+        match self.state(owner: owner) {
+            Optional.Some(v: val state) => {
+                match state {
+                    SourceBodyState.Building => { return self.inactiveBuilder(owner: owner).contextualValues.contains(exprId) }
+                    _ => {}
+                }
+            }
+            Optional.None => {}
+        }
+        return false
+    }
+}
+
 impl Comp {
+    inout fn normalizedSourceTypeContext(expectedTerm: U64) -> Result[U64, CompileDiagnostic] {
+        if self.arena.typeContainsAssociatedProjection(ref: expectedTerm) { return self.normalizedValueType(ref: expectedTerm) }
+        return <Result.Ok value=expectedTerm />
+    }
+
+    // A later use checks compatibility with its requested type. It cannot
+    // reinterpret a value after its first successful context or binding.
+    inout fn effectiveSourceTypeContext(exprId: U64, requested: U64) -> Result[U64, CompileDiagnostic] {
+        if requested == 0U64 { return <Result.Ok value=0U64 /> }
+        val owner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => owner
+            Optional.None => { return <Result.Ok value=requested /> }
+        }
+        if self.sourceOwnerConstructionClosed(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: completed source owner cannot contextualize an expression") /> }
+        if !self.sourceFacts.contextCommitted(owner: owner, exprId: exprId) { return <Result.Ok value=requested /> }
+        match self.sourceFacts.expression(owner: owner, exprId: exprId) {
+            Optional.Some(v: val fact) => { if fact.term != 0U64 { return <Result.Ok value=fact.term /> } }
+            Optional.None => {}
+        }
+        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: committed source context has no type") />
+    }
+
+    // Value alone is not commitment: an argument probe or a generic call can
+    // still contain callee binders. Only complete, owner-scoped results advance.
+    inout fn commitSourceTypeContext(exprId: U64) {
+        val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return } }
+        if self.sourceOwnerConstructionClosed(owner: owner) || self.sourceFacts.contextCommitted(owner: owner, exprId: exprId) { return }
+        val fact = match self.sourceFacts.expression(owner: owner, exprId: exprId) { Optional.Some(v: val fact) => fact Optional.None => { return } }
+        match fact.typeState {
+            SemanticExpressionTypeState.Value | SemanticExpressionTypeState.Unit => {}
+            _ => { return }
+        }
+        if !self.sourceTypeHasCompleteArguments(ref: fact.term) { return }
+        mut val scope = match self.declarationTypeScope(owner: self.cur.checkFn) { Result.Ok(value: val scope) => scope Result.Err(error: _) => { return } }
+        val site = match self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) { Result.Ok(value: val site) => site Result.Err(error: _) => { return } }
+        val index = self.callTemplateIndex(siteKey: site)
+        if index < self.callTemplateLocations.count() {
+            if !semanticCompletionOwnersEqual(recorded: self.callTemplateLocations[index].owner, prepared: owner) { return }
+            val template = self.callTemplateAt(index: index)
+            match template.kind {
+                CallTemplateKind.Pending => { return }
+                CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: _) | CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => {
+                    match self.recordedCallParameterState(exprId: exprId) {
+                        Result.Ok(value: val state) => { match state { SourceCallParameterState.Selected(function: _, signature: _) => {} _ => { return } } }
+                        Result.Err(error: _) => { return }
+                    }
+                }
+                _ => {}
+            }
+            scope = match self.callConstraintScope(template: template) { Result.Ok(value: val scope) => scope Result.Err(error: _) => { return } }
+        }
+        match self.declarationTypeDependencies(ref: fact.term, scope: scope, offset: self.exprOffset(id: exprId)) {
+            Result.Ok(value: _) => {}
+            // Still-incomplete construction is not a new source diagnostic.
+            Result.Err(error: _) => { return }
+        }
+        self.sourceFacts.activate(owner: owner)
+        self.sourceFacts.activeBuilder.contextualValues.insert(exprId)
+    }
+
     // Late constraint closure reads the node's registered owner, not the
     // cursor left by another source walk. This is a construction query and
     // does not grant a prepared-body reader.

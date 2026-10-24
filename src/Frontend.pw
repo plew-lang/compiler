@@ -2463,6 +2463,8 @@ struct SourceBodyBuilder {
     mut val data: SourceBodyData
     mut val requested: Bool = false
     mut val requiredKeys: Set[U64] = Set.new()
+    // Construction progress only; the type remains in the expression row.
+    mut val contextualValues: Set[U64] = Set.new()
 }
 impl SourceBodyBuilder { factory }
 

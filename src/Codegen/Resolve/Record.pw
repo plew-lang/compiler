@@ -1540,10 +1540,8 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: completed source owner cannot record an expression") />
         }
         // Normalize at the context boundary before inspecting expression shape.
-        mut val normalizedContext = expectedTerm
-        if self.arena.typeContainsAssociatedProjection(ref: normalizedContext) {
-            normalizedContext = try self.normalizedValueType(ref: normalizedContext)
-        }
+        val requestedContext = try self.normalizedSourceTypeContext(expectedTerm: expectedTerm)
+        val normalizedContext = try self.effectiveSourceTypeContext(exprId: exprId, requested: requestedContext)
         // A deferred value block must be recorded again in its lexical scope
         // once the selected parameter supplies its result context.
         if normalizedContext == 0U64 && deferContext && self.expressionNeedsTypeContext(exprId: exprId) {
@@ -2267,7 +2265,7 @@ pub impl Comp {
             }
         }
         if normalizedContext != 0U64 {
-            try self.recordSemanticExprExpectedResult(exprId: exprId, expectedTerm: normalizedContext)
+            try self.recordSemanticExprExpectedResult(exprId: exprId, expectedTerm: requestedContext)
         }
         match self.arena.exprs[exprId] {
             Expr.Call(nameStart: _, nameLen: _, args: val arguments) | Expr.Method(recv: _, nameStart: _, nameLen: _, args: val arguments) | Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: val arguments) => {
@@ -2290,6 +2288,7 @@ pub impl Comp {
             _ => {}
         }
         try self.recordSourceTypingObligation(exprId: exprId, needsValue: needsValue, purpose: purpose)
+        if requestedContext != 0U64 { self.commitSourceTypeContext(exprId: exprId) }
         return <Result.Ok value=() />
     }
 
@@ -2385,6 +2384,7 @@ pub impl Comp {
                 }
                 try self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
                 self.storeBuildingSemanticBinding(stmtId: stmtId, typeTerm: self.cur.locals[self.cur.locals.count() - 1U64].ty, endedBinding: endedBinding)
+                self.commitSourceTypeContext(exprId: init)
             }
             Stmt.Assign(val target, val value) => {
                 try self.recordExpr(exprId: target)
