@@ -2,7 +2,7 @@
 // navigation while avoiding selection payload copies. This is not a new store.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { CallTemplate, CallTemplateKind, CallTemplateReceiver, Expr, Func, Param }
+use /Ir only { CallTemplateReceiver, Expr, Func, Param, InstanceEnvironment }
 use @Std/Io only { print }
 
 fn compare(compiler: inout Comp, index: U64) {
@@ -46,6 +46,11 @@ fn main() {
     val first = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "first").nameId)
     val second = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "second").nameId)
     val broken = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "broken").nameId)
+    compiler.recordParametricFunction(fnIdx: first, recordCallTemplates: true).unwrap()
+    compiler.recordParametricFunction(fnIdx: second, recordCallTemplates: true).unwrap()
+    val firstRow = compiler.firstLexicalCallTemplate(owner: first)
+    if firstRow == 0U64 { panic("inactive builder has no operation") }
+    compare(compiler: inout compiler, index: firstRow - 1U64)
     compiler.prepareLexicalBody(fnIdx: first).unwrap()
     val retained = compiler.preparedFunctionSemanticFacts(fnIdx: first).unwrap()
     val firstFull = retained.operationAt(index: 0U64).unwrap()
@@ -55,6 +60,12 @@ fn main() {
     compiler.prepareLexicalBody(fnIdx: second).unwrap()
     val other = compiler.preparedFunctionSemanticFacts(fnIdx: second).unwrap()
     if other.operationHeadAt(index: 0U64).unwrap().siteKey.sameKey(other: firstHead.siteKey) { panic("different owner shared identity") }
+    val firstBody = compiler.internBodyInstance(fnIdx: first, environment: <InstanceEnvironment />)
+    compiler.preparedBodyFacts(bodyId: firstBody).unwrap()
+    compare(compiler: inout compiler, index: firstRow - 1U64)
+    val secondBody = compiler.internBodyInstance(fnIdx: second, environment: <InstanceEnvironment />)
+    compiler.preparedBodyFacts(bodyId: secondBody).unwrap()
+    compare(compiler: inout compiler, index: firstRow - 1U64)
     compiler.cur.sourceFactReader = <Optional.Some v=1000000U64 />
     mut val index = 0U64
     mut val sawRecipe = false
