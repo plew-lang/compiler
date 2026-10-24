@@ -141,12 +141,13 @@ or final-consumer connection. Its requested early-missing-owner control now
 passes: ordinary resolution leaves it unowned and final body admission rejects
 it, rather than selecting an unrelated Buffer. Final completion review is pending.
 
-**Remaining in-scope work:** add a nameLen != 0 guard to qualifiedConstruction
-and an offset0 qualified-origin/sentinel control. Static inspection shows the
-new batch condition can otherwise consider the empty sentinel when a selected
-synthetic name starts at0; no reproduction or fix is claimed yet. The reviewer
-confirms this is an in-scope condition/test strengthening, not a new task.
-Complete that work and rerun affected fresh controls after the planning stop.
+**Sentinel guard completed:** a81f62e6 adds nameLen != 0 to the ordinary batch's
+qualifiedConstruction condition. synthetic_buffer_declaration_identity registers
+an offset0 qualified origin and proves the actual selected construction receives
+Core identity while sentinel0 and structural Unit remain unowned. Fresh2 executes
+this control successfully. Its raw source/term equivalence, complete child and
+missing/foreign-owner controls also pass; final certification remains held by
+the required interrupted String suite described below.
 
 **Completion hold:** optional_chain exposes another unassigned source producer,
 not a Buffer regression. Its canonical finding and pending plan are in

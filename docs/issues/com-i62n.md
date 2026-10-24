@@ -39,7 +39,7 @@ The [C3 finding](com-m0bf.md#scope-stop-unassigned-pre-rewrite-optional-chain-pr
 and meta evidence/existing-feature-conformance/source-owner-facts/
 phase3c-synthetic-buffer-partial.json own the trace, binary/input hashes,
 same-source comparison and independent scope verdict. User approval authorizes
-this task addition. No fix or successful validation of this producer is claimed.
+this task addition. The allocation evidence precedes the implementation and partial validation below.
 
 ## Finite Actions
 
@@ -121,11 +121,37 @@ Verdict: **task definition/allocation appropriate; C3 reclassification complete;
 no blocking findings**. The source-result -> conversion/rewrite -> final-consumer
 boundary is finite and distinct from nqjd/qbwg/6paa/C4/C5. There are no missing
 targets or dependency cycles; D4's transitive prerequisite holds.
-This certifies planning/classification only. The task remains open and
-unimplemented; implementation, fresh controls, independent completion review
-and final G2 gate obligations are not certified by this review.
+This certifies planning/classification only. This allocation review does not certify implementation, fresh controls,
+independent completion review or final G2 gate obligations.
 
 
+
+## Implementation Under Validation
+
+Production **d05a153d** removes optChainResultRef and its raw Optional/child
+construction, and removes Record's pre-child legacy result capture. ExprType's
+uncommitted OptChain construction and Record share chainStageResultRef. Record
+checks the base/continuation before saving the complete stage as the source
+expression term and passing it to ChainSite/generated calls. The generated
+MatchExpr uses ordinary source checking. **7aeda7d5** defers an unowned carrier
+before legacy declaration-index readers; it does not admit a missing identity.
+
+Fresh2 passes the new source-result/return/stage and Identity conversion checks,
+including rigid generic and projected T#Source.Output children, direct/block/if,
+nested terms, retained-owner aliases, missing carrier, registered foreign carrier
+and same-spelled foreign child controls. Actual optional-chain execution covers
+Some/None, continuation effects, two concrete projection results and existing
+owned payload cleanup. Foreign checked-body reads are rejected. The unrelated
+ordinary projected_call_chain and trait_subject_chain are supplementary controls,
+not evidence of ?. projection handling. The saved source result goes through
+conversion/rewrite and both existing worklists to BodySignature/CallResolution,
+Mid match/call construction and midCanonicalEmitDirectCall; no final reader
+performs owner recovery.
+
+Independent review finds no remaining i62n-specific static or projection-control
+blocker. The interrupted required closure suite still prevents final recognition,
+as detailed below. New controls/corrections are **3b9a2f9c / 38b33f37**; source and
+binary hashes plus actual successes/failures are in the linked durable receipt.
 
 ## Current Validation Hold: Custom-factory Source Receiver
 

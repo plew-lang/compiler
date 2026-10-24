@@ -28,7 +28,7 @@ Enumerate production constructors lacking declaration identity on the paths from
 
 ## Exit and Evidence
 
-Each hit is tied to one of the four entry families, a canonical producer or a legitimate construction-only representation, exact fallback consumers and current controls. No unclassified source nominal hit remains. For each real gap create a paired producer-plus-reader repair child with exact API/fixtures and make it mandatory; do not delete all spelling fallbacks at once. This inventory closes classification, not unperformed repairs.
+Each hit is tied to one of the four entry families, a canonical producer or a legitimate construction-only representation, exact fallback consumers and current controls. The custom-factory source/context lane below is currently unassigned; classification is reopened. For each real gap create a paired producer-plus-reader repair child with exact API/fixtures and make it mandatory; do not delete all spelling fallbacks at once. This inventory closes classification, not unperformed repairs.
 
 Existing starting controls: `mid_type_recipe_instances`, `type_term_closedness`
 
