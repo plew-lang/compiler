@@ -125,6 +125,19 @@ if they carry no success authority. No global rewind may invalidate other owners
 On success, the builder's storage transfers to the payload and has no remaining
 writer. Later analyses append their own result, not rewrite the checked payload.
 
+During construction, a Value/Unit tag alone does not prove contextual typing is
+complete: argument probes and generic results can still require their first
+available context. The owner-local builder records completed initial
+contextualization and binding as progress, without storing a second type. Both
+context entry points then reuse the established expression term as construction
+context, while preserving the requested expectation for compatibility and use
+conversion. They cannot reinterpret an established literal, array or block.
+Commitment requires complete arguments and valid lexical Self/ParamId/interface
+scope; incomplete selected calls remain eligible for ordinary completion. A
+binding commits its initializer's source result, never copies the slot's type
+over it. This progress is discarded with the builder on success or failure;
+Mid and Mono consume the existing published facts, not an additional marker.
+
 Expected compatibility, lookup and first concrete witness construction remain
 separate named operations of the existing checking/type/evidence boundaries.
 Directory lookup or an array's presence cannot certify either. Extern/bodyless
