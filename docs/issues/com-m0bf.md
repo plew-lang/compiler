@@ -1,6 +1,6 @@
 ---
 id: com-m0bf
-status: closed
+status: open
 deps: []
 links: []
 created: 2026-10-23T10:41:58Z
@@ -49,7 +49,8 @@ producers. Classification is not the completion of the paired repairs.
 
 | Entry family / producer | Representation and status | Paired reads / disposition |
 | --- | --- | --- |
-| Named source construction: `Expr::inferMakeInstance` | Preserves selected existing TypeRef or stamps the selected nominal declaration before recording. | Semantic aggregate/expression -> body grounding -> Mid aggregate. Already canonical; no replacement lookup. |
+| Named memberwise source construction: `Expr::inferMakeInstance` | Preserves selected existing TypeRef or stamps the selected nominal declaration before recording. This does not classify custom-factory preparation/rewriting. | Semantic aggregate/expression -> body grounding -> Mid aggregate. The custom-factory lane below is a separate required finding. |
+| Custom-factory source/context receiver: `Global::resolveConstructionContext`, `prepareFactoryConstruction`, named-factory/cast rewrite, `SyntheticCallSite.receiverTerm` | Current String options controls save an unowned `Options` receiver before body finalization. Trace the first loss in supplied context versus raw receiver construction; do not assume only the simpleTypeRef fallback is responsible. | Saved CallTemplate.receiverTypeTerm/signature -> declaration/executable worklists -> body environment/signature -> Mid/LLVM. Unassigned required producer repair; classification reopened and work stopped pending task-plan approval. |
 | Array construction: `Expr::arrayRefOfElem` | Retains full element and canonical Lang Array identity where available. `typedIrRefOfInfo`'s name-only element recovery remains distinct. | Published expression/aggregate and generic arguments; canonical main path preserved, legacy adapter assigned nqjd. |
 | Source TypeInfo adapters: `TypeRecovery::typeInfoOfName`; `Expr::typedIrRefOfInfo`; `FreeFn::tyRefOfInfo`/`findOrAddTypeRef` | Primitive/unknown compatibility descriptions are legitimate during construction. An ordinary nominal recovered only via global firstBareTypeNamed or a new name-only append lacks owner/binder authority. | `recordSemanticExprInfo`, body type recovery, grounding and final signature completeness; mandatory repair nqjd. No global name-id stamping. |
 | Body signatures: `Expr::semanticCallableReturnTerm` | Existing lowered return terms retain identity. Unit is a structural empty record. Async omitted return creates an unstamped Promise[Unit] after declaration publication. | CallTemplate result, body signatures and final descriptor grounding; mandatory nqjd. `Call::groundedSelectedCalleeReturn` also has a retTy=0 to simpleTypeRef adapter assigned to nqjd (keep genuine omitted Unit distinct from a missing annotated return). Promise name-collision source control currently passes, so no source-level failure is claimed from this observation alone. |
@@ -213,3 +214,56 @@ existing prerequisites reach the new repair transitively.
 closes this reconciliation only. The new repair remains open, qbwg/fyxe/6paa
 remain in_progress, and their actual implementation/control/review exits plus
 final G2 gates remain required. No source/test/verification relaxation was made.
+
+
+## Scope Stop: Unassigned Custom-factory Source Receiver
+
+At production **7aeda7d5**, fixture checkpoint **38b33f37**, fresh2 SHA
+**10adc2ca3603d4d4d2ad1842ef6854ceee16d853bd3e24fbf107f8e2c9f01a65**,
+the standard build, full compiler source check and module native4 pass.
+focused-3 passes native44 before a new internal fixture's absent diagnostic
+anchor crashes. That internal fixture is corrected without weakening its missing
+dependency checks. The closure tail passes the strengthened chain/projection,
+receiver-dependency and Dictionary controls, then string_interpolation fails:
+`body receiver does not match its selected declaration`, Options.factory at line5.
+Remaining native7 and reject15 are unexecuted. No full scoped completion follows.
+
+The read-only probe loads that exact source through normal File dependencies,
+prepares main, and reads the saved Direct templates for callee0. Both already
+contain receiver term14 with hasDecl=false, siteOffset=0, nameStart=533 and
+assocNameLen=0. The final body check reports actual owner0 against selected
+Options owner84. Thus the loss precedes BodyInstanceEnvironment and is not a
+failure of 6paa's canonical key reader. Global's custom-factory preparation and
+rewrite retain a separate synthetic receiver path; the old inferMakeInstance
+inventory row did not cover it. For contextual `</>`, supplied `ty=context` can
+also be incomplete. The exact first-loss branch is not yet proved and must not
+be guessed from a raw fallback's mere existence.
+
+Independent /root/body_receiver_completion_review confirms **task omission / new
+source producer boundary**, not an assigned finalizer repair. C3 is reopened.
+i62n/qbwg/fyxe/6paa remain in_progress; their valid partial controls remain evidence,
+but no task is certified complete. Stop implementation under the bounded-task
+policy before silently expanding any of them.
+
+### Proposed Finite Allocation (Not Yet Created)
+
+Create one mandatory paired repair for custom-factory source/context receiver
+production and saved-call handoff, depending on this classification. First trace
+and isolate the source of the ownerless default/explicit Options context; preserve
+its selected complete term through custom/named construction rewrite and the
+synthetic receiver. Distinguish pre-publication construction from committed source
+facts. Cover default Options and explicit `</>`, named/anonymous factories,
+aliases/homonymous owners, generic children, and missing/foreign-owner rejection.
+Follow the same saved receiver/signature through both worklists, body admission
+and actual Mid/LLVM execution; remove paired raw competing authority. Do not add
+downstream name recovery, weaken identity checks, broadly redesign conformance,
+or reopen nqjd's already reviewed bounded closure.
+
+The new task must block interrupted qbwg/fyxe/6paa/i62n completion, met-6e6k and
+G1; keep C3's classification direction acyclic and D4 transitively blocked. Review
+the concrete allocation before resuming implementation. Final G2 gates remain.
+Evidence is retained in meta
+`evidence/existing-feature-conformance/source-owner-facts/phase3c-chain-factory-scope-stop.json`,
+including all actual results, exact input/carrier/log hashes, the probe source and
+output, fixture corrections and independent scope verdict. No new task has been
+created or implementation repair attempted for this finding.

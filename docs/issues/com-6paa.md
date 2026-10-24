@@ -204,3 +204,17 @@ owns the finding/proposed disposition. Keep this task in_progress; do not weaken
 type identity or absorb another producer into the registered body-key repair.
 The approved [com-i62n](com-i62n.md) is now its explicit required prerequisite;
 this task retains its own fresh control and independent completion review exit.
+
+
+## Current Validation Hold: Custom-factory Source Receiver
+
+Fresh2 on production **7aeda7d5**, fixture checkpoint **38b33f37**, passes full
+compiler source checking and module4. The scoped runs retain their actual
+successes but do not complete: string_interpolation exposes an ownerless Options
+factory receiver already saved before body admission. The independent review
+classifies a missing source/context producer assignment; this is not permission
+to widen this task or recover the owner in final readers. See
+[C3 scope stop and proposed allocation](com-m0bf.md#scope-stop-unassigned-custom-factory-source-receiver)
+and meta evidence/existing-feature-conformance/source-owner-facts/
+phase3c-chain-factory-scope-stop.json. This task remains in_progress; final
+completion review and G2 gates are still required.
