@@ -1,0 +1,18 @@
+use @Std/Io only { print }
+trait Read[Input] {
+    type Output
+    fn read(value: Input) -> Output
+}
+struct Box[T] { pub val item: T }
+pub impl Box { factory }
+impl[T] Box[T] as Read[Self] {
+    type Output = T
+    fn read(value: Self) -> T { return value.item }
+}
+fn read[T](value: T) -> T#Read[T].Output where T: Read[T] {
+    return value.read(value: value)
+}
+fn main() {
+    print(read(value: <Box[I64] item=42I64 />))
+    print(read(value: <Box[String] item="text" />))
+}
