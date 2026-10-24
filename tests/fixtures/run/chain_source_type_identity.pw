@@ -7,7 +7,7 @@ use /Ir only { InstanceEnvironment, ValueConversionProof, TypeRef, StructDef, Bi
 
 fn main() {
     mut val compiler = <Comp />
-    val source = "use @Std/Lang only {{ Optional as Maybe }} struct Optional[T] {{}} struct Item {{ pub val count: I64 }} pub impl Item {{ factory }} struct Box[T] {{ pub val item: T }} pub impl[T] Box[T] {{ factory }} fn direct(value: Maybe[Box[Item]]) -> Maybe[Item] {{ return value?.item }} fn block(value: Maybe[Box[Item]]) -> Maybe[Item] {{ return {{ give value?.item }} }} fn branch(value: Maybe[Box[Item]], flag: Bool) -> Maybe[Item] {{ return if flag {{ give value?.item }} else {{ give <Maybe[Item].None /> }} }} fn generic[T](value: Maybe[Box[T]]) -> Maybe[T] {{ return value?.item }} fn nested(value: Maybe[Box[Box[Item]]]) -> Maybe[Box[Item]] {{ return value?.item }} fn unrelated() {{}}"
+    val source = "struct Item {{ pub val count: I64 }} pub impl Item {{ factory }} struct Box[T] {{ pub val item: T }} pub impl[T] Box[T] {{ factory }} fn direct(value: Optional[Box[Item]]) -> Optional[Item] {{ return value?.item }} fn block(value: Optional[Box[Item]]) -> Optional[Item] {{ return {{ give value?.item }} }} fn branch(value: Optional[Box[Item]], flag: Bool) -> Optional[Item] {{ return if flag {{ give value?.item }} else {{ give <Optional[Item].None /> }} }} fn generic[T](value: Optional[Box[T]]) -> Optional[T] {{ return value?.item }} fn nested(value: Optional[Box[Box[Item]]]) -> Optional[Box[Item]] {{ return value?.item }} fn unrelated() {{}}"
     requireSuccess(result: analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="chain-source-types.pw" />, sources: <SourceAccess />))
     val unrelated = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "unrelated").nameId)
     requireSuccess(result: compiler.prepareLexicalBody(fnIdx: unrelated))
@@ -56,11 +56,18 @@ fn checkStageInputs(compiler: inout Comp, result: U64) {
     val shape = compiler.arena.typeAt(index: result)
     val hole = compiler.pushExpr(e: <Expr.ChainHole />)
     assert(compiler.typeRefEq(a: compiler.chainStageResultRef(baseRef: result, cont: hole).unwrap(), b: result))
+    val alias = compiler.internBytes(s: "Maybe")
+    val aliased = compiler.pushType(t: <TypeRef nameStart=alias.nameStart nameLen=alias.nameLen args=shape.args hasDecl=true declOffset=shape.declOffset />)
+    assert(compiler.typeRefEq(a: compiler.chainStageResultRef(baseRef: aliased, cont: hole).unwrap(), b: result))
     assert(compiler.chainStageResultRef(baseRef: 0U64, cont: hole).unwrap() == 0U64)
     val unowned = compiler.pushType(t: <TypeRef nameStart=shape.nameStart nameLen=shape.nameLen args=shape.args />)
     val missing = compiler.chainStageResultRef(baseRef: unowned, cont: hole)
     assert(missing.isErr() || missing.unwrap() == 0U64)
-    val foreignOwner = compiler.typeDeclIdentityInModule(mod: 0U64, start: shape.nameStart, len: shape.nameLen)
+    val carrierOffset = compiler.arena.bytes.count() + 20U64
+    compiler.modules.registerSourceFile(start: carrierOffset, length: 1U64, moduleId: 778U64, path: "ForeignOptional.pw")
+    val parameters = compiler.lowerTypeParamNames(names: ["Element"], anchor: carrierOffset).unwrap()
+    compiler.arena.registerStruct(<StructDef nameStart=shape.nameStart nameLen=shape.nameLen nameId=shape.nameId typeParams=parameters fields=[] isUnique=false isExtern=false defOffset=carrierOffset />)
+    val foreignOwner = <Bind nameStart=carrierOffset nameLen=1U64 fieldStart=0U64 fieldLen=0U64 />
     val foreignCarrier = compiler.declaredTypeRef(nameStart: shape.nameStart, nameLen: shape.nameLen, args: shape.args, declaration: foreignOwner)
     assert(foreignCarrier != 0U64 && !compiler.typeRefEq(a: foreignCarrier, b: result))
     val foreignStage = compiler.chainStageResultRef(baseRef: foreignCarrier, cont: hole)
