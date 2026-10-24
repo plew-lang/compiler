@@ -1,6 +1,6 @@
 ---
 id: com-4kti
-status: in_progress
+status: closed
 deps: [com-nucu]
 links: [com-nucu]
 created: 2026-10-23T13:23:26Z
@@ -128,47 +128,71 @@ implementation remains open.
 | /root/candidate_repair_size_review | Finite actions, deliverables, size and possible splitting | Keep one bounded repair with three checkpoints; medium implementation scope, near the upper end of the 1–2-day target, not a guaranteed estimate |
 | /root/candidate_repair_dependencies_review | Ownership, real dependencies, closure order and evidence reuse | Keep primary parent met-6e6k; add selection and D3 dependencies; no whole-plan reorganization or duplicate repair ticket |
 
-## Implementation Checkpoint
+## Outcome
 
-Implementation is in progress; no closure or final gate is claimed. The shared
-proof traversal now supports enumeration separately from existence/admission,
-and exact and enumerating projection queries share associated-clause evidence
-construction. Both source receiver families feed one member selector, with
-candidate-local receiver substitutions and exact-instance SourceAdmission.
-Original trait-subject witness bodies are represented by the target requirement,
-not counted again as independent provided declarations. The remaining operator
-supertrait route has an explicit grammar/arity-only entry; its former written-
-call/provided shortcuts are removed.
+Completed at source/test revision **c056e658352362b2b915a7ffd5a6b3b4a2a72dcc**.
+This closes this shared candidate boundary, not phase three or release gates.
 
-The first fresh candidate passed full compiler-source check and changed the
-original ordinary/projected order-dependent examples to acceptance, rejecting
-no-operand ambiguity. Additional new controls exposed the provided impl-binder
-substitution and duplicate witness surfaces; their in-scope corrections await a
-fresh candidate and controls. Preserve the failed and successful scoped receipts
-under compiler scratch until the final revision and evidence are pinned.
+- `Mono/Resolve::searchTraitPatternProofFromFacts` is the shared finite traversal
+  for instance enumeration and exact queries. Projected and ordinary receivers
+  retain authored, supertrait, trait-subject and associated-schema evidence.
+  `projectedTraitAssumptions` constructs the same associated-clause evidence for
+  discovery and exact queries. Exact opaque premises keep their priority.
+- `Check/Bounds::staticMemberResolution` replaces the separate projected and
+  first-bound/direct/supertrait/provided written-call choices. It deduplicates
+  complete trait instances after provenance priority, uses the shared complete
+  argument matcher with a candidate-local method map, and performs exact
+  SourceAdmission only for the successful choice. Associated outputs never rank
+  alternative sources. Original trait-subject bodies are represented by their
+  target requirements rather than duplicate provided candidates.
+- Candidate matching preserves nested records/functions/arrays and labels,
+  legal boxing conversions, unresolved method slots and contextual closures.
+  Conversion errors remain candidate-local; a type-mismatch rank cannot publish.
+  `groundKnownCallTypeArguments` substitutes only bound slots. The existing
+  `inferFnArgs` accepts the complete proof-grounded parameter vector for selected
+  requirements, preserving method inference and result types.
+- `recordStaticMethodTemplate` saves declaration, full instance, method arguments
+  and admitted proof. Declaration obligations and executable worklists consume
+  that same template through `instantiateStaticMemberProof`; Mid/declaration
+  access and native lowering retain it. No separate concrete selection was added.
+- The common exact proof worker now applies preferred-source cohorts to member
+  dispatch too, preserving unrelated members when the explicit selector has no
+  candidate. SourceAdmission compares paths; MemberDispatch compares executable
+  endpoints. A preferred source with incompatible associated outputs cannot
+  fall back. The remaining operator helper is explicitly grammar/arity-only;
+  its written-call/provided selection shortcuts were removed.
 
-### First Implementation Review
+### Verification and Independent Completion Review
 
-`/root/shared_member_completion_review` reviewed 963352ac and the fresh scoped
-candidate (`phase3c-member-selection-2`, SHA256
-`1dc20154f88627dc649326167f738465e8b2b43b0d51ca75f3bf44dfcf9a3e6d`).
-The consumer chain and shared-instance/admission structure are sound, but the
-review does **not** certify completion. Two blockers require corrections:
+Fresh candidate `bin/plewc-phase3c-member-selection-6`, SHA256
+`0a7e4432d425c2052c24ac130b41406018a169e3951149752147c87ca8c57084`,
+was built by standard run `20261024T021053-build-9f6d8f` (exit zero, immutable
+inputs unchanged). Full compiler-source check passed. The watched scoped runner
+`focused-10` passed **native 20 / reject 20**, with no exclusions, immutable
+inputs unchanged and no internal errors in rejection controls. The standard
+profile has no scoped fixture filter; each focused compile/link/run used the
+existing watchdog rather than a weaker runner. Receipts and precise fixture
+hashes are retained in
+[the scoped evidence](https://github.com/plew-lang/meta/blob/main/evidence/existing-feature-conformance/source-owner-facts/phase3c-member-selection.json).
 
-- A method binder in part of a parameter must not make its known structure
-  automatically applicable. Use one tentative directional substitution map per
-  candidate for `Pair[Input, Other]` and repeated method variables; preserve
-  known trait input arguments and keep outer parameters rigid.
-- A diagnostic rank-1 member cannot flow into ordinary publication. Legal value
-  conversions (notably concrete-to-existential boxing) must participate in real
-  applicability, and a failed/ambiguous conversion stays candidate-local so a
-  later unique applicable candidate remains selectable. No applicable candidate
-  means an error, not a saved diagnostic selection without SourceAdmission.
+New controls cover both ordinary/projected instance order and ambiguity, schema
+plus explicit bounds, provided/supertrait routes, structural/method inference,
+repeated method constraints, function labels, literals, boxing source ambiguity,
+conversion-candidate isolation and output mismatch. `generic_member_source_selection`
+executes all six explicit/inherited/unrelated-view calls;
+`generic_member_contextual_closure` executes both contextual receiver families.
+Existing saved-proof, declaration-owner, result-signature and operator controls
+were rerun on the same candidate.
 
-These fixes and additional positive/reject controls are in progress. The reviewer
-also requires fresh saved-proof/source-path/static-signature and operator arity/
-result controls; these are added to the scoped run, not replaced by old evidence.
-The all-trait scan and repeated proof traversal are performance risks to measure;
-no optimization or slowdown is claimed without a matching-source measurement.
-`focused-5` has native 8/reject 8 success and unchanged input hashes, before the
-two review corrections. It is not evidence for the corrected source.
+`/root/shared_member_completion_review` independently reviewed the implementation,
+producer-to-final-consumer chain and fresh receipts. Earlier blocking findings
+(partial structural inference, rank-1 publication, zero-slot substitution and
+source/context propagation) were corrected and re-reviewed. Final verdict:
+**bounded scope complete; no blocking findings** at c056e658, native 20/reject 20.
+
+Standard formal checkpoint `20261024T021625-self-host-66ae62` reached generation-2
+fixed point and median **6.717830 seconds** (7.309414 / 6.717830 / 6.707443), exit
+zero and unchanged inputs. This meets the current seven-second checkpoint. The
+changed-source comparison does not isolate the all-trait scan's cost. A later
+frozen candidate still requires all G2a/G2b gates; this scoped closure does not
+certify final normal/gen/deps/sanitizer success or main/seed/carrier promotion.

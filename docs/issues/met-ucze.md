@@ -1,6 +1,6 @@
 ---
 id: met-ucze
-status: open
+status: closed
 deps: [com-qehq, com-qb05, com-17yh, com-4kti]
 links: []
 created: 2026-10-13T01:40:08Z
@@ -49,7 +49,7 @@ Keep method/operator/protocol result projections and the same source provenance.
 - [B2](com-17yh.md): operator/protocol/iteration/try selected requirements.
 - [com-4kti](com-4kti.md): shared ordinary-generic/projected source candidate
   enumeration, applicability and full-instance admission through saved final use.
-  The C2 finding reopened this area; B0/B1/B2 alone cannot close it.
+  The C2 finding is closed by the fresh shared-frontier repair and its independent review; B0/B1/B2 alone did not establish this boundary.
 - [B3](com-v2xk.md) under met-ia09 owns exact callee condition environments;
   [D3](com-wqa0.md) owns the final operation/constraint API write boundary.
 
@@ -128,3 +128,18 @@ No compiler/test/performance process was run for B0. The prior f67c8fce normal
 suite is historical coverage of the starting controls, not fresh evidence for
 09e5a277 or a source-to-final proof. B1–B4 retain their fresh positive/reject/
 corruption and final-consumer requirements, and G2a/G2b retain all final gates.
+
+## Scoped Area Closure
+
+Required B0/B1/B2 and shared repair com-4kti are closed. The repaired source
+c056e658 preserves one selected complete instance and admitted proof for both
+symbolic receiver families, including provided and supertrait routes, through
+CallTemplate, declaration/executable worklists and Mid/native. The independent
+completion reviewer found no blocking findings; native20/reject20 and full
+compiler-source check passed with pinned candidate6 and unchanged inputs. See
+[com-4kti outcome](com-4kti.md#outcome) for removed paths and exact receipts.
+The generation-2 formal checkpoint median is 6.717830s. This scoped area closure
+does not close D3 write authority, C4/C6 final type/descriptor audits, the other
+phase-three areas or final G2 gates. B1/B2's unaffected bounded evidence remains
+at its recorded revisions; affected proof/signature/operator controls were
+rerun by com-4kti. No main/seed/carrier promotion is implied.
