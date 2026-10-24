@@ -81,6 +81,9 @@ measurement choice; neither may use name spelling as semantic identity.
 Shared term/evidence rows are stable immutable values, including their child
 ranges. Appending new rows cannot rewrite an existing term or proof. The session
 owns these pools and the directory, which never escape as a mutable arena.
+Canonical type rows and their child pools remain private to Ir. External readers
+use scalar `typeTermAt`/`typeTermCount` and element queries for the recorded ranges;
+no reader obtains the mutable arrays or a snapshot of a growing whole pool.
 Initial declaration-facet resolution is a construction phase: it computes and
 validates one complete batch before publishing either type representation. That
 publication permanently closes facet updates, including updates to later appended

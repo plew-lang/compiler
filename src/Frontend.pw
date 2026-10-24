@@ -918,9 +918,8 @@ pub impl Comp {
     // accessor: the range's type documents which semantic relation is read.
     fn typeTermArgAt(ref: U64, index: U64) -> U64 {
         if ref >= self.arena.typeTermCount() { return 0U64 }
-        // Do not copy the complete TypeTerm row just to read one relation.
-        // This field projection is the arena read boundary: the scalar range
-        // is copied, never the type's unrelated semantic identity fields.
+        // Read the scalar relation without copying owning child arrays.
+        // The arena exposes values and ranges, never its mutable pool backing.
         val args: TypeArgumentRange = self.arena.typeTermAt(index: ref).args
         if index >= args.len { return 0U64 }
         return self.arena.typeArgumentAt(index: args.start + index)
