@@ -1,6 +1,6 @@
 ---
 id: com-0ssn
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-23T10:41:58Z
@@ -57,7 +57,20 @@ request pipeline: dormant warning body, unrelated successful request, one
 Warning severity/message, retained source/execution/binding facts, repeat without
 duplicate emission, type error after a loop with failed facts/retry retained,
 and explicit return successor error inside a warned region. It does not execute
-an infinite loop or expose a private API. Native12/reject22 are running under
-watch-command with fresh `bin/plewc-phase3e-context-4`; runtime source remains
-unchanged from the E1 fixed-point/performance checkpoint. No E3/E4/G2 admission
-follows from this verification plan.
+an infinite loop or expose a private API. Native12/reject22 all pass under
+watch-command with fresh `bin/plewc-phase3e-context-4`; frozen input run session8032
+reached exit0. Runtime source remains unchanged from the E1 checkpoint.
+
+## Outcome
+
+Verified and independently admitted by `/root/body_receiver_completion_review`.
+Meta `phase3e-diagnostic-flow.json` records12native/22reject success, source and
+carrier hashes. The reviewer matched3 receipt refs and253 current inputs, and
+independently matched183 consumed src/std/manifests/carrier inputs with E1's
+fresh checkpoint. Reusing the unchanged production `041b451e` build/sourcecheck
+and formal generation2 median6.930588s is valid; adding a new fixture does not
+claim the entire older formal test inventory remains identical.
+
+No E2 production defect was found. The new diagnostic test closes the observed
+coverage gap without changing semantics or exposing private APIs. No E3/E4/G2,
+main, adopted-carrier or seed admission follows from this finite closure.
