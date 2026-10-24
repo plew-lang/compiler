@@ -4,6 +4,10 @@ use @Std/Io only { print }
 trait Source { type Item }
 struct Provider {}
 impl Provider as Source { type Item = I64 }
+struct ProviderOf[T] {}
+impl[T] ProviderOf[T] as Source { type Item = T }
+struct Projected[T] { val value: ProviderOf[T]#Source.Item }
+pub impl Projected { factory }
 
 struct Holder { val value: Provider#Source.Item }
 pub impl Holder { factory }
@@ -34,4 +38,11 @@ fn main() {
     val copied = nested
     print(read(choice: copied.value))
     print(copied.projected)
+    // Both the receiver's declaration argument and its associated output must
+    // be grounded before the field becomes physical storage.
+    val projectedInteger = <Projected[I64] value=88I64 />
+    val projectedText = <Projected[String] value=("pro" + "jected") />
+    val retainedText = projectedText
+    print(projectedInteger.value)
+    print(retainedText.value)
 }

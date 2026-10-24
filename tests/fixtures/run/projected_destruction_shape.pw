@@ -60,9 +60,9 @@ fn rejectedShape(compiler: inout Comp, term: U64) {
 fn main() {
     mut val compiler = <Comp />
     val resources = [
-        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64 }}" />,
-        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 }}" />,
-        <SourceResource path="plew:std/ShapeProbe.pw".bytes() text="trait Source {{ type Item }}\nstruct Provider {{}}\nimpl Provider as Source {{ type Item=I64 }}\nstruct Holder {{ val value: Provider#Source.Item }}\nenum Choice {{ Value(value: Provider#Source.Item) Empty }}\nstruct Wrapper[T] {{ val value: T val projected: Provider#Source.Item }}\nnewtype Wrapped=Holder\nfn roots(holder: Holder, choice: Choice, generic: Wrapper[I64], wrapped: Wrapped, provider: Provider) {{}}" />,
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64, String }}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 struct String }}" />,
+        <SourceResource path="plew:std/ShapeProbe.pw".bytes() text="trait Source {{ type Item }}\nstruct Provider {{}}\nimpl Provider as Source {{ type Item=I64 }}\nstruct ProviderOf[T] {{}}\nimpl[T] ProviderOf[T] as Source {{ type Item=T }}\nstruct Projected[T] {{ val value: ProviderOf[T]#Source.Item }}\nstruct Holder {{ val value: Provider#Source.Item }}\nenum Choice {{ Value(value: Provider#Source.Item) Empty }}\nstruct Wrapper[T] {{ val value: T val projected: Provider#Source.Item }}\nnewtype Wrapped=Holder\nfn roots(holder: Holder, choice: Choice, generic: Wrapper[I64], wrapped: Wrapped, provider: Provider, projectedInteger: Projected[I64], projectedText: Projected[String]) {{}}" />,
     ]
     analyzeFrontendForRequests(c: inout compiler,
         input: <FrontendInput.File path="plew:std/ShapeProbe.pw" />,
@@ -74,7 +74,10 @@ fn main() {
     val generic = parameter(compiler: inout compiler, function: function, index: 2U64)
     val wrapped = parameter(compiler: inout compiler, function: function, index: 3U64)
     val provider = parameter(compiler: inout compiler, function: function, index: 4U64)
+    val projectedInteger = parameter(compiler: inout compiler, function: function, index: 5U64)
+    val projectedText = parameter(compiler: inout compiler, function: function, index: 6U64)
     val integer = compiler.arena.typeAt(index: generic).args[0U64]
+    val string = compiler.arena.typeAt(index: projectedText).args[0U64]
 
     val holderShape = checkedShape(compiler: inout compiler, term: holder)
     assert(holderShape.fieldTypes.count() == 1U64)
@@ -89,6 +92,15 @@ fn main() {
     assert(compiler.typeRefEq(a: genericShape.fieldTypes[1U64], b: integer))
     val wrappedShape = checkedShape(compiler: inout compiler, term: wrapped)
     assert(compiler.typeRefEq(a: wrappedShape.underlying, b: holder))
+    // These projections contain the enclosing declaration's ParamId below
+    // ProviderOf. Substitution must precede conformance/output normalization.
+    val projectedIntegerShape = checkedShape(compiler: inout compiler, term: projectedInteger)
+    val projectedTextShape = checkedShape(compiler: inout compiler, term: projectedText)
+    assert(projectedIntegerShape.fieldTypes.count() == 1U64)
+    assert(projectedTextShape.fieldTypes.count() == 1U64)
+    assert(compiler.typeRefEq(a: projectedIntegerShape.fieldTypes[0U64], b: integer))
+    assert(compiler.typeRefEq(a: projectedTextShape.fieldTypes[0U64], b: string))
+    assert(!compiler.typeRefEq(a: projectedIntegerShape.fieldTypes[0U64], b: projectedTextShape.fieldTypes[0U64]))
 
     // A concrete projection is still an open root until its caller normalizes
     // it. A generic declaration head without its arguments is also inadmissible.
@@ -128,5 +140,12 @@ fn main() {
     assert(contract.fieldTypes.count() == holderShape.fieldTypes.count())
     assert(compiler.typeRefEq(a: contract.fieldTypes[0U64], b: holderShape.fieldTypes[0U64]))
     assert(compiler.arena.typeIsClosed(ref: contract.fieldTypes[0U64]))
+    for term in [projectedInteger, projectedText] {
+        compiler.enqueueFinalDestruction(typeRef: term).unwrap()
+        val projectedContract = compiler.arena.finalDestructions[compiler.checkedFinalDestruction(typeRef: term).unwrap() - 1U64]
+        assert(projectedContract.fieldTypes.count() == 1U64)
+        assert(compiler.typeRefEq(a: projectedContract.fieldTypes[0U64], b: compiler.arena.typeAt(index: term).args[0U64]))
+        assert(compiler.arena.typeIsClosed(ref: projectedContract.fieldTypes[0U64]))
+    }
     print("projected-destruction-shape")
 }

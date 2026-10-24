@@ -98,3 +98,6 @@ tests/fixtures/run/any_sendable_erasure.pw
 
 # Inferred generic enum payloads retain array stride and heap String ownership.
 tests/fixtures/run/generic_enum_field_inference.pw
+
+# Associated physical fields preserve grounded generic String ownership.
+tests/fixtures/run/associated_storage_layout.pw
