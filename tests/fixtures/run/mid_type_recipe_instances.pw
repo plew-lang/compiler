@@ -100,9 +100,11 @@ fn main() {
     val absent = instantiateCanonicalMidBody(c: inout compiler, body: unitSource, bodyId: absentBody)
     match absent.error { MidInstantiateError.InvalidLocalResultType => {} _ => { panic "absent result accepted as Unit" } }
     // The same navigation anchor cannot replace a wrong semantic slot/owner.
+    // The global owner is a maximum-value sentinel, not an incrementable index.
+    val foreignOwner = if site.ownerFnIdx == 0U64 { give 1U64 } else { give 0U64 }
     val wrongSites = [
         <CallSiteKey ownerFnIdx=site.ownerFnIdx originKind=site.originKind originStart=site.originStart originEnd=site.originEnd originSerial=site.originSerial slot=site.slot + 1U64 />,
-        <CallSiteKey ownerFnIdx=site.ownerFnIdx + 1U64 originKind=site.originKind originStart=site.originStart originEnd=site.originEnd originSerial=site.originSerial slot=site.slot />,
+        <CallSiteKey ownerFnIdx=foreignOwner originKind=site.originKind originStart=site.originStart originEnd=site.originEnd originSerial=site.originSerial slot=site.slot />,
     ]
     for wrongSite in wrongSites {
         val recipe = compiler.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 exprId=999U64 siteIsStmt=true callSite=wrongSite />)
