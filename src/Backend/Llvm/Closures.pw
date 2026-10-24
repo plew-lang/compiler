@@ -149,12 +149,9 @@ pub impl LlvmCtx {
 
     inout fn declareClosure(c: inout Comp, bodyId: U64) -> Result[(), CompileDiagnostic] {
         if self.closureSlot(bodyId: bodyId) < self.closures.count() { return <Result.Ok value=() /> }
+        val closure = try c.requirePreparedClosureInstance(bodyId: bodyId)
         val frozen = c.arena.closureSignature(bodyId: bodyId)
-        if frozen.declarationIndex == 0U64 || frozen.declarationIndex > c.semanticClosureCount() {
-            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: closure signature has no lexical declaration") />
-        }
         val semanticIndex = frozen.declarationIndex - 1U64
-        val closure = (try c.preparedSemanticClosureAt(index: semanticIndex))
         val functionType: U64 = frozen.functionTypeTerm
         if functionType == 0U64 || functionType >= c.arena.typeCount() || frozen.captures.count() != closure.captures.count() {
             return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: reachable closure has no finalized signature") />

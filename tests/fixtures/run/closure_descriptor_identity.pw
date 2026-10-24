@@ -1,0 +1,79 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontend }
+use /SourceAccess only { SourceAccess }
+use /Mid only { MidCanonicalBody, MidInstantiateError, instantiateCanonicalMidBody }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
+
+fn expectRejected(compiler: Comp, source: MidCanonicalBody, body: U64) {
+    mut val copy = compiler
+    match instantiateCanonicalMidBody(c: inout copy, body: source, bodyId: body).error {
+        MidInstantiateError.None => { panic("foreign closure descriptor reached executable Mid") }
+        _ => {}
+    }
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "struct Left {{}} struct Right {{}} fn captured[T](value: T) -> fn() -> I64 {{ return fn() -> I64 {{ val copy = value return 3I64 }} }} fn main() {{ val first = fn() -> I64 {{ return 1I64 }} val second = fn() -> I64 {{ return 2I64 }} val left = captured(value: <Left />) val right = captured(value: <Right />) val firstResult = first() val secondResult = second() val leftResult = left() val rightResult = right() }}"
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text path="closure-descriptors.pw" text=source />, sources: <SourceAccess stdRoot=[] />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
+    val captured = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "captured").nameId)
+    mut val plain: Array[U64] = []
+    mut val generic: Array[U64] = []
+    mut val mainBody = 0U64
+    for body in 1U64..<(compiler.arena.bodyInstanceCount() + 1U64) {
+        val instance = compiler.arena.bodyInstanceAt(index: body - 1U64)
+        val signature = compiler.arena.closureSignature(bodyId: body)
+        if signature.declarationIndex != 0U64 {
+            val declaration = compiler.preparedSemanticClosureAt(index: signature.declarationIndex - 1U64).unwrap()
+            assert(instance.fnIdx == declaration.bodyKey)
+            if declaration.ownerFnIdx == owner { plain.append(body) }
+            if declaration.ownerFnIdx == captured { generic.append(body) }
+        } else if instance.fnIdx == owner { mainBody = body }
+    }
+    assert(plain.count() == 2U64 && generic.count() == 2U64 && mainBody != 0U64)
+    mut val templates = <MidFunctionTemplates />
+    val mainSource = templates.body(c: inout compiler, function: owner)
+    match mainSource.error { MidBuildError.None => {} _ => { panic("main template failed") } }
+    match instantiateCanonicalMidBody(c: inout compiler, body: mainSource.canonical, bodyId: mainBody).error {
+        MidInstantiateError.None => {}
+        _ => { panic("valid closure construction failed") }
+    }
+    val first = compiler.arena.closureSignature(bodyId: plain[0U64])
+    val second = compiler.arena.closureSignature(bodyId: plain[1U64])
+    assert(first.declarationIndex != second.declarationIndex)
+    assert(first.captures.count() == 0U64 && second.captures.count() == 0U64)
+    assert(compiler.typeRefEq(a: first.functionTypeTerm, b: second.functionTypeTerm))
+    mut val missing = compiler
+    val ordinary = compiler.arena.bodySignature(bodyId: plain[0U64])
+    missing.arena.setBodySignature(bodyId: plain[0U64], parameters: ordinary.parameterTypes, passings: ordinary.parameterPassings, result: ordinary.resultType)
+    expectRejected(compiler: missing, source: mainSource.canonical, body: mainBody)
+    mut val replaced = compiler
+    replaced.arena.setClosureSignature(bodyId: plain[0U64], parameters: ordinary.parameterTypes, passings: ordinary.parameterPassings, result: ordinary.resultType, closure: second)
+    expectRejected(compiler: replaced, source: mainSource.canonical, body: mainBody)
+
+    // One declaration and ABI, but two distinct nominal capture instances.
+    val left = compiler.arena.closureSignature(bodyId: generic[0U64])
+    val right = compiler.arena.closureSignature(bodyId: generic[1U64])
+    assert(left.declarationIndex == right.declarationIndex)
+    assert(compiler.typeRefEq(a: left.functionTypeTerm, b: right.functionTypeTerm))
+    assert(!compiler.typeRefEq(a: left.captures[0U64].typeTerm, b: right.captures[0U64].typeTerm))
+    val instance = compiler.arena.bodyInstanceAt(index: generic[0U64] - 1U64)
+    val parent = compiler.findBodyInstance(fnIdx: captured, environment: instance.environment)
+    assert(parent != 0U64)
+    val genericSource = templates.body(c: inout compiler, function: captured)
+    match genericSource.error { MidBuildError.None => {} _ => { panic("generic template failed") } }
+    match instantiateCanonicalMidBody(c: inout compiler, body: genericSource.canonical, bodyId: parent).error {
+        MidInstantiateError.None => {}
+        _ => { panic("valid generic closure construction failed") }
+    }
+    mut val foreign = compiler
+    val signature = compiler.arena.bodySignature(bodyId: generic[0U64])
+    foreign.arena.setClosureSignature(bodyId: generic[0U64], parameters: signature.parameterTypes, passings: signature.parameterPassings, result: signature.resultType, closure: right)
+    expectRejected(compiler: foreign, source: genericSource.canonical, body: parent)
+    print("closure-descriptor-identity")
+}

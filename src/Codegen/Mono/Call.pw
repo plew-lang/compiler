@@ -5156,13 +5156,104 @@ pub impl Comp {
         }
     }
 
+    // Concrete descriptor admission reads the checked source and already
+    // published instance terms. It never performs substitution or selection.
+    inout fn closureInstanceTypeMatches(bodyId: U64, source: U64, concrete: U64) -> Bool {
+        if source >= self.arena.typeCount() || concrete >= self.arena.typeCount() { return false }
+        if !self.arena.typeIsClosed(ref: concrete) { return false }
+        if self.arena.typeIsClosed(ref: source) { return self.typeRefEq(a: source, b: concrete) }
+        val fact = self.arena.bodyTypeTermResult(bodyId: bodyId, typeTerm: source)
+        return fact.bodyId == bodyId && self.typeRefEq(a: fact.resultType, b: concrete)
+    }
+
+    inout fn requirePreparedClosureInstance(bodyId: U64) -> Result[SemanticClosure, CompileDiagnostic] {
+        if bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: closure instance is missing") />
+        }
+        val body = self.arena.bodySignature(bodyId: bodyId)
+        val frozen = self.arena.closureSignature(bodyId: bodyId)
+        if !self.arena.bodyIsCallable(bodyId: bodyId) || !body.ready || frozen.declarationIndex == 0U64 || frozen.declarationIndex > self.semanticClosures.count() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: closure instance has no checked callable declaration") />
+        }
+        val closure = try self.preparedSemanticClosureAt(index: frozen.declarationIndex - 1U64)
+        val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        if instance.fnIdx != closure.bodyKey || !frozen.templatesClosed || frozen.functionTypeTerm == 0U64 || !self.closureInstanceTypeMatches(bodyId: bodyId, source: closure.functionTypeTerm, concrete: frozen.functionTypeTerm) || frozen.captures.count() != closure.captures.count() {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure instance does not match its checked declaration") />
+        }
+        val signature = self.arena.typeAt(index: frozen.functionTypeTerm)
+        if !self.isFnType(ref: frozen.functionTypeTerm) || signature.args.count() != closure.parameters.count() + 1U64 || body.parameterTypes.count() != closure.parameters.count() || body.parameterPassings.count() != closure.parameters.count() || body.receiverType != 0U64 || !self.sameCallReceiverPassing(a: body.receiverPassing, b: <CallReceiverPassing.None />) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure callable signature is inconsistent") />
+        }
+        val result = if closure.hasReturn { give signature.args[0U64] } else { give 0U64 }
+        if !self.typeRefEq(a: body.resultType, b: result) || !self.typeRefEq(a: body.bodyResultType, b: result) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure result does not match its function type") />
+        }
+        mut val index = 0U64
+        while index < closure.parameters.count() {
+            val parameter = closure.parameters[index]
+            val expected = if parameter.isInout { give <CallArgumentPassing.Inout /> } else if parameter.isMove { give <CallArgumentPassing.Move /> } else { give <CallArgumentPassing.Borrow /> }
+            if !self.closureInstanceTypeMatches(bodyId: bodyId, source: parameter.typeTerm, concrete: body.parameterTypes[index]) || !self.typeRefEq(a: signature.args[index + 1U64], b: body.parameterTypes[index]) || !self.sameCallArgumentPassings(a: [expected], b: [body.parameterPassings[index]]) {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure parameter does not match its checked declaration") />
+            }
+            index += 1U64
+        }
+        index = 0U64
+        while index < closure.captures.count() {
+            val source = closure.captures[index]
+            val capture = frozen.captures[index]
+            val sourceCell = match source.mode { SemanticClosureCaptureMode.CellBorrow => true _ => false }
+            val concreteCell = match capture.mode { SemanticClosureCaptureMode.CellBorrow => true _ => false }
+            if capture.bindingTarget != source.bindingTarget || capture.nameLen != source.nameLen || sourceCell != concreteCell || capture.typeTerm == 0U64 || !self.closureInstanceTypeMatches(bodyId: bodyId, source: source.typeTerm, concrete: capture.typeTerm) {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure capture does not match its checked declaration") />
+            }
+            index += 1U64
+        }
+        val drop = frozen.environmentDropBodyId
+        if frozen.captures.count() == 0U64 {
+            if drop != 0U64 { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: empty closure has an environment drop") /> }
+        } else {
+            if drop == 0U64 || drop > self.arena.bodyInstanceCount() { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure environment drop is missing") /> }
+            match self.arena.bodyOrigin(bodyId: drop) {
+                BodyOrigin.ClosureEnvironmentDrop(closureBodyId: val owner) => {
+                    if owner != bodyId { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure environment drop belongs to another instance") /> }
+                }
+                _ => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure environment drop has the wrong origin") /> }
+            }
+            val dropInstance = self.arena.bodyInstanceAt(index: drop - 1U64)
+            val dropSignature = self.arena.bodySignature(bodyId: drop)
+            if dropInstance.fnIdx != instance.fnIdx || !self.sameInstanceEnvironment(a: dropInstance.environment, b: instance.environment) || !dropSignature.ready || dropSignature.parameterTypes.count() != frozen.captures.count() || dropSignature.parameterPassings.count() != frozen.captures.count() || dropSignature.resultType != 0U64 {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure environment drop has the wrong signature") />
+            }
+            index = 0U64
+            while index < frozen.captures.count() {
+                if !self.typeRefEq(a: dropSignature.parameterTypes[index], b: frozen.captures[index].typeTerm) || !self.sameCallArgumentPassings(a: [dropSignature.parameterPassings[index]], b: [<CallArgumentPassing.Move />]) {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure environment drop capture is inconsistent") />
+                }
+                index += 1U64
+            }
+        }
+        return <Result.Ok value=closure />
+    }
+
     // Finalization freezes the closure ABI under the same lexical instance
     // as its return/call descriptors. Abstract scans do not publish an ABI.
     inout fn finalizeClosureSignature(ownerFnIdx: U64, closureId: U64) -> Result[(), CompileDiagnostic] {
         val index = (try self.semanticClosureIndex(ownerFnIdx: ownerFnIdx, exprId: closureId))
         if index >= self.semanticClosures.count() { return <Result.Ok value=() /> }
         val closure = try self.preparedSemanticClosureAt(index: index)
-        val environment = self.cur.bodyEnvironment
+        val closureBodyId = self.currentBodyInstanceId()
+        if closureBodyId == 0U64 || closureBodyId > self.arena.bodyInstanceCount() || !self.arena.bodyIsCallable(bodyId: closureBodyId) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closureId), msg: "internal error: closure publication requires a callable instance") />
+        }
+        val instance = self.arena.bodyInstanceAt(index: closureBodyId - 1U64)
+        if instance.fnIdx != closure.bodyKey || self.cur.bodyFnIdx != closure.bodyKey || !self.sameInstanceEnvironment(a: instance.environment, b: self.cur.bodyEnvironment) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closureId), msg: "internal error: closure publication environment does not match its registered instance") />
+        }
+        if self.arena.bodySignature(bodyId: closureBodyId).ready {
+            val prepared = try self.requirePreparedClosureInstance(bodyId: closureBodyId)
+            return <Result.Ok value=() />
+        }
+        val environment = instance.environment
         val functionType = (try self.groundAndRecordBodyType(ref: closure.functionTypeTerm, environment: environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
         if functionType == 0U64 || functionType >= self.arena.typeCount() { return <Result.Ok value=() /> }
         val signature = self.arena.typeAt(index: functionType)
@@ -5190,7 +5281,6 @@ pub impl Comp {
             captures.append(<SemanticClosureCapture bindingTarget=capture.bindingTarget nameLen=capture.nameLen typeTerm=type mode=capture.mode />)
             captureI += 1U64
         }
-        val closureBodyId = self.currentBodyInstanceId()
         mut val dropBodyId = self.arena.closureSignature(bodyId: closureBodyId).environmentDropBodyId
         if captures.count() != 0U64 && dropBodyId == 0U64 {
             val instance = self.arena.bodyInstanceAt(index: closureBodyId - 1U64)
@@ -5226,14 +5316,8 @@ pub impl Comp {
     // Reconstruct a closure's concrete lexical environment from its instance
     // and checked capture metadata, never from a suspended enclosing Cursor.
     inout fn scanFinalClosureBody(bodyId: U64) -> Result[(), CompileDiagnostic] {
+        val closure = try self.requirePreparedClosureInstance(bodyId: bodyId)
         val abi = self.arena.closureSignature(bodyId: bodyId)
-        if abi.declarationIndex == 0U64 || abi.declarationIndex > self.semanticClosures.count() {
-            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: closure request has no lexical declaration") />
-        }
-        val closure = try self.preparedSemanticClosureAt(index: abi.declarationIndex - 1U64)
-        if !abi.templatesClosed {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure finalization requires closed lexical call templates") />
-        }
         val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
         if closure.ownerFnIdx < self.arena.functionCount() {
             try self.enterFinalCallableEnvironment(bodyId: bodyId, instance: instance, function: self.arena.functionAt(index: closure.ownerFnIdx))

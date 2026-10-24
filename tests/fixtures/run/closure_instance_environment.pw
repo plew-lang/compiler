@@ -1,0 +1,48 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { BodyInstance, BodyOrigin }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "struct Left {{}} struct Right {{}} fn captured[T](value: T) -> fn() -> I64 {{ return fn() -> I64 {{ val copy = value return 1I64 }} }} fn types(left: Left, right: Right) {{}} fn main() {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="closure-environment.pw" text=source />, sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "captured").nameId)
+    val types = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "types").nameId))
+    val left = compiler.funcParamAt(params: types.params, index: 0U64).ty
+    val right = compiler.funcParamAt(params: types.params, index: 1U64).ty
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    assert(compiler.semanticClosureCount() == 1U64)
+    val closure = compiler.preparedSemanticClosureAt(index: 0U64).unwrap()
+    val leftEnvironment = compiler.bodyInstanceEnvironment(fnIdx: owner, args: [left], recvInstRef: 0U64).unwrap()
+    val rightEnvironment = compiler.bodyInstanceEnvironment(fnIdx: owner, args: [right], recvInstRef: 0U64).unwrap()
+    val body = compiler.internBodyInstance(fnIdx: closure.bodyKey, environment: leftEnvironment)
+    compiler.cur.bodyId = body
+    compiler.cur.bodyFnIdx = closure.bodyKey
+    compiler.cur.bodyEnvironment = rightEnvironment
+    mut val mismatch = compiler
+    if mismatch.finalizeClosureSignature(ownerFnIdx: owner, closureId: closure.exprId).isOk() { panic("cursor environment published under another closure instance") }
+    assert(!mismatch.arena.bodySignature(bodyId: body).ready)
+    compiler.cur.bodyEnvironment = leftEnvironment
+    compiler.finalizeClosureSignature(ownerFnIdx: owner, closureId: closure.exprId).unwrap()
+    val signature = compiler.arena.closureSignature(bodyId: body)
+    assert(signature.declarationIndex == 1U64 && signature.captures.count() == 1U64)
+    assert(compiler.typeRefEq(a: signature.captures[0U64].typeTerm, b: left))
+    // A synthetic drop has the same function/environment, but is not callable.
+    val drop = signature.environmentDropBodyId
+    assert(drop != 0U64)
+    mut val wrongOrigin = compiler
+    wrongOrigin.cur.bodyId = drop
+    assert(wrongOrigin.finalizeClosureSignature(ownerFnIdx: owner, closureId: closure.exprId).isErr())
+    val foreign = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=owner environment=leftEnvironment />)
+    mut val wrongKey = compiler
+    wrongKey.cur.bodyId = foreign
+    wrongKey.cur.bodyFnIdx = owner
+    assert(wrongKey.finalizeClosureSignature(ownerFnIdx: owner, closureId: closure.exprId).isErr())
+    assert(!wrongKey.arena.bodySignature(bodyId: foreign).ready)
+    // A foreign descriptor must also fail the later scan admission.
+    compiler.arena.setClosureSignature(bodyId: foreign, parameters: [], passings: [], result: compiler.arena.bodySignature(bodyId: body).resultType, closure: signature)
+    assert(compiler.scanFinalClosureBody(bodyId: foreign).isErr())
+    print("closure-instance-environment")
+}

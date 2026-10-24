@@ -566,9 +566,16 @@ fn instantiateCanonicalMakeClosure(c: inout Comp, bodyId: U64, rvalueId: U64, en
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingSemanticClosure /> }
         return 0U64
     }
+    match c.requirePreparedClosureInstance(bodyId: closureBodyId) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => {
+            if !midInstantiateHasError(error: error) { error = <MidInstantiateError.Frontend diagnostic=diagnostic /> }
+            return 0U64
+        }
+    }
     val signature = c.arena.closureSignature(bodyId: closureBodyId)
     val functionType: U64 = signature.functionTypeTerm
-    if closure.bodyKey != source.closureBodyKey || source.elements.len != closure.captures.count() || signature.captures.count() != closure.captures.count() || functionType == 0U64 || !(c.typeRefEq(a: functionType, b: instantiateMidTerm(c: inout c, typeTerm: source.resultTerm, bodyId: bodyId, environment: environment, error: inout error))) {
+    if signature.declarationIndex != closureIndex + 1U64 || closure.bodyKey != source.closureBodyKey || source.elements.len != closure.captures.count() || signature.captures.count() != closure.captures.count() || functionType == 0U64 || !(c.typeRefEq(a: functionType, b: instantiateMidTerm(c: inout c, typeTerm: source.resultTerm, bodyId: bodyId, environment: environment, error: inout error))) {
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidSemanticClosure /> }
         return 0U64
     }
