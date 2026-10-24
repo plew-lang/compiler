@@ -5,6 +5,25 @@ use @Std/Core only { assert }
 use @Std/Process only { argAt }
 use @Std/Io only { print }
 
+// Canonical closedness excludes parameters but does not establish nominal arity.
+// The arena also retains declaration heads; those have no executable contract.
+fn completeArguments(compiler: inout Comp, term: U64) -> Bool {
+    val type = compiler.arena.typeAt(index: term)
+    val structure = compiler.structIndexForType(ref: term)
+    if structure < compiler.arena.structCount() {
+        if type.args.count() != compiler.arena.structAt(index: structure).typeParams.count() { return false }
+    } else {
+        val enumeration = compiler.enumIndexForType(ref: term)
+        if enumeration < compiler.arena.enumCount() && type.args.count() != compiler.arena.enumAt(index: enumeration).typeParams.count() { return false }
+    }
+    mut val index = 0U64
+    while index < compiler.typeTermRefChildCount(ref: term) {
+        if !completeArguments(compiler: inout compiler, term: compiler.typeTermRefChildRef(ref: term, index: index)) { return false }
+        index += 1U64
+    }
+    return true
+}
+
 fn main() {
     mut val compiler = <Comp />
     analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />,
@@ -18,10 +37,13 @@ fn main() {
     mut val compared = 0U64
     mut val index = 1U64
     while index < types {
-        if compiler.arena.typeIsClosed(ref: index) {
+        val contractId = compiler.finalDestructionIndex(typeRef: index)
+        val eligible = compiler.arena.typeIsClosed(ref: index) && completeArguments(compiler: inout compiler, term: index)
+        // No published final contract may disappear from this comparison.
+        if contractId != 0U64 { assert(eligible) }
+        if eligible {
             val shape = compiler.closedDestructionShape(typeRef: index).unwrap()
             if shape.destructorDeclaration != 0U64 { destructors += 1U64 }
-            val contractId = compiler.finalDestructionIndex(typeRef: index)
             if contractId != 0U64 {
                 compared += 1U64
                 val contract = compiler.arena.finalDestructions[contractId - 1U64]

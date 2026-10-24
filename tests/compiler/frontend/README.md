@@ -85,5 +85,7 @@ exit 0, empty stderr, and `destruction-shape:ok` on stdout. It compares every
 available finalized contract with its declaration shape, verifies a destructor
 is discoverable, and asserts that shape queries add no executable body,
 final destruction contract, or record layout. The compiler source itself is
-also a valid input. Open TypeTerms are deliberately not passed to this
-closed-type API; their dependencies remain separate analysis obligations.
+also a valid input. Open TypeTerms and declaration heads with incomplete generic arguments are not
+passed to this closed-instance API; their dependencies remain separate analysis
+obligations. Every available final contract must pass those eligibility checks
+and is compared; filtering cannot silently omit a published contract.
