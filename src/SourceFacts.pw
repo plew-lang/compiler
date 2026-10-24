@@ -371,7 +371,9 @@ impl Comp {
         if !self.sourceTypeHasCompleteArguments(ref: fact.term) { return }
         val site = match self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) { Result.Ok(value: val site) => site Result.Err(error: _) => { return } }
         val index = self.callTemplateIndex(siteKey: site)
-        if index < self.callTemplateLocations.count() {
+        // Both paths validate the lexical owner. Build its scope once; a
+        // selected call also supplies its own interface proof scope.
+        val scope = if index < self.callTemplateLocations.count() {
             if !semanticCompletionOwnersEqual(recorded: self.callTemplateLocations[index].owner, prepared: owner) { return }
             val template = self.callTemplateAt(index: index)
             match template.kind {
@@ -384,11 +386,7 @@ impl Comp {
                 }
                 _ => {}
             }
-        }
-        // Both paths validate the lexical owner. Build its scope once; a
-        // selected call also supplies its own interface proof scope.
-        val scope = if index < self.callTemplateLocations.count() {
-            give match self.callConstraintScope(template: self.callTemplateAt(index: index)) { Result.Ok(value: val scope) => scope Result.Err(error: _) => { return } }
+            give match self.callConstraintScope(template: template) { Result.Ok(value: val scope) => scope Result.Err(error: _) => { return } }
         } else {
             give match self.declarationTypeScope(owner: self.cur.checkFn) { Result.Ok(value: val scope) => scope Result.Err(error: _) => { return } }
         }
