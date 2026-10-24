@@ -37,3 +37,18 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Prepared Current Progress Boundary (Not Reproduced)
+
+Read-only tracing at36680385 finds tracePhases defaults false in normal
+Compiler.runProgram/executeProgram and the fixtures' inner CompilerSession.open.
+prepare_body -> lowerBody is synchronous; diagnostic draining occurs afterward.
+Native source callback/module admission/ORC materialization have no ordinary
+progress publisher. This identifies possible silent intervals, not a new current
+60-second reproduction or proven deadlock. If reproduced, connect actual source
+worklist/pass progress to its consumer; do not add heartbeats or extend deadlines.
+
+The task's exact four inputs remain demand/finalization/initializers/registry.
+The older session-traced-jit.json fourth case is mid_requests, so that historical
+success does not certify registry. No current normal-CLI execution was started
+during this preparation.

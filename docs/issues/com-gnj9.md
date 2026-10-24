@@ -38,11 +38,22 @@ current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
 
-## Current Boundary Finding
+## Current Verification and Remaining Exit
 
-E3 and its three repairs are independently closed at771150e1 with a6.978049s
-formal checkpoint. Current E4 controls execute correctly, but exact source target
-identities are not saved. body-checking/checked-body-storage require them; relative
-completion tags and Mid lexical stacks do not discharge that contract.
-The independently reviewed finite paired repair com-tl9c owns the producer,
-publication and actual Mid mapping. E4 remains incomplete until it is admitted.
+The paired com-tl9c repair now closes producer -> private publication -> saved
+identity -> actual Mid destination/cleanup at dea2b38d, refined36680385. Its
+outcome and durable receipt own exact source/removed paths and controls.
+
+Direct/nested gives, block/if/match results, return through block/loop, nested
+break/continue and while-condition local loops, closure-local return, try Err
+return and operand-first exits retain their source targets. Abandoned result/
+interpolation and mutable pattern/conditional ownership controls execute through
+strict Mid verification and LLVM. Existing com-gyup ownership evidence is
+reconciled, not reopened or replaced by reachability assumptions. Missing, wrong
+kind, foreign session/owner and same-owner nonenclosing/sibling loop mapping fail
+at the real readers. Saved relative completion remains a separate pure algebra.
+
+Independent review admits the initial90 functional cases and refined60 affected
+cases, all-source checks and exact fixed-point artifacts. However refined formal
+median7.072914s fails below7s; com-tl9c and E4 remain unclosed under the explicit
+performance stop. Functionality does not waive this exit or certify full G2.

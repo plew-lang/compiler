@@ -68,3 +68,44 @@ Fresh sourcecheck and native/cleanup controls, applicable ASan E registration,
 formal fixed point/median below7s and independent completion review are required.
 Full final candidate gates remain G2. Any newly necessary semantics or unbounded
 repair gets its own independently reviewed scope before widening this task.
+
+## Implemented Boundary and Performance Stop
+
+Production dea2b38d adds owner-local SourceTransferFact(Function/Block/Loop),
+private statement publication and immutable prepared lookup. Record chooses
+identity under explicit block/loop/condition-barrier/closure contexts; Mid maps
+the saved identity to the actual active result/CFG/cleanup destination. The old
+nearest-loop authority and parallel loop arrays are removed. SemanticTry keeps
+its existing owner/returnTerm for implicit Err returns; it needs no duplicate
+direct-statement transfer row. Global return acceptance is unchanged.
+
+Fixture d4749a85 source_transfer_targets checks real successful publication,
+exact nested/sibling/closure identity and actual Mid missing/sibling mapping
+rejection. Standard build20261024T142604-build-a5eb16, fresh sourcecheck and
+native50/panic4/reject36 pass. The already registered sanitizer ownership inputs
+cover the changed cleanup paths; this internal contract fixture adds no separate
+runtime ownership path requiring another manifest entry.
+
+36680385 removes only duplicate target-key lookup and eager successful-give
+diagnostic offsets. Private registration retains all prior owner/kind/target
+checks without rewriting existing rows. Measured successor090240dd513a530998c9025c43323f3243fc3206653e1aee1af657ed7503ddad
+passes all-source checking and affected native20/panic4/reject36. Independent
+review /root/body_receiver_completion_review verifies19 receipt references,
+303 current focused inputs, all5929 formal inputs and saved successor identity.
+The earlier90-case scope differs only in the two refined production files.
+
+Both formal runs reach generation2 fixed point with unchanged inputs and exit0.
+Initial20261024T143250-self-host-7c1dbf median7.267095s; refined
+20261024T144321-self-host-f35ef5 median7.072914s (7.546383/7.072914/7.023181).
+The below7s exit remains unmet. Alternating identical-source old E3/new E4
+medians7.071088/7.064008, identical LLVM, do not establish an E4-specific slowdown.
+No further clear low-cost removal within this boundary was found; broader common
+Mid performance investigation is needed, not weaker target validation. This is
+not a claim that improvement is inherently impossible. The independent reviewer
+recognizes functional completion and the performance stop, so this ticket and E4
+remain in_progress. No enclosing area/G2/main/seed/carrier promotion follows.
+
+Durable records: meta evidence/existing-feature-conformance/source-owner-facts/
+phase3e-transfer-targets.json, phase3e-transfer-targets-initial-self-host.json,
+phase3e-transfer-targets-cost-self-host.json and
+phase3e-transfer-targets-same-source.json. All sessions are recovered.

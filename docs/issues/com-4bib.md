@@ -37,3 +37,24 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Prepared Seven-Row Request Map (Not Executed)
+
+Read-only preparation at36680385 finds no new mode-specific defect; this is
+not current-candidate parity certification. The finite comparison remains:
+
+| Row | Shared source request/owner | Required contrast |
+| --- | --- | --- |
+| ordinary | prepareLexicalBody -> recordParametricFunction/checkGenericFunction/verifyFunctionDeclaration; Function(canonical declaration) | same requested body under check/build/run, positive and missing-call rejection |
+| generic/provided | same lexical preparation; provided semanticBodyOwner, separate concrete instance | symbolic generic and provided method requested in all modes |
+| closure | nested source preparation/publication; Closure(expression), separate bodyKey | parent construction and demanded child success/failure |
+| global | prepareGlobalInitializer(target), individual Global(target); startup root is separate | same startup positive/reject under all modes |
+| default | registered parameter/field generator Function, retained DefaultGeneratorOrigin | omitted parameter/field defaults plus independent owner publication |
+| generated | gen harness uses ordinary lexical preparation; resulting application is a separate program | harness positive/reject and generated application check/build/run |
+| invalid unused | check/build request whole target; lazy session/run omit unrelated body | whole-target rejection versus requested-only success, then explicit request rejection |
+
+Existing source_typing_owner_requests/default_generator_source_publication and
+gen greet/helperboundary/UnresolvedField controls supply intent. The current
+scratch plan/runner at compiler/tmp/phase3f-mode-parity is unexecuted; its pinned
+initial E4 carrier must be reviewed/updated before use. No F3 InternalSession CLI
+job or historical diagnostic-host success is reused as current product success.
