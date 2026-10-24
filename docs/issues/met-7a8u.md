@@ -1,6 +1,6 @@
 ---
 id: met-7a8u
-status: in_progress
+status: closed
 deps: [met-qs57]
 links: []
 created: 2026-10-24T18:06:52Z
@@ -37,3 +37,17 @@ static/operator seeds and first-pass error/skip order. No test-only public API.
 Compare the combined candidate with source-query baseline on identical input,
 retain structural and correctness evidence, and obtain independent completion
 review. This is not the below6s parent or whole-G2 completion.
+
+## Outcome
+
+Resolved by navigation/projection3b5162c5 and relevance8711de03, with standalone
+new-control source text repair678a85b9. Source behavior, prepared admission,
+identity and initial diagnostic ordering remain intact. Fresh9a698996d9e8c995d4accded21907cb46b2a0634664f6846afb622b92ffeca97 passes
+all sourcecheck and17 native/7 reject controls. Same-source serial3+3 comparison
+median6.769865→6.072895s with all LLVM78283576bbfe56315dc14ea9a8fa28691e749adad8ad3f4f508da30ab28f24b3.
+Independent b2 reviewer checked13 references,236/239 input hashes,6 compressed
+LLVMs and the fixture-only repair; accepts both finite tasks. Meta evidence
+performance-six-seconds/call-navigation-relevance.json owns detailed proof.
+Formal182531-self-host-6ee17d reaches generation2 fixed point, median6.051333s:
+this is still above the parent target, not main/G2 admission. Subsequent finite
+query/empty-view work is met-ycyn. No semantic caches or lowered proof conditions.

@@ -1,6 +1,6 @@
 ---
 id: met-v1jg
-status: in_progress
+status: closed
 deps: [met-qs57]
 links: []
 created: 2026-10-24T18:01:18Z
@@ -45,3 +45,26 @@ Do not narrow this internal API to powers of two. Extend the existing default
 argument fixture for127/128 rebuild, exact key lookup, intentional equal-hash
 serial collisions and missing keys. Prepared constraint projection is siteKey
 plus count/subject scalar getters; prepared admission and closedness stay intact.
+
+## Outcome
+
+Resolved by navigation/projection3b5162c5 and relevance8711de03, with standalone
+new-control source text repair678a85b9. Source behavior, prepared admission,
+identity and initial diagnostic ordering remain intact. Fresh9a698996d9e8c995d4accded21907cb46b2a0634664f6846afb622b92ffeca97 passes
+all sourcecheck and17 native/7 reject controls. Same-source serial3+3 comparison
+median6.769865→6.072895s with all LLVM78283576bbfe56315dc14ea9a8fa28691e749adad8ad3f4f508da30ab28f24b3.
+Independent b2 reviewer checked13 references,236/239 input hashes,6 compressed
+LLVMs and the fixture-only repair; accepts both finite tasks. Meta evidence
+performance-six-seconds/call-navigation-relevance.json owns detailed proof.
+Formal182531-self-host-6ee17d reaches generation2 fixed point, median6.051333s:
+this is still above the parent target, not main/G2 admission. Subsequent finite
+query/empty-view work is met-ycyn. No semantic caches or lowered proof conditions.
+
+## Separate Existing Boundary
+
+Raw rebuildCallTemplateIndex can be requested with capacity too small to leave
+an empty bucket, which can make a malformed internal table loop. Production
+ensureCallTemplateIndex retains its occupancy rule; the new mask/fallback does
+not create or relax this boundary. A future writer API cleanup should validate
+or normalize requested capacity before constructing a table. This is outside
+the measured valid-query slice and does not certify arbitrary malformed rebuilds.
