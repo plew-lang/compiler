@@ -1,0 +1,7 @@
+trait Convert[Input] { fn convert(value: Input) -> I64 }
+trait Left {} trait Right {}
+pub impl Left as Convert[I64] { fn convert(value: I64) -> I64 { return 1I64 } }
+pub impl Right as Convert[I64] { fn convert(value: I64) -> I64 { return 2I64 } }
+trait Source { type Item }
+fn probe[T](value: T#Source.Item) -> I64 where T: Source, T#Source.Item: Left, T#Source.Item: Right { return value.convert(value: 1I64) }
+fn main() {}

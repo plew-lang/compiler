@@ -1,0 +1,3 @@
+trait Convert[Input] { fn convert(value: Input) -> I64 }
+fn probe[T](value: T) -> I64 where T: Convert[I64], T: Convert[U64] { return value.convert(value: 1) }
+fn main() {}

@@ -1,0 +1,33 @@
+use @Std/Io only { print }
+trait Convert[Input] { fn convert(value: Input) -> I64 }
+trait Parent[Input]: Convert[Input] {}
+trait Source { type Item }
+trait SchemaSource { type Item: Convert[Bool] }
+struct Parser {}
+pub impl Parser { factory }
+impl Parser as Convert[I64] { fn convert(value: I64) -> I64 { return value + 10I64 } }
+impl Parser as Convert[Bool] { fn convert(value: Bool) -> I64 { return if value { give 20I64 } else { give 0I64 } } }
+impl Parser as Parent[I64] {}
+impl Parser as Parent[Bool] {}
+struct Root {}
+impl Root as Source { type Item = Parser }
+impl Root as SchemaSource { type Item = Parser }
+pub impl[Input] Convert[Input] { fn relay(value: Input) -> I64 { return self.convert(value: value) } }
+fn ordinary[T](value: T) -> I64 where T: Convert[I64], T: Convert[Bool] { return value.convert(value: true) }
+fn reversed[T](value: T) -> I64 where T: Convert[Bool], T: Convert[I64] { return value.convert(value: 1I64) }
+fn projected[T](value: T#Source.Item) -> I64 where T: Source, T#Source.Item: Convert[I64], T#Source.Item: Convert[Bool] { return value.convert(value: true) }
+fn projectedReverse[T](value: T#Source.Item) -> I64 where T: Source, T#Source.Item: Convert[Bool], T#Source.Item: Convert[I64] { return value.convert(value: 2I64) }
+fn provided[T](value: T) -> I64 where T: Convert[I64], T: Convert[Bool] { return value.relay(value: true) }
+fn inherited[T](value: T) -> I64 where T: Parent[I64], T: Parent[Bool] { return value.convert(value: true) }
+fn duplicate[T](value: T) -> I64 where T: Convert[I64], T: Convert[I64] { return value.convert(value: 3I64) }
+fn schema[T](value: T#SchemaSource.Item) -> I64 where T: SchemaSource, T#SchemaSource.Item: Convert[I64] { return value.convert(value: true) }
+fn main() {
+    print(ordinary(value: <Parser />))
+    print(reversed(value: <Parser />))
+    print(projected[Root](value: <Parser />))
+    print(projectedReverse[Root](value: <Parser />))
+    print(provided(value: <Parser />))
+    print(inherited(value: <Parser />))
+    print(duplicate(value: <Parser />))
+    print(schema[Root](value: <Parser />))
+}

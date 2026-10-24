@@ -297,15 +297,35 @@ pub impl Comp {
     }
 
     inout fn staticRequirementMatchRank(resolution: StaticMemberResolution, requirement: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+        match resolution {
+            StaticMemberResolution.Requirement(proof: val proof, traitIdx: val owner, reqIdx: _) => { return self.staticMemberMatchRank(proof: proof, traitIdx: owner, requirement: requirement, args: args) }
+            _ => { return <Result.Ok value=0U64 /> }
+        }
+    }
+
+    inout fn staticMemberMatchRank(proof: StaticConformanceProof, traitIdx: U64, requirement: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         if !self.paramsLabelsOk(params: requirement.params, args: args) { return <Result.Ok value=0U64 />}
+        val bound = try self.staticProofBound(proof: proof, traitIdx: traitIdx)
+        if bound.subject == 0U64 { return <Result.Ok value=0U64 /> }
+        // Provided declarations own impl binders distinct from the trait's
+        // binders. Match their receiver arguments under this candidate only.
+        mut val substitutions: Array[UnifyBind] = []
+        mut val input = 0U64
+        while input < requirement.recvTraitArgs.count() {
+            if input >= bound.constraint.key.positionalArgs.count() || !self.unifyPatterns(a: self.funcTypeAt(types: requirement.recvTraitArgs, index: input), aSide: 0U64, b: bound.constraint.key.positionalArgs[input], bSide: 1U64, aParams: <PatternBindInput.Function range=requirement.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout substitutions) { return <Result.Ok value=0U64 /> }
+            input += 1U64
+        }
+        val receiverMatch = self.witnessMatchFromUnify(conformIdx: 0U64, typeParams: <PatternBindInput.Function range=requirement.typeParams />, binds: substitutions)
         mut val argument: U64 = 0U64
         while argument < args.len {
             val parameterIndex: U64 = self.paramIndexForArg(params: requirement.params, args: args, argIdx: argument)
             if parameterIndex >= requirement.params.count() { return <Result.Ok value=1U64 />}
             val original: Param = self.funcParamAt(params: requirement.params, index: parameterIndex)
-            mut val ref: U64 = try self.staticRequirementParamType(resolution: resolution, args: args, argIdx: argument)
+            val receiverType = try self.groundWitnessTypeTerm(ref: original.ty, params: <PatternBindInput.Function range=requirement.typeParams />, matchResult: receiverMatch)
+            mut val ref: U64 = self.traitBoundTypeTerm(ref: receiverType, bound: bound, traitIndex: traitIdx)
             if ref == 0U64 { ref = original.ty }
             if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=1U64 />}
+            if self.typeTermUsesOpenParameters(ref: ref, parameters: self.copyFuncBinds(binds: requirement.typeParams), boundCount: 0U64) { argument += 1U64 continue }
             val term: TypeRef = self.arena.typeAt(index: ref)
             val isArray: Bool = rangeEquals(bytes: self.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "Array") && term.args.count() == 1U64
             val head: TypeRef = if isArray { give self.arena.typeAt(index: term.args[0U64]) } else { give term }
@@ -316,249 +336,162 @@ pub impl Comp {
         return <Result.Ok value=2U64 />
     }
 
-    inout fn selectStaticRequirement(proof: StaticConformanceProof, traitIdx: U64, memberId: U64, args: ArgRange, operatorArity: U64 = 0U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
-        val trait: TraitDef = self.decls.traitAt(index: traitIdx)
-        mut val selected: U64 = trait.reqs.count()
-        mut val bestRank: U64 = 0U64
-        mut val index: U64 = 0U64
-        while index < trait.reqs.count() {
-            val requirement: Func = self.traitReqAt(reqs: trait.reqs, index: index)
-            if requirement.nameId == memberId {
-                // Operator grammar fixes a single requirement and its arity;
-                // unlike an authored call it has no argument-label payload.
-                if operatorArity != 0U64 {
-                    if requirement.params.count() == operatorArity { return <Result.Ok value=<StaticMemberResolution.Requirement proof=proof traitIdx=traitIdx reqIdx=index /> />}
-                    index += 1U64
-                    continue
-                }
-                val resolution: StaticMemberResolution = <StaticMemberResolution.Requirement proof=proof traitIdx=traitIdx reqIdx=index />
-                val rank: U64 = (try self.staticRequirementMatchRank(resolution: resolution, requirement: requirement, args: args))
-                if rank > bestRank {
-                    selected = index
-                    bestRank = rank
-                }
-                else if rank == 2U64 && selected < trait.reqs.count() {
-                    if (try self.overloadsAmbiguous(fa: self.traitReqAt(reqs: trait.reqs, index: selected), fb: requirement, args: args)) {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: self.argAt(args: args, index: 0U64).expr), msg: "ambiguous call: an unsuffixed integer literal matches more than one overload; add a type suffix") />
-                    }
-                }
-            }
-            index += 1U64
-        }
-        if selected < trait.reqs.count() { return <Result.Ok value=<StaticMemberResolution.Requirement proof=proof traitIdx=traitIdx reqIdx=selected /> />}
-        return <Result.Ok value=<StaticMemberResolution.Missing /> />
-    }
-
-    // A `where T: Sub` bound entails members of Sub's declared supertrait
-    // closure.  Keep the declaration path as proof data: the body instance
-    // later obtains the concrete target conformance, while Record never has
-    // to reopen syntax or pretend that the user authored `T: Super`.
-    inout fn staticMemberInSupertraits(boundRef: DeclarationBoundRef, traitIdx: U64, memberId: U64, args: ArgRange, path: Array[SupertraitRef], depth: U64 = 0U64, requiredTraitOwner: U64 = 0U64, operatorArity: U64 = 0U64, useOffset: U64 = 0U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
-        if depth > 64U64 || traitIdx >= self.decls.traitCount() { return <Result.Ok value=<StaticMemberResolution.Missing /> />}
-        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
-        mut val si: U64 = 0U64
-        while si < traitDef.supertraits.count() {
-            val superConstraint = self.traitConstraintAt(constraints: traitDef.supertraits, index: si)
-            val superOwner: U64 = superConstraint.key.owner
-            val nextTrait: U64 = self.decls.traitIndexByOffset(offset: superOwner)
-            if nextTrait < self.decls.traitCount() {
-                mut val nextPath: Array[SupertraitRef] = path
-                nextPath.append(<SupertraitRef traitIndex=traitIdx boundIndex=si />)
-                val proof: StaticConformanceProof = <StaticConformanceProof.AssumedSupertraitPath source=boundRef steps=nextPath />
-                val target: TraitDef = self.decls.traitAt(index: nextTrait)
-                mut val requirement: StaticMemberResolution = <StaticMemberResolution.Missing />
-                if requiredTraitOwner == 0U64 || self.decls.traitAt(index: nextTrait).nameStart == requiredTraitOwner { requirement = (try self.selectStaticRequirement(proof: proof, traitIdx: nextTrait, memberId: memberId, args: args, operatorArity: operatorArity)) }
-                match requirement { StaticMemberResolution.Missing => {} _ => { return <Result.Ok value=requirement />} }
-                mut val fi: U64 = self.arena.firstFunctionNamed(nameId: memberId)
-                while fi < self.arena.functionCount() {
-                    val candidate: Func = self.arena.functionAt(index: fi)
-                    if operatorArity == 0U64 && (requiredTraitOwner == 0U64 || candidate.provTraitOwner == requiredTraitOwner) && !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == target.nameId && candidate.provTraitOwner == target.nameStart && candidate.nameId == memberId && self.methodIsVisible(mf: candidate, offset: useOffset) && self.paramsLabelsOk(params: candidate.params, args: args) {
-                        return <Result.Ok value=<StaticMemberResolution.Provided proof=proof traitIdx=nextTrait callee=fi /> />
-                    }
-                    fi = self.arena.nextFunctionNamed(index: fi)
-                }
-                val nested: StaticMemberResolution = (try self.staticMemberInSupertraits(boundRef: boundRef, traitIdx: nextTrait, memberId: memberId, args: args, path: nextPath, depth: depth + 1U64, requiredTraitOwner: requiredTraitOwner, operatorArity: operatorArity, useOffset: useOffset))
-                match nested {
-                    StaticMemberResolution.Missing => {}
-                    _ => { return <Result.Ok value=nested />}
-                }
-            }
-            si += 1U64
-        }
-        return <Result.Ok value=<StaticMemberResolution.Missing /> />
-    }
-
-    // Resolve a requirement through declaration-time proof, without consulting
-    // a concrete impl that happens to be visible today.  This is deliberately
-    // separate from `resolveMethodFinal`: in
-    //
-    //   fn f[T](p: Parser, x: T) -> Parser#Convert[T].Output
-    //     where Parser: Convert[T] { p.convert(value: x) }
-    //
-    // `T` is rigid.  Selecting Parser's Convert[String] witness while checking
-    // the template would be unsound; the only evidence is the bound itself.
-    // The result carries both the proof and the selected declaration.  Its
-    // associated result stays symbolic until the type-term/proof consumer
-    // grounds the selected bound at an actual instantiation.
-    inout fn staticMemberResolution(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64 = 0U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
-        val memberId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        // Associated-type bounds are entailed by the projection's prerequisite
-        // proof. Reuse that proof query rather than treating them as new
-        // authored function bounds or searching concrete implementations.
-        if receiverRef != 0U64 && receiverRef < self.arena.typeCount() && self.arena.typeTerms[receiverRef].assocNameId != 0U64 {
-            return self.projectedMemberResolution(fnIdx: fnIdx, receiverRef: receiverRef, memberId: memberId, args: args, requiredTraitOwner: requiredTraitOwner)
-        }
-        val assumptions = self.functionBoundAssumptions(fnIdx: fnIdx)
-        mut val i: U64 = 0U64
-        while i < assumptions.count() {
-            val bound = self.declarationBound(source: assumptions[i])
-            if bound.subject != 0U64 && self.typeRefEq(a: bound.subject, b: self.typeRefWithoutOuterViews(ref: receiverRef)) {
-                val proof: StaticConformanceProof = <StaticConformanceProof.AssumedBound source=assumptions[i] />
-                match proof {
-                    StaticConformanceProof.AssumedBound(source: _) => {
-                        mut val ti: U64 = 0U64
-                        while ti < self.decls.traitCount() {
-                            val traitDef: TraitDef = self.decls.traitAt(index: ti)
-                            if traitDef.nameStart == bound.constraint.key.owner && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: bound.constraint.key.positionalArgs.count()) {
-                                mut val requirement: StaticMemberResolution = <StaticMemberResolution.Missing />
-                                if requiredTraitOwner == 0U64 || self.decls.traitAt(index: ti).nameStart == requiredTraitOwner { requirement = (try self.selectStaticRequirement(proof: proof, traitIdx: ti, memberId: memberId, args: args)) }
-                                match requirement { StaticMemberResolution.Missing => {} _ => { return <Result.Ok value=requirement />} }
-                                // A provided trait member is not a requirement
-                                // slot, but a bound selects it through the
-                                // same trait instance. Keep its declaration
-                                // identity rather than asking Mono to recover
-                                // it from the call spelling later.
-                                mut val fi: U64 = self.arena.firstFunctionNamed(nameId: memberId)
-                                while fi < self.arena.functionCount() {
-                                    val candidate: Func = self.arena.functionAt(index: fi)
-                                    if (requiredTraitOwner == 0U64 || candidate.provTraitOwner == requiredTraitOwner) && !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == traitDef.nameId && candidate.provTraitOwner == traitDef.nameStart && candidate.nameId == memberId && self.methodIsVisible(mf: candidate, offset: nameStart) && self.paramsLabelsOk(params: candidate.params, args: args) {
-                                        return <Result.Ok value=<StaticMemberResolution.Provided proof=proof traitIdx=ti callee=fi /> />
-                                    }
-                                    fi = self.arena.nextFunctionNamed(index: fi)
-                                }
-                            }
-                            ti += 1U64
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            i += 1U64
-        }
-        // The direct-bound search above intentionally handles only the
-        // authored trait itself.  Search declared supertraits separately so
-        // the proof records the derivation rather than collapsing it into an
-        // indistinguishable direct bound.
-        i = 0U64
-        while i < assumptions.count() {
-            val bound = self.declarationBound(source: assumptions[i])
-            if bound.subject != 0U64 && self.typeRefEq(a: bound.subject, b: self.typeRefWithoutOuterViews(ref: receiverRef)) {
-                val direct: StaticConformanceProof = <StaticConformanceProof.AssumedBound source=assumptions[i] />
-                match direct {
-                    StaticConformanceProof.AssumedBound(source: val boundRef) => {
-                        mut val ti: U64 = 0U64
-                        while ti < self.decls.traitCount() {
-                            if self.decls.traitAt(index: ti).nameStart == bound.constraint.key.owner && self.traitArityMatches(actual: self.decls.traitAt(index: ti).typeParams.count(), expected: bound.constraint.key.positionalArgs.count()) {
-                                val inherited: StaticMemberResolution = (try self.staticMemberInSupertraits(boundRef: boundRef, traitIdx: ti, memberId: memberId, args: args, path: [], requiredTraitOwner: requiredTraitOwner, useOffset: nameStart))
-                                match inherited {
-                                    StaticMemberResolution.Missing => {}
-                                    _ => { return <Result.Ok value=inherited />}
-                                }
-                            }
-                            ti += 1U64
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            i += 1U64
-        }
-        // A generic bound may entail another trait through a declared,
-        // owner-module trait-subject edge. This is symbolic evidence: Record
-        // stores the exact edge id and BodyInstance later grounds the receiver.
-        i = 0U64
-        while i < assumptions.count() {
-            val bound = self.declarationBound(source: assumptions[i])
-            if bound.subject != 0U64 && self.typeRefEq(a: bound.subject, b: self.typeRefWithoutOuterViews(ref: receiverRef)) {
-                val baseProof: StaticConformanceProof = <StaticConformanceProof.AssumedBound source=assumptions[i] />
-                match baseProof {
-                    StaticConformanceProof.AssumedBound(source: val boundRef) => {
-                        mut val ci: U64 = 0U64
-                        while ci < self.decls.conformCount() {
-                            val edge: Conform = self.decls.conformAt(index: ci)
-                            if edge.subjectTraitOwner != 0U64 && edge.typeStart == bound.constraint.key.owner && self.proofSourceIsActive(baseRef: receiverRef, extId: edge.extId) {
-                                val shape = self.traitSubjectWitnessMatch(conformIdx: ci, subjectArgs: bound.constraint.key.positionalArgs, selfRef: receiverRef)
-                                val selectedWitness = match (try self.witnessWithConditions(witness: shape, assumptions: assumptions)) {
-                                    Optional.Some(v: val witness) => { give witness }
-                                    Optional.None => { ci += 1U64 continue }
-                                }
-                                mut val ti: U64 = 0U64
-                                while ti < self.decls.traitCount() {
-                                    val traitDef: TraitDef = self.decls.traitAt(index: ti)
-                                    if traitDef.nameStart == edge.traitStart && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: edge.traitArgs.count()) {
-                                        val proof: StaticConformanceProof = <StaticConformanceProof.AssumedTraitPath source=boundRef steps=[] edges=[selectedWitness] />
-                                        mut val fi: U64 = self.arena.firstFunctionNamed(nameId: memberId)
-                                        while fi < self.arena.functionCount() {
-                                            val candidate: Func = self.arena.functionAt(index: fi)
-                                            if (requiredTraitOwner == 0U64 || candidate.provTraitOwner == requiredTraitOwner) && !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == traitDef.nameId && candidate.provTraitOwner == traitDef.nameStart && candidate.nameId == memberId && self.methodIsVisible(mf: candidate, offset: nameStart) && self.paramsLabelsOk(params: candidate.params, args: args) {
-                                                return <Result.Ok value=<StaticMemberResolution.Provided proof=proof traitIdx=ti callee=fi /> />
-                                            }
-                                            fi = self.arena.nextFunctionNamed(index: fi)
-                                        }
-                                        mut val requirement: StaticMemberResolution = <StaticMemberResolution.Missing />
-                                        if requiredTraitOwner == 0U64 || self.decls.traitAt(index: ti).nameStart == requiredTraitOwner { requirement = (try self.selectStaticRequirement(proof: proof, traitIdx: ti, memberId: memberId, args: args)) }
-                                        match requirement { StaticMemberResolution.Missing => {} _ => { return <Result.Ok value=requirement />} }
-                                    }
-                                    ti += 1U64
-                                }
-                            }
-                            ci += 1U64
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            i += 1U64
-        }
-        return <Result.Ok value=<StaticMemberResolution.Missing /> />
-    }
-
-    inout fn projectedMemberResolution(fnIdx: U64, receiverRef: U64, memberId: U64, args: ArgRange, requiredTraitOwner: U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
-        val assumptions = self.functionBoundAssumptions(fnIdx: fnIdx)
+    // Canonical protocols already carry an exact admitted instance. Select
+    // its requirement using the same argument rank as written member calls.
+    inout fn selectStaticRequirement(proof: StaticConformanceProof, traitIdx: U64, memberId: U64, args: ArgRange) -> Result[StaticMemberResolution, CompileDiagnostic] {
+        val declaration = self.decls.traitAt(index: traitIdx)
         mut val selected: StaticMemberResolution = <StaticMemberResolution.Missing />
+        mut val bestRank = 0U64
         mut val index = 0U64
-        while index < self.decls.traitCount() {
-            val declaration = self.decls.traitAt(index: index)
-            if requiredTraitOwner == 0U64 || declaration.nameStart == requiredTraitOwner {
-                mut val hasMember = false
-                mut val requirementIndex = 0U64
-                while requirementIndex < declaration.reqs.count() {
-                    val requirement = self.traitReqAt(reqs: declaration.reqs, index: requirementIndex)
-                    if requirement.nameId == memberId && self.paramsLabelsOk(params: requirement.params, args: args) { hasMember = true }
-                    requirementIndex += 1U64
-                }
-                if hasMember {
-                    val proof = (try self.traitPatternProof(demand: <ConformanceProofDemand.Existence />, baseRef: receiverRef, traitId: declaration.nameId, traitOwner: declaration.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: true, assumptions: assumptions))
-                    match proof {
-                        StaticConformanceProof.Missing => {}
-                        _ => {
-                            val resolution = (try self.selectStaticRequirement(proof: proof, traitIdx: index, memberId: memberId, args: args))
-                            match resolution {
-                                StaticMemberResolution.Missing => {}
-                                _ => {
-                                    match selected {
-                                        StaticMemberResolution.Missing => { selected = resolution }
-                                        _ => { return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTerms[receiverRef].siteOffset, msg: "ambiguous associated-type member: multiple trait requirements match") /> }
-                                    }
-                                }
-                            }
-                        }
-                    }
+        while index < declaration.reqs.count() {
+            val requirement = self.traitReqAt(reqs: declaration.reqs, index: index)
+            if requirement.nameId == memberId {
+                val rank = try self.staticMemberMatchRank(proof: proof, traitIdx: traitIdx, requirement: requirement, args: args)
+                if rank == 2U64 && bestRank == 2U64 { return <Result.Err error=self.diagnosticAt(offset: requirement.nameStart, msg: "ambiguous call: multiple trait requirements match the arguments") /> }
+                if rank > bestRank {
+                    selected = <StaticMemberResolution.Requirement proof=proof traitIdx=traitIdx reqIdx=index />
+                    bestRank = rank
                 }
             }
             index += 1U64
         }
         return <Result.Ok value=selected />
+    }
+
+    // Operator grammar supplies an exact trait owner and operand arity, not
+    // an authored argument-label range. Written calls use the shared frontier.
+    inout fn staticOperatorRequirement(proof: StaticConformanceProof, traitIdx: U64, memberId: U64, arity: U64) -> StaticMemberResolution {
+        val trait = self.decls.traitAt(index: traitIdx)
+        mut val index = 0U64
+        while index < trait.reqs.count() {
+            val requirement = self.traitReqAt(reqs: trait.reqs, index: index)
+            if requirement.nameId == memberId && requirement.params.count() == arity { return <StaticMemberResolution.Requirement proof=proof traitIdx=traitIdx reqIdx=index /> }
+            index += 1U64
+        }
+        return <StaticMemberResolution.Missing />
+    }
+
+    inout fn staticOperatorInSupertraits(boundRef: DeclarationBoundRef, traitIdx: U64, memberId: U64, path: Array[SupertraitRef], requiredTraitOwner: U64, arity: U64, depth: U64 = 0U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
+        if depth > 64U64 || traitIdx >= self.decls.traitCount() { return <Result.Ok value=<StaticMemberResolution.Missing /> /> }
+        val declaration = self.decls.traitAt(index: traitIdx)
+        mut val index = 0U64
+        while index < declaration.supertraits.count() {
+            val constraint = self.traitConstraintAt(constraints: declaration.supertraits, index: index)
+            val target = self.decls.traitIndexByOffset(offset: constraint.key.owner)
+            if target < self.decls.traitCount() {
+                mut val steps = path
+                steps.append(<SupertraitRef traitIndex=traitIdx boundIndex=index />)
+                if constraint.key.owner == requiredTraitOwner {
+                    val selected = self.staticOperatorRequirement(proof: <StaticConformanceProof.AssumedSupertraitPath source=boundRef steps=steps />, traitIdx: target, memberId: memberId, arity: arity)
+                    match selected { StaticMemberResolution.Missing => {} _ => { return <Result.Ok value=selected /> } }
+                }
+                val inherited = try self.staticOperatorInSupertraits(boundRef: boundRef, traitIdx: target, memberId: memberId, path: steps, requiredTraitOwner: requiredTraitOwner, arity: arity, depth: depth + 1U64)
+                match inherited { StaticMemberResolution.Missing => {} _ => { return <Result.Ok value=inherited /> } }
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=<StaticMemberResolution.Missing /> />
+    }
+
+    // One source frontier for ordinary symbolic and associated receivers.
+    // Discovery and applicability are tentative; only the exact selected
+    // instance is admitted and published. No expected result ranks candidates.
+    inout fn staticMemberResolution(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64 = 0U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
+        if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() { return <Result.Ok value=<StaticMemberResolution.Missing /> /> }
+        val memberId = intern(c: inout self, start: nameStart, len: nameLen)
+        val assumptions = self.functionBoundAssumptions(fnIdx: fnIdx)
+        // Ordinary receivers without a matching lexical premise have no
+        // symbolic frontier. Concrete method lookup owns their other surfaces.
+        if self.arena.typeAt(index: receiverRef).assocNameId == 0U64 {
+            mut val hasPremise = false
+            val receiver = self.typeRefWithoutOuterViews(ref: receiverRef)
+            for source in assumptions {
+                val bound = self.declarationBound(source: source)
+                if bound.subject != 0U64 && self.typeRefEq(a: bound.subject, b: receiver) { hasPremise = true break }
+            }
+            if !hasPremise { return <Result.Ok value=<StaticMemberResolution.Missing /> /> }
+        }
+        mut val candidates: Array[StaticMemberResolution] = []
+        mut val traitIndex = 0U64
+        while traitIndex < self.decls.traitCount() {
+            val declaration = self.decls.traitAt(index: traitIndex)
+            if requiredTraitOwner == 0U64 || declaration.nameStart == requiredTraitOwner {
+                mut val requirements: Array[U64] = []
+                mut val index = 0U64
+                while index < declaration.reqs.count() {
+                    val requirement = self.traitReqAt(reqs: declaration.reqs, index: index)
+                    if requirement.nameId == memberId && self.paramsLabelsOk(params: requirement.params, args: args) { requirements.append(index) }
+                    index += 1U64
+                }
+                mut val provided: Array[U64] = []
+                index = self.arena.firstFunctionNamed(nameId: memberId)
+                while index < self.arena.functionCount() {
+                    val function = self.arena.functionAt(index: index)
+                    if !function.isProvided && function.originTraitOwner == 0U64 && function.hasRecv && function.body != 0U64 && function.recvId == declaration.nameId && function.provTraitOwner == declaration.nameStart && self.methodIsVisible(mf: function, offset: nameStart) && self.paramsLabelsOk(params: function.params, args: args) { provided.append(index) }
+                    index = self.arena.nextFunctionNamed(index: index)
+                }
+                if requirements.count() != 0U64 || provided.count() != 0U64 {
+                    val proofs = try self.traitMemberInstanceProofs(baseRef: receiverRef, traitId: declaration.nameId, traitOwner: declaration.nameStart, assumptions: assumptions)
+                    mut val instances: Array[TraitBound] = []
+                    for proof in proofs {
+                        val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+                        if bound.subject == 0U64 { continue }
+                        mut val duplicate = false
+                        for instance in instances {
+                            if instance.constraint.key.owner == bound.constraint.key.owner && self.sameResolvedTypeRefs(a: instance.constraint.key.positionalArgs, b: bound.constraint.key.positionalArgs) { duplicate = true }
+                        }
+                        if duplicate { continue }
+                        instances.append(bound)
+                        for requirement in requirements { candidates.append(<StaticMemberResolution.Requirement proof=proof traitIdx=traitIndex reqIdx=requirement />) }
+                        for function in provided { candidates.append(<StaticMemberResolution.Provided proof=proof traitIdx=traitIndex callee=function />) }
+                    }
+                }
+            }
+            traitIndex += 1U64
+        }
+        mut val selected: StaticMemberResolution = <StaticMemberResolution.Missing />
+        mut val diagnostic: StaticMemberResolution = <StaticMemberResolution.Missing />
+        mut val found = false
+        for candidate in candidates {
+            val rank = match candidate {
+                StaticMemberResolution.Requirement(proof: val proof, traitIdx: val owner, reqIdx: val requirement) => { give try self.staticMemberMatchRank(proof: proof, traitIdx: owner, requirement: self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: requirement), args: args) },
+                StaticMemberResolution.Provided(proof: val proof, traitIdx: val owner, callee: val function) => { give try self.staticMemberMatchRank(proof: proof, traitIdx: owner, requirement: self.arena.functionAt(index: function), args: args) },
+                StaticMemberResolution.Missing => 0U64,
+            }
+            if rank == 2U64 {
+                if found { return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous call: multiple trait member instances match the arguments") /> }
+                selected = candidate
+                found = true
+            } else if rank == 1U64 {
+                // Retain a signature solely to produce the ordinary argument
+                // mismatch diagnostic when no candidate is applicable.
+                diagnostic = candidate
+            }
+        }
+        if !found { return <Result.Ok value=diagnostic /> }
+        return self.admitStaticMemberInstance(resolution: selected, receiverRef: receiverRef, assumptions: assumptions)
+    }
+
+    inout fn admitStaticMemberInstance(resolution: StaticMemberResolution, receiverRef: U64, assumptions: Array[DeclarationBoundRef]) -> Result[StaticMemberResolution, CompileDiagnostic] {
+        val traitIndex = match resolution {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: val owner, reqIdx: _) => owner,
+            StaticMemberResolution.Provided(proof: _, traitIdx: val owner, callee: _) => owner,
+            StaticMemberResolution.Missing => { return <Result.Ok value=resolution /> },
+        }
+        val original = match resolution {
+            StaticMemberResolution.Requirement(proof: val proof, traitIdx: _, reqIdx: _) => proof,
+            StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: _) => proof,
+            StaticMemberResolution.Missing => <StaticConformanceProof.Missing />,
+        }
+        val bound = try self.staticProofBound(proof: original, traitIdx: traitIndex)
+        val declaration = self.decls.traitAt(index: traitIndex)
+        val proof = try self.traitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiverRef, traitId: declaration.nameId, traitOwner: declaration.nameStart, traitArgs: <PatternTypeInput.Values values=bound.constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions)
+        if self.proofIsMissing(proof: proof) { return <Result.Ok value=<StaticMemberResolution.Missing /> /> }
+        match resolution {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: val owner, reqIdx: val requirement) => { return <Result.Ok value=<StaticMemberResolution.Requirement proof=proof traitIdx=owner reqIdx=requirement /> /> }
+            StaticMemberResolution.Provided(proof: _, traitIdx: val owner, callee: val function) => { return <Result.Ok value=<StaticMemberResolution.Provided proof=proof traitIdx=owner callee=function /> /> }
+            StaticMemberResolution.Missing => { return <Result.Ok value=resolution /> }
+        }
     }
 
     // Operator syntax has no written argument labels, yet it is still a
@@ -614,7 +547,7 @@ pub impl Comp {
                         while ti < self.decls.traitCount() {
                             val traitDef: TraitDef = self.decls.traitAt(index: ti)
                             if traitDef.nameStart == bound.constraint.key.owner && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: bound.constraint.key.positionalArgs.count()) {
-                                val inherited: StaticMemberResolution = (try self.staticMemberInSupertraits(boundRef: boundRef, traitIdx: ti, memberId: memberId, args: <ArgRange start=0U64 len=0U64 />, path: [], requiredTraitOwner: targetOwner, operatorArity: arity))
+                                val inherited: StaticMemberResolution = (try self.staticOperatorInSupertraits(boundRef: boundRef, traitIdx: ti, memberId: memberId, path: [], requiredTraitOwner: targetOwner, arity: arity))
                                 match inherited {
                                     StaticMemberResolution.Missing => {}
                                     _ => { return <Result.Ok value=inherited />}

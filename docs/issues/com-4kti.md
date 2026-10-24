@@ -1,6 +1,6 @@
 ---
 id: com-4kti
-status: open
+status: in_progress
 deps: [com-nucu]
 links: [com-nucu]
 created: 2026-10-23T13:23:26Z
@@ -127,3 +127,22 @@ implementation remains open.
 | /root/candidate_repair_design_plan_review | Responsibility, source selection, proof admission and implementation feasibility | Sound shared boundary; concrete acceptance refinements below required before implementation |
 | /root/candidate_repair_size_review | Finite actions, deliverables, size and possible splitting | Keep one bounded repair with three checkpoints; medium implementation scope, near the upper end of the 1–2-day target, not a guaranteed estimate |
 | /root/candidate_repair_dependencies_review | Ownership, real dependencies, closure order and evidence reuse | Keep primary parent met-6e6k; add selection and D3 dependencies; no whole-plan reorganization or duplicate repair ticket |
+
+## Implementation Checkpoint
+
+Implementation is in progress; no closure or final gate is claimed. The shared
+proof traversal now supports enumeration separately from existence/admission,
+and exact and enumerating projection queries share associated-clause evidence
+construction. Both source receiver families feed one member selector, with
+candidate-local receiver substitutions and exact-instance SourceAdmission.
+Original trait-subject witness bodies are represented by the target requirement,
+not counted again as independent provided declarations. The remaining operator
+supertrait route has an explicit grammar/arity-only entry; its former written-
+call/provided shortcuts are removed.
+
+The first fresh candidate passed full compiler-source check and changed the
+original ordinary/projected order-dependent examples to acceptance, rejecting
+no-operand ambiguity. Additional new controls exposed the provided impl-binder
+substitution and duplicate witness surfaces; their in-scope corrections await a
+fresh candidate and controls. Preserve the failed and successful scoped receipts
+under compiler scratch until the final revision and evidence are pinned.
