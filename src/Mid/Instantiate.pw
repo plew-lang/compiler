@@ -848,7 +848,14 @@ fn canonicalMidRvalueResultType(c: Comp, rvalueId: U64) -> U64 {
 // canonical storage instead of mutating an already-published local row.
 fn appendCanonicalInstantiatedLocals(c: inout Comp, bodyId: U64, error: inout MidInstantiateError, source: MidBodyNode, blockStart: U64, blockLen: U64, environment: BodyInstance) -> MidRange {
     val localStart: U64 = c.mid.locals.count()
-    mut val localCount: U64 = source.locals.len
+    // This index is private to the current immutable output body. Zero means
+    // no nonzero rvalue override, not a missing semantic type/recipe result.
+    mut val resultTypes: Array[U64] = []
+    mut val localI: U64 = 0U64
+    while localI < source.locals.len {
+        resultTypes.append(0U64)
+        localI += 1U64
+    }
     mut val blockI: U64 = 0U64
     while blockI < blockLen {
         val block: MidBlockNode = c.mid.blocks[blockStart + blockI]
@@ -857,13 +864,26 @@ fn appendCanonicalInstantiatedLocals(c: inout Comp, bodyId: U64, error: inout Mi
             val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
             if (statement.tag == 1U64 || statement.tag == 9U64) && statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                if destination.projections.len == 0U64 && destination.local + 1U64 > localCount { localCount = destination.local + 1U64 }
+                if destination.projections.len == 0U64 {
+                    val requiredLocals = destination.local + 1U64
+                    while resultTypes.count() < requiredLocals { resultTypes.append(0U64) }
+                    mut val permitsOverride = destination.local < resultTypes.count()
+                    if destination.local < source.locals.len {
+                        val declaration = c.mid.locals[source.locals.start + destination.local]
+                        permitsOverride = declaration.typeRecipe == 0U64 && !declaration.isParameter && declaration.sourceNameStart == 0U64
+                    }
+                    if permitsOverride {
+                        val resultType = canonicalMidRvalueResultType(c: c, rvalueId: statement.value)
+                        if resultType != 0U64 { resultTypes.set(i: destination.local, value: resultType) }
+                    }
+                }
             }
             statementI = statementI + 1U64
         }
         blockI = blockI + 1U64
     }
-    mut val localI: U64 = 0U64
+    val localCount = resultTypes.count()
+    localI = 0U64
     while localI < localCount {
         mut val sourceLocal: MidLocalDecl = <MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 />
         mut val typeTerm: U64 = 0U64
@@ -875,23 +895,7 @@ fn appendCanonicalInstantiatedLocals(c: inout Comp, bodyId: U64, error: inout Mi
             }
         }
         if sourceLocal.typeRecipe == 0U64 && !sourceLocal.isParameter && sourceLocal.sourceNameStart == 0U64 {
-            blockI = 0U64
-            while blockI < blockLen {
-                val block: MidBlockNode = c.mid.blocks[blockStart + blockI]
-                mut val statementI: U64 = 0U64
-                while statementI < block.statements.len {
-                    val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
-                    if (statement.tag == 1U64 || statement.tag == 9U64) && statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
-                        val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                        if destination.local == localI && destination.projections.len == 0U64 {
-                            val resultType: U64 = canonicalMidRvalueResultType(c: c, rvalueId: statement.value)
-                            if resultType != 0U64 { typeTerm = resultType }
-                        }
-                    }
-                    statementI = statementI + 1U64
-                }
-                blockI = blockI + 1U64
-            }
+            if resultTypes[localI] != 0U64 { typeTerm = resultTypes[localI] }
         }
         c.mid.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=sourceLocal.sourceScope isUnique=sourceLocal.isUnique isParameter=sourceLocal.isParameter isBorrowed=sourceLocal.isBorrowed isInout=sourceLocal.isInout isCaptureCell=sourceLocal.isCaptureCell ownsAtEntry=sourceLocal.ownsAtEntry isDropFlag=sourceLocal.isDropFlag isReturnPlace=sourceLocal.isReturnPlace sourceNameStart=sourceLocal.sourceNameStart preparedExpr=sourceLocal.preparedExpr />)
         localI = localI + 1U64
