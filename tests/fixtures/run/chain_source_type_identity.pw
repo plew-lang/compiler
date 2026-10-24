@@ -8,7 +8,7 @@ use /Ir only { InstanceEnvironment, ValueConversionProof, TypeRef, StructDef, Bi
 fn main() {
     mut val compiler = <Comp />
     val source = "struct Item {{ pub val count: I64 }} pub impl Item {{ factory }} struct Box[T] {{ pub val item: T }} pub impl[T] Box[T] {{ factory }} fn direct(value: Optional[Box[Item]]) -> Optional[Item] {{ return value?.item }} fn block(value: Optional[Box[Item]]) -> Optional[Item] {{ return {{ give value?.item }} }} fn branch(value: Optional[Box[Item]], flag: Bool) -> Optional[Item] {{ return if flag {{ give value?.item }} else {{ give <Optional[Item].None /> }} }} fn generic[T](value: Optional[Box[T]]) -> Optional[T] {{ return value?.item }} fn nested(value: Optional[Box[Box[Item]]]) -> Optional[Box[Item]] {{ return value?.item }} fn unrelated() {{}}"
-    requireSuccess(result: analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="chain-source-types.pw" />, sources: <SourceAccess stdRoot="std".bytes() />), context: "analysis")
+    requireSuccess(result: analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="chain-source-types.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />), context: "analysis")
     val unrelated = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "unrelated").nameId)
     requireSuccess(result: compiler.prepareLexicalBody(fnIdx: unrelated), context: "unrelated")
     val foreign = compiler.internBodyInstance(fnIdx: unrelated, environment: <InstanceEnvironment />)
