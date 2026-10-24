@@ -88,8 +88,18 @@ builder, keyed by actual function input and current lexical root. Unregistered
 functions/roots/receivers, synthetic scopes and failures are not cached;
 interface proof roots are recomposed per call. All argument-completeness,
 owner/selection and type dependency checks remain. Independent static review
-found no blocker. Standard build `20261024T120241-build-aa05ff` succeeded;
-fresh sourcecheck succeeded and native33/reject20 are running. The final
-functional receipt is `phase3e-result-authority.json`; until updated it names
-the previous candidate and must not certify66d84b81. Formal performance and
-independent final admission remain pending. E1/G1 dependencies remain open.
+found no blocker. Its fresh sourcecheck/native33/reject20 pass, but formal
+median7.027803s still misses the target (`phase3e-context-self-host-memo.json`).
+
+The final identified local candidate is `041b451e`: Direct parameter state now
+passes its already validated function/type-argument array/proof to the existing
+`recordedDirectCallEnvironment` / `withLexicalSelfBinding` authority instead of
+relooking up the same occurrence and materializing its arguments3times. The At
+reader also reuses its function/arguments. A shared observational wrapper
+preserves trace output. State Incomplete versus At error/callee-mismatch and
+all arity/resolvedness checks remain unchanged. Sourcecheck and independent
+static review succeed. Standard build `20261024T122016-build-ac051e` succeeds;
+fresh sourcecheck/native37/reject20 are running, adding existing selection,
+constraint and final-signature controls. These results and the next formal
+checkpoint must be recorded before independent final admission. Earlier
+receipts certify their named candidates only. E1/G1 dependencies remain open.
