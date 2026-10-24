@@ -96,6 +96,7 @@ open/in_progress/closed and real prerequisites.
 | E2 (3E) | [com-0ssn](com-0ssn.md): Verify explicit transfer errors remain distinct from loop reachability warnings | Bounded diagnostic/flow verification |
 | E3 (3E) | [com-9tau](com-9tau.md): Verify diverging callable types survive value storage and invocation | Bounded callable-contract verification |
 | E4 (3E) | [com-gnj9](com-gnj9.md): Verify saved exit targets drive Mid cleanup and final lowering | Bounded final-consumer verification |
+| E4 target repair | [com-tl9c](com-tl9c.md): Save source transfer targets and consume their active Mid mappings | Finite paired source publication/final-consumer repair |
 | F1 (3F) | [com-4bib](com-4bib.md): Assign and verify requested-body semantics across command modes | Bounded mode-parity investigation and controls |
 | F2 (3F) | [com-d57o](com-d57o.md): Close the finite retained parser recovery observations | Bounded historical investigation |
 | F3 (3F) | [com-vrvl](com-vrvl.md): Isolate normal CLI InternalSession progress before changing JIT policy | Bounded isolated investigation |
