@@ -3,7 +3,7 @@
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
 use /Ir only { DefaultGeneratorOrigin }
-use /Mid only { MidFunctionTemplates, MidBuildError }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
 use @Std/Io only { print }
 
 fn main() {

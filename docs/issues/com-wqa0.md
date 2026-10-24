@@ -1,6 +1,6 @@
 ---
 id: com-wqa0
-status: open
+status: in_progress
 deps: [com-qb05, com-17yh, com-v2xk, com-4kti, com-fyxe]
 links: []
 created: 2026-10-23T10:41:58Z
