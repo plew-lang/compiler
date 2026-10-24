@@ -41,8 +41,9 @@ waived by a bounded child closing.
 ## Producer and Reader Inventory
 
 Inspected production code at **c056e658** (documentation checkpoint e6ef8918).
-The finite four-family inventory below classifies every direct TypeRef append
-and named-recovery adapter reachable from the listed entries. Rebuild/view/
+The inventory below records the inspected entries; its original completeness
+claim was reopened after the late synthetic Buffer omission described below.
+The added row assigns that producer explicitly. Rebuild/view/
 substitution helpers preserve existing identity; they are not new spelling
 producers. Classification is not the completion of the paired repairs.
 
@@ -58,6 +59,7 @@ producers. Classification is not the completion of the paired repairs.
 | Registered receiver: `Call::canonicalBodyReceiverRef`, `selectedCallableSubstitution`; fallback `Record::parametricSelfRef` | Missing explicit receiver is reconstructed by simpleTypeRef even when Func.recvTy is complete; selectedCallableSubstitution similarly reconstructs its receiver instead of preserving the declaration term. ParametricSelfRef's main recvTy lane is correct; fallback rebuilds type parameters without ParamId and the nominal head without owner. | internBodyInstance -> body signature / final callable / Mid lookup. Internal diagnostic confirms identity loss and mixed known/unknown key equivalence; mandatory 6paa. |
 | Body/signature Self bridges: `Ground::assocItemRef`, `setSelfItemEnv`, `setSelfItemEnvForBody` | simpleTypeRef still rebuilds a receiver when recvInstRef is absent. `collectDeclarationTypes` can take this lane even when f.recvTy exists. | Declaration signature collection and Call final body environment, then recorded/body types. Assigned to 6paa together with parametricSelfRef and canonicalBodyReceiverRef; preserve the valid retained Item/proof environment. |
 | Chain-generated registration: `Call::chainStageResultRef`, `registerChainSiteInsts` | Existing head rebuild retains identity. Missing continuation ref appends a naked nominal name; Optional[V/U] registrations also omit owner. | scanType, chain result/rewritten call facts, worklist registration -> final descriptors; mandatory nqjd. |
+| Dual-stage synthetic construction: `Lower/Types::synthBufferNew`, called by `Lower/String::beginStringInterpolation` and `Record::synthEmptyDict` | Early construction records fixed Core-module provenance for ordinary declaration resolution. The same helper appends an unowned Buffer[elemRef] after publication for Dictionary's keys/values/hashes/buckets. That late branch is not covered by the one-time declaration batch. | SyntheticCallSite.receiverTerm -> complete signature -> both worklists -> body environment/key/signature -> final callee -> Mid/LLVM; mandatory [com-qbwg](com-qbwg.md). This new producer entry is separate from nqjd's reviewed bounded closure and 6paa's body-key migration. |
 | Rigid/structural helpers | chainValueArgIndex creates declaration-owned ParamId leaves; semanticSourceResultTerm creates Unit; closureFnTypeRef creates a function structure; reserveTypeSentinel reserves absence. Primitive literal contexts are explicit builtin atoms. | Legitimate non-nominal/construction representations. Do not invent nominal declarations or infer binders from matching printed names. |
 | Rebuild/publication helpers: `Frontend::pushType`, `Arena::registerType`, `finishTypeDeclarationResolution`; Ground rebuild/view helpers | pushType interns names and preserves supplied identity; registerType synchronizes rows/terms. The one-time declaration batch resolves source-site rows; it cannot stamp later appends or act as mutable post-publication repair. | Scalar/owning rows, typeIsClosed, grounding and runtime signature readers. D4 remains the separate publication audit; nqjd/6paa must supply late identity at production. |
 
@@ -127,14 +129,14 @@ did not assign this early/late dual-use producer. Independent scope review by
 omission, outside the implicitly permitted extra repair of registered body keys.
 
 The user explicitly requires stopping when task omissions/errors are found.
-No Buffer producer code fix or owner-recovery fallback has been added. C3 is
-reopened for reconciliation; fyxe and 6paa remain in_progress, not completed.
-Next plan proposal, pending approval: explicitly assign a finite early/late
-synthetic producer repair, retain early construction until ordinary declaration
-publication, construct late Buffer[elemRef] from its fixed Core owner and complete
-child, and verify missing/foreign owner, String/Dictionary callers, saved
-signature and native final consumption. Link that repair as a prerequisite of
-these closures, reconcile C3, then rerun fresh scoped controls and reviews.
+No Buffer producer code fix or owner-recovery fallback has been added. The user
+approved task addition: [com-qbwg](com-qbwg.md) now owns the finite early/late
+producer repair, its native/internal controls and final-consumer trace. Required
+tk dependencies connect it to fyxe, 6paa, the type-consumer area, D4 and G1.
+C3 remains open for classification reconciliation/review before com-qbwg starts;
+it does not depend on the repair's implementation. fyxe and 6paa remain
+in_progress, not completed. Task registration resolves the planning-approval
+stop; it does not turn the retained failed fixture into passing evidence.
 
 Durable receipt: meta evidence/existing-feature-conformance/source-owner-facts/
 phase3c-receiver-producer-scope-stop.json. Raw failed focused-5 and

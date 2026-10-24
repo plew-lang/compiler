@@ -1,7 +1,7 @@
 ---
 id: com-6paa
 status: in_progress
-deps: [com-m0bf, com-nqjd, com-fyxe]
+deps: [com-m0bf, com-nqjd, com-fyxe, com-qbwg]
 links: []
 created: 2026-10-24T02:29:50Z
 type: bug
@@ -190,6 +190,8 @@ and all four part controls (explicit result, Self result and namespace controls)
 The fresh39c3e27f module controls4 and compiler-source check pass, but the
 mandatory internal authority fixture fails on an ownerless late Buffer[U64].
 Independent review identifies an unassigned C3 producer, not another body-key
-repair. Keep this task in_progress and stop at the user's task-omission condition.
-The canonical finding, trace, receipt and pending plan proposal are in
+repair. The approved task addition assigns it to mandatory prerequisite
+[com-qbwg](com-qbwg.md); keep this task in_progress until that repair and this
+task's own required fresh controls and completion review pass.
+The canonical finding, trace, receipt and classification reconciliation are in
 [C3 scope reconciliation](com-m0bf.md#scope-stop-unassigned-late-synthetic-buffer-producer).

@@ -1,7 +1,7 @@
 ---
 id: com-fyxe
 status: in_progress
-deps: [com-m0bf]
+deps: [com-m0bf, com-qbwg]
 links: []
 created: 2026-10-24T02:30:52Z
 type: task
@@ -151,4 +151,7 @@ native exit complete or weakening the final parent gate.
 39c3e27f fresh5 passes module alias controls4 but the required internal signature
 authority fixture fails on the unassigned late Buffer producer. This task's
 source-selection/parameter-context path remains statically coherent; no final
-completion is claimed. See com-6paa's Scope Stop and reopened C3 com-m0bf.
+completion is claimed. The approved producer task [com-qbwg](com-qbwg.md) is now
+an explicit completion prerequisite. After it closes, rerun this task's required
+fresh controls and independent completion review; the task remains in_progress.
+See [C3 classification reconciliation](com-m0bf.md#scope-stop-unassigned-late-synthetic-buffer-producer).
