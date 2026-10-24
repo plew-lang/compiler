@@ -173,6 +173,8 @@ owner when it switches readers; it does not broaden one initializer's authority.
 
 ## Worked Producer-to-Consumer Paths
 
+Selected field types are substituted under the exact receiver declaration before canonical associated-output normalization and source publication. Receiver binder precedence and lexical assumptions remain explicit; an open parameter is not forced into a concrete type or made callable by later instantiation. Function-valued fields and local parameters save their normalized function type with the already selected field or binding identity. Instantiation and final lowering consume that selection rather than reselecting a member from source spelling.
+
 1. **Ordinary calls and prior results.** Source checking registers signatures,
    commits operation A and its result, then checks B's argument using that result.
    It saves B's operand recipe with A's exact CallSiteKey, complete signature and
