@@ -37,3 +37,30 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Actual Variant and Consumer Inventory
+
+| Representation | Producer | Retained identity and final read |
+|---|---|---|
+| Term (1) | Resolve/Expr::semanticTypeRecipeTerm; Record::semanticTypeRecipeForExpr for non-call expressions | Complete parametric term (including canonical projections); evaluateSemanticTypeRecipeForBody grounds it in the explicit BodyInstance and publishes a BodyTypeResult. |
+| CallResult (2) | Resolve/Expr::recordSemanticExprCall; Record::semanticTypeRecipeForExpr and recordForItemTypeRecipe | Exact CallSiteKey including lexical owner, origin and slot. SourceSelectedCallResult checks that key against the selected template; final evaluation reads the descriptor for the explicit body/site. Diagnostic expression navigation does not select a result. |
+| OptionalPayload (4) | Record::recordForItemTypeRecipe | Saved next-call recipe plus exact selected carrier declaration. Finalization reads that call result, checks owner and one child, and publishes the payload. |
+| Former Project (3) | No source or test producer remains | The unused evaluator performed another assocBindingFor lookup from recipe-only trait fields. Remove this alternate projection authority and its four fields. Projections continue through canonical Term/call result evidence, not a new special case. |
+
+All three live variants reach Ir/BodyInstances::setBodyTypeRecipeResult under
+sourceKind1, separate from canonical term results under sourceKind2.
+Mid/Instantiate::instantiateMidType requires the exact body/recipe publication,
+checks true Unit against the retained same-site descriptor, then clears the
+recipe in the instantiated local/place. Backend reads the instantiated Mid
+terms; it neither evaluates a recipe nor reselects its source.
+
+Existing mid_type_recipe_instances covers CallResult/OptionalPayload across
+instances, wrong nominal carrier, missing publication and true/forged Unit.
+The increment adds explicit wrong slot/lexical owner controls and Term recipes
+under two explicit ParamId environments with the cursor on the other instance.
+The true Unit case now runs the frontend producer before its Mid read.
+Source-call site authority and prepared owner controls remain unchanged.
+The first new internal edit omitted required MidLocalDecl.typeTerm in two
+constructions; it failed checking and is corrected to zero without changing
+the test purpose or weakening any assertion. Fresh candidate execution and
+independent completion review are not yet complete.

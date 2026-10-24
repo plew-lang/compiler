@@ -71,17 +71,6 @@ pub impl Comp {
             return <Result.Ok value=0U64 />
         }
         val input: U64 = self.arena.semanticTypeRecipes[recipeId - 1U64].input
-        if kind == 3U64 {
-            val receiver: U64 = (try self.groundSemanticTypeRecipeForBody(recipeId: input, bodyId: bodyId, selfRef: selfRef, itemRef: itemRef))
-            if receiver == 0U64 { return <Result.Ok value=0U64 />}
-            mut val args: Array[U64] = []
-            mut val i: U64 = 0U64
-            while i < self.arena.semanticTypeRecipes[recipeId - 1U64].traitArgs.count() {
-                args.append((try self.groundAndRecordBodyType(ref: self.arena.semanticTypeRecipes[recipeId - 1U64].traitArgs[i], environment: self.arena.bodyInstanceAt(index: bodyId - 1U64).environment, selfRef: selfRef, itemRef: itemRef, bodyId: bodyId)))
-                i += 1U64
-            }
-            return <Result.Ok value=(try self.assocBindingFor(baseRef: receiver, traitId: self.arena.semanticTypeRecipes[recipeId - 1U64].traitId, traitOwner: self.arena.semanticTypeRecipes[recipeId - 1U64].traitOwner, traitArgs: args, assocId: self.arena.semanticTypeRecipes[recipeId - 1U64].assocId)) />
-        }
         if kind == 4U64 {
             val optional: U64 = (try self.groundSemanticTypeRecipeForBody(recipeId: input, bodyId: bodyId, selfRef: selfRef, itemRef: itemRef))
             if optional == 0U64 || optional >= self.arena.typeCount() { return <Result.Ok value=0U64 />}

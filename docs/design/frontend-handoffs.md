@@ -132,6 +132,16 @@ no-static-selection, or selected; a missing row count is not stable negative
 selection. Once selected, a result recipe is immutable across refinement and
 omitted arguments. Readers do not rerun `where` selection for a result.
 
+A result-type recipe references a complete parametric term, an exact selected
+call occurrence, or the payload of a selected Optional carrier. Associated
+projections remain nodes of the canonical term algebra, interpreted with the
+explicit instance environment and evidence; they are not another recipe-level
+lookup. Frontend finalization publishes a result under the body and recipe
+identity. Mid consumes that publication without evaluating a recipe. A zero
+callable result represents Unit only when the same body/site has a selected
+descriptor whose result is Unit; an absent publication or dependency cannot
+become Unit. Recipe identity and type-term identity use distinct key namespaces.
+
 Explicit arguments acquire context and freeze before publication, including
 permitted parent result hints. Empty ambient cursor state cannot repair a failed
 read. Receiver selection context and receiver evaluation dependency are separate.

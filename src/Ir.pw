@@ -3314,8 +3314,9 @@ pub impl CallSiteKey { factory }
 
 // A semantic type source may depend on an earlier call result even though a
 // canonical TypeTerm must remain a pure structural algebra. `kind` is
-// 1=Term, 2=CallResult, 3=Project, 4=OptionalPayload. `input` is the child of
-// Project or OptionalPayload; CallResult's
+// 1=Term, 2=CallResult, 4=OptionalPayload. `input` is the child of
+// OptionalPayload. Associated projections are complete Term children, not a
+// second recipe that selects conformance again. CallResult's
 // CallSiteKey is semantic identity; ExprId plus `siteIsStmt` are navigation
 // only, because implicit protocol calls are statement-owned rather than
 // expression-owned.
@@ -3331,10 +3332,6 @@ pub struct SemanticTypeRecipe {
     pub val exprId: U64 = 0U64
     pub val siteIsStmt: Bool = false
     pub val callSite: CallSiteKey = <CallSiteKey />
-    pub val traitOwner: U64 = 0U64
-    pub val traitId: U64 = 0U64
-    pub val traitArgs: Array[U64] = []
-    pub val assocId: U64 = 0U64
 }
 pub impl SemanticTypeRecipe { factory }
 

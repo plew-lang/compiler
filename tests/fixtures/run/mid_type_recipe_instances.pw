@@ -1,6 +1,6 @@
 use @Std/Io only { write }
 use /Frontend only { Comp }
-use /Ir only { TypeRef, InstanceEnvironment, SemanticTypeRecipe, EnumDef, Variant, FieldDef }
+use /Ir only { TypeRef, InstanceEnvironment, SemanticTypeRecipe, EnumDef, Variant, FieldDef, CallSiteKey }
 use /Mid only { MidBody, MidBlock, MidTerminator, MidLocalDecl, MidScope, MidOperand, MidPlace, MidInstantiateError, instantiateCanonicalMidBody }
 
 fn carrier(compiler: inout Comp, name: String) -> U64 {
@@ -88,7 +88,7 @@ fn main() {
     val unitBody = compiler.internBodyInstance(fnIdx: noCallee, environment: <InstanceEnvironment receiverRef=firstOptional />)
     compiler.cur.bodyId = unitBody
     compiler.appendFinalCallee(exprId: 0U64, callee: noCallee, siteIsStmt: true, slot: 2U64, recvTypeRef: firstType, resultTypeRef: 0U64, generatedSite: site).unwrap()
-    compiler.arena.setBodyTypeRecipeResult(bodyId: unitBody, recipeId: 1U64, resultType: 0U64)
+    if compiler.groundSemanticTypeRecipeForBody(recipeId: 1U64, bodyId: unitBody, selfRef: firstType, itemRef: 0U64).unwrap() != 0U64 { panic "Unit producer invented a value" }
     val unitSource = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=0U64 typeRecipe=1U64 sourceScope=0U64 isUnique=false isParameter=false />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
     val unit = instantiateCanonicalMidBody(c: inout compiler, body: unitSource, bodyId: unitBody)
     match unit.error { MidInstantiateError.None => {} _ => { panic "known Unit rejected" } }
@@ -99,5 +99,42 @@ fn main() {
     val absentBody = compiler.internBodyInstance(fnIdx: noCallee, environment: <InstanceEnvironment receiverRef=secondOptional />)
     val absent = instantiateCanonicalMidBody(c: inout compiler, body: unitSource, bodyId: absentBody)
     match absent.error { MidInstantiateError.InvalidLocalResultType => {} _ => { panic "absent result accepted as Unit" } }
+    // The same navigation anchor cannot replace a wrong semantic slot/owner.
+    val wrongSites = [
+        <CallSiteKey ownerFnIdx=site.ownerFnIdx originKind=site.originKind originStart=site.originStart originEnd=site.originEnd originSerial=site.originSerial slot=site.slot + 1U64 />,
+        <CallSiteKey ownerFnIdx=site.ownerFnIdx + 1U64 originKind=site.originKind originStart=site.originStart originEnd=site.originEnd originSerial=site.originSerial slot=site.slot />,
+    ]
+    for wrongSite in wrongSites {
+        val recipe = compiler.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 exprId=999U64 siteIsStmt=true callSite=wrongSite />)
+        if compiler.groundSemanticTypeRecipeForBody(recipeId: recipe, bodyId: firstBody, selfRef: firstType, itemRef: 0U64).unwrap() != 0U64 { panic "wrong semantic site borrowed a result" }
+        val wrongSource = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=0U64 typeRecipe=recipe sourceScope=0U64 isUnique=false isParameter=false />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+        val invalid = instantiateCanonicalMidBody(c: inout compiler, body: wrongSource, bodyId: firstBody)
+        match invalid.error { MidInstantiateError.InvalidLocalResultType => {} _ => { panic "missing call site accepted as Unit" } }
+    }
+    checkTermRecipes(compiler: inout compiler, firstType: firstType, secondType: secondType, function: noCallee)
     write(s: "mid-type-recipe-instances-ok\n")
+}
+
+fn checkTermRecipes(compiler: inout Comp, firstType: U64, secondType: U64, function: U64) {
+    val name = compiler.internBytes(s: "Parameter")
+    val parameters = compiler.lowerTypeParamNames(names: ["Parameter"], anchor: name.nameStart).unwrap()
+    val parameter = parameters[0U64]
+    val term = compiler.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId paramId=parameter.paramId args=[] />)
+    val firstBody = compiler.internBodyInstance(fnIdx: function, environment: <InstanceEnvironment params=parameters args=[firstType] />)
+    val secondBody = compiler.internBodyInstance(fnIdx: function, environment: <InstanceEnvironment params=parameters args=[secondType] />)
+    val recipe = compiler.semanticTypeRecipeTerm(term: term)
+    if compiler.groundSemanticTypeRecipeForBody(recipeId: recipe, bodyId: firstBody, selfRef: 0U64, itemRef: 0U64).unwrap() != firstType { panic "Term recipe lost its first binding" }
+    if compiler.groundSemanticTypeRecipeForBody(recipeId: recipe, bodyId: secondBody, selfRef: 0U64, itemRef: 0U64).unwrap() != secondType { panic "Term recipe lost its second binding" }
+    val source = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=0U64 typeRecipe=recipe sourceScope=0U64 isUnique=false isParameter=true />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    val bodies = [firstBody, secondBody]
+    val types = [firstType, secondType]
+    mut val index = 0U64
+    while index < bodies.count() {
+        compiler.cur.bodyId = bodies[1U64 - index]
+        val instantiated = instantiateCanonicalMidBody(c: inout compiler, body: source, bodyId: bodies[index])
+        match instantiated.error { MidInstantiateError.None => {} _ => { panic "Term recipe instance failed" } }
+        val local = compiler.mid.bodies[instantiated.body.body - 1U64].locals.start
+        if compiler.mid.locals[local].typeTerm != types[index] || compiler.mid.locals[local].typeRecipe != 0U64 { panic "Term recipe consumed another instance" }
+        index += 1U64
+    }
 }
