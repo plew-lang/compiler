@@ -88,7 +88,9 @@ impl Comp {
 
 
 pub impl Comp {
-    fn callTemplateIndex(siteKey: CallSiteKey) -> U64 {
+    // Session navigation borrows the cursor in place; it does not need an
+    // owned snapshot of the whole compilation state.
+    inout fn callTemplateIndex(siteKey: CallSiteKey) -> U64 {
         return findSourceCallTemplateIndex(locations: self.callTemplateLocations, indexSlots: self.callTemplateIndexSlots, siteKey: siteKey)
     }
 }

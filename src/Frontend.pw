@@ -165,6 +165,8 @@ pub struct PreparedCallConstraints {
 impl PreparedCallConstraints { factory }
 pub impl PreparedCallConstraints {
     fn constraints() -> SelectedCallConstraints { return self.plan }
+    fn boundCount() -> U64 { return self.plan.bounds.count() }
+    fn boundSubjectAt(index: U64) -> U64 { return self.plan.bounds[index].subject }
 }
 
 enum CallConstraintPlanState {
@@ -2312,14 +2314,22 @@ fn patternDiagOffset(c: inout Comp, a: PatInfo) -> U64 {
 
 // Index lookup depends only on source call rows and their collision table.
 // Keep the whole compilation session out of this read-only operation.
+// The normal writer grows powers of two. Retain arbitrary positive capacities
+// for the internal rebuild API without a division on the ordinary lookup path.
+fn sourceCallTemplateBucket(hash: U64, capacity: U64) -> U64 {
+    val mask = capacity - 1U64
+    if (capacity & mask) == 0U64 { return hash & mask }
+    return hash % capacity
+}
 fn findSourceCallTemplateIndex(locations: Array[SourceCallLocation], indexSlots: Array[U64], siteKey: CallSiteKey) -> U64 {
     val capacity = indexSlots.count()
     if capacity == 0U64 { return locations.count() }
-    mut val slot = siteKey.lookupHash() % capacity
+    mut val slot = sourceCallTemplateBucket(hash: siteKey.lookupHash(), capacity: capacity)
     while indexSlots[slot] != 0U64 {
         val entry = indexSlots[slot] - 1U64
         if locations[entry].siteKey.sameKey(other: siteKey) { return entry }
-        slot = (slot + 1U64) % capacity
+        slot += 1U64
+        if slot == capacity { slot = 0U64 }
     }
     return locations.count()
 }

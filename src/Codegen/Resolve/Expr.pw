@@ -801,9 +801,10 @@ pub impl Comp {
         mut val entry: U64 = 0U64
         while entry < self.callTemplateLocations.count() {
             val siteKey: CallSiteKey = self.callTemplateLocations[entry].siteKey
-            mut val slot: U64 = siteKey.lookupHash() % capacity
+            mut val slot: U64 = sourceCallTemplateBucket(hash: siteKey.lookupHash(), capacity: capacity)
             while self.callTemplateIndexSlots[slot] != 0U64 {
-                slot = (slot + 1U64) % capacity
+                slot += 1U64
+                if slot == capacity { slot = 0U64 }
             }
             self.callTemplateIndexSlots.set(i: slot, value: entry + 1U64)
             self.indexLexicalCallTemplate(templateIndex: entry)
@@ -928,9 +929,10 @@ pub impl Comp {
         self.sourceFacts.activeBuilder.data.operationConstraints.append(<Optional.None />)
         self.callTemplateLocations.append(<SourceCallLocation owner=owner siteKey=template.siteKey localIndex=localIndex />)
         val capacity: U64 = self.callTemplateIndexSlots.count()
-        mut val slot: U64 = template.siteKey.lookupHash() % capacity
+        mut val slot: U64 = sourceCallTemplateBucket(hash: template.siteKey.lookupHash(), capacity: capacity)
         while self.callTemplateIndexSlots[slot] != 0U64 {
-            slot = (slot + 1U64) % capacity
+            slot += 1U64
+            if slot == capacity { slot = 0U64 }
         }
         self.callTemplateIndexSlots.set(i: slot, value: self.callTemplateLocations.count())
         self.indexLexicalCallTemplate(templateIndex: self.callTemplateLocations.count() - 1U64)

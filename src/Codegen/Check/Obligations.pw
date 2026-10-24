@@ -640,23 +640,27 @@ pub impl Comp {
 
     // Relevance includes deferred public conditions even when no method is
     // used in the callee. Empty trait bounds still require source admission.
-    inout fn selectedCallHasDeferredConstraints(template: CallTemplate) -> Result[Bool, CompileDiagnostic] {
-        val index = self.callTemplateIndex(siteKey: template.siteKey)
+    inout fn selectedCallHasDeferredConstraints(siteKey: CallSiteKey) -> Result[Bool, CompileDiagnostic] {
+        val index = self.callTemplateIndex(siteKey: siteKey)
         match self.preparedCallConstraints(index: index) {
             Optional.Some(v: val snapshot) => {
-                for bound in snapshot.constraints().bounds {
-                    if !self.arena.typeIsClosed(ref: bound.subject) { return <Result.Ok value=true /> }
+                val count = snapshot.boundCount()
+                mut val bound = 0U64
+                while bound < count {
+                    val subject = snapshot.boundSubjectAt(index: bound)
+                    if !self.arena.typeIsClosed(ref: subject) { return <Result.Ok value=true /> }
+                    bound += 1U64
                 }
                 return <Result.Ok value=false />
             }
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "declaration call has no prepared source constraints") /> }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: siteKey.originStart, msg: "declaration call has no prepared source constraints") /> }
         }
     }
 
     inout fn checkCallConstraintTemplate(template: CallTemplate, environment: InstanceEnvironment, depth: U64, requests: inout Array[CallConstraintInstance], heads: inout Dictionary[U64, U64], relevant: Array[Bool]) -> Result[DeclarationObligationState, CompileDiagnostic] {
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                if !(try self.callConstraintIsRelevant(function: callee, relevant: relevant)) && !(try self.selectedCallHasDeferredConstraints(template: template)) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
+                if !(try self.callConstraintIsRelevant(function: callee, relevant: relevant)) && !(try self.selectedCallHasDeferredConstraints(siteKey: template.siteKey)) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => {}
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
@@ -670,7 +674,7 @@ pub impl Comp {
                 match selection {
                     OperatorSelection.Primitive => { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
                     OperatorSelection.Direct(callee: val callee) => {
-                        if !(try self.callConstraintIsRelevant(function: callee, relevant: relevant)) && !(try self.selectedCallHasDeferredConstraints(template: template)) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
+                        if !(try self.callConstraintIsRelevant(function: callee, relevant: relevant)) && !(try self.selectedCallHasDeferredConstraints(siteKey: template.siteKey)) { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
                     }
                     _ => {}
                 }
@@ -761,7 +765,7 @@ pub impl Comp {
                 val template = self.callTemplateAt(index: templateIndex)
                 val owner = self.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
                 if owner < relevant.count() && !relevant[owner] {
-                    mut val needed = try self.selectedCallHasDeferredConstraints(template: template)
+                    mut val needed = try self.selectedCallHasDeferredConstraints(siteKey: template.siteKey)
                     if !needed {
                     match template.kind {
                         CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => { needed = true }

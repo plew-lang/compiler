@@ -25,6 +25,16 @@ fn main() {
                     }
                     val snapshot = compiler.preparedCallConstraints(index: index).unwrap()
                     val plan = snapshot.constraints()
+                    if snapshot.boundCount() != plan.bounds.count() || snapshot.boundCount() == 0U64 {
+                        panic("prepared bound projection lost its admitted bounds")
+                    }
+                    mut val boundIndex = 0U64
+                    while boundIndex < snapshot.boundCount() {
+                        if snapshot.boundSubjectAt(index: boundIndex) != plan.bounds[boundIndex].subject {
+                            panic("prepared bound projection changed subject order")
+                        }
+                        boundIndex += 1U64
+                    }
                     val invalid = <SelectedCallConstraints owner=plan.owner bounds=plan.bounds proofs=[] />
                     if compiler.checkSelectedCallConstraintPlan(template: template, expected: plan.bounds, plan: invalid).isOk() {
                         panic("admission accepted an incomplete local plan")

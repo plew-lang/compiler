@@ -131,8 +131,16 @@ fn main() {
     val completedCount = c.callTemplateCount()
     if c.completeRecordedBodyDefaultCalls(owner: 0U64).unwrap() != 1U64 || c.callTemplateCount() != completedCount { panic("lexical completion is not idempotent") }
     if c.completeRecordedDefaultCalls().unwrap() != 2U64 { panic("batch completion lost unrelated failure") }
-    c.rebuildCallTemplateIndex(capacity: 128U64)
-    if c.completeRecordedBodyDefaultCalls(owner: 0U64).unwrap() != 1U64 { panic("rebuilt request index changed membership") }
+    for capacity in [127U64, 128U64] {
+        c.rebuildCallTemplateIndex(capacity: capacity)
+        if c.completeRecordedBodyDefaultCalls(owner: 0U64).unwrap() != 1U64 { panic("rebuilt request index changed membership") }
+        mut val index = 0U64
+        while index < c.callTemplateCount() {
+            val site = c.callTemplateAt(index: index).siteKey
+            if c.callTemplateIndex(siteKey: site) != index { panic("rebuild changed exact call key lookup") }
+            index += 1U64
+        }
+    }
 
     // Incomplete rows are rejected, not silently ignored by bounds checks.
     match c.checkRecordedBodyCallConstraints(owner: 0U64) {
@@ -161,6 +169,22 @@ fn main() {
     match c.checkRecordedBodyCallConstraints(owner: 0U64) {
         Result.Ok(value: _) => { panic("closure iteration was not checked") }
         Result.Err(error: _) => {}
+    }
+
+    // Internal lookup-only rows: no source acceptance or constraint admission
+    // claim. Distinct serials differing by the hash modulus collide exactly.
+    c.cur.checkFn = 0U64
+    val firstSite = <CallSiteKey ownerFnIdx=0U64 originKind=2U64 originSerial=4000U64 />
+    val secondSite = <CallSiteKey ownerFnIdx=0U64 originKind=2U64 originSerial=4294971291U64 />
+    if firstSite.lookupHash() != secondSite.lookupHash() { panic("collision setup drifted") }
+    val collisionIndex = c.callTemplateCount()
+    c.appendCallTemplate(template: <CallTemplate siteKey=firstSite kind=<CallTemplateKind.ExpectedValue /> />)
+    c.appendCallTemplate(template: <CallTemplate siteKey=secondSite kind=<CallTemplateKind.ExpectedValue /> />)
+    for capacity in [127U64, 128U64] {
+        c.rebuildCallTemplateIndex(capacity: capacity)
+        if c.callTemplateIndex(siteKey: firstSite) != collisionIndex || c.callTemplateIndex(siteKey: secondSite) != collisionIndex + 1U64 { panic("collision aliased distinct call keys") }
+        val absent = <CallSiteKey ownerFnIdx=0U64 originKind=2U64 originSerial=4000U64 slot=99U64 />
+        if c.callTemplateIndex(siteKey: absent) != c.callTemplateCount() { panic("absent call key found a row") }
     }
 
 }
