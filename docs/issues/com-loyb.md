@@ -1,6 +1,6 @@
 ---
 id: com-loyb
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-23T10:41:58Z
@@ -74,3 +74,28 @@ review classifies this as fixture/API graph mismatch, not a source regression
 or unassigned repair. The final probe uses the established File+resource path
 and declaration-only admission. Preliminary failed runs remain separate raw
 records; they are not the decisive endpoint reproduction.
+
+
+## Bounded Completion
+
+Production **96e375a7**, fresh compiler SHA256
+**ae44a45f4742e653a71a642999919e8f6f40182e7e02a317df2290c9a17cc788**.
+Standard build **20261024T083905-build-bdcd46** and full fresh sourcecheck pass.
+Scoped native22/reject7 plus generic native3 pass with unchanged inputs.
+
+Independent completion review by /root/body_receiver_completion_review recognizes
+this finite task complete without blockers, and verifies all21 referenced file
+hashes plus249/194 target input fingerprints. Identity/Missing/Retag/Box/Array/
+Enum retain exact endpoint/owner/path evidence through source completion,
+explicit body environment, final conversion, frozen Mid proof and LLVM.
+recorded_conversion_consumption preserves source/target and equal-final-type
+negative controls; the actual heap/structural/generic/closure controls pass.
+
+Canonical variant/producer/consumer map, correction and validation records:
+meta **1646925c**, evidence/existing-feature-conformance/source-owner-facts/
+phase3c-conversion-evidence-closure.json. The original before-5 assertion failure
+is distinct from preliminary Text-graph setup failures and from the successful
+embedded preflight/fresh tests. No ordinary-source acceptance bug is claimed.
+All sessions are recovered; final G2a/b and C6 onward remain incomplete.
+This does not establish latest formal performance, parent completion, main
+integration or candidate ASan success.
