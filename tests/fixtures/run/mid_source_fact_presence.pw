@@ -3,7 +3,7 @@ use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Mid only { MidBuildState, MidBuildError, buildMidLet }
+use /Mid only { prepareMidSourceState, MidBuildState, MidBuildError, buildMidLet }
 
 fn main() {
     mut val compiler: Comp = <Comp />
@@ -21,13 +21,9 @@ fn main() {
         _ => { panic("missing source fact accepted") }
     }
     val foreignFacts = compiler.preparedFunctionSemanticFacts(fnIdx: other).unwrap()
-    mut val foreign = <MidBuildState.initial sourceFunction=owner sourceFacts=<Optional.Some v=foreignFacts /> />
-    match buildMidLet(c: inout compiler, state: inout foreign, stmtId: statement) {
-        MidBuildError.MissingSemanticType => {}
-        _ => { panic("foreign owner fact accepted") }
-    }
+    if (prepareMidSourceState(c: inout compiler, sourceFunction: owner, facts: foreignFacts)).isOk() { panic("foreign owner fact accepted") }
     val facts = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
-    mut val recorded = <MidBuildState.initial sourceFunction=owner sourceFacts=<Optional.Some v=facts /> />
+    mut val recorded = (prepareMidSourceState(c: inout compiler, sourceFunction: owner, facts: facts)).unwrap()
     match buildMidLet(c: inout compiler, state: inout recorded, stmtId: statement) {
         MidBuildError.None => {}
         _ => { panic("recorded source fact rejected") }

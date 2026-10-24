@@ -5,7 +5,7 @@ use ../Diag only { CompileDiagnostic }
 
 use ../Frontend only { Comp, PreparedSemanticFacts }
 use ../Ir only { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticExpressionTypeState, InvocationCompletion, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, ConditionClauseRange, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
-use ../Diag only { eprintU64 }
+use ../Diag only { eprintU64, CompileDiagnostic }
 use @Std/Io only { eprint }
 use ../Ops only { opAnd, opOr }
 use ./Ir only { midLocalIsOwnedTemporary, MidEnumDestination, MidRange, MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidCallArgument, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
@@ -245,8 +245,39 @@ fn midNormalizeCallArgument(state: inout MidBuildState, operand: MidOperand) -> 
     }
 }
 pub impl MidBuildState {
-    factory initial(sourceFunction: U64, sourceFacts: Optional[PreparedSemanticFacts] = <Optional.None />) {
-        return <MidBuildState scopes=[<MidScope />] blocks=[<MidBlock />] sourceFunction=sourceFunction sourceFacts=sourceFacts />
+    // Draft IR state has no authority to consume authored source statements.
+    factory initial(sourceFunction: U64) {
+        return <MidBuildState scopes=[<MidScope />] blocks=[<MidBlock />] sourceFunction=sourceFunction />
+    }
+}
+
+pub fn prepareMidSourceState(c: inout Comp, sourceFunction: U64, facts: PreparedSemanticFacts) -> Result[MidBuildState, CompileDiagnostic] {
+    mut val state = <MidBuildState.initial sourceFunction=sourceFunction />
+    try state.admitSource(c: inout c, facts: facts)
+    return <Result.Ok value=state />
+}
+
+impl MidBuildState {
+    inout fn admitSource(c: inout Comp, facts: PreparedSemanticFacts, globalInitializerTarget: Optional[U64] = <Optional.None />) -> Result[(), CompileDiagnostic] {
+        try c.requireSourceFactsForFunction(facts: facts, sourceFunction: self.sourceFunction, globalInitializerTarget: globalInitializerTarget)
+        self.sourceFacts = <Optional.Some v=facts />
+        return <Result.Ok value=() />
+    }
+}
+
+// Owner equality is established once at source-state construction. Public
+// consumers still check session reuse and the exact retained statement row.
+fn midSourceStateAdmitted(c: Comp, state: MidBuildState) -> Bool {
+    match state.sourceFacts {
+        Optional.Some(v: val facts) => { return facts.belongsToSession(session: c.sourceFactSession()) }
+        Optional.None => { return false }
+    }
+}
+fn midSourceStatementAdmitted(c: Comp, state: MidBuildState, stmtId: U64) -> Bool {
+    if !midSourceStateAdmitted(c: c, state: state) { return false }
+    match state.sourceFacts {
+        Optional.Some(v: val facts) => { return facts.statementCompletion(stmtId: stmtId).isSome() }
+        Optional.None => { return false }
     }
 }
 
@@ -364,8 +395,8 @@ pub fn midLocalForBinding(state: MidBuildState, declarationTarget: U64) -> MidBi
 // separate typed address root, never a synthetic local. No source spelling,
 // scope scan, or AST pattern match is permitted here.
 pub fn midPlaceForRecordedIdent(c: inout Comp, state: MidBuildState, exprId: U64, typeTerm: U64) -> MidPlaceLookup {
+    if !midSourceStateAdmitted(c: c, state: state) { return <MidPlaceLookup /> }
     val facts = match state.sourceFacts { Optional.Some(v: val facts) => facts Optional.None => { return <MidPlaceLookup /> } }
-    if !facts.belongsToSession(session: c.sourceFactSession()) { return <MidPlaceLookup /> }
     val target = match facts.identifierTarget(exprId: exprId) { Optional.Some(v: val target) => target Optional.None => { return <MidPlaceLookup /> } }
     val local: MidBindingLookup = midLocalForBinding(state: state, declarationTarget: target)
     if !local.found {
@@ -2400,6 +2431,11 @@ fn midInitializeBinding(state: inout MidBuildState, destination: MidPlace, value
 }
 
 pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64, completeEvaluation: Bool = true) -> MidBuildError {
+    if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+    return buildMidLetAdmitted(c: inout c, state: inout state, stmtId: stmtId, completeEvaluation: completeEvaluation)
+}
+
+fn buildMidLetAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64, completeEvaluation: Bool = true) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.Let(mutable: val mutable, nameStart: val nameStart, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => {
@@ -2466,6 +2502,11 @@ pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64, compl
 // in Mid. Index paths deliberately remain SemanticAccess work: treating one
 // as a raw store here would bypass its getter/setter/writeback and CoW proof.
 pub fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+    if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+    return buildMidAssignAdmitted(c: inout c, state: inout state, stmtId: stmtId)
+}
+
+fn buildMidAssignAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.Assign(target: val target, value: val value) => {
@@ -2533,6 +2574,11 @@ fn midReturnOperand(c: inout Comp, operand: MidOperand, typeTerm: U64) -> MidOpe
 }
 
 pub fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+    if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+    return buildMidReturnAdmitted(c: inout c, state: inout state, stmtId: stmtId)
+}
+
+fn buildMidReturnAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.Return(value: val value, hasValue: val hasValue, offset: _) => {
@@ -2588,19 +2634,20 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
             state.aggregateValues = []
         }
         val stmtId: U64 = c.arena.blockStmtPool[block.stmtStart + i]
+        if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
         match c.arena.stmts[stmtId] {
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => {
-                result = buildMidLet(c: inout c, state: inout state, stmtId: stmtId, completeEvaluation: !expressionSequence)
+                result = buildMidLetAdmitted(c: inout c, state: inout state, stmtId: stmtId, completeEvaluation: !expressionSequence)
             }
             Stmt.If(cond: _, thenBlk: _, elseBlk: _, hasElse: _) => {
-                result = buildMidIf(c: inout c, state: inout state, stmtId: stmtId)
+                result = buildMidIfAdmitted(c: inout c, state: inout state, stmtId: stmtId)
             }
             Stmt.IfChain(conditions: val conditions, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
                 result = buildMidConditionChain(c: inout c, state: inout state, conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk, blockResult: <MidBlockResult.Forbidden />)
             }
             Stmt.Return(value: _, hasValue: _, offset: _) => {
                 val evaluation: U64 = midOpenScope(state: inout state)
-                result = buildMidReturn(c: inout c, state: inout state, stmtId: stmtId)
+                result = buildMidReturnAdmitted(c: inout c, state: inout state, stmtId: stmtId)
                 midFinishEvaluationScope(state: inout state, scope: evaluation)
             }
             Stmt.ExprStmt(expr: val expr) => {
@@ -2621,14 +2668,14 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
             }
             Stmt.Assign(target: _, value: _) => {
                 val evaluation: U64 = midOpenScope(state: inout state)
-                result = buildMidAssign(c: inout c, state: inout state, stmtId: stmtId)
+                result = buildMidAssignAdmitted(c: inout c, state: inout state, stmtId: stmtId)
                 midFinishEvaluationScope(state: inout state, scope: evaluation)
             }
             Stmt.While(cond: _, body: _) => {
-                result = buildMidWhile(c: inout c, state: inout state, stmtId: stmtId)
+                result = buildMidWhileAdmitted(c: inout c, state: inout state, stmtId: stmtId)
             }
-            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, iter: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { result = buildMidFor(c: inout c, state: inout state, stmtId: stmtId) }
-            Stmt.Match(scrut: _, arms: _) => { result = buildMidMatch(c: inout c, state: inout state, stmtId: stmtId) }
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, iter: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { result = buildMidForAdmitted(c: inout c, state: inout state, stmtId: stmtId) }
+            Stmt.Match(scrut: _, arms: _) => { result = buildMidMatchAdmitted(c: inout c, state: inout state, stmtId: stmtId) }
             Stmt.Panic(msg: val message, offset: _) => {
                 val messageTerm: U64 = (match midSourceSemanticTerm(c: inout c, state: state, exprId: message) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return error } })
                 val built: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: message, allowAccessMarker: false)
@@ -2693,6 +2740,7 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
 }
 
 pub fn buildMidBlock(c: inout Comp, state: inout MidBuildState, blockId: U64) -> MidBuildError {
+    if !midSourceStateAdmitted(c: c, state: state) { return <MidBuildError.MissingSemanticType /> }
     return buildMidBlockInto(c: inout c, state: inout state, blockId: blockId, blockResult: <MidBlockResult.Forbidden />)
 }
 
@@ -3074,6 +3122,11 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
 }
 
 pub fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+    if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+    return buildMidMatchAdmitted(c: inout c, state: inout state, stmtId: stmtId)
+}
+
+fn buildMidMatchAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.Match(scrut: val scrut, arms: val arms) => { return buildMidPatternMatch(c: inout c, state: inout state, matchSource: <MatchSource.Statement stmtId=stmtId />, scrut: scrut, continuation: <MidPatternContinuation.Arms arms=arms />, blockResult: <MidBlockResult.Forbidden />, traceId: stmtId) }
@@ -3174,6 +3227,11 @@ fn buildMidIfCfg(c: inout Comp, state: inout MidBuildState, cond: U64, thenBlk: 
 // is no conditional-move special case: a Move emitted by `buildMidLet` in one
 // branch reaches the join through the same CFG used by every other statement.
 pub fn buildMidIf(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+    if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+    return buildMidIfAdmitted(c: inout c, state: inout state, stmtId: stmtId)
+}
+
+fn buildMidIfAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.If(cond: val cond, thenBlk: val thenBlk, elseBlk: val elseBlk, hasElse: val hasElse) => {
@@ -3193,6 +3251,11 @@ pub fn buildMidIf(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> Mid
 // `break` and `continue` use the lexical loop-target stack to emit every
 // intervening ScopeExit before branching.
 pub fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+    if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+    return buildMidWhileAdmitted(c: inout c, state: inout state, stmtId: stmtId)
+}
+
+fn buildMidWhileAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.While(cond: val cond, body: val body) => {
@@ -3238,6 +3301,11 @@ pub fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> 
 // Both false-next and break converge after iteration cleanup, while continue
 // returns to the next call without releasing the iterator itself.
 pub fn buildMidFor(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+    if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+    return buildMidForAdmitted(c: inout c, state: inout state, stmtId: stmtId)
+}
+
+fn buildMidForAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     match c.arena.stmts[stmtId] {
         Stmt.For(varStart: val varStart, varLen: _, varTyStart: _, varTyLen: _, varTy: _, iter: val iter, body: val body, isStruct: val isStruct, patStart: _, patLen: _, binds: _) => {
             // The protocol and its storage exist only after the iterable
@@ -3363,7 +3431,10 @@ pub fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
     }
     val receiverTerm = signature.receiverTerm
     val resultTerm = signature.resultTerm
-    mut val state: MidBuildState = <MidBuildState.initial sourceFunction=fnIdx sourceFacts=<Optional.Some v=facts /> />
+    mut val state: MidBuildState = match prepareMidSourceState(c: inout c, sourceFunction: fnIdx, facts: facts) {
+        Result.Ok(value: val state) => state
+        Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
+    }
     if signature.hasReceiver {
         // `self` is the first ABI parameter exactly like an ordinary source
         // parameter.  An `inout fn` receiver is therefore a capability-bearing
@@ -3437,7 +3508,10 @@ fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -> Mid
         Optional.Some(v: val signature) => signature
         Optional.None => { return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) error=<MidBuildError.MissingSemanticType /> /> }
     }
-    mut val state: MidBuildState = <MidBuildState.initial sourceFunction=closure.bodyKey sourceFacts=<Optional.Some v=facts /> />
+    mut val state: MidBuildState = match prepareMidSourceState(c: inout c, sourceFunction: closure.bodyKey, facts: facts) {
+        Result.Ok(value: val state) => state
+        Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
+    }
     // Source parameters are the contiguous Mid ABI prefix. The closure LLVM
     // emitter adds its environment pointer before this prefix; representing it
     // as an ordinary Mid parameter would shift every source ABI index.
@@ -3549,7 +3623,10 @@ pub fn buildParametricMidGlobalInit(c: inout Comp) -> MidBodyBuild {
             Result.Ok(value: val facts) => facts
             Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: globalOwner) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
         }
-        state.sourceFacts = <Optional.Some v=facts />
+        match state.admitSource(c: inout c, facts: facts, globalInitializerTarget: <Optional.Some v=global.nameStart />) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: globalOwner) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
+        }
         if global.letStmt >= c.arena.stmts.count() { return <MidBodyBuild body=<MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=<MidBuildError.InvalidStatement /> /> }
         match c.arena.stmts[global.letStmt] {
             Stmt.Let(nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: val declaredTerm, init: val init, mutable: _) => {

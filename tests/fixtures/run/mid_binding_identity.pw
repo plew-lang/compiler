@@ -2,7 +2,7 @@ use @Std/Io only { write }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
 use /Ir only { Expr, Stmt }
-use /Mid only { MidBuildState, MidBuildError, MidOperand, MidRvalue, MidStatement, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet }
+use /Mid only { prepareMidSourceState, MidBuildState, MidBuildError, MidOperand, MidRvalue, MidStatement, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet }
 
 fn main() {
     mut val c: Comp = <Comp />
@@ -18,7 +18,7 @@ fn main() {
     c.prepareLexicalBody(fnIdx: owner).unwrap()
     val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
     val firstTarget = match c.arena.stmts[firstBinding] { Stmt.Let(mutable: _, nameStart: val start, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => start _ => { panic("missing first binding") } }
-    mut val state: MidBuildState = <MidBuildState.initial sourceFunction=owner sourceFacts=<Optional.Some v=facts /> />
+    mut val state: MidBuildState = (prepareMidSourceState(c: inout c, sourceFunction: owner, facts: facts)).unwrap()
     val firstLocal = addMidLocal(state: inout state, declarationTarget: parameter.nameStart, typeTerm: valueTerm, isUnique: true, isParameter: false, ownsAtEntry: false)
     val secondLocal = addMidLocal(state: inout state, declarationTarget: firstTarget, typeTerm: valueTerm, isUnique: true, isParameter: false, ownsAtEntry: false)
     val outer = midLocalForBinding(state: state, declarationTarget: parameter.nameStart)
@@ -29,9 +29,9 @@ fn main() {
     val initializer = match c.arena.stmts[firstBinding] { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init _ => { panic("missing initializer") } }
     val bindingProbe = match c.arena.exprs[initializer] { Expr.Move(operand: val operand, isBorrow: _) => operand _ => { panic("missing move") } }
     val place = midPlaceForRecordedIdent(c: inout c, state: state, exprId: bindingProbe, typeTerm: valueTerm)
-    val absentState = <MidBuildState.initial sourceFunction=owner sourceFacts=<Optional.Some v=facts /> />
+    val absentState = (prepareMidSourceState(c: inout c, sourceFunction: owner, facts: facts)).unwrap()
     val absentPlace = midPlaceForRecordedIdent(c: inout c, state: absentState, exprId: bindingProbe, typeTerm: valueTerm)
-    mut val letState = <MidBuildState.initial sourceFunction=owner sourceFacts=<Optional.Some v=facts /> />
+    mut val letState = (prepareMidSourceState(c: inout c, sourceFunction: owner, facts: facts)).unwrap()
     val input = addMidLocal(state: inout letState, declarationTarget: parameter.nameStart, typeTerm: valueTerm, isUnique: true, isParameter: true, ownsAtEntry: true)
     val letResult = buildMidLet(c: inout c, state: inout letState, stmtId: firstBinding)
     mut val hasAssign: Bool = false

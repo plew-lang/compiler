@@ -1,0 +1,5 @@
+use /Mid only { MidBuildState }
+
+fn main() {
+    val state = <MidBuildState.initial sourceFunction=0U64 sourceFacts=<Optional.None /> />
+}

@@ -138,6 +138,15 @@ type. Default expressions retain their authored source IDs under distinct genera
 keys. Captured lexical contexts and instance environments must not be recovered
 from a mutable ambient cursor.
 
+A source-consuming Mid construction state binds one immutable source-function
+identity to a retained, owner/session-validated reader. A draft IR state is not
+source-check authority. Public source-consumer entry points verify the current
+compiler session and membership of the demanded statement in that reader before
+lowering it, including statements with no value operand. Private construction
+cores consume that admitted context without resolving its owner for each
+expression. The composite global builder re-admits each existing explicit global
+owner when it switches readers; it does not broaden one initializer's authority.
+
 ## Worked Producer-to-Consumer Paths
 
 1. **Ordinary calls and prior results.** Source checking registers signatures,

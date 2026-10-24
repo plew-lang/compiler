@@ -1,7 +1,7 @@
 use @Std/Io only { write }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Mid only { MidBuildError, MidBuildState, MidTerminator, addMidLocal, buildMidBlock }
+use /Mid only { prepareMidSourceState, MidBuildError, MidBuildState, MidTerminator, addMidLocal, buildMidBlock }
 
 // A CallTemplate carries whether a selected argument is `inout`. Mid must turn
 // that semantic ABI fact into an Inout borrow rather than silently retaining a
@@ -17,7 +17,7 @@ fn main() {
     val valueTerm = parameter.ty
     c.prepareLexicalBody(fnIdx: owner).unwrap()
     val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
-    mut val state = <MidBuildState.initial sourceFunction=owner sourceFacts=<Optional.Some v=facts /> />
+    mut val state = (prepareMidSourceState(c: inout c, sourceFunction: owner, facts: facts)).unwrap()
     addMidLocal(state: inout state, declarationTarget: parameter.nameStart, typeTerm: valueTerm, isUnique: false, isParameter: true, ownsAtEntry: false, isInout: true)
     val result = buildMidBlock(c: inout c, state: inout state, blockId: function.body)
     mut val isInoutBorrow: Bool = false

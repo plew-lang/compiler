@@ -1,7 +1,7 @@
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Mid only { MidBuildState, MidBuildError, buildMidReturn, buildMidLet }
+use /Mid only { prepareMidSourceState, MidBuildState, MidBuildError, buildMidReturn, buildMidLet }
 
 fn main() {
     val source = "fn first() {{ val value = 1I64 return }} fn second() {{ val value = 2I64 return }} fn empty() {{ return }}"
@@ -15,15 +15,16 @@ fn main() {
     compiler.prepareLexicalBody(fnIdx: empty).unwrap()
     val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: first).body, index: 0U64)
     val facts = compiler.preparedFunctionSemanticFacts(fnIdx: first).unwrap()
-    mut val valid = <MidBuildState.initial sourceFunction=first sourceFacts=<Optional.Some v=facts /> />
+    mut val valid = (prepareMidSourceState(c: inout compiler, sourceFunction: first, facts: facts)).unwrap()
     match buildMidLet(c: inout compiler, state: inout valid, stmtId: statement) {
         MidBuildError.None => {}
         _ => { panic("valid source owner rejected") }
     }
     // Same arena and present rows: rejection must check owner, not just presence.
-    mut val foreign = <MidBuildState.initial sourceFunction=second sourceFacts=<Optional.Some v=facts /> />
-    match buildMidLet(c: inout compiler, state: inout foreign, stmtId: statement) {
-        MidBuildError.None => { panic("another source owner's binding reached Mid") }
+    if (prepareMidSourceState(c: inout compiler, sourceFunction: second, facts: facts)).isOk() { panic("another source owner's facts made a source state") }
+    val otherStatement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: second).body, index: 0U64)
+    match buildMidLet(c: inout compiler, state: inout valid, stmtId: otherStatement) {
+        MidBuildError.None => { panic("another source owner's statement reached Mid") }
         _ => {}
     }
     val emptyStatement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: empty).body, index: 0U64)
@@ -35,7 +36,7 @@ fn main() {
     mut val other = <Comp />
     analyzeFrontendForRequests(c: inout other, input: <FrontendInput.Text path="mid-source-owner.pw" text=source />, sources: <SourceAccess />).unwrap()
     other.prepareLexicalBody(fnIdx: empty).unwrap()
-    mut val foreignSession = <MidBuildState.initial sourceFunction=empty sourceFacts=<Optional.Some v=compiler.preparedFunctionSemanticFacts(fnIdx: empty).unwrap() /> />
+    mut val foreignSession = (prepareMidSourceState(c: inout compiler, sourceFunction: empty, facts: compiler.preparedFunctionSemanticFacts(fnIdx: empty).unwrap())).unwrap()
     match buildMidReturn(c: inout other, state: inout foreignSession, stmtId: emptyStatement) {
         MidBuildError.None => { panic("foreign session's return reached Mid") }
         _ => {}

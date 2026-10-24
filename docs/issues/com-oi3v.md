@@ -74,3 +74,25 @@ Exit requires removal of arbitrary-facts source construction, shared admission a
 all affected public source-consumer entries, no private-core re-resolution,
 positive/negative actual Mid evidence, internal fixture migration, source/fresh
 validation and independent review. Final G2/parent completion remains outside it.
+
+## Implementation Checkpoint
+
+The working implementation keeps initial facts-free and adds
+prepareMidSourceState. Comp.requireSourceFactsForFunction checks the opaque
+reader's session and existing sourceFunctionOwner once. Private admitSource is
+the only facts setter, including the existing explicit-target global switch.
+Public statement consumers and the common private dispatcher use shared session/
+statement-membership admission; checked private Admitted cores do not redo owner
+selection. recordedIdent's public reader also checks the admitted session.
+The entry is a Result-returning function because inout Comp is a call argument,
+not an authored source factory attribute; no language syntax change is needed.
+
+The fixed compiler checks the entire modified source successfully. Corrected
+embedded preflight first4 plus tail7 controls pass. The tail's first attempt
+stopped at a missing newly introduced import; the remaining fixtures were not
+reported successful until the corrected tail completed. The new unchecked
+initial(sourceFacts=...) reject emits the expected no-matching-method diagnostic.
+Independent intermediate review recognizes the intended finite boundary and
+requests fresh final controls. Normal empty-block construction reads no foreign
+statement; it does not require a new block-owner map. Fresh completion/performance
+and independent final certification are still pending.

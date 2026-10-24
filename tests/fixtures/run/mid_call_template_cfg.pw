@@ -2,7 +2,7 @@ use @Std/Io only { write }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
 use /Ir only { Stmt }
-use /Mid only { MidBuildError, MidBuildState, MidCallTarget, MidOperand, MidTerminator, addMidLocal, buildMidBlock }
+use /Mid only { prepareMidSourceState, MidBuildError, MidBuildState, MidCallTarget, MidOperand, MidTerminator, addMidLocal, buildMidBlock }
 
 fn main() {
     mut val c: Comp = <Comp />
@@ -18,7 +18,7 @@ fn main() {
     c.prepareLexicalBody(fnIdx: owner).unwrap()
     val key = c.callTemplateForSourceBody(fnIdx: owner, exprId: callExpression).unwrap().siteKey
     val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
-    mut val state = <MidBuildState.initial sourceFunction=owner sourceFacts=<Optional.Some v=facts /> />
+    mut val state = (prepareMidSourceState(c: inout c, sourceFunction: owner, facts: facts)).unwrap()
     val result = buildMidBlock(c: inout c, state: inout state, blockId: function.body)
     mut val built: Bool = false
     match result { MidBuildError.None => { built = true } _ => {} }
@@ -43,7 +43,7 @@ fn main() {
     val parameter = c.funcParamAt(params: moveFunction.params, index: 0U64)
     c.prepareLexicalBody(fnIdx: moveOwner).unwrap()
     val moveFacts = c.preparedFunctionSemanticFacts(fnIdx: moveOwner).unwrap()
-    mut val moveState = <MidBuildState.initial sourceFunction=moveOwner sourceFacts=<Optional.Some v=moveFacts /> />
+    mut val moveState = (prepareMidSourceState(c: inout c, sourceFunction: moveOwner, facts: moveFacts)).unwrap()
     val file = addMidLocal(state: inout moveState, declarationTarget: parameter.nameStart, typeTerm: parameter.ty, isUnique: true, isParameter: true, ownsAtEntry: true)
     val moveResult = buildMidBlock(c: inout c, state: inout moveState, blockId: moveFunction.body)
     // No intervening evaluation: the call consumes the source at this point.

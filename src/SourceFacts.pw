@@ -683,6 +683,15 @@ pub impl Comp {
         }
         return <Result.Ok value=() />
     }
+    inout fn requireSourceFactsForFunction(facts: PreparedSemanticFacts, sourceFunction: U64, globalInitializerTarget: Optional[U64] = <Optional.None />) -> Result[(), CompileDiagnostic] {
+        try self.requireSourceFactsSession(facts: facts)
+        val expected = try self.sourceFunctionOwner(fnIdx: sourceFunction, globalInitializerTarget: globalInitializerTarget)
+        if !semanticCompletionOwnersEqual(recorded: facts.owner, prepared: expected) {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: source facts belong to another source function") />
+        }
+        return <Result.Ok value=() />
+    }
+
 }
 
 pub impl Comp {
