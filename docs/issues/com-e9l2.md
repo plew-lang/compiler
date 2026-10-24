@@ -64,3 +64,18 @@ The first new internal edit omitted required MidLocalDecl.typeTerm in two
 constructions; it failed checking and is corrected to zero without changing
 the test purpose or weakening any assertion. Fresh candidate execution and
 independent completion review are not yet complete.
+
+
+### Source Iteration Readers and Review
+
+Record::sourceForItemTerm reads the saved next CallResult by its exact site;
+forItemPayload validates its recipe input and selected nominal carrier before
+source binding. They do not reinterpret the source expression or select another
+Item by name. mid_body_type_results is also a required control: a numerically
+equal recipe ID and canonical type ID remain distinct sourceKind namespaces,
+with per-instance projection results and missing-publication rejection in Mid.
+
+Independent static review by /root/body_receiver_completion_review on f05188b4
+confirms no Project producer or surviving reader requires the removed fields,
+and the source/final/Mid identity and Unit contracts are retained. No static
+blocker; fresh execution and final completion review remain pending.
