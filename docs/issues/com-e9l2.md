@@ -1,6 +1,6 @@
 ---
 id: com-e9l2
-status: open
+status: in_progress
 deps: [com-qehq]
 links: []
 created: 2026-10-23T10:41:58Z
