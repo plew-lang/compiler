@@ -2406,25 +2406,21 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // The explicit body-context read for the expected-result side of a call
-    // template.  Zero means the source supplied no bidirectional context.
-    inout fn groundSemanticCallExpectedResult(exprId: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[U64, CompileDiagnostic] {
-        val expected: U64 = (try self.callTemplateForCurrentBody(exprId: exprId)).expectedResultTerm
-        if expected == 0U64 { return <Result.Ok value=0U64 />}
-        return <Result.Ok value=(try self.groundTermForBody(ref: expected, environment: environment, selfRef: selfRef, itemRef: itemRef)) />
+    // The caller already acquired the exact source template. Ground its saved
+    // context without navigating to the same owner/site a second time.
+    // Zero means the source supplied no bidirectional context.
+    inout fn groundCallTemplateExpectedResult(expectedResultTerm: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[U64, CompileDiagnostic] {
+        if expectedResultTerm == 0U64 { return <Result.Ok value=0U64 />}
+        return <Result.Ok value=(try self.groundTermForBody(ref: expectedResultTerm, environment: environment, selfRef: selfRef, itemRef: itemRef)) />
     }
 
     // Ground the selected callee substitutions recorded beside an expression's
     // TypeTerm.  This is the direct producer→consumer handoff for generic free
     // calls; Mono must not re-infer a body-local `self` from AST/TypeInfo when
     // the parametric template already selected it.
-    inout fn groundSemanticCallTypeArgs(exprId: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[Array[U64], CompileDiagnostic] {
+    inout fn groundCallTemplateTypeArgs(arguments: CallTemplateTypeArgumentRange, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[Array[U64], CompileDiagnostic] {
         mut val out: Array[U64] = []
-        mut val args: Array[U64] = []
-        match (try self.callTemplateForCurrentBody(exprId: exprId)).kind {
-            CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val stored, proofId: _) => { args = self.callTemplateTypeArgs(range: stored) }
-            _ => {}
-        }
+        val args = self.callTemplateTypeArgs(range: arguments)
         mut val i: U64 = 0U64
         while i < args.count() {
             out.append((try self.groundTermForBody(ref: args[i], environment: environment, selfRef: selfRef, itemRef: itemRef)))

@@ -62,7 +62,7 @@ fn main() {
                 val template = compiler.callTemplateForCurrentBody(exprId: expression).unwrap()
                 match template.kind {
                     CallTemplateKind.Dynamic(receiver: val receiver, args: val arguments, target: val target) => {
-                        val selection = compiler.selectDynamicTemplateCall(exprId: expression, receiver: receiver, arguments: compiler.callTemplateArguments(range: arguments), target: target).unwrap()
+                        val selection = compiler.selectDynamicTemplateCall(exprId: expression, receiver: receiver, expectedResultTerm: template.expectedResultTerm, arguments: compiler.callTemplateArguments(range: arguments), target: target).unwrap()
                         assert(compiler.typeRefEq(a: selection.resultRef, b: expected))
                         calls += 1U64
                     }

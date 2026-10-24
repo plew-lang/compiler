@@ -3363,9 +3363,9 @@ pub impl Comp {
         }
     }
 
-    inout fn selectDirectTemplateCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, receiverTypeTerm: U64, arguments: Array[CallTemplateArgument], proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[CallSiteSelection, CompileDiagnostic] {
-        val expected: U64 = (try self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
-        val calleeArgs: Array[U64] = (try self.groundSemanticCallTypeArgs(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+    inout fn selectDirectTemplateCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, receiverTypeTerm: U64, expectedResultTerm: U64, calleeTypeArgs: CallTemplateTypeArgumentRange, arguments: Array[CallTemplateArgument], proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[CallSiteSelection, CompileDiagnostic] {
+        val expected: U64 = (try self.groundCallTemplateExpectedResult(expectedResultTerm: expectedResultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+        val calleeArgs: Array[U64] = (try self.groundCallTemplateTypeArgs(arguments: calleeTypeArgs, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         val receiverRef = try self.groundSelectedDirectReceiver(receiver: receiver, receiverTypeTerm: receiverTypeTerm)
         mut val concreteProof: StaticConformanceProof = proof
         // A Direct template has already selected its callable.  When that
@@ -3401,8 +3401,8 @@ pub impl Comp {
     // only per-instance operation is grounding the carried TypeTerm/receiver;
     // lexical lookup, field lookup, and existential requirement selection have
     // already happened in Record.
-    inout fn selectDynamicTemplateCall(exprId: U64, receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], target: DynamicCallTemplateTarget) -> Result[CallSiteSelection, CompileDiagnostic] {
-        val expected: U64 = (try self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+    inout fn selectDynamicTemplateCall(exprId: U64, receiver: CallTemplateReceiver, expectedResultTerm: U64, arguments: Array[CallTemplateArgument], target: DynamicCallTemplateTarget) -> Result[CallSiteSelection, CompileDiagnostic] {
+        val expected: U64 = (try self.groundCallTemplateExpectedResult(expectedResultTerm: expectedResultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         val receiverRef: U64 = (try self.groundCallTemplateReceiver(receiver: receiver))
         val args: ArgRange = self.templateArgumentRangeFromValues(arguments: arguments)
         val noCallee: U64 = self.arena.functionCount()
@@ -3997,16 +3997,16 @@ pub impl Comp {
         // Expr.Call/Method/ExtMethod here would duplicate candidate selection
         // and lose a receiver/result dependency carried by CallSiteKey.
         match template.kind {
-            CallTemplateKind.Direct(callee: val storedCallee, receiver: val receiver, args: val arguments, calleeTypeArgs: _, proofId: val proofId) => {
+            CallTemplateKind.Direct(callee: val storedCallee, receiver: val receiver, args: val arguments, calleeTypeArgs: val calleeTypeArgs, proofId: val proofId) => {
                 if storedCallee < self.arena.functionCount() {
-                    val selection: CallSiteSelection = (try self.selectDirectTemplateCall(exprId: exprId, callee: storedCallee, receiver: receiver, receiverTypeTerm: template.receiverTypeTerm, arguments: self.callTemplateArguments(range: arguments), proof: self.thawStaticConformanceProof(id: proofId)))
+                    val selection: CallSiteSelection = (try self.selectDirectTemplateCall(exprId: exprId, callee: storedCallee, receiver: receiver, receiverTypeTerm: template.receiverTypeTerm, expectedResultTerm: template.expectedResultTerm, calleeTypeArgs: calleeTypeArgs, arguments: self.callTemplateArguments(range: arguments), proof: self.thawStaticConformanceProof(id: proofId)))
                     try self.recordSelectedBodyCallee(selection: selection)
                     try self.enqueueSelectedCallee(selection: selection, template: template)
                     return <Result.Ok value=storedCallee />
                 }
             }
             CallTemplateKind.Dynamic(receiver: val receiver, args: val arguments, target: val target) => {
-                val selection: CallSiteSelection = (try self.selectDynamicTemplateCall(exprId: exprId, receiver: receiver, arguments: self.callTemplateArguments(range: arguments), target: target))
+                val selection: CallSiteSelection = (try self.selectDynamicTemplateCall(exprId: exprId, receiver: receiver, expectedResultTerm: template.expectedResultTerm, arguments: self.callTemplateArguments(range: arguments), target: target))
                 try self.recordSelectedBodyCallee(selection: selection)
                 return <Result.Ok value=selection.callee />
             }
