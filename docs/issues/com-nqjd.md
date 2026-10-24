@@ -1,6 +1,6 @@
 ---
 id: com-nqjd
-status: in_progress
+status: closed
 deps: [com-m0bf]
 links: []
 created: 2026-10-24T02:29:50Z
@@ -76,12 +76,12 @@ receiver/body key and associated context readers remain com-6paa and com-fyxe.
 | Producer | Saved authority and explicit environment | Final consumption |
 |---|---|---|
 | Decl::declaredTypeRef / langTypeRefAt, FreeFn::findOrAddTypeRef | Real nominal owner and full arity; canonical spelling is only a shape projection. Bare cache validates all facets and is keyed by resolved owner. Source adapters resolve in the source occurrence's module; synthetic carriers use the fixed Lang surface. | TypeRef/TypeTerm owner reaches expression facts, source signatures and instance type arguments. No global first-name nominal/ParamId reconstruction. |
-| Record literal / sourceArrayTypeRef, ExprType index | Saved literal carries its fixed Lang owner; Array keeps the complete child term. Missing String/Array fails before publication. typedIrRefOfInfo no longer uses name-keyed arrayElems to invent a child. | Saved owner/body expression -> body type grounding -> final aggregate/index facts -> Mid operands and LLVM type use. Nested arrays and distinct nominal children execute in the source control. |
+| Record literal / sourceArrayTypeRef, ExprType index | Saved literal carries its fixed Lang owner; Array keeps the complete child term. Missing String/Array fails before publication. typedIrRefOfInfo no longer uses name-keyed arrayElems to invent a child. | Saved owner/body expression -> body type grounding -> final aggregate/index facts -> Mid operands and LLVM type use. Nested arrays of Leaf and an unrelated same-name lexical binder execute in the source control; distinct nominal owners are covered separately by the registered-owner and namespace controls. |
 | semanticCallableReturnTerm | Implicit async returns Promise[structural Unit] with exact Lang owner; admission validates a missing carrier before call constraints. Omitted ordinary Unit remains an ordinary structural source value and an erased completed ABI result slot. | Declaration worklist callConstraintSubstitutionState/appendCallConstraintInstance and executable prepareFinalBodyRequest/scanFinalBodyInstance consume saved templates in explicit environments; groundedSelectedCalleeReturn is the selected bodyless signature reader. |
 | ExprType bound/provided results | One staticMemberCallResultType/staticProvidedCallEnvironment retains the selected requirement/provided proof and receiver. groundFinalMethodReturn/Parameter defer a missing complete receiver; missing annotated results and qualifiers are not rewritten from spelling. | Recorded call result/signature -> source constraint checking -> explicit body signature/final call. Old first-bound/supertrait return-name traversal and traitMemberRetInfo/boundRetInfoOf are removed. |
 | Chain continuation / Optional | chainStageResultRef preserves the full continuation term and rebuilds the original carrier with unchanged semantic facets; registerChainSiteInsts selects canonical Optional. | Same saved rewritten call and instance registration paths; no raw nominal append for a missing continuation. Existing optional/generic/multiparam/projected chains remain decisive controls. |
 
-The unchanged terminal handoff is completeStaticBodyCallee -> BodySignature and
+The unchanged terminal handoff is BodySignature -> completeStaticBodyCallee ->
 CallResolution parameter/result terms -> Mid::instantiateCanonicalMidBody and
 instantiateMidType -> Backend/Llvm/Mid preflight/emission. Mid reads body-specific
 type results and final call signatures; it neither evaluates source recipes nor
@@ -116,7 +116,4 @@ ref-less Array name reconstruction, missing ambient String/Array/Promise,
 nominal kind/arity, and incomplete first-cache facet/stability handling. The
 f95134ca rereview confirms those repairs and no further production blocker;
 its same-spelling evidence concern is addressed by the registered-module and
-fresh namespace controls. Independent final closure review is pending. Formal
-performance/fixed-point checkpoint and final G2 all-suite gates remain distinct
-from these scoped successes. This task is not complete until its independent
-verdict is recorded.
+fresh namespace controls. Independent final closure review by late_nominal_completion_review confirms the finite boundary complete with no blocking findings. It independently verified raw receipts, every applicable input hash, candidate hash, the same-name registered-owner regression, the repaired producer/removal sites and both-worklist/Mid/LLVM handoff. Two nonblocking trace-wording corrections are incorporated above. The formal checkpoint 20261024T032622-self-host-3988ef subsequently completed at generation 2, median 6.827440 seconds (7.446359 / 6.827440 / 6.777643), exit 0 with unchanged inputs. The meta evidence phase3c-late-nominal-self-host.json preserves its exact measured compiler hash and receipt. The scoped task is complete; final G2 all-suite gates and the parent remain open.
