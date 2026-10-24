@@ -1,7 +1,7 @@
 ---
 id: met-ucze
 status: open
-deps: [com-qehq, com-qb05, com-17yh]
+deps: [com-qehq, com-qb05, com-17yh, com-4kti]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -47,6 +47,9 @@ Keep method/operator/protocol result projections and the same source provenance.
 - [B0](com-qehq.md): reconcile the eight actual paths and select residuals.
 - [B1](com-qb05.md): ordinary/method/factory saved-selection closure.
 - [B2](com-17yh.md): operator/protocol/iteration/try selected requirements.
+- [com-4kti](com-4kti.md): shared ordinary-generic/projected source candidate
+  enumeration, applicability and full-instance admission through saved final use.
+  The C2 finding reopened this area; B0/B1/B2 alone cannot close it.
 - [B3](com-v2xk.md) under met-ia09 owns exact callee condition environments;
   [D3](com-wqa0.md) owns the final operation/constraint API write boundary.
 

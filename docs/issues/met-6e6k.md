@@ -20,7 +20,9 @@ work and real prerequisites are tk dependencies under the
 
 - [A](com-g2qg.md): already completed 3A inference/fixture cleanup.
 - [C1](com-nplw.md): forward array context.
-- [C2](com-nucu.md): partial-input projected member enumeration.
+- [C2](com-nucu.md): partial-input projected member classification.
+- [com-4kti](com-4kti.md): its mandatory shared generic/projected candidate
+  selection and full-instance admission repair through final use.
 - [C3](com-m0bf.md): unstamped nominal producer inventory.
 - [C4](com-e9l2.md): result recipe/projection readers.
 - [C5](com-loyb.md): source conversion endpoints.

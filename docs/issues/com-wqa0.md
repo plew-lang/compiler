@@ -1,7 +1,7 @@
 ---
 id: com-wqa0
 status: open
-deps: [com-qb05, com-17yh, com-v2xk]
+deps: [com-qb05, com-17yh, com-v2xk, com-4kti]
 links: []
 created: 2026-10-23T10:41:58Z
 type: task
@@ -24,7 +24,9 @@ included. Split or block a newly evidenced larger repair before widening this ta
 
 Entry points: `src/Frontend.pw`; `src/Codegen/Resolve/Record.pw`; `src/Ir/InstanceConstraints.pw`; `src/Codegen/Check/Bounds.pw`; `src/Codegen/Mono/Call.pw`.
 
-Using the finalized B1/B2/B3 maps, enumerate operation/constraint constructors, navigation and sealed readers. Verify private owner payload mutation is possible only while Building and auxiliary storage-demand analysis cannot rewrite committed operations. Follow each saved operation/constraint range to admitted callee and final use.
+After [com-4kti](com-4kti.md) closes its shared generic/projected candidate
+selection repair, use its revised source-selection/constraint-publication map
+together with the finalized B1/B2/B3 maps. Enumerate operation/constraint constructors, navigation and sealed readers. Verify private owner payload mutation is possible only while Building and auxiliary storage-demand analysis cannot rewrite committed operations. Follow each saved operation/constraint range to admitted callee and final use.
 
 ## Exit and Evidence
 
