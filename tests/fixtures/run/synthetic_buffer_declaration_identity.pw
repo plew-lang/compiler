@@ -1,7 +1,7 @@
 use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp }
-use /Ir only { TypeRef, StructDef, Bind, ResolvedViewSource }
+use /Ir only { TypeRef, StructDef, Bind, ResolvedViewSource, TraitOwner, TraitDef }
 
 fn receiver(compiler: Comp, expression: U64) -> U64 {
     return compiler.decls.syntheticCallSites[compiler.syntheticCallSiteIndex(exprId: expression)].receiverTerm
@@ -71,7 +71,10 @@ fn main() {
     val generic = receiver(compiler: compiler, expression: genericExpression)
     assert(compiler.arena.typeAt(index: generic).args[0U64] == rigid)
     assert(compiler.arena.typeAt(index: rigid).paramId == parameter.paramId)
-    val viewed = compiler.typeRefWithViewSources(ref: element, sources: [<ResolvedViewSource surfaceId=elementName.nameId traitOwner=500U64 />])
+    val facet = compiler.internBytes(s: "Facet")
+    compiler.decls.registerTraitOwner(<TraitOwner sourceModule=5U64 nameStart=facet.nameStart nameLen=facet.nameLen nameId=facet.nameId arity=0U64 />)
+    compiler.decls.registerTrait(<TraitDef nameStart=facet.nameStart nameLen=facet.nameLen nameId=facet.nameId reqs=compiler.pushTraitReqs(reqs: []) />)
+    val viewed = compiler.typeRefWithViewSources(ref: element, sources: [<ResolvedViewSource surfaceId=facet.nameId traitOwner=facet.nameStart />])
     val viewedExpression = compiler.synthBufferNew(elemRef: viewed).unwrap()
     val viewedReceiver = receiver(compiler: compiler, expression: viewedExpression)
     assert(compiler.arena.typeAt(index: viewedReceiver).args[0U64] == viewed)
