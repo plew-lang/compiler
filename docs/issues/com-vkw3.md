@@ -37,3 +37,24 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Producer-to-consumer Reconciliation
+
+Audited production: `c1b731bd` (D1 source-state admission). This map describes
+existing authority rather than a new source-domain implementation.
+
+| Domain | Key / producer | Published reader and final use | Distinguishing controls |
+|---|---|---|---|
+| Closure creation / body | `Resolve/Record.recordExpr` saves creation in its parent, calls `publishSemanticClosure` and `registerClosureFactOwner`; body facts use `Closure(exprId)` with the registered lexical parent. The source request checks nested obligations and `finishSourceFacts` propagates its success/failure to children. | `preparedSemanticClosureAt` reads the successful creation owner; `preparedClosureSemanticFacts` reads the distinct body payload. `ensureParametricMidClosureBody` admits that payload; Mono's `requirePreparedClosureInstance` validates the frozen body/environment against the creation descriptor. | `source_closure_publication`, `source_typing_owner_requests`, `global_closure_call_constraints`, C6 descriptor controls. |
+| Individual global / composite | `prepareGlobalInitializer(target)` owns `Global(target)` and restores the request Cursor. `prepareGlobalInitializerUncached` checks that declaration alone. | `preparedGlobalSemanticFacts` / `preparedBodyFacts(..., globalInitializerTarget)` require that target. `DeclarationBodyRequests.globalInitializer` first admits every individual result; Mid's composite builder re-admits each actual global payload. The all-global executable sentinel alone grants no source authority. | `global_call_constraint_evidence`, `prepared_binding_source_owner`, `prepared_body_expression_owner`, `mid_global_initialization_ownership`, D1 `mid_source_owner_admission`. |
+| Parameter / field default | `prepareDefaultArgumentGenerators` and `prepareFieldDefaultGenerators` allocate independent function owners, retaining `DefaultGeneratorOrigin.Parameter(function, slot)` / `.Field(structure, slot)`. Reused authored ExprIds are navigation, not an all-owner type table. Provided aliases share the canonical parameter generator; binder projection uses ParamIds. | Ordinary `prepareLexicalBody(generator)` publishes its signature/facts. `recordDefaultArgumentCall` saves the selected generator and environment; ordinary Mid/Mono callable preparation consumes them. The lexical namespace is retained without aliasing generator source facts to the parent. | `default_argument_call_templates`, `default_generator_shared_owner`, `default_generator_environment`, `record_literal_default_owner`, `mid_default_enum_owner_return`. |
+| Authored provided body / placed callable | `semanticBodyOwner` validates explicit `lexicalOwnerFnId` and shared body; `prepareLexicalBody` canonicalizes the source request. Placed receiver/method binder environments remain distinct. | `preparedFunctionSemanticFacts` and source call keys read the authored payload. Instance preparation retains the selected callable, bound evidence and lexical receiver. No new source owner is inferred from equal spelling or active Cursor. | `retained_provided_body_constraints`, `trait_provided_private_owner_helper`, `default_generator_shared_owner`, B3/C3 environment and receiver controls. |
+| Generated executable body | `BodyOrigin.Callable`, `.ExistentialWitness(resolution, member)` and `.ClosureEnvironmentDrop(closureBodyId)` distinguish executable origins. Defaults remain ordinary source functions with explicit declaration/slot provenance. | `CheckedProgram.declarationRootsForBody` uses the retained witness member target or capture destruction roots. Generated code does not acquire arbitrary source facts through the current Cursor; ordinary source-backed paths still require admitted facts. | C6 descriptor/environment origin controls; global/default/provided controls above. Runtime environment destruction and startup effect/SCC planning remain phase four. |
+
+Signature registration is not source preparation success: `lowerDeclarations`
+registers callable roots, `prepareFinalCallableSignature` can publish a callable
+signature without requesting its invalid body, and `preparedSemanticFacts`
+rejects absent/failed owners and bodyless registrations without a payload.
+`callable_signature_demand` and `source_typing_owner_requests` distinguish these
+states. Retained reader/session and foreign-owner controls belong to D1 and are
+reused only with their recorded scope, not as new whole-candidate gate results.

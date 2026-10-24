@@ -1,0 +1,47 @@
+// A default's authored ExprId belongs to its generator's successful payload,
+// not the parent function. Registration alone cannot publish either payload.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { DefaultGeneratorOrigin }
+use /Mid only { MidFunctionTemplates, MidBuildError }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="default-source.pw" text="fn parent(value: I64 = 7I64) -> I64 {{ return value }} fn other() {{}}" />,
+        sources: <SourceAccess />).unwrap()
+    val parent = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "parent").nameId)
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "other").nameId)
+    val declaration = compiler.arena.functionAt(index: parent)
+    val expression = compiler.funcParamAt(params: declaration.params, index: 0U64).defaultExpr
+    val generator = compiler.defaultArgumentGenerator(ownerFnIdx: parent, parameterIndex: 0U64)
+    if generator >= compiler.arena.functionCount() || generator == parent { panic("missing independent generator") }
+    match compiler.decls.defaultGeneratorOrigins.get(key: generator).unwrap() {
+        DefaultGeneratorOrigin.Parameter(function: val function, parameter: val parameter) => {
+            if function != parent || parameter != 0U64 { panic("default declaration slot changed") }
+        }
+        _ => { panic("wrong default origin") }
+    }
+    if compiler.preparedFunctionSemanticFacts(fnIdx: parent).isOk() || compiler.preparedFunctionSemanticFacts(fnIdx: generator).isOk() { panic("registration published a source body") }
+    compiler.prepareLexicalBody(fnIdx: parent).unwrap()
+    val parentFacts = compiler.preparedFunctionSemanticFacts(fnIdx: parent).unwrap()
+    if parentFacts.expression(exprId: expression).isSome() { panic("default expression leaked into its parent") }
+    if compiler.preparedFunctionSemanticFacts(fnIdx: generator).isOk() { panic("parent preparation demanded a default body") }
+    compiler.prepareLexicalBody(fnIdx: generator).unwrap()
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: generator).unwrap()
+    val term = facts.expression(exprId: expression).unwrap().term
+    if term == 0U64 || !facts.expressionCompletion(exprId: expression).isSome() { panic("default source facts missing") }
+    if facts.functionSignature().unwrap().resultTerm != term { panic("default signature lost its source result") }
+    mut val templates = <MidFunctionTemplates />
+    val built = templates.body(c: inout compiler, function: generator)
+    match built.error {
+        MidBuildError.None => {}
+        _ => { panic("generator payload did not reach Mid") }
+    }
+    if built.canonical.body == 0U64 { panic("missing default Mid body") }
+    compiler.prepareLexicalBody(fnIdx: other).unwrap()
+    if parentFacts.expression(exprId: expression).isSome() || compiler.preparedFunctionSemanticFacts(fnIdx: other).unwrap().expression(exprId: expression).isSome() { panic("foreign owner acquired default expression") }
+    if facts.expression(exprId: expression).unwrap().term != term { panic("retained default reader changed") }
+    print("default-generator-source-publication")
+}

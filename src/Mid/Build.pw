@@ -3607,9 +3607,9 @@ fn ensurePreparedParametricMidClosureBody(c: inout Comp, closure: SemanticClosur
     return built
 }
 
-// Module globals have one synthetic lexical body.  Their frontend facts use
-// the same sentinel owner as Mono, so calls and aggregates remain keyed by
-// their recorded source identity rather than being re-resolved from names.
+// Module globals share a composite executable body. Each initializer retains
+// its own Global(target) facts; the executable sentinel grants no source
+// authority. Re-admit the explicit source owner for each initializer below.
 // Each RHS first receives a normal temporary home.  InitializeGlobal then
 // consumes that home exactly once into the process-lifetime root; it must not
 // be confused with either local Assign or destructive Overwrite.

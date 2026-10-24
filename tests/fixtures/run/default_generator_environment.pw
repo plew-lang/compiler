@@ -1,18 +1,20 @@
 use @Std/Io only { write }
 use /Frontend only { Comp }
-use /Ir only { DeclarationBoundRef, Bind, Expr, Func, Global, Param, StaticConformanceProof, TraitDef, TraitOwner }
+use /Ir only { DeclarationBoundRef, Bind, Expr, Func, FuncBound, Global, Param, StaticConformanceProof, TraitConstraint, TraitInstanceKey, TraitDef, TraitOwner, TypeRef }
 
 fn main() {
     mut val c: Comp = <Comp />
-    val unit = c.kwSpan(kw: "", kwLen: 0U64)
-    val unitTerm = c.simpleTypeRef(nameStart: unit.nameStart, nameLen: unit.nameLen)
-    val integer = c.kwSpan(kw: "I64", kwLen: 3U64)
-    val term = c.simpleTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)
+    c.arena.reserveTypeSentinel()
+    val unitTerm = c.semanticSourceResultTerm(ref: 0U64)
+    val integer = c.internBytes(s: "I64")
+    val term = c.langTypeRefAt(nameStart: integer.nameStart, nameLen: integer.nameLen, args: [])
     val name = c.internTmpName(prefix: "declaration", n: 0U64)
     c.modules.registerSourceFile(start: name.nameStart, length: name.nameLen, moduleId: 7U64, path: "<test>")
     val traitName = c.internTmpName(prefix: "Trait", n: 0U64)
     c.decls.registerTrait(<TraitDef nameStart=traitName.nameStart nameLen=traitName.nameLen nameId=traitName.nameId selfParamId=81U64 />)
     c.decls.registerTraitOwner(<TraitOwner sourceModule=0U64 nameStart=traitName.nameStart nameLen=traitName.nameLen nameId=traitName.nameId arity=0U64 />)
+    val selfName = c.internBytes(s: "Self")
+    val selfTerm = c.pushType(t: <TypeRef nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=selfName.nameId paramId=81U64 args=[] />)
     val binds = c.pushFuncBinds(binds: [<Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=71U64 fieldStart=0U64 fieldLen=0U64 />])
     val expression = c.pushExpr(e: <Expr.Int value=7U64 offset=0U64 isBool=false tyStart=integer.nameStart tyLen=integer.nameLen isNeg=false />)
     val parameters = c.pushFuncParams(params: [<Param nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
@@ -30,9 +32,15 @@ fn main() {
     // The explicit source ID may point forward to a later declaration.
     c.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=binds params=parameters
         hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=unitTerm body=0U64
-        hasRecv=true recvStart=traitName.nameStart recvLen=traitName.nameLen recvId=traitName.nameId
+        hasRecv=true recvStart=traitName.nameStart recvLen=traitName.nameLen recvId=traitName.nameId recvTy=selfTerm
         selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false
         provTraitOwner=traitName.nameStart />)
+    // The transport proof refers to a real lexical Self premise owned by
+    // the source declaration, not an unregistered bound-table position.
+    val proofSource = <DeclarationBoundRef.Function index=c.decls.funcBounds.count() />
+    c.decls.funcBounds.append(<FuncBound fnIdx=2U64 paramStart=selfName.nameStart paramLen=selfName.nameLen paramNameId=selfName.nameId paramTy=selfTerm
+        constraint=<TraitConstraint key=<TraitInstanceKey owner=traitName.nameStart positionalArgs=[] /> assocPredicates=[] /> />)
+    if !c.declarationBoundIsValid(source: proofSource) { panic("missing lexical Self premise") }
     c.prepareDefaultArgumentGenerators().unwrap()
     val free = c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64)
     val provided = c.defaultArgumentGenerator(ownerFnIdx: 1U64, parameterIndex: 0U64)
@@ -49,7 +57,7 @@ fn main() {
     if c.sameInstanceEnvironment(a: sourceEnv, b: generatorEnv) { write(s: "free-binders\n") }
     // Test environment transport, not entailment: a selected abstract proof
     // is passed through unchanged and the lexical Self ParamId is bound.
-    val proof: StaticConformanceProof = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=0U64 /> />
+    val proof: StaticConformanceProof = <StaticConformanceProof.AssumedBound source=proofSource />
     val providedEnv = c.bodyInstanceEnvironment(fnIdx: 1U64, args: [term], recvInstRef: term, selectedProof: proof).unwrap()
     val defaultEnv = c.bodyInstanceEnvironment(fnIdx: provided, args: [term], recvInstRef: term, selectedProof: proof).unwrap()
     if providedEnv.params.count() == 2U64 && c.sameInstanceEnvironment(a: providedEnv, b: defaultEnv) { write(s: "provided-self-and-proof\n") }
