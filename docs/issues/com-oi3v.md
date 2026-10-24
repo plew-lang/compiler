@@ -1,6 +1,6 @@
 ---
 id: com-oi3v
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T09:47:32Z
@@ -75,24 +75,36 @@ all affected public source-consumer entries, no private-core re-resolution,
 positive/negative actual Mid evidence, internal fixture migration, source/fresh
 validation and independent review. Final G2/parent completion remains outside it.
 
-## Implementation Checkpoint
+## Outcome
 
-The working implementation keeps initial facts-free and adds
-prepareMidSourceState. Comp.requireSourceFactsForFunction checks the opaque
-reader's session and existing sourceFunctionOwner once. Private admitSource is
-the only facts setter, including the existing explicit-target global switch.
-Public statement consumers and the common private dispatcher use shared session/
-statement-membership admission; checked private Admitted cores do not redo owner
-selection. recordedIdent's public reader also checks the admitted session.
-The entry is a Result-returning function because inout Comp is a call argument,
-not an authored source factory attribute; no language syntax change is needed.
+Complete at production **c1b731bd**. prepareMidSourceState validates the opaque
+reader's session and existing sourceFunctionOwner through
+Comp.requireSourceFactsForFunction, then private admitSource pairs facts with the
+immutable sourceFunction. initial remains a facts-free draft constructor. The
+only source switch is the global builder's explicit-target private re-admission.
+Public source statement wrappers, the common statement dispatcher and recorded
+identifier reader check their session/membership boundary before source use.
+Private Admitted cores do not add new semantic inference or repeated owner
+admission; the duplicate recordedIdent session check was removed.
 
-The fixed compiler checks the entire modified source successfully. Corrected
-embedded preflight first4 plus tail7 controls pass. The tail's first attempt
-stopped at a missing newly introduced import; the remaining fixtures were not
-reported successful until the corrected tail completed. The new unchecked
-initial(sourceFacts=...) reject emits the expected no-matching-method diagnostic.
-Independent intermediate review recognizes the intended finite boundary and
-requests fresh final controls. Normal empty-block construction reads no foreign
-statement; it does not require a new block-owner map. Fresh completion/performance
-and independent final certification are still pending.
+The new actual-consumer test rejects wrong-owner source construction, a valid
+state with a foreign statement, missing-facts Unit return and cross-session Unit
+return. The old initial(sourceFacts=...) form is a reject fixture. Existing
+internal tests retain their original intent through the validated entry; their
+initial missing imports were corrected as internal migration, with unexecuted
+cases excluded from earlier partial results. No source-language change was needed.
+
+Fresh normal28/reject4, full sourcecheck and standard build
+**20261024T100003-build-183956** pass, inputs unchanged. Independent completion
+review by /root/associated_context_completion_review recognizes this finite child
+and D1 complete, without blockers or unallocated repair. The parent D1 table and
+meta **768e7d80** evidence file phase3d-owner-admission.json retain exact producer/
+reader functions, fresh carrier SHA and all verification records. The baseline
+before-2 shows the admission defect; before-1 is a failed new-test return-place
+setup, not the decisive defect.
+
+Separate formal **20261024T100858-self-host-8126f0** reaches generation2 fixed
+point and median **6.830579s** (exit0/frozen inputs), saved in
+phase3d-owner-self-host.json. This meets the existing7s checkpoint goal without
+claiming performance improvement over a different source. All sessions are
+recovered. D2/D3 and later tasks, parent and full G2 gates remain separate.

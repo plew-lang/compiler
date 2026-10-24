@@ -1,6 +1,6 @@
 ---
 id: com-vkw3
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-23T10:41:58Z
