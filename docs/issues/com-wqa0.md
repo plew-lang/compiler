@@ -1,6 +1,6 @@
 ---
 id: com-wqa0
-status: in_progress
+status: closed
 deps: [com-qb05, com-17yh, com-v2xk, com-4kti, com-fyxe]
 links: []
 created: 2026-10-23T10:41:58Z
@@ -70,3 +70,33 @@ scoped session pool access, not a private copy of all child pools per payload.
 Final Mid/LLVM contains no call to construction-time selected-plan preparation
 or source candidate selection. B1/B2/B3 and C4/C5/C6 retain their separate exact
 callee, recipe, conversion and descriptor evidence boundaries.
+
+## Outcome
+
+Closed after independent review of `08499d93`. No runtime source change was
+needed; `source_operation_owner_storage` now additionally rejects a foreign
+site key for an explicit Building target and a new foreign-owner append, and
+checks issued operand backing after another owner's publication. Existing
+post-success/post-failure/fork/session controls remain intact.
+
+Receipt: meta
+`evidence/existing-feature-conformance/source-owner-facts/phase3d-operation-authority.json`.
+Fixed `bin/plewc-phase3d-owner-admission-fixed`, SHA256
+`434e711ea2eddeaa5cb4070bce88d69f84b9b2e3a421f9056fd48d2374c27f5f`: normal13
+and reject7 passed, followed by the strengthened owner control. Input snapshots
+were unchanged; sessions 34803/34556 were recovered through exit0. The first
+run differs from current inputs only in that strengthened fixture; unchanged
+controls retain matching source/std/carrier inputs.
+
+Independent reviewer `/root/associated_context_completion_review` confirmed
+four receipt reference hashes, embedded summaries and carrier SHA; all 189
+latest inputs match and only the named fixture differs among the 227 earlier
+inputs. The API map, explicit replacement identity and immutable child-pool
+contract close this boundary without competing authority or unresolved repair.
+The review's tentative current-Cursor replacement objection was withdrawn after
+tracing legitimate explicit-target batch updates; no new Cursor restriction was
+introduced.
+
+D4, area/parent reconciliation and G2a/G2b remain separately owned. Runtime
+production is still `c1b731bd`; its prior generation2 median6.830579 is reused
+only as that checkpoint, not a new performance measurement.

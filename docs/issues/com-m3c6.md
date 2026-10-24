@@ -1,6 +1,6 @@
 ---
 id: com-m3c6
-status: open
+status: in_progress
 deps: [com-m0bf, com-nqjd, com-6paa, com-qbwg]
 links: []
 created: 2026-10-23T10:41:58Z
