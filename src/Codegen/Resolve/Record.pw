@@ -469,8 +469,9 @@ pub impl Comp {
         if localIndex >= self.cur.locals.count() { return <Result.Ok value=false /> }
         try self.recordDeclarationCapture(localIndex: localIndex)
         val local: Local = (try self.typedLocal(index: localIndex))
-        if !(self.isFnType(ref: local.ty)) { return <Result.Ok value=false /> }
-        try self.recordDynamicCallTemplate(exprId: exprId, receiver: <CallTemplateReceiver.None />, args: args, target: <DynamicCallTemplateTarget.ClosureLocal bindingDeclStart=local.nameStart fnTypeTerm=local.ty />)
+        val functionType = try self.normalizedValueType(ref: local.ty)
+        if !self.isFnType(ref: functionType) { return <Result.Ok value=false /> }
+        try self.recordDynamicCallTemplate(exprId: exprId, receiver: <CallTemplateReceiver.None />, args: args, target: <DynamicCallTemplateTarget.ClosureLocal bindingDeclStart=local.nameStart fnTypeTerm=functionType />)
         return <Result.Ok value=true />
     }
 

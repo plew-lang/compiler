@@ -1120,7 +1120,17 @@ fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U6
         Result.Err(error: val error) => { return <MidOperandBuild.Error error=error /> }
     }
     val term = sourceType.typeTerm()
-    val returnsUnit: Bool = c.callTemplateReturnsUnit(template: template)
+    val invocation = match midSourceSemanticExpression(state: state, exprId: exprId) {
+        Optional.Some(v: val fact) => fact.invocation
+        Optional.None => { return <MidOperandBuild.Error error=<MidBuildError.MissingSemanticType /> /> }
+    }
+    // A nonvalue source fact may retain a diagnostic Unit annotation. It is
+    // never the payload of a diverging invocation: the frozen call recipe owns
+    // that ABI result (zero), just as it owns ordinary typed call results.
+    val returnsUnit = c.callTemplateReturnsUnit(template: template) && match invocation {
+        InvocationCompletion.Diverges => false
+        _ => true
+    }
     if !returnsUnit && template.resultTypeRecipe == 0U64 {
         if c.traceCodegen {
             eprint(text: "[trace-codegen] Mid call result recipe missing expr=")

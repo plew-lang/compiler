@@ -1,6 +1,17 @@
 // Part of monomorphization (root: _.pw): TypeInfo extraction and field-type
 // substitution.
 
+impl Comp {
+    // Receiver substitution precedes this canonical projection closure. Keep
+    // unresolved lexical parameters open; only selected associated outputs are
+    // normalized here, before any field reader records their meaning.
+    inout fn normalizedSelectedFieldType(ref: U64, receiverRef: U64) -> Result[U64, CompileDiagnostic] {
+        if !self.arena.typeContainsAssociatedProjection(ref: ref) { return <Result.Ok value=ref /> }
+        return self.closeBodyProjectionTerms(ref: ref, environment: <InstanceEnvironment receiverRef=receiverRef />,
+            selfRef: receiverRef, itemRef: 0U64, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))
+    }
+}
+
 // TypeInfo of a fully-concrete TypeRef (for literal-context checking and the
 // field/index/method dispatch). Generic instantiations report as kind-2 named
 // (the head span); nested generic field types are deferred (G2a).
@@ -136,7 +147,7 @@ pub impl Comp {
             if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return <Result.Ok value=0U64 />}
             mut val ri: U64 = 0U64
             while ri < t.recordFieldLabels.count() {
-                if t.recordFieldLabels[ri] == qField { return <Result.Ok value=t.recordFieldTerms[ri] />}
+                if t.recordFieldLabels[ri] == qField { return self.normalizedSelectedFieldType(ref: t.recordFieldTerms[ri], receiverRef: storageRef) }
                 ri += 1U64
             }
             return <Result.Ok value=0U64 />
@@ -148,7 +159,10 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < fields.count() {
             val fd: FieldDef = fields[i]
-            if fd.nameId == qField { return <Result.Ok value=(try self.groundUnderInst(instRef: storageRef, tyRef: fd.ty)) />}
+            if fd.nameId == qField {
+                val grounded = try self.groundUnderInst(instRef: storageRef, tyRef: fd.ty)
+                return self.normalizedSelectedFieldType(ref: grounded, receiverRef: storageRef)
+            }
             i += 1U64
         }
         return <Result.Ok value=0U64 />
