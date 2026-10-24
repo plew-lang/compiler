@@ -1,0 +1,166 @@
+// Direct transfers retain owner and region identity across source publication.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /SourceCompletion only { CompletionTransfer }
+use /Ir only { Expr, Stmt, SourceExitTarget, SourceTransferFact, SemanticCompletionOwner }
+use /Mid only { prepareMidSourceState, buildMidBlock, buildMidReturn, MidBuildError, MidBlock, MidTerminator }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn initialized() -> Comp {
+    mut val compiler = <Comp />
+    val resources = [
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64, Bool }}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 struct Bool }}" />,
+        <SourceResource path="plew:std/TransferProbe.pw".bytes() text="fn regions() -> I64 {{ val outer = {{ val inner = {{ give 1I64 }}\n give inner }}\n return outer }}\nfn loops(flag: Bool) {{ while flag {{ while flag {{ break }}\n break }}\n while flag {{ continue }}\n return }}\nfn closureOwner() {{ val callback: fn() -> () = fn() {{ return }}\n return }}\nfn other() {{ return }}" />,
+    ]
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.File path="plew:std/TransferProbe.pw" />,
+        sources: <SourceAccess stdRoot="plew:std/".bytes() resources=resources />).unwrap()
+    return compiler
+}
+
+fn function(compiler: inout Comp, name: String) -> U64 {
+    val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    assert(index < compiler.arena.functionCount())
+    return index
+}
+
+fn initializer(compiler: Comp, statement: U64) -> U64 {
+    return match compiler.arena.stmts[statement] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val expression) => expression
+        _ => { panic("expected transfer probe binding") }
+    }
+}
+
+fn valueBlock(compiler: Comp, expression: U64) -> U64 {
+    return match compiler.arena.exprs[expression] {
+        Expr.Block(body: val block, offset: _) => block
+        _ => { panic("expected transfer probe value block") }
+    }
+}
+
+fn loopBody(compiler: Comp, statement: U64) -> U64 {
+    return match compiler.arena.stmts[statement] {
+        Stmt.While(cond: _, body: val block) => block
+        _ => { panic("expected transfer probe loop") }
+    }
+}
+
+fn blockTarget(fact: SourceTransferFact, statement: U64, block: U64, owner: U64) {
+    assert(fact.statementId == statement)
+    assert(fact.matches(transfer: <CompletionTransfer.Give />))
+    match fact.owner { SemanticCompletionOwner.Function(index: val index) => { assert(index == owner) } _ => { panic("wrong block owner") } }
+    match fact.target { SourceExitTarget.Block(blockId: val target) => { assert(target == block) } _ => { panic("give lost its block target") } }
+}
+
+fn loopTarget(fact: SourceTransferFact, statement: U64, loop: U64, owner: U64) {
+    assert(fact.statementId == statement)
+    match fact.owner { SemanticCompletionOwner.Function(index: val index) => { assert(index == owner) } _ => { panic("wrong loop owner") } }
+    match fact.target { SourceExitTarget.Loop(statementId: val target) => { assert(target == loop) } _ => { panic("loop exit lost its target") } }
+}
+
+fn succeeded(error: MidBuildError) {
+    match error { MidBuildError.None => {} _ => { panic("matching source target rejected") } }
+}
+
+fn rejected(error: MidBuildError) {
+    match error { MidBuildError.None => { panic("missing or foreign target reached Mid") } _ => {} }
+}
+
+fn main() {
+    mut val compiler = initialized()
+    val regions = function(compiler: inout compiler, name: "regions")
+    val loops = function(compiler: inout compiler, name: "loops")
+    val closureOwner = function(compiler: inout compiler, name: "closureOwner")
+    val other = function(compiler: inout compiler, name: "other")
+    compiler.prepareLexicalBody(fnIdx: regions).unwrap()
+    compiler.prepareLexicalBody(fnIdx: loops).unwrap()
+    compiler.prepareLexicalBody(fnIdx: closureOwner).unwrap()
+    compiler.prepareLexicalBody(fnIdx: other).unwrap()
+    val regionFacts = compiler.preparedFunctionSemanticFacts(fnIdx: regions).unwrap()
+    val loopFacts = compiler.preparedFunctionSemanticFacts(fnIdx: loops).unwrap()
+    val parentFacts = compiler.preparedFunctionSemanticFacts(fnIdx: closureOwner).unwrap()
+    val otherFacts = compiler.preparedFunctionSemanticFacts(fnIdx: other).unwrap()
+
+    // Each direct give belongs to its own block, although both have one owner.
+    val regionBody = compiler.arena.functionAt(index: regions).body
+    val outerBinding = compiler.blockStmtAt(blkId: regionBody, index: 0U64)
+    val outerBlock = valueBlock(compiler: compiler, expression: initializer(compiler: compiler, statement: outerBinding))
+    val innerBinding = compiler.blockStmtAt(blkId: outerBlock, index: 0U64)
+    val innerBlock = valueBlock(compiler: compiler, expression: initializer(compiler: compiler, statement: innerBinding))
+    val innerGive = compiler.blockStmtAt(blkId: innerBlock, index: 0U64)
+    val outerGive = compiler.blockStmtAt(blkId: outerBlock, index: 1U64)
+    assert(innerBlock != outerBlock)
+    blockTarget(fact: compiler.sourceTransferFact(facts: regionFacts, stmtId: innerGive, transfer: <CompletionTransfer.Give />).unwrap(), statement: innerGive, block: innerBlock, owner: regions)
+    blockTarget(fact: regionFacts.transfer(stmtId: outerGive).unwrap(), statement: outerGive, block: outerBlock, owner: regions)
+    val functionReturn = compiler.blockStmtAt(blkId: regionBody, index: 1U64)
+    val returned = compiler.sourceTransferFact(facts: regionFacts, stmtId: functionReturn, transfer: <CompletionTransfer.Return />).unwrap()
+    match returned.target { SourceExitTarget.Function => {} _ => { panic("return lost its function target") } }
+    match returned.owner { SemanticCompletionOwner.Function(index: val index) => { assert(index == regions) } _ => { panic("return has another invocation owner") } }
+
+    // Nested and sibling loops have distinct stable statement identities.
+    val loopsBody = compiler.arena.functionAt(index: loops).body
+    val outerLoop = compiler.blockStmtAt(blkId: loopsBody, index: 0U64)
+    val outerLoopBody = loopBody(compiler: compiler, statement: outerLoop)
+    val innerLoop = compiler.blockStmtAt(blkId: outerLoopBody, index: 0U64)
+    val innerLoopBody = loopBody(compiler: compiler, statement: innerLoop)
+    val innerBreak = compiler.blockStmtAt(blkId: innerLoopBody, index: 0U64)
+    val outerBreak = compiler.blockStmtAt(blkId: outerLoopBody, index: 1U64)
+    val siblingLoop = compiler.blockStmtAt(blkId: loopsBody, index: 1U64)
+    val siblingBody = loopBody(compiler: compiler, statement: siblingLoop)
+    val continued = compiler.blockStmtAt(blkId: siblingBody, index: 0U64)
+    loopTarget(fact: compiler.sourceTransferFact(facts: loopFacts, stmtId: innerBreak, transfer: <CompletionTransfer.Break />).unwrap(), statement: innerBreak, loop: innerLoop, owner: loops)
+    loopTarget(fact: loopFacts.transfer(stmtId: outerBreak).unwrap(), statement: outerBreak, loop: outerLoop, owner: loops)
+    loopTarget(fact: compiler.sourceTransferFact(facts: loopFacts, stmtId: continued, transfer: <CompletionTransfer.Continue />).unwrap(), statement: continued, loop: siblingLoop, owner: loops)
+
+    // A closure's return targets its invocation, never its construction owner.
+    val parentBody = compiler.arena.functionAt(index: closureOwner).body
+    val closureBinding = compiler.blockStmtAt(blkId: parentBody, index: 0U64)
+    val closureExpression = initializer(compiler: compiler, statement: closureBinding)
+    val closureIndex = compiler.semanticClosureIndex(ownerFnIdx: closureOwner, exprId: closureExpression).unwrap()
+    val closure = compiler.preparedSemanticClosureAt(index: closureIndex).unwrap()
+    val closureFacts = compiler.preparedClosureSemanticFacts(closure: closure).unwrap()
+    val closureReturn = compiler.blockStmtAt(blkId: closure.bodyBlock, index: 0U64)
+    val parentReturn = compiler.blockStmtAt(blkId: parentBody, index: 1U64)
+    val closureTransfer = compiler.sourceTransferFact(facts: closureFacts, stmtId: closureReturn, transfer: <CompletionTransfer.Return />).unwrap()
+    match closureTransfer.target { SourceExitTarget.Function => {} _ => { panic("closure return lost its invocation target") } }
+    match closureTransfer.owner { SemanticCompletionOwner.Closure(expression: val expression) => { assert(expression == closureExpression) } _ => { panic("closure return selected its parent function") } }
+    assert(parentFacts.transfer(stmtId: closureReturn).isNone())
+    assert(closureFacts.transfer(stmtId: parentReturn).isNone())
+    mut val closureState = prepareMidSourceState(c: inout compiler, sourceFunction: closure.bodyKey, facts: closureFacts).unwrap()
+    succeeded(error: buildMidReturn(c: inout compiler, state: inout closureState, stmtId: closureReturn))
+
+    // Successful snapshots distinguish nontransfer statements and wrong kind.
+    assert(regionFacts.statementCompletion(stmtId: outerBinding).isSome())
+    assert(regionFacts.transfer(stmtId: outerBinding).isNone())
+    assert(compiler.sourceTransferFact(facts: regionFacts, stmtId: outerBinding, transfer: <CompletionTransfer.Return />).isErr())
+    assert(compiler.sourceTransferFact(facts: regionFacts, stmtId: functionReturn, transfer: <CompletionTransfer.Continue />).isErr())
+    assert(compiler.sourceTransferFact(facts: otherFacts, stmtId: functionReturn, transfer: <CompletionTransfer.Return />).isErr())
+    assert(prepareMidSourceState(c: inout compiler, sourceFunction: other, facts: regionFacts).isErr())
+    mut val another = initialized()
+    assert(another.sourceTransferFact(facts: regionFacts, stmtId: functionReturn, transfer: <CompletionTransfer.Return />).isErr())
+
+    // Actual Mid consumers cannot replace the saved source loop with a sibling
+    // mapping or invent a target when no mapping is active.
+    mut val missing = prepareMidSourceState(c: inout compiler, sourceFunction: loops, facts: loopFacts).unwrap()
+    rejected(error: buildMidBlock(c: inout compiler, state: inout missing, blockId: innerLoopBody))
+    mut val wrong = prepareMidSourceState(c: inout compiler, sourceFunction: loops, facts: loopFacts).unwrap()
+    wrong.blocks.append(<MidBlock />)
+    wrong.blocks.append(<MidBlock />)
+    wrong.pushLoopTarget(statementId: siblingLoop, breakTarget: 1U64, continueTarget: 2U64, enclosingScope: 0U64)
+    rejected(error: buildMidBlock(c: inout compiler, state: inout wrong, blockId: innerLoopBody))
+    mut val matching = prepareMidSourceState(c: inout compiler, sourceFunction: loops, facts: loopFacts).unwrap()
+    matching.blocks.append(<MidBlock />)
+    matching.blocks.append(<MidBlock />)
+    matching.pushLoopTarget(statementId: innerLoop, breakTarget: 1U64, continueTarget: 2U64, enclosingScope: 0U64)
+    succeeded(error: buildMidBlock(c: inout compiler, state: inout matching, blockId: innerLoopBody))
+    match matching.blocks[0U64].terminator { MidTerminator.Goto(target: val target) => { assert(target == 1U64) } _ => { panic("break did not use its saved mapping") } }
+    mut val continuation = prepareMidSourceState(c: inout compiler, sourceFunction: loops, facts: loopFacts).unwrap()
+    continuation.blocks.append(<MidBlock />)
+    continuation.blocks.append(<MidBlock />)
+    continuation.pushLoopTarget(statementId: siblingLoop, breakTarget: 1U64, continueTarget: 2U64, enclosingScope: 0U64)
+    succeeded(error: buildMidBlock(c: inout compiler, state: inout continuation, blockId: siblingBody))
+    match continuation.blocks[0U64].terminator { MidTerminator.Goto(target: val target) => { assert(target == 2U64) } _ => { panic("continue did not use its saved mapping") } }
+    print("source-transfer-targets")
+}
