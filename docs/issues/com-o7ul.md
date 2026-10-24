@@ -39,3 +39,24 @@ ordinary typed dynamic call controls execute; value-position and conversion
 rejections remain. Pair com-px0e for original associated path. Fresh sourcecheck,
 fixed point, median below7s and independent completion review. E3/G1/E4 depend on
 this repair; full final candidate suites remain G2.
+
+## Current Repair Refinement
+
+Initial c9a2319a separates diagnostic Unit from a diverging call destination but
+fresh2 exposed the next representation mismatch in existing diverging_call_flow.
+The reserved result local stayed untyped because materializeMidCallValue returned
+NoContinuation after callee Unreachable, before committing its recipe. Source
+selection controls passed; this is not an incorrect surface test.
+
+771150e1 makes the lowering result explicit: buildMidCallEvaluation returns
+Ok(true) only at its two actual Call/NormalizedCall emission sites, Ok(false)
+when input evaluation cannot continue, and Err for construction failure.
+buildMidCallInto preserves that result while applying saved callee divergence.
+The result local receives its recipe on actual emission even if the callee never
+returns; only normal continuation enters the call-result cache. Additional
+invocation lookup is limited to potential normal-Unit calls. Source facts and
+strict type verification remain unchanged. Independently reviewed by
+/root/body_receiver_completion_review. New mid_call_reached_completion covers
+normal and inout input loops plus a returning argument of a diverging callee.
+Current-source embedded preparation is a preflight; native/panic execution and
+formal measurements remain required.
