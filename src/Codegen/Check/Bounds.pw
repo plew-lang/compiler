@@ -677,6 +677,13 @@ pub impl Comp {
 
     inout fn conformanceTraitBound(conformance: Conform) -> TraitBound {
         val subject = self.receiverSubjectTerm(receiver: conformance.subjectTy, traitOwner: conformance.subjectTraitOwner)
+        // Positional inputs and associated outputs belong to the same
+        // declaration subject. In particular Add[Self] names this conformer,
+        // not an unrelated ungrounded Self in the requirement's projection.
+        mut val arguments: Array[U64] = []
+        for argument in self.copyConformTypes(types: conformance.traitArgs) {
+            arguments.append(self.groundTermInEnvironment(ref: argument, params: [], values: [], selfRef: subject))
+        }
         mut val outputs: Array[TraitAssocPredicate] = []
         mut val index = 0U64
         while index < conformance.assocBindingIds.count() {
@@ -684,7 +691,7 @@ pub impl Comp {
             outputs.append(<TraitAssocPredicate member=binding.nameId value=self.groundTermInEnvironment(ref: binding.ty, params: [], values: [], selfRef: subject) span=binding.tyStart />)
             index += 1U64
         }
-        return <TraitBound subject=subject constraint=<TraitConstraint key=<TraitInstanceKey owner=conformance.traitStart positionalArgs=self.copyConformTypes(types: conformance.traitArgs) /> positionalArgsOpen=false assocPredicates=outputs /> offset=conformance.defOffset />
+        return <TraitBound subject=subject constraint=<TraitConstraint key=<TraitInstanceKey owner=conformance.traitStart positionalArgs=arguments /> positionalArgsOpen=false assocPredicates=outputs /> offset=conformance.defOffset />
     }
 
     inout fn conformanceDeclarationAssumptions(conformIndex: U64) -> Array[DeclarationBoundRef] {

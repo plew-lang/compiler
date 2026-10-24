@@ -47,7 +47,7 @@ fn main() {
     assert(compiler.factoryConstructionReceiver(writtenTerm: receiver, typeStart: declaration.nameStart, typeLen: declaration.nameLen, offset: declaration.defOffset).unwrap() == receiver)
     val missing = compiler.internBytes(s: "MissingFactoryReceiver")
     assert(compiler.factoryConstructionReceiver(writtenTerm: 0U64, typeStart: missing.nameStart, typeLen: missing.nameLen, offset: declaration.defOffset).isErr())
-    val foreignSource = compiler.internBytes(s: "struct Options {}")
+    val foreignSource = compiler.internBytes(s: "struct Options {{}}")
     val foreignStart = foreignSource.nameStart + 7U64
     compiler.modules.registerSourceFile(start: foreignSource.nameStart, length: foreignSource.nameLen, moduleId: 777U64, path: "ForeignFactory.pw")
     compiler.arena.registerStruct(<StructDef nameStart=foreignStart nameLen=7U64 nameId=optionsName typeParams=[] fields=[] isUnique=false isExtern=false defOffset=foreignStart />)
@@ -62,7 +62,7 @@ fn main() {
 fn checkEarlyReceiver() {
     mut val compiler = <Comp />
     compiler.arena.reserveTypeSentinel()
-    val source = compiler.internBytes(s: "struct Early {}")
+    val source = compiler.internBytes(s: "struct Early {{}}")
     val start = source.nameStart + 7U64
     val name = compiler.internBytes(s: "Early").nameId
     compiler.modules.registerSourceFile(start: source.nameStart, length: source.nameLen, moduleId: 1U64, path: "Early.pw")
