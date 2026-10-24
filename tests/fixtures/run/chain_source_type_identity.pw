@@ -2,18 +2,19 @@ use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
+use /Diag only { CompileDiagnostic }
 use /Ir only { InstanceEnvironment, ValueConversionProof, TypeRef, StructDef, Bind, Expr }
 
 fn main() {
     mut val compiler = <Comp />
-    val source = "use @Std/Core only {{ Optional as Maybe }} struct Optional[T] {{}} struct Item {{ pub val count: I64 }} pub impl Item {{ factory }} struct Box[T] {{ pub val item: T }} pub impl[T] Box[T] {{ factory }} fn direct(value: Maybe[Box[Item]]) -> Maybe[Item] {{ return value?.item }} fn block(value: Maybe[Box[Item]]) -> Maybe[Item] {{ return {{ give value?.item }} }} fn branch(value: Maybe[Box[Item]], flag: Bool) -> Maybe[Item] {{ return if flag {{ give value?.item }} else {{ give <Maybe[Item].None /> }} }} fn generic[T](value: Maybe[Box[T]]) -> Maybe[T] {{ return value?.item }} fn nested(value: Maybe[Box[Box[Item]]]) -> Maybe[Box[Item]] {{ return value?.item }} fn unrelated() {{}}"
-    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="chain-source-types.pw" />, sources: <SourceAccess />).unwrap()
+    val source = "use @Std/Lang only {{ Optional as Maybe }} struct Optional[T] {{}} struct Item {{ pub val count: I64 }} pub impl Item {{ factory }} struct Box[T] {{ pub val item: T }} pub impl[T] Box[T] {{ factory }} fn direct(value: Maybe[Box[Item]]) -> Maybe[Item] {{ return value?.item }} fn block(value: Maybe[Box[Item]]) -> Maybe[Item] {{ return {{ give value?.item }} }} fn branch(value: Maybe[Box[Item]], flag: Bool) -> Maybe[Item] {{ return if flag {{ give value?.item }} else {{ give <Maybe[Item].None /> }} }} fn generic[T](value: Maybe[Box[T]]) -> Maybe[T] {{ return value?.item }} fn nested(value: Maybe[Box[Box[Item]]]) -> Maybe[Box[Item]] {{ return value?.item }} fn unrelated() {{}}"
+    requireSuccess(result: analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="chain-source-types.pw" />, sources: <SourceAccess />))
     val unrelated = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "unrelated").nameId)
-    compiler.prepareLexicalBody(fnIdx: unrelated).unwrap()
+    requireSuccess(result: compiler.prepareLexicalBody(fnIdx: unrelated))
     val foreign = compiler.internBodyInstance(fnIdx: unrelated, environment: <InstanceEnvironment />)
     for name in ["direct", "block", "branch", "generic", "nested"] {
         val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
-        compiler.prepareLexicalBody(fnIdx: function).unwrap()
+        requireSuccess(result: compiler.prepareLexicalBody(fnIdx: function))
         val body = compiler.internBodyInstance(fnIdx: function, environment: <InstanceEnvironment />)
         val result = compiler.preparedFunctionBodySignature(fnIdx: function).unwrap().resultTerm
         mut val found = 0U64
@@ -42,6 +43,13 @@ fn main() {
         }
     }
     print("chain-source-type-identity")
+}
+
+fn requireSuccess(result: Result[(), CompileDiagnostic]) {
+    match result {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val error) => { print(error.message) panic("chain source preparation failed") }
+    }
 }
 
 fn checkStageInputs(compiler: inout Comp, result: U64) {
