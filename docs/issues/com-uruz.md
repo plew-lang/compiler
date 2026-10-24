@@ -173,8 +173,15 @@ empty interpolation in its test-source strings; the never-green fixture is
 corrected to escaped braces without weakening its assertions. Existing-carrier
 preflight then compiles and runs the new Comp code's source-owner/factory test
 successfully with unchanged inputs. This diagnostic does not certify a fresh
-compiler or final gates. Fresh3 standard build 20261024T074133-build-7c1463 is
-in progress on source e10009c4 from the known chain-source-2 carrier.
+compiler or final gates. Fresh3 standard build 20261024T074133-build-7c1463, full source checking,
+module9 and 77 native controls pass with unchanged inputs. The next control,
+mid_associated_item_identity, exposes discarded impl-pattern ParamId bindings
+in a provided receiver body environment. Trace and independent classification
+place this within the existing com-6paa scope; dd393d54 repairs that mapping
+without altering the source receiver producer. Its new internal preflight
+passes after reproducing the original failure. Fresh4 standard build
+20261024T075946-build-c9e973 passes; normal89/reject27, module9 and full source
+checking are now running with fixed inputs. Task completion remains held.
 
 Independent read-only implementation follow-ups by
 /root/body_receiver_completion_review found the structural regression, confirmed
