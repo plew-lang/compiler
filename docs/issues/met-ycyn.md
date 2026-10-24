@@ -1,6 +1,6 @@
 ---
 id: met-ycyn
-status: in_progress
+status: closed
 deps: [met-v1jg, met-7a8u]
 links: []
 created: 2026-10-24T18:32:09Z
@@ -32,5 +32,16 @@ found-set membership can stop scanning, duplicate checks can be removed by proof
 Use the saved fixed point carrier bin/plewc-perf-navigation-fixed for build.
 Separate commits per query family; same-source comparison against that carrier,
 fresh source/type/Mid source controls, independent review, then standard formal
-measurement. An identity fast path is not permission to weaken type equality.
+measurement when a material improvement is supported. An identity fast path is not permission to weaken type equality.
 No change to source acceptance, ownership or code generation output is intended.
+
+## Outcome
+
+Production d461ba2c/4e716165, standard build20261024T183532-build-642634
+from fixed-pointd0654cb3; freshbd2ed7dc sourcecheck and native18/panic2/reject8
+all pass with unchanged inputs. Matching source old6.072105/new6.067694s,
+all six LLVM outputs identical; difference is noise-sized, no speedup claim.
+Independent b2 review accepted scope and rechecked referenced hashes/inputs.
+Durable receipt: meta/evidence/performance-six-seconds/minimal-query-inputs.json.
+Formal latest remains6.051333s, target unmet. No new formal run merely to select
+a favorable fluctuation. No main/seed/adopted-carrier promotion.
