@@ -350,8 +350,8 @@ pub fn checkDeclarationLocalAccess(c: inout Comp, templates: inout MidFunctionTe
     mut val needed: Dictionary[U64, Bool] = [:]
     mut val site = 0U64
     while !eager && site < c.callTemplateCount() {
-        val template = c.callTemplateAt(index: site)
-        if template.mayHaveStorageArguments { needed[template.siteKey.ownerFnIdx] = true }
+        val head = c.callTemplateHeadAt(index: site)
+        if head.mayHaveStorageArguments { needed[head.siteKey.ownerFnIdx] = true }
         site += 1U64
     }
     mut val index = 0U64

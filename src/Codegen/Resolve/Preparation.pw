@@ -71,7 +71,7 @@ impl Comp {
         mut val row = self.firstLexicalCallTemplate(owner: owner)
         while row != 0U64 {
             val index = row - 1U64
-            val sourceOwner = self.callTemplateAt(index: index).siteKey.ownerFnIdx
+            val sourceOwner = self.callTemplateHeadAt(index: index).siteKey.ownerFnIdx
             if !required.getOr(key: sourceOwner, fallback: false) {
                 if self.finalizeSourceCallStorage(index: index) { required[sourceOwner] = true }
             }
@@ -84,7 +84,7 @@ impl Comp {
     inout fn finalizeGlobalCallStorage(target: U64) {
         mut val required: Dictionary[U64, Bool] = [:]
         for index in self.globalCallTemplateOwners.getOr(key: target, fallback: []) {
-            val sourceOwner = self.callTemplateAt(index: index).siteKey.ownerFnIdx
+            val sourceOwner = self.callTemplateHeadAt(index: index).siteKey.ownerFnIdx
             if !required.getOr(key: sourceOwner, fallback: false) {
                 if self.finalizeSourceCallStorage(index: index) { required[sourceOwner] = true }
             }

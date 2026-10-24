@@ -1443,7 +1443,7 @@ pub impl Comp {
         // when no surrounding frontend expression asks for its concrete type.
         val templateIndex = self.callTemplateIndex(siteKey: siteKey)
         if templateIndex < self.callTemplateLocations.count() {
-            self.arena.setBodyTypeRecipeResult(bodyId: bodyId, recipeId: self.callTemplateAt(index: templateIndex).resultTypeRecipe, resultType: resultTypeRef)
+            self.arena.setBodyTypeRecipeResult(bodyId: bodyId, recipeId: self.callTemplateHeadAt(index: templateIndex).resultTypeRecipe, resultType: resultTypeRef)
         }
         return <Result.Ok value=() />
     }

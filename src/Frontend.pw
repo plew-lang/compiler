@@ -2434,6 +2434,16 @@ struct SourceCallLocation {
 }
 impl SourceCallLocation { factory }
 
+// A transient projection of one operation, not another semantic store. The
+// selected kind remains in its source row and is read only by consumers that
+// need it. Construction stays private to the same owner-aware query boundary.
+pub struct SourceOperationHead {
+    pub val siteKey: CallSiteKey
+    pub val resultTypeRecipe: U64 = 0U64
+    pub val mayHaveStorageArguments: Bool = true
+}
+impl SourceOperationHead { factory }
+
 // Transient read projection, not another semantic store. Do not pass Comp,
 // SourceFactDirectory or SourceBodyData by value to a nontrivial getter.
 fn cachedSourceOperationReader(readers: Array[PreparedSemanticFacts], index: Optional[U64], session: U64, owner: SemanticCompletionOwner) -> Optional[PreparedSemanticFacts] {
@@ -2451,6 +2461,10 @@ fn cachedSourceOperationReader(readers: Array[PreparedSemanticFacts], index: Opt
 fn readSourceOperationTemplate(rows: Array[CallTemplate], index: U64) -> Optional[CallTemplate] {
     if index >= rows.count() { return <Optional.None /> }
     return <Optional.Some v=rows[index] />
+}
+fn readSourceOperationHead(rows: Array[CallTemplate], index: U64) -> Optional[SourceOperationHead] {
+    if index >= rows.count() { return <Optional.None /> }
+    return <Optional.Some v=<SourceOperationHead siteKey=rows[index].siteKey resultTypeRecipe=rows[index].resultTypeRecipe mayHaveStorageArguments=rows[index].mayHaveStorageArguments /> />
 }
 fn readSourceOperationConstraints(rows: Array[Optional[CallConstraintPlanState]], index: U64) -> Optional[CallConstraintPlanState] {
     if index >= rows.count() { return <Optional.None /> }
@@ -2612,6 +2626,7 @@ impl PreparedSemanticFacts { factory }
 pub impl PreparedSemanticFacts {
     fn belongsToSession(session: U64) -> Bool { return self.session == session }
     fn operationAt(index: U64) -> Optional[CallTemplate] { return readSourceOperationTemplate(rows: self.payload->operations, index: index) }
+    fn operationHeadAt(index: U64) -> Optional[SourceOperationHead] { return readSourceOperationHead(rows: self.payload->operations, index: index) }
     fn expression(exprId: U64) -> Optional[SemanticExprType] { return readSourceExpression(rows: self.payload->expressions, identities: self.payload->expressionIds, indexSlots: self.payload->expressionIndexSlots, exprId: exprId) }
     fn valueBlock(blockId: U64) -> Optional[SourceValueBlockFact] { return self.payload->valueBlocks.get(key: blockId) }
     fn identifierTarget(exprId: U64) -> Optional[U64] { return self.payload->identifierTargets.get(key: exprId) }

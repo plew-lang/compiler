@@ -2059,6 +2059,15 @@ pub impl Comp {
         if index < self.callTemplateLocations.count() { return <Result.Ok value=self.callTemplateAt(index: index) />}
         return <Result.Ok value=<CallTemplate siteKey=siteKey /> />
     }
+    // The exact same source key and owner admission as the full query, for
+    // consumers that need no selected-kind payload. Absence preserves the
+    // ordinary Pending template's zero recipe and conservative storage flag.
+    inout fn callTemplateHeadForSourceBody(fnIdx: U64, exprId: U64) -> Result[SourceOperationHead, CompileDiagnostic] {
+        val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: fnIdx, exprId: exprId))
+        val index: U64 = self.callTemplateIndex(siteKey: siteKey)
+        if index < self.callTemplateLocations.count() { return <Result.Ok value=self.callTemplateHeadAt(index: index) /> }
+        return <Result.Ok value=<SourceOperationHead siteKey=siteKey /> />
+    }
 
     // The declaration-time semantic term of an expression. Most expressions
     // are supplied by Record; an identifier's lexical Local is equally a

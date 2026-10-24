@@ -1371,8 +1371,8 @@ fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggreg
         val operand: MidOperandBuild = if nested.found {
             give materializeMidAggregateValue(c: inout c, state: inout state, aggregate: nested.aggregate)
         } else if midExprIsCall(c: c, state: state, exprId: element.exprId) {
-            val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: element.exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
-            give materializeMidCallValue(c: inout c, state: inout state, exprId: element.exprId, siteKey: template.siteKey)
+            val head = (match c.callTemplateHeadForSourceBody(fnIdx: state.sourceFunction, exprId: element.exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
+            give materializeMidCallValue(c: inout c, state: inout state, exprId: element.exprId, siteKey: head.siteKey)
         } else {
             give midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: element.exprId, allowAccessMarker: false)
         }
@@ -1624,8 +1624,8 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
     if candidate < c.decls.accessCandidateCount() {
         if allowAccessMarker { return midPrepareAccess(c: inout c, state: inout state, candidate: candidate) }
         val readExpr: U64 = c.decls.accessCandidateAt(index: candidate).readExpr
-        val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: readExpr) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
-        return materializeMidCallValue(c: inout c, state: inout state, exprId: readExpr, siteKey: template.siteKey)
+        val head = (match c.callTemplateHeadForSourceBody(fnIdx: state.sourceFunction, exprId: readExpr) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
+        return materializeMidCallValue(c: inout c, state: inout state, exprId: readExpr, siteKey: head.siteKey)
     }
     val aggregate: MidAggregateLookup = (match midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, sourceFacts: state.sourceFacts, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
     if aggregate.found {
@@ -1654,27 +1654,27 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             return midOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: valueTypeTerm)
         }
         Expr.Call(nameStart: _, nameLen: _, args: _) => {
-            val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
-            return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
+            val head = (match c.callTemplateHeadForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
+            return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: head.siteKey)
         }
         Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
-            val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
-            return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
+            val head = (match c.callTemplateHeadForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
+            return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: head.siteKey)
         }
         Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
-            val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
-            return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
+            val head = (match c.callTemplateHeadForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
+            return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: head.siteKey)
         }
         Expr.Unary(op: _, operand: _) => {
-            val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
-            return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
+            val head = (match c.callTemplateHeadForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
+            return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: head.siteKey)
         }
         Expr.Binary(op: val op, lhs: val lhs, rhs: val rhs) => {
             if op == opAnd() || op == opOr() {
                 return materializeMidShortCircuit(c: inout c, state: inout state, lhs: lhs, rhs: rhs, typeTerm: valueTypeTerm, isAnd: op == opAnd())
             }
-            val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
-            return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
+            val head = (match c.callTemplateHeadForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
+            return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: head.siteKey)
         }
         Expr.ExtView(recv: val sourceExpr, source: _, strip: _) => {
             // The selected call already carries its semantic view. A capability
@@ -3943,12 +3943,12 @@ fn midSourceSemanticType(c: inout Comp, facts: Optional[PreparedSemanticFacts], 
         }
         SemanticExpressionTypeState.NoNormalValue => { return <Result.Ok value=<MidSourceExpressionType.NoNormalValue term=fact.term /> /> }
         SemanticExpressionTypeState.Pending => {
-            val template = match c.callTemplateForSourceBody(fnIdx: sourceFunction, exprId: exprId) {
-                Result.Ok(value: val template) => template
+            val head = match c.callTemplateHeadForSourceBody(fnIdx: sourceFunction, exprId: exprId) {
+                Result.Ok(value: val head) => head
                 Result.Err(error: val diagnostic) => { return <Result.Err error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
             }
-            if template.resultTypeRecipe == 0U64 { return <Result.Err error=<MidBuildError.MissingSemanticType /> /> }
-            return <Result.Ok value=<MidSourceExpressionType.CallResult recipe=template.resultTypeRecipe /> />
+            if head.resultTypeRecipe == 0U64 { return <Result.Err error=<MidBuildError.MissingSemanticType /> /> }
+            return <Result.Ok value=<MidSourceExpressionType.CallResult recipe=head.resultTypeRecipe /> />
         }
         SemanticExpressionTypeState.Unrecorded => { return <Result.Err error=<MidBuildError.MissingSemanticType /> /> }
     }

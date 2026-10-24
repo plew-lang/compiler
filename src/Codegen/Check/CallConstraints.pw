@@ -110,6 +110,18 @@ pub impl Comp {
         }
         panic("internal error: source operation navigation has no owner row")
     }
+    inout fn callTemplateHeadAt(index: U64) -> SourceOperationHead {
+        val location = self.callTemplateLocations[index]
+        val result = match cachedSourceOperationReader(readers: self.sourceFacts.readers, index: self.cur.sourceFactReader, session: self.sourceFacts.session, owner: location.owner) {
+            Optional.Some(v: val reader) => { give reader.operationHeadAt(index: location.localIndex) }
+            Optional.None => { give self.sourceFacts.operationHead(owner: location.owner, index: location.localIndex) }
+        }
+        match result {
+            Optional.Some(v: val head) => { if head.siteKey.sameKey(other: location.siteKey) { return head } }
+            Optional.None => {}
+        }
+        panic("internal error: source operation navigation has no owner row")
+    }
     // Explicit inspection copy for diagnostics/tests, never a body reader.
     inout fn callTemplateSnapshot() -> Array[CallTemplate] {
         mut val result: Array[CallTemplate] = []
