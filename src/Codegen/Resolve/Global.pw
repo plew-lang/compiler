@@ -9,7 +9,7 @@ pub impl Comp {
                 // Structural records own their written fields. Their
                 // synthetic layout identity is not a nominal declaration
                 // from which omitted memberwise defaults may be inherited.
-                val structuralRecord = ty != 0U64 && ty < self.arena.typeCount() && self.arena.typeTerms[ty].isRecord
+                val structuralRecord = ty != 0U64 && ty < self.arena.typeCount() && self.arena.typeTermAt(index: ty).isRecord
                 if !isEnum && typeLen != 0U64 && !structuralRecord {
                     mut val values: Array[MakeField] = []
                     mut val i: U64 = 0U64
@@ -19,7 +19,7 @@ pub impl Comp {
                     }
                     mut val declaration = <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
                     if ty != 0U64 && ty < self.arena.typeCount() {
-                        val term = self.arena.typeTerms[ty]
+                        val term = self.arena.typeTermAt(index: ty)
                         if term.hasDecl { declaration = <Bind nameStart=term.declOffset nameLen=1U64 fieldStart=0U64 fieldLen=0U64 /> }
                     }
                     if declaration.nameLen == 0U64 { declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen) }
@@ -653,7 +653,7 @@ pub impl Comp {
                 if typeLen == 0U64 && ty == 0U64 { return <Result.Ok value=() /> }
                 val candidates = self.anonymousConstructionCandidates(typeStart: typeStart, typeLen: typeLen)
                 val receiver = try self.factoryConstructionReceiver(writtenTerm: ty, typeStart: typeStart, typeLen: typeLen, offset: self.exprOffset(id: exprId))
-                val abstractReceiver = receiver != 0U64 && receiver < self.arena.typeCount() && (self.arena.typeTerms[receiver].paramId != 0U64 || self.arena.typeTerms[receiver].assocNameId != 0U64)
+                val abstractReceiver = receiver != 0U64 && receiver < self.arena.typeCount() && (self.arena.typeTermAt(index: receiver).paramId != 0U64 || self.arena.typeTermAt(index: receiver).assocNameId != 0U64)
                 if isEnum && !abstractReceiver { return <Result.Ok value=() /> }
                 if candidates.count() == 0U64 && !abstractReceiver {
                     self.normalizeMemberwiseDefaultsAt(exprId: exprId)

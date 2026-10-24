@@ -46,8 +46,8 @@ pub impl Comp {
                                 rTy = innerRef
                                 rArr = false
                                 if innerRef < self.arena.typeCount() {
-                                    rStart = self.arena.typeTerms[innerRef].nameStart
-                                    rLen = self.arena.typeTerms[innerRef].nameLen
+                                    rStart = self.arena.typeTermAt(index: innerRef).nameStart
+                                    rLen = self.arena.typeTermAt(index: innerRef).nameLen
                                 }
                             }
                         }

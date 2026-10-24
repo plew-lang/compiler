@@ -7,7 +7,7 @@
 
 pub impl Comp {
     inout fn typeInfoOfRef(ref: U64) -> TypeInfo {
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         // A projection is a structured semantic term even when its receiver
         // has no ordinary type arguments.  Do not collapse
         // `Parser#Convert[T].Output` to a bare Parser TypeInfo: generic-body
@@ -32,7 +32,7 @@ pub impl Comp {
             // `Array[E]` ref alongside (TOTAL-REF, same as the array-local branch):
             // a field/method on an Array-typed `Self` value (`lhs.data` in Array's
             // own Eq witness) needs the instance ref to resolve.
-            val el = self.arena.typeTerms[self.arena.typeArgumentPool[t.args.start]]
+            val el = self.arena.typeTermAt(index: self.arena.typeArgumentAt(index: t.args.start))
             val ab: TypeInfo = self.typeInfoOfName(start: el.nameStart, len: el.nameLen, isArray: true)
             return <TypeInfo kind=3 nameStart=ab.nameStart nameLen=ab.nameLen ref=ref />
         }

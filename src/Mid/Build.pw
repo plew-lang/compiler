@@ -996,7 +996,7 @@ fn midDirectArrayIndexExpr(c: Comp, state: MidBuildState, exprId: U64) -> U64 {
             }
             val baseTerm = source.term
             if baseTerm == 0U64 || baseTerm >= c.arena.typeCount() { return c.arena.exprs.count() }
-            val array = c.arena.typeTerms[baseTerm]
+            val array = c.arena.typeTermAt(index: baseTerm)
             if c.traceCodegen {
                 eprint(text: "[trace-codegen] Mid array-place candidate term=")
                 eprintU64(n: baseTerm)

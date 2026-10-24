@@ -61,7 +61,7 @@ pub impl Comp {
     // The empty-view case needs no owned array. Preserve the existing set
     // semantics (including duplicate IDs) for the non-empty representation.
     inout fn sameCompatibilityViewSet(expectedRef: U64, inferredRef: U64) -> Bool {
-        if self.arena.typeTerms[expectedRef].viewIds.len == 0U64 && self.arena.typeTerms[inferredRef].viewIds.len == 0U64 { return true }
+        if self.arena.typeTermAt(index: expectedRef).viewIds.len == 0U64 && self.arena.typeTermAt(index: inferredRef).viewIds.len == 0U64 { return true }
         return self.sameViewIdSet(a: self.arena.typeAt(index: expectedRef).viewIds, b: self.arena.typeAt(index: inferredRef).viewIds)
     }
 
@@ -105,8 +105,8 @@ pub impl Comp {
         if exp == 0U64 || actual == 0U64 || exp >= self.arena.typeCount() || actual >= self.arena.typeCount() {
             return <Result.Ok value=<TypeCompatibility.Unresolved /> />
         }
-        val te = self.arena.typeTerms[exp]
-        val tin = self.arena.typeTerms[actual]
+        val te = self.arena.typeTermAt(index: exp)
+        val tin = self.arena.typeTermAt(index: actual)
         if te.isSendable && !((try self.typeRefIsSendable(ref: actual))) {
             return <Result.Ok value=<TypeCompatibility.Incompatible /> />
         }
@@ -185,8 +185,8 @@ pub impl Comp {
             mut val index: U64 = 0U64
             while index < te.args.len {
                 if self.typeTermRefIdentityChildLabel(ref: exp, index: index) != self.typeTermRefIdentityChildLabel(ref: actual, index: index) { return <Result.Ok value=<TypeCompatibility.Incompatible /> /> }
-                val expectedChild = self.arena.typeArgumentPool[te.args.start + index]
-                val inferredChild = self.arena.typeArgumentPool[tin.args.start + index]
+                val expectedChild = self.arena.typeArgumentAt(index: te.args.start + index)
+                val inferredChild = self.arena.typeArgumentAt(index: tin.args.start + index)
                 if index == 0U64 {
                     val expectedUnit = self.callableResultIsUnit(ref: expectedChild)
                     val inferredUnit = self.callableResultIsUnit(ref: inferredChild)
@@ -210,8 +210,8 @@ pub impl Comp {
 
     // Structural field-by-field compatibility of two Record TypeTerms.
     inout fn recordTypeCompatibility(teRef: U64, tinRef: U64) -> Result[TypeCompatibility, CompileDiagnostic] {
-        val te = self.arena.typeTerms[teRef]
-        val tin = self.arena.typeTerms[tinRef]
+        val te = self.arena.typeTermAt(index: teRef)
+        val tin = self.arena.typeTermAt(index: tinRef)
         if !(te.isRecord) || !(tin.isRecord) { return <Result.Ok value=<TypeCompatibility.Incompatible /> />}
         if te.recordFieldLabels.len != tin.recordFieldLabels.len || te.recordFieldTerms.len != tin.recordFieldTerms.len || te.recordFieldLabels.len != te.recordFieldTerms.len {
             return <Result.Ok value=<TypeCompatibility.Incompatible /> />
@@ -221,14 +221,14 @@ pub impl Comp {
         // tcCheckMakeFields.
         mut val i: U64 = 0
         while i < te.recordFieldTerms.len {
-            if i >= te.recordFieldLabels.len || i >= tin.recordFieldLabels.len || self.arena.typeRecordLabelPool[te.recordFieldLabels.start + i] != self.arena.typeRecordLabelPool[tin.recordFieldLabels.start + i] { return <Result.Ok value=<TypeCompatibility.Incompatible /> />}
+            if i >= te.recordFieldLabels.len || i >= tin.recordFieldLabels.len || self.arena.typeRecordLabelAt(index: te.recordFieldLabels.start + i) != self.arena.typeRecordLabelAt(index: tin.recordFieldLabels.start + i) { return <Result.Ok value=<TypeCompatibility.Incompatible /> />}
             // a record/tuple field widening concrete->`any P` has no backend repack (records are
             // not a covariant container the erasure handles), so reject it rather than silently
             // miscompile the differing field layout (spec/08; mirrors compatNamed's gate).
-            if self.argWidensToAny(expectedArg: self.arena.typeRecordFieldPool[te.recordFieldTerms.start + i], inferredArg: self.arena.typeRecordFieldPool[tin.recordFieldTerms.start + i]) {
+            if self.argWidensToAny(expectedArg: self.arena.typeRecordFieldAt(index: te.recordFieldTerms.start + i), inferredArg: self.arena.typeRecordFieldAt(index: tin.recordFieldTerms.start + i)) {
                 return <Result.Ok value=<TypeCompatibility.Incompatible /> />
             }
-            match (try self.typeCompatibility(expected: self.arena.typeRecordFieldPool[te.recordFieldTerms.start + i], inferred: self.arena.typeRecordFieldPool[tin.recordFieldTerms.start + i])) {
+            match (try self.typeCompatibility(expected: self.arena.typeRecordFieldAt(index: te.recordFieldTerms.start + i), inferred: self.arena.typeRecordFieldAt(index: tin.recordFieldTerms.start + i))) {
                     TypeCompatibility.Compatible => {}
                     TypeCompatibility.Incompatible => { return <Result.Ok value=<TypeCompatibility.Incompatible /> /> }
                     TypeCompatibility.Unresolved => { return <Result.Ok value=<TypeCompatibility.Unresolved /> /> }
@@ -294,11 +294,11 @@ pub impl Comp {
             mut val i: U64 = 0
             while i < te.args.len {
                 if !(headErasable) {
-                    if self.argWidensToAny(expectedArg: self.arena.typeArgumentPool[te.args.start + i], inferredArg: self.arena.typeArgumentPool[tin.args.start + i]) {
+                    if self.argWidensToAny(expectedArg: self.arena.typeArgumentAt(index: te.args.start + i), inferredArg: self.arena.typeArgumentAt(index: tin.args.start + i)) {
                         return <Result.Ok value=<TypeCompatibility.Incompatible /> />
                     }
                 }
-                match (try self.typeCompatibility(expected: self.arena.typeArgumentPool[te.args.start + i], inferred: self.arena.typeArgumentPool[tin.args.start + i])) {
+                match (try self.typeCompatibility(expected: self.arena.typeArgumentAt(index: te.args.start + i), inferred: self.arena.typeArgumentAt(index: tin.args.start + i))) {
                     TypeCompatibility.Compatible => {}
                     TypeCompatibility.Incompatible => { return <Result.Ok value=<TypeCompatibility.Incompatible /> /> }
                     TypeCompatibility.Unresolved => { return <Result.Ok value=<TypeCompatibility.Unresolved /> /> }
@@ -316,8 +316,8 @@ pub impl Comp {
         if expectedArg >= self.arena.typeCount() || inferredArg >= self.arena.typeCount() {
             return false
         }
-        val ea = self.arena.typeTerms[expectedArg]
-        val ia = self.arena.typeTerms[inferredArg]
+        val ea = self.arena.typeTermAt(index: expectedArg)
+        val ia = self.arena.typeTermAt(index: inferredArg)
         if !(ea.isAny) || ia.isAny {
             return false
         }

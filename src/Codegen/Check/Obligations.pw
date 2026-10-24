@@ -808,7 +808,7 @@ pub impl Comp {
         val function = self.arena.functionAt(index: canonical)
         val lexical = try self.lexicalFunction(f: function)
         mut val selfParameter = 0U64
-        if lexical.recvTy != 0U64 && lexical.recvTy < self.arena.typeTerms.count() { selfParameter = self.arena.typeTerms[lexical.recvTy].paramId }
+        if lexical.recvTy != 0U64 && lexical.recvTy < self.arena.typeTermCount() { selfParameter = self.arena.typeTermAt(index: lexical.recvTy).paramId }
         return <Result.Ok value=<DeclarationTypeScope owner=canonical parameters=function.typeParams selfParameter=selfParameter /> />
     }
 

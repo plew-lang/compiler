@@ -63,7 +63,7 @@ fn main() {
     assert(compiler.arena.typeDeclarationResolutionComplete())
     assert(compiler.arena.typeAt(index: early).hasDecl)
     assert(compiler.arena.typeAt(index: early).declOffset == coreOwner.nameStart)
-    assert(compiler.arena.typeTerms[early].declOffset == coreOwner.nameStart)
+    assert(compiler.arena.typeTermAt(index: early).declOffset == coreOwner.nameStart)
     val publishedCount = compiler.arena.typeCount()
     val lateExpression = compiler.synthBufferNew(elemRef: element).unwrap()
     val late = receiver(compiler: compiler, expression: lateExpression)

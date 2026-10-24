@@ -22,7 +22,7 @@ fn main() {
     val normal = signature(compiler: inout compiler, result: unit, argument: integer, diverging: false)
     val stopping = signature(compiler: inout compiler, result: unit, argument: integer, diverging: true)
     val same = signature(compiler: inout compiler, result: unit, argument: integer, diverging: true)
-    assert(compiler.arena.typeTerms[stopping].isDiverging, message: "canonical contract")
+    assert(compiler.arena.typeTermAt(index: stopping).isDiverging, message: "canonical contract")
     assert(compiler.arena.typeAt(index: stopping).isDiverging, message: "row contract")
     assert(!compiler.typeRefEq(a: normal, b: stopping), message: "completion identity")
     assert(compiler.typeRefEq(a: stopping, b: same), message: "same completion identity")
@@ -43,14 +43,14 @@ fn main() {
     val generic = signature(compiler: inout compiler, result: unit, argument: variable, diverging: true)
     val grounded = compiler.groundTermForBody(ref: generic, environment: <InstanceEnvironment params=[parameter] args=[integer] />, selfRef: 0U64, itemRef: 0U64).unwrap()
     assert(compiler.typeRefEq(a: stopping, b: grounded), message: "grounding preserves completion")
-    assert(compiler.arena.typeTerms[grounded].isDiverging, message: "grounded contract")
+    assert(compiler.arena.typeTermAt(index: grounded).isDiverging, message: "grounded contract")
 
     // A normal callable can return a diverging callable value. The two levels
     // must not be collapsed into the same invocation contract.
     val returningCallable = signature(compiler: inout compiler, result: stopping, argument: integer, diverging: false)
-    assert(!compiler.arena.typeTerms[returningCallable].isDiverging, message: "outer invocation")
+    assert(!compiler.arena.typeTermAt(index: returningCallable).isDiverging, message: "outer invocation")
     val result = compiler.arena.typeAt(index: returningCallable).args[0U64]
-    assert(compiler.arena.typeTerms[result].isDiverging, message: "returned callable")
+    assert(compiler.arena.typeTermAt(index: result).isDiverging, message: "returned callable")
     val normalKey = compiler.recordTypeKeyFromRef(ref: normal)
     val stoppingKey = compiler.recordTypeKeyFromRef(ref: stopping)
     assert(normalKey.count() != stoppingKey.count(), message: "structural key")

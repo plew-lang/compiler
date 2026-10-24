@@ -60,3 +60,13 @@ and checks an already failed request cannot be blessed by later dependency
 completion. `type_declaration_writer_private` guards the private mutation API.
 Existing closedness/projection/name-index/unification and C3 nominal controls
 exercise preserved metadata and downstream identity.
+
+## Required Raw-storage Repair
+
+Independent review found public mutable `typeTerms` and8 child pools bypass the
+otherwise closed batch. Do not claim this whole API closed before
+[com-s5k5](com-s5k5.md) passes. Its finite allocation was independently approved,
+and D4/G1 depend on it. The before control `type_term_rows_private` was accepted
+(exit0) by the c1b731bd fixed compiler/source, a decisive privacy failure. The
+new source dependency fixture's earlier body-zero setup failure is separate;
+after reserving block zero it passes both negative and positive source paths.

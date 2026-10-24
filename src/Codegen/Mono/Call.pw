@@ -757,9 +757,9 @@ pub impl Comp {
                 eprint(text: " expected=")
                 self.traceMonoTypeHead(ref: self.groundTermInEnvironment(ref: self.parametricSelfRef(f: function), params: complete.params, values: complete.args, selfRef: complete.receiverRef))
                 eprint(text: " actual-decl=")
-                if complete.receiverRef < self.arena.typeCount() { eprintU64(n: self.arena.typeTerms[complete.receiverRef].declOffset) }
+                if complete.receiverRef < self.arena.typeCount() { eprintU64(n: self.arena.typeTermAt(index: complete.receiverRef).declOffset) }
                 eprint(text: " pattern-decl=")
-                if function.recvTy < self.arena.typeCount() { eprintU64(n: self.arena.typeTerms[function.recvTy].declOffset) }
+                if function.recvTy < self.arena.typeCount() { eprintU64(n: self.arena.typeTermAt(index: function.recvTy).declOffset) }
                 eprint(text: "\n")
             }
             return <Result.Err error=self.diagnosticAt(offset: function.nameStart, msg: "internal error: body receiver does not match its selected declaration") />
@@ -2178,7 +2178,7 @@ pub impl Comp {
         if target >= self.arena.typeCount() || traitIndex >= self.decls.traitCount() {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential member has no selected interface") />
         }
-        if !self.arena.typeTerms[target].isAny || self.recordAnyTraitIndex(anyRef: target) != traitIndex {
+        if !self.arena.typeTermAt(index: target).isAny || self.recordAnyTraitIndex(anyRef: target) != traitIndex {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential bindings do not match the selected trait") />
         }
         mut val parameters: Array[Bind] = []
@@ -3206,11 +3206,11 @@ pub impl Comp {
                     eprint(text: " result-id=")
                     eprintU64(n: result)
                     eprint(text: " result-decl=")
-                    eprintU64(n: self.arena.typeTerms[result].declOffset)
+                    eprintU64(n: self.arena.typeTermAt(index: result).declOffset)
                     eprint(text: " carrier-id=")
                     eprintU64(n: carrierResult)
                     eprint(text: " carrier-decl=")
-                    eprintU64(n: self.arena.typeTerms[carrierResult].declOffset)
+                    eprintU64(n: self.arena.typeTermAt(index: carrierResult).declOffset)
                     eprint(text: "\n")
                 }
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: final call result projection does not match its carrier or source result") />

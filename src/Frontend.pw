@@ -83,7 +83,7 @@ fn functionHasTraitReceiver(arena ~: Arena, decls ~: Decls, fnIdx: U64) -> Bool 
     if function.recvTy == 0U64 || function.recvTy >= arena.typeCount() { return false }
     val traitIndex = decls.traitIndexByOffset(offset: function.recvStart)
     if traitIndex >= decls.traitCount() { return false }
-    return arena.typeTerms[function.recvTy].paramId != 0U64 && arena.typeTerms[function.recvTy].paramId == decls.traitAt(index: traitIndex).selfParamId
+    return arena.typeTermAt(index: function.recvTy).paramId != 0U64 && arena.typeTermAt(index: function.recvTy).paramId == decls.traitAt(index: traitIndex).selfParamId
 }
 
 
@@ -917,19 +917,19 @@ pub impl Comp {
     // TypeTerm child access is owner-specific. Do not publish a generic pool
     // accessor: the range's type documents which semantic relation is read.
     fn typeTermArgAt(ref: U64, index: U64) -> U64 {
-        if ref >= self.arena.typeTerms.count() { return 0U64 }
+        if ref >= self.arena.typeTermCount() { return 0U64 }
         // Do not copy the complete TypeTerm row just to read one relation.
         // This field projection is the arena read boundary: the scalar range
         // is copied, never the type's unrelated semantic identity fields.
-        val args: TypeArgumentRange = self.arena.typeTerms[ref].args
+        val args: TypeArgumentRange = self.arena.typeTermAt(index: ref).args
         if index >= args.len { return 0U64 }
-        return self.arena.typeArgumentPool[args.start + index]
+        return self.arena.typeArgumentAt(index: args.start + index)
     }
 
     inout fn copyTypeTermArgs(ref: U64) -> Array[U64] {
         mut val out: Array[U64] = []
-        if ref >= self.arena.typeTerms.count() { return out }
-        val args: TypeArgumentRange = self.arena.typeTerms[ref].args
+        if ref >= self.arena.typeTermCount() { return out }
+        val args: TypeArgumentRange = self.arena.typeTermAt(index: ref).args
         mut val i: U64 = 0U64
         while i < args.len {
             out.append(self.typeTermArgAt(ref: ref, index: i))
@@ -953,16 +953,16 @@ pub impl Comp {
 
     fn typeTermViewSourceCount(ref: U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return 0U64 }
-        val term = self.arena.typeTerms[ref]
+        val term = self.arena.typeTermAt(index: ref)
         if term.viewSources.len != 0U64 { return term.viewSources.len }
         if term.viewIds.len != 0U64 { return term.viewIds.len }
         return if term.viewExtId != 0U64 { give 1U64 } else { give 0U64 }
     }
 
     fn typeTermViewSourceAt(ref: U64, index: U64) -> ResolvedViewSource {
-        val term = self.arena.typeTerms[ref]
-        if term.viewSources.len != 0U64 { return self.arena.typeViewSourcePool[term.viewSources.start + index] }
-        if term.viewIds.len != 0U64 { return <ResolvedViewSource surfaceId=self.arena.typeViewIdPool[term.viewIds.start + index] /> }
+        val term = self.arena.typeTermAt(index: ref)
+        if term.viewSources.len != 0U64 { return self.arena.typeViewSourceAt(index: term.viewSources.start + index) }
+        if term.viewIds.len != 0U64 { return <ResolvedViewSource surfaceId=self.arena.typeViewIdAt(index: term.viewIds.start + index) /> }
         return <ResolvedViewSource surfaceId=term.viewExtId />
     }
 
@@ -1028,7 +1028,7 @@ pub impl Comp {
     // arguments remain part of those arguments' semantic identity.
     inout fn typeRefWithoutOuterViews(ref: U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
-        val term = self.arena.typeTerms[ref]
+        val term = self.arena.typeTermAt(index: ref)
         if term.viewExtId == 0U64 && term.viewIds.len == 0U64 && term.viewSources.len == 0U64 { return ref }
         val base: TypeRef = self.arena.typeAt(index: ref)
         return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen nameId=base.nameId paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms isAny=base.isAny argLabels=base.argLabels assocTraitStart=base.assocTraitStart assocTraitLen=base.assocTraitLen assocTraitId=base.assocTraitId assocTraitArgs=base.assocTraitArgs assocTraitArgLabels=base.assocTraitArgLabels assocNameStart=base.assocNameStart assocNameLen=base.assocNameLen assocNameId=base.assocNameId isSendable=base.isSendable isDiverging=base.isDiverging hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=base.hasAssocTraitDecl assocTraitDeclOffset=base.assocTraitDeclOffset siteOffset=base.siteOffset />)

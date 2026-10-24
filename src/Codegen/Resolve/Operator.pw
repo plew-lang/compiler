@@ -27,7 +27,7 @@ pub impl Comp {
                         matches = rhsRef != 0U64 && self.typeRefEq(a: rhs, b: rhsRef)
                         if rhsUntyped {
                             matches = true
-                            val rhsType = self.arena.typeTerms[rhs]
+                            val rhsType = self.arena.typeTermAt(index: rhs)
                             if self.isIntType(start: rhsType.nameStart, len: rhsType.nameLen) { rank += 1U64 }
                         }
                     }
@@ -44,9 +44,9 @@ pub impl Comp {
         }
         if ambiguous {
             if rhsUntyped && (selectedRank == 2U64 || selectedRank == 4U64) {
-                return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTerms[receiverRef].nameStart, msg: "ambiguous operator: the right operand matches more than one integer overload — add a suffix to the literal (e.g. `10I64`)") />
+                return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTermAt(index: receiverRef).nameStart, msg: "ambiguous operator: the right operand matches more than one integer overload — add a suffix to the literal (e.g. `10I64`)") />
             }
-            return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTerms[receiverRef].nameStart, msg: "ambiguous operator: more than one implementation matches the operands; select a view or add a literal suffix (spec/12)") />
+            return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTermAt(index: receiverRef).nameStart, msg: "ambiguous operator: more than one implementation matches the operands; select a view or add a literal suffix (spec/12)") />
         }
         return <Result.Ok value=selected />
     }

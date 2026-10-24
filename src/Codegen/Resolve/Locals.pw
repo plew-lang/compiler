@@ -139,7 +139,7 @@ pub impl Comp {
         val storage = self.fieldStorageTypeRef(receiverRef: receiverRef)
         if storage == 0U64 || storage >= self.arena.typeCount() { return true }
         mut val declaration = self.structIndexForType(ref: storage)
-        if self.arena.typeTerms[storage].isRecord { declaration = self.recordStructIndex(ref: storage) }
+        if self.arena.typeTermAt(index: storage).isRecord { declaration = self.recordStructIndex(ref: storage) }
         if declaration >= self.arena.structCount() { return true }
         val field = self.fieldIndexOfReceiver(receiverRef: storage, fieldStart: fieldStart, fieldLen: fieldLen)
         if field >= self.arena.structAt(index: declaration).fields.count() { return true }

@@ -13,6 +13,17 @@ pub impl Arena {
 
     fn typeCount() -> U64 { return self.typeRows.count() }
     fn typeAt(index: U64) -> TypeRef { return self.typeRows[index] }
+    // Scalar reads preserve immutable pooled children without copying arrays.
+    fn typeTermCount() -> U64 { return self.typeTerms.count() }
+    fn typeTermAt(index: U64) -> TypeTerm { return self.typeTerms[index] }
+    fn typeArgumentAt(index: U64) -> U64 { return self.typeArgumentPool[index] }
+    fn typeRecordLabelAt(index: U64) -> U64 { return self.typeRecordLabelPool[index] }
+    fn typeRecordFieldAt(index: U64) -> U64 { return self.typeRecordFieldPool[index] }
+    fn typeViewIdAt(index: U64) -> U64 { return self.typeViewIdPool[index] }
+    fn typeViewSourceAt(index: U64) -> ResolvedViewSource { return self.typeViewSourcePool[index] }
+    fn typeArgumentLabelAt(index: U64) -> U64 { return self.typeArgumentLabelPool[index] }
+    fn typeAssocArgumentAt(index: U64) -> U64 { return self.typeAssocArgumentPool[index] }
+    fn typeAssocArgumentLabelAt(index: U64) -> U64 { return self.typeAssocArgumentLabelPool[index] }
 
     fn firstBareTypeNamed(nameId: U64) -> U64 {
         if nameId < self.bareTypeNameRefs.count() {

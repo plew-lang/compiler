@@ -930,8 +930,8 @@ pub impl Comp {
         mut val recvStart: U64 = rt.nameStart
         mut val recvLen: U64 = rt.nameLen
         if rt.kind == 3 && rt.ref != 0U64 && rt.ref < self.arena.typeCount() {
-            recvStart = self.arena.typeTerms[rt.ref].nameStart
-            recvLen = self.arena.typeTerms[rt.ref].nameLen
+            recvStart = self.arena.typeTermAt(index: rt.ref).nameStart
+            recvLen = self.arena.typeTermAt(index: rt.ref).nameLen
         }
         mut val mfi: U64 = self.arena.functionCount()
         // Always start from the complete view set.  A multi-view TypeRef deliberately
@@ -1082,8 +1082,8 @@ pub impl Comp {
         mut val receiver = receiverRef
         val underlying = self.arena.newtypeUnderlying(ref: receiver)
         if underlying != 0U64 { receiver = underlying }
-        val selected = self.arena.typeTerms[receiver]
-        val declared = self.arena.typeTerms[f.recvTy]
+        val selected = self.arena.typeTermAt(index: receiver)
+        val declared = self.arena.typeTermAt(index: f.recvTy)
         if selected.hasDecl && declared.hasDecl { return selected.declOffset == declared.declOffset }
         return true
     }
@@ -1093,7 +1093,7 @@ pub impl Comp {
     fn receiverDeclarationHasOwner(f: Func, declaration: Bind) -> Bool {
         if declaration.nameLen == 0U64 { return true }
         if f.recvTy == 0U64 || f.recvTy >= self.arena.typeCount() { return false }
-        val receiver = self.arena.typeTerms[f.recvTy]
+        val receiver = self.arena.typeTermAt(index: f.recvTy)
         return receiver.hasDecl && receiver.declOffset == declaration.nameStart
     }
 
@@ -1239,7 +1239,7 @@ pub impl Comp {
     // receiver or a generic binder. Callers normalize declaration terms first.
     inout fn resultEnumIndex(ref: U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return self.arena.enumCount() }
-        val term = self.arena.typeTerms[ref]
+        val term = self.arena.typeTermAt(index: ref)
         if term.args.len != 2U64 { return self.arena.enumCount() }
         val index = self.enumIndexForType(ref: ref)
         if index >= self.arena.enumCount() { return index }

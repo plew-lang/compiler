@@ -23,7 +23,7 @@ pub impl Comp {
         // An empty substitution cannot change any child. This is independent
         // of closedness: unbound parameters and projections remain untouched.
         if (params.count() == 0U64 || values.count() == 0U64) && selfRef == 0U64 && itemRef == 0U64 { return ref }
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         // Self and Item are proof-derived binders just like ParamId entries,
         // except their values live on the selected receiver proof rather than
         // in a method's generic argument vector. They may occur below a
@@ -44,8 +44,8 @@ pub impl Comp {
             mut val changed: Bool = false
             mut val ri: U64 = 0U64
             while ri < t.recordFieldTerms.len {
-                val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeRecordFieldPool[t.recordFieldTerms.start + ri], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
-                if next != self.arena.typeRecordFieldPool[t.recordFieldTerms.start + ri] {
+                val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeRecordFieldAt(index: t.recordFieldTerms.start + ri), params: params, values: values, selfRef: selfRef, itemRef: itemRef)
+                if next != self.arena.typeRecordFieldAt(index: t.recordFieldTerms.start + ri) {
                     if !changed { fields = self.arena.typeAt(index: ref).recordFieldTerms }
                     fields[ri] = next
                     changed = true
@@ -68,8 +68,8 @@ pub impl Comp {
             mut val argumentsChanged: Bool = false
             mut val ai: U64 = 0U64
             while ai < t.assocTraitArgs.len {
-                val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + ai], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
-                if next != self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + ai] {
+                val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeAssocArgumentAt(index: t.assocTraitArgs.start + ai), params: params, values: values, selfRef: selfRef, itemRef: itemRef)
+                if next != self.arena.typeAssocArgumentAt(index: t.assocTraitArgs.start + ai) {
                     if !argumentsChanged { traitArgs = self.arena.typeAt(index: ref).assocTraitArgs }
                     traitArgs[ai] = next
                     argumentsChanged = true
@@ -107,8 +107,8 @@ pub impl Comp {
         mut val assocArgsChanged: Bool = false
         mut val i: U64 = 0U64
         while i < t.args.len {
-            val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeArgumentPool[t.args.start + i], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
-            if next != self.arena.typeArgumentPool[t.args.start + i] {
+            val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeArgumentAt(index: t.args.start + i), params: params, values: values, selfRef: selfRef, itemRef: itemRef)
+            if next != self.arena.typeArgumentAt(index: t.args.start + i) {
                 if !argsChanged { args = self.arena.typeAt(index: ref).args }
                 args[i] = next
                 argsChanged = true
@@ -117,8 +117,8 @@ pub impl Comp {
         }
         i = 0U64
         while i < t.assocTraitArgs.len {
-            val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + i], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
-            if next != self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + i] {
+            val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeAssocArgumentAt(index: t.assocTraitArgs.start + i), params: params, values: values, selfRef: selfRef, itemRef: itemRef)
+            if next != self.arena.typeAssocArgumentAt(index: t.assocTraitArgs.start + i) {
                 if !assocArgsChanged { assocArgs = self.arena.typeAt(index: ref).assocTraitArgs }
                 assocArgs[i] = next
                 assocArgsChanged = true
@@ -145,26 +145,26 @@ pub impl Comp {
     }
 
     inout fn recordBodyTypeTermResult(bodyId: U64, source: U64, result: U64) {
-        if bodyId == 0U64 || source == 0U64 || source >= self.arena.typeTerms.count() || self.arena.typeIsClosed(ref: source) || !self.arena.typeIsClosed(ref: result) { return }
+        if bodyId == 0U64 || source == 0U64 || source >= self.arena.typeTermCount() || self.arena.typeIsClosed(ref: source) || !self.arena.typeIsClosed(ref: result) { return }
         self.arena.setBodyTypeTermResult(bodyId: bodyId, typeTerm: source, resultType: result)
-        val term = self.arena.typeTerms[source]
+        val term = self.arena.typeTermAt(index: source)
         if result == 0U64 || term.paramId != 0U64 || term.assocNameId != 0U64 { return }
-        val concrete = self.arena.typeTerms[result]
+        val concrete = self.arena.typeTermAt(index: result)
         if term.isRecord && concrete.isRecord && term.recordFieldTerms.len == concrete.recordFieldTerms.len {
             mut val index = 0U64
             while index < term.recordFieldTerms.len {
-                self.recordBodyTypeTermResult(bodyId: bodyId, source: self.arena.typeRecordFieldPool[term.recordFieldTerms.start + index], result: self.arena.typeRecordFieldPool[concrete.recordFieldTerms.start + index])
+                self.recordBodyTypeTermResult(bodyId: bodyId, source: self.arena.typeRecordFieldAt(index: term.recordFieldTerms.start + index), result: self.arena.typeRecordFieldAt(index: concrete.recordFieldTerms.start + index))
                 index += 1U64
             }
         } else if !term.isRecord && !concrete.isRecord && term.args.len == concrete.args.len && term.assocTraitArgs.len == concrete.assocTraitArgs.len {
             mut val index = 0U64
             while index < term.args.len {
-                self.recordBodyTypeTermResult(bodyId: bodyId, source: self.arena.typeArgumentPool[term.args.start + index], result: self.arena.typeArgumentPool[concrete.args.start + index])
+                self.recordBodyTypeTermResult(bodyId: bodyId, source: self.arena.typeArgumentAt(index: term.args.start + index), result: self.arena.typeArgumentAt(index: concrete.args.start + index))
                 index += 1U64
             }
             index = 0U64
             while index < term.assocTraitArgs.len {
-                self.recordBodyTypeTermResult(bodyId: bodyId, source: self.arena.typeAssocArgumentPool[term.assocTraitArgs.start + index], result: self.arena.typeAssocArgumentPool[concrete.assocTraitArgs.start + index])
+                self.recordBodyTypeTermResult(bodyId: bodyId, source: self.arena.typeAssocArgumentAt(index: term.assocTraitArgs.start + index), result: self.arena.typeAssocArgumentAt(index: concrete.assocTraitArgs.start + index))
                 index += 1U64
             }
         }
@@ -176,7 +176,7 @@ pub impl Comp {
     // consults whichever callee environment happens to be in Cursor.
     inout fn groundTermForBody(ref: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[U64, CompileDiagnostic] {
         if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=ref />}
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         // Self/Item are derived projections of the selected receiver, not
         // ParamId bindings. Preserve their established semantic meaning before
         // consulting the explicit binder map.
@@ -221,7 +221,7 @@ pub impl Comp {
         if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=ref />}
         // A non-projection leaf has no children to close. Read its scalar
         // shape before materializing any owning compatibility type record.
-        val term = self.arena.typeTerms[ref]
+        val term = self.arena.typeTermAt(index: ref)
         if !term.isRecord && term.assocNameId == 0U64 && term.args.len == 0U64 && term.assocTraitArgs.len == 0U64 { return <Result.Ok value=ref />}
         val t: TypeRef = self.arena.typeAt(index: ref)
         if t.isRecord {
@@ -399,57 +399,57 @@ pub impl Comp {
     // boundaries; equality must not copy its Array payload at every recursive
     // step.  `typeTerms` has the same stable index as `types`.
     inout fn typeTermRefChildCount(ref: U64) -> U64 {
-        if ref >= self.arena.typeTerms.count() { return 0U64 }
-        val t = self.arena.typeTerms[ref]
+        if ref >= self.arena.typeTermCount() { return 0U64 }
+        val t = self.arena.typeTermAt(index: ref)
         if t.isRecord { return t.recordFieldTerms.len }
         if t.assocNameId != 0U64 { return 1U64 + t.assocTraitArgs.len }
         return t.args.len + t.assocTraitArgs.len
     }
 
     inout fn typeTermRefProjectionReceiver(ref: U64) -> U64 {
-        if ref >= self.arena.typeTerms.count() { return 0U64 }
-        return self.arena.typeTerms[ref].projectionReceiver
+        if ref >= self.arena.typeTermCount() { return 0U64 }
+        return self.arena.typeTermAt(index: ref).projectionReceiver
     }
 
     inout fn typeTermRefChildRef(ref: U64, index: U64) -> U64 {
-        if ref >= self.arena.typeTerms.count() { return 0U64 }
-        val t = self.arena.typeTerms[ref]
+        if ref >= self.arena.typeTermCount() { return 0U64 }
+        val t = self.arena.typeTermAt(index: ref)
         if t.isRecord {
-            if index < t.recordFieldTerms.len { return self.arena.typeRecordFieldPool[t.recordFieldTerms.start + index] }
+            if index < t.recordFieldTerms.len { return self.arena.typeRecordFieldAt(index: t.recordFieldTerms.start + index) }
             return 0U64
         }
         if t.assocNameId != 0U64 {
             if index == 0U64 { return self.typeTermRefProjectionReceiver(ref: ref) }
             val traitIndex: U64 = index - 1U64
-            if traitIndex < t.assocTraitArgs.len { return self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + traitIndex] }
+            if traitIndex < t.assocTraitArgs.len { return self.arena.typeAssocArgumentAt(index: t.assocTraitArgs.start + traitIndex) }
             return 0U64
         }
-        if index < t.args.len { return self.arena.typeArgumentPool[t.args.start + index] }
+        if index < t.args.len { return self.arena.typeArgumentAt(index: t.args.start + index) }
         val traitIndex: U64 = index - t.args.len
-        if traitIndex < t.assocTraitArgs.len { return self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + traitIndex] }
+        if traitIndex < t.assocTraitArgs.len { return self.arena.typeAssocArgumentAt(index: t.assocTraitArgs.start + traitIndex) }
         return 0U64
     }
 
     inout fn typeTermRefIdentityChildLabel(ref: U64, index: U64) -> U64 {
-        if ref >= self.arena.typeTerms.count() { return 0U64 }
-        val t = self.arena.typeTerms[ref]
+        if ref >= self.arena.typeTermCount() { return 0U64 }
+        val t = self.arena.typeTermAt(index: ref)
         if t.isRecord {
-            if index < t.recordFieldLabels.len { return self.arena.typeRecordLabelPool[t.recordFieldLabels.start + index] }
+            if index < t.recordFieldLabels.len { return self.arena.typeRecordLabelAt(index: t.recordFieldLabels.start + index) }
             return 0U64
         }
         if t.assocNameId != 0U64 {
             if index == 0U64 { return 0U64 }
             val traitIndex: U64 = index - 1U64
-            if traitIndex < t.assocTraitArgLabels.len { return self.arena.typeAssocArgumentLabelPool[t.assocTraitArgLabels.start + traitIndex] }
+            if traitIndex < t.assocTraitArgLabels.len { return self.arena.typeAssocArgumentLabelAt(index: t.assocTraitArgLabels.start + traitIndex) }
             return 0U64
         }
         // Function parameter labels and existential associated labels are type identity.
-        if (t.isAny || self.isFnType(ref: ref)) && index < t.argLabels.len { return self.arena.typeArgumentLabelPool[t.argLabels.start + index] }
+        if (t.isAny || self.isFnType(ref: ref)) && index < t.argLabels.len { return self.arena.typeArgumentLabelAt(index: t.argLabels.start + index) }
         return 0U64
     }
 
     inout fn sameTypeTermViewIds(a: U64, b: U64) -> Bool {
-        if a >= self.arena.typeTerms.count() || b >= self.arena.typeTerms.count() { return false }
+        if a >= self.arena.typeTermCount() || b >= self.arena.typeTermCount() { return false }
         val count = self.typeTermViewSourceCount(ref: a)
         if count != self.typeTermViewSourceCount(ref: b) { return false }
         mut val index = 0U64
@@ -468,10 +468,10 @@ pub impl Comp {
     }
 
     inout fn typeTermRefSameHead(a: U64, b: U64) -> Bool {
-        if a >= self.arena.typeTerms.count() || b >= self.arena.typeTerms.count() { return false }
+        if a >= self.arena.typeTermCount() || b >= self.arena.typeTermCount() { return false }
         if a == b { return true }
-        val ta = self.arena.typeTerms[a]
-        val tb = self.arena.typeTerms[b]
+        val ta = self.arena.typeTermAt(index: a)
+        val tb = self.arena.typeTermAt(index: b)
         if ta.isRecord || tb.isRecord { return ta.isRecord && tb.isRecord && ta.isSendable == tb.isSendable && ta.isDiverging == tb.isDiverging }
         if ta.hasDecl != tb.hasDecl { return false }
         if ta.hasDecl && tb.hasDecl {
@@ -645,8 +645,8 @@ pub impl Comp {
         // a compound element (`Ref[I32]`, `Array[I32]`, `Box[I32]`) gets a mangled
         // name span + its ref, matching the parser's recordArrayElem (so the runtime
         // and use sites agree); a simple element uses its head name.
-        mut val nStart: U64 = self.arena.typeTerms[re].nameStart
-        mut val nLen: U64 = self.arena.typeTerms[re].nameLen
+        mut val nStart: U64 = self.arena.typeTermAt(index: re).nameStart
+        mut val nLen: U64 = self.arena.typeTermAt(index: re).nameLen
         mut val fRef: U64 = 0
         if (try self.isCompoundType(ref: re)) {
             val mn: Bind = (try self.appendMangleSpan(ref: re))
@@ -800,7 +800,7 @@ pub impl Comp {
     }
 
     inout fn groundRecordStruct(ref: U64) -> Result[U64, CompileDiagnostic] {
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         if t.nameLen == 0U64 {
             return <Result.Ok value=ref />
         }
@@ -832,14 +832,14 @@ pub impl Comp {
             appendBytes(into: inout cn, from: ":".bytes())
             mut val fieldTerm: U64 = fd.ty
             if t.isRecord && j < t.recordFieldTerms.len {
-                fieldTerm = self.arena.typeRecordFieldPool[t.recordFieldTerms.start + j]
+                fieldTerm = self.arena.typeRecordFieldAt(index: t.recordFieldTerms.start + j)
             }
             val g: U64 = (try self.groundTypeRef(ref: fieldTerm))
             if g != fd.ty {
                 changed = true
             }
             appendBytes(into: inout cn, from: self.recordTypeKeyFromRef(ref: g))
-            val gt = self.arena.typeTerms[g]
+            val gt = self.arena.typeTermAt(index: g)
             gfields.append(<FieldDef nameStart=fd.nameStart nameLen=fd.nameLen nameId=fd.nameId tyStart=gt.nameStart tyLen=gt.nameLen tyNameId=intern(c: inout self, start: gt.nameStart, len: gt.nameLen) tyIsArray=fd.tyIsArray ty=g isMut=fd.isMut hasDefault=fd.hasDefault defaultVal=fd.defaultVal vis=fd.vis />)
             j += 1
         }
@@ -893,7 +893,7 @@ pub impl Comp {
     // program's type nesting is far below 64.
     inout fn checkInstDepth(ref: U64) -> Result[(), CompileDiagnostic] {
         if self.tyRefDepth(ref: ref) > 64U64 {
-            return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTerms[ref].nameStart, msg: "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)") />
+            return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTermAt(index: ref).nameStart, msg: "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)") />
         }
         return <Result.Ok value=() />
     }
@@ -902,15 +902,15 @@ pub impl Comp {
         if ref >= self.arena.typeCount() {
             return <Result.Ok value=ref />
         }
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         if t.isRecord {
             if t.recordFieldLabels.len != t.recordFieldTerms.len { return <Result.Ok value=ref />}
             mut val fields: Array[U64] = []
             mut val changed: Bool = false
             mut val ri: U64 = 0U64
             while ri < t.recordFieldTerms.len {
-                val next: U64 = (try self.groundTypeRef(ref: self.arena.typeRecordFieldPool[t.recordFieldTerms.start + ri]))
-                if next != self.arena.typeRecordFieldPool[t.recordFieldTerms.start + ri] {
+                val next: U64 = (try self.groundTypeRef(ref: self.arena.typeRecordFieldAt(index: t.recordFieldTerms.start + ri)))
+                if next != self.arena.typeRecordFieldAt(index: t.recordFieldTerms.start + ri) {
                     if !changed { fields = self.arena.typeAt(index: ref).recordFieldTerms }
                     fields[ri] = next
                     changed = true
@@ -934,8 +934,8 @@ pub impl Comp {
         mut val changed: Bool = false
         mut val i: U64 = 0
         while i < t.args.len {
-            val g: U64 = (try self.groundTypeRef(ref: self.arena.typeArgumentPool[t.args.start + i]))
-            if g != self.arena.typeArgumentPool[t.args.start + i] {
+            val g: U64 = (try self.groundTypeRef(ref: self.arena.typeArgumentAt(index: t.args.start + i)))
+            if g != self.arena.typeArgumentAt(index: t.args.start + i) {
                 if !changed { newArgs = self.arena.typeAt(index: ref).args }
                 newArgs[i] = g
                 changed = true

@@ -265,7 +265,7 @@ pub impl Comp {
     inout fn witnessSourceSelected(witness: WitnessMatch, assumptions: Array[DeclarationBoundRef]) -> Result[Bool, CompileDiagnostic] {
         if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Ok value=false /> }
         if witness.selfRef == 0U64 || witness.selfRef >= self.arena.typeCount() { return <Result.Ok value=true /> }
-        val receiver = self.arena.typeTerms[witness.selfRef]
+        val receiver = self.arena.typeTermAt(index: witness.selfRef)
         if receiver.viewSources.len == 0U64 && receiver.viewIds.len == 0U64 && receiver.viewExtId == 0U64 { return <Result.Ok value=true /> }
         val source = self.decls.conformAt(index: witness.conformIdx - 1U64)
         val arguments = try self.groundedWitnessTraitArgs(cf: source, witness: witness)
@@ -857,7 +857,7 @@ pub impl Comp {
         if ref >= self.arena.typeCount() {
             return false
         }
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         if t.paramId == 0U64 && t.args.len == 0U64 {
             return false
         }
@@ -868,7 +868,7 @@ pub impl Comp {
         if a == b {
             return true
         }
-        if a >= self.arena.typeTerms.count() || b >= self.arena.typeTerms.count() { return false }
+        if a >= self.arena.typeTermCount() || b >= self.arena.typeTermCount() { return false }
         if !(self.typeTermRefSameHead(a: a, b: b)) { return false }
         val childCount = self.typeTermRefChildCount(ref: a)
         if childCount != self.typeTermRefChildCount(ref: b) { return false }

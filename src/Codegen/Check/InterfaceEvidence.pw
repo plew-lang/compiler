@@ -43,7 +43,7 @@ impl Comp {
         if scope.interfaceRoot == 0U64 { return 0U64 }
         val bound = self.interfaceEvidenceBound(index: scope.interfaceRoot - 1U64)
         if bound.subject == 0U64 || bound.subject >= self.arena.typeCount() { return 0U64 }
-        return self.arena.typeTerms[bound.subject].paramId
+        return self.arena.typeTermAt(index: bound.subject).paramId
     }
 
     inout fn checkInterfaceAssumptionScope(index: U64, scope: DeclarationTypeScope, offset: U64) -> Result[(), CompileDiagnostic] {
@@ -80,7 +80,7 @@ impl Comp {
     // Only selected source recording calls this constructor. Exact operation
     // matching and immutable publication, rather than a name lookup, grant use.
     inout fn createInterfaceEvidenceRoot(site: CallSiteKey, receiver: U64, traitIndex: U64) -> Result[U64, CompileDiagnostic] {
-        if receiver == 0U64 || receiver >= self.arena.typeCount() || !self.arena.typeTerms[receiver].isAny || traitIndex >= self.decls.traitCount() {
+        if receiver == 0U64 || receiver >= self.arena.typeCount() || !self.arena.typeTermAt(index: receiver).isAny || traitIndex >= self.decls.traitCount() {
             return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "selected interface has no valid receiver or trait") />
         }
         val owner = match self.currentSourceOwner() {
@@ -169,8 +169,8 @@ impl Comp {
 impl Comp {
     inout fn declarationTypeDependencies(ref: U64, scope: DeclarationTypeScope, offset: U64) -> Result[DeclarationTypeDependencies, CompileDiagnostic] {
         if self.arena.typeIsClosed(ref: ref) { return <Result.Ok value=<DeclarationTypeDependencies /> /> }
-        if ref >= self.arena.typeTerms.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation has an invalid type term") /> }
-        val term = self.arena.typeTerms[ref]
+        if ref >= self.arena.typeTermCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation has an invalid type term") /> }
+        val term = self.arena.typeTermAt(index: ref)
         mut val caller = false
         mut val interfaceScoped = false
         // A projection's receiver child owns its binder. The old flat mirror
@@ -260,7 +260,7 @@ impl Comp {
         val root = try self.interfaceProofRoot(proof: <StaticConformanceProof.AssumedBound source=source />)
         if root == 0U64 { return <Result.Ok value=false /> }
         val bound = self.interfaceEvidenceBound(index: root - 1U64)
-        return <Result.Ok value=self.typeTermContainsParameter(ref: subject, parameter: self.arena.typeTerms[bound.subject].paramId) />
+        return <Result.Ok value=self.typeTermContainsParameter(ref: subject, parameter: self.arena.typeTermAt(index: bound.subject).paramId) />
     }
 }
 
@@ -306,7 +306,7 @@ impl Comp {
 // explicit scope admits only the interface and its declared associated facts.
 impl Comp {
     inout fn createInterfaceContractRoot(target: U64, traitIndex: U64, slot: U64) -> Result[U64, CompileDiagnostic] {
-        if target == 0U64 || target >= self.arena.typeCount() || !self.arena.typeTerms[target].isAny || !self.arena.typeIsClosed(ref: target) || traitIndex >= self.decls.traitCount() || slot == 0U64 || slot > self.decls.traitAt(index: traitIndex).reqs.count() {
+        if target == 0U64 || target >= self.arena.typeCount() || !self.arena.typeTermAt(index: target).isAny || !self.arena.typeIsClosed(ref: target) || traitIndex >= self.decls.traitCount() || slot == 0U64 || slot > self.decls.traitAt(index: traitIndex).reqs.count() {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface member contract has no closed target or requirement") />
         }
         val constraint = self.existentialTraitConstraint(ref: target)

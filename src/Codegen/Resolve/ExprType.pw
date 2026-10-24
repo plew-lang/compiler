@@ -12,9 +12,9 @@ pub impl Comp {
             return <Result.Ok value=scalarInfo() />
         }
         if self.isFnType(ref: fr) {
-            val ft = self.arena.typeTerms[fr]
+            val ft = self.arena.typeTermAt(index: fr)
             if ft.args.len > 0U64 {
-                return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentPool[ft.args.start + 0]) />
+                return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentAt(index: ft.args.start + 0)) />
             }
         }
         return <Result.Ok value=scalarInfo() />
@@ -65,7 +65,7 @@ pub impl Comp {
         // identities. A generated callable can carry the former even when its
         // applicability pattern uses the latter. Bind nominal parameters from
         // their own receiver declaration, never by a witness's array position.
-        val receiver = self.arena.typeTerms[receiverRef]
+        val receiver = self.arena.typeTermAt(index: receiverRef)
         mut val nominalParams: Array[Bind] = []
         val structIndex = self.structIndexForType(ref: receiverRef)
         if structIndex < self.arena.structCount() {
@@ -80,10 +80,10 @@ pub impl Comp {
             while pi < f.typeParams.count() {
                 val parameter = self.funcBindAt(binds: f.typeParams, index: pi)
                 if nominalParams[bi].paramId != 0U64 && nominalParams[bi].paramId == parameter.paramId {
-                    if fullArgs[pi] != 0U64 && !self.typeRefEq(a: fullArgs[pi], b: self.arena.typeArgumentPool[receiver.args.start + bi]) {
+                    if fullArgs[pi] != 0U64 && !self.typeRefEq(a: fullArgs[pi], b: self.arena.typeArgumentAt(index: receiver.args.start + bi)) {
                         return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "internal error: receiver substitutions disagree for one parameter") />
                     }
-                    fullArgs.set(i: pi, value: self.arena.typeArgumentPool[receiver.args.start + bi])
+                    fullArgs.set(i: pi, value: self.arena.typeArgumentAt(index: receiver.args.start + bi))
                 }
                 pi += 1U64
             }
@@ -111,7 +111,7 @@ pub impl Comp {
         // A generic type qualifier without written arguments is an inference
         // request, not an instantiated receiver with zero parameters. Complete
         // it from this call before matching the declaration's receiver pattern.
-        if f.isAssoc && f.recvTy != 0U64 && f.recvTy < self.arena.typeCount() && self.arena.typeTerms[semanticReceiver].args.len == 0U64 && self.arena.typeTerms[f.recvTy].args.len != 0U64 {
+        if f.isAssoc && f.recvTy != 0U64 && f.recvTy < self.arena.typeCount() && self.arena.typeTermAt(index: semanticReceiver).args.len == 0U64 && self.arena.typeTermAt(index: f.recvTy).args.len != 0U64 {
             val inferredReceiver = try self.associatedReceiverFromArguments(f: f, args: args)
             if inferredReceiver != 0U64 && inferredReceiver != semanticReceiver && self.typeTermRefSameHead(a: semanticReceiver, b: inferredReceiver) {
                 return <Result.Ok value=inferredReceiver />
@@ -520,12 +520,12 @@ pub impl Comp {
                         sref = self.cur.recvInstRef
                     }
                     if sref != 0U64 {
-                        val rt = self.arena.typeTerms[sref]
+                        val rt = self.arena.typeTermAt(index: sref)
                         // self inside an `impl Array[T]` method types as an array (kind 3,
                         // element name) so the array/raw intrinsics dispatch on it.
                         if rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
                             if rt.args.len == 1 {
-                                val en: Bind = (try self.arrayElemNameForRef(elemRef: self.arena.typeArgumentPool[rt.args.start + 0]))
+                                val en: Bind = (try self.arrayElemNameForRef(elemRef: self.arena.typeArgumentAt(index: rt.args.start + 0)))
                                 return <Result.Ok value=<TypeInfo kind=3 nameStart=en.nameStart nameLen=en.nameLen ref=sref /> />
                             }
                         }
@@ -555,7 +555,7 @@ pub impl Comp {
                         // `Optional[I64].Some(v)` needs its concrete enum
                         // subject to type `v` and infer `print(v)`.
                         if self.isGenericInst(ref: lo.ty) || self.isGenericEnumInst(ref: lo.ty) {
-                            val lt = self.arena.typeTerms[lo.ty]
+                            val lt = self.arena.typeTermAt(index: lo.ty)
                             return <Result.Ok value=<TypeInfo kind=2 nameStart=lt.nameStart nameLen=lt.nameLen ref=lo.ty /> />
                         }
                         // A declaration-time generic term such as
@@ -565,7 +565,7 @@ pub impl Comp {
                         // can later substitute the lexical ParamId; reducing
                         // it to the `Optional` spelling loses every argument.
                         if lo.ty != 0U64 && lo.ty < self.arena.typeCount() {
-                            val declared = self.arena.typeTerms[lo.ty]
+                            val declared = self.arena.typeTermAt(index: lo.ty)
                             if declared.args.len > 0U64 || declared.paramId != 0U64 {
                                 return <Result.Ok value=self.typeInfoOfRef(ref: lo.ty) />
                             }
@@ -608,17 +608,17 @@ pub impl Comp {
                         // resolve through the trait P (the name-only form loses isAny).
                         if lo.ty != 0U64 {
                             if lo.ty < self.arena.typeCount() {
-                                if self.arena.typeTerms[lo.ty].isAny {
-                                    return <Result.Ok value=<TypeInfo kind=2 nameStart=self.arena.typeTerms[lo.ty].nameStart nameLen=self.arena.typeTerms[lo.ty].nameLen ref=lo.ty /> />
+                                if self.arena.typeTermAt(index: lo.ty).isAny {
+                                    return <Result.Ok value=<TypeInfo kind=2 nameStart=self.arena.typeTermAt(index: lo.ty).nameStart nameLen=self.arena.typeTermAt(index: lo.ty).nameLen ref=lo.ty /> />
                                 }
                                 // A view-typed local/param keeps its declared ref.  The
                                 // source set is a static type facet: reducing it to a name-only
                                 // TypeInfo here would make `T#E#F` bare only in ordinary `.`
                                 // syntax.  `viewExtId` is the legacy one-source spelling;
                                 // `viewIds` is the multi-source normal form.
-                                if self.arena.typeTerms[lo.ty].viewExtId != 0U64 || self.arena.typeTerms[lo.ty].viewIds.count() > 0U64 {
+                                if self.arena.typeTermAt(index: lo.ty).viewExtId != 0U64 || self.arena.typeTermAt(index: lo.ty).viewIds.count() > 0U64 {
                                     val vb: TypeInfo = self.typeInfoOfName(start: lo.tyStart, len: lo.tyLen, isArray: lo.isArray)
-                                    return <Result.Ok value=<TypeInfo kind=vb.kind nameStart=vb.nameStart nameLen=vb.nameLen ref=lo.ty viewExtId=self.arena.typeTerms[lo.ty].viewExtId /> />
+                                    return <Result.Ok value=<TypeInfo kind=vb.kind nameStart=vb.nameStart nameLen=vb.nameLen ref=lo.ty viewExtId=self.arena.typeTermAt(index: lo.ty).viewExtId /> />
                                 }
                             }
                         }
@@ -679,7 +679,7 @@ pub impl Comp {
                     if args.len == 2U64 {
                         val br: U64 = self.typedIrRefOfInfo(ti: (try self.exprTypeWithChainHole(id: self.argAt(args: args, index: 0U64).expr, chainHoleRef: chainHoleRef)))
                         if br != 0U64 {
-                            val brt = self.arena.typeTerms[br]
+                            val brt = self.arena.typeTermAt(index: br)
                             val powN: Bind = self.kwSpan(kw: "pow", kwLen: 3U64)
                             fi = (try self.findAssoc(recvStart: brt.nameStart, recvLen: brt.nameLen, nameStart: powN.nameStart, nameLen: powN.nameLen, args: args))
                         }
@@ -744,7 +744,7 @@ pub impl Comp {
                         // kind-2 instantiation (`Box[I32]`, an enum) reports as a genInst.
                         if !(f.retIsArray) {
                             if self.isGenericInst(ref: f.retTy) {
-                                val rtr = self.arena.typeTerms[f.retTy]
+                                val rtr = self.arena.typeTermAt(index: f.retTy)
                                 return <Result.Ok value=<TypeInfo kind=2 nameStart=rtr.nameStart nameLen=rtr.nameLen ref=f.retTy /> />
                             }
                         }
@@ -760,9 +760,9 @@ pub impl Comp {
                 if lvi < self.cur.locals.count() {
                     val lty: U64 = self.cur.locals[lvi].ty
                     if self.isFnType(ref: lty) {
-                        val ftr = self.arena.typeTerms[lty]
+                        val ftr = self.arena.typeTermAt(index: lty)
                         if ftr.args.len > 0 {
-                            return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentPool[ftr.args.start + 0]) />
+                            return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentAt(index: ftr.args.start + 0)) />
                         }
                     }
                 }
@@ -799,7 +799,7 @@ pub impl Comp {
                     if !isEnum && ty == 0U64 {
                         val rr: U64 = (try self.inferRecordMakeRef(fields: fields))
                         if rr != 0U64 {
-                            val rt = self.arena.typeTerms[rr]
+                            val rt = self.arena.typeTermAt(index: rr)
                             return <Result.Ok value=<TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=rr viewExtId=rt.viewExtId /> />
                         }
                     }
@@ -818,7 +818,7 @@ pub impl Comp {
                 // structural types alike; spelling is not a replacement for
                 // the resolved declaration or lexical binder.
                 if g != 0U64 && g < self.arena.typeCount() {
-                    val resultType = self.arena.typeTerms[g]
+                    val resultType = self.arena.typeTermAt(index: g)
                     return <Result.Ok value=<TypeInfo kind=2 nameStart=resultType.nameStart nameLen=resultType.nameLen ref=g viewExtId=resultType.viewExtId /> />
                 }
                 return <Result.Ok value=<TypeInfo kind=2 nameStart=typeStart nameLen=typeLen ref=0 /> />
@@ -846,9 +846,9 @@ pub impl Comp {
                     // complete child retains nominal owner, nested shape and
                     // existential/projection facts for every element kind.
                     if bt.ref != 0U64 && bt.ref < self.arena.typeCount() {
-                        val array = self.arena.typeTerms[bt.ref]
+                        val array = self.arena.typeTermAt(index: bt.ref)
                         if array.args.len == 1U64 {
-                            val element = try self.resolveTy(tyRef: self.arena.typeArgumentPool[array.args.start])
+                            val element = try self.resolveTy(tyRef: self.arena.typeArgumentAt(index: array.args.start))
                             if element != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: element) /> }
                         }
                     }
@@ -857,18 +857,18 @@ pub impl Comp {
                 // `dict[k]` yields the Dictionary's value type V (args[1]) — the subscript
                 // desugars to `.at(key:) -> V`.
                 if self.isDictionaryType(ti: bt) {
-                    val dt = self.arena.typeTerms[bt.ref]
+                    val dt = self.arena.typeTermAt(index: bt.ref)
                     if dt.args.len > 1 {
-                        return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentPool[dt.args.start + 1]) />
+                        return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentAt(index: dt.args.start + 1)) />
                     }
                 }
                 // `buf[i]` on the Buffer floor yields the element type T (args[0]) — the
                 // compiler-recognised subscript (value return; see genLlvmIndex).
                 if self.isBufferType(ti: bt) {
                     if bt.ref != 0 {
-                        val bft = self.arena.typeTerms[bt.ref]
+                        val bft = self.arena.typeTermAt(index: bt.ref)
                         if bft.args.len > 0 {
-                            return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentPool[bft.args.start + 0]) />
+                            return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentAt(index: bft.args.start + 0)) />
                         }
                     }
                 }
@@ -888,7 +888,7 @@ pub impl Comp {
                 val bt: TypeInfo = (try self.exprTypeWithChainHole(id: recv, chainHoleRef: chainHoleRef))
                 val br: U64 = self.typedIrRefOfInfo(ti: bt)
                 if br != 0U64 {
-                    val brt = self.arena.typeTerms[br]
+                    val brt = self.arena.typeTermAt(index: br)
                     mut val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: br)
                     if strip {
                         sources = []
@@ -902,7 +902,7 @@ pub impl Comp {
                         if !(present) { sources.append(source) }
                     }
                     val vr: U64 = self.typeRefWithViewSources(ref: br, sources: sources)
-                    val legacy: U64 = self.arena.typeTerms[vr].viewExtId
+                    val legacy: U64 = self.arena.typeTermAt(index: vr).viewExtId
                     return <Result.Ok value=<TypeInfo kind=bt.kind nameStart=bt.nameStart nameLen=bt.nameLen ref=vr viewExtId=legacy /> />
                 }
                 return <Result.Ok value=<TypeInfo kind=bt.kind nameStart=bt.nameStart nameLen=bt.nameLen ref=bt.ref viewExtId=source.surfaceId /> />
@@ -1013,7 +1013,7 @@ pub impl Comp {
                     // return doesn't fully ground.
                     if rt.ref != 0U64 {
                         if rt.ref < self.arena.typeCount() {
-                            if self.arena.typeTerms[rt.ref].isAny {
+                            if self.arena.typeTermAt(index: rt.ref).isAny {
                                 val traitIndex = self.recordAnyTraitIndex(anyRef: rt.ref)
                                 val slot = self.recordAnyRequirementSlot(anyRef: rt.ref, nameStart: nameStart, nameLen: nameLen, args: args)
                                 if traitIndex < self.decls.traitCount() && slot != 0U64 {
@@ -1131,9 +1131,9 @@ pub impl Comp {
                             // the bare-`T` name substitution below, as before.
                             mut val elemRef: U64 = 0
                             if rt.ref != 0U64 && rt.ref < self.arena.typeCount() {
-                                val art = self.arena.typeTerms[rt.ref]
+                                val art = self.arena.typeTermAt(index: rt.ref)
                                 if art.args.len == 1U64 && rangeEquals(bytes: self.arena.bytes, start: art.nameStart, len: art.nameLen, kw: "Array") {
-                                    elemRef = self.arena.typeArgumentPool[art.args.start + 0]
+                                    elemRef = self.arena.typeArgumentAt(index: art.args.start + 0)
                                 }
                             }
                             if elemRef != 0U64 {
@@ -1178,7 +1178,7 @@ pub impl Comp {
                                 // an inference hole: a bare-`T` return still substitutes the
                                 // structured element ref (the pre-grounding behavior).
                                 if mf.retTy < self.arena.typeCount() {
-                                    if self.arena.typeTerms[mf.retTy].nameId == self.funcBindAt(binds: mf.typeParams, index: 0U64).nameId {
+                                    if self.arena.typeTermAt(index: mf.retTy).nameId == self.funcBindAt(binds: mf.typeParams, index: 0U64).nameId {
                                         return <Result.Ok value=self.typeInfoOfRef(ref: elemRef) />
                                     }
                                 }
@@ -1187,7 +1187,7 @@ pub impl Comp {
                             // type parameter T with the element's name (the pre-grounding
                             // behavior — serves plain named elements only).
                             if mf.retTy < self.arena.typeCount() {
-                                if self.arena.typeTerms[mf.retTy].nameId == self.funcBindAt(binds: mf.typeParams, index: 0U64).nameId {
+                                if self.arena.typeTermAt(index: mf.retTy).nameId == self.funcBindAt(binds: mf.typeParams, index: 0U64).nameId {
                                     if rt.nameLen > 0U64 {
                                         return <Result.Ok value=self.typeInfoOfName(start: rt.nameStart, len: rt.nameLen, isArray: false) />
                                     }
@@ -1267,9 +1267,9 @@ pub impl Comp {
                 // result type = the Result's Ok payload T (args[0] of Result[T, E]).
                 val rt: TypeInfo = (try self.exprTypeWithChainHole(id: expr, chainHoleRef: chainHoleRef))
                 if self.isGenericInst(ref: rt.ref) {
-                    val inst = self.arena.typeTerms[rt.ref]
+                    val inst = self.arena.typeTermAt(index: rt.ref)
                     if inst.args.len > 0 {
-                        return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentPool[inst.args.start + 0]) />
+                        return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentAt(index: inst.args.start + 0)) />
                     }
                 }
                 return <Result.Ok value=scalarInfo() />
@@ -1278,10 +1278,10 @@ pub impl Comp {
                 // pointee field type: base is Ref[T] / MutableRef[T]; resolve T then T's field.
                 val bt: TypeInfo = (try self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef))
                 if self.isStrongRefInst(ref: bt.ref) {
-                    val inst = self.arena.typeTerms[bt.ref]
-                    val pt: TypeInfo = self.typeInfoOfRef(ref: self.arena.typeArgumentPool[inst.args.start + 0])
+                    val inst = self.arena.typeTermAt(index: bt.ref)
+                    val pt: TypeInfo = self.typeInfoOfRef(ref: self.arena.typeArgumentAt(index: inst.args.start + 0))
                     if pt.kind == 2 {
-                        return <Result.Ok value=(try self.genericFieldTypeInfo(instRef: self.arena.typeArgumentPool[inst.args.start + 0], fieldStart: nameStart, fieldLen: nameLen)) />
+                        return <Result.Ok value=(try self.genericFieldTypeInfo(instRef: self.arena.typeArgumentAt(index: inst.args.start + 0), fieldStart: nameStart, fieldLen: nameLen)) />
                     }
                 }
                 return <Result.Ok value=scalarInfo() />
@@ -1292,9 +1292,9 @@ pub impl Comp {
                 // like a normal receiver.
                 val bt: TypeInfo = (try self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef))
                 if self.isStrongRefInst(ref: bt.ref) {
-                    val inst = self.arena.typeTerms[bt.ref]
+                    val inst = self.arena.typeTermAt(index: bt.ref)
                     if inst.args.len > 0 {
-                        return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentPool[inst.args.start + 0]) />
+                        return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentAt(index: inst.args.start + 0)) />
                     }
                 }
                 return <Result.Ok value=scalarInfo() />
@@ -1314,9 +1314,9 @@ pub impl Comp {
                 // type argument. A value-less Promise[()] (args empty) yields a scalar.
                 val ot: TypeInfo = (try self.exprTypeWithChainHole(id: operand, chainHoleRef: chainHoleRef))
                 if ot.ref != 0 {
-                    val tr = self.arena.typeTerms[ot.ref]
+                    val tr = self.arena.typeTermAt(index: ot.ref)
                     if tr.args.len > 0 {
-                        return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentPool[tr.args.start + 0]) />
+                        return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentAt(index: tr.args.start + 0)) />
                     }
                 }
                 return <Result.Ok value=scalarInfo() />

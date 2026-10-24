@@ -178,7 +178,7 @@ pub impl Comp {
     // in `viewIds`.
     inout fn hasTopLevelView(ref: U64) -> Bool {
         if ref == 0U64 || ref >= self.arena.typeCount() { return false }
-        val term: TypeTerm = self.arena.typeTerms[ref]
+        val term: TypeTerm = self.arena.typeTermAt(index: ref)
         return term.hasTopLevelView()
     }
 
@@ -186,7 +186,7 @@ pub impl Comp {
     // `T#P` / projections retain their structural view/projection constraints.
     inout fn plainBinder(ref: U64, params: PatternBindInput) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return params.count() }
-        val term: TypeTerm = self.arena.typeTerms[ref]
+        val term: TypeTerm = self.arena.typeTermAt(index: ref)
         if term.hasTopLevelView() || term.assocTraitId != 0U64 || term.args.len != 0U64 { return params.count() }
         if term.paramId != 0U64 {
             mut val i: U64 = 0U64
@@ -204,11 +204,11 @@ pub impl Comp {
     fn sameTypeTermViewIdSet(a: TypeViewIdRange, b: TypeViewIdRange) -> Bool {
         mut val index: U64 = 0U64
         while index < a.len {
-            val selector = self.arena.typeViewIdPool[a.start + index]
+            val selector = self.arena.typeViewIdAt(index: a.start + index)
             mut val found = false
             mut val other: U64 = 0U64
             while other < b.len {
-                if self.arena.typeViewIdPool[b.start + other] == selector { found = true }
+                if self.arena.typeViewIdAt(index: b.start + other) == selector { found = true }
                 other += 1U64
             }
             if !found { return false }
@@ -216,11 +216,11 @@ pub impl Comp {
         }
         index = 0U64
         while index < b.len {
-            val selector = self.arena.typeViewIdPool[b.start + index]
+            val selector = self.arena.typeViewIdAt(index: b.start + index)
             mut val found = false
             mut val other: U64 = 0U64
             while other < a.len {
-                if self.arena.typeViewIdPool[a.start + other] == selector { found = true }
+                if self.arena.typeViewIdAt(index: a.start + other) == selector { found = true }
                 other += 1U64
             }
             if !found { return false }
@@ -249,15 +249,15 @@ pub impl Comp {
             return false
         }
         if ref == 0U64 || ref >= self.arena.typeCount() { return false }
-        val t: TypeTerm = self.arena.typeTerms[ref]
+        val t: TypeTerm = self.arena.typeTermAt(index: ref)
         mut val i: U64 = 0U64
         while i < t.args.len {
-            if self.occursInPattern(side: side, binderId: binderId, ref: self.arena.typeArgumentPool[t.args.start + i], refSide: refSide, aParams: aParams, bParams: bParams, binds: binds) { return true }
+            if self.occursInPattern(side: side, binderId: binderId, ref: self.arena.typeArgumentAt(index: t.args.start + i), refSide: refSide, aParams: aParams, bParams: bParams, binds: binds) { return true }
             i += 1U64
         }
         i = 0U64
         while i < t.assocTraitArgs.len {
-            if self.occursInPattern(side: side, binderId: binderId, ref: self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + i], refSide: refSide, aParams: aParams, bParams: bParams, binds: binds) { return true }
+            if self.occursInPattern(side: side, binderId: binderId, ref: self.arena.typeAssocArgumentAt(index: t.assocTraitArgs.start + i), refSide: refSide, aParams: aParams, bParams: bParams, binds: binds) { return true }
             i += 1U64
         }
         return false
@@ -290,21 +290,21 @@ pub impl Comp {
             return self.unifyPatterns(a: b, aSide: bSide, b: a, bSide: aSide, aParams: aParams, bParams: bParams, binds: inout binds, ignoreTopView: ignoreTopView)
         }
         if a == 0U64 || b == 0U64 || a >= self.arena.typeCount() || b >= self.arena.typeCount() { return a == b }
-        val ta: TypeTerm = self.arena.typeTerms[a]
-        val tb: TypeTerm = self.arena.typeTerms[b]
+        val ta: TypeTerm = self.arena.typeTermAt(index: a)
+        val tb: TypeTerm = self.arena.typeTermAt(index: b)
         if ((ta.hasDecl && tb.hasDecl) && ta.declOffset != tb.declOffset) || (!(ta.hasDecl && tb.hasDecl) && ta.nameId != tb.nameId) || (!ignoreTopView && (ta.viewExtId != tb.viewExtId || !(self.sameTypeTermViewIdSet(a: ta.viewIds, b: tb.viewIds)))) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId || ta.args.len != tb.args.len || ta.assocTraitArgs.len != tb.assocTraitArgs.len { return false }
         mut val i: U64 = 0U64
         while i < ta.args.len {
-            if !(self.unifyPatterns(a: self.arena.typeArgumentPool[ta.args.start + i], aSide: aSide, b: self.arena.typeArgumentPool[tb.args.start + i], bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }
+            if !(self.unifyPatterns(a: self.arena.typeArgumentAt(index: ta.args.start + i), aSide: aSide, b: self.arena.typeArgumentAt(index: tb.args.start + i), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }
             i += 1U64
         }
         i = 0U64
         while i < ta.assocTraitArgs.len {
             mut val al: U64 = 0U64
             mut val bl: U64 = 0U64
-            if i < ta.assocTraitArgLabels.len { al = self.arena.typeAssocArgumentLabelPool[ta.assocTraitArgLabels.start + i] }
-            if i < tb.assocTraitArgLabels.len { bl = self.arena.typeAssocArgumentLabelPool[tb.assocTraitArgLabels.start + i] }
-            if al != bl || !(self.unifyPatterns(a: self.arena.typeAssocArgumentPool[ta.assocTraitArgs.start + i], aSide: aSide, b: self.arena.typeAssocArgumentPool[tb.assocTraitArgs.start + i], bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }
+            if i < ta.assocTraitArgLabels.len { al = self.arena.typeAssocArgumentLabelAt(index: ta.assocTraitArgLabels.start + i) }
+            if i < tb.assocTraitArgLabels.len { bl = self.arena.typeAssocArgumentLabelAt(index: tb.assocTraitArgLabels.start + i) }
+            if al != bl || !(self.unifyPatterns(a: self.arena.typeAssocArgumentAt(index: ta.assocTraitArgs.start + i), aSide: aSide, b: self.arena.typeAssocArgumentAt(index: tb.assocTraitArgs.start + i), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }
             i += 1U64
         }
         return true

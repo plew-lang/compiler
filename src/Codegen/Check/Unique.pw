@@ -507,7 +507,7 @@ pub impl Comp {
                     // lang-item generic surfaces such as `Ref.factory(value: move T)`;
                     // allow an explicit ownership mode there and let each call/instance
                     // decide whether it is meaningful.
-                    if term == 0U64 || term >= self.arena.typeCount() || self.arena.typeTerms[term].paramId == 0U64 {
+                    if term == 0U64 || term >= self.arena.typeCount() || self.arena.typeTermAt(index: term).paramId == 0U64 {
                         if p.isMove {
                             return <Result.Err error=self.diagnosticAt(offset: anchor, msg: "`move` is not allowed on a copyable type; pass by value or use `inout`") />
                         }
@@ -534,7 +534,7 @@ pub impl Comp {
             if self.arena.typeTermIsUnique(ref: ae.fieldStart) {
                 // the collected Bind span is interned — anchor at the unique type's
                 // own declaration (a real file:line) instead.
-                return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTerms[ae.fieldStart].declOffset, msg: "a unique type cannot be stored in an Array (this unique type is used as an element type somewhere); wrap it in Ref[T]") />
+                return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTermAt(index: ae.fieldStart).declOffset, msg: "a unique type cannot be stored in an Array (this unique type is used as an element type somewhere); wrap it in Ref[T]") />
             }
             i += 1
         }
@@ -571,7 +571,7 @@ pub impl Comp {
                                 // the arena TypeRef has no use-site offset — anchor at the
                                 // unique type's own DECLARATION (a real file:line) instead of
                                 // the interned arg span, which maps to no source file.
-                                return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTerms[t.args[j]].declOffset, msg: "a unique type cannot be a generic type argument (this unique type is used as one somewhere); wrap it in Ref[T]") />
+                                return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTermAt(index: t.args[j]).declOffset, msg: "a unique type cannot be a generic type argument (this unique type is used as one somewhere); wrap it in Ref[T]") />
                             }
                         }
                         j += 1

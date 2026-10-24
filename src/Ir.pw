@@ -2993,16 +2993,16 @@ pub struct Arena {
     mut val genericEnumNameHeads: Dictionary[U64, U64] = [:]
     // Canonical scalar semantic type rows. `types` is the legacy mirror while
     // consumers migrate; both tables have the same index during that period.
-    // New hot-path readers must use typeTerms and these owner-specific pools.
-    pub mut val typeTerms: Array[TypeTerm] = []
-    pub mut val typeArgumentPool: Array[U64] = []
-    pub mut val typeRecordLabelPool: Array[U64] = []
-    pub mut val typeRecordFieldPool: Array[U64] = []
-    pub mut val typeViewIdPool: Array[U64] = []
-    pub mut val typeViewSourcePool: Array[ResolvedViewSource] = []
-    pub mut val typeArgumentLabelPool: Array[U64] = []
-    pub mut val typeAssocArgumentPool: Array[U64] = []
-    pub mut val typeAssocArgumentLabelPool: Array[U64] = []
+    // Hot-path readers use scalar queries; canonical rows and child pools stay private.
+    mut val typeTerms: Array[TypeTerm] = []
+    mut val typeArgumentPool: Array[U64] = []
+    mut val typeRecordLabelPool: Array[U64] = []
+    mut val typeRecordFieldPool: Array[U64] = []
+    mut val typeViewIdPool: Array[U64] = []
+    mut val typeViewSourcePool: Array[ResolvedViewSource] = []
+    mut val typeArgumentLabelPool: Array[U64] = []
+    mut val typeAssocArgumentPool: Array[U64] = []
+    mut val typeAssocArgumentLabelPool: Array[U64] = []
     mut val typeRows: Array[TypeRef] = []
     mut val typeDeclarationResolutionFinished: Bool = false
     mut val bareTypeNameRefs: Array[U64] = []

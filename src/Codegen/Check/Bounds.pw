@@ -180,7 +180,7 @@ pub impl Comp {
     }
 
     inout fn existentialIterationItemTerm(receiver: U64) -> U64 {
-        if receiver == 0U64 || receiver >= self.arena.typeCount() || !self.arena.typeTerms[receiver].isAny { return 0U64 }
+        if receiver == 0U64 || receiver >= self.arena.typeCount() || !self.arena.typeTermAt(index: receiver).isAny { return 0U64 }
         return self.existentialIterationItemInBound(bound: <TraitBound subject=receiver constraint=self.existentialTraitConstraint(ref: receiver) offset=self.arena.typeAt(index: receiver).siteOffset />)
     }
 
@@ -199,7 +199,7 @@ pub impl Comp {
         val owner = self.coreTraitOwner(name: "Iterator")
         mut val valid = false
         if cursor != 0U64 && cursor < self.arena.typeCount() && owner != 0U64 {
-            if self.arena.typeTerms[cursor].isAny {
+            if self.arena.typeTermAt(index: cursor).isAny {
                 val cursorItem = self.existentialIterationItemInBound(bound: <TraitBound subject=cursor constraint=self.existentialTraitConstraint(ref: cursor) offset=offset />, requiredOwner: owner)
                 valid = cursorItem != 0U64 && self.typeRefEq(a: cursorItem, b: item)
             } else {
@@ -1051,7 +1051,7 @@ pub impl Comp {
         while k < tps.count() {
             if tps[k].nameId == prId {
                 if k < targs.count() {
-                    return self.arena.typeTerms[targs[k]].nameId
+                    return self.arena.typeTermAt(index: targs[k]).nameId
                 }
             }
             k += 1
@@ -1834,7 +1834,7 @@ pub impl Comp {
                 }
                 val receiver = template.receiverTypeTerm
                 if receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=() /> }
-                if self.arena.typeTerms[receiver].isAny {
+                if self.arena.typeTermAt(index: receiver).isAny {
                     try self.checkExistentialIterationReceiver(receiver: receiver, fnIdx: template.siteKey.ownerFnIdx, offset: template.siteKey.originStart)
                     return <Result.Ok value=() />
                 }

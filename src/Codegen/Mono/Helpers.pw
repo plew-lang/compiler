@@ -6,7 +6,7 @@
 
 pub impl Comp {
     inout fn isGenericInst(ref: U64) -> Bool {
-        if ref == 0U64 || ref >= self.arena.typeCount() || self.arena.typeTerms[ref].args.count() == 0U64 { return false }
+        if ref == 0U64 || ref >= self.arena.typeCount() || self.arena.typeTermAt(index: ref).args.count() == 0U64 { return false }
         val structIndex = self.structIndexForType(ref: ref)
         if structIndex < self.arena.structCount() {
             return self.arena.structAt(index: structIndex).typeParams.count() > 0U64
@@ -20,7 +20,7 @@ pub impl Comp {
         if ref >= self.arena.typeCount() {
             return false
         }
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "fn")
     }
 
@@ -31,7 +31,7 @@ pub impl Comp {
         if ref >= self.arena.typeCount() {
             return false
         }
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         if t.args.len != 1 {
             return false
         }
@@ -44,7 +44,7 @@ pub impl Comp {
         if ref >= self.arena.typeCount() {
             return false
         }
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         if t.args.len != 1 {
             return false
         }
@@ -54,7 +54,7 @@ pub impl Comp {
     // Is `ref` either strong reference capability (`Ref[T]` or `MutableRef[T]`)?
     fn isStrongRefInst(ref: U64) -> Bool {
         if ref >= self.arena.typeCount() { return false }
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         if t.args.len != 1U64 { return false }
         return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref") || rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "MutableRef")
     }
@@ -64,7 +64,7 @@ pub impl Comp {
         if ref >= self.arena.typeCount() {
             return false
         }
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         if t.args.len != 1 {
             return false
         }
@@ -79,7 +79,7 @@ pub impl Comp {
         if ref >= self.arena.typeCount() {
             return false
         }
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         if t.args.len != 1 {
             return false
         }
@@ -91,7 +91,7 @@ pub impl Comp {
         if ref >= self.arena.typeCount() {
             return false
         }
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         if t.args.len != 1 {
             return false
         }
@@ -101,7 +101,7 @@ pub impl Comp {
     // Is `ref` either weak reference-cell capability (`WeakRef[T]` or `WeakMutableRef[T]`)?
     inout fn isWeakRefLikeInst(ref: U64) -> Bool {
         if ref >= self.arena.typeCount() { return false }
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         if t.args.len != 1U64 { return false }
         return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "WeakRef") || rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "WeakMutableRef")
     }
@@ -111,7 +111,7 @@ pub impl Comp {
         if ref >= self.arena.typeCount() {
             return false
         }
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         if t.args.len != 1 {
             return false
         }
@@ -126,7 +126,7 @@ pub impl Comp {
         if ref >= self.arena.typeCount() {
             return false
         }
-        val t = self.arena.typeTerms[ref]
+        val t = self.arena.typeTermAt(index: ref)
         if t.args.len != 1 {
             return false
         }

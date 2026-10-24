@@ -1,0 +1,5 @@
+use /Ir only { Arena }
+fn main() {
+    mut val arena = <Arena />
+    arena.typeArgumentPool.set(i: 0U64, value: 0U64)
+}

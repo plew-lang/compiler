@@ -10,7 +10,7 @@ fn check(compiler: inout Comp) {
     val bound = compiler.conformBoundAt(bounds: conformance.bounds, index: 0U64)
     val parameter = compiler.conformBindAt(binds: conformance.typeParams, index: 0U64)
     assert(parameter.paramId != 0U64)
-    assert(compiler.arena.typeTerms[bound.subject].paramId == parameter.paramId)
+    assert(compiler.arena.typeTermAt(index: bound.subject).paramId == parameter.paramId)
     assert(bound.constraint.key.owner == compiler.decls.traitAt(index: 0U64).nameStart)
     assert(bound.constraint.key.positionalArgs.count() == 1U64)
     assert(!bound.constraint.positionalArgsOpen)

@@ -411,7 +411,7 @@ pub impl Comp {
     // of another declaration with the same spelling.
     inout fn typeDefinitionModule(ref: U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return 4000000000U64 }
-        val type = self.arena.typeTerms[ref]
+        val type = self.arena.typeTermAt(index: ref)
         if !type.hasDecl { return 4000000000U64 }
         return self.moduleOf(offset: type.declOffset)
     }

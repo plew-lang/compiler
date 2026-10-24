@@ -4,7 +4,7 @@ pub impl Comp {
 
 inout fn typeTermContainsParameter(ref: U64, parameter: U64) -> Bool {
     if parameter == 0U64 || ref >= self.arena.typeCount() { return false }
-    if self.arena.typeTerms[ref].paramId == parameter { return true }
+    if self.arena.typeTermAt(index: ref).paramId == parameter { return true }
     mut val index = 0U64
     while index < self.typeTermRefChildCount(ref: ref) {
         if self.typeTermContainsParameter(ref: self.typeTermRefChildRef(ref: ref, index: index), parameter: parameter) { return true }
@@ -57,8 +57,8 @@ inout fn checkExistentialRequirementCall(req: Func, target: U64, traitIndex: U64
 // identity; it never searches names or invents static conformance evidence.
 inout fn existentialTypesCompatible(sourceRef: U64, targetRef: U64) -> Bool {
     if sourceRef == 0U64 || targetRef == 0U64 || sourceRef >= self.arena.typeCount() || targetRef >= self.arena.typeCount() { return false }
-    val source = self.arena.typeTerms[sourceRef]
-    val target = self.arena.typeTerms[targetRef]
+    val source = self.arena.typeTermAt(index: sourceRef)
+    val target = self.arena.typeTermAt(index: targetRef)
     if !source.isAny || !target.isAny || !source.hasDecl || !target.hasDecl || source.declOffset != target.declOffset { return false }
     if target.isSendable && !source.isSendable { return false }
     if source.paramId != target.paramId || source.assocNameId != 0U64 || target.assocNameId != 0U64 || source.isDiverging != target.isDiverging { return false }

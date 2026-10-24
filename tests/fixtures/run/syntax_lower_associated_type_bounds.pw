@@ -19,10 +19,10 @@ fn check(compiler: inout Comp) {
     assert(predicate.member == compiler.internBytes(s: "Item").nameId)
     assert(compiler.arena.typeAt(index: predicate.value).nameId == predicate.member)
     val parameter = compiler.traitBindAt(binds: declaration.typeParams, index: 0U64)
-    assert(compiler.arena.typeTerms[third.constraint.assocPredicates[0U64].value].paramId == parameter.paramId)
+    assert(compiler.arena.typeTermAt(index: third.constraint.assocPredicates[0U64].value).paramId == parameter.paramId)
     assert(first.constraint.key.positionalArgs.count() == 1U64)
     assert(!first.constraint.positionalArgsOpen)
-    assert(compiler.arena.typeTerms[first.constraint.key.positionalArgs[0U64]].paramId == parameter.paramId)
+    assert(compiler.arena.typeTermAt(index: first.constraint.key.positionalArgs[0U64]).paramId == parameter.paramId)
     assert(first.offset != 0U64)
     assert(compiler.monoWork.bodyCount() == 0U64)
 }

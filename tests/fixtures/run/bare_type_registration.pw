@@ -18,6 +18,6 @@ fn main() {
     val duplicate = compiler.internBytes(s: "BareProbe")
     compiler.pushType(t: <TypeRef nameStart=duplicate.nameStart nameLen=duplicate.nameLen args=[] />)
     if compiler.arena.firstBareTypeNamed(nameId: duplicate.nameId) != first { panic "first name occurrence changed" }
-    if compiler.arena.typeCount() != compiler.arena.typeTerms.count() { panic "parallel type rows diverged" }
+    if compiler.arena.typeCount() != compiler.arena.typeTermCount() { panic "parallel type rows diverged" }
     write(s: "bare-type-registration-ok\n")
 }

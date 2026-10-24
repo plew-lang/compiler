@@ -84,7 +84,7 @@ pub impl Comp {
         if args.count() == 0U64 {
             val prior = self.arena.firstBareTypeNamed(nameId: intern(c: inout self, start: canonicalStart, len: canonicalLength))
             if prior < self.arena.typeCount() {
-                val term = self.arena.typeTerms[prior]
+                val term = self.arena.typeTermAt(index: prior)
                 if term.hasDecl && term.declOffset == declaration.nameStart && self.typeTermIsBareNominal(ref: prior) {
                     self.lateBareNominalRefs[declaration.nameStart] = prior
                     return prior
@@ -97,8 +97,8 @@ pub impl Comp {
     }
 
     fn typeTermIsBareNominal(ref: U64) -> Bool {
-        if ref == 0U64 || ref >= self.arena.typeTerms.count() { return false }
-        val term = self.arena.typeTerms[ref]
+        if ref == 0U64 || ref >= self.arena.typeTermCount() { return false }
+        val term = self.arena.typeTermAt(index: ref)
         return term.args.len == 0U64 && term.paramId == 0U64 && term.assocNameId == 0U64 && term.projectionReceiver == 0U64 && !term.isRecord && !term.isAny && !term.isSendable && !term.isDiverging && term.viewExtId == 0U64 && term.viewIds.len == 0U64 && term.viewSources.len == 0U64 && term.assocTraitId == 0U64 && term.assocTraitLen == 0U64 && !term.hasAssocTraitDecl && term.assocTraitArgs.len == 0U64 && term.assocTraitArgLabels.len == 0U64 && term.argLabels.len == 0U64 && term.recordFieldLabels.len == 0U64 && term.recordFieldTerms.len == 0U64
     }
 
@@ -114,7 +114,7 @@ pub impl Comp {
         if args.count() != 0U64 || !self.isPrimType(start: nameStart, len: nameLen) { return 0U64 }
         val prior = self.arena.firstBareTypeNamed(nameId: intern(c: inout self, start: nameStart, len: nameLen))
         if prior < self.arena.typeCount() {
-            val term = self.arena.typeTerms[prior]
+            val term = self.arena.typeTermAt(index: prior)
             if !term.hasDecl && self.typeTermIsBareNominal(ref: prior) { return prior }
         }
         return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=[] />)
@@ -162,7 +162,7 @@ pub impl Comp {
 
     inout fn isLangArrayType(ref: U64) -> Bool {
         if ref == 0U64 || ref >= self.arena.typeCount() { return false }
-        val term = self.arena.typeTerms[ref]
+        val term = self.arena.typeTermAt(index: ref)
         if !term.hasDecl || term.isAny || term.isRecord || term.paramId != 0U64 || term.assocNameId != 0U64 { return false }
         val identity = self.langArrayIdentity()
         return identity.nameLen != 0U64 && term.declOffset == identity.nameStart && term.args.len == 1U64
@@ -476,7 +476,7 @@ pub impl Comp {
         mut val out: Array[Bind] = []
         mut val declaration = <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
         if receiverRef != 0U64 && receiverRef < self.arena.typeCount() {
-            val receiver = self.arena.typeTerms[receiverRef]
+            val receiver = self.arena.typeTermAt(index: receiverRef)
             if receiver.hasDecl { declaration = <Bind nameStart=receiver.declOffset nameLen=1U64 fieldStart=0U64 fieldLen=0U64 /> }
         }
         if declaration.nameLen == 0U64 {
