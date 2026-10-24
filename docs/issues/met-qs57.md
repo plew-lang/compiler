@@ -1,6 +1,6 @@
 ---
 id: met-qs57
-status: in_progress
+status: closed
 deps: [com-5d2q]
 links: []
 created: 2026-10-24T17:43:34Z
@@ -35,3 +35,17 @@ Build fresh once, run full source check and affected functional controls,
 compare old/new serially on the identical source and emitted LLVM/runtime.
 A faster helper is not a whole self-compilation claim. The parent remains open
 until formal fixed point, below6s and required correctness admission.
+
+## Outcome
+
+Resolved by 6a876323 (scalar destruction query),318e6be0 (saved call context),
+f53ac39d (owner-local expression index),499c0d7f (dedicated publication control).
+Standard build20261024T174941-build-da3780 exit0/frozen inputs; fresh c37f338fbf0be63af9c57ec8688142da05e9110019541845b4297c8759273363 passes
+all sourcecheck and22 native/4 reject controls. Same-source serial alternating
+3 runs each: old6.931619/6.904798/6.926046; new6.611139/6.606803/6.605769s.
+Median6.926046→6.606803s, all LLVM44f54532b2fe6fac647186a10b35654c42e1e9d09e4aa9614c30e5aa22179203.
+Meta evidence/performance-six-seconds/source-query-index.json owns hashes,
+receipts and individual results. b2 independent reviewer rechecked ten references,
+240/239/5933 input fingerprints and all six compressed LLVM outputs and accepts
+this bounded task. Formal <6s/fixed point and whole correctness admission remain
+open on parent. met-v1jg owns the next measured navigation-copy/division slice.

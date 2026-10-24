@@ -1,7 +1,7 @@
 ---
 id: com-swgs
 status: in_progress
-deps: [com-ksl8, com-9t8k, com-5d2q, met-qs57]
+deps: [com-ksl8, com-9t8k, com-5d2q, met-qs57, met-v1jg]
 links: []
 created: 2026-10-24T17:09:12Z
 type: epic
