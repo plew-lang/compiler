@@ -2357,11 +2357,29 @@ fn readSourceRow[T](rows: Array[T], keys: Dictionary[U64, U64], key: U64) -> Opt
         Optional.None => { return <Optional.None /> }
     }
 }
-fn readSourceExpressionHead(rows: Array[SemanticExprType], keys: Dictionary[U64, U64], exprId: U64) -> SourceExpressionHead {
-    match keys.get(key: exprId) {
-        Optional.Some(v: val index) => { return <SourceExpressionHead term=rows[index].term typeState=rows[index].typeState invocation=rows[index].invocation /> }
-        Optional.None => { return <SourceExpressionHead /> }
+// ExprIds are compiler-assigned identities. Use the existing row-ordered key
+// array as the collision key store; slots contain row + 1, never semantic facts.
+// This stays sparse per owner and preserves key zero as an ordinary identity.
+fn findSourceExpressionIndex(identities: Array[U64], indexSlots: Array[U64], exprId: U64) -> U64 {
+    val capacity = indexSlots.count()
+    if capacity == 0U64 { return identities.count() }
+    mut val slot = exprId & (capacity - 1U64)
+    while indexSlots[slot] != 0U64 {
+        val index = indexSlots[slot] - 1U64
+        if identities[index] == exprId { return index }
+        slot = (slot + 1U64) & (capacity - 1U64)
     }
+    return identities.count()
+}
+fn readSourceExpression(rows: Array[SemanticExprType], identities: Array[U64], indexSlots: Array[U64], exprId: U64) -> Optional[SemanticExprType] {
+    val index = findSourceExpressionIndex(identities: identities, indexSlots: indexSlots, exprId: exprId)
+    if index < identities.count() { return <Optional.Some v=rows[index] /> }
+    return <Optional.None />
+}
+fn readSourceExpressionHead(rows: Array[SemanticExprType], identities: Array[U64], indexSlots: Array[U64], exprId: U64) -> SourceExpressionHead {
+    val index = findSourceExpressionIndex(identities: identities, indexSlots: indexSlots, exprId: exprId)
+    if index < identities.count() { return <SourceExpressionHead term=rows[index].term typeState=rows[index].typeState invocation=rows[index].invocation /> }
+    return <SourceExpressionHead />
 }
 fn readSourceMatchIndex(statementKeys: Dictionary[U64, U64], expressionKeys: Dictionary[U64, U64], conditionKeys: Dictionary[U64, U64], source: MatchSource) -> Optional[U64] {
     match source {
@@ -2434,7 +2452,7 @@ struct SourceBodyData {
     mut val operationConstraints: Array[Optional[CallConstraintPlanState]] = []
     mut val parent: Optional[SemanticCompletionOwner] = <Optional.None />
     mut val expressions: Array[SemanticExprType] = []
-    mut val expressionKeys: Dictionary[U64, U64] = [:]
+    mut val expressionIndexSlots: Array[U64] = []
     mut val expressionIds: Array[U64] = []
     mut val requiredExpressions: Array[U64] = []
     mut val valueBlocks: Dictionary[U64, SourceValueBlockFact] = [:]
@@ -2584,7 +2602,7 @@ impl PreparedSemanticFacts { factory }
 pub impl PreparedSemanticFacts {
     fn belongsToSession(session: U64) -> Bool { return self.session == session }
     fn operationAt(index: U64) -> Optional[CallTemplate] { return readSourceOperationTemplate(rows: self.payload->operations, index: index) }
-    fn expression(exprId: U64) -> Optional[SemanticExprType] { return readSourceRow(rows: self.payload->expressions, keys: self.payload->expressionKeys, key: exprId) }
+    fn expression(exprId: U64) -> Optional[SemanticExprType] { return readSourceExpression(rows: self.payload->expressions, identities: self.payload->expressionIds, indexSlots: self.payload->expressionIndexSlots, exprId: exprId) }
     fn valueBlock(blockId: U64) -> Optional[SourceValueBlockFact] { return self.payload->valueBlocks.get(key: blockId) }
     fn identifierTarget(exprId: U64) -> Optional[U64] { return self.payload->identifierTargets.get(key: exprId) }
     fn globalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] { return self.payload->globalAddresses.get(key: exprId) }

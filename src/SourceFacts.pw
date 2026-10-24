@@ -1,15 +1,37 @@
 // Private owner-local backing. A published reader holds one Ref, never a
 // snapshot of the directory or another owner's mutable arrays.
 impl SourceBodyData {
-    inout fn putExpression(exprId: U64, fact: SemanticExprType) {
-        match self.expressionKeys.get(key: exprId) {
-            Optional.Some(v: val index) => { self.expressions.set(i: index, value: fact) }
-            Optional.None => {
-                self.expressionKeys[exprId] = self.expressions.count()
-                self.expressionIds.append(exprId)
-                self.expressions.append(fact)
-            }
+    inout fn growExpressionIndex() {
+        mut val capacity = self.expressionIndexSlots.count() * 2U64
+        if capacity == 0U64 { capacity = 8U64 }
+        mut val slots: Array[U64] = []
+        mut val index = 0U64
+        while index < capacity {
+            slots.append(0U64)
+            index += 1U64
         }
+        index = 0U64
+        while index < self.expressionIds.count() {
+            mut val slot = self.expressionIds[index] & (capacity - 1U64)
+            while slots[slot] != 0U64 { slot = (slot + 1U64) & (capacity - 1U64) }
+            slots.set(i: slot, value: index + 1U64)
+            index += 1U64
+        }
+        self.expressionIndexSlots = slots
+    }
+    inout fn putExpression(exprId: U64, fact: SemanticExprType) {
+        val index = findSourceExpressionIndex(identities: self.expressionIds, indexSlots: self.expressionIndexSlots, exprId: exprId)
+        if index < self.expressionIds.count() {
+            self.expressions.set(i: index, value: fact)
+            return
+        }
+        if self.expressionIndexSlots.count() == 0U64 || (self.expressionIds.count() + 1U64) * 4U64 > self.expressionIndexSlots.count() * 3U64 { self.growExpressionIndex() }
+        val capacity = self.expressionIndexSlots.count()
+        mut val slot = exprId & (capacity - 1U64)
+        while self.expressionIndexSlots[slot] != 0U64 { slot = (slot + 1U64) & (capacity - 1U64) }
+        self.expressionIndexSlots.set(i: slot, value: self.expressionIds.count() + 1U64)
+        self.expressionIds.append(exprId)
+        self.expressions.append(fact)
     }
     // Only checked value facts cross publication. Capability/type-qualifier
     // probes and discarded untyped literals have no runtime fact requirement.
@@ -26,7 +48,7 @@ impl SourceBodyData {
         val identities = self.expressionIds
         self.expressions = []
         self.expressionIds = []
-        self.expressionKeys = [:]
+        self.expressionIndexSlots = []
         mut val index = 0U64
         while index < facts.count() {
             match facts[index].typeState {
@@ -270,13 +292,13 @@ impl SourceFactDirectory {
         }
     }
     inout fn expressionHead(owner: SemanticCompletionOwner, exprId: U64) -> SourceExpressionHead {
-        if self.isActive(owner: owner) { return readSourceExpressionHead(rows: self.activeBuilder.data.expressions, keys: self.activeBuilder.data.expressionKeys, exprId: exprId) }
+        if self.isActive(owner: owner) { return readSourceExpressionHead(rows: self.activeBuilder.data.expressions, identities: self.activeBuilder.data.expressionIds, indexSlots: self.activeBuilder.data.expressionIndexSlots, exprId: exprId) }
         match self.state(owner: owner) {
             Optional.Some(v: val state) => {
                 match state {
                     SourceBodyState.Building => { val builder = self.inactiveBuilder(owner: owner)
-                        return readSourceExpressionHead(rows: builder.data.expressions, keys: builder.data.expressionKeys, exprId: exprId) }
-                    SourceBodyState.Succeeded(reader: val reader) => { return readSourceExpressionHead(rows: self.readers[reader].payload->expressions, keys: self.readers[reader].payload->expressionKeys, exprId: exprId) }
+                        return readSourceExpressionHead(rows: builder.data.expressions, identities: builder.data.expressionIds, indexSlots: builder.data.expressionIndexSlots, exprId: exprId) }
+                    SourceBodyState.Succeeded(reader: val reader) => { return readSourceExpressionHead(rows: self.readers[reader].payload->expressions, identities: self.readers[reader].payload->expressionIds, indexSlots: self.readers[reader].payload->expressionIndexSlots, exprId: exprId) }
                     _ => {}
                 }
             }
@@ -285,13 +307,13 @@ impl SourceFactDirectory {
         return <SourceExpressionHead />
     }
     inout fn expression(owner: SemanticCompletionOwner, exprId: U64) -> Optional[SemanticExprType] {
-        if self.isActive(owner: owner) { return readSourceRow(rows: self.activeBuilder.data.expressions, keys: self.activeBuilder.data.expressionKeys, key: exprId) }
+        if self.isActive(owner: owner) { return readSourceExpression(rows: self.activeBuilder.data.expressions, identities: self.activeBuilder.data.expressionIds, indexSlots: self.activeBuilder.data.expressionIndexSlots, exprId: exprId) }
         match self.state(owner: owner) {
             Optional.Some(v: val state) => {
                 match state {
-                    SourceBodyState.Active => { return readSourceRow(rows: self.activeBuilder.data.expressions, keys: self.activeBuilder.data.expressionKeys, key: exprId) }
+                    SourceBodyState.Active => { return readSourceExpression(rows: self.activeBuilder.data.expressions, identities: self.activeBuilder.data.expressionIds, indexSlots: self.activeBuilder.data.expressionIndexSlots, exprId: exprId) }
                     SourceBodyState.Building => { val builder = self.inactiveBuilder(owner: owner)
-                        return readSourceRow(rows: builder.data.expressions, keys: builder.data.expressionKeys, key: exprId) }
+                        return readSourceExpression(rows: builder.data.expressions, identities: builder.data.expressionIds, indexSlots: builder.data.expressionIndexSlots, exprId: exprId) }
                     SourceBodyState.Succeeded(reader: val reader) => { return self.readers[reader].expression(exprId: exprId) }
                     _ => {}
                 }
