@@ -1,0 +1,101 @@
+// Diagnostic emission follows the source request, while saved completion
+// keeps source-valid dead statements separate from executable continuation.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Diag only { CompileDiagnostic, DiagnosticSeverity }
+use @Std/Io only { print }
+
+fn owner(compiler: inout Comp, name: String) -> U64 {
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    if function >= compiler.arena.functionCount() { panic("missing diagnostic owner") }
+    return function
+}
+
+fn noDiagnostics(compiler: inout Comp) {
+    if compiler.takeDiagnostics().count() != 0U64 { panic("unexpected diagnostic outside a fresh source request") }
+}
+
+fn oneWarning(compiler: inout Comp) {
+    val diagnostics = compiler.takeDiagnostics()
+    if diagnostics.count() != 1U64 { panic("source request did not retain exactly one loop warning") }
+    match diagnostics[0U64].severity {
+        DiagnosticSeverity.Warning => {}
+        _ => { panic("analytical noncontinuation became an error") }
+    }
+    if diagnostics[0U64].message != "unreachable code: preceding control flow cannot continue here (spec/11)" { panic(diagnostics[0U64].message) }
+}
+
+fn rejected(compiler: inout Comp, function: U64) -> CompileDiagnostic {
+    return match compiler.prepareLexicalBody(fnIdx: function) {
+        Result.Err(error: val diagnostic) => diagnostic
+        Result.Ok(value: _) => { panic("invalid source request succeeded") }
+    }
+}
+
+fn failedFacts(compiler: inout Comp, function: U64, message: String) {
+    match compiler.preparedFunctionSemanticFacts(fnIdx: function) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != message { panic("failed owner lost its original diagnostic") }
+        }
+        Result.Ok(value: _) => { panic("failed owner published successful facts") }
+    }
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    val resources = [
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64, Bool }}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 struct Bool }}" />,
+        <SourceResource path="plew:std/DiagnosticProbe.pw".bytes() text="fn good() {{}}\nfn unusedWarning() {{ while true {{}}\n val later = 2I64 }}\nfn warned() {{ while true {{}}\n val later = 1I64 }}\nfn invalidAfterLoop() {{ while true {{}}\n val wrong: I64 = true }}\nfn transferAfterLoop() {{ while true {{}}\n return\n val later = 3I64 }}" />,
+    ]
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.File path="plew:std/DiagnosticProbe.pw" />,
+        sources: <SourceAccess stdRoot="plew:std/".bytes() resources=resources />).unwrap()
+    val good = owner(compiler: inout compiler, name: "good")
+    val unused = owner(compiler: inout compiler, name: "unusedWarning")
+    val warned = owner(compiler: inout compiler, name: "warned")
+    val invalid = owner(compiler: inout compiler, name: "invalidAfterLoop")
+    val transfer = owner(compiler: inout compiler, name: "transferAfterLoop")
+
+    // Neither declaration registration nor an unrelated successful request
+    // may inspect a dormant body merely to emit its warning.
+    noDiagnostics(compiler: inout compiler)
+    compiler.prepareLexicalBody(fnIdx: good).unwrap()
+    if compiler.preparedFunctionSemanticFacts(fnIdx: unused).isOk() { panic("unused warning body was prepared eagerly") }
+    noDiagnostics(compiler: inout compiler)
+
+    // The loop is analyzed, never executed by this fixture. Its successor
+    // remains source-valid and is recorded despite lacking an execution edge.
+    compiler.prepareLexicalBody(fnIdx: warned).unwrap()
+    oneWarning(compiler: inout compiler)
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: warned).unwrap()
+    val body = compiler.arena.functionAt(index: warned).body
+    val loopStatement = compiler.blockStmtAt(blkId: body, index: 0U64)
+    val later = compiler.blockStmtAt(blkId: body, index: 1U64)
+    val flow = facts.statementCompletion(stmtId: loopStatement).unwrap()
+    if !flow.source.normal() || flow.execution.normal() { panic("loop source and execution channels were conflated") }
+    if facts.binding(stmtId: later).isNone() || facts.statementCompletion(stmtId: later).isNone() { panic("analytically dead successor was not checked and saved") }
+    compiler.prepareLexicalBody(fnIdx: warned).unwrap()
+    noDiagnostics(compiler: inout compiler)
+
+    // Analytical dead code still has an ordinary type contract. Failed
+    // publication and retry preserve the type error, without another warning.
+    val invalidDiagnostic = rejected(compiler: inout compiler, function: invalid)
+    match invalidDiagnostic.severity { DiagnosticSeverity.Error => {} _ => { panic("dead-code type mismatch was only a warning") } }
+    if invalidDiagnostic.message != "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)" { panic(invalidDiagnostic.message) }
+    oneWarning(compiler: inout compiler)
+    failedFacts(compiler: inout compiler, function: invalid, message: invalidDiagnostic.message)
+    if rejected(compiler: inout compiler, function: invalid).message != invalidDiagnostic.message { panic("failed retry changed the diagnostic") }
+    noDiagnostics(compiler: inout compiler)
+
+    // A warning region does not relax the local source-transfer prohibition.
+    // The return is warned; a successor after that return remains an error.
+    val transferDiagnostic = rejected(compiler: inout compiler, function: transfer)
+    match transferDiagnostic.severity { DiagnosticSeverity.Error => {} _ => { panic("explicit-transfer successor was only warned") } }
+    if transferDiagnostic.message != "code after a source control transfer is not allowed (spec/11)" { panic(transferDiagnostic.message) }
+    oneWarning(compiler: inout compiler)
+    failedFacts(compiler: inout compiler, function: transfer, message: transferDiagnostic.message)
+    if compiler.preparedFunctionSemanticFacts(fnIdx: unused).isOk() { panic("later requests prepared the dormant warning body") }
+    noDiagnostics(compiler: inout compiler)
+    print("source-completion-diagnostics")
+}
