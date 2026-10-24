@@ -1,6 +1,6 @@
 ---
 id: com-qxzc
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T18:51:16Z
@@ -31,3 +31,13 @@ Require sourcecheck, affected source/result/storage/Mid controls, dedicated
 active/sealed/missing/foreign-cache projection contrasts and independent review.
 If a material improvement appears, run standard formal self-host alone. Preserve
 all three times and fixed-point evidence; latest6.051333 is not below6.
+
+## Outcome
+
+Production9873fe97 and strengthened internal fixture5b3497e3 pass standard
+build20261024T185413-build-e12ab8, fresh sourcecheck and native23/panic2/reject8.
+Freshf21571ea, same-source oldbd2 median6.050066/new6.024843, sixLLVM identical.
+Small difference, no formal target claim. b2 independently rechecked scope, all
+receipt refs/input hashes and inactive Building/matching/foreign cached-owner
+contrasts. No blockers. Durable receipt meta/evidence/performance-six-seconds/operation-head-projection.json.
+Latest formal remains6.051333s; no repeated formal runs to select favorable noise.
