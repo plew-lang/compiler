@@ -1,0 +1,44 @@
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Mid only { MidBuildState, MidBuildError, buildMidReturn, buildMidLet }
+
+fn main() {
+    val source = "fn first() {{ val value = 1I64 return }} fn second() {{ val value = 2I64 return }} fn empty() {{ return }}"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="mid-source-owner.pw" text=source />, sources: <SourceAccess />).unwrap()
+    val first = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "first").nameId)
+    val second = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "second").nameId)
+    val empty = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "empty").nameId)
+    compiler.prepareLexicalBody(fnIdx: first).unwrap()
+    compiler.prepareLexicalBody(fnIdx: second).unwrap()
+    compiler.prepareLexicalBody(fnIdx: empty).unwrap()
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: first).body, index: 0U64)
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: first).unwrap()
+    mut val valid = <MidBuildState.initial sourceFunction=first sourceFacts=<Optional.Some v=facts /> />
+    match buildMidLet(c: inout compiler, state: inout valid, stmtId: statement) {
+        MidBuildError.None => {}
+        _ => { panic("valid source owner rejected") }
+    }
+    // Same arena and present rows: rejection must check owner, not just presence.
+    mut val foreign = <MidBuildState.initial sourceFunction=second sourceFacts=<Optional.Some v=facts /> />
+    match buildMidLet(c: inout compiler, state: inout foreign, stmtId: statement) {
+        MidBuildError.None => { panic("another source owner's binding reached Mid") }
+        _ => {}
+    }
+    val emptyStatement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: empty).body, index: 0U64)
+    mut val missing = <MidBuildState.initial sourceFunction=empty />
+    match buildMidReturn(c: inout compiler, state: inout missing, stmtId: emptyStatement) {
+        MidBuildError.None => { panic("return without source facts reached Mid") }
+        _ => {}
+    }
+    mut val other = <Comp />
+    analyzeFrontendForRequests(c: inout other, input: <FrontendInput.Text path="mid-source-owner.pw" text=source />, sources: <SourceAccess />).unwrap()
+    other.prepareLexicalBody(fnIdx: empty).unwrap()
+    mut val foreignSession = <MidBuildState.initial sourceFunction=empty sourceFacts=<Optional.Some v=compiler.preparedFunctionSemanticFacts(fnIdx: empty).unwrap() /> />
+    match buildMidReturn(c: inout other, state: inout foreignSession, stmtId: emptyStatement) {
+        MidBuildError.None => { panic("foreign session's return reached Mid") }
+        _ => {}
+    }
+    print("mid-source-owner-admission")
+}
