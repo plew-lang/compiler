@@ -2465,6 +2465,9 @@ struct SourceBodyBuilder {
     mut val requiredKeys: Set[U64] = Set.new()
     // Construction progress only; the type remains in the expression row.
     mut val contextualValues: Set[U64] = Set.new()
+    mut val contextualScopeFunction: U64 = 0U64
+    mut val contextualScopeRoot: U64 = 0U64
+    mut val contextualScope: Optional[DeclarationTypeScope] = <Optional.None />
 }
 impl SourceBodyBuilder { factory }
 

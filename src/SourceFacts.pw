@@ -358,6 +358,33 @@ impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: committed source context has no type") />
     }
 
+    // Existing lexical declarations are append-only. Cache only a real
+    // function's successful base scope, keyed by both request and current
+    // lexical root; late root registration and synthetic owners bypass it.
+    // Interface proof roots are per call and never enter this cache.
+    inout fn contextualLexicalScope(owner: SemanticCompletionOwner, function: U64) -> Result[DeclarationTypeScope, CompileDiagnostic] {
+        val root = self.callTemplateLexicalRoots.getOr(key: function, fallback: function)
+        val cacheable = function < self.arena.functionCount() && root < self.arena.functionCount()
+        self.sourceFacts.activate(owner: owner)
+        if cacheable && self.sourceFacts.activeBuilder.contextualScopeFunction == function && self.sourceFacts.activeBuilder.contextualScopeRoot == root {
+            match self.sourceFacts.activeBuilder.contextualScope {
+                Optional.Some(v: val scope) => { return <Result.Ok value=scope /> }
+                Optional.None => {}
+            }
+        }
+        val scope = try self.declarationTypeScope(owner: function)
+        if cacheable && scope.owner < self.arena.functionCount() {
+            val lexical = try self.lexicalFunction(f: self.arena.functionAt(index: scope.owner))
+            // An unresolved receiver can acquire a ParamId after type append.
+            if lexical.recvTy == 0U64 || lexical.recvTy < self.arena.typeTermCount() {
+                self.sourceFacts.activeBuilder.contextualScopeFunction = function
+                self.sourceFacts.activeBuilder.contextualScopeRoot = root
+                self.sourceFacts.activeBuilder.contextualScope = <Optional.Some v=scope />
+            }
+        }
+        return <Result.Ok value=scope />
+    }
+
     // Value alone is not commitment: an argument probe or a generic call can
     // still contain callee binders. Only complete, owner-scoped results advance.
     inout fn commitSourceTypeContext(exprId: U64) {
@@ -386,9 +413,10 @@ impl Comp {
                 }
                 _ => {}
             }
-            give match self.callConstraintScope(template: template) { Result.Ok(value: val scope) => scope Result.Err(error: _) => { return } }
+            val base = match self.contextualLexicalScope(owner: owner, function: template.siteKey.ownerFnIdx) { Result.Ok(value: val scope) => scope Result.Err(error: _) => { return } }
+            give <DeclarationTypeScope owner=base.owner parameters=base.parameters selfParameter=base.selfParameter interfaceRoot=selectedInterfaceRoot(template: template) />
         } else {
-            give match self.declarationTypeScope(owner: self.cur.checkFn) { Result.Ok(value: val scope) => scope Result.Err(error: _) => { return } }
+            give match self.contextualLexicalScope(owner: owner, function: self.cur.checkFn) { Result.Ok(value: val scope) => scope Result.Err(error: _) => { return } }
         }
         match self.declarationTypeDependencies(ref: fact.term, scope: scope, offset: self.exprOffset(id: exprId)) {
             Result.Ok(value: _) => {}
