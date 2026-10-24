@@ -748,29 +748,36 @@ pub impl Comp {
     inout fn memberObligationRelevance() -> Result[Array[Bool], CompileDiagnostic] {
         mut val owners: Array[U64] = []
         mut val relevant: Array[Bool] = []
+        mut val incoming: Array[U64] = []
+        mut val callers: Array[U64] = []
+        mut val next: Array[U64] = []
         mut val function = 0U64
         while function < self.arena.functionCount() {
             owners.append(try self.semanticBodyOwner(fnIdx: function))
             relevant.append(false)
+            incoming.append(0U64)
             function += 1U64
         }
         for conversion in self.decls.declarationConversions {
             val owner = self.callTemplateLexicalRoots.getOr(key: conversion.site.ownerFnIdx, fallback: conversion.site.ownerFnIdx)
             if owner < relevant.count() { relevant[owner] = true }
         }
-        mut val changed = true
-        while changed {
-            changed = false
-            for templateIndex in 0U64..<self.callTemplateCount() {
-                val template = self.callTemplateAt(index: templateIndex)
-                val owner = self.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
-                if owner < relevant.count() && !relevant[owner] {
-                    mut val needed = try self.selectedCallHasDeferredConstraints(siteKey: template.siteKey)
-                    if !needed {
+        // Preserve the first ordered scan, including its relevance skips and
+        // fallible prepared-constraint reads. No propagation runs ahead of it.
+        for templateIndex in 0U64..<self.callTemplateCount() {
+            val template = self.callTemplateAt(index: templateIndex)
+            val owner = self.callTemplateLexicalRoots.getOr(key: template.siteKey.ownerFnIdx, fallback: template.siteKey.ownerFnIdx)
+            if owner < relevant.count() && !relevant[owner] {
+                mut val needed = try self.selectedCallHasDeferredConstraints(siteKey: template.siteKey)
+                if !needed {
+                    mut val dependency = relevant.count()
                     match template.kind {
                         CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => { needed = true }
                         CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                            if callee < owners.count() && owners[callee] < relevant.count() { needed = relevant[owners[callee]] }
+                            if callee < owners.count() && owners[callee] < relevant.count() {
+                                dependency = owners[callee]
+                                needed = relevant[dependency]
+                            }
                         }
                         CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                             match selection {
@@ -782,18 +789,45 @@ pub impl Comp {
                             match selection {
                                 OperatorSelection.Static(resolution: _) => { needed = true }
                                 OperatorSelection.Direct(callee: val callee) => {
-                                    if callee < owners.count() && owners[callee] < relevant.count() { needed = relevant[owners[callee]] }
+                                    if callee < owners.count() && owners[callee] < relevant.count() {
+                                        dependency = owners[callee]
+                                        needed = relevant[dependency]
+                                    }
                                 }
                                 _ => {}
                             }
                         }
                         _ => {}
                     }
+                    if dependency < relevant.count() {
+                        callers.append(owner)
+                        next.append(incoming[dependency])
+                        incoming.set(i: dependency, value: callers.count())
                     }
-                    if needed { relevant[owner] = true
-                        changed = true }
                 }
+                if needed { relevant[owner] = true }
             }
+        }
+        // Every still-false owner's eligible templates now have immutable,
+        // non-deferred constraints. Only Direct callee relevance can change.
+        mut val pending: Array[U64] = []
+        function = 0U64
+        while function < relevant.count() {
+            if relevant[function] { pending.append(function) }
+            function += 1U64
+        }
+        mut val cursor = 0U64
+        while cursor < pending.count() {
+            mut val edge = incoming[pending[cursor]]
+            while edge != 0U64 {
+                val caller = callers[edge - 1U64]
+                if !relevant[caller] {
+                    relevant[caller] = true
+                    pending.append(caller)
+                }
+                edge = next[edge - 1U64]
+            }
+            cursor += 1U64
         }
         function = 0U64
         while function < owners.count() {

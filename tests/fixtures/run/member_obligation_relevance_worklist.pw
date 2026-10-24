@@ -1,0 +1,156 @@
+// Exercise the public relevance query over normally prepared source calls.
+// Building-call cases below inspect only the query's existing error/skip
+// contract; they do not claim that an unprepared owner is executable.
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Ir only { Func, Stmt, CallTemplateKind, OperatorSelection }
+use /Diag only { CompileDiagnostic, DiagnosticLocation }
+
+fn owner(compiler: inout Comp, name: String) -> U64 {
+    return compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+}
+
+fn prepareBodies(compiler: inout Comp) {
+    mut val function = 0U64
+    while function < compiler.arena.functionCount() {
+        val declaration = compiler.arena.functionAt(index: function)
+        if declaration.body != 0U64 && !declaration.isExtern { compiler.prepareLexicalBody(fnIdx: function).unwrap() }
+        function += 1U64
+    }
+}
+
+fn check(compiler: inout Comp, relevant: Array[Bool], name: String, expected: Bool) {
+    val function = owner(compiler: inout compiler, name: name)
+    if function >= relevant.count() || relevant[function] != expected { panic("incorrect member relevance: " + name) }
+}
+
+fn providedAlias(compiler: inout Comp, source: U64, name: String) -> U64 {
+    val declaration = compiler.arena.functionAt(index: source)
+    val alias = compiler.internBytes(s: name)
+    val index = compiler.arena.functionCount()
+    // The same public declaration setup as declaration_obligation_states:
+    // one canonical source owner, rather than a new authored body.
+    compiler.arena.registerFunction(<Func nameStart=alias.nameStart nameLen=alias.nameLen nameId=alias.nameId
+        typeParams=declaration.typeParams params=declaration.params hasRet=declaration.hasRet
+        retStart=declaration.retStart retLen=declaration.retLen retIsArray=declaration.retIsArray retTy=declaration.retTy body=declaration.body
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false
+        isProvided=true lexicalOwnerFnId=source + 1U64 />)
+    return index
+}
+
+fn checkGraph() {
+    mut val compiler = <Comp />
+    val source = "trait Stepper {{ fn step() -> I64 }} struct Token {{}} impl Token as Stepper {{ fn step() -> I64 {{ return 0I64 }} }} trait Marker {{}} impl Token as Marker {{}}\n"
+        + "fn root() -> I64 {{ return chain1() }}\nfn chain1() -> I64 {{ return chain2() }}\nfn chain2() -> I64 {{ return chain3() }}\nfn chain3() -> I64 {{ return chain4() }}\nfn chain4() -> I64 {{ return chain5() }}\nfn chain5() -> I64 {{ return chain6() }}\nfn chain6() -> I64 {{ return chain7() }}\nfn chain7() -> I64 {{ return chain8() }}\nfn chain8() -> I64 {{ return leafSeed(value: <Token />) }}\n"
+        + "fn diamond() -> I64 {{ val ignored = left() return right() }}\nfn left() -> I64 {{ return chain8() }}\nfn right() -> I64 {{ return chain8() }}\n"
+        + "fn cycleA() -> I64 {{ return cycleB() }}\nfn cycleB() -> I64 {{ val ignored = cycleA() return chain8() }}\n"
+        + "fn coldA() -> I64 {{ return coldB() }}\nfn coldB() -> I64 {{ return coldA() }}\nfn plain() -> I64 {{ return 1I64 }}\n"
+        + "fn conversion() -> any Marker {{ return <Token /> }}\nfn leafSeed[T](value: T) -> I64 where T: Stepper {{ return value.step() }}\n"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="relevance-graph.pw" text=source />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    prepareBodies(compiler: inout compiler)
+    val seed = owner(compiler: inout compiler, name: "leafSeed")
+    val root = owner(compiler: inout compiler, name: "root")
+    // The seed is visited after the chain's caller edges, so one ordered scan
+    // alone cannot establish root's relevance.
+    if compiler.firstLexicalCallTemplate(owner: root) >= compiler.firstLexicalCallTemplate(owner: seed) { panic("long-chain source order did not exercise backward propagation") }
+    val alias = providedAlias(compiler: inout compiler, source: seed, name: "seedAlias")
+    val plain = owner(compiler: inout compiler, name: "plain")
+    val coldAlias = providedAlias(compiler: inout compiler, source: plain, name: "plainAlias")
+    val relevant = compiler.memberObligationRelevance().unwrap()
+    for name in ["root", "chain1", "chain2", "chain3", "chain4", "chain5", "chain6", "chain7", "chain8", "diamond", "left", "right", "cycleA", "cycleB", "conversion", "leafSeed"] {
+        check(compiler: inout compiler, relevant: relevant, name: name, expected: true)
+    }
+    for name in ["coldA", "coldB", "plain"] { check(compiler: inout compiler, relevant: relevant, name: name, expected: false) }
+    if !relevant[alias] || relevant[coldAlias] { panic("provided alias lost its canonical source relevance") }
+    val repeated = compiler.memberObligationRelevance().unwrap()
+    mut val index = 0U64
+    while index < relevant.count() {
+        if repeated[index] != relevant[index] { panic("repeated relevance query changed the fixed point") }
+        index += 1U64
+    }
+}
+
+fn checkOperator() {
+    mut val compiler = <Comp />
+    val resources = [
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64 }}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 }} trait Stepper {{ fn step() -> I64 }} struct Token {{}} impl Token as Stepper {{ fn step() -> I64 {{ return 0I64 }} }} fn leafSeed[T](value: T) -> I64 where T: Stepper {{ return value.step() }} pub trait Add[Rhs] {{ type Output assoc fn add(lhs~: Self, rhs~: Rhs) -> Output }} pub impl I64 as Add[I64] {{ type Output = I64 assoc fn add(lhs~: I64, rhs~: I64) -> I64 {{ return leafSeed(value: <Token />) }} }}" />,
+        <SourceResource path="plew:std/OperatorProbe.pw".bytes() text="fn operatorRoot() -> I64 {{ return operatorCaller() }} fn operatorCaller() -> I64 {{ return 1I64 + 2I64 }}" />
+    ]
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="plew:std/OperatorProbe.pw" />, sources: <SourceAccess stdRoot="plew:std/".bytes() resources=resources />).unwrap()
+    prepareBodies(compiler: inout compiler)
+    val caller = owner(compiler: inout compiler, name: "operatorCaller")
+    mut val direct = false
+    mut val row = compiler.firstLexicalCallTemplate(owner: caller)
+    while row != 0U64 {
+        match compiler.callTemplateAt(index: row - 1U64).kind {
+            CallTemplateKind.Operator(op: _, operands: _, resolution: val selection, resultTerm: _) => {
+                match selection { OperatorSelection.Direct(callee: _) => { direct = true } _ => {} }
+            }
+            _ => {}
+        }
+        row = compiler.nextLexicalCallTemplate(index: row - 1U64)
+    }
+    if !direct { panic("operator setup did not select a Direct edge") }
+    val relevant = compiler.memberObligationRelevance().unwrap()
+    check(compiler: inout compiler, relevant: relevant, name: "operatorCaller", expected: true)
+    check(compiler: inout compiler, relevant: relevant, name: "operatorRoot", expected: true)
+}
+
+fn line(diagnostic: CompileDiagnostic) -> I64 {
+    match diagnostic.location {
+        DiagnosticLocation.Line(line: val line) => { return line }
+        DiagnosticLocation.File(path: _, line: val line) => { return line }
+        DiagnosticLocation.Unpositioned => { panic("missing diagnostic source line") }
+    }
+}
+
+fn recordSeed(compiler: inout Comp, function: U64) {
+    compiler.recordParametricFunction(fnIdx: function, recordCallTemplates: true).unwrap()
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: function).body, index: 1U64)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Return(value: val value, hasValue: _, offset: _) => value
+        _ => { panic("missing conversion return") }
+    }
+    compiler.cur.checkFn = function
+    compiler.cur.recordCallTemplates = true
+    val target = compiler.arena.functionAt(index: function).retTy
+    compiler.recordDeclarationConversion(exprId: expression, target: target).unwrap()
+}
+
+fn checkErrorOrder(reverse: Bool) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="relevance-errors.pw" text="trait Marker {{}} struct Token {{}} impl Token as Marker {{}}\nfn target() -> I64 {{ return 1I64 }}\nfn seeded() -> any Marker {{ val ignored = target() return <Token /> }}\nfn first() -> I64 {{ return target() }}\nfn second() -> I64 {{ return target() }}\n" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val seeded = owner(compiler: inout compiler, name: "seeded")
+    val first = owner(compiler: inout compiler, name: "first")
+    val second = owner(compiler: inout compiler, name: "second")
+    val earlier = if reverse { give second } else { give first }
+    val later = if reverse { give first } else { give second }
+    if !reverse { compiler.recordParametricFunction(fnIdx: earlier, recordCallTemplates: true).unwrap() }
+    recordSeed(compiler: inout compiler, function: seeded)
+    if reverse { compiler.recordParametricFunction(fnIdx: earlier, recordCallTemplates: true).unwrap() }
+    compiler.recordParametricFunction(fnIdx: later, recordCallTemplates: true).unwrap()
+    val seededRow = compiler.firstLexicalCallTemplate(owner: seeded) - 1U64
+    if compiler.preparedCallConstraints(index: seededRow).isSome() { panic("seeded row was unexpectedly published") }
+    val row = compiler.firstLexicalCallTemplate(owner: earlier) - 1U64
+    val site = compiler.callTemplateAt(index: row).siteKey
+    val message = "declaration call has no prepared source constraints"
+    val expected = compiler.diagnosticAt(offset: site.originStart, msg: message)
+    match compiler.memberObligationRelevance() {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != message || line(diagnostic: diagnostic) != line(diagnostic: expected) { panic("initial relevance diagnostic order changed") }
+        }
+        Result.Ok(value: _) => { panic("missing prepared constraints were silently skipped") }
+    }
+}
+
+fn main() {
+    checkGraph()
+    checkOperator()
+    checkErrorOrder(reverse: false)
+    checkErrorOrder(reverse: true)
+    print("member-obligation-relevance-worklist-ok")
+}
