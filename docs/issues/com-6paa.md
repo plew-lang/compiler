@@ -18,15 +18,22 @@ Planned paired repair from [C3 inventory](com-m0bf.md#producer-and-reader-invent
 parent criteria 2, 3, 8. This owns registered body receiver production and its
 paired key/closedness readers, after other late nominal producers are migrated.
 
-Entry: `Mono/Call::canonicalBodyReceiverRef`, `internBodyInstance`,
+Entry: `Mono/Call::canonicalBodyReceiverRef`, `selectedCallableSubstitution`,
+`internBodyInstance`,
 `sameBodyRuntimeRef`, `finalStaticCalleeIsComplete`;
 `Resolve/Record::parametricSelfRef`; `Mono/FreeFn::registerMethodInst`;
-`Mono/Resolve::tyRefIsGround`; `Mono/Ground` legacy bare-name substitutions.
+`Mono/Resolve::tyRefIsGround`; `Mono/Ground::assocItemRef`, `setSelfItemEnv`, `setSelfItemEnvForBody`,
+`collectDeclarationTypes`, `groundTermInEnvironment`, `groundTermForBody`,
+`typeTermSameHead`, `typeTermRefSameHead` and paired legacy bare-name substitutions.
 
 ## Finite Actions
 
-1. Use the selected function's complete declared receiver and explicit
-   instantiation environment when no instance receiver was supplied. Preserve
+1. Migrate declaration and final-body Self environment construction together
+   (`collectDeclarationTypes` must not pass through an unowned receiver merely
+   because recvInstRef is zero). Retain selected associated Item evidence.
+   Use the selected function's complete declared receiver and explicit
+   instantiation environment when no instance receiver was supplied, including
+   selectedCallableSubstitution rather than recreating f.recvTy from its name. Preserve
    ParamId and nominal owner while removing only the caller's outer views and
    reapplying the selected declaration's own view. Trait-subject/provided copies
    must use retained evidence, not pretend that a trait name is a concrete type.

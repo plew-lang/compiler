@@ -1,6 +1,6 @@
 ---
 id: com-nqjd
-status: open
+status: in_progress
 deps: [com-m0bf]
 links: []
 created: 2026-10-24T02:29:50Z
@@ -19,11 +19,14 @@ not a new language feature. Parent criteria 1, 2, 3, 8. C3 classifies;
 this task implements its late source/synthetic nominal producer boundary.
 
 Entry: `Resolve/Expr::typedIrRefOfInfo`, `semanticCallableReturnTerm`,
-`arrayRefOfElem`; `Resolve/TypeRecovery::typeInfoOfName`;
+`arrayRefOfElem`; `Resolve/Record::concreteTypeQualifierTerm`;
+`Resolve/TypeRecovery::typeInfoOfName`;
 `Mono/FreeFn::tyRefOfInfo`/`findOrAddTypeRef`;
-`Mono/Call::chainStageResultRef`/`registerChainSiteInsts`.
+`Resolve/ExprType::groundFinalMethodReturn`, `groundFinalMethodParameter`,
+`boundMethodRetInfo`; `Mono/Call::groundedSelectedCalleeReturn`,
+`chainStageResultRef`/`registerChainSiteInsts`.
 Normal named constructions already preserve the selected declaration through
-`contextualNominalMakeRef`; do not replace that working path with name lookup.
+`inferMakeInstance`; do not replace that working path with name lookup.
 
 ## Finite Actions
 
@@ -33,6 +36,9 @@ Normal named constructions already preserve the selected declaration through
    its producer. Use existing declaration APIs; do not globally stamp pushType
    rows by spelling or mutate a published declaration facet. A bare-name cache
    cannot select among unrelated declarations or bind a lexical ParamId.
+   Include concreteTypeQualifierTerm: its resolved declaration branch is valid;
+   its missing-identity branch may not publish a nominal receiver. Distinguish
+   explicit primitive qualifiers from unresolved/foreign nominal names.
 2. Preserve the canonical bundled Promise identity for async implicit Unit,
    and Optional/continuation identities for Chain-generated registration.
    Complete terms from child expressions stay complete through nested arrays,
@@ -43,6 +49,11 @@ Normal named constructions already preserve the selected declaration through
    registered-body key recovery belongs to com-6paa. Primitive leaves, Unit,
    function/record structures and rigid ParamId/projection terms need no invented
    nominal declaration.
+   This task owns missing complete receiver/return term and lexical ParamId
+   recovery, including ExprType adapters and groundedSelectedCalleeReturn. It
+   must not attach a nominal owner to boundMethodRetInfo's lexical parameter.
+   A missing annotated result is distinct from genuine omitted Unit. fyxe owns
+   selecting/reading associated argument context, not these term constructors.
 
 ## Exit and Controls
 
