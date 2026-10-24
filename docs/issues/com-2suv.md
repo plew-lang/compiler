@@ -1,7 +1,7 @@
 ---
 id: com-2suv
 status: in_progress
-deps: []
+deps: [com-f0mq]
 links: []
 created: 2026-10-23T10:41:58Z
 type: task
