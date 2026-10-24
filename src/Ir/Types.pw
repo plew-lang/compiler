@@ -150,8 +150,7 @@ impl Arena {
     }
 
     fn typeNameIsSelf(start: U64, len: U64) -> Bool {
-        if len != 4U64 { return false }
-        return self.bytes[start] == 'S' && self.bytes[start + 1U64] == 'e' && self.bytes[start + 2U64] == 'l' && self.bytes[start + 3U64] == 'f'
+        return typeNameBytesAreSelf(bytes: self.bytes, start: start, len: len)
     }
 
     fn childProjectionPresence(ref: U64) -> U64 {
@@ -211,66 +210,82 @@ impl Arena {
     }
 }
 
+// These recursive read queries need only immutable structural pools. Keep
+// the full Arena out of their recursive ABI without changing the public
+// readonly API or caching answers for forward/unknown child references.
+fn typeNameBytesAreSelf(bytes: Array[U8], start: U64, len: U64) -> Bool {
+    if len != 4U64 { return false }
+    return bytes[start] == 'S' && bytes[start + 1U64] == 'e' && bytes[start + 2U64] == 'l' && bytes[start + 3U64] == 'f'
+}
+
+fn typeTermContainsAssociatedProjection(terms: Array[TypeTerm], recordFields: Array[U64], arguments: Array[U64], associatedArguments: Array[U64], ref: U64) -> Bool {
+    if ref == 0U64 || ref >= terms.count() { return false }
+    val term = terms[ref]
+    if term.projectionPresence != 0U64 { return term.projectionPresence == 2U64 }
+    if term.assocNameId != 0U64 { return true }
+    if term.isRecord {
+        mut val index = 0U64
+        while index < term.recordFieldTerms.len {
+            if typeTermContainsAssociatedProjection(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, ref: recordFields[term.recordFieldTerms.start + index]) { return true }
+            index += 1U64
+        }
+        return false
+    }
+    mut val index = 0U64
+    while index < term.args.len {
+        if typeTermContainsAssociatedProjection(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, ref: arguments[term.args.start + index]) { return true }
+        index += 1U64
+    }
+    index = 0U64
+    while index < term.assocTraitArgs.len {
+        if typeTermContainsAssociatedProjection(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, ref: associatedArguments[term.assocTraitArgs.start + index]) { return true }
+        index += 1U64
+    }
+    return false
+}
+
+fn typeTermIsClosed(terms: Array[TypeTerm], recordFields: Array[U64], arguments: Array[U64], associatedArguments: Array[U64], bytes: Array[U8], ref: U64) -> Bool {
+    if ref == 0U64 { return true }
+    if ref >= terms.count() { return false }
+    val state = terms[ref].closedness
+    if state != 0U64 { return state == 1U64 }
+    val term = terms[ref]
+    if term.paramId != 0U64 || term.assocNameId != 0U64 || term.projectionReceiver != 0U64 { return false }
+    if !term.isAny && typeNameBytesAreSelf(bytes: bytes, start: term.nameStart, len: term.nameLen) { return false }
+    if term.isRecord {
+        if term.recordFieldLabels.len != term.recordFieldTerms.len { return false }
+        mut val index = 0U64
+        while index < term.recordFieldTerms.len {
+            if !typeTermIsClosed(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, bytes: bytes, ref: recordFields[term.recordFieldTerms.start + index]) { return false }
+            index += 1U64
+        }
+        return true
+    }
+    mut val index = 0U64
+    while index < term.args.len {
+        if !typeTermIsClosed(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, bytes: bytes, ref: arguments[term.args.start + index]) { return false }
+        index += 1U64
+    }
+    index = 0U64
+    while index < term.assocTraitArgs.len {
+        if !typeTermIsClosed(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, bytes: bytes, ref: associatedArguments[term.assocTraitArgs.start + index]) { return false }
+        index += 1U64
+    }
+    return true
+}
+
 pub impl Arena {
     // Structural children are immutable; declaration stamping preserves this
     // fact. Forward/unknown children retain the exact recursive reader.
     fn typeContainsAssociatedProjection(ref: U64) -> Bool {
-        if ref == 0U64 || ref >= self.typeTerms.count() { return false }
-        val term = self.typeTerms[ref]
-        if term.projectionPresence != 0U64 { return term.projectionPresence == 2U64 }
-        if term.assocNameId != 0U64 { return true }
-        if term.isRecord {
-            mut val index = 0U64
-            while index < term.recordFieldTerms.len {
-                if self.typeContainsAssociatedProjection(ref: self.typeRecordFieldPool[term.recordFieldTerms.start + index]) { return true }
-                index += 1U64
-            }
-            return false
-        }
-        mut val index = 0U64
-        while index < term.args.len {
-            if self.typeContainsAssociatedProjection(ref: self.typeArgumentPool[term.args.start + index]) { return true }
-            index += 1U64
-        }
-        index = 0U64
-        while index < term.assocTraitArgs.len {
-            if self.typeContainsAssociatedProjection(ref: self.typeAssocArgumentPool[term.assocTraitArgs.start + index]) { return true }
-            index += 1U64
-        }
-        return false
+        return typeTermContainsAssociatedProjection(terms: self.typeTerms, recordFields: self.typeRecordFieldPool, arguments: self.typeArgumentPool, associatedArguments: self.typeAssocArgumentPool, ref: ref)
     }
 
     // Unit is zero. Closedness does not normalize projections or choose proof.
     // Declaration resolution preserves it; structural rebuilding registers a
     // new term. Unknown rows retain the original recursive check.
     fn typeIsClosed(ref: U64) -> Bool {
-        if ref == 0U64 { return true }
-        if ref >= self.typeTerms.count() { return false }
-        val state = self.typeTerms[ref].closedness
-        if state != 0U64 { return state == 1U64 }
-        val term = self.typeTerms[ref]
-        if term.paramId != 0U64 || term.assocNameId != 0U64 || term.projectionReceiver != 0U64 { return false }
-        if !term.isAny && self.typeNameIsSelf(start: term.nameStart, len: term.nameLen) { return false }
-        if term.isRecord {
-            if term.recordFieldLabels.len != term.recordFieldTerms.len { return false }
-            mut val index = 0U64
-            while index < term.recordFieldTerms.len {
-                if !self.typeIsClosed(ref: self.typeRecordFieldPool[term.recordFieldTerms.start + index]) { return false }
-                index += 1U64
-            }
-            return true
-        }
-        mut val index = 0U64
-        while index < term.args.len {
-            if !self.typeIsClosed(ref: self.typeArgumentPool[term.args.start + index]) { return false }
-            index += 1U64
-        }
-        index = 0U64
-        while index < term.assocTraitArgs.len {
-            if !self.typeIsClosed(ref: self.typeAssocArgumentPool[term.assocTraitArgs.start + index]) { return false }
-            index += 1U64
-        }
-        return true
+        return typeTermIsClosed(terms: self.typeTerms, recordFields: self.typeRecordFieldPool, arguments: self.typeArgumentPool, associatedArguments: self.typeAssocArgumentPool, bytes: self.bytes, ref: ref)
     }
 }
 
