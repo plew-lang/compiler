@@ -1,7 +1,7 @@
 // Operations and their constraints share the owner publication boundary.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { CallTemplate, CallTemplateKind, Stmt, InstanceEnvironment }
+use /Ir only { CallSiteKey, CallTemplate, CallTemplateKind, Stmt, InstanceEnvironment }
 use @Std/Io only { print }
 
 fn owner(compiler: inout Comp, name: String) -> U64 {
@@ -27,6 +27,13 @@ fn main() {
     // The consumer now caches first. Reads during second/broken preparation
     // must reject that cached owner and use the actual operation owner.
     val operation = reader.operationAt(index: 0U64).unwrap()
+    val arguments = match operation.kind {
+        CallTemplateKind.Direct(callee: _, receiver: _, args: val arguments, calleeTypeArgs: _, proofId: _) => arguments
+        _ => { panic("missing direct operation") }
+    }
+    val originalArguments = compiler.callTemplateArguments(range: arguments)
+    if originalArguments.count() != 1U64 { panic("missing saved operand") }
+    val argumentExpression = compiler.callArgumentExprId(source: originalArguments[0U64].source)
     if operation.siteKey.ownerFnIdx != first || reader.operationAt(index: 1U64).isSome() { panic("reader crossed an owner boundary") }
     val index = compiler.callTemplateIndex(siteKey: operation.siteKey)
     if compiler.preparedCallConstraints(index: index).isNone() { panic("owner published without constraint admission") }
@@ -34,6 +41,13 @@ fn main() {
     compiler.recordParametricFunction(fnIdx: second, recordCallTemplates: true).unwrap()
     val secondIndex = compiler.firstLexicalCallTemplate(owner: second) - 1U64
     val secondOperation = compiler.callTemplateAt(index: secondIndex)
+    // Replacement selects an explicit Building row; its complete site key
+    // must still belong to that row. The active Cursor is not that identity.
+    if compiler.replaceBuildingCallTemplate(index: secondIndex, template: operation) { panic("foreign site replaced a Building operation") }
+    compiler.cur.checkFn = second
+    val operationCount = compiler.callTemplateCount()
+    if compiler.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=first originKind=2U64 originSerial=90001U64 /> kind=<CallTemplateKind.Pending /> />) { panic("source cursor appended another owner's site") }
+    if compiler.callTemplateCount() != operationCount { panic("rejected append changed navigation") }
     mut val fork = compiler
     if !fork.replaceBuildingCallTemplate(index: secondIndex, template: <CallTemplate siteKey=secondOperation.siteKey kind=<CallTemplateKind.Pending /> />) { panic("missing fork writer") }
     match compiler.callTemplateAt(index: secondIndex).kind {
@@ -42,6 +56,8 @@ fn main() {
     }
     compiler.prepareLexicalBody(fnIdx: second).unwrap()
     if !reader.operationAt(index: 0U64).unwrap().siteKey.sameKey(other: operation.siteKey) { panic("later publication changed retained reader") }
+    val retainedArguments = compiler.callTemplateArguments(range: arguments)
+    if retainedArguments.count() != 1U64 || compiler.callArgumentExprId(source: retainedArguments[0U64].source) != argumentExpression { panic("another owner changed published operand backing") }
     compiler.recordParametricFunction(fnIdx: broken, recordCallTemplates: true).unwrap()
     val brokenIndex = compiler.firstLexicalCallTemplate(owner: broken) - 1U64
     val brokenOperation = compiler.callTemplateAt(index: brokenIndex)
