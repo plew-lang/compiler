@@ -67,7 +67,7 @@ fn midInstantiateHasError(error: MidInstantiateError) -> Bool {
 
 // A missing frontend fact is distinct from the closed Unit result (zero).
 // Pure substitution may close an ordinary term; it must never choose proof.
-fn instantiateMidTerm(c: inout Comp, typeTerm: U64, bodyId: U64, environment: BodyInstance, error: inout MidInstantiateError) -> U64 {
+fn measuredInstantiateMidTerm(c: inout Comp, typeTerm: U64, bodyId: U64, environment: BodyInstance, error: inout MidInstantiateError) -> U64 {
     if typeTerm == 0U64 { return 0U64 }
     val fact = c.arena.bodyTypeTermResult(bodyId: bodyId, typeTerm: typeTerm)
     mut val result = fact.resultType
@@ -846,7 +846,7 @@ fn canonicalMidRvalueResultType(c: Comp, rvalueId: U64) -> U64 {
 // Local declarations are rows too: append their final ground type only after
 // the body rewrite has seen resolution boundaries. This preserves append-only
 // canonical storage instead of mutating an already-published local row.
-fn appendCanonicalInstantiatedLocals(c: inout Comp, bodyId: U64, error: inout MidInstantiateError, source: MidBodyNode, blockStart: U64, blockLen: U64, environment: BodyInstance) -> MidRange {
+fn measuredAppendCanonicalInstantiatedLocals(c: inout Comp, bodyId: U64, error: inout MidInstantiateError, source: MidBodyNode, blockStart: U64, blockLen: U64, environment: BodyInstance) -> MidRange {
     val localStart: U64 = c.mid.locals.count()
     // This index is private to the current immutable output body. Zero means
     // no nonzero rvalue override, not a missing semantic type/recipe result.
@@ -1358,7 +1358,7 @@ pub fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, local
 // Canonical instantiation is a direct append-only rewrite. Converted borrow
 // arguments receive their own cleanup continuation, while every pre-existing
 // CFG edge is remapped around those inserted blocks.
-pub fn instantiateCanonicalMidBody(c: inout Comp, body: MidCanonicalBody, bodyId: U64) -> MidCanonicalInstantiation {
+fn measuredInstantiateCanonicalMidBody(c: inout Comp, body: MidCanonicalBody, bodyId: U64) -> MidCanonicalInstantiation {
     if body.body == 0U64 || body.body > c.mid.bodies.count() || bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() {
         return <MidCanonicalInstantiation error=<MidInstantiateError.InvalidBodyInstance /> />
     }
@@ -1497,4 +1497,35 @@ fn midConversionSourceRef(c: Comp, conversion: U64) -> U64 {
 fn midConversionTargetRef(c: Comp, conversion: U64) -> U64 {
     if conversion == 0U64 || conversion > c.arena.conversionProofCount() { return 0U64 }
     return c.arena.conversionProofAt(index: conversion - 1U64).targetRef
+}
+
+// Temporary CPU-cost diagnostic only; removed after the measured execution.
+extern(c) { fn clock() -> U64 }
+fn reportMidCost(label: String, ticks: U64, calls: U64 = 0U64) {
+    eprint(text: "[mid-cost] {label} ticks={ticks} calls={calls}\n")
+}
+
+mut val instantiationTermTicks = 0U64
+mut val instantiationTermCalls = 0U64
+fn instantiateMidTerm(c: inout Comp, typeTerm: U64, bodyId: U64, environment: BodyInstance, error: inout MidInstantiateError) -> U64 {
+    val started = clock()
+    val result = measuredInstantiateMidTerm(c: inout c, typeTerm: typeTerm, bodyId: bodyId, environment: environment, error: inout error)
+    instantiationTermTicks += clock() - started
+    instantiationTermCalls += 1U64
+    return result
+}
+fn appendCanonicalInstantiatedLocals(c: inout Comp, bodyId: U64, error: inout MidInstantiateError, source: MidBodyNode, blockStart: U64, blockLen: U64, environment: BodyInstance) -> MidRange {
+    val started = clock()
+    val result = measuredAppendCanonicalInstantiatedLocals(c: inout c, bodyId: bodyId, error: inout error, source: source, blockStart: blockStart, blockLen: blockLen, environment: environment)
+    reportMidCost(label: "locals", ticks: clock() - started)
+    return result
+}
+pub fn instantiateCanonicalMidBody(c: inout Comp, body: MidCanonicalBody, bodyId: U64) -> MidCanonicalInstantiation {
+    val started = clock()
+    val termTicks = instantiationTermTicks
+    val termCalls = instantiationTermCalls
+    val result = measuredInstantiateCanonicalMidBody(c: inout c, body: body, bodyId: bodyId)
+    reportMidCost(label: "instantiate", ticks: clock() - started)
+    reportMidCost(label: "terms", ticks: instantiationTermTicks - termTicks, calls: instantiationTermCalls - termCalls)
+    return result
 }
