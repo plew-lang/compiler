@@ -574,7 +574,7 @@ pub impl Comp {
             // Early syntax-generated nominal terms have no source annotation
             // site, but do retain their selected qualified-use domain. Resolve
             // them in this same batch, before any semantic receiver is saved.
-            val qualifiedConstruction = t.siteOffset == 0U64 && !t.hasDecl && t.paramId == 0U64 && !t.isRecord && !t.isAny && t.assocNameLen == 0U64 && self.modules.qualifiedUseIndex(offset: t.nameStart) < self.modules.qualifiedUseCount()
+            val qualifiedConstruction = t.nameLen != 0U64 && t.siteOffset == 0U64 && !t.hasDecl && t.paramId == 0U64 && !t.isRecord && !t.isAny && t.assocNameLen == 0U64 && self.modules.qualifiedUseIndex(offset: t.nameStart) < self.modules.qualifiedUseCount()
             if (t.siteOffset != 0U64 && self.offsetIsLoaded(offset: t.siteOffset)) || qualifiedConstruction {
                 val useMod: U64 = self.moduleOf(offset: t.siteOffset)
                 val decl: Bind = self.typeDeclIdentityAt(useMod: useMod, start: t.nameStart, len: t.nameLen)

@@ -1,7 +1,7 @@
 use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp }
-use /Ir only { TypeRef, StructDef, Bind, ResolvedViewSource, TraitOwner, TraitDef, Func, InstanceEnvironment }
+use /Ir only { TypeRef, StructDef, Bind, ResolvedViewSource, TraitOwner, TraitDef, Func, InstanceEnvironment, ImportOrigin }
 
 fn receiver(compiler: Comp, expression: U64) -> U64 {
     return compiler.decls.syntheticCallSites[compiler.syntheticCallSiteIndex(exprId: expression)].receiverTerm
@@ -40,6 +40,7 @@ fn checkMissingCore() {
 }
 
 fn main() {
+    checkQualifiedZeroName()
     mut val compiler = <Comp />
     compiler.arena.reserveTypeSentinel()
     compiler.modules.coreModule = 1U64
@@ -99,4 +100,22 @@ fn main() {
     assert(!compiler.arena.finishTypeDeclarationResolution(resolutions: []))
     checkMissingCore()
     print("synthetic-buffer-declaration-identity")
+}
+
+fn checkQualifiedZeroName() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "Buffer")
+    assert(name.nameStart == 0U64)
+    compiler.modules.coreModule = 1U64
+    compiler.modules.registerSourceFile(start: 100U64, length: 10U64, moduleId: 1U64, path: "Core.pw")
+    compiler.modules.registerQualifiedUse(<ImportOrigin localStart=name.nameStart localLength=name.nameLen localModule=0U64 sourceStart=name.nameStart sourceLength=name.nameLen targetModule=1U64 />)
+    val unit = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true />)
+    val construction = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[unit] />)
+    val owner = registerBuffer(compiler: inout compiler, offset: 100U64, module: 1U64)
+    compiler.resolveTypeDeclIdentities().unwrap()
+    assert(compiler.arena.typeAt(index: construction).hasDecl)
+    assert(compiler.arena.typeAt(index: construction).declOffset == owner.nameStart)
+    assert(!compiler.arena.typeAt(index: 0U64).hasDecl)
+    assert(!compiler.arena.typeAt(index: unit).hasDecl)
 }
