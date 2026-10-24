@@ -1,6 +1,6 @@
 ---
 id: com-qbwg
-status: in_progress
+status: closed
 deps: [com-m0bf, com-i62n, com-uruz]
 links: []
 created: 2026-10-24T05:12:48Z
@@ -174,3 +174,32 @@ owner in final readers. See
 and meta evidence/existing-feature-conformance/source-owner-facts/
 phase3c-chain-factory-scope-stop.json. This task remains in_progress; final
 completion review and G2 gates are still required.
+
+
+## Bounded Completion
+
+The early Core-provenance/ordinary-batch and late exact-declaration Buffer producer retains complete children. The offset-zero sentinel guard, missing/foreign owner rejection and actual String/Dictionary consumers pass. No second readiness flag or post-publication facet mutation was introduced.
+
+Production **dd393d54**, control update **956902ad**, fresh4 SHA256
+**df71fc281246486b13f603d273bdede62a985a3d023964ed0f8669b7ea637839**.
+Standard build **20261024T075946-build-c9e973** and fresh full compiler-source
+checking pass. Combined native90/reject27/module9 controls pass. The prefix
+run remains false after native89/reject23 success and a diagnostic-golden
+mismatch; the one updated internal diagnostic and remaining three rejects
+pass separately, as does the associated-owner positive. Production source,
+std and carrier match; the only changed prefix expectation is that golden.
+
+Canonical receipt and producer/consumer/removal mapping: meta
+**e6210277**, evidence/existing-feature-conformance/source-owner-facts/
+phase3c-source-receiver-closure.json. This preserves initial failures, exact
+input/carrier hashes, individual outcomes, permitted diagnostic correction,
+source check, and independent final reviews.
+
+Independent completion review by **/root/body_receiver_completion_review**
+recognizes this finite task as complete, with no blocking findings. E registers
+optchain_projected_result; registration is not successful sanitizer execution.
+The native String projection fixture uses a literal, not a separate dynamic
+heap-allocation measurement. Final G2a fixed point/performance and G2b full
+normal/gen/deps/LLVM22 ASan-LSan, C4 onward and parent phase-three completion
+remain open. Main, seed and adopted carrier are unchanged. Earlier holds above
+retain historical observations and are superseded by this bounded outcome.

@@ -1,6 +1,6 @@
 ---
 id: com-uruz
-status: in_progress
+status: closed
 deps: [com-m0bf]
 links: []
 created: 2026-10-24T07:16:50Z
@@ -191,3 +191,32 @@ No remaining static blocker was reported; fresh target results and final
 completion review remain required. New source/internal and existing generic,
 projection, shadowing, structural and exact-instance rejection controls are
 queued for those checks. Final G2 obligations remain unchanged.
+
+
+## Bounded Completion
+
+The original associated-name skip entry erased the nominal source site before factory selection. The repaired producer preserves real declaration identity, canonical lexical trait projections and supplied context. All three factory rewrites share the phase-correct construction entry, with structural literals kept separate.
+
+Production **dd393d54**, control update **956902ad**, fresh4 SHA256
+**df71fc281246486b13f603d273bdede62a985a3d023964ed0f8669b7ea637839**.
+Standard build **20261024T075946-build-c9e973** and fresh full compiler-source
+checking pass. Combined native90/reject27/module9 controls pass. The prefix
+run remains false after native89/reject23 success and a diagnostic-golden
+mismatch; the one updated internal diagnostic and remaining three rejects
+pass separately, as does the associated-owner positive. Production source,
+std and carrier match; the only changed prefix expectation is that golden.
+
+Canonical receipt and producer/consumer/removal mapping: meta
+**e6210277**, evidence/existing-feature-conformance/source-owner-facts/
+phase3c-source-receiver-closure.json. This preserves initial failures, exact
+input/carrier hashes, individual outcomes, permitted diagnostic correction,
+source check, and independent final reviews.
+
+Independent completion review by **/root/body_receiver_completion_review**
+recognizes this finite task as complete, with no blocking findings. E registers
+optchain_projected_result; registration is not successful sanitizer execution.
+The native String projection fixture uses a literal, not a separate dynamic
+heap-allocation measurement. Final G2a fixed point/performance and G2b full
+normal/gen/deps/LLVM22 ASan-LSan, C4 onward and parent phase-three completion
+remain open. Main, seed and adopted carrier are unchanged. Earlier holds above
+retain historical observations and are superseded by this bounded outcome.
