@@ -1,7 +1,7 @@
 use @Std/Io only { print }
 
 // Generated Buffer receivers must keep Core ownership despite this local name.
-struct Buffer { count: I64 }
+struct Buffer { val count: I64 }
 impl Buffer { factory }
 
 fn dictionary[T](value: T) -> Dictionary[String, T] {
