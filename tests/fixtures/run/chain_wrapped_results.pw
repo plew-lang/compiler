@@ -1,0 +1,26 @@
+use @Std/Io only { print }
+
+struct Item { pub val count: I64 }
+pub impl Item {
+    factory
+    fn observed() -> I64 {
+        print("read")
+        return self.count
+    }
+}
+fn direct(value: Optional[Item]) -> Optional[I64] { return value?.observed() }
+fn block(value: Optional[Item]) -> Optional[I64] { return { give value?.observed() } }
+fn branch(value: Optional[Item], flag: Bool) -> Optional[I64] {
+    return if flag { give value?.observed() } else { give <Optional[I64].None /> }
+}
+fn main() {
+    val some = <Optional[Item].Some v=<Item count=42I64 /> />
+    val none = <Optional[Item].None />
+    print(direct(value: some).unwrapOr(fallback: -1I64))
+    print(direct(value: none).unwrapOr(fallback: -1I64))
+    print(block(value: some).unwrapOr(fallback: -1I64))
+    print(block(value: none).unwrapOr(fallback: -1I64))
+    print(branch(value: some, flag: true).unwrapOr(fallback: -1I64))
+    print(branch(value: none, flag: true).unwrapOr(fallback: -1I64))
+    print(branch(value: some, flag: false).unwrapOr(fallback: -1I64))
+}

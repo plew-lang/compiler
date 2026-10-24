@@ -1,0 +1,43 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { InstanceEnvironment, ValueConversionProof }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "use @Std/Core only {{ Optional as Maybe }} struct Optional {{}} struct Item {{ pub val count: I64 }} pub impl Item {{ factory }} struct Box[T] {{ pub val item: T }} pub impl[T] Box[T] {{ factory }} fn direct(value: Maybe[Box[Item]]) -> Maybe[Item] {{ return value?.item }} fn block(value: Maybe[Box[Item]]) -> Maybe[Item] {{ return {{ give value?.item }} }} fn branch(value: Maybe[Box[Item]], flag: Bool) -> Maybe[Item] {{ return if flag {{ give value?.item }} else {{ give <Maybe[Item].None /> }} }} fn generic[T](value: Maybe[Box[T]]) -> Maybe[T] {{ return value?.item }} fn nested(value: Maybe[Box[Box[Item]]]) -> Maybe[Box[Item]] {{ return value?.item }} fn unrelated() {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="chain-source-types.pw" />, sources: <SourceAccess />).unwrap()
+    for name in ["direct", "block", "branch", "generic", "nested"] {
+        val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+        compiler.prepareLexicalBody(fnIdx: function).unwrap()
+        val body = compiler.internBodyInstance(fnIdx: function, environment: <InstanceEnvironment />)
+        val result = compiler.preparedFunctionBodySignature(fnIdx: function).unwrap().resultTerm
+        mut val found = 0U64
+        for site in compiler.decls.chainSites {
+            match compiler.preparedBodyExpression(bodyId: body, exprId: site.exprId) {
+                Result.Err(error: _) => {}
+                Result.Ok(value: val expression) => {
+                    assert(expression.term != 0U64)
+                    assert(compiler.arena.typeAt(index: expression.term).hasDecl)
+                    assert(compiler.typeRefEq(a: expression.term, b: result))
+                    assert(compiler.typeRefEq(a: expression.term, b: site.stageRef))
+                    val unrelated = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "unrelated").nameId)
+                    val foreign = compiler.internBodyInstance(fnIdx: unrelated, environment: <InstanceEnvironment />)
+                    assert(compiler.preparedBodyExpression(bodyId: foreign, exprId: site.exprId).isErr())
+                    found += 1U64
+                }
+            }
+        }
+        assert(found == 1U64)
+        for conversion in compiler.decls.declarationConversions {
+            if conversion.site.ownerFnIdx == function {
+                match compiler.thawValueConversionProof(id: conversion.proof) {
+                    ValueConversionProof.Missing => { panic("chain conversion lost its source type") }
+                    _ => {}
+                }
+            }
+        }
+    }
+    print("chain-source-type-identity")
+}

@@ -135,35 +135,6 @@ pub impl Comp {
         }
     }
 
-    // Result `Optional[U]` of a NON-rewritten `?.` on an Optional base (the fallback
-    // path — a Chain base goes through chainResultRef). U = the type of the trailing
-    // chain `cont` with the ChainHole bound to the Optional's payload T.
-    inout fn optChainResultRef(base: U64, cont: U64) -> Result[U64, CompileDiagnostic] {
-        val bt: TypeInfo = (try self.typeOf(id: base))
-        if bt.kind != 2 {
-            return <Result.Ok value=0 />
-        }
-        if bt.ref >= self.arena.typeCount() {
-            return <Result.Ok value=0 />
-        }
-        val ot: TypeRef = self.arena.typeAt(index: bt.ref)
-        if !(rangeEquals(bytes: self.arena.bytes, start: ot.nameStart, len: ot.nameLen, kw: "Optional")) {
-            return <Result.Ok value=0 />
-        }
-        if ot.args.count() < 1 {
-            return <Result.Ok value=0 />
-        }
-        val uInfo: TypeInfo = (try self.exprTypeWithChainHole(id: cont, chainHoleRef: ot.args[0]))
-        mut val uRef: U64 = uInfo.ref
-        if uRef == 0 {
-            val noArgs: Array[U64] = []
-            uRef = self.pushType(t: <TypeRef nameStart=uInfo.nameStart nameLen=uInfo.nameLen args=noArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
-        }
-        mut val args: Array[U64] = []
-        args.append(uRef)
-        return <Result.Ok value=self.pushType(t: <TypeRef nameStart=ot.nameStart nameLen=ot.nameLen args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />) />
-    }
-
     inout fn fieldDeclaredMut(receiverRef: U64, fieldStart: U64, fieldLen: U64) -> Bool {
         val storage = self.fieldStorageTypeRef(receiverRef: receiverRef)
         if storage == 0U64 || storage >= self.arena.typeCount() { return true }

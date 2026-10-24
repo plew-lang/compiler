@@ -1241,16 +1241,15 @@ pub impl Comp {
                 }
             }
             Expr.OptChain(val base, val cont) => {
-                // once the mono scan records the ChainSite, its stage result `Head[U]` is
-                // authoritative (the desugar's give value references a bound `__chainVal`
-                // not in scope from here, so re-deriving through the tree fails).
+                // A saved source stage is authoritative after normalization.
                 val cr: U64 = (try self.chainResultRef(exprId: id))
                 if cr != 0 {
                     return <Result.Ok value=self.typeInfoOfRef(ref: cr) />
                 }
-                // pre-rewrite / Optional fallback: `base?.<cont>` : Optional[U] where U is
-                // the type of `cont` with the ChainHole bound to the base's payload.
-                val rr: U64 = (try self.optChainResultRef(base: base, cont: cont))
+                // Uncommitted construction uses the same complete carrier/child
+                // producer as Record's rewrite, never an Optional-by-name copy.
+                val receiver = try self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)
+                val rr = try self.chainStageResultRef(baseRef: receiver.ref, cont: cont)
                 if rr == 0 {
                     return <Result.Ok value=scalarInfo() />
                 }

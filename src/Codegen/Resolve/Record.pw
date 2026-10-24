@@ -2086,12 +2086,8 @@ pub impl Comp {
                 try self.recordValueBlock(exprId: exprId, blockId: elseBlk, expectedTerm: normalizedContext)
             }
             Expr.OptChain(val base, val cont) => {
-                // This form rewrites itself to MatchExpr below. Preserve its
-                // pre-rewrite legacy adapter before changing the AST node;
-                // other forms use the common post-order fallback.
-                if exprId < self.arena.exprs.count() {
-                    self.recordSemanticExprInfo(exprId: exprId, ti: (try self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef)))
-                }
+                // Check the children before committing the chain result. The
+                // same complete stage then owns both source and rewritten use.
                 try self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
                 mut val baseInfo: TypeInfo = (try self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef))
                 mut val baseRef: U64 = self.parametricExprTerm(exprId: base)
@@ -2120,6 +2116,7 @@ pub impl Comp {
                     if (try self.typeConformsToChain(typeRef: baseRef)) {
                         val stageRef: U64 = (try self.chainStageResultRef(baseRef: baseRef, cont: cont))
                         if stageRef != 0U64 {
+                            self.recordSemanticExprTerm(exprId: exprId, term: stageRef)
                             val baseTerm: TypeRef = self.arena.typeAt(index: baseRef)
                             val valueIndex: U64 = (try self.chainValueArgIndex(typeRef: baseRef))
                             if valueIndex < baseTerm.args.count() {
