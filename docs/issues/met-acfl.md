@@ -1,7 +1,7 @@
 ---
 id: met-acfl
 status: open
-deps: [com-kp3y, com-vkw3, com-wqa0, com-m3c6]
+deps: [com-kp3y, com-vkw3, com-wqa0, com-m3c6, com-gnj9]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -67,25 +67,20 @@ semantic prerequisites. A sealed component does not finish this whole area.
 
 Existing source publication/header/closure/global/fact consumers; com-kp3y owns the first owner-local storage increment. Final closure still includes current operation/evidence/origin families, term declaration publication and old-reader removal; a sealed component does not finish the whole parent.
 
-## Declaration-facet Publication Increment (WIP)
+## Reconciled Publication Components
 
-Replace the public per-row resolveTypeDeclaration writer with one validated
-finishTypeDeclarationResolution batch. The actual row mutation is private to Ir.
-The frontend computes resolved facets after source declarations/imports are
-registered; Arena validates ordered, unique, in-range row identities before any
-write and permanently closes this phase on success. A rejected batch changes
-neither type representation nor publication state. Post-publication appends are
-still supported, but do not reopen facet resolution for any row. Source typing
-admission requires the completed declaration dependency before owner success.
+Independent area reconciliation at d4749a85 confirms no new D-specific repair.
+com-kp3y/D1/com-oi3v close owner-local payload/public readers; D2/com-vkw3 close
+source-domain identity; D3/com-wqa0 close operation/constraint write authority;
+D4/com-m3c6/com-s5k5 close one-way declaration-facet publication and private
+backing storage. Late nominal producers and exact proof/descriptor consumers
+are discharged by their closed B/C children rather than reopened here.
+Their outcome sections retain exact source, removal, controls and receipt scope.
 
-Existing internal bare-name, projection-presence, closedness and unification
-oracles now publish their initial construction batch through this API. Preserve
-their original lookup/metadata/copy/matching assertions; do not expose a test-only
-writer. The new publication control covers invalid/duplicate batches, stable
-parallel representations, post-success rejection, later append rejection and
-independent Arena branches. Earlier 8f054757 whole-source/imported controls remain
-scoped evidence; D4 reconciles current fresh proof and G2a/G2b own the final gates.
-
-This closes the declaration-facet writer boundary, not every canonical type
-producer or late legacy name/ambient read. The source/header/closure owner storage
-increments already recorded in com-kp3y remain intact and are not reimplemented.
+The area's broad completion-publication contract also needs the independently
+reviewed com-tl9c/E4 result: explicit source exit identities must reach actual
+Mid cleanup. That existing paired repair is implemented and under fresh
+verification, not yet admitted. This area remains open until that result is
+explicitly reconciled. Runtime closure ownership/startup SCC and unsupported
+unique/shared facilities remain outside this phase-three subset. G2a/G2b retain
+all current frozen-candidate correctness/performance gates.

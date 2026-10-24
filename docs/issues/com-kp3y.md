@@ -1,6 +1,6 @@
 ---
 id: com-kp3y
-status: in_progress
+status: closed
 deps: [com-rv13]
 links: []
 created: 2026-10-21T15:16:01Z
@@ -59,3 +59,22 @@ parent automatically.
 [com-604k](com-604k.md), [com-esri](com-esri.md): **Included repair** of existing
 owner publication and successful readers. No new persistent incrementality or
 unsupported capture/unique feature is required.
+
+## Independent Area Reconciliation
+
+Closed as the bounded owner-storage component at d4749a85 after independent
+contract reconciliation by /root/body_receiver_completion_review. D1/com-oi3v
+close the seven owner-local fact families, immutable readers and actual public
+Mid owner/session admission. D2/com-vkw3 retain ordinary/provided/closure/global/
+default identities. Their exact receipts, tested revisions and unchanged-input
+scopes remain in those tickets and the source-owner-facts evidence index.
+No additional storage repair or new feature is required by this component.
+
+The all-owner tables/snapshots and external payload/directory writers remain
+removed. Stable failure, successful publication, retained/forked readers and
+missing/foreign/post-outcome controls are covered by those independently admitted
+children. This reconciliation does not attribute their older whole gates to
+current binaries. Operation/constraint APIs, nominal facets and exact saved
+transfer targets remain the enclosing area's separately named contracts; the
+last is being closed by com-tl9c/E4. Final G2, met-si6j, runtime capture/startup
+work, main/seed/adopted-carrier promotion are not included.
