@@ -1,16 +1,19 @@
 use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
-use /SourceAccess only { SourceAccess }
+use /SourceAccess only { SourceAccess, SourceResource }
 use /Ir only { ValueConversionProof, Expr, CallTemplateKind, ExistentialBoxEvidence, ExistentialWitnessPlan, ExistentialRequirementSignature, CallReceiverPassing }
 
 // Frontend signature preparation must preserve the callable's implicit
 // Promise result, independently of backend async-method support.
 fn main() {
     mut val compiler = <Comp />
-    compiler.modules.langModule = 0U64
-    val source = "extern(plewIntrinsic) {{ struct Promise[T] }}\nfn probe(value: WorkerValue, target: any Worker) {{ val pending = target.task() }}\ntrait Worker {{ async fn task() }}\nstruct WorkerValue {{}}\nimpl WorkerValue as Worker {{ async fn task() {{}} }}\n"
-    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="signature.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val source = "fn probe(value: WorkerValue, target: any Worker) {{ val pending = target.task() }}\ntrait Worker {{ async fn task() }}\nstruct WorkerValue {{}}\nimpl WorkerValue as Worker {{ async fn task() {{}} }}\n"
+    val sources = <SourceAccess stdRoot="plew:std/".bytes() resources=[
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub extern(plewIntrinsic) {{ struct Promise[T] }}" />,
+        <SourceResource path="plew:std/Signature.pw".bytes() text=source />,
+    ] />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.File path="plew:std/Signature.pw" />, sources: sources).unwrap()
     val probe = compiler.arena.functionAt(index: 0U64)
     val sourceType = compiler.funcParamAt(params: probe.params, index: 0U64).ty
     val targetType = compiler.funcParamAt(params: probe.params, index: 1U64).ty

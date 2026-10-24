@@ -68,48 +68,55 @@ Fresh source check/scoped native and rejection controls, pinned hashes and an
 independent completion review are required. Global final gates remain G2.
 General type-checker/ABI/inference redesign is outside this bounded task.
 
-## Implementation Checkpoint
+## Implementation and Reader Closure
 
-The first source increment is ready for a fresh build, not certified complete.
-Canonical late named/Lang constructors now retain the resolved declaration;
-literals supply their fixed ambient type rather than relying on a ref-less head.
-Array indexing projects the complete saved child for simple, nested and
-existential elements. Missing nominal qualifiers and annotated callable results
-no longer create anonymous nominal terms. Chain Promise/Optional/continuation
-construction uses the same identity-preserving producer boundary.
+Production is f95134ca. This closes the bounded producer boundary; the registered
+receiver/body key and associated context readers remain com-6paa and com-fyxe.
 
-The old bound-member return-name traversal is removed in favor of the shared
-selected instance/proof. Source result queries and Record use one provided-call
-environment, retaining the selected proof. The raw bare-index test is narrowed
-to its original index-order intent, and internal async declaration clients now
-explicitly supply their minimal ambient Promise fixture; these are internal-test
-adjustments permitted by the active goal, not changes to language expectations.
-The registered-body key and Self-environment repairs remain com-6paa.
+| Producer | Saved authority and explicit environment | Final consumption |
+|---|---|---|
+| Decl::declaredTypeRef / langTypeRefAt, FreeFn::findOrAddTypeRef | Real nominal owner and full arity; canonical spelling is only a shape projection. Bare cache validates all facets and is keyed by resolved owner. Source adapters resolve in the source occurrence's module; synthetic carriers use the fixed Lang surface. | TypeRef/TypeTerm owner reaches expression facts, source signatures and instance type arguments. No global first-name nominal/ParamId reconstruction. |
+| Record literal / sourceArrayTypeRef, ExprType index | Saved literal carries its fixed Lang owner; Array keeps the complete child term. Missing String/Array fails before publication. typedIrRefOfInfo no longer uses name-keyed arrayElems to invent a child. | Saved owner/body expression -> body type grounding -> final aggregate/index facts -> Mid operands and LLVM type use. Nested arrays and distinct nominal children execute in the source control. |
+| semanticCallableReturnTerm | Implicit async returns Promise[structural Unit] with exact Lang owner; admission validates a missing carrier before call constraints. Omitted ordinary Unit remains an ordinary structural source value and an erased completed ABI result slot. | Declaration worklist callConstraintSubstitutionState/appendCallConstraintInstance and executable prepareFinalBodyRequest/scanFinalBodyInstance consume saved templates in explicit environments; groundedSelectedCalleeReturn is the selected bodyless signature reader. |
+| ExprType bound/provided results | One staticMemberCallResultType/staticProvidedCallEnvironment retains the selected requirement/provided proof and receiver. groundFinalMethodReturn/Parameter defer a missing complete receiver; missing annotated results and qualifiers are not rewritten from spelling. | Recorded call result/signature -> source constraint checking -> explicit body signature/final call. Old first-bound/supertrait return-name traversal and traitMemberRetInfo/boundRetInfoOf are removed. |
+| Chain continuation / Optional | chainStageResultRef preserves the full continuation term and rebuilds the original carrier with unchanged semantic facets; registerChainSiteInsts selects canonical Optional. | Same saved rewritten call and instance registration paths; no raw nominal append for a missing continuation. Existing optional/generic/multiparam/projected chains remain decisive controls. |
 
-Old candidate6 checks the new compiler source successfully. New positive controls
-cover late carrier owner, same-head distinct declaration construction, missing
-nominal non-creation, saved array element type and nested nominal execution.
-Fresh candidate, affected old controls, negative/corruption controls, final reader
-trace and independent completion review are still required.
+The unchanged terminal handoff is completeStaticBodyCallee -> BodySignature and
+CallResolution parameter/result terms -> Mid::instantiateCanonicalMidBody and
+instantiateMidType -> Backend/Llvm/Mid preflight/emission. Mid reads body-specific
+type results and final call signatures; it neither evaluates source recipes nor
+performs another nominal lookup. arcFieldTy now requires the declared field term
+rather than guessing an owner from the field's text.
 
-### Static Review Corrections in Progress
+Internal declaration clients now explicitly supply their minimal Promise/Lang
+fixture. The existential async client uses SourceResource modules so ordinary
+WorkerValue remains outside Lang. bare_type_registration keeps the original raw
+index-order test directly through the arena index. New never-green fixture syntax
+and minimal-environment mistakes were corrected without changing expected
+language behavior. late_nominal_type_identity separates alias spelling
+normalization from actual same-spelling owners: two registered StructDefs belong
+to different registered module ranges, and complete terms must retain distinct
+owners despite equal name IDs. Repeated queries must reuse each owner's term.
 
-The first static review of 95032393 does not certify closure. It identified the
-actual Record literal producer (not just its ExprType fallback), the ref-less
-Array reconstruction through the name-keyed element registry, missing ambient
-Array/String, and incomplete bare-cache facet filtering. Those paths are now
-migrated in the pending source increment: Record uses fixed Lang terms, missing
-String/Array produces a diagnostic before publication, a ref-less array stays
-unresolved, and missing implicit async Promise is rejected at declaration
-admission and the retained final reader. Registered numeric primitive atoms for
-minimal declaration clients remain distinct from ordinary nominal String.
+## Scoped Verification
 
-Late zero-arity nominal terms are cached by resolved declaration owner, using
-that declaration's canonical spelling; the old raw-name index is only a validated
-initial reuse probe. This prevents repeated append after a non-bare first row.
-The producer validates actual nominal kind and arity, so an absent owner, plain
-trait or missing generic argument vector does not become a closed nominal term.
-New controls inspect saved literal owners, trait-only first-cache rows and stable
-repeated lookups, missing ambient carriers, annotated result/field/qualifier
-absence, and ref-less array input with competing owner/ParamId element rows.
-All remain pending fresh execution and independent re-review.
+Fresh candidate phase3c-late-nominal-2 is built by the standard immutable-input
+build 20261024T031013-build-0d0187, exit 0, and checks the full compiler source
+successfully. SHA256 b27d410681ba36e068609cb57b88e728564a45e738e5b3b0bf7cc4564933745e.
+Target receipts cover normal 26, reject 9 (no internal diagnostics) and three
+real-module alias/namespace native cases. The first five unchanged successes
+from late-focused-7 and the remaining 21 plus rejects from late-focused-8 are
+reconciled by exact applicable input hashes; only the intervening existential
+fixture changed. Every run held its inputs fixed. Failed preparatory runs are
+not success evidence. The meta evidence phase3c-late-nominal.json retains the
+build receipt, source-check hashes, per-case input hashes and actual results.
+
+The first static review found five production blockers: actual Record literals,
+ref-less Array name reconstruction, missing ambient String/Array/Promise,
+nominal kind/arity, and incomplete first-cache facet/stability handling. The
+f95134ca rereview confirms those repairs and no further production blocker;
+its same-spelling evidence concern is addressed by the registered-module and
+fresh namespace controls. Independent final closure review is pending. Formal
+performance/fixed-point checkpoint and final G2 all-suite gates remain distinct
+from these scoped successes. This task is not complete until its independent
+verdict is recorded.
