@@ -21,7 +21,7 @@ fn checkMissingCore() {
     compiler.modules.coreModule = 3U64
     val foreign = registerBuffer(compiler: inout compiler, offset: 200U64, module: 2U64)
     val name = compiler.internBytes(s: "I64")
-    val element = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen />)
+    val element = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
     val earlyExpression = compiler.synthBufferNew(elemRef: element).unwrap()
     val early = receiver(compiler: compiler, expression: earlyExpression)
     compiler.resolveTypeDeclIdentities().unwrap()
@@ -74,7 +74,7 @@ fn main() {
     assert(compiler.arena.typeAt(index: nested).args[0U64] == late)
     val parameters = compiler.lowerTypeParamNames(names: ["Value"], anchor: 400U64).unwrap()
     val parameter = parameters[0U64]
-    val rigid = compiler.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId paramId=parameter.paramId />)
+    val rigid = compiler.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId paramId=parameter.paramId args=[] />)
     val genericExpression = compiler.synthBufferNew(elemRef: rigid).unwrap()
     val generic = receiver(compiler: compiler, expression: genericExpression)
     assert(compiler.arena.typeAt(index: generic).args[0U64] == rigid)
