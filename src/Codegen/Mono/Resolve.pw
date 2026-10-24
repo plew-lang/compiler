@@ -1130,15 +1130,6 @@ pub impl Comp {
         return <Result.Ok value=tyRef />
     }
 
-    inout fn isTypeParamName(start: U64, len: U64) -> Bool {
-        // a name that names a declared struct/enum is a concrete type, never a type
-        // parameter — even if some *other* generic's parameter shares the name (a user
-        // struct `B` vs `MapIter[I, F, B]`'s `B`). Concrete types win the global check;
-        // a template's own parameter is resolved by the active env before this matters.
-        val qId: U64 = intern(c: inout self, start: start, len: len)
-        return self.arena.hasTypeParameterName(nameId: qId)
-    }
-
     inout fn tyRefIsGround(ref: U64) -> Result[Bool, CompileDiagnostic] {
         if ref >= self.arena.typeCount() {
             return <Result.Ok value=true />
@@ -1161,9 +1152,6 @@ pub impl Comp {
                 return <Result.Ok value=false />
             }
             return <Result.Ok value=(try self.tyRefIsGround(ref: r)) />
-        }
-        if self.isTypeParamName(start: t.nameStart, len: t.nameLen) {
-            return <Result.Ok value=false />
         }
         // `Self` is a contextual keyword, not concrete without a method env; a flat
         // scan (Make/Cast) reaching a provided body's `<FilterIter[Self,…]>` must not

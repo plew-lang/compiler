@@ -85,3 +85,30 @@ This is the planned canonicalBodyReceiverRef/selectedCallableSubstitution/body
 signature boundary, not a new selection or inference issue. fyxe's new fixture
 uses an explicit Pair[B,A] return to isolate associated parameter context. This
 Self variant remains a required native success control for this task.
+
+### Receiver Producer Increment
+
+The first implementation increment consumes parametricSelfRef and saved callable
+ParamId arguments for missing concrete receivers. canonicalBodyReceiverRef retains
+the complete declaration term; selectedCallableSubstitution no longer uses head
+spelling or a result hint to replace it. bodyInstanceEnvironment grounds the
+receiver from its explicit callable substitution before key normalization.
+Declaration signature collection, verification and setSelfItemEnvForBody use
+complete receiver terms. The paired Self/Item adapters now take receiver terms
+only; no missing-term simpleTypeRef fallback remains there. parametricSelfRef's
+ordinary legacy whole-program head/positional binder reconstruction is removed.
+The registered-declaration regression checks owner retention, default/supplied
+key reuse and homonymous-owner separation. Legacy equality/substitution reader
+retirement and fresh verification remain pending within this task.
+
+### Paired Legacy Reader Retirement
+
+After owner-preserving nominal producers, groundTermInEnvironment no longer
+binds unstamped terms by parameter spelling. The whole-program isTypeParamName
+query and the obsolete instArgCollidesParamName rejection are removed; ParamId
+and registered term closedness own those decisions. typeTermSameHead and its
+scalar counterpart reject known/missing nominal identity mismatches. Canonical
+body receivers use the ordinary complete type equality instead of a parallel
+head/args comparator that erased nested facets. Outer views are normalized once
+at the receiver producer; nested views and structural/function children survive.
+Fresh target checks and final reader negative controls remain required.

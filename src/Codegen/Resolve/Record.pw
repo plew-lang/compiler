@@ -751,7 +751,7 @@ pub impl Comp {
                 }
                 ti += 1U64
             }
-            return self.simpleTypeRef(nameStart: sb.nameStart, nameLen: sb.nameLen)
+            return 0U64
         }
         // An extension method's lexical `self` is `Recv#Ext`.  A conferred
         // witness does not inherit a caller's conformance-path view: its shared
@@ -771,26 +771,9 @@ pub impl Comp {
             extensionView.append(vid)
             return self.typeRefWithViews(ref: f.recvTy, viewExtId: vid, viewIds: extensionView)
         }
-        mut val rcount: U64 = 0
-        val si: U64 = self.anyStructIndex(nameStart: f.recvStart, nameLen: f.recvLen)
-        if si < self.arena.structCount() {
-            rcount = self.arena.structAt(index: si).typeParams.count()
-        } else {
-            val ei: U64 = self.anyEnumIndex(nameStart: f.recvStart, nameLen: f.recvLen)
-            if ei < self.arena.enumCount() {
-                rcount = self.arena.enumAt(index: ei).typeParams.count()
-            }
-        }
-        mut val args: Array[U64] = []
-        mut val i: U64 = 0
-        while i < rcount {
-            if i < f.typeParams.count() {
-                val tp: Bind = self.funcBindAt(binds: f.typeParams, index: i)
-                args.append(self.simpleTypeRef(nameStart: tp.nameStart, nameLen: tp.nameLen))
-            }
-            i += 1
-        }
-        return self.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=vid />)
+        // Missing declaration data stays missing. Reconstructing a nominal
+        // head or impl binders by spelling would publish a different owner.
+        return 0U64
     }
 
     // Context supplies only an Array element type. It cannot change the

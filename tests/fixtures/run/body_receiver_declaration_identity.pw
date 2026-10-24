@@ -1,0 +1,35 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { TypeRef, StructDef, Func, InstanceEnvironment }
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "Repeated")
+    val method = compiler.internBytes(s: "method")
+    compiler.modules.registerSourceFile(start: 100U64, length: 10U64, moduleId: 1U64, path: "One.pw")
+    compiler.modules.registerSourceFile(start: 200U64, length: 10U64, moduleId: 2U64, path: "Two.pw")
+    for offset in [100U64, 200U64] {
+        compiler.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[] fields=[] isUnique=false isExtern=false defOffset=offset />)
+    }
+    val firstOwner = compiler.typeDeclIdentityInModule(mod: 1U64, start: name.nameStart, len: name.nameLen)
+    val secondOwner = compiler.typeDeclIdentityInModule(mod: 2U64, start: name.nameStart, len: name.nameLen)
+    val first = compiler.declaredTypeRef(nameStart: name.nameStart, nameLen: name.nameLen, args: [], declaration: firstOwner)
+    val second = compiler.declaredTypeRef(nameStart: name.nameStart, nameLen: name.nameLen, args: [], declaration: secondOwner)
+    compiler.arena.registerFunction(<Func nameStart=method.nameStart nameLen=method.nameLen hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=true recvStart=name.nameStart recvLen=name.nameLen recvTy=first selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    val implicit = compiler.canonicalBodyReceiverRef(fnIdx: 0U64, recvInstRef: 0U64)
+    assert(compiler.arena.typeAt(index: implicit).hasDecl)
+    assert(compiler.arena.typeAt(index: implicit).declOffset == firstOwner.nameStart)
+    assert(compiler.sameBodyRuntimeRef(a: implicit, b: first))
+    assert(!compiler.sameBodyRuntimeRef(a: implicit, b: second))
+    val unowned = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
+    assert(!compiler.sameBodyRuntimeRef(a: first, b: unowned))
+    assert(!compiler.typeTermRefSameHead(a: first, b: unowned))
+    assert(!compiler.typeTermSameHead(a: compiler.arena.typeAt(index: first), b: compiler.arena.typeAt(index: unowned)))
+    val defaultEnvironment = compiler.bodyInstanceEnvironment(fnIdx: 0U64, args: [], recvInstRef: 0U64).unwrap()
+    val suppliedEnvironment = compiler.bodyInstanceEnvironment(fnIdx: 0U64, args: [], recvInstRef: first).unwrap()
+    val firstKey = compiler.internBodyInstance(fnIdx: 0U64, environment: defaultEnvironment)
+    assert(firstKey == compiler.internBodyInstance(fnIdx: 0U64, environment: suppliedEnvironment))
+    assert(firstKey != compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=second />))
+    print("body-receiver-declaration-identity")
+}

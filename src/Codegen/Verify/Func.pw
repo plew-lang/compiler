@@ -85,7 +85,7 @@ pub impl Comp {
             self.cur.selfRef = self.parametricSelfRef(f: f)
             self.cur.itemRef = self.abstractProvidedItemRef(f: f)
         } else if f.hasRecv || f.isAssoc {
-            try self.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
+            try self.setSelfItemEnv(recvInstRef: self.parametricSelfRef(f: f))
         } else {
             self.clearSelfItemEnv()
         }

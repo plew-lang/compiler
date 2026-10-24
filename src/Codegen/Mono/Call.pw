@@ -114,51 +114,11 @@ pub impl Comp {
         return 9223372036854775808U64 + closureId
     }
 
-    // TypeRef indices are arena allocation identities, not semantic identities:
-    // a plain `I64` can be reconstructed in more than one frontend phase.
-    // A body is additionally selected by its Func identity, so a caller view is
-    // not another receiver identity here: the selected Func already carries its
-    // extension/trait provenance.  Body-instance keys compare the structural
-    // runtime receiver (head plus arguments) and deliberately erase views.
+    // Receivers are normalized once by canonicalBodyReceiverRef. Body keys
+    // then compare complete semantic identity, including nested views and
+    // structural/function children, rather than a second runtime-head rule.
     inout fn sameBodyRuntimeRef(a: U64, b: U64) -> Bool {
-        if a == b { return true }
-        if a >= self.arena.typeCount() || b >= self.arena.typeCount() { return false }
-        // Runtime shape reads the canonical scalar term and pooled children;
-        // copying the owning TypeRef would retain unrelated semantic arrays.
-        val left = self.arena.typeTerms[a]
-        val right = self.arena.typeTerms[b]
-        // Source facets (view, capability, associated-type spelling) are
-        // resolved before this point.  The emitted receiver representation is
-        // determined solely by its runtime head/arguments and existential bit.
-        // Registered declaration identity is stronger than source spelling:
-        // imported aliases may differ in spelling, while unrelated modules
-        // may declare distinct same-named receivers.
-        // A few bootstrap-era TypeRef construction paths predate nameId and
-        // legitimately carry 0.  Interned ids are a fast path, not part of the
-        // runtime type contract; fall back to the head spelling for those
-        // legacy nodes rather than splitting one emitted body in two.
-        // A zero nameId is an absent cache entry, not an identifier.  Comparing
-        // two such legacy refs as equal merged unrelated runtime receivers
-        // (for example Counter and Two) in final-callable/body keys.  Use ids
-        // only when BOTH exist; otherwise compare the authoritative spelling.
-        if left.hasDecl && right.hasDecl {
-            if left.declOffset != right.declOffset { return false }
-        } else if left.nameId == 0U64 || right.nameId == 0U64 {
-            if !(spansEqual(c: inout self, aStart: left.nameStart, aLen: left.nameLen, bStart: right.nameStart, bLen: right.nameLen)) {
-                return false
-            }
-        } else if left.nameId != right.nameId {
-            return false
-        }
-        if left.isAny != right.isAny || left.args.len != right.args.len {
-            return false
-        }
-        mut val i: U64 = 0U64
-        while i < left.args.len {
-            if !(self.sameBodyRuntimeRef(a: self.arena.typeArgumentPool[left.args.start + i], b: self.arena.typeArgumentPool[right.args.start + i])) { return false }
-            i += 1U64
-        }
-        return true
+        return self.typeRefEq(a: a, b: b)
     }
 
     inout fn sameBodyReceiver(a: U64, b: U64) -> Bool {
@@ -183,7 +143,7 @@ pub impl Comp {
         val f: Func = self.arena.functionAt(index: fnIdx)
         mut val out: U64 = recvInstRef
         if out == 0U64 && (f.hasRecv || f.isAssoc) {
-            out = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
+            out = self.parametricSelfRef(f: f)
         }
         if out == 0U64 || out >= self.arena.typeCount() { return out }
         val base: TypeRef = self.arena.typeAt(index: out)
@@ -681,7 +641,12 @@ pub impl Comp {
     inout fn bodyInstanceEnvironment(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
         mut val params: Array[Bind] = []
         mut val values: Array[U64] = []
-        val canonicalRecv: U64 = self.canonicalBodyReceiverRef(fnIdx: fnIdx, recvInstRef: recvInstRef)
+        mut val suppliedReceiver = recvInstRef
+        if suppliedReceiver == 0U64 && fnIdx < self.arena.functionCount() {
+            val declaration = self.arena.functionAt(index: fnIdx)
+            suppliedReceiver = self.groundTermInEnvironment(ref: self.parametricSelfRef(f: declaration), params: self.copyFuncBinds(binds: declaration.typeParams), values: args)
+        }
+        val canonicalRecv: U64 = self.canonicalBodyReceiverRef(fnIdx: fnIdx, recvInstRef: suppliedReceiver)
         mut val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
         if fnIdx < self.arena.functionCount() {
             // args belongs to the selected callable, whose binder vector can
@@ -965,48 +930,11 @@ pub impl Comp {
         if callee >= self.arena.functionCount() { return <Result.Ok value=<Optional.None /> /> }
         val f: Func = self.arena.functionAt(index: callee)
         mut val recvInst: U64 = selection.receiverRef
-        // A semantic call-resolution template can provide the selected
-        // receiver directly.  In that case it outranks an AST type entry: a
-        // shared generic desugar node necessarily stores `Head[T]`, while this
-        // body instance may be compiling `Head[I64]`.
-        // A bare generic type qualifier (`Buffer.new`) selects the declaration
-        // but is not yet an instantiated receiver.  Treat it as absent here
-        // so the semantic expected result may supply `Buffer[T]`; a concrete
-        // `Buffer[I64].new` remains a selected receiver.
-        mut val hasSelectedReceiver: Bool = selection.resultHintRef != 0U64
-        if selection.receiverRef != 0U64 && selection.receiverRef < self.arena.typeCount() {
-            if !(f.isAssoc) || self.arena.typeAt(index: selection.receiverRef).args.count() == f.typeParams.count() {
-                hasSelectedReceiver = true
-            }
-        }
-        if f.hasRecv && recvInst == 0U64 {
-            recvInst = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
-        }
-        if f.isAssoc && recvInst == 0U64 {
-            recvInst = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
-        }
-        // An associated factory has no value receiver. Its source resolver
-        // records the enclosing expected result as an explicit selection fact;
-        // use that concrete subject before considering ambient scan state.
-        if f.isAssoc && selection.resultHintRef != 0U64 && selection.resultHintRef < self.arena.typeCount() {
-            val hinted: TypeRef = self.arena.typeAt(index: selection.resultHintRef)
-            if spansEqual(c: inout self, aStart: hinted.nameStart, aLen: hinted.nameLen, bStart: f.recvStart, bLen: f.recvLen) {
-                recvInst = selection.resultHintRef
-            }
-        }
-        // A type-qualified generic associated call has no value receiver to
-        // carry the subject arguments (`Optional.empty()` is parsed as a
-        // Method whose receiver is the bare type name).  Its already-grounded
-        // result supplies that same subject instance.  Preserve it here rather
-        // than asking LLVM to infer type arguments from the spelling again.
-        if f.isAssoc && f.typeParams.count() > 0U64 && !hasSelectedReceiver {
-            val resultInst: U64 = selection.resultRef
-            if resultInst != 0U64 && resultInst < self.arena.typeCount() {
-                val resultTy: TypeRef = self.arena.typeAt(index: resultInst)
-                if spansEqual(c: inout self, aStart: resultTy.nameStart, aLen: resultTy.nameLen, bStart: f.recvStart, bLen: f.recvLen) {
-                    recvInst = resultInst
-                }
-            }
+        // The selected declaration and saved ParamId substitution own an
+        // absent associated receiver. A result hint is not another receiver
+        // authority and a printed head cannot reconstruct the body key.
+        if recvInst == 0U64 && (f.hasRecv || f.isAssoc) {
+            recvInst = self.groundTermInEnvironment(ref: self.parametricSelfRef(f: f), params: self.copyFuncBinds(binds: f.typeParams), values: selection.calleeTypeArgs)
         }
         // Every provided callable enters its shared body through concrete
         // conformance evidence. Direct and StaticMethod templates can both

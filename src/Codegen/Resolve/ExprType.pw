@@ -1054,7 +1054,7 @@ pub impl Comp {
                         if self.isGenericInst(ref: mf.retTy) {
                             val g2SavedSelf: U64 = self.cur.selfRef
                             val g2SavedItem: U64 = self.cur.itemRef
-                            try self.setSelfItemEnv(recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: 0)
+                            try self.setSelfItemEnv(recvInstRef: rt.ref)
                             // a generic method (`Counter.map[B]`): bind its method-own type
                             // params from the call (B from the closure arg) so the return
                             // `MapIter[Self,…,B]` grounds to `MapIter[Counter,…,I64]`.
