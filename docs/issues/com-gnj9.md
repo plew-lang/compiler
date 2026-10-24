@@ -1,7 +1,7 @@
 ---
 id: com-gnj9
 status: open
-deps: [com-2suv]
+deps: [com-2suv, com-fbqh]
 links: []
 created: 2026-10-23T10:41:58Z
 type: task
