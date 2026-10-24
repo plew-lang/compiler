@@ -48,7 +48,12 @@ fn check(mode: U64, entry: U64) -> Bool {
     // Copy before either branch receives context. One branch must not grant
     // or constrain the other's construction progress.
     mut val independent = compiler
-    compiler.recordExpr(exprId: expression, expectedTerm: narrow).unwrap()
+    if entry == 1U64 && mode == 0U64 {
+        compiler.recordExpr(exprId: expression).unwrap()
+        compiler.recordSemanticExprExpectedResult(exprId: expression, expectedTerm: narrow).unwrap()
+    } else {
+        compiler.recordExpr(exprId: expression, expectedTerm: narrow).unwrap()
+    }
     compiler.tcCheckValue(expectedRef: narrow, valueExpr: expression, pos: "initial-context").unwrap()
     val saved = compiler.sourceSemanticExprTypeAt(index: expression)
     val savedChild = compiler.sourceSemanticExprTypeAt(index: child)
