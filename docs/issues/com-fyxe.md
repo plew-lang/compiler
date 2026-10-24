@@ -155,3 +155,10 @@ completion is claimed. The approved producer task [com-qbwg](com-qbwg.md) is now
 an explicit completion prerequisite. After it closes, rerun this task's required
 fresh controls and independent completion review; the task remains in_progress.
 See [C3 classification reconciliation](com-m0bf.md#scope-stop-unassigned-late-synthetic-buffer-producer).
+
+Buffer checkpoint ce98f5f4 fresh62a36bc4 now executes this task's context and
+authority controls successfully; module4 also pass. Final certification remains
+withheld: the required focused suite stops at optional_chain, a separately
+unassigned pre-rewrite producer. See the current
+[C3 stop](com-m0bf.md#scope-stop-unassigned-pre-rewrite-optional-chain-producer).
+No newly required repair is silently included here.

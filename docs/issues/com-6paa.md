@@ -195,3 +195,10 @@ repair. The approved task addition assigns it to mandatory prerequisite
 task's own required fresh controls and completion review pass.
 The canonical finding, trace, receipt and classification reconciliation are in
 [C3 scope reconciliation](com-m0bf.md#scope-stop-unassigned-late-synthetic-buffer-producer).
+
+The Buffer checkpoint ce98f5f4 fresh62a36bc4 passes its first19 native controls
+and module4, but optional_chain now exposes a separate, unassigned pre-rewrite
+source producer. It also fails with pre-Buffer fresh5 on identical source.
+The [current C3 stop](com-m0bf.md#scope-stop-unassigned-pre-rewrite-optional-chain-producer)
+owns the finding/proposed disposition. Keep this task in_progress; do not weaken
+type identity or absorb another producer into the registered body-key repair.

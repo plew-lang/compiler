@@ -12,6 +12,13 @@ tags: [frontend, verification]
 ---
 # Stamp late nominal source and synthetic type producers
 
+Scope clarification: this closed task's listed production/reader changes and
+historical controls remain valid. It does not certify every Chain source
+producer: the unassigned pre-rewrite Locals::optChainResultRef path is now a
+[C3 scope stop](com-m0bf.md#scope-stop-unassigned-pre-rewrite-optional-chain-producer).
+Its disposition must be reconciled before claiming Chain-family/parent closure;
+it is not silently added to this completed finite task.
+
 ## Boundary and Entry
 
 Planned paired repair from [C3 inventory](com-m0bf.md#producer-and-reader-inventory),

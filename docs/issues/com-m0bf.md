@@ -1,6 +1,6 @@
 ---
 id: com-m0bf
-status: closed
+status: open
 deps: []
 links: []
 created: 2026-10-23T10:41:58Z
@@ -156,3 +156,46 @@ mandatory com-qbwg with no remaining blocking classification finding.
 **Classification and task allocation complete.** Existing bounded nqjd evidence
 is retained; com-qbwg implementation, fyxe/6paa completion and final G2 gates
 remain outstanding. This closes the inventory only, not the failed control.
+
+## Scope Stop: Unassigned Pre-rewrite Optional-chain Producer
+
+At **ce98f5f4** (production a2eda3bd), fresh
+plewc-phase3c-synthetic-buffer-1 passes compiler-source checking, module native4
+and the first **19** focused native cases, including both new Buffer controls
+and associated_literal_signature_authority. The next case, optional_chain,
+fails source checking with "source value does not satisfy the required
+conversion"; remaining native23 and reject11 are unexecuted, not successful.
+The focused and module input maps remain unchanged. On the identical source,
+pre-Buffer fresh5 also fails and nqjd's fixed8e0f0329 succeeds. The Buffer
+producer change is not the origin of this regression.
+
+Independent read-only review by /root/body_receiver_completion_review finds
+another missing C3 producer: Record::recordExpr(OptChain)'s pre-rewrite capture
+calls ExprType::constructExprTypeWithChainHole -> Locals::optChainResultRef.
+That helper rebuilds Optional[U] and a missing continuation ref with raw TypeRef
+appends, then recordSemanticExprInfo saves the nonzero unowned term before
+expected-result/conversion checking. The later chainStageResultRef and
+registerChainSiteInsts paths assigned to nqjd cannot repair that earlier saved
+source meaning. This is not an unused construction term or the registered body
+key repair assigned to 6paa.
+
+The review classifies this as a producer-allocation omission, outside qbwg and
+6paa's finite repairs. C3 is reopened; no code change to optChainResultRef, type
+equality relaxation or implicit scope extension has been made. nqjd's listed
+producer changes and their historical scoped evidence stay valid, but they do
+not certify this unassigned pre-rewrite source path. qbwg/fyxe/6paa stay
+in_progress. User task-omission stop condition applies.
+
+Pending plan proposal: explicitly assign the pre-rewrite chain source producer
+and its saved fact/conversion/rewritten-call readers. Retain the complete
+selected carrier and continuation child at production, then trace one semantic
+result through source recording, rewrite, both worklists and Mid/LLVM. Verify
+Optional/generic/projected chains, distinct same-spelled owners, nested children,
+missing identity and direct/wrapped source results. Reconcile the C3 row and
+mandatory closure dependencies before implementation; do not put this into
+G1 as an unspecified residual repair.
+
+Durable receipt: meta evidence/existing-feature-conformance/source-owner-facts/
+phase3c-synthetic-buffer-partial.json. Raw results stay under
+compiler/tmp/phase3c-synthetic-buffer. Current formal performance/full G2 gates
+have not run. This is another inventory stop, not phase-three completion.

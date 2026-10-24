@@ -111,3 +111,48 @@ This certifies the task definition and allocation only. C3 classification
 reconfirmation and this repair's implementation/validation/completion review
 remain outstanding.
 
+## Implementation and Partial Validation
+
+Production **a2eda3bd** uses Arena::typeDeclarationResolutionComplete as the
+single phase authority. Late synthBufferNew uses the fixed Core module and
+declaredTypeRef with the original complete element ref; missing Core/arity
+fails before a synthetic call is registered. Early selected qualified-use
+provenance enters resolveTypeDeclIdentities' ordinary one-time batch, including
+the String lowerer's selected U8/StringOutput terms. No published facet writer,
+downstream owner reconstruction or comparison relaxation was added.
+
+Candidate SHA **62a36bc4eeb4e99364aa526b4b8f86aa11a291b6b3d63c37ea901f34d36144d6**
+was built by the adopted orc-lifetime carrier through standard build
+**20261024T055640-build-7f4934** (exit0, unchanged inputs). The preceding WIP fresh5
+cannot build this source because its existing Buffer bug rejects Core.new;
+that failure is retained, not counted as successful validation.
+
+Fresh sourcecheck passes. part-focused-1 passes all4 native controls.
+focused-4 at **ce98f5f4** passes native19, including both new Buffer controls
+and the formerly failing associated authority case, then stops at optional_chain;
+the remaining native23/reject11 are unexecuted. The new internal fixture
+corrections preserve its original purpose: required args fields, ordered source
+range registration, valid view owner and the source control's val field syntax.
+All scoped inputs remain unchanged. No full gate/performance success is claimed.
+
+Static implementation review by /root/body_receiver_completion_review at
+a2eda3bd/d7a60eb3 found no blocker in phase choice, fixed owner, child retention
+or final-consumer connection. Its requested early-missing-owner control now
+passes: ordinary resolution leaves it unowned and final body admission rejects
+it, rather than selecting an unrelated Buffer. Final completion review is pending.
+
+**Remaining in-scope work:** add a nameLen != 0 guard to qualifiedConstruction
+and an offset0 qualified-origin/sentinel control. Static inspection shows the
+new batch condition can otherwise consider the empty sentinel when a selected
+synthetic name starts at0; no reproduction or fix is claimed yet. The reviewer
+confirms this is an in-scope condition/test strengthening, not a new task.
+Complete that work and rerun affected fresh controls after the planning stop.
+
+**Completion hold:** optional_chain exposes another unassigned source producer,
+not a Buffer regression. Its canonical finding and pending plan are in
+[C3](com-m0bf.md#scope-stop-unassigned-pre-rewrite-optional-chain-producer).
+Stop under the user's task-omission condition; do not close qbwg from partial
+success or implicitly absorb the new producer. Durable partial receipt:
+meta evidence/existing-feature-conformance/source-owner-facts/
+phase3c-synthetic-buffer-partial.json.
+
