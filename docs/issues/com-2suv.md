@@ -1,6 +1,6 @@
 ---
 id: com-2suv
-status: in_progress
+status: closed
 deps: [com-f0mq]
 links: []
 created: 2026-10-23T10:41:58Z
@@ -72,12 +72,28 @@ and saved conversion evidence.
 Controls `1b3e0520` cover both recontext entries across4modes, initial commitment
 through the expected-result entry, pre/postcommit Comp forks, provisional
 Array[Square] first-context completion versus binding commitment, and actual
-saved ArrayRepack admission. Standard build `20261024T112642-build-b6309c`, fresh
-whole compiler sourcecheck, native33/reject20 all succeed with frozen inputs.
-Meta `phase3e-result-authority.json` retains exact cases/hash/receipts; carrier
-`bin/plewc-phase3e-context-1` SHA256
-`31bae1a929a8bb8a4c7b223ecf72e05458a9577ae208b36957b2cb632954c7bc`.
-Sessions83521/34954/58874 reached exit0.
+saved ArrayRepack admission. Final production `041b451e` includes stable lexical
+base-scope reuse and reuse of validated direct-call environment materials,
+without weakening arity/owner/selection/dependency checks.
 
-Formal self-host and independent final admission remain pending. This is not
-E2 diagnostic closure, E3 callable closure, E4 cleanup closure or G2 full gates.
+Standard build `20261024T122016-build-ac051e`, fresh whole compiler sourcecheck
+and native37/reject20 all succeed with frozen inputs. Meta
+`phase3e-result-authority.json` retains exact cases/hash/receipts. Formal
+`20261024T122706-self-host-de3b4c` reaches generation2 fixed point with
+7.463384/6.885864/6.930588s, median6.930588s below7s; exit0 and unchanged inputs.
+Meta `phase3e-result-authority-self-host.json`. Saved measured WIP compiler
+`bin/plewc-phase3e-result-authority-fixed`, SHA256
+`3014fb6134705e2e390779f71c3c1c6c7d0f11208b81fb4d11a33777627ec5bf`.
+The three preceding above-target checkpoints remain separate and do not certify
+completion. No formal same-source speedup percentage is claimed.
+
+## Outcome
+
+Resolved and independently admitted by `/root/body_receiver_completion_review`.
+The final static/functional review checked14 referenced hashes and290 focused
+inputs. Formal receipt/summary/saved binary match and all5904 formal input hashes
+remain current; recomputed median6.930588s. Both E1 and required childcom-f0mq
+meet their finite exits. No remaining blocker in this scope.
+
+This is not E2 diagnostic closure, E3 callable closure, E4 cleanup closure, G2
+full gates, main integration, or adopted-carrier/seed promotion.

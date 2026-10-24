@@ -1,6 +1,6 @@
 ---
 id: com-fuo8
-status: open
+status: in_progress
 deps: [com-2suv, com-0ssn, com-9tau, com-gnj9]
 links: []
 created: 2026-10-21T15:16:01Z

@@ -1,6 +1,6 @@
 ---
 id: com-f0mq
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T11:14:55Z
@@ -98,8 +98,20 @@ relooking up the same occurrence and materializing its arguments3times. The At
 reader also reuses its function/arguments. A shared observational wrapper
 preserves trace output. State Incomplete versus At error/callee-mismatch and
 all arity/resolvedness checks remain unchanged. Sourcecheck and independent
-static review succeed. Standard build `20261024T122016-build-ac051e` succeeds;
-fresh sourcecheck/native37/reject20 are running, adding existing selection,
-constraint and final-signature controls. These results and the next formal
-checkpoint must be recorded before independent final admission. Earlier
-receipts certify their named candidates only. E1/G1 dependencies remain open.
+static review succeed. Standard build `20261024T122016-build-ac051e`, fresh
+sourcecheck/native37/reject20 all succeed with unchanged inputs; the scope adds
+existing selection, constraint and final-signature controls.
+
+## Outcome
+
+Resolved at `041b451e`, with independent finite completion admission from
+`/root/body_receiver_completion_review`. Meta `phase3e-result-authority.json`
+records final fresh correctness; `phase3e-result-authority-self-host.json` records
+formal `20261024T122706-self-host-de3b4c`, generation2 fixed point and median
+6.930588s (7.463384/6.885864/6.930588), below7s, exit0/unchanged inputs. Saved
+measured WIP `bin/plewc-phase3e-result-authority-fixed`, SHA256
+`3014fb6134705e2e390779f71c3c1c6c7d0f11208b81fb4d11a33777627ec5bf`.
+The reviewer reconciled290 focused and5904 formal inputs, receipt/summary/binary
+hashes, contract and actual final-consumer controls. Earlier above-target
+checkpoints remain explicit. E1/G1 may now consume this child's closure; no
+main/adopted/seed/full G2 promotion is implied.
