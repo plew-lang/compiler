@@ -109,6 +109,10 @@ pub impl Comp {
         val proof = self.thawValueConversionProof(id: conversion.proof)
         try self.checkConversionProofAtBoundary(proof: proof, source: conversion.source, target: conversion.target, offset: conversion.site.originStart)
         val scope = try self.declarationTypeScope(owner: conversion.site.ownerFnIdx)
+        // Identity has no endpoints of its own. Every row, including one
+        // completed from a pending source, owns these terms in this scope.
+        try self.declarationTypeDependency(ref: conversion.source, scope: scope, offset: conversion.site.originStart)
+        try self.declarationTypeDependency(ref: conversion.target, scope: scope, offset: conversion.site.originStart)
         try self.declarationConversionDependency(conversion: proof, scope: scope, offset: conversion.site.originStart)
         return <Result.Ok value=() />
     }
@@ -1302,7 +1306,11 @@ pub impl Comp {
                 if (try self.declarationTypeDependency(ref: target, scope: scope, offset: offset)) { dependent = true }
                 if (try self.declarationProofDependency(proof: proof, scope: scope, offset: offset)) { dependent = true }
             }
-            ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => { return self.declarationConversionDependency(conversion: element, scope: scope, offset: offset) }
+            ValueConversionProof.ArrayRepack(sourceRef: val source, targetRef: val target, element: val element) => {
+                dependent = try self.declarationTypeDependency(ref: source, scope: scope, offset: offset)
+                if (try self.declarationTypeDependency(ref: target, scope: scope, offset: offset)) { dependent = true }
+                if (try self.declarationConversionDependency(conversion: element, scope: scope, offset: offset)) { dependent = true }
+            }
             ValueConversionProof.EnumRepack(sourceRef: val source, targetRef: val target, enumIdx: _, argumentProofs: val arguments, payloads: val payloads) => {
                 dependent = try self.declarationTypeDependency(ref: source, scope: scope, offset: offset)
                 if (try self.declarationTypeDependency(ref: target, scope: scope, offset: offset)) { dependent = true }

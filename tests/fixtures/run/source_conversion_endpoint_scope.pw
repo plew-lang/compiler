@@ -1,0 +1,42 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Ir only { DeclarationConversion, ValueConversionProof, Stmt }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "fn sourceConversionOwner[T](value: Array[T]) -> Array[T] {{ return value }} fn foreignConversionOwner[T](value: Array[T]) -> Array[T] {{ return value }}"
+    val path = "plew:std/ConversionScope.pw"
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path=path.bytes() text=source />] />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+    val first = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "sourceConversionOwner").nameId)
+    val second = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreignConversionOwner").nameId)
+    val function = compiler.arena.functionAt(index: first)
+    val ownType = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val foreignType = compiler.funcParamAt(params: compiler.arena.functionAt(index: second).params, index: 0U64).ty
+    assert(!compiler.typeRefEq(a: ownType, b: foreignType))
+    // Row admission is a declaration operation, not an executable-body demand.
+    val statement = compiler.blockStmtAt(blkId: function.body, index: 0U64)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Return(value: val expression, hasValue: _, offset: _) => expression
+        _ => { panic("missing source expression") }
+    }
+    val site = compiler.templateCallSiteKey(fnIdx: first, exprId: expression).unwrap()
+    val scope = compiler.declarationTypeScope(owner: first).unwrap()
+    assert(compiler.declarationTypeDependency(ref: ownType, scope: scope, offset: site.originStart).unwrap())
+    assert(compiler.declarationTypeDependency(ref: foreignType, scope: scope, offset: site.originStart).isErr())
+    for array in [false, true] {
+        val ownProof = if array { give <ValueConversionProof.ArrayRepack sourceRef=ownType targetRef=ownType element=<ValueConversionProof.Identity /> /> } else { give <ValueConversionProof.Identity /> }
+        val foreignProof = if array { give <ValueConversionProof.ArrayRepack sourceRef=foreignType targetRef=foreignType element=<ValueConversionProof.Identity /> /> } else { give <ValueConversionProof.Identity /> }
+        if array {
+            assert(compiler.declarationConversionDependency(conversion: ownProof, scope: scope, offset: site.originStart).unwrap())
+            assert(compiler.declarationConversionDependency(conversion: foreignProof, scope: scope, offset: site.originStart).isErr())
+        }
+        compiler.checkDeclarationConversionEvidence(conversion: <DeclarationConversion site=site source=ownType target=ownType proof=compiler.freezeValueConversionProof(proof: ownProof) />).unwrap()
+        assert(compiler.checkDeclarationConversionEvidence(conversion: <DeclarationConversion site=site source=foreignType target=foreignType proof=compiler.freezeValueConversionProof(proof: foreignProof) />).isErr())
+    }
+    print("source-conversion-endpoint-scope")
+}
