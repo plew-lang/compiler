@@ -135,3 +135,52 @@ or dependency cycles; required six prerequisite edges and D4's transitive
 prerequisite hold. nqjd's closed scope and the four incomplete repairs are retained.
 This certifies task planning/classification only. Implementation, fresh controls,
 independent completion review and final G2 gates are not certified.
+
+
+## Implementation Checkpoint (Not Completion)
+
+**7b7ae4f6 / 6b92594e / e10009c4** repair the source context before factory
+rewrite. The old File-input probe shows Options signature terms12/14 already
+have siteOffset0/hasDecl=false immediately after declaration analysis, before
+main is prepared. Lower/Impl::appendTraitAssocTypes inserts name-only entries
+into the lowering skip scope; Lower/Types previously erased source sites merely
+on a spelling match even when that entry had no ParamId. The three type and
+construction entrances now reserve that behavior for real ParamIds. Trait
+requirement lowering's two representations supply their selected owner, Self
+ParamId and parameter terms to the existing lexical projection producer, as
+provided bodies already do. Its scope is saved/restored; no anonymous nominal
+stand-in or new proof solver is introduced.
+
+Global's factoryConstructionReceiver replaces the three raw receiver fallbacks.
+It keeps supplied terms, gives early missing terms a normal source-site
+construction, and resolves late missing terms in the selected source domain
+through declaredTypeRef. Structural record literals bypass nominal factory
+processing and continue to ordinary structural checking. Missing late nominal
+declarations fail instead of becoming successful raw receivers.
+
+Canonical requirements also expose asymmetric conformance environment handling:
+conformanceTraitBound already substitutes its subject into associated outputs,
+but copied positional inputs containing Self verbatim. Inputs now use the same
+existing groundTermInEnvironment(selfRef: subject). Exact instance/output
+comparison is retained; ParamIds are not rebound by spelling.
+
+Initial fresh candidates and failures remain evidence, not passes. Fresh1
+(standard build 20261024T072728-build-001996) reproduces the structural-literal
+regression and requirement Item visibility regression. Fresh2 (standard build
+20261024T073423-build-eaf881) rejects I64 as Add[Self] due to the ungrounded
+positional input. The first internal fixture compile stalls on an unescaped
+empty interpolation in its test-source strings; the never-green fixture is
+corrected to escaped braces without weakening its assertions. Existing-carrier
+preflight then compiles and runs the new Comp code's source-owner/factory test
+successfully with unchanged inputs. This diagnostic does not certify a fresh
+compiler or final gates. Fresh3 standard build 20261024T074133-build-7c1463 is
+in progress on source e10009c4 from the known chain-source-2 carrier.
+
+Independent read-only implementation follow-ups by
+/root/body_receiver_completion_review found the structural regression, confirmed
+the subsequent source/structural separation and requirement projection fix, and
+confirmed positional Self grounding is proper same-declaration normalization.
+No remaining static blocker was reported; fresh target results and final
+completion review remain required. New source/internal and existing generic,
+projection, shadowing, structural and exact-instance rejection controls are
+queued for those checks. Final G2 obligations remain unchanged.
