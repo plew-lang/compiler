@@ -653,10 +653,31 @@ pub impl Comp {
         return storage != actual && self.typeRefEq(a: expected, b: self.typeRefWithoutOuterViews(ref: storage))
     }
 
+    // Callable, impl-pattern and nominal binders contribute to one mapping.
+    // Keep their lexical identities; equal spelling or position is no equation.
+    inout fn mergeInstanceBinding(parameter: Bind, value: U64, params: inout Array[Bind], values: inout Array[U64], offset: U64) -> Result[(), CompileDiagnostic] {
+        mut val index = 0U64
+        while parameter.paramId != 0U64 && index < params.count() {
+            if params[index].paramId == parameter.paramId {
+                if values[index] != 0U64 && value != 0U64 && !self.typeRefEq(a: values[index], b: value) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: body receiver conflicts with its recorded callable arguments") />
+                }
+                if values[index] == 0U64 { values.set(i: index, value: value) }
+                return <Result.Ok value=() />
+            }
+            index += 1U64
+        }
+        params.append(parameter)
+        values.append(value)
+        return <Result.Ok value=() />
+    }
+
     inout fn bodyInstanceEnvironment(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
         mut val params: Array[Bind] = []
         mut val values: Array[U64] = []
         mut val suppliedReceiver = recvInstRef
+        mut val offset = 0U64
+        if fnIdx < self.arena.functionCount() { offset = self.arena.functionAt(index: fnIdx).nameStart }
         if suppliedReceiver == 0U64 && fnIdx < self.arena.functionCount() {
             val declaration = self.arena.functionAt(index: fnIdx)
             suppliedReceiver = self.groundTermInEnvironment(ref: self.parametricSelfRef(f: declaration), params: self.copyFuncBinds(binds: declaration.typeParams), values: args)
@@ -674,26 +695,28 @@ pub impl Comp {
             // Preserve method-owned arguments, replacing only ParamIds
             // established by the selected receiver's directional match.
             mut val receiverBindings = <WitnessMatch />
-            if f.typeParams.count() > 0U64 && canonicalRecv != 0U64 {
+            if (f.typeParams.count() > 0U64 || f.recvPatternParams.count() > 0U64) && canonicalRecv != 0U64 {
                 receiverBindings = (try self.methodReceiverEnvironment(f: f, instRef: canonicalRecv))
             }
             mut val i: U64 = 0U64
             while i < f.typeParams.count() && i < args.count() {
                 val parameter = self.funcBindAt(binds: f.typeParams, index: i)
-                mut val value = args[i]
-                mut val binding = 0U64
-                while binding < receiverBindings.binds.count() {
-                    val matched = receiverBindings.binds[binding]
-                    if (matched.paramId != 0U64 && matched.paramId == parameter.paramId) || (matched.paramId == 0U64 && matched.binder == i) {
-                        if value != 0U64 && !self.typeRefEq(a: value, b: matched.term) {
-                            return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "internal error: body receiver conflicts with its recorded callable arguments") />
-                        }
-                        value = matched.term
-                    }
-                    binding += 1U64
+                try self.mergeInstanceBinding(parameter: parameter, value: args[i], params: inout params, values: inout values, offset: f.nameStart)
+                i += 1U64
+            }
+            // A provided copy's callable binders can belong to the nominal
+            // declaration while recvTy belongs to its conformance impl. Keep
+            // every declared pattern binding, even absent from the callable
+            // argument vector. Signature projection still uses f.typeParams.
+            mut val patternParams = f.typeParams
+            if f.recvPatternParams.count() > 0U64 { patternParams = f.recvPatternParams }
+            i = 0U64
+            while i < patternParams.count() {
+                val parameter = self.funcBindAt(binds: patternParams, index: i)
+                val binding = self.witnessBindParamIndex(binds: receiverBindings.binds, paramId: parameter.paramId)
+                if parameter.paramId != 0U64 && binding < receiverBindings.binds.count() {
+                    try self.mergeInstanceBinding(parameter: parameter, value: receiverBindings.binds[binding].term, params: inout params, values: inout values, offset: f.nameStart)
                 }
-                params.append(parameter)
-                values.append(value)
                 i += 1U64
             }
             // The selected proof is part of a provided body's semantic
@@ -715,8 +738,7 @@ pub impl Comp {
                 val declared: Array[Bind] = self.arena.structAt(index: si).typeParams
                 mut val i: U64 = 0U64
                 while i < declared.count() && i < recv.args.count() {
-                    params.append(declared[i])
-                    values.append(recv.args[i])
+                    try self.mergeInstanceBinding(parameter: declared[i], value: recv.args[i], params: inout params, values: inout values, offset: offset)
                     i += 1U64
                 }
             } else {
@@ -725,8 +747,7 @@ pub impl Comp {
                     val declared: Array[Bind] = self.arena.enumAt(index: ei).typeParams
                     mut val i: U64 = 0U64
                     while i < declared.count() && i < recv.args.count() {
-                        params.append(declared[i])
-                        values.append(recv.args[i])
+                        try self.mergeInstanceBinding(parameter: declared[i], value: recv.args[i], params: inout params, values: inout values, offset: offset)
                         i += 1U64
                     }
                 }

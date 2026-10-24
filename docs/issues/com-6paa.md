@@ -219,3 +219,27 @@ owner in final readers. See
 and meta evidence/existing-feature-conformance/source-owner-facts/
 phase3c-chain-factory-scope-stop.json. This task remains in_progress; final
 completion review and G2 gates are still required.
+
+
+## Provided Receiver Pattern Environment Repair
+
+Fresh3 at source 0b9b4428 passes full compiler-source checking, module9 and
+77 native controls before mid_associated_item_identity fails at its provided
+Source.pair body. Trace records pattern Box[T@34], actual Box[I64], expected
+Box[T@34], both nominal declaration309. The copy keeps the conformance impl's
+receiver pattern/binders, while its callable vector contains the nominal type's
+distinct binder. methodReceiverEnvironment obtains the correct impl binding,
+but bodyInstanceEnvironment discarded contributions absent from that vector.
+Independent classification by /root/body_receiver_completion_review confirms
+this is the already-assigned explicit-environment/provided-receiver boundary
+within this task, not a new producer or specification decision.
+
+The new internal provided_receiver_environment control confirms distinct nominal
+and impl ParamIds and the correct matcher binding, then reproduces an Err at
+body environment construction before repair. The candidate merges callable,
+declared receiver-pattern and nominal contributions by ParamId, requiring equal
+semantic terms for duplicate known mappings. The callable argument vector is
+still projected by its own declaration identity/order. Missing/foreign receiver
+checks and exact declaration matching are retained. The test requires receiver
+grounding, key reuse/separation and conflicting nominal arguments to be rejected.
+Fresh candidate validation and independent completion review remain pending.

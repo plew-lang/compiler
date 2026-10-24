@@ -1,0 +1,43 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "trait Source {{ type Item fn get() -> Item }} pub impl Source {{ fn pair(value: Item) -> Array[Item] {{ return [self.get(), value] }} }} struct Box[T] {{ pub val value: T }} pub impl[T] Box[T] as Source {{ type Item = T fn get() -> T {{ return self.value }} }}"
+    val path = "plew:std/ReceiverProbe.pw"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path=path.bytes() text=source />] />).unwrap()
+    val name = compiler.internBytes(s: "pair").nameId
+    mut val checked = 0U64
+    mut val index = 0U64
+    while index < compiler.arena.functionCount() {
+        val function = compiler.arena.functionAt(index: index)
+        if function.nameId == name && function.isProvided && function.recvPatternParams.count() == 1U64 {
+            val nominal = compiler.funcBindAt(binds: function.typeParams, index: 0U64)
+            val pattern = compiler.funcBindAt(binds: function.recvPatternParams, index: 0U64)
+            assert(nominal.paramId != 0U64 && pattern.paramId != 0U64 && nominal.paramId != pattern.paramId)
+            val integerName = compiler.internBytes(s: "I64")
+            val textName = compiler.internBytes(s: "String")
+            val integer = compiler.langTypeRefAt(nameStart: integerName.nameStart, nameLen: integerName.nameLen, args: [])
+            val text = compiler.langTypeRefAt(nameStart: textName.nameStart, nameLen: textName.nameLen, args: [])
+            val receiver = compiler.groundTermInEnvironment(ref: function.recvTy, params: [pattern], values: [integer])
+            val matched = compiler.methodReceiverEnvironment(f: function, instRef: receiver).unwrap()
+            assert(matched.binds.count() == 1U64 && matched.binds[0U64].paramId == pattern.paramId)
+            val environment = compiler.bodyInstanceEnvironment(fnIdx: index, args: [integer], recvInstRef: receiver).unwrap()
+            assert(compiler.typeRefEq(a: compiler.groundTermInEnvironment(ref: function.recvTy, params: environment.params, values: environment.args), b: receiver))
+            assert(compiler.bodyReceiverMatchesDeclaration(function: function, environment: environment))
+            val key = compiler.internBodyInstance(fnIdx: index, environment: environment)
+            val repeated = compiler.bodyInstanceEnvironment(fnIdx: index, args: [integer], recvInstRef: receiver).unwrap()
+            assert(key == compiler.internBodyInstance(fnIdx: index, environment: repeated))
+            assert(compiler.bodyInstanceEnvironment(fnIdx: index, args: [text], recvInstRef: receiver).isErr())
+            val other = compiler.groundTermInEnvironment(ref: function.recvTy, params: [pattern], values: [text])
+            val otherEnvironment = compiler.bodyInstanceEnvironment(fnIdx: index, args: [text], recvInstRef: other).unwrap()
+            assert(key != compiler.internBodyInstance(fnIdx: index, environment: otherEnvironment))
+            checked += 1U64
+        }
+        index += 1U64
+    }
+    assert(checked == 1U64)
+    print("provided-receiver-environment")
+}
