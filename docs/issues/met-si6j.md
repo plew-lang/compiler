@@ -82,6 +82,7 @@ open/in_progress/closed and real prerequisites.
 | C3 producer repair | [com-nqjd](com-nqjd.md): Stamp late source and synthetic nominal terms with their selected owner | Paired producer/read repair from planned inventory |
 | C3 synthetic repair | [com-qbwg](com-qbwg.md): Preserve Core Buffer identity across early and late synthetic construction | Finite dual-stage producer/read repair from inventory reconciliation |
 | C3 chain source repair | [com-i62n](com-i62n.md): Preserve complete source types before Optional-chain rewriting | Finite pre-rewrite source-result/consumer repair from inventory reconciliation |
+| C3 factory source repair | [com-uruz](com-uruz.md): Preserve selected declaration identity through custom-factory source receivers | Finite source/context-to-rewrite and saved-call repair from inventory reconciliation |
 | C3 context repair | [com-fyxe](com-fyxe.md): Use the selected complete associated-call parameter context | Paired signature/context repair from planned inventory |
 | C3 body-key repair | [com-6paa](com-6paa.md): Preserve declared receiver identity through final body keys and retire paired recovery | Paired producer/final-key repair after other producers |
 | C4 (3C) | [com-e9l2](com-e9l2.md): Verify saved result recipes and projection identity at final reads | Bounded closure verification |

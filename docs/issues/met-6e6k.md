@@ -1,7 +1,7 @@
 ---
 id: met-6e6k
 status: in_progress
-deps: [com-g2qg, com-nplw, com-nucu, com-m0bf, com-e9l2, com-loyb, com-3q2n, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n]
+deps: [com-g2qg, com-nplw, com-nucu, com-m0bf, com-e9l2, com-loyb, com-3q2n, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -24,6 +24,7 @@ work and real prerequisites are tk dependencies under the
 - [com-4kti](com-4kti.md): its mandatory shared generic/projected candidate
   selection and full-instance admission repair through final use.
 - [C3](com-m0bf.md): unstamped nominal producer inventory, with mandatory late-type [com-nqjd](com-nqjd.md), associated-context [com-fyxe](com-fyxe.md) and final-body-key [com-6paa](com-6paa.md) repairs. Classification alone does not close these repairs.
+- [com-uruz](com-uruz.md): custom-factory source/context receiver identity through saved calls and final use. This distinct producer blocks the interrupted C3 repairs.
 - [C4](com-e9l2.md): result recipe/projection readers.
 - [C5](com-loyb.md): source conversion endpoints.
 - [C6](com-3q2n.md): closure/dynamic descriptor dependencies.

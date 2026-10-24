@@ -1,6 +1,6 @@
 ---
 id: com-m0bf
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-10-23T10:41:58Z
@@ -28,7 +28,7 @@ Enumerate production constructors lacking declaration identity on the paths from
 
 ## Exit and Evidence
 
-Each hit is tied to one of the four entry families, a canonical producer or a legitimate construction-only representation, exact fallback consumers and current controls. The custom-factory source/context lane below is currently unassigned; classification is reopened. For each real gap create a paired producer-plus-reader repair child with exact API/fixtures and make it mandatory; do not delete all spelling fallbacks at once. This inventory closes classification, not unperformed repairs.
+Each hit is tied to one of the four entry families, a canonical producer or a legitimate construction-only representation, exact fallback consumers and current controls. The custom-factory source/context lane below is assigned to com-uruz; independent allocation reconfirmation is complete. For each real gap create a paired producer-plus-reader repair child with exact API/fixtures and make it mandatory; do not delete all spelling fallbacks at once. This inventory closes classification, not unperformed repairs.
 
 Existing starting controls: `mid_type_recipe_instances`, `type_term_closedness`
 
@@ -50,7 +50,7 @@ producers. Classification is not the completion of the paired repairs.
 | Entry family / producer | Representation and status | Paired reads / disposition |
 | --- | --- | --- |
 | Named memberwise source construction: `Expr::inferMakeInstance` | Preserves selected existing TypeRef or stamps the selected nominal declaration before recording. This does not classify custom-factory preparation/rewriting. | Semantic aggregate/expression -> body grounding -> Mid aggregate. The custom-factory lane below is a separate required finding. |
-| Custom-factory source/context receiver: `Global::resolveConstructionContext`, `prepareFactoryConstruction`, named-factory/cast rewrite, `SyntheticCallSite.receiverTerm` | Current String options controls save an unowned `Options` receiver before body finalization. Trace the first loss in supplied context versus raw receiver construction; do not assume only the simpleTypeRef fallback is responsible. | Saved CallTemplate.receiverTypeTerm/signature -> declaration/executable worklists -> body environment/signature -> Mid/LLVM. Unassigned required producer repair; classification reopened and work stopped pending task-plan approval. |
+| Custom-factory source/context receiver: `Global::resolveConstructionContext`, `prepareFactoryConstruction`, named-factory/cast rewrite, `SyntheticCallSite.receiverTerm` | Current String options controls save an unowned `Options` receiver before body finalization. Trace the first loss in supplied context versus raw receiver construction; do not assume only the simpleTypeRef fallback is responsible. | Saved CallTemplate.receiverTypeTerm/signature -> declaration/executable worklists -> body environment/signature -> Mid/LLVM. Mandatory [com-uruz](com-uruz.md); classification reconfirmation covers this separate producer boundary. |
 | Array construction: `Expr::arrayRefOfElem` | Retains full element and canonical Lang Array identity where available. `typedIrRefOfInfo`'s name-only element recovery remains distinct. | Published expression/aggregate and generic arguments; canonical main path preserved, legacy adapter assigned nqjd. |
 | Source TypeInfo adapters: `TypeRecovery::typeInfoOfName`; `Expr::typedIrRefOfInfo`; `FreeFn::tyRefOfInfo`/`findOrAddTypeRef` | Primitive/unknown compatibility descriptions are legitimate during construction. An ordinary nominal recovered only via global firstBareTypeNamed or a new name-only append lacks owner/binder authority. | `recordSemanticExprInfo`, body type recovery, grounding and final signature completeness; mandatory repair nqjd. No global name-id stamping. |
 | Body signatures: `Expr::semanticCallableReturnTerm` | Existing lowered return terms retain identity. Unit is a structural empty record. Async omitted return creates an unstamped Promise[Unit] after declaration publication. | CallTemplate result, body signatures and final descriptor grounding; mandatory nqjd. `Call::groundedSelectedCalleeReturn` also has a retTy=0 to simpleTypeRef adapter assigned to nqjd (keep genuine omitted Unit distinct from a missing annotated return). Promise name-collision source control currently passes, so no source-level failure is claimed from this observation alone. |
@@ -245,25 +245,34 @@ i62n/qbwg/fyxe/6paa remain in_progress; their valid partial controls remain evid
 but no task is certified complete. Stop implementation under the bounded-task
 policy before silently expanding any of them.
 
-### Proposed Finite Allocation (Not Yet Created)
+### Approved Finite Allocation
 
-Create one mandatory paired repair for custom-factory source/context receiver
-production and saved-call handoff, depending on this classification. First trace
-and isolate the source of the ownerless default/explicit Options context; preserve
-its selected complete term through custom/named construction rewrite and the
-synthetic receiver. Distinguish pre-publication construction from committed source
-facts. Cover default Options and explicit `</>`, named/anonymous factories,
-aliases/homonymous owners, generic children, and missing/foreign-owner rejection.
-Follow the same saved receiver/signature through both worklists, body admission
-and actual Mid/LLVM execution; remove paired raw competing authority. Do not add
-downstream name recovery, weaken identity checks, broadly redesign conformance,
-or reopen nqjd's already reviewed bounded closure.
+The user approved task correction after the independent source-producer review.
+[com-uruz](com-uruz.md) owns first-loss tracing at the supplied context/custom-
+factory construction boundary, complete receiver production, synthetic rewrite,
+saved signature, both worklists and final consumption, with paired raw authority
+removal and focused controls. Its concrete actions/exit are the single task plan.
+It depends only on this classification; i62n/qbwg/fyxe/6paa, met-6e6k and G1
+require it. D4 remains transitively blocked. No independent broader conformance
+or body-key redesign has been silently included. nqjd's bounded closure remains.
 
-The new task must block interrupted qbwg/fyxe/6paa/i62n completion, met-6e6k and
-G1; keep C3's classification direction acyclic and D4 transitively blocked. Review
-the concrete allocation before resuming implementation. Final G2 gates remain.
-Evidence is retained in meta
-`evidence/existing-feature-conformance/source-owner-facts/phase3c-chain-factory-scope-stop.json`,
-including all actual results, exact input/carrier/log hashes, the probe source and
-output, fixture corrections and independent scope verdict. No new task has been
-created or implementation repair attempted for this finding.
+Independent allocation review confirms the finite repair, distinct responsibilities,
+all existing dependency targets, acyclic graph and D4 transitive prerequisite.
+**C3 classification is complete; com-uruz implementation remains open.**
+The evidence in meta
+`evidence/existing-feature-conformance/source-owner-facts/phase3c-chain-factory-scope-stop.json`
+remains a historical failure/probe receipt, not proof of the new repair. No
+implementation or new execution validation is part of this task registration.
+
+
+### Custom-factory Reclassification Outcome
+
+Independent /root/body_receiver_completion_review reviewed the concrete task
+registration against compiler base **072ece07**, including source evidence,
+entry/first-loss investigation, producer-to-final-consumer exit, controls,
+responsibility split and all dependency edges. Verdict: **appropriate task
+allocation; classification complete; no blocking findings**. The new task has
+only the classification prerequisite, and the interrupted repairs/area/G1 require
+it without a cycle. This closes classification only; no implementation success,
+fresh execution, final repair review or G2 gate is inferred. The four existing
+repairs remain in_progress and the new repair remains open.
