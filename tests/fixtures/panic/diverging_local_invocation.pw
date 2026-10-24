@@ -1,0 +1,6 @@
+// Storing and copying this value continues normally; invocation does not.
+fn main() {
+    val callback: diverge fn() = diverge fn() { panic("diverging local invoked") }
+    val retained = callback
+    retained()
+}

@@ -1,0 +1,35 @@
+// Source selection must normalize a callable signature before saving its
+// field/binding identity. Concrete and parametric outputs use the same rule.
+use @Std/Io only { print }
+
+trait Callable { type Callback }
+struct Contract {}
+impl Contract as Callable { type Callback = fn() -> I64 }
+struct Holder { val callback: Contract#Callable.Callback }
+pub impl Holder { factory }
+
+struct ProviderOf[T] {}
+impl[T] ProviderOf[T] as Callable { type Callback = fn() -> T }
+struct Projected[T] { val callback: ProviderOf[T]#Callable.Callback }
+pub impl Projected { factory }
+
+struct UnitHolder { val callback: fn() -> () }
+pub impl UnitHolder { factory }
+
+fn invoke(callback: Contract#Callable.Callback) -> I64 { return callback() }
+fn generic[T](holder: Projected[T]) -> T { return holder.callback() }
+fn invokeUnit(callback: fn() -> ()) { callback() }
+
+fn main() {
+    val holder = <Holder callback=fn() -> I64 { return 11I64 } />
+    print(holder.callback())
+    print(invoke(callback: fn() -> I64 { return 12I64 }))
+    val integer = <Projected[I64] callback=fn() -> I64 { return 21I64 } />
+    val text = <Projected[String] callback=fn() -> String { return "generic" } />
+    print(generic(holder: integer))
+    print(generic(holder: text))
+    val unit = <UnitHolder callback=fn() { print("unit-field") } />
+    unit.callback()
+    invokeUnit(callback: fn() { print("unit-local") })
+    print("done")
+}

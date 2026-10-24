@@ -1,7 +1,7 @@
 ---
 id: com-9tau
 status: in_progress
-deps: [com-fbqh]
+deps: [com-fbqh, com-px0e, com-o7ul]
 links: []
 created: 2026-10-23T10:41:58Z
 type: task

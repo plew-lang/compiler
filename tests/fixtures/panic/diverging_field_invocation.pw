@@ -1,0 +1,9 @@
+// This direct field type isolates Mid call consumption from projection lookup.
+struct Holder { val callback: diverge fn() }
+pub impl Holder { factory }
+
+fn main() {
+    val holder = <Holder callback=diverge fn() { panic("diverging field invoked") } />
+    val retained = holder
+    retained.callback()
+}
