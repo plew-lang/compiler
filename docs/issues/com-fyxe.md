@@ -100,3 +100,20 @@ term, rather than using a syntax-based contextual-shape gate. Completed terms
 remain untouched. An incomplete user call now reports the established cannot
 infer all type arguments diagnostic; corrupt explicit reader requests still
 fail without reconstruction. A no-context associated call reject is added.
+
+### Bare Generic Qualifier Identity
+
+Fresh 36223da3 candidate4 passes all 19 focused native and 11 rejection cases
+(no internal errors), plus the full compiler-source check. The new real-module
+same-name alias fixture exposes the remaining preselection boundary: with no
+complete receiver term, findAssoc admitted unrelated homonymous receiver owners
+and could save the first label-only candidate. The alias had already identified
+a declaration; missing type arguments do not make that identity unknown.
+
+The paired local fix resolves that bare qualifier's owner once in its explicit
+source domain, then filters candidate declared receivers by that owner alongside
+the existing complete-receiver test. It does not append a partial nominal term,
+select by expected result, change body keys, or add an inference solver. Internal
+raw name-only clients with no declaration keep their existing probe behavior;
+source qualifiers with a known owner cannot cross to another owner. Fresh
+execution and final independent review of this increment remain pending.

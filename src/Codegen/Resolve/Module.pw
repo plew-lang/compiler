@@ -1088,6 +1088,15 @@ pub impl Comp {
         return true
     }
 
+    // A bare generic qualifier already determines its declaration even
+    // though it cannot yet supply a complete instantiated receiver term.
+    fn receiverDeclarationHasOwner(f: Func, declaration: Bind) -> Bool {
+        if declaration.nameLen == 0U64 { return true }
+        if f.recvTy == 0U64 || f.recvTy >= self.arena.typeCount() { return false }
+        val receiver = self.arena.typeTerms[f.recvTy]
+        return receiver.hasDecl && receiver.declOffset == declaration.nameStart
+    }
+
     inout fn findAssoc(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         mut val firstLabel: U64 = self.arena.functionCount()
         mut val typeMatch: U64 = self.arena.functionCount()
@@ -1098,13 +1107,16 @@ pub impl Comp {
         val source = self.realTypeNameInModule(useMod: self.moduleOf(offset: recvStart), start: recvStart, len: recvLen)
         val rnu: Bind = self.newtypeUnderName(start: source.nameStart, len: source.nameLen)
         val qRecvId: U64 = intern(c: inout self, start: rnu.nameStart, len: rnu.nameLen)
+        val receiverDeclaration = if recvRef == 0U64 {
+            give self.typeDeclIdentityAt(useMod: self.moduleOf(offset: rnu.nameStart), start: rnu.nameStart, len: rnu.nameLen)
+        } else { give self.missingDeclIdentity() }
         mut val i: U64 = self.decls.firstCallableNamed(nameId: qNameId)
         while i < self.decls.callableCount() {
             val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
             if f.isAssoc && self.callableIsBare(c: cand) {
                 if f.nameId == qNameId {
-                    if f.recvId == qRecvId && self.receiverDeclarationMatches(f: f, receiverRef: recvRef) {
+                    if f.recvId == qRecvId && self.receiverDeclarationMatches(f: f, receiverRef: recvRef) && self.receiverDeclarationHasOwner(f: f, declaration: receiverDeclaration) {
                         val matchRank: U64 = (try self.callableArgMatchRank(f: f, args: args))
                         if matchRank != 0U64 {
                             if firstLabel == self.arena.functionCount() {
