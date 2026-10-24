@@ -1,0 +1,122 @@
+// Public construction/publication probes only: no private index or payload
+// writer is exposed. Sparse public expression IDs deliberately share low bits
+// while enough facts are inserted to grow the owner-local index repeatedly.
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, Stmt, TypeRef, SemanticExpressionTypeState }
+
+fn integer(compiler: inout Comp) -> U64 {
+    return compiler.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+}
+
+fn returnExpression(compiler: inout Comp, function: U64) -> U64 {
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: function).body, index: 0U64)
+    match compiler.arena.stmts[statement] {
+        Stmt.Return(value: val value, hasValue: _, offset: _) => { return value }
+        _ => { panic("missing return expression") }
+    }
+}
+
+fn namedType(compiler: inout Comp, name: String) -> U64 {
+    val span = compiler.internBytes(s: name)
+    return compiler.pushType(t: <TypeRef nameStart=span.nameStart nameLen=span.nameLen nameId=span.nameId args=[] />)
+}
+
+fn pending(compiler: inout Comp, expression: U64) {
+    match compiler.sourceSemanticExprTypeAt(index: expression).typeState {
+        SemanticExpressionTypeState.Pending => {}
+        _ => { panic("discarded numeric probe is not pending") }
+    }
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="expression-index.pw" text="fn first() -> I64 {{ return 1I64 }} fn second() -> I64 {{ return 2I64 }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val first = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "first").nameId)
+    val second = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "second").nameId)
+    val zero = returnExpression(compiler: inout compiler, function: first)
+    val foreign = returnExpression(compiler: inout compiler, function: second)
+    if zero != 0U64 { panic("source setup did not provide expression key zero") }
+    val integerType = namedType(compiler: inout compiler, name: "I64")
+    val narrow = namedType(compiler: inout compiler, name: "I8")
+    val wide = namedType(compiler: inout compiler, name: "I16")
+    compiler.cur.checkFn = first
+    compiler.cur.recordCallTemplates = true
+    compiler.recordExpr(exprId: zero).unwrap()
+    mut val discarded: Array[U64] = []
+    val initialPending = integer(compiler: inout compiler)
+    compiler.recordExpr(exprId: initialPending, needsValue: false).unwrap()
+    pending(compiler: inout compiler, expression: initialPending)
+    discarded.append(initialPending)
+    mut val keys: Array[U64] = []
+    mut val index = 0U64
+    while index < 40U64 {
+        val target = (index + 1U64) * 64U64
+        while compiler.arena.exprs.count() < target { integer(compiler: inout compiler) }
+        val expression = integer(compiler: inout compiler)
+        if expression != target { panic("sparse expression setup drifted") }
+        keys.append(expression)
+        if index == 0U64 {
+            // Update this existing row after all growth/collision probes.
+            compiler.recordExpr(exprId: expression).unwrap()
+            pending(compiler: inout compiler, expression: expression)
+        } else {
+            compiler.recordExpr(exprId: expression, expectedTerm: integerType).unwrap()
+        }
+        if index == 19U64 {
+            val middlePending = integer(compiler: inout compiler)
+            compiler.recordExpr(exprId: middlePending, needsValue: false).unwrap()
+            pending(compiler: inout compiler, expression: middlePending)
+            discarded.append(middlePending)
+        }
+        index += 1U64
+    }
+    mut val fork = compiler
+    compiler.recordExpr(exprId: keys[0U64], expectedTerm: narrow).unwrap()
+    fork.recordExpr(exprId: keys[0U64], expectedTerm: wide).unwrap()
+    if !compiler.typeRefEq(a: compiler.semanticExprTerm(exprId: keys[0U64]), b: narrow) { panic("row update missed the original branch") }
+    if !fork.typeRefEq(a: fork.semanticExprTerm(exprId: keys[0U64]), b: wide) { panic("row update missed the fork branch") }
+    val extra = integer(compiler: inout fork)
+    fork.recordExpr(exprId: extra, expectedTerm: wide).unwrap()
+    match compiler.sourceSemanticExprTypeAt(index: extra).typeState {
+        SemanticExpressionTypeState.Unrecorded => {}
+        _ => { panic("fork insertion mutated the original index") }
+    }
+    compiler.prepareLexicalBody(fnIdx: first).unwrap()
+    val reader = compiler.preparedFunctionSemanticFacts(fnIdx: first).unwrap()
+    val zeroTerm = reader.expression(exprId: zero).unwrap().term
+    if !compiler.typeRefEq(a: zeroTerm, b: integerType) { panic("key zero lost its fact") }
+    index = 0U64
+    while index < keys.count() {
+        val expected = if index == 0U64 { give narrow } else { give integerType }
+        if !compiler.typeRefEq(a: reader.expression(exprId: keys[index]).unwrap().term, b: expected) { panic("grown index lost or aliased a row") }
+        index += 1U64
+    }
+    // Publishing removes tentative rows and rebuilds the same lookup domain.
+    index = 0U64
+    while index < discarded.count() {
+        if reader.expression(exprId: discarded[index]).isSome() { panic("publication retained a tentative row") }
+        index += 1U64
+    }
+    if reader.expression(exprId: 63U64).isSome() || reader.expression(exprId: 900000U64).isSome() { panic("unregistered expression acquired a fact") }
+    if reader.expression(exprId: foreign).isSome() || reader.expression(exprId: extra).isSome() { panic("foreign expression entered the reader") }
+    compiler.prepareLexicalBody(fnIdx: second).unwrap()
+    val other = compiler.preparedFunctionSemanticFacts(fnIdx: second).unwrap()
+    if other.expression(exprId: zero).isSome() || other.expression(exprId: keys[0U64]).isSome() { panic("another owner acquired a fact") }
+    if other.expression(exprId: foreign).isNone() { panic("second owner lost its own expression") }
+    fork.prepareLexicalBody(fnIdx: first).unwrap()
+    val forkReader = fork.preparedFunctionSemanticFacts(fnIdx: first).unwrap()
+    if !fork.typeRefEq(a: forkReader.expression(exprId: keys[0U64]).unwrap().term, b: wide) { panic("publication lost the fork row update") }
+    if !fork.typeRefEq(a: forkReader.expression(exprId: extra).unwrap().term, b: wide) { panic("publication lost the fork insertion") }
+    index = 0U64
+    while index < keys.count() {
+        val expected = if index == 0U64 { give narrow } else { give integerType }
+        if !compiler.typeRefEq(a: reader.expression(exprId: keys[index]).unwrap().term, b: expected) { panic("retained reader changed after owner/fork publication") }
+        index += 1U64
+    }
+    if reader.expression(exprId: zero).unwrap().term != zeroTerm { panic("retained key-zero reader changed") }
+    print("source-expression-fact-index-ok")
+}
