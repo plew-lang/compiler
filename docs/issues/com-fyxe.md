@@ -145,3 +145,10 @@ Keep this task in_progress pending final native controls and final independent
 review. Its source-side producer/reader repair is ready for com-6paa's planned
 implementation prerequisite; that task now proceeds without declaring this
 native exit complete or weakening the final parent gate.
+
+## Completion Hold
+
+39c3e27f fresh5 passes module alias controls4 but the required internal signature
+authority fixture fails on the unassigned late Buffer producer. This task's
+source-selection/parameter-context path remains statically coherent; no final
+completion is claimed. See com-6paa's Scope Stop and reopened C3 com-m0bf.
