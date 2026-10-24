@@ -65,7 +65,10 @@ Initial native17/reject16 all pass with fixed carrier
 meta receipt `phase3e-result-authority-initial.json` retains the exact scope.
 Independent review found a possible construction API path that reapplies an
 I16 expectation after a scalar or empty array was already typed with I8,
-including wrapped values. A new internal control must distinguish this from
-ordinary source miscompilation before deciding closure or a finite repair.
+including wrapped values. `value_control_context_authority` reproduces all4 direct/block scalar/empty
+Array changes and subsequent compatibility acceptance (panic134). Setup parse
+and private-API failures are separate from this decisive baseline; no private
+reader was exposed. Ordinary source miscompilation is not established. A finite
+shared-context repair is being designed before allocation.
 Preserve legitimate Pending-to-known and generic result completion; explicit
 types and already committed terms must not be overwritten merely by context.
