@@ -79,6 +79,9 @@ open/in_progress/closed and real prerequisites.
 | C2 (3C) | [com-nucu](com-nucu.md): Close partial-input projected member enumeration before source admission | Bounded investigation of one query boundary |
 | C2 repair (3B/3C) | [com-4kti](com-4kti.md): Unify generic and projected member candidate selection before source admission | Bounded shared-frontier implementation |
 | C3 (3C) | [com-m0bf](com-m0bf.md): Classify remaining unstamped nominal producers and paired legacy readers | Bounded producer inventory |
+| C3 producer repair | [com-nqjd](com-nqjd.md): Stamp late source and synthetic nominal terms with their selected owner | Paired producer/read repair from planned inventory |
+| C3 context repair | [com-fyxe](com-fyxe.md): Use the selected complete associated-call parameter context | Paired signature/context repair from planned inventory |
+| C3 body-key repair | [com-6paa](com-6paa.md): Preserve declared receiver identity through final body keys and retire paired recovery | Paired producer/final-key repair after other producers |
 | C4 (3C) | [com-e9l2](com-e9l2.md): Verify saved result recipes and projection identity at final reads | Bounded closure verification |
 | C5 (3C) | [com-loyb](com-loyb.md): Verify source conversion proofs retain exact endpoints and ownership | Bounded closure verification |
 | C6 (3C) | [com-3q2n](com-3q2n.md): Verify closure and dynamic descriptors retain semantic dependencies | Bounded closure verification |

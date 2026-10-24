@@ -1,7 +1,7 @@
 ---
 id: met-ucze
-status: closed
-deps: [com-qehq, com-qb05, com-17yh, com-4kti]
+status: open
+deps: [com-qehq, com-qb05, com-17yh, com-4kti, com-fyxe]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -129,17 +129,17 @@ suite is historical coverage of the starting controls, not fresh evidence for
 09e5a277 or a source-to-final proof. B1–B4 retain their fresh positive/reject/
 corruption and final-consumer requirements, and G2a/G2b retain all final gates.
 
-## Scoped Area Closure
+## Shared-Frontier Closure and Remaining Source Authority
 
-Required B0/B1/B2 and shared repair com-4kti are closed. The repaired source
+B0/B1/B2 and shared repair com-4kti are closed. C3 subsequently classified the live associated literal-context replay under required repair [com-fyxe](com-fyxe.md); this area is open until that repair and its scoped review close. The repaired source
 c056e658 preserves one selected complete instance and admitted proof for both
 symbolic receiver families, including provided and supertrait routes, through
 CallTemplate, declaration/executable worklists and Mid/native. The independent
 completion reviewer found no blocking findings; native20/reject20 and full
 compiler-source check passed with pinned candidate6 and unchanged inputs. See
 [com-4kti outcome](com-4kti.md#outcome) for removed paths and exact receipts.
-The generation-2 formal checkpoint median is 6.717830s. This scoped area closure
-does not close D3 write authority, C4/C6 final type/descriptor audits, the other
+The generation-2 formal checkpoint median is 6.717830s. This shared-frontier closure
+does not close the reopened area, D3 write authority, C4/C6 final type/descriptor audits, the other
 phase-three areas or final G2 gates. B1/B2's unaffected bounded evidence remains
 at its recorded revisions; affected proof/signature/operator controls were
 rerun by com-4kti. No main/seed/carrier promotion is implied.

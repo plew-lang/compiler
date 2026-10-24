@@ -1,7 +1,7 @@
 ---
 id: com-m3c6
 status: open
-deps: [com-m0bf]
+deps: [com-m0bf, com-nqjd, com-6paa]
 links: []
 created: 2026-10-23T10:41:58Z
 type: task

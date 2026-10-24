@@ -37,3 +37,52 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Producer and Reader Inventory
+
+Inspected production code at **c056e658** (documentation checkpoint e6ef8918).
+The finite four-family inventory below classifies every direct TypeRef append
+and named-recovery adapter reachable from the listed entries. Rebuild/view/
+substitution helpers preserve existing identity; they are not new spelling
+producers. Classification is not the completion of the paired repairs.
+
+| Entry family / producer | Representation and status | Paired reads / disposition |
+| --- | --- | --- |
+| Named source construction: `Expr::contextualNominalMakeRef` | Preserves selected existing TypeRef or stamps the selected nominal declaration before recording. | Semantic aggregate/expression -> body grounding -> Mid aggregate. Already canonical; no replacement lookup. |
+| Array construction: `Expr::arrayRefOfElem` | Retains full element and canonical Lang Array identity where available. `typedIrRefOfInfo`'s name-only element recovery remains distinct. | Published expression/aggregate and generic arguments; canonical main path preserved, legacy adapter assigned nqjd. |
+| Source TypeInfo adapters: `TypeRecovery::typeInfoOfName`; `Expr::typedIrRefOfInfo`; `FreeFn::tyRefOfInfo`/`findOrAddTypeRef` | Primitive/unknown compatibility descriptions are legitimate during construction. An ordinary nominal recovered only via global firstBareTypeNamed or a new name-only append lacks owner/binder authority. | `recordSemanticExprInfo`, body type recovery, grounding and final signature completeness; mandatory repair nqjd. No global name-id stamping. |
+| Body signatures: `Expr::semanticCallableReturnTerm` | Existing lowered return terms retain identity. Unit is a structural empty record. Async omitted return creates an unstamped Promise[Unit] after declaration publication. | CallTemplate result, body signatures and final descriptor grounding; mandatory nqjd. Promise name-collision source control currently passes, so no source-level failure is claimed from this observation alone. |
+| Associated function inference: `ExprType::associatedReceiverFromArguments`, `groundFinalMethodSignatureTerm` | Existing recvTy, signature terms and simultaneous explicit environment preserve identity. `groundFinalMethodReturn`/Parameter's missing-ref path and boundMethodRetInfo still accept a name-only receiver. | Saved signature and selected call term; nominal adapter migration nqjd, registered receiver/key migration 6paa. Keep correct full-term lane. |
+| Associated literal context: `Literal::checkAssocArgsLitCtxFromExpected` via `checkLitSpanCtx` | No direct nominal append. A competing name lookup/inferFnArgs plus positional ctx.args -> f.typeParams map remains; callers exist in Record, Generic and Verify. It cannot be classified as a universally preselection-only adapter. | Full selected parameter context and literal checking -> saved source call -> final call; mandatory fyxe. Do not replace one missing-owner term with another lookup in a final reader. |
+| Registered receiver: `Call::canonicalBodyReceiverRef`; fallback `Record::parametricSelfRef` | Missing explicit receiver is reconstructed by simpleTypeRef even when Func.recvTy is complete. ParametricSelfRef's main recvTy lane is correct; fallback rebuilds type parameters without ParamId and the nominal head without owner. | internBodyInstance -> body signature / final callable / Mid lookup. Internal diagnostic confirms identity loss and mixed known/unknown key equivalence; mandatory 6paa. |
+| Chain-generated registration: `Call::chainStageResultRef`, `registerChainSiteInsts` | Existing head rebuild retains identity. Missing continuation ref appends a naked nominal name; Optional[V/U] registrations also omit owner. | scanType, chain result/rewritten call facts, worklist registration -> final descriptors; mandatory nqjd. |
+| Rigid/structural helpers | chainValueArgIndex creates declaration-owned ParamId leaves; semanticSourceResultTerm creates Unit; closureFnTypeRef creates a function structure; reserveTypeSentinel reserves absence. Primitive literal contexts are explicit builtin atoms. | Legitimate non-nominal/construction representations. Do not invent nominal declarations or infer binders from matching printed names. |
+| Rebuild/publication helpers: `Frontend::pushType`, `Arena::registerType`, `finishTypeDeclarationResolution`; Ground rebuild/view helpers | pushType interns names and preserves supplied identity; registerType synchronizes rows/terms. The one-time declaration batch resolves source-site rows; it cannot stamp later appends or act as mutable post-publication repair. | Scalar/owning rows, typeIsClosed, grounding and runtime signature readers. D4 remains the separate publication audit; nqjd/6paa must supply late identity at production. |
+
+The paired legacy readers are explicit: `Mono/Resolve::tyRefIsGround` uses
+whole-program isTypeParamName only for unstamped terms; `Mono/Ground` retains
+bare-name substitution/equality bridges; `Mono/Call::sameBodyRuntimeRef` compares
+names when either side lacks owner; descriptor completeness currently checks
+closedness and cannot restore lost nominal identity. These are not permission
+to delete all fallbacks before migrating their producers. nqjd supplies late
+source/synthetic terms, fyxe closes the associated context authority, and 6paa
+closes registered receivers and the corresponding final-key fallback. Their
+actual dependencies, area/G1 admission and D4 prerequisite are retained in tk.
+
+### Evidence and Limits
+
+Fresh candidate6 at c056e658 passes `mid_type_recipe_instances` and
+`type_term_closedness` natively (controls-1, native2, no exclusions, input hashes
+unchanged). The additional Promise/type-parameter-name source probe passes
+source check with a preexisting warning; it does not establish all identity
+properties. The internal boundary diagnostic supplies a Func with a complete
+nominal recvTy, requests its canonical body receiver without an explicit instance,
+and observes **1 / 0 / 1 / 1**: known identity present, synthesized identity absent,
+and key equality with each of two different nominal owner IDs. This isolates the
+producer/key boundary; it is not a demonstrated user-program miscompile or a
+complete malformed-descriptor test. Raw probe and hashes accompany the receipt.
+
+These planned repair descendants implement this inventory's required disposition;
+closing C3 certifies classification only, never those source changes. No source,
+syntax, ownership or inference specification change is proposed. The final parent
+requires all mandatory repairs plus its remaining audits and G2 gates.
