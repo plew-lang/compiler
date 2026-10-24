@@ -71,3 +71,14 @@ been established; the source construction authority invariant is violated.
 
 E1 and G1 require this repair. The child does not depend on its unfinished parent;
 final whole-candidate normal/gen/deps/ASan-LSan gates remain G2a/G2b.
+
+## Current Implementation and Verification
+
+Production `63372a7c` and adopted contract `fbab88b5` implement the shared policy;
+controls `1b3e0520` exercise both entries including initial expected-result
+commitment, binding/provisional distinction, retained ArrayRepack and Comp forks.
+No final consumer reads the progress Set. Fixed prior-carrier preflight3 and
+fresh compiler sourcecheck/native33/reject20 all pass with fixed inputs.
+Standard fresh build `20261024T112642-build-b6309c`, meta receipt
+`phase3e-result-authority.json`. Formal checkpoint and independent final admission
+remain pending; E1/G1 dependencies remain open until those pass.

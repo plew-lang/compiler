@@ -40,8 +40,8 @@ waived by a bounded child closing.
 
 ## Four-expression Reconciliation
 
-Initial audit at `ee736b1a` / runtime `9b4652a3`. This map is not completion
-admission while the recontextualization question below is unresolved.
+Initial audit at `ee736b1a` / runtime `9b4652a3`; the final repair and
+functional scope are recorded below.
 
 | Expression | Source producer / saved authority | Final consumer |
 |---|---|---|
@@ -57,18 +57,27 @@ body instances; syntax completion is limited to bodyless construction walks.
 The loop source/execution distinction is preserved, with diagnostics in E2 and
 full exit cleanup auditing in E4.
 
-## Open Verification Point
+## Required Repair and Functional Evidence
 
-Initial native17/reject16 all pass with fixed carrier
-`bin/plewc-phase3d-type-storage-fixed`, SHA256
-`380d649e240dd71e366323a4167ac39200dc77a0993fcec4cc5cda1dd8822275`;
-meta receipt `phase3e-result-authority-initial.json` retains the exact scope.
-Independent review found a possible construction API path that reapplies an
-I16 expectation after a scalar or empty array was already typed with I8,
-including wrapped values. `value_control_context_authority` reproduces all4 direct/block scalar/empty
-Array changes and subsequent compatibility acceptance (panic134). Setup parse
-and private-API failures are separate from this decisive baseline; no private
-reader was exposed. Ordinary source miscompilation is not established. A finite
-shared-context repair is being designed before allocation.
-Preserve legitimate Pending-to-known and generic result completion; explicit
-types and already committed terms must not be overwritten merely by context.
+Independent review found and reproduced repeated-context source type rewriting
+for direct/block scalar/empty Array. The decisive4-mode panic134 and separate
+setup failures are retained in meta `phase3e-context-authority-before.json`.
+Ordinary source miscompilation is not established. Required child
+[com-f0mq](com-f0mq.md) implements a shared initial-context/binding commitment
+policy at production `63372a7c`; contract `fbab88b5`. The marker is owner-local
+builder progress only; source type and final-consumer authority remain the
+existing saved facts. Requested expectations still drive normal compatibility
+and saved conversion evidence.
+
+Controls `1b3e0520` cover both recontext entries across4modes, initial commitment
+through the expected-result entry, pre/postcommit Comp forks, provisional
+Array[Square] first-context completion versus binding commitment, and actual
+saved ArrayRepack admission. Standard build `20261024T112642-build-b6309c`, fresh
+whole compiler sourcecheck, native33/reject20 all succeed with frozen inputs.
+Meta `phase3e-result-authority.json` retains exact cases/hash/receipts; carrier
+`bin/plewc-phase3e-context-1` SHA256
+`31bae1a929a8bb8a4c7b223ecf72e05458a9577ae208b36957b2cb632954c7bc`.
+Sessions83521/34954/58874 reached exit0.
+
+Formal self-host and independent final admission remain pending. This is not
+E2 diagnostic closure, E3 callable closure, E4 cleanup closure or G2 full gates.
