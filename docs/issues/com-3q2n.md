@@ -1,6 +1,6 @@
 ---
 id: com-3q2n
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-23T10:41:58Z
@@ -38,39 +38,50 @@ current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
 
-## Current increment
+## Outcome
 
-The closure audit reproduced two internal admission gaps: a same-ABI, zero-capture
-descriptor from another declaration reached actual canonical Mid, and a foreign
-cursor environment could publish a signature under a different registered body.
-These are damaged internal descriptors, not established ordinary-source
-miscompilations. Baselines and the corrected embedded-compiler preflight remain
-separate in `tmp/phase3c-descriptors/`.
+Bounded C6 is complete at production **b9187931** (closure producer/read repair
+**20c5b9b8**). `finalizeClosureSignature` checks the registered callable origin,
+body key and exact lexical environment before publishing. Ready republication
+uses `requirePreparedClosureInstance`; final scanning, MakeClosure Mid and LLVM
+closure declaration share that reader. It compares the prepared declaration,
+published type results, signature/parameter passing, capture identity/mode and
+owned environment-drop signature. It does not select or normalize source meaning.
 
-`20c5b9b8` adds producer key/origin/environment admission and the common
-`requirePreparedClosureInstance` reader for final scanning, MakeClosure Mid and
-LLVM declaration. It reads the checked declaration and existing body type results;
-it does not select another declaration or normalize projections. The paired
-`closure_descriptor_identity` and `closure_instance_environment` preflight passed.
-The follow-up increment also verifies the complete environment-drop shape.
-
-The dynamic-call audit found that field/binding selection needed the same source
-identity check even when both targets have one function ABI. The current increment
-adds a shared `checkFinalClosureCallEvidence` at publication, Mid signature admission
-and LLVM preflight, and compares a field receiver's semantic type with its actual
-Mid operand. `dynamic_closure_descriptor_identity` exercises actual canonical Mid
-with a fully copied valid instance and a changed target. Its never-green setup is
-being checked before a fresh build; no fresh-success claim is made here.
-
-Interface publication/reader audit: source recording retains the interface root;
-`instantiateInterfaceCall` binds it to the registered environment/source owner;
+`checkFinalClosureCallEvidence` retains the source operation owner and exact
+binding/field/function term at publication, Mid signature admission and LLVM
+preflight. Both final consumers also compare a closure-field receiver with the
+actual Mid operand's semantic type. Interface admission already retained exact
+root/body/site/receiver/trait/slot through `instantiateInterfaceCall`,
 `checkFinalInterfaceEvidence`, `midSelectedSignature` and
-`midCanonicalExistentialCallPreflight` retain body/site/receiver/trait/slot. Existing
-proof admission stays B4's responsibility. Include `interface_final_evidence`,
-`existential_selected_source_tables`, `mid_dynamic_call_signatures` and the two
-`namespace_existential_*identity` module controls in final scoped verification.
+`midCanonicalExistentialCallPreflight`; the controls now explicitly change the
+receiver, trait and slot as well as operation proof/body. No new ABI or runtime
+capture/drop model was introduced; later API-closure tasks retain their scope.
 
-The independent intermediate review found no design blocker. It requested the
-remaining drop-signature shape checks; they are included in the current increment.
-Final fresh verification, evidence preservation and independent completion review
-are still required. No runtime model, ABI, parent completion or final gate changes.
+Three decisive negative controls reproduce damaged-descriptor admission:
+same-ABI different closure declaration; foreign cursor environment under a
+registered closure instance; and same-function-type different field/binding in an
+otherwise fully copied valid instance. The new controls exercise actual canonical
+Mid, including distinct nominal generic instances. They do not establish an
+ordinary-source miscompilation. Preliminary never-green test setup failures remain
+separate from those decisive baselines and from repaired successful executions.
+
+Fresh `bin/plewc-phase3c-descriptors-1` SHA256
+**6ca009d50989a0e6ea01825994d64fc9acec442d3942601f256e582fc5b15ff5**:
+standard build **20261024T092115-build-3d8faf**, full compiler sourcecheck,
+native26/reject9 and module2 all pass with unchanged inputs. Equal-ABI source-view
+and same-named module/slot controls retain their distinct selected semantics.
+Independent completion review by /root/body_receiver_completion_review recognizes
+C6 complete without blockers/unassigned repairs, verifies the fresh carrier and
+255/195 scoped input fingerprints, plus all21 receipt references.
+
+Durable evidence: meta **71a714de**, `evidence/existing-feature-conformance/
+source-owner-facts/phase3c-descriptor-closure.json`. Separate formal checkpoint
+**20261024T092627-self-host-d759d3** reaches generation2 fixed point, median
+**6.850077s**, exit0 and unchanged inputs; `phase3c-descriptor-self-host.json` saves
+the measurements and toolchain. The measured compiler is retained as
+`bin/plewc-phase3c-descriptors-fixed`, SHA256
+**d6c3e55adfd54876c6b6f2a0d2afb60fdfe2a371eb5111fd436131a8c8d139a5**.
+All build/check/scoped/formal sessions are recovered to terminal status.
+Subsequent phase-three tasks, parent completion and latest full G2 gates remain
+outside this closure. Main, seed and adopted carrier are unchanged.
