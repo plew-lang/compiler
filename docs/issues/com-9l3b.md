@@ -1,7 +1,7 @@
 ---
 id: com-9l3b
 status: open
-deps: [com-p5um]
+deps: [com-p5um, com-o3vw, com-rtki, com-9d1o]
 links: []
 created: 2026-10-23T10:41:59Z
 type: task
