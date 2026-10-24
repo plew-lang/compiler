@@ -1,0 +1,77 @@
+// Scalar operation projections retain the full reader's exact owner/site
+// navigation while avoiding selection payload copies. This is not a new store.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplate, CallTemplateKind, CallTemplateReceiver, Expr, Func, Param }
+use @Std/Io only { print }
+
+fn compare(compiler: inout Comp, index: U64) {
+    val full = compiler.callTemplateAt(index: index)
+    val head = compiler.callTemplateHeadAt(index: index)
+    if !full.siteKey.sameKey(other: head.siteKey) || full.resultTypeRecipe != head.resultTypeRecipe || full.mayHaveStorageArguments != head.mayHaveStorageArguments {
+        panic("operation projection changed a saved field")
+    }
+}
+
+fn construction() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integer = compiler.internBytes(s: "I64")
+    val term = compiler.simpleTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)
+    val name = compiler.internTmpName(prefix: "value", n: 0U64)
+    val expression = compiler.pushExpr(e: <Expr.Int value=7U64 offset=0U64 isBool=false tyStart=integer.nameStart tyLen=integer.nameLen isNeg=false />)
+    val parameters = compiler.pushFuncParams(params: [<Param nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId tyStart=integer.nameStart tyLen=integer.nameLen tyIsArray=false ty=term isInout=false isMove=false isBorrow=false noLabel=false hasDefault=true defaultExpr=expression />])
+    compiler.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen params=parameters hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    compiler.prepareDefaultArgumentGenerators().unwrap()
+    compiler.cur.checkFn = 0U64
+    compiler.cur.recordCallTemplates = true
+    val generator = compiler.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64)
+    val call = compiler.recordDefaultArgumentCall(generator: generator, receiver: <CallTemplateReceiver.Term term=term />, calleeTypeArgs: [], resultTerm: term, existingExpr: compiler.arena.exprs.count()).unwrap()
+    val full = compiler.callTemplateForSourceBody(fnIdx: 0U64, exprId: call).unwrap()
+    val head = compiler.callTemplateHeadForSourceBody(fnIdx: 0U64, exprId: call).unwrap()
+    if !full.siteKey.sameKey(other: head.siteKey) || full.resultTypeRecipe != head.resultTypeRecipe { panic("active source query changed") }
+    compare(compiler: inout compiler, index: compiler.callTemplateIndex(siteKey: head.siteKey))
+    val missing = compiler.pushExpr(e: <Expr.Int value=9U64 offset=0U64 isBool=false tyStart=integer.nameStart tyLen=integer.nameLen isNeg=false />)
+    val absent = compiler.callTemplateHeadForSourceBody(fnIdx: 0U64, exprId: missing).unwrap()
+    val absentFull = compiler.callTemplateForSourceBody(fnIdx: 0U64, exprId: missing).unwrap()
+    if !absent.siteKey.sameKey(other: absentFull.siteKey) || absent.resultTypeRecipe != 0U64 || !absent.mayHaveStorageArguments { panic("missing row no longer has the same explicit defaults") }
+}
+
+fn main() {
+    construction()
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="source-operation-head.pw" text="fn value() -> I64 {{ return 42I64 }} fn accept(value: I64) {{}} fn first() {{ accept(value: value()) }} fn second() {{ accept(value: value()) }} fn broken() {{ val values = [] }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val first = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "first").nameId)
+    val second = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "second").nameId)
+    val broken = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "broken").nameId)
+    compiler.prepareLexicalBody(fnIdx: first).unwrap()
+    val retained = compiler.preparedFunctionSemanticFacts(fnIdx: first).unwrap()
+    val firstFull = retained.operationAt(index: 0U64).unwrap()
+    val firstHead = retained.operationHeadAt(index: 0U64).unwrap()
+    if !firstFull.siteKey.sameKey(other: firstHead.siteKey) || firstFull.resultTypeRecipe != firstHead.resultTypeRecipe { panic("sealed reader projection changed") }
+    if retained.operationHeadAt(index: 1000000U64).isSome() { panic("missing local operation fabricated a row") }
+    compiler.prepareLexicalBody(fnIdx: second).unwrap()
+    val other = compiler.preparedFunctionSemanticFacts(fnIdx: second).unwrap()
+    if other.operationHeadAt(index: 0U64).unwrap().siteKey.sameKey(other: firstHead.siteKey) { panic("different owner shared identity") }
+    compiler.cur.sourceFactReader = <Optional.Some v=1000000U64 />
+    mut val index = 0U64
+    mut val sawRecipe = false
+    mut val sawNoStorage = false
+    while index < compiler.callTemplateCount() {
+        compare(compiler: inout compiler, index: index)
+        val head = compiler.callTemplateHeadAt(index: index)
+        if head.resultTypeRecipe != 0U64 { sawRecipe = true }
+        if !head.mayHaveStorageArguments { sawNoStorage = true }
+        index += 1U64
+    }
+    if !sawRecipe || !sawNoStorage { panic("fixture did not exercise finalized scalar fields") }
+    match compiler.prepareLexicalBody(fnIdx: broken) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("broken owner prepared") }
+    }
+    if compiler.preparedFunctionSemanticFacts(fnIdx: broken).isOk() { panic("failed owner published a reader") }
+    if retained.operationHeadAt(index: 0U64).unwrap().resultTypeRecipe != firstHead.resultTypeRecipe { panic("later work changed retained reader") }
+    print("source-operation-head-projection")
+}
