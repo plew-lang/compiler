@@ -1,6 +1,6 @@
 part ./Ir/FinalResolutions
 use ./SourceFiles only { SourceFiles, SourceFileRange }
-use ./SourceCompletion only { SourceCompletion }
+use ./SourceCompletion only { SourceCompletion, CompletionTransfer }
 use @Std/Set only { Set }
 part ./Ir/Modules
 part ./Ir/AccessCandidates
@@ -435,6 +435,41 @@ pub enum SemanticCompletionOwner {
     Global(target: U64)
     Closure(expression: U64)
 }
+// Direct source transfers retain their exact enclosing region. Function
+// targets use the tagged source owner, including a closure's own invocation.
+pub enum SourceExitTarget {
+    Function
+    Block(blockId: U64)
+    Loop(statementId: U64)
+}
+pub impl SourceExitTarget {
+    fn matches(target: Self) -> Bool {
+        match self {
+            SourceExitTarget.Function => { return match target { SourceExitTarget.Function => true _ => false } }
+            SourceExitTarget.Block(blockId: val block) => { return match target { SourceExitTarget.Block(blockId: val other) => block == other _ => false } }
+            SourceExitTarget.Loop(statementId: val statement) => { return match target { SourceExitTarget.Loop(statementId: val other) => statement == other _ => false } }
+        }
+    }
+}
+pub struct SourceTransferFact {
+    pub val owner: SemanticCompletionOwner
+    pub val statementId: U64
+    pub val transfer: CompletionTransfer
+    pub val target: SourceExitTarget
+}
+pub impl SourceTransferFact {
+    factory
+    fn matches(transfer: CompletionTransfer) -> Bool {
+        match transfer {
+            CompletionTransfer.Give => { return match self.transfer { CompletionTransfer.Give => true _ => false } }
+            CompletionTransfer.Return => { return match self.transfer { CompletionTransfer.Return => true _ => false } }
+            CompletionTransfer.Break => { return match self.transfer { CompletionTransfer.Break => true _ => false } }
+            CompletionTransfer.Continue => { return match self.transfer { CompletionTransfer.Continue => true _ => false } }
+            CompletionTransfer.Diverge => { return false }
+        }
+    }
+}
+
 pub struct SemanticExpressionCompletion {
     pub val owner: SemanticCompletionOwner
     pub val flow: SourceCompletion

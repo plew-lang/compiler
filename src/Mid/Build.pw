@@ -1,3 +1,5 @@
+use ../SourceCompletion only { CompletionTransfer }
+use ../Ir only { SourceExitTarget, SourceTransferFact }
 use ../Diag only { CompileDiagnostic }
 // Mid builder state. Source bindings are mapped once to Mid local identities;
 // later passes consume the frontend resolver's declaration identity rather than
@@ -173,6 +175,14 @@ struct MidCallValueLookup {
 }
 pub impl MidCallValueLookup { factory }
 
+struct MidSourceLoopTarget {
+    val statementId: U64
+    val breakTarget: U64
+    val continueTarget: U64
+    val enclosingScope: U64
+}
+impl MidSourceLoopTarget { factory }
+
 pub struct MidBuildState {
     mut val sourceFacts: Optional[PreparedSemanticFacts] = <Optional.None />
     pub mut val locals: Array[MidLocalDecl] = []
@@ -194,9 +204,7 @@ pub struct MidBuildState {
     // Nested loops select only their innermost target. These parallel private
     // stacks are deliberately separate from lexical scopes: a loop has two
     // CFG destinations, while a scope has one cleanup obligation.
-    mut val loopBreakTargets: Array[U64] = []
-    mut val loopContinueTargets: Array[U64] = []
-    mut val loopEnclosingScopes: Array[U64] = []
+    mut val loopTargets: Array[MidSourceLoopTarget] = []
     pub mut val currentBlock: U64 = 0U64
     pub mut val currentScope: U64 = 0U64
     pub mut val hasReturnPlace: Bool = false
@@ -282,37 +290,34 @@ fn midSourceStatementAdmitted(c: Comp, state: MidBuildState, stmtId: U64) -> Boo
 }
 
 pub impl MidBuildState {
-    inout fn pushLoopTarget(breakTarget: U64, continueTarget: U64, enclosingScope: U64) {
-        self.loopBreakTargets.append(breakTarget)
-        self.loopContinueTargets.append(continueTarget)
-        self.loopEnclosingScopes.append(enclosingScope)
+    inout fn pushLoopTarget(statementId: U64, breakTarget: U64, continueTarget: U64, enclosingScope: U64) {
+        self.loopTargets.append(<MidSourceLoopTarget statementId=statementId breakTarget=breakTarget continueTarget=continueTarget enclosingScope=enclosingScope />)
     }
-
     inout fn popLoopTarget() {
-        if self.loopBreakTargets.count() != 0U64 {
-            self.loopBreakTargets.removeLast()
-            self.loopContinueTargets.removeLast()
-            self.loopEnclosingScopes.removeLast()
+        if self.loopTargets.count() != 0U64 { self.loopTargets.removeLast() }
+    }
+}
+impl MidBuildState {
+    fn loopTarget(statementId: U64) -> Optional[MidSourceLoopTarget] {
+        mut val index = self.loopTargets.count()
+        while index > 0U64 {
+            index -= 1U64
+            val target = self.loopTargets[index]
+            if target.statementId == statementId { return <Optional.Some v=target /> }
         }
+        return <Optional.None />
     }
+}
 
-    fn hasLoopTarget() -> Bool {
-        return self.loopBreakTargets.count() != 0U64
-    }
-
-    fn currentLoopBreakTarget() -> U64 {
-        if self.loopBreakTargets.count() == 0U64 { return 0U64 }
-        return self.loopBreakTargets[self.loopBreakTargets.count() - 1U64]
-    }
-
-    fn currentLoopContinueTarget() -> U64 {
-        if self.loopContinueTargets.count() == 0U64 { return 0U64 }
-        return self.loopContinueTargets[self.loopContinueTargets.count() - 1U64]
-    }
-
-    fn currentLoopEnclosingScope() -> U64 {
-        if self.loopEnclosingScopes.count() == 0U64 { return 0U64 }
-        return self.loopEnclosingScopes[self.loopEnclosingScopes.count() - 1U64]
+fn midSourceTransfer(c: inout Comp, state: MidBuildState, stmtId: U64, transfer: CompletionTransfer) -> Result[SourceTransferFact, MidBuildError] {
+    match state.sourceFacts {
+        Optional.Some(v: val facts) => {
+            return match c.sourceTransferFact(facts: facts, stmtId: stmtId, transfer: transfer) {
+                Result.Ok(value: val fact) => <Result.Ok value=fact />
+                Result.Err(error: val diagnostic) => <Result.Err error=<MidBuildError.Frontend diagnostic=diagnostic /> />
+            }
+        }
+        Optional.None => { return <Result.Err error=<MidBuildError.MissingSemanticType /> /> }
     }
 }
 
@@ -943,18 +948,24 @@ fn midEmitScopeExitsTo(state: inout MidBuildState, enclosingScope: U64) -> MidBu
 
 // `break` and `continue` are ordinary CFG edges.  Their only special rule is
 // lexical cleanup of the scopes crossed to the selected loop boundary.
-fn buildMidLoopExit(state: inout MidBuildState, isContinue: Bool) -> MidBuildError {
-    if !state.hasLoopTarget() {
-        if isContinue { return <MidBuildError.UnsupportedContinue /> }
-        return <MidBuildError.UnsupportedBreak />
+fn buildMidLoopExit(c: inout Comp, state: inout MidBuildState, stmtId: U64, isContinue: Bool) -> MidBuildError {
+    val kind = if isContinue { give <CompletionTransfer.Continue /> } else { give <CompletionTransfer.Break /> }
+    val fact = match midSourceTransfer(c: inout c, state: state, stmtId: stmtId, transfer: kind) {
+        Result.Ok(value: val fact) => fact
+        Result.Err(error: val error) => { return error }
     }
-    val cleanup: MidBuildError = midEmitScopeExitsTo(state: inout state, enclosingScope: state.currentLoopEnclosingScope())
+    val statement = match fact.target {
+        SourceExitTarget.Loop(statementId: val statement) => statement
+        _ => { return <MidBuildError.InvalidStatement /> }
+    }
+    val target = match state.loopTarget(statementId: statement) {
+        Optional.Some(v: val target) => target
+        Optional.None => { return <MidBuildError.InvalidStatement /> }
+    }
+    val cleanup = midEmitScopeExitsTo(state: inout state, enclosingScope: target.enclosingScope)
     match cleanup { MidBuildError.None => {} _ => { return cleanup } }
-    if isContinue {
-        midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=state.currentLoopContinueTarget() />)
-    } else {
-        midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=state.currentLoopBreakTarget() />)
-    }
+    val edge = if isContinue { give target.continueTarget } else { give target.breakTarget }
+    midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=edge />)
     return <MidBuildError.None />
 }
 
@@ -2596,6 +2607,11 @@ fn buildMidReturnAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.Return(value: val value, hasValue: val hasValue, offset: _) => {
+            val fact = match midSourceTransfer(c: inout c, state: state, stmtId: stmtId, transfer: <CompletionTransfer.Return />) {
+                Result.Ok(value: val fact) => fact
+                Result.Err(error: val error) => { return error }
+            }
+            match fact.target { SourceExitTarget.Function => {} _ => { return <MidBuildError.InvalidStatement /> } }
             if !hasValue {
                 midEmitAllScopeExits(state: inout state)
                 midSetTerminator(state: inout state, terminator: <MidTerminator.Return />)
@@ -2700,6 +2716,14 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
                 }
             }
             Stmt.Give(value: val value) => {
+                val fact = match midSourceTransfer(c: inout c, state: state, stmtId: stmtId, transfer: <CompletionTransfer.Give />) {
+                    Result.Ok(value: val fact) => fact
+                    Result.Err(error: val error) => { return error }
+                }
+                match fact.target {
+                    SourceExitTarget.Block(blockId: val target) => { if target != blockId { return <MidBuildError.InvalidStatement /> } }
+                    _ => { return <MidBuildError.InvalidStatement /> }
+                }
                 val term = (match midSourceSemanticTerm(c: inout c, state: state, exprId: value) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return error } })
                 val destination = match blockResult {
                     MidBlockResult.Forbidden => { return <MidBuildError.UnsupportedGive /> }
@@ -2719,8 +2743,8 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
                 // connects this result to the enclosing expression's join.
                 i = block.stmtLen
             }
-            Stmt.Break(offset: _) => { result = buildMidLoopExit(state: inout state, isContinue: false) }
-            Stmt.Continue(offset: _) => { result = buildMidLoopExit(state: inout state, isContinue: true) }
+            Stmt.Break(offset: _) => { result = buildMidLoopExit(c: inout c, state: inout state, stmtId: stmtId, isContinue: false) }
+            Stmt.Continue(offset: _) => { result = buildMidLoopExit(c: inout c, state: inout state, stmtId: stmtId, isContinue: true) }
         }
         if !midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
             i = block.stmtLen
@@ -3294,7 +3318,7 @@ fn buildMidWhileAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64)
                 midSetTerminator(state: inout state, terminator: <MidTerminator.Switch discriminant=conditionValue values=[1I64] targets=[bodyTarget] otherwise=exitTarget />)
             }
             state.currentBlock = bodyTarget
-            state.pushLoopTarget(breakTarget: exitTarget, continueTarget: headerTarget, enclosingScope: state.currentScope)
+            state.pushLoopTarget(statementId: stmtId, breakTarget: exitTarget, continueTarget: headerTarget, enclosingScope: state.currentScope)
             val bodyResult: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: body)
             state.popLoopTarget()
             match bodyResult { MidBuildError.None => {} _ => { return bodyResult } }
@@ -3388,7 +3412,7 @@ fn buildMidForAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64) -
             val local: U64 = addMidLocal(state: inout state, declarationTarget: varStart, typeTerm: 0U64, isUnique: false, isParameter: false, ownsAtEntry: false, typeRecipe: recipe.itemRecipe)
             val item: MidPlace = <MidPlace local=local typeTerm=0U64 typeRecipe=recipe.itemRecipe />
             midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=item value=<MidRvalue.ForPayloadCopy place=next stmtId=stmtId /> />)
-            state.pushLoopTarget(breakTarget: exit, continueTarget: header, enclosingScope: loopScope)
+            state.pushLoopTarget(statementId: stmtId, breakTarget: exit, continueTarget: header, enclosingScope: loopScope)
             val result: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: body)
             state.popLoopTarget()
             match result { MidBuildError.None => {} _ => { return result } }

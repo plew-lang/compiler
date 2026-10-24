@@ -1,0 +1,111 @@
+// Direct control selection belongs to source recording. Relative completion
+// composition remains in SourceCompletion; these rows retain region identity.
+impl Comp {
+    inout fn enterSourceControlRegion(region: SourceControlRegion) -> SourceControlCheckpoint {
+        if !self.cur.recordCallTemplates { return <SourceControlCheckpoint /> }
+        val owner = self.currentSourceOwner()
+        match owner {
+            Optional.Some(v: val owner) => {
+                self.sourceFacts.activate(owner: owner)
+                val depth = self.sourceFacts.activeBuilder.controlRegions.count()
+                self.sourceFacts.activeBuilder.controlRegions.append(region)
+                return <SourceControlCheckpoint owner=<Optional.Some v=owner /> depth=depth />
+            }
+            Optional.None => { return <SourceControlCheckpoint /> }
+        }
+    }
+    inout fn restoreSourceControlRegion(checkpoint: SourceControlCheckpoint) {
+        match checkpoint.owner {
+            Optional.Some(v: val owner) => {
+                self.sourceFacts.activate(owner: owner)
+                while self.sourceFacts.activeBuilder.controlRegions.count() > checkpoint.depth {
+                    self.sourceFacts.activeBuilder.controlRegions.removeLast()
+                }
+            }
+            Optional.None => {}
+        }
+    }
+    inout fn sourceTransferBlockTarget(offset: U64) -> Result[SourceExitTarget, CompileDiagnostic] {
+        mut val index = self.sourceFacts.activeBuilder.controlRegions.count()
+        while index > 0U64 {
+            index -= 1U64
+            match self.sourceFacts.activeBuilder.controlRegions[index] {
+                SourceControlRegion.Block(blockId: val block, permitsGive: val permitted) => {
+                    if permitted { return <Result.Ok value=<SourceExitTarget.Block blockId=block /> /> }
+                    break
+                }
+                _ => {}
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`give` is only allowed in a value block (spec/11)") />
+    }
+    inout fn sourceTransferLoopTarget(offset: U64, isContinue: Bool) -> Result[SourceExitTarget, CompileDiagnostic] {
+        mut val index = self.sourceFacts.activeBuilder.controlRegions.count()
+        mut val condition = false
+        while index > 0U64 {
+            index -= 1U64
+            match self.sourceFacts.activeBuilder.controlRegions[index] {
+                SourceControlRegion.Loop(statementId: val statement) => { return <Result.Ok value=<SourceExitTarget.Loop statementId=statement /> /> }
+                SourceControlRegion.LoopBarrier => { condition = true
+                    break }
+                _ => {}
+            }
+        }
+        if condition {
+            if isContinue { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`continue` cannot target a surrounding loop from a while condition (spec/11)") /> }
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`break` cannot target a surrounding loop from a while condition (spec/11)") />
+        }
+        if isContinue { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`continue` outside a loop (spec/11)") /> }
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`break` outside a loop (spec/11)") />
+    }
+    inout fn recordSourceTransfer(stmtId: U64, owner: SemanticCompletionOwner) -> Result[(), CompileDiagnostic] {
+        val fact = match self.arena.stmts[stmtId] {
+            Stmt.Return(value: _, hasValue: _, offset: _) => {
+                give <SourceTransferFact owner=owner statementId=stmtId transfer=<CompletionTransfer.Return /> target=<SourceExitTarget.Function /> />
+            }
+            Stmt.Give(value: val value) => {
+                val target = try self.sourceTransferBlockTarget(offset: self.exprOffset(id: value))
+                give <SourceTransferFact owner=owner statementId=stmtId transfer=<CompletionTransfer.Give /> target=target />
+            }
+            Stmt.Break(offset: val offset) => {
+                val target = try self.sourceTransferLoopTarget(offset: offset, isContinue: false)
+                give <SourceTransferFact owner=owner statementId=stmtId transfer=<CompletionTransfer.Break /> target=target />
+            }
+            Stmt.Continue(offset: val offset) => {
+                val target = try self.sourceTransferLoopTarget(offset: offset, isContinue: true)
+                give <SourceTransferFact owner=owner statementId=stmtId transfer=<CompletionTransfer.Continue /> target=target />
+            }
+            _ => { return <Result.Ok value=() /> }
+        }
+        match readSourceRow(rows: self.sourceFacts.activeBuilder.data.transfers, keys: self.sourceFacts.activeBuilder.data.transferKeys, key: stmtId) {
+            Optional.Some(v: val prior) => {
+                if !semanticCompletionOwnersEqual(recorded: prior.owner, prepared: owner) || !prior.matches(transfer: fact.transfer) || !prior.target.matches(target: fact.target) {
+                    return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: source transfer target changed after selection") />
+                }
+                return <Result.Ok value=() />
+            }
+            Optional.None => {}
+        }
+        self.sourceFacts.activeBuilder.data.putTransfer(fact: fact)
+        return <Result.Ok value=() />
+    }
+}
+
+// Cross-module read boundary; a raw target record grants no source publication
+// authority. Mid obtains its target only through this admitted snapshot.
+pub impl Comp {
+    inout fn sourceTransferFact(facts: PreparedSemanticFacts, stmtId: U64, transfer: CompletionTransfer) -> Result[SourceTransferFact, CompileDiagnostic] {
+        try self.requireSourceFactsSession(facts: facts)
+        if stmtId >= self.arena.stmts.count() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: source transfer statement is out of range") />
+        }
+        val fact = match facts.transfer(stmtId: stmtId) {
+            Optional.Some(v: val fact) => fact
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: prepared source transfer has no target") /> }
+        }
+        if !fact.matches(transfer: transfer) {
+            return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: prepared source transfer has a different kind") />
+        }
+        return <Result.Ok value=fact />
+    }
+}

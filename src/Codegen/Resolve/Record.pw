@@ -2414,8 +2414,14 @@ pub impl Comp {
                 }
             }
             Stmt.While(val cond, val body) => {
-                try self.recordExpr(exprId: cond)
-                try self.recordBlock(blkId: body)
+                val conditionScope = self.enterSourceControlRegion(region: <SourceControlRegion.LoopBarrier />)
+                val checked = self.recordExpr(exprId: cond)
+                self.restoreSourceControlRegion(checkpoint: conditionScope)
+                try checked
+                val loopScope = self.enterSourceControlRegion(region: <SourceControlRegion.Loop statementId=stmtId />)
+                val recorded = self.recordBlock(blkId: body)
+                self.restoreSourceControlRegion(checkpoint: loopScope)
+                try recorded
             }
             Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val varTy, val iter, val body, val isStruct, patStart: _, patLen: _, val binds) => {
                 val forMark: U64 = self.scopeMark()
@@ -2448,8 +2454,11 @@ pub impl Comp {
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: item.nameStart, tyLen: item.nameLen, isArray: item.kind == 3, ty: semanticItem, isInout: false, isMut: false, owned: false)
                 }
 
-                try self.recordBlock(blkId: body)
+                val loopScope = self.enterSourceControlRegion(region: <SourceControlRegion.Loop statementId=stmtId />)
+                val recorded = self.recordBlock(blkId: body)
+                self.restoreSourceControlRegion(checkpoint: loopScope)
                 self.popLocals(mark: forMark)
+                try recorded
             }
             Stmt.Match(val scrut, val arms) => {
                 // Validate labels before publishing lexical pattern bindings.
@@ -2478,7 +2487,7 @@ pub impl Comp {
         if self.cur.recordCallTemplates {
             match self.recordedCompletionFact(completion: completion) {
                 Optional.Some(v: val fact) => {
-                    self.storeBuildingSemanticStmtCompletion(stmtId: stmtId, fact: fact)
+                    try self.storeBuildingSemanticStmtCompletion(stmtId: stmtId, fact: fact)
                 }
                 Optional.None => {}
             }
@@ -2494,6 +2503,14 @@ pub impl Comp {
     }
 
     inout fn recordBlockContents(blkId: U64, resultContext: BlockResultContext) -> Result[SourceCompletion, CompileDiagnostic] {
+        val permitsGive = match resultContext { BlockResultContext.Value(expectedTerm: _) => true _ => false }
+        val checkpoint = self.enterSourceControlRegion(region: <SourceControlRegion.Block blockId=blkId permitsGive=permitsGive />)
+        val recorded = self.recordBlockContentsInRegion(blkId: blkId, resultContext: resultContext)
+        self.restoreSourceControlRegion(checkpoint: checkpoint)
+        return recorded
+    }
+
+    inout fn recordBlockContentsInRegion(blkId: U64, resultContext: BlockResultContext) -> Result[SourceCompletion, CompileDiagnostic] {
         mut val expectedTerm = 0U64
         mut val permitsGive = false
         match resultContext {

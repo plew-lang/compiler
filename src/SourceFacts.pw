@@ -57,6 +57,15 @@ impl SourceBodyData {
             }
         }
     }
+    inout fn putTransfer(fact: SourceTransferFact) {
+        match self.transferKeys.get(key: fact.statementId) {
+            Optional.Some(v: val index) => { self.transfers.set(i: index, value: fact) }
+            Optional.None => {
+                self.transferKeys[fact.statementId] = self.transfers.count()
+                self.transfers.append(fact)
+            }
+        }
+    }
     inout fn putAggregate(fact: SemanticAggregate) {
         match self.aggregateKeys.get(key: fact.exprId) {
             Optional.Some(v: val index) => { self.aggregates.set(i: index, value: fact) }
@@ -227,7 +236,7 @@ impl SourceFactDirectory {
         self.clearActive(owner: owner)
         if self.measure {
             self.bodiesSealed += 1U64
-            self.rowsSealed += data.operations.count() + data.expressions.count() + data.bindings.count() + data.statements.count() + data.aggregates.count() + data.tries.count() + data.matches.count() + data.closurePlans.count() + data.valueBlocks.count()
+            self.rowsSealed += data.operations.count() + data.expressions.count() + data.bindings.count() + data.statements.count() + data.transfers.count() + data.aggregates.count() + data.tries.count() + data.matches.count() + data.closurePlans.count() + data.valueBlocks.count()
         }
         val payload: Ref[SourceBodyData] = <Ref value=data />
         val reader = self.readers.count()
@@ -543,10 +552,14 @@ impl Comp {
             Optional.None => {}
         }
     }
-    inout fn storeBuildingSemanticStmtCompletion(stmtId: U64, fact: SemanticExpressionCompletion) {
+    inout fn storeBuildingSemanticStmtCompletion(stmtId: U64, fact: SemanticExpressionCompletion) -> Result[(), CompileDiagnostic] {
         self.sourceFacts.activate(owner: fact.owner)
+        // This is the sole statement publication entry. A direct transfer
+        // cannot publish its completion without its selected target.
+        try self.recordSourceTransfer(stmtId: stmtId, owner: fact.owner)
         self.sourceFacts.activeBuilder.data.putStatement(stmtId: stmtId, fact: fact)
         self.sourceFacts.statementOwners[stmtId] = fact.owner
+        return <Result.Ok value=() />
     }
 }
 

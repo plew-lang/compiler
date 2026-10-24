@@ -1,3 +1,4 @@
+use ./Ir only { SourceExitTarget, SourceTransferFact }
 use ./Ir only { DeclarationScopeOrigin }
 use @Std/Core only { Ref }
 use ./Ir only { SemanticTypeRecipe, CallTemplateArgumentRange, CallTemplateTypeArgumentRange, CallTemplateOperandRange, CallTemplateViewRange }
@@ -2444,6 +2445,8 @@ struct SourceBodyData {
     mut val bindingKeys: Dictionary[U64, U64] = [:]
     mut val statements: Array[SemanticExpressionCompletion] = []
     mut val statementKeys: Dictionary[U64, U64] = [:]
+    mut val transfers: Array[SourceTransferFact] = []
+    mut val transferKeys: Dictionary[U64, U64] = [:]
     mut val aggregates: Array[SemanticAggregate] = []
     mut val aggregateKeys: Dictionary[U64, U64] = [:]
     mut val tries: Array[SemanticTry] = []
@@ -2459,9 +2462,21 @@ struct SourceBodyData {
 }
 impl SourceBodyData { factory }
 
+enum SourceControlRegion {
+    Block(blockId: U64, permitsGive: Bool)
+    Loop(statementId: U64)
+    LoopBarrier
+}
+struct SourceControlCheckpoint {
+    val owner: Optional[SemanticCompletionOwner] = <Optional.None />
+    val depth: U64 = 0U64
+}
+impl SourceControlCheckpoint { factory }
+
 struct SourceBodyBuilder {
     mut val data: SourceBodyData
     mut val requested: Bool = false
+    mut val controlRegions: Array[SourceControlRegion] = []
     mut val requiredKeys: Set[U64] = Set.new()
     // Construction progress only; the type remains in the expression row.
     mut val contextualValues: Set[U64] = Set.new()
@@ -2575,6 +2590,15 @@ pub impl PreparedSemanticFacts {
     fn globalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] { return self.payload->globalAddresses.get(key: exprId) }
     fn bindingNeedsCaptureCell(sourceFunction: U64, bindingTarget: U64) -> Bool { return sourceBindingNeedsCaptureCell(closures: self.payload->closurePlans, sourceFunction: sourceFunction, bindingTarget: bindingTarget) }
     fn binding(stmtId: U64) -> Optional[SourceBindingFact] { return readSourceRow(rows: self.payload->bindings, keys: self.payload->bindingKeys, key: stmtId) }
+    fn transfer(stmtId: U64) -> Optional[SourceTransferFact] {
+        match readSourceRow(rows: self.payload->transfers, keys: self.payload->transferKeys, key: stmtId) {
+            Optional.Some(v: val fact) => {
+                if fact.statementId == stmtId && semanticCompletionOwnersEqual(recorded: fact.owner, prepared: self.owner) { return <Optional.Some v=fact /> }
+            }
+            Optional.None => {}
+        }
+        return <Optional.None />
+    }
     fn functionSignature() -> Optional[SourceBodySignature] { return self.payload->signature }
     fn aggregate(ownerFnIdx: U64, exprId: U64) -> Optional[SemanticAggregate] {
         match readSourceRow(rows: self.payload->aggregates, keys: self.payload->aggregateKeys, key: exprId) {
