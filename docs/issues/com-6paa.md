@@ -112,3 +112,32 @@ body receivers use the ordinary complete type equality instead of a parallel
 head/args comparator that erased nested facets. Outer views are normalized once
 at the receiver producer; nested views and structural/function children survive.
 Fresh target checks and final reader negative controls remain required.
+
+### Fixed Primitive Producer Pairing
+
+Fresh9c4f2d77 builds successfully but exposes expected/inferred Bool identity
+inconsistency in Lang's Dictionary loop condition. Strict nominal equality is
+retained. The paired semantic fixed-builtin sites now use langTypeRefAt:
+Check/Match boolean coverage, Infer/Check logical operands and U64 index,
+Verify/Func condition, Resolve/Expr static comparison result,
+Resolve/TypeRecovery boolean coverage, Record synthetic Dictionary U64 buffers,
+and Mono/Ownership I64 discriminant. Minimal clients keep the existing primitive
+atom floor. Unresolved Lower constructors and arbitrary TypeInfo adapters are
+not generalized by this correction. Independent scope review classifies it as
+the planned Action3 primitive-preserving producer/reader migration.
+
+### Receiver and Body Signature Admission
+
+Independent review identified that a caller-supplied receiver or same-function
+foreign BodyInstance could bypass the repaired producer. The common
+bodyReceiverMatchesDeclaration validates the selected declaration's receiver
+pattern under explicit bindings, allowing only the existing one-way newtype
+inheritance boundary. bodyInstanceEnvironment rejects receiver/argument conflicts
+and foreign or missing nominal ownership. finalCallBodyEnvironmentMatches checks
+selected function, canonical receiver and exact callable arguments against the
+retained body environment; completeStaticBodyCallee consumes it before reading
+the signature and finalStaticCalleeIsComplete shares the check. Bodyless calls
+validate their explicit declaration environment without selecting a new proof.
+The registered-owner regression includes wrong/missing receiver, swapped body,
+prepared foreign signature and bodyless-descriptor controls. Fresh verification
+and reviewer follow-up remain pending.

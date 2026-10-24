@@ -528,7 +528,7 @@ pub impl Comp {
         }
         if sawTrue && sawFalse {
             val name = self.kwSpan(kw: "Bool", kwLen: 4U64)
-            return <Result.Ok value=self.typeRefEq(a: type, b: self.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)) />
+            return <Result.Ok value=self.typeRefEq(a: type, b: self.langTypeRefAt(nameStart: name.nameStart, nameLen: name.nameLen, args: [])) />
         }
         return <Result.Ok value=false />
     }

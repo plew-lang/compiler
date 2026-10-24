@@ -146,11 +146,7 @@ pub impl Comp {
             out = self.parametricSelfRef(f: f)
         }
         if out == 0U64 || out >= self.arena.typeCount() { return out }
-        val base: TypeRef = self.arena.typeAt(index: out)
-        if base.viewExtId != 0U64 || base.viewIds.count() != 0U64 {
-            val noViews: Array[U64] = []
-            out = self.typeRefWithViews(ref: out, viewExtId: 0U64, viewIds: noViews)
-        }
+        out = self.typeRefWithoutOuterViews(ref: out)
         if f.extId != 0U64 {
             val selectedView: Array[U64] = [f.extId]
             out = self.typeRefWithViews(ref: out, viewExtId: f.extId, viewIds: selectedView)
@@ -638,6 +634,25 @@ pub impl Comp {
         }
     }
 
+    // Validation consumes the selected declaration and its explicit bindings.
+    // It neither selects a conformance nor recovers a missing nominal owner.
+    inout fn bodyReceiverMatchesDeclaration(function: Func, environment: InstanceEnvironment) -> Bool {
+        if !(function.hasRecv || function.isAssoc) { return true }
+        val receiver = environment.receiverRef
+        if receiver == 0U64 || receiver >= self.arena.typeCount() { return false }
+        val pattern = self.parametricSelfRef(f: function)
+        if pattern == 0U64 || pattern >= self.arena.typeCount() { return false }
+        val declared = self.groundTermInEnvironment(ref: pattern, params: environment.params, values: environment.args, selfRef: receiver)
+        val expected = self.typeRefWithoutOuterViews(ref: declared)
+        val actual = self.typeRefWithoutOuterViews(ref: receiver)
+        if self.typeRefEq(a: expected, b: actual) { return true }
+        // An inherited callable belongs to the underlying declaration. This
+        // does not equate two distinct newtypes that happen to share storage.
+        if self.fieldStorageTypeRef(receiverRef: expected) != expected { return false }
+        val storage = self.fieldStorageTypeRef(receiverRef: actual)
+        return storage != actual && self.typeRefEq(a: expected, b: self.typeRefWithoutOuterViews(ref: storage))
+    }
+
     inout fn bodyInstanceEnvironment(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
         mut val params: Array[Bind] = []
         mut val values: Array[U64] = []
@@ -670,6 +685,9 @@ pub impl Comp {
                 while binding < receiverBindings.binds.count() {
                     val matched = receiverBindings.binds[binding]
                     if (matched.paramId != 0U64 && matched.paramId == parameter.paramId) || (matched.paramId == 0U64 && matched.binder == i) {
+                        if value != 0U64 && !self.typeRefEq(a: value, b: matched.term) {
+                            return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "internal error: body receiver conflicts with its recorded callable arguments") />
+                        }
                         value = matched.term
                     }
                     binding += 1U64
@@ -716,7 +734,12 @@ pub impl Comp {
         }
         val environment = <InstanceEnvironment params=params args=values receiverRef=canonicalRecv proof=proof />
         if fnIdx >= self.arena.functionCount() { return <Result.Ok value=environment />}
-        return <Result.Ok value=(try self.withLexicalSelfBinding(f: self.arena.functionAt(index: fnIdx), environment: environment)) />
+        val function = self.arena.functionAt(index: fnIdx)
+        val complete = try self.withLexicalSelfBinding(f: function, environment: environment)
+        if !self.bodyReceiverMatchesDeclaration(function: function, environment: complete) {
+            return <Result.Err error=self.diagnosticAt(offset: function.nameStart, msg: "internal error: body receiver does not match its selected declaration") />
+        }
+        return <Result.Ok value=complete />
     }
 
     // The lexical trait Self is a ParamId, including below nominal type
@@ -3058,6 +3081,26 @@ pub impl Comp {
         return <Result.Ok value=carrierRef />
     }
 
+    inout fn finalCallBodyEnvironmentMatches(callee: U64, receiver: U64, arguments: Array[U64], bodyId: U64) -> Bool {
+        if callee >= self.arena.functionCount() || bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() { return false }
+        val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        if instance.fnIdx != callee { return false }
+        val selectedFunction = self.arena.functionAt(index: callee)
+        if (selectedFunction.hasRecv || selectedFunction.isAssoc) && receiver == 0U64 { return false }
+        val canonical = self.canonicalBodyReceiverRef(fnIdx: callee, recvInstRef: receiver)
+        if !self.sameBodyReceiver(a: canonical, b: instance.environment.receiverRef) { return false }
+        val function = self.arena.functionAt(index: callee)
+        if arguments.count() != function.typeParams.count() { return false }
+        val stored = self.signatureTypeArguments(f: function, environment: instance.environment)
+        if stored.count() != arguments.count() { return false }
+        mut val index = 0U64
+        while index < stored.count() {
+            if !self.typeRefEq(a: stored[index], b: arguments[index]) { return false }
+            index += 1U64
+        }
+        return self.bodyReceiverMatchesDeclaration(function: function, environment: instance.environment)
+    }
+
     inout fn completeStaticBodyCallee(exprId: U64, callee: U64, recvRef: U64, calleeArgs: Array[U64], argumentSources: Array[CallTemplateArgument] = [], resultRef: U64 = 0U64, resultProjection: CallResultProjection = <CallResultProjection.Identity />, siteIsStmt: Bool = false, slot: U64 = 0U64, calleeBodyId: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         val i: U64 = (try self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
         // An executable body already owns its closed ABI signature. Consume
@@ -3069,6 +3112,9 @@ pub impl Comp {
             }
             if self.arena.bodyInstanceAt(index: calleeBodyId - 1U64).fnIdx != callee {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: final call body does not belong to its callee") />
+            }
+            if !self.finalCallBodyEnvironmentMatches(callee: callee, receiver: recvRef, arguments: calleeArgs, bodyId: calleeBodyId) {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: final call body does not match its selected receiver or callable arguments") />
             }
             val prepared = self.arena.bodySignature(bodyId: calleeBodyId)
             if !prepared.ready {
@@ -4265,6 +4311,14 @@ pub impl Comp {
         }
         if (f.hasRet || f.isAsync) && e.resultTypeRef == 0U64 {
             return <Result.Ok value=false />
+        }
+        if e.calleeBodyId != 0U64 {
+            if !self.arena.bodySignature(bodyId: e.calleeBodyId).ready || !self.finalCallBodyEnvironmentMatches(callee: e.callee, receiver: e.recvTypeRef, arguments: self.copyFinalCalleeTypeArgs(args: e.calleeTypeArgs), bodyId: e.calleeBodyId) {
+                return <Result.Ok value=false />
+            }
+        } else if f.hasRecv || f.isAssoc {
+            val environment = try self.withLexicalSelfBinding(f: f, environment: <InstanceEnvironment receiverRef=e.recvTypeRef params=self.copyFuncBinds(binds: f.typeParams) args=self.copyFinalCalleeTypeArgs(args: e.calleeTypeArgs) />)
+            if !self.bodyReceiverMatchesDeclaration(function: f, environment: environment) { return <Result.Ok value=false /> }
         }
         return <Result.Ok value=true />
     }

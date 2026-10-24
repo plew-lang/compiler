@@ -210,7 +210,7 @@ pub impl Comp {
         if bs.nameLen == 0U64 {
             return <Result.Ok value=() />
         }
-        val boolRef: U64 = self.simpleTypeRef(nameStart: bs.nameStart, nameLen: bs.nameLen)
+        val boolRef: U64 = self.langTypeRefAt(nameStart: bs.nameStart, nameLen: bs.nameLen, args: [])
         try self.tcCheckValue(expectedRef: boolRef, valueExpr: cond, pos: "condition")
         return <Result.Ok value=() />
     }

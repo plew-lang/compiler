@@ -243,7 +243,7 @@ pub impl Comp {
         if op == opAnd() || op == opOr() {
             val bs: Bind = self.kwSpan(kw: "Bool", kwLen: 4U64)
             if bs.nameLen != 0U64 {
-                val boolRef: U64 = self.simpleTypeRef(nameStart: bs.nameStart, nameLen: bs.nameLen)
+                val boolRef: U64 = self.langTypeRefAt(nameStart: bs.nameStart, nameLen: bs.nameLen, args: [])
                 try self.tcCheckValue(expectedRef: boolRef, valueExpr: lhs, pos: "logical")
                 try self.tcCheckValue(expectedRef: boolRef, valueExpr: rhs, pos: "logical")
             }
@@ -385,7 +385,7 @@ pub impl Comp {
             if u64.nameLen == 0U64 {
                 return <Result.Ok value=() />
             }
-            try self.tcCheckValue(expectedRef: self.simpleTypeRef(nameStart: u64.nameStart, nameLen: u64.nameLen), valueExpr: index, pos: "index")
+            try self.tcCheckValue(expectedRef: self.langTypeRefAt(nameStart: u64.nameStart, nameLen: u64.nameLen, args: []), valueExpr: index, pos: "index")
             return <Result.Ok value=() />
         }
         val br: U64 = (try self.inferType(id: base))

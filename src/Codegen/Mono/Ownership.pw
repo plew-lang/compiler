@@ -6,7 +6,7 @@ pub impl Comp {
     inout fn prepareDiscriminantType() -> Result[(), CompileDiagnostic] {
         self.arena.loweringDiscriminantType = 0U64
         val name = self.internBytes(s: "I64")
-        val term = self.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+        val term = self.langTypeRefAt(nameStart: name.nameStart, nameLen: name.nameLen, args: [])
         match (try self.arcClassOfRef(ref: term)) {
             ArcClass.Scalar => {
                 self.arena.loweringDiscriminantType = term

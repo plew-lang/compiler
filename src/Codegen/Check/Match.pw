@@ -50,7 +50,7 @@ pub impl Comp {
         val term = self.semanticExprTerm(exprId: scrut)
         val enumIndex = self.enumIndexForType(ref: self.lexicalLayoutReceiver(receiverTerm: term))
         val boolName = self.kwSpan(kw: "Bool", kwLen: 4U64)
-        val isBool = self.typeRefEq(a: term, b: self.simpleTypeRef(nameStart: boolName.nameStart, nameLen: boolName.nameLen))
+        val isBool = self.typeRefEq(a: term, b: self.langTypeRefAt(nameStart: boolName.nameStart, nameLen: boolName.nameLen, args: []))
         mut val positiveIntegers: Set[U64] = Set.new()
         mut val negativeIntegers: Set[U64] = Set.new()
         mut val strings: Array[Array[U8]] = []

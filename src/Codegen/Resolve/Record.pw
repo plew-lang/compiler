@@ -44,7 +44,7 @@ pub impl Comp {
         val emptyKeys: U64 = (try self.synthBufferNew(elemRef: ct.args[0]))
         val emptyVals: U64 = (try self.synthBufferNew(elemRef: ct.args[1]))
         val u64N: Bind = self.internBytes(s: "U64")
-        val u64Ref: U64 = self.simpleTypeRef(nameStart: u64N.nameStart, nameLen: u64N.nameLen)
+        val u64Ref: U64 = self.langTypeRefAt(nameStart: u64N.nameStart, nameLen: u64N.nameLen, args: [])
         val emptyHashes: U64 = (try self.synthBufferNew(elemRef: u64Ref))
         val emptyBuckets: U64 = (try self.synthBufferNew(elemRef: u64Ref))
         val zero: U64 = self.pushExpr(e: <Expr.Int value=0 offset=0 isBool=false tyStart=u64N.nameStart tyLen=u64N.nameLen isNeg=false />)

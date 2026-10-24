@@ -1481,7 +1481,7 @@ pub impl Comp {
         if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
             val boolName: Bind = self.kwSpan(kw: "Bool", kwLen: 4U64)
             if boolName.nameLen == 0U64 { return <Result.Ok value=0U64 />}
-            return <Result.Ok value=self.simpleTypeRef(nameStart: boolName.nameStart, nameLen: boolName.nameLen) />
+            return <Result.Ok value=self.langTypeRefAt(nameStart: boolName.nameStart, nameLen: boolName.nameLen, args: []) />
         }
         return <Result.Ok value=(try self.staticRequirementResultType(resolution: resolution)) />
     }

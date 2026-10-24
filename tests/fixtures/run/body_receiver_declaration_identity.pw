@@ -1,7 +1,7 @@
 use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp }
-use /Ir only { TypeRef, StructDef, Func, InstanceEnvironment }
+use /Ir only { TypeRef, StructDef, Func, InstanceEnvironment, CallResolution }
 fn main() {
     mut val compiler = <Comp />
     compiler.arena.reserveTypeSentinel()
@@ -30,6 +30,20 @@ fn main() {
     val suppliedEnvironment = compiler.bodyInstanceEnvironment(fnIdx: 0U64, args: [], recvInstRef: first).unwrap()
     val firstKey = compiler.internBodyInstance(fnIdx: 0U64, environment: defaultEnvironment)
     assert(firstKey == compiler.internBodyInstance(fnIdx: 0U64, environment: suppliedEnvironment))
-    assert(firstKey != compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=second />))
+    val otherKey = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=second />)
+    assert(firstKey != otherKey)
+    assert(compiler.bodyInstanceEnvironment(fnIdx: 0U64, args: [], recvInstRef: second).isErr())
+    assert(compiler.bodyInstanceEnvironment(fnIdx: 0U64, args: [], recvInstRef: unowned).isErr())
+    assert(compiler.finalCallBodyEnvironmentMatches(callee: 0U64, receiver: first, arguments: [], bodyId: firstKey))
+    assert(!compiler.finalCallBodyEnvironmentMatches(callee: 0U64, receiver: first, arguments: [], bodyId: otherKey))
+    assert(!compiler.finalCallBodyEnvironmentMatches(callee: 0U64, receiver: unowned, arguments: [], bodyId: firstKey))
+    assert(!compiler.finalCallBodyEnvironmentMatches(callee: 0U64, receiver: 0U64, arguments: [], bodyId: firstKey))
+    compiler.arena.setBodySignature(bodyId: firstKey, parameters: [], passings: [], result: 0U64, receiverType: first)
+    compiler.arena.setBodySignature(bodyId: otherKey, parameters: [], passings: [], result: 0U64, receiverType: second)
+    assert(compiler.finalStaticCalleeIsComplete(e: <CallResolution bodyId=firstKey exprId=0U64 callee=0U64 recvTypeRef=first calleeBodyId=firstKey />).unwrap())
+    assert(!compiler.finalStaticCalleeIsComplete(e: <CallResolution bodyId=firstKey exprId=0U64 callee=0U64 recvTypeRef=first calleeBodyId=otherKey />).unwrap())
+    assert(!compiler.finalStaticCalleeIsComplete(e: <CallResolution bodyId=firstKey exprId=0U64 callee=0U64 recvTypeRef=unowned calleeBodyId=firstKey />).unwrap())
+    assert(!compiler.finalStaticCalleeIsComplete(e: <CallResolution bodyId=firstKey exprId=0U64 callee=0U64 recvTypeRef=second />).unwrap())
+    assert(!compiler.finalStaticCalleeIsComplete(e: <CallResolution bodyId=firstKey exprId=0U64 callee=0U64 recvTypeRef=unowned />).unwrap())
     print("body-receiver-declaration-identity")
 }
