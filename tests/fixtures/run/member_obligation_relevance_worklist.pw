@@ -41,12 +41,7 @@ fn providedAlias(compiler: inout Comp, source: U64, name: String) -> U64 {
 
 fn checkGraph() {
     mut val compiler = <Comp />
-    val source = "trait Stepper {{ fn step() -> I64 }} struct Token {{}} impl Token as Stepper {{ fn step() -> I64 {{ return 0I64 }} }} trait Marker {{}} impl Token as Marker {{}}\n"
-        + "fn root() -> I64 {{ return chain1() }}\nfn chain1() -> I64 {{ return chain2() }}\nfn chain2() -> I64 {{ return chain3() }}\nfn chain3() -> I64 {{ return chain4() }}\nfn chain4() -> I64 {{ return chain5() }}\nfn chain5() -> I64 {{ return chain6() }}\nfn chain6() -> I64 {{ return chain7() }}\nfn chain7() -> I64 {{ return chain8() }}\nfn chain8() -> I64 {{ return leafSeed(value: <Token />) }}\n"
-        + "fn diamond() -> I64 {{ val ignored = left() return right() }}\nfn left() -> I64 {{ return chain8() }}\nfn right() -> I64 {{ return chain8() }}\n"
-        + "fn cycleA() -> I64 {{ return cycleB() }}\nfn cycleB() -> I64 {{ val ignored = cycleA() return chain8() }}\n"
-        + "fn coldA() -> I64 {{ return coldB() }}\nfn coldB() -> I64 {{ return coldA() }}\nfn plain() -> I64 {{ return 1I64 }}\n"
-        + "fn conversion() -> any Marker {{ return <Token /> }}\nfn leafSeed[T](value: T) -> I64 where T: Stepper {{ return value.step() }}\n"
+    val source = "trait Stepper {{ fn step() -> I64 }} struct Token {{}} impl Token as Stepper {{ fn step() -> I64 {{ return 0I64 }} }} trait Marker {{}} impl Token as Marker {{}}\nfn root() -> I64 {{ return chain1() }}\nfn chain1() -> I64 {{ return chain2() }}\nfn chain2() -> I64 {{ return chain3() }}\nfn chain3() -> I64 {{ return chain4() }}\nfn chain4() -> I64 {{ return chain5() }}\nfn chain5() -> I64 {{ return chain6() }}\nfn chain6() -> I64 {{ return chain7() }}\nfn chain7() -> I64 {{ return chain8() }}\nfn chain8() -> I64 {{ return leafSeed(value: <Token />) }}\nfn diamond() -> I64 {{ val ignored = left() return right() }}\nfn left() -> I64 {{ return chain8() }}\nfn right() -> I64 {{ return chain8() }}\nfn cycleA() -> I64 {{ return cycleB() }}\nfn cycleB() -> I64 {{ val ignored = cycleA() return chain8() }}\nfn coldA() -> I64 {{ return coldB() }}\nfn coldB() -> I64 {{ return coldA() }}\nfn plain() -> I64 {{ return 1I64 }}\nfn conversion() -> any Marker {{ return <Token /> }}\nfn leafSeed[T](value: T) -> I64 where T: Stepper {{ return value.step() }}\n"
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="relevance-graph.pw" text=source />, sources: <SourceAccess stdRoot=[] />).unwrap()
     prepareBodies(compiler: inout compiler)
     val seed = owner(compiler: inout compiler, name: "leafSeed")
