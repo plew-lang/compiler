@@ -24,6 +24,15 @@ fn main() {
                 if compiler.checkFinalInterfaceEvidence(resolution: replaced(row: row, body: row.bodyId, evidence: 0U64)).isOk() { panic("missing interface evidence was reconstructed") }
                 if compiler.checkFinalInterfaceEvidence(resolution: replaced(row: row, body: row.bodyId + 1U64, evidence: row.interfaceEvidence)).isOk() { panic("foreign body borrowed interface evidence") }
                 if compiler.checkFinalInterfaceEvidence(resolution: replaced(row: row, body: row.bodyId, evidence: row.interfaceEvidence + 100U64)).isOk() { panic("nonexistent interface evidence was accepted") }
+                match row.target {
+                    CallTarget.ExistentialRequirement(traitIdx: val trait, slot: val slot) => {
+                        val wrongTrait = <CallResolution bodyId=row.bodyId siteKey=row.siteKey exprId=row.exprId callee=row.callee recvTypeRef=row.recvTypeRef target=<CallTarget.ExistentialRequirement traitIdx=trait + 1U64 slot=slot /> interfaceEvidence=row.interfaceEvidence />
+                        val wrongSlot = <CallResolution bodyId=row.bodyId siteKey=row.siteKey exprId=row.exprId callee=row.callee recvTypeRef=row.recvTypeRef target=<CallTarget.ExistentialRequirement traitIdx=trait slot=slot + 1U64 /> interfaceEvidence=row.interfaceEvidence />
+                        val wrongReceiver = <CallResolution bodyId=row.bodyId siteKey=row.siteKey exprId=row.exprId callee=row.callee recvTypeRef=0U64 target=row.target interfaceEvidence=row.interfaceEvidence />
+                        if compiler.checkFinalInterfaceEvidence(resolution: wrongTrait).isOk() || compiler.checkFinalInterfaceEvidence(resolution: wrongSlot).isOk() || compiler.checkFinalInterfaceEvidence(resolution: wrongReceiver).isOk() { panic("interface descriptor replaced receiver or requirement identity") }
+                    }
+                    _ => {}
+                }
                 rows.append(row)
             }
             _ => {}

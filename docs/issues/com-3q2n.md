@@ -37,3 +37,40 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Current increment
+
+The closure audit reproduced two internal admission gaps: a same-ABI, zero-capture
+descriptor from another declaration reached actual canonical Mid, and a foreign
+cursor environment could publish a signature under a different registered body.
+These are damaged internal descriptors, not established ordinary-source
+miscompilations. Baselines and the corrected embedded-compiler preflight remain
+separate in `tmp/phase3c-descriptors/`.
+
+`20c5b9b8` adds producer key/origin/environment admission and the common
+`requirePreparedClosureInstance` reader for final scanning, MakeClosure Mid and
+LLVM declaration. It reads the checked declaration and existing body type results;
+it does not select another declaration or normalize projections. The paired
+`closure_descriptor_identity` and `closure_instance_environment` preflight passed.
+The follow-up increment also verifies the complete environment-drop shape.
+
+The dynamic-call audit found that field/binding selection needed the same source
+identity check even when both targets have one function ABI. The current increment
+adds a shared `checkFinalClosureCallEvidence` at publication, Mid signature admission
+and LLVM preflight, and compares a field receiver's semantic type with its actual
+Mid operand. `dynamic_closure_descriptor_identity` exercises actual canonical Mid
+with a fully copied valid instance and a changed target. Its never-green setup is
+being checked before a fresh build; no fresh-success claim is made here.
+
+Interface publication/reader audit: source recording retains the interface root;
+`instantiateInterfaceCall` binds it to the registered environment/source owner;
+`checkFinalInterfaceEvidence`, `midSelectedSignature` and
+`midCanonicalExistentialCallPreflight` retain body/site/receiver/trait/slot. Existing
+proof admission stays B4's responsibility. Include `interface_final_evidence`,
+`existential_selected_source_tables`, `mid_dynamic_call_signatures` and the two
+`namespace_existential_*identity` module controls in final scoped verification.
+
+The independent intermediate review found no design blocker. It requested the
+remaining drop-signature shape checks; they are included in the current increment.
+Final fresh verification, evidence preservation and independent completion review
+are still required. No runtime model, ABI, parent completion or final gate changes.

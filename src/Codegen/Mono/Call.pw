@@ -1435,6 +1435,7 @@ pub impl Comp {
         val evaluationArguments = self.prepareFinalCalleeArguments(arguments: arguments, parameterTypes: parameterTypeRefs, sourceTypes: argumentSourceTypes)
         val row = <CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee receiverPassing=receiverPassing recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target interfaceEvidence=interfaceEvidence />
         try self.checkFinalInterfaceEvidence(resolution: row)
+        try self.checkFinalClosureCallEvidence(resolution: row)
         if !self.arena.publishFinalCallee(row: row, typeArguments: calleeTypeArgs, parameterTypes: parameterTypeRefs, conversions: argumentConversions, passings: argumentPassings, arguments: <Optional.Some v=evaluationArguments />) {
             return <Result.Err error=self.diagnosticAt(offset: siteKey.originStart, msg: "final call occurrence is already published") />
         }
@@ -5158,7 +5159,7 @@ pub impl Comp {
 
     // Concrete descriptor admission reads the checked source and already
     // published instance terms. It never performs substitution or selection.
-    inout fn closureInstanceTypeMatches(bodyId: U64, source: U64, concrete: U64) -> Bool {
+    inout fn publishedBodyTypeMatches(bodyId: U64, source: U64, concrete: U64) -> Bool {
         if source >= self.arena.typeCount() || concrete >= self.arena.typeCount() { return false }
         if !self.arena.typeIsClosed(ref: concrete) { return false }
         if self.arena.typeIsClosed(ref: source) { return self.typeRefEq(a: source, b: concrete) }
@@ -5177,7 +5178,7 @@ pub impl Comp {
         }
         val closure = try self.preparedSemanticClosureAt(index: frozen.declarationIndex - 1U64)
         val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
-        if instance.fnIdx != closure.bodyKey || !frozen.templatesClosed || frozen.functionTypeTerm == 0U64 || !self.closureInstanceTypeMatches(bodyId: bodyId, source: closure.functionTypeTerm, concrete: frozen.functionTypeTerm) || frozen.captures.count() != closure.captures.count() {
+        if instance.fnIdx != closure.bodyKey || !frozen.templatesClosed || frozen.functionTypeTerm == 0U64 || !self.publishedBodyTypeMatches(bodyId: bodyId, source: closure.functionTypeTerm, concrete: frozen.functionTypeTerm) || frozen.captures.count() != closure.captures.count() {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure instance does not match its checked declaration") />
         }
         val signature = self.arena.typeAt(index: frozen.functionTypeTerm)
@@ -5191,8 +5192,12 @@ pub impl Comp {
         mut val index = 0U64
         while index < closure.parameters.count() {
             val parameter = closure.parameters[index]
-            val expected = if parameter.isInout { give <CallArgumentPassing.Inout /> } else if parameter.isMove { give <CallArgumentPassing.Move /> } else { give <CallArgumentPassing.Borrow /> }
-            if !self.closureInstanceTypeMatches(bodyId: bodyId, source: parameter.typeTerm, concrete: body.parameterTypes[index]) || !self.typeRefEq(a: signature.args[index + 1U64], b: body.parameterTypes[index]) || !self.sameCallArgumentPassings(a: [expected], b: [body.parameterPassings[index]]) {
+            val passingMatches = match body.parameterPassings[index] {
+                CallArgumentPassing.Inout => parameter.isInout
+                CallArgumentPassing.Move => !parameter.isInout && parameter.isMove
+                CallArgumentPassing.Borrow => !parameter.isInout && !parameter.isMove
+            }
+            if !self.publishedBodyTypeMatches(bodyId: bodyId, source: parameter.typeTerm, concrete: body.parameterTypes[index]) || !self.typeRefEq(a: signature.args[index + 1U64], b: body.parameterTypes[index]) || !passingMatches {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure parameter does not match its checked declaration") />
             }
             index += 1U64
@@ -5203,7 +5208,7 @@ pub impl Comp {
             val capture = frozen.captures[index]
             val sourceCell = match source.mode { SemanticClosureCaptureMode.CellBorrow => true _ => false }
             val concreteCell = match capture.mode { SemanticClosureCaptureMode.CellBorrow => true _ => false }
-            if capture.bindingTarget != source.bindingTarget || capture.nameLen != source.nameLen || sourceCell != concreteCell || capture.typeTerm == 0U64 || !self.closureInstanceTypeMatches(bodyId: bodyId, source: source.typeTerm, concrete: capture.typeTerm) {
+            if capture.bindingTarget != source.bindingTarget || capture.nameLen != source.nameLen || sourceCell != concreteCell || capture.typeTerm == 0U64 || !self.publishedBodyTypeMatches(bodyId: bodyId, source: source.typeTerm, concrete: capture.typeTerm) {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure capture does not match its checked declaration") />
             }
             index += 1U64
@@ -5221,18 +5226,61 @@ pub impl Comp {
             }
             val dropInstance = self.arena.bodyInstanceAt(index: drop - 1U64)
             val dropSignature = self.arena.bodySignature(bodyId: drop)
-            if dropInstance.fnIdx != instance.fnIdx || !self.sameInstanceEnvironment(a: dropInstance.environment, b: instance.environment) || !dropSignature.ready || dropSignature.parameterTypes.count() != frozen.captures.count() || dropSignature.parameterPassings.count() != frozen.captures.count() || dropSignature.resultType != 0U64 {
+            if dropInstance.fnIdx != instance.fnIdx || !self.sameInstanceEnvironment(a: dropInstance.environment, b: instance.environment) || !dropSignature.ready || dropSignature.parameterTypes.count() != frozen.captures.count() || dropSignature.parameterPassings.count() != frozen.captures.count() || dropSignature.resultType != 0U64 || dropSignature.bodyResultType != 0U64 || dropSignature.receiverType != 0U64 || dropSignature.closureSignatureId != 0U64 || !self.sameCallReceiverPassing(a: dropSignature.receiverPassing, b: <CallReceiverPassing.None />) {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure environment drop has the wrong signature") />
             }
             index = 0U64
             while index < frozen.captures.count() {
-                if !self.typeRefEq(a: dropSignature.parameterTypes[index], b: frozen.captures[index].typeTerm) || !self.sameCallArgumentPassings(a: [dropSignature.parameterPassings[index]], b: [<CallArgumentPassing.Move />]) {
+                val consumes = match dropSignature.parameterPassings[index] { CallArgumentPassing.Move => true _ => false }
+                if !self.typeRefEq(a: dropSignature.parameterTypes[index], b: frozen.captures[index].typeTerm) || !consumes {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure environment drop capture is inconsistent") />
                 }
                 index += 1U64
             }
         }
         return <Result.Ok value=closure />
+    }
+
+    // A closure call keeps the source binding/field selection even when a
+    // different target would have exactly the same function ABI.
+    inout fn checkFinalClosureCallEvidence(resolution: CallResolution) -> Result[(), CompileDiagnostic] {
+        match resolution.target {
+            CallTarget.ClosureLocal(bindingDeclStart: _, fnTypeRef: _) | CallTarget.ClosureField(fieldIndex: _, fnTypeRef: _) => {}
+            _ => { return <Result.Ok value=() /> }
+        }
+        val index = self.callTemplateIndex(siteKey: resolution.siteKey)
+        if index >= self.callTemplateLocations.count() {
+            return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "internal error: dynamic closure call has no source operation") />
+        }
+        val location = self.callTemplateLocations[index]
+        val global: Optional[U64] = match location.owner { SemanticCompletionOwner.Global(target: val target) => <Optional.Some v=target /> _ => <Optional.None /> }
+        if !semanticCompletionOwnersEqual(recorded: location.owner, prepared: (try self.bodySourceOwner(bodyId: resolution.bodyId, globalInitializerTarget: global))) || !(try self.semanticCompletionOwnerPrepared(owner: location.owner)) {
+            return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "internal error: dynamic closure call belongs to another source owner") />
+        }
+        val template = self.callTemplateAt(index: index)
+        mut val matched = false
+        match template.kind {
+            CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
+                match target {
+                    DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: val binding, fnTypeTerm: val term) => {
+                        match resolution.target {
+                            CallTarget.ClosureLocal(bindingDeclStart: val actual, fnTypeRef: val ref) => { matched = binding == actual && self.publishedBodyTypeMatches(bodyId: resolution.bodyId, source: term, concrete: ref) }
+                            _ => {}
+                        }
+                    }
+                    DynamicCallTemplateTarget.ClosureField(fieldIndex: val field, fnTypeTerm: val term) => {
+                        match resolution.target {
+                            CallTarget.ClosureField(fieldIndex: val actual, fnTypeRef: val ref) => { matched = field == actual && self.publishedBodyTypeMatches(bodyId: resolution.bodyId, source: term, concrete: ref) }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        if !matched { return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "internal error: dynamic closure call differs from its checked source selection") /> }
+        return <Result.Ok value=() />
     }
 
     // Finalization freezes the closure ABI under the same lexical instance

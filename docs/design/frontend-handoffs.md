@@ -325,7 +325,20 @@ Closures retain their own completed signature and capture/body identity; a reuse
 expression ID is not a shared concrete ABI. Capture discovery visits values,
 places, writes, and calls using lexical binding IDs. Globals are not captures;
 shadowing cannot redirect a saved capture. Grounded capture metadata belongs to
-the body instance, not a second Mono cache of inferred truth.
+the body instance, not a second Mono cache of inferred truth. Descriptor
+publication verifies the registered callable origin, declaration key and lexical
+environment before writing instance facts. Shared admission at final scanning,
+Mid construction and LLVM declaration compares the checked source signature and
+capture identities with the already published body type results, including the
+owned environment-drop instance. A same-ABI descriptor from another declaration
+or generic instance is not interchangeable.
+
+Dynamic closure calls retain the selected lexical binding or field index as well
+as the complete function type. Publication, Mid and LLVM compare those identities
+with the checked source operation under its retained source owner. Closed source
+terms are their own authority; open terms require the matching published body type
+result. A closure-field receiver also matches the actual Mid operand's semantic
+type. These readers do not select another member or normalize a projection.
 
 ## 8. Implicit Calls and Reachability
 

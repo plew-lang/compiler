@@ -1222,6 +1222,15 @@ pub fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, local
         }
         return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> />
     }
+    match selected.target {
+        CallTarget.ClosureField(fieldIndex: _, fnTypeRef: _) => {
+            val concrete = c.mid.callReceivers[receiver - 1U64]
+            if concrete.tag != 2U64 || !c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: concrete.operand), b: selected.recvTypeRef) {
+                return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> />
+            }
+        }
+        _ => {}
+    }
     val argumentStart: U64 = c.mid.callArguments.count()
     val conversionStatementStart: U64 = c.mid.statements.count()
     mut val argumentI: U64 = 0U64
@@ -1409,6 +1418,7 @@ enum MidSelectedSignature {
 }
 
 fn midSelectedSignature(c: inout Comp, selected: CallResolution) -> MidSelectedSignature {
+    if c.checkFinalClosureCallEvidence(resolution: selected).isErr() { return <MidSelectedSignature.Invalid /> }
     mut val functionType: U64 = 0U64
     mut val hasReceiver: Bool = false
     match selected.target {

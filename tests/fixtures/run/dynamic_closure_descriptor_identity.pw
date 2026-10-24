@@ -1,0 +1,112 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontend }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallResolution, CallTarget, CallSiteKey, ValueConversionProof, FinalReturnResolution }
+use /Mid only { MidInstantiateError, instantiateCanonicalMidBody }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
+
+fn checkReplacement(compiler: Comp, row: CallResolution, target: CallTarget, valid: Bool) {
+    mut val copy = compiler
+    val instance = copy.arena.bodyInstanceAt(index: row.bodyId - 1U64)
+    val body = copy.arena.registerBodyInstance(instance)
+    val signature = copy.arena.bodySignature(bodyId: row.bodyId)
+    copy.arena.setBodySignature(bodyId: body, parameters: signature.parameterTypes, passings: signature.parameterPassings, result: signature.resultType)
+    // Keep the whole valid instance context; only the selected target changes.
+    for term in 1U64..<copy.arena.typeCount() {
+        val fact = copy.arena.bodyTypeTermResult(bodyId: row.bodyId, typeTerm: term)
+        if fact.bodyId != 0U64 { copy.arena.setBodyTypeTermResult(bodyId: body, typeTerm: term, resultType: fact.resultType) }
+    }
+    for recipe in 1U64..<(copy.arena.semanticTypeRecipes.count() + 1U64) {
+        val fact = copy.arena.bodyTypeResult(bodyId: row.bodyId, sourceKind: 1U64, sourceId: recipe)
+        if fact.bodyId != 0U64 { copy.arena.setBodyTypeRecipeResult(bodyId: body, recipeId: recipe, resultType: fact.resultType) }
+    }
+    for result in compiler.arena.finalReturns {
+        if result.bodyId == row.bodyId { copy.putFinalReturn(fact: <FinalReturnResolution bodyId=body exprId=result.exprId targetTypeRef=result.targetTypeRef conversion=result.conversion />) }
+    }
+    mut val conversions: Array[ValueConversionProof] = []
+    for proof in copy.copyFinalCalleeConversions(conversions: row.argumentConversions) { conversions.append(copy.thawValueConversionProof(id: proof)) }
+    mut val arguments = copy.arena.beginFinalCallArguments()
+    for index in 0U64..<row.arguments.len { arguments = copy.arena.appendFinalCallArgument(arguments: arguments, argument: copy.arena.finalCalleeArgumentAt(arguments: row.arguments, index: index)) }
+    val replacement = <CallResolution bodyId=body siteKey=row.siteKey exprId=row.exprId siteIsStmt=row.siteIsStmt slot=row.slot callee=row.callee receiverPassing=row.receiverPassing recvTypeRef=row.recvTypeRef resultTypeRef=row.resultTypeRef resultProjection=row.resultProjection target=target />
+    assert(copy.arena.publishFinalCallee(row: replacement, parameterTypes: copy.copyFinalCalleeParameterTypes(types: row.parameterTypeRefs), conversions: conversions, passings: copy.copyFinalCalleeArgumentPassings(passings: row.argumentPassings), arguments: <Optional.Some v=arguments />))
+    mut val templates = <MidFunctionTemplates />
+    val source = templates.body(c: inout copy, function: instance.fnIdx)
+    match source.error { MidBuildError.None => {} _ => { panic("dynamic template failed") } }
+    match instantiateCanonicalMidBody(c: inout copy, body: source.canonical, bodyId: body).error {
+        MidInstantiateError.None => { if !valid { panic("foreign dynamic selection reached executable Mid") } }
+        MidInstantiateError.MissingReturnResolution => { if valid { panic("copied dynamic instance missing return") } }
+        MidInstantiateError.CallResolutionPassing => { if valid { panic("valid dynamic signature rejected") } }
+        _ => { if valid { panic("valid copied dynamic instance failed") } }
+    }
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "struct Left {{}} struct Right {{}} struct Handler[T] {{ val first: fn(value: T) -> T val second: fn(value: T) -> T }} fn field[T](handler: Handler[T], value: T) -> T {{ return handler.first(value: value) }} fn local[T](first: fn(value: T) -> T, second: fn(value: T) -> T, value: T) -> T {{ return first(value: value) }} fn main() {{ val left = fn(value: Left) -> Left {{ return value }} val right = fn(value: Right) -> Right {{ return value }} val a = field(handler: <Handler[Left] first=left second=left />, value: <Left />) val b = field(handler: <Handler[Right] first=right second=right />, value: <Right />) val c = local(first: left, second: left, value: <Left />) val d = local(first: right, second: right, value: <Right />) }}"
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text path="dynamic-descriptors.pw" text=source />, sources: <SourceAccess />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+    mut val rows: Array[CallResolution] = []
+    mut val fields = 0U64
+    mut val locals = 0U64
+    for index in 0U64..<compiler.arena.finalCalleeCount() {
+        val row = compiler.arena.finalCalleeAt(index: index)
+        match row.target {
+            CallTarget.ClosureField(fieldIndex: val field, fnTypeRef: val ref) => {
+                checkReplacement(compiler: compiler, row: row, target: row.target, valid: true)
+                checkReplacement(compiler: compiler, row: row, target: <CallTarget.ClosureField fieldIndex=field + 1U64 fnTypeRef=ref />, valid: false)
+                rows.append(row)
+                fields += 1U64
+            }
+            CallTarget.ClosureLocal(bindingDeclStart: val binding, fnTypeRef: val ref) => {
+                val function = compiler.arena.functionAt(index: compiler.arena.bodyInstanceAt(index: row.bodyId - 1U64).fnIdx)
+                val other = compiler.funcParamAt(params: function.params, index: 1U64).nameStart
+                assert(other != binding)
+                checkReplacement(compiler: compiler, row: row, target: row.target, valid: true)
+                checkReplacement(compiler: compiler, row: row, target: <CallTarget.ClosureLocal bindingDeclStart=other fnTypeRef=ref />, valid: false)
+                rows.append(row)
+                locals += 1U64
+            }
+            _ => {}
+        }
+    }
+    assert(fields == 2U64 && locals == 2U64)
+    mut val instances = 0U64
+    for row in rows {
+        val missing = <CallResolution bodyId=row.bodyId siteKey=<CallSiteKey /> exprId=row.exprId callee=row.callee target=row.target />
+        assert(compiler.checkFinalClosureCallEvidence(resolution: missing).isErr())
+        val foreign = <CallResolution bodyId=0U64 siteKey=row.siteKey exprId=row.exprId callee=row.callee target=row.target />
+        assert(compiler.checkFinalClosureCallEvidence(resolution: foreign).isErr())
+        for other in rows {
+            if other.bodyId != row.bodyId && compiler.arena.bodyInstanceAt(index: other.bodyId - 1U64).fnIdx == compiler.arena.bodyInstanceAt(index: row.bodyId - 1U64).fnIdx {
+                match row.target {
+                    CallTarget.ClosureField(fieldIndex: val field, fnTypeRef: val original) => {
+                        match other.target {
+                            CallTarget.ClosureField(fieldIndex: _, fnTypeRef: val ref) => {
+                                assert(!compiler.typeRefEq(a: original, b: ref))
+                                checkReplacement(compiler: compiler, row: row, target: <CallTarget.ClosureField fieldIndex=field fnTypeRef=ref />, valid: false)
+                                instances += 1U64
+                            }
+                            _ => {}
+                        }
+                    }
+                    CallTarget.ClosureLocal(bindingDeclStart: val binding, fnTypeRef: val original) => {
+                        match other.target {
+                            CallTarget.ClosureLocal(bindingDeclStart: _, fnTypeRef: val ref) => {
+                                assert(!compiler.typeRefEq(a: original, b: ref))
+                                checkReplacement(compiler: compiler, row: row, target: <CallTarget.ClosureLocal bindingDeclStart=binding fnTypeRef=ref />, valid: false)
+                                instances += 1U64
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    assert(instances == 4U64)
+    print("dynamic-closure-descriptor-identity")
+}

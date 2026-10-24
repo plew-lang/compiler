@@ -1683,6 +1683,7 @@ pub impl LlvmCtx {
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
         if target.tag != 2U64 || target.resolution >= c.arena.finalCalleeCount() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
         val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
+        if c.checkFinalClosureCallEvidence(resolution: selected).isErr() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
         mut val functionType: U64 = 0U64
         match selected.target {
             CallTarget.ClosureLocal(bindingDeclStart: val binding, fnTypeRef: val ref) => {
@@ -1694,6 +1695,8 @@ pub impl LlvmCtx {
             CallTarget.ClosureField(fieldIndex: val field, fnTypeRef: val ref) => {
                 functionType = ref
                 if selected.recvTypeRef == 0U64 || selected.recvTypeRef >= c.arena.typeCount() || !(try self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.Borrow />)) { return <Result.Ok value=<MidCallPreflight.Receiver /> /> }
+                val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
+                if !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: receiver.operand), b: selected.recvTypeRef) { return <Result.Ok value=<MidCallPreflight.Receiver /> /> }
                 val receiverType: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: selected.recvTypeRef))
                 if LLVMGetTypeKind(receiverType) != 10U32 || field >= (LLVMCountStructElementTypes(receiverType) as U64) { return <Result.Ok value=<MidCallPreflight.Receiver /> /> }
             }
