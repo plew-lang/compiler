@@ -3328,15 +3328,34 @@ pub impl Comp {
     // remains a navigation anchor for backend value emission, but callee,
     // receiver, argument shape, substitutions, and expected result all come
     // from frontend semantic facts recorded before BodyInstance finalization.
+    // A signature term supplies type authority; a Prior recipe separately
+    // requires its exact body/site dependency to have completed.
+    inout fn groundSelectedDirectReceiver(receiver: CallTemplateReceiver, receiverTypeTerm: U64) -> Result[U64, CompileDiagnostic] {
+        val selected = if receiverTypeTerm != 0U64 {
+            give try self.groundAndRecordBodyType(ref: receiverTypeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.currentBodyInstanceId())
+        } else { give 0U64 }
+        match receiver {
+            CallTemplateReceiver.None | CallTemplateReceiver.Opaque | CallTemplateReceiver.Term(term: _) => {
+                if selected != 0U64 { return <Result.Ok value=selected /> }
+                return self.groundCallTemplateReceiver(receiver: receiver)
+            }
+            _ => {
+                val dependency = try self.groundCallTemplateReceiver(receiver: receiver)
+                if dependency == 0U64 {
+                    return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: selected receiver dependency was not finalized") />
+                }
+                if selected != 0U64 && !self.typeRefEq(a: selected, b: dependency) {
+                    return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: selected receiver dependency does not match its saved signature") />
+                }
+                return <Result.Ok value=if selected != 0U64 { give selected } else { give dependency } />
+            }
+        }
+    }
+
     inout fn selectDirectTemplateCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, receiverTypeTerm: U64, arguments: Array[CallTemplateArgument], proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[CallSiteSelection, CompileDiagnostic] {
         val expected: U64 = (try self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         val calleeArgs: Array[U64] = (try self.groundSemanticCallTypeArgs(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
-        // The receiver recipe retains evaluation/dependency provenance. Its
-        // Term may still be a bare associated qualifier. The saved signature's
-        // completed receiver term owns type substitution and body identity.
-        val receiverRef: U64 = if receiverTypeTerm != 0U64 {
-            give try self.groundAndRecordBodyType(ref: receiverTypeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.currentBodyInstanceId())
-        } else { give try self.groundCallTemplateReceiver(receiver: receiver) }
+        val receiverRef = try self.groundSelectedDirectReceiver(receiver: receiver, receiverTypeTerm: receiverTypeTerm)
         mut val concreteProof: StaticConformanceProof = proof
         // A Direct template has already selected its callable.  When that
         // callable is a provided copy, the template must nevertheless carry

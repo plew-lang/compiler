@@ -172,3 +172,15 @@ to own evaluation and dependency provenance. No result/name reconstruction or
 receiver inference is reintroduced. The old owning head comparison's remaining
 internal client mid_nominal_alias_identity is migrated to the scalar ref reader;
 its same-owner alias intent is unchanged.
+
+### Receiver Dependency Remains Mandatory
+
+The independent review of fc183c6b accepts saved signature authority but requires
+PriorCallResult/PriorProtocolResult (including views) to keep their exact body/site
+dependency checks. groundSelectedDirectReceiver separates the two: Term/opaque
+construction recipes use a completed saved term; Prior recipes must resolve their
+existing dependency and agree with the saved term, even when that term is present.
+Missing dependency, wrong-result site, cross-body and view/protocol variants are
+covered by direct_receiver_signature_dependency. No AST order alone proves the
+prior operation completed. Freshfc183c6b already passes full compiler sourcecheck
+and all four part controls (explicit result, Self result and namespace controls).

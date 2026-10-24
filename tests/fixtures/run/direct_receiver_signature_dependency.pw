@@ -1,0 +1,36 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { InstanceEnvironment, CallTemplateReceiver, CallSiteKey }
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val first = compiler.langTypeRef(name: "I64", args: [])
+    val second = compiler.langTypeRef(name: "U8", args: [])
+    val owner = compiler.arena.functionCount()
+    compiler.cur.bodyFnIdx = owner
+    val body = compiler.internBodyInstance(fnIdx: owner, environment: <InstanceEnvironment />)
+    compiler.cur.bodyId = body
+    val site = compiler.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: 1U64).unwrap()
+    val other = compiler.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: 2U64).unwrap()
+    compiler.appendFinalCallee(exprId: 0U64, callee: owner, siteIsStmt: true, slot: 1U64, recvTypeRef: 0U64, resultTypeRef: first).unwrap()
+    compiler.appendFinalCallee(exprId: 0U64, callee: owner, siteIsStmt: true, slot: 2U64, recvTypeRef: 0U64, resultTypeRef: second).unwrap()
+    val receiver = <CallTemplateReceiver.PriorCallResult exprId=0U64 siteKey=site />
+    assert(compiler.groundSelectedDirectReceiver(receiver: receiver, receiverTypeTerm: first).unwrap() == first)
+    assert(compiler.groundSelectedDirectReceiver(receiver: receiver, receiverTypeTerm: 0U64).unwrap() == first)
+    assert(compiler.groundSelectedDirectReceiver(receiver: <CallTemplateReceiver.PriorCallResult exprId=0U64 siteKey=<CallSiteKey /> />, receiverTypeTerm: first).isErr())
+    assert(compiler.groundSelectedDirectReceiver(receiver: <CallTemplateReceiver.PriorCallResult exprId=0U64 siteKey=other />, receiverTypeTerm: first).isErr())
+    val views = compiler.publishCallTemplateViews(views: [])
+    assert(compiler.groundSelectedDirectReceiver(receiver: <CallTemplateReceiver.PriorCallResultWithViews exprId=0U64 siteKey=site views=views />, receiverTypeTerm: first).unwrap() == first)
+    assert(compiler.groundSelectedDirectReceiver(receiver: <CallTemplateReceiver.PriorCallResultWithViews exprId=0U64 siteKey=<CallSiteKey /> views=views />, receiverTypeTerm: first).isErr())
+    assert(compiler.groundSelectedDirectReceiver(receiver: <CallTemplateReceiver.PriorProtocolResult slot=1U64 />, receiverTypeTerm: first).unwrap() == first)
+    assert(compiler.groundSelectedDirectReceiver(receiver: <CallTemplateReceiver.PriorProtocolResult slot=3U64 />, receiverTypeTerm: first).isErr())
+    assert(compiler.groundSelectedDirectReceiver(receiver: <CallTemplateReceiver.PriorProtocolResultWithViews slot=1U64 views=views />, receiverTypeTerm: first).unwrap() == first)
+    assert(compiler.groundSelectedDirectReceiver(receiver: <CallTemplateReceiver.PriorProtocolResultWithViews slot=3U64 views=views />, receiverTypeTerm: first).isErr())
+    compiler.cur.bodyId = compiler.internBodyInstance(fnIdx: owner, environment: <InstanceEnvironment receiverRef=second />)
+    assert(compiler.groundSelectedDirectReceiver(receiver: receiver, receiverTypeTerm: first).isErr())
+    // A completed signature is authoritative for a type qualifier's Term;
+    // it need not equal the earlier construction-only qualifier placeholder.
+    assert(compiler.groundSelectedDirectReceiver(receiver: <CallTemplateReceiver.Term term=0U64 />, receiverTypeTerm: first).unwrap() == first)
+    print("direct-receiver-signature-dependency")
+}
