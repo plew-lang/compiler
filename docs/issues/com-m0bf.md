@@ -1,6 +1,6 @@
 ---
 id: com-m0bf
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-10-23T10:41:58Z
@@ -133,8 +133,8 @@ No Buffer producer code fix or owner-recovery fallback has been added. The user
 approved task addition: [com-qbwg](com-qbwg.md) now owns the finite early/late
 producer repair, its native/internal controls and final-consumer trace. Required
 tk dependencies connect it to fyxe, 6paa, the type-consumer area, D4 and G1.
-C3 remains open for classification reconciliation/review before com-qbwg starts;
-it does not depend on the repair's implementation. fyxe and 6paa remain
+C3 classification reconciliation is reviewed below; it does not depend on the
+repair's implementation. fyxe and 6paa remain
 in_progress, not completed. Task registration resolves the planning-approval
 stop; it does not turn the retained failed fixture into passing evidence.
 
@@ -143,3 +143,16 @@ phase3c-receiver-producer-scope-stop.json. Raw failed focused-5 and
 signature-trace-5 plus successful part-focused-5 remain under
 compiler/tmp/phase3c-body-receivers. No current formal performance or full G2 gate
 is claimed; the earlier **6.827440s** checkpoint remains distinct.
+
+## Reclassification Outcome
+
+Independent read-only review by /root/body_receiver_completion_review at
+**4685fe20** compared the added inventory/repair disposition with production
+39c3e27f. It confirmed all five callers: early beginStringInterpolation and
+late synthEmptyDict keys/values/hashes/buckets. The Core provenance, saved
+SyntheticCallSite receiver and complete signature, both worklists, body
+environment/key/signature, final callee and Mid/LLVM reads are assigned to
+mandatory com-qbwg with no remaining blocking classification finding.
+**Classification and task allocation complete.** Existing bounded nqjd evidence
+is retained; com-qbwg implementation, fyxe/6paa completion and final G2 gates
+remain outstanding. This closes the inventory only, not the failed control.

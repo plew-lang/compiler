@@ -1,6 +1,6 @@
 ---
 id: com-qbwg
-status: open
+status: in_progress
 deps: [com-m0bf]
 links: []
 created: 2026-10-24T05:12:48Z
