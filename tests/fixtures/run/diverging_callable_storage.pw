@@ -1,0 +1,28 @@
+// Returning, copying and storing a diverging callable are normal value
+// operations. Only invocation takes the callable's nonreturning edge.
+use @Std/Io only { print }
+
+trait CallableStorage { type Callback }
+struct Contract {}
+impl Contract as CallableStorage { type Callback = diverge fn() }
+
+struct Holder { val callback: Contract#CallableStorage.Callback }
+pub impl Holder { factory }
+
+fn make() -> diverge fn() {
+    return diverge fn() { panic("stored diverging callable invoked") }
+}
+fn identity[T](value: T) -> T { return value }
+fn associated(value: Contract#CallableStorage.Callback) -> Contract#CallableStorage.Callback { return value }
+fn keep(holder: Holder) {}
+
+fn main() {
+    val callback = make()
+    val copy = callback
+    val transported = identity(value: copy)
+    val projected = associated(value: transported)
+    val holder = <Holder callback=projected />
+    val retained = holder
+    keep(holder: retained)
+    print("stored")
+}
