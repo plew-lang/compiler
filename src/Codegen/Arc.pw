@@ -106,7 +106,7 @@ pub impl Comp {
         if f.tyLen == 0U64 {
             return <Result.Ok value=0U64 />
         }
-        return <Result.Ok value=self.findOrAddTypeRef(nameStart: f.tyStart, nameLen: f.tyLen) />
+        return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "internal error: field has no declared semantic type for ownership") />
     }
 
     // The `deinit` method index of struct `sidx`, or funcs.count() if it has none.

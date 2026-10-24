@@ -6,65 +6,6 @@
 
 pub impl Comp {
 
-    // The declared return TypeInfo of trait `traitOwner`'s member `qName` (requirement
-    // or provided method, supertraits included) during private source type
-    // construction through a type parameter's bounds. A bare `Self` return maps back to the PARAMETRIC receiver name
-    // (tpStart/tpLen — the conformer IS the type param, so it grounds per instance); a
-    // structured return mentioning `Self`/`Item` stays unknown for now (recording it
-    // raw would let the ENCLOSING method's Self substitute in — a different Self).
-    inout fn traitMemberRetInfo(traitOwner: U64, traitArity: U64, qName: U64, args: ArgRange, tpStart: U64, tpLen: U64, depth: U64, useMod: U64) -> TypeInfo {
-        if depth > 64U64 {
-            return scalarInfo()
-        }
-        mut val ti: U64 = 0
-        while ti < self.decls.traitCount() {
-            val t: TraitDef = self.decls.traitAt(index: ti)
-            if t.nameStart == traitOwner && self.traitArityMatches(actual: t.typeParams.count(), expected: traitArity) {
-                mut val ri: U64 = 0
-                while ri < t.reqs.count() {
-                    val r: Func = self.traitReqAt(reqs: t.reqs, index: ri)
-                    if r.nameId == qName {
-                        if self.paramsLabelsOk(params: r.params, args: args) {
-                            return self.boundRetInfoOf(f: r, tpStart: tpStart, tpLen: tpLen)
-                        }
-                    }
-                    ri += 1
-                }
-                mut val sti: U64 = 0
-                while sti < t.supertraits.count() {
-                    val sup: TraitConstraint = self.traitConstraintAt(constraints: t.supertraits, index: sti)
-                    val supOwner: U64 = sup.key.owner
-                    val sr: TypeInfo = self.traitMemberRetInfo(traitOwner: supOwner, traitArity: 4000000000U64, qName: qName, args: args, tpStart: tpStart, tpLen: tpLen, depth: depth + 1U64, useMod: useMod)
-                    if sr.nameLen != 0U64 {
-                        return sr
-                    }
-                    sti += 1
-                }
-                val includePrivateProvided: Bool = useMod == self.traitModuleByOwner(owner: traitOwner)
-                mut val gi: U64 = self.arena.firstFunctionNamed(nameId: qName)
-                while gi < self.arena.functionCount() {
-                    val g: Func = self.arena.functionAt(index: gi)
-                    if g.hasRecv && g.recvStart == traitOwner && g.nameId == qName {
-                        if includePrivateProvided || g.isPub {
-                            if self.paramsLabelsOk(params: g.params, args: args) {
-                                return self.boundRetInfoOf(f: g, tpStart: tpStart, tpLen: tpLen)
-                            }
-                        }
-                    }
-                    gi = self.arena.nextFunctionNamed(index: gi)
-                }
-            }
-            ti += 1
-        }
-        return scalarInfo()
-    }
-
-    // The result TypeInfo of `recv.name(args)` when `name` is not a method but a
-    // closure-typed FIELD (`struct Handler { val run: fn() -> I64 }`): the backend loads
-    // the field and calls it indirectly (CallMethod's closure-field branch), so the
-    // result is the fn type's return — args[0] of the {fn, [ret, p0, …]} ref. Grounded
-    // through a generic receiver's env (`fn() -> T` on `Handler[I64]`). scalarInfo when
-    // the name is not a closure field (the caller then keeps its unknown result).
     inout fn closureFieldRetInfo(rt: TypeInfo, nameStart: U64, nameLen: U64) -> Result[TypeInfo, CompileDiagnostic] {
         val fr = (try self.fieldTypeRefOfReceiver(receiverRef: self.typedIrRefOfInfo(ti: rt), fieldStart: nameStart, fieldLen: nameLen))
         if fr == 0U64 {
@@ -87,7 +28,7 @@ pub impl Comp {
         if result != 0U64 && result < self.arena.typeCount() {
             return <Result.Ok value=self.typeInfoOfRef(ref: result) />
         }
-        return <Result.Ok value=self.typeInfoOfName(start: f.retStart, len: f.retLen, isArray: f.retIsArray) />
+        return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: f), msg: "internal error: declared callable has no source result term") />
     }
 
     // Project structural receiver bindings into the selected callable's lexical
@@ -347,7 +288,7 @@ pub impl Comp {
 
     inout fn groundFinalMethodReturn(f: Func, recvTy: TypeInfo, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         mut val receiver = recvTy.ref
-        if receiver == 0U64 && recvTy.nameLen != 0U64 { receiver = self.simpleTypeRef(nameStart: recvTy.nameStart, nameLen: recvTy.nameLen) }
+        if receiver == 0U64 { return <Result.Ok value=0U64 /> }
         return <Result.Ok value=(try self.groundFinalMethodSignatureTerm(f: f, receiverRef: receiver, args: args, signatureTerm: f.retTy)) />
     }
 
@@ -356,7 +297,7 @@ pub impl Comp {
     // groundUnderInst cannot see, through the receiver-selected environment.
     inout fn groundFinalMethodParameter(f: Func, recvTy: TypeInfo, args: ArgRange, parameterTerm: U64) -> Result[U64, CompileDiagnostic] {
         mut val receiver = recvTy.ref
-        if receiver == 0U64 && recvTy.nameLen != 0U64 { receiver = self.simpleTypeRef(nameStart: recvTy.nameStart, nameLen: recvTy.nameLen) }
+        if receiver == 0U64 { return <Result.Ok value=0U64 /> }
         return <Result.Ok value=(try self.groundFinalMethodSignatureTerm(f: f, receiverRef: receiver, args: args, signatureTerm: parameterTerm)) />
     }
 
@@ -374,101 +315,34 @@ pub impl Comp {
         return true
     }
 
-    inout fn boundRetInfoOf(f: Func, tpStart: U64, tpLen: U64) -> TypeInfo {
-        if f.isAsync && !f.hasRet { return self.typeInfoOfRef(ref: self.semanticCallableReturnTerm(function: f)) }
-        if !(f.hasRet) {
-            return scalarInfo()
-        }
-        // A projection such as Self.Output is not the receiver itself.
-        // Its result requires the selected path proof, just like a nested
-        // generic result requires substitution in the selected call context.
-        if f.retTy != 0U64 && f.retTy < self.arena.typeCount() {
-            if self.arena.typeTerms[f.retTy].assocNameId != 0U64 { return scalarInfo() }
-        }
-        if !(f.retIsArray) {
-            if rangeEquals(bytes: self.arena.bytes, start: f.retStart, len: f.retLen, kw: "Self") {
-                return <TypeInfo kind=2 nameStart=tpStart nameLen=tpLen ref=0 />
-            }
-        }
-        // a structured return (`Optional[Self]`, an `Item`-mentioning combinator) is
-        // left unknown: its inner Self/Item belong to the BOUND trait, not the
-        // enclosing method's env, so recording the raw ref would mis-ground.
-        if self.isGenericInst(ref: f.retTy) {
-            return scalarInfo()
-        }
-        return self.typeInfoOfName(start: f.retStart, len: f.retLen, isArray: f.retIsArray)
+    // Reuse the exact selected provided environment for source result queries
+    // and the signature saved by Record.
+    inout fn staticProvidedCallEnvironment(function: Func, proof: StaticConformanceProof, receiverTerm: U64, args: ArgRange) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        val inferred = try self.inferMethodEnvironment(f: function, receiverRef: receiverTerm, args: args, selectedProof: proof)
+        return self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment params=inferred.params args=inferred.args receiverRef=receiverTerm proof=proof />)
     }
 
-    // The return TypeInfo of `value.name(args)` where `value: T` and T is a bound type
-    // parameter of `fnIdx` — rustc-style bound-based method typing: search each of T's
-    // bound traits for the member and take its declared return.
-    inout fn boundMethodRetInfo(fnIdx: U64, receiverRef: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[TypeInfo, CompileDiagnostic] {
-        // The static proof owns both requirement selection and its associated
-        // output predicates. Reify the complete return TypeTerm before the
-        // older name-shaped fallback; this handles nested results such as
-        // `Optional[Item]` under `where I: Iterator[Item=E]`.
-        mut val semanticReceiver: U64 = receiverRef
-        if semanticReceiver == 0U64 {
-            semanticReceiver = self.simpleTypeRef(nameStart: tpStart, nameLen: tpLen)
-        }
-        val resolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: fnIdx, receiverRef: semanticReceiver, nameStart: nameStart, nameLen: nameLen, args: args))
+    // Source result queries interpret the selected signature and proof. They
+    // cannot recover a receiver, lexical binder or another member from text.
+    inout fn staticMemberCallResultType(resolution: StaticMemberResolution, receiverTerm: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
-                val result: U64 = (try self.staticRequirementCallResultType(resolution: resolution, args: args))
-                if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) />}
+                return self.staticRequirementCallResultType(resolution: resolution, args: args)
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
                 val declaration = self.arena.functionAt(index: callee)
-                val inferred = (try self.finalMethodEnvironment(f: declaration, receiverRef: semanticReceiver, args: args))
-                if inferred.receiverRef != 0U64 {
-                    val environment = <InstanceEnvironment params=inferred.params args=inferred.args receiverRef=inferred.receiverRef proof=proof />
-                    val result = (try self.groundTermForBody(ref: declaration.retTy, environment: environment, selfRef: semanticReceiver, itemRef: 0U64))
-                    if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) />}
-                }
+                val environment = try self.staticProvidedCallEnvironment(function: declaration, proof: proof, receiverTerm: receiverTerm, args: args)
+                return self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: declaration), environment: environment, selfRef: receiverTerm, itemRef: 0U64)
             }
-            _ => {}
+            StaticMemberResolution.Missing => { return <Result.Ok value=0U64 /> }
         }
-        val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        val qTp: U64 = intern(c: inout self, start: tpStart, len: tpLen)
-        mut val bi: U64 = 0
-        while bi < self.decls.funcBounds.count() {
-            val fb: FuncBound = self.decls.funcBounds.at(index: bi)
-            if fb.fnIdx == fnIdx && fb.paramNameId == qTp {
-                val owner: U64 = fb.constraint.key.owner
-                mut val traitIdx: U64 = 0U64
-                while traitIdx < self.decls.traitCount() {
-                    if self.decls.traitAt(index: traitIdx).nameStart == owner && self.traitArityMatches(actual: self.decls.traitAt(index: traitIdx).typeParams.count(), expected: fb.constraint.key.positionalArgs.count()) {
-                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
-                        mut val reqIdx: U64 = 0U64
-                        while reqIdx < traitDef.reqs.count() {
-                            val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
-                            if req.nameId == qName && self.paramsLabelsOk(params: req.params, args: args) {
-                                if req.hasRet && req.retTy != 0U64 {
-                                    val savedParams: Array[Bind] = self.cur.typeParams
-                                    val savedArgs: Array[U64] = self.cur.typeArgs
-                                    self.cur.typeParams = self.copyTraitBinds(binds: traitDef.typeParams)
-                                    self.cur.typeArgs = fb.constraint.key.positionalArgs
-                                    val grounded: U64 = (try self.groundTypeRef(ref: req.retTy))
-                                    self.cur.typeParams = savedParams
-                                    self.cur.typeArgs = savedArgs
-                                    val result: U64 = self.reifyBoundAssociatedTerms(ref: grounded, traitDef: traitDef, receiverRef: fb.paramTy, traitOwner: fb.constraint.key.owner, traitArgs: fb.constraint.key.positionalArgs, predicates: fb.constraint.assocPredicates)
-                                    if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) />}
-                                }
-                            }
-                            reqIdx += 1U64
-                        }
-                        traitIdx = self.decls.traitCount()
-                    } else {
-                        traitIdx += 1U64
-                    }
-                }
-                val r: TypeInfo = self.traitMemberRetInfo(traitOwner: owner, traitArity: fb.constraint.key.positionalArgs.count(), qName: qName, args: args, tpStart: tpStart, tpLen: tpLen, depth: 0U64, useMod: self.moduleOf(offset: nameStart))
-                if r.nameLen != 0U64 {
-                    return <Result.Ok value=r />
-                }
-            }
-            bi += 1
-        }
+    }
+
+    inout fn boundMethodRetInfo(fnIdx: U64, receiverRef: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[TypeInfo, CompileDiagnostic] {
+        if receiverRef == 0U64 { return <Result.Ok value=scalarInfo() /> }
+        val resolution = try self.staticMemberResolution(fnIdx: fnIdx, receiverRef: receiverRef, nameStart: nameStart, nameLen: nameLen, args: args)
+        val result = try self.staticMemberCallResultType(resolution: resolution, receiverTerm: receiverRef, args: args)
+        if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) /> }
         return <Result.Ok value=scalarInfo() />
     }
 
@@ -605,13 +479,14 @@ pub impl Comp {
                 if isBool {
                     val b: Bind = self.kwSpan(kw: "Bool", kwLen: 4)
                     if b.nameLen != 0 {
-                        return <Result.Ok value=<TypeInfo kind=0 nameStart=b.nameStart nameLen=b.nameLen ref=0 /> />
+                        return <Result.Ok value=<TypeInfo kind=0 nameStart=b.nameStart nameLen=b.nameLen ref=self.langTypeRefAt(nameStart: b.nameStart, nameLen: b.nameLen, args: []) /> />
                     }
                 }
                 // a suffixed literal (`5U64`) carries its own type; otherwise the
                 // type comes from context and is recovered elsewhere.
                 if tyLen != 0 {
-                    return <Result.Ok value=self.typeInfoOfName(start: tyStart, len: tyLen, isArray: false) />
+                    val shape = self.typeInfoOfName(start: tyStart, len: tyLen, isArray: false)
+                    return <Result.Ok value=<TypeInfo kind=shape.kind nameStart=tyStart nameLen=tyLen ref=self.langTypeRefAt(nameStart: tyStart, nameLen: tyLen, args: []) /> />
                 }
                 return <Result.Ok value=scalarInfo() />
             }
@@ -619,17 +494,17 @@ pub impl Comp {
                 // a float literal is F64 (or its explicit F32/F64 suffix). Reported as a
                 // named type (kind 2) so it isn't confused with the int/String categories.
                 if tyLen != 0 {
-                    return <Result.Ok value=<TypeInfo kind=2 nameStart=tyStart nameLen=tyLen ref=0 /> />
+                    return <Result.Ok value=<TypeInfo kind=2 nameStart=tyStart nameLen=tyLen ref=self.langTypeRefAt(nameStart: tyStart, nameLen: tyLen, args: []) /> />
                 }
                 val fb: Bind = self.kwSpan(kw: "F64", kwLen: 3)
-                return <Result.Ok value=<TypeInfo kind=2 nameStart=fb.nameStart nameLen=fb.nameLen ref=0 /> />
+                return <Result.Ok value=<TypeInfo kind=2 nameStart=fb.nameStart nameLen=fb.nameLen ref=self.langTypeRefAt(nameStart: fb.nameStart, nameLen: fb.nameLen, args: []) /> />
             }
             Expr.Str(val start, val len) => {
                 // carry the "String" name span so tyRefOfInfo can recover a String
                 // TypeRef — a generic call `print("hi")` then infers T = String (without
                 // the name, a string-literal argument left T uninferred -> no instance).
                 val ss: Bind = self.stringTypeSpan()
-                return <Result.Ok value=<TypeInfo kind=2 nameStart=ss.nameStart nameLen=ss.nameLen ref=0 /> />
+                return <Result.Ok value=<TypeInfo kind=2 nameStart=ss.nameStart nameLen=ss.nameLen ref=self.langTypeRefAt(nameStart: ss.nameStart, nameLen: ss.nameLen, args: []) /> />
             }
             Expr.Ident(val start, val len) => {
                 if self.isSelfRef(start: start, len: len) {
@@ -967,38 +842,17 @@ pub impl Comp {
             Expr.Index(val base, val index) => {
                 val bt: TypeInfo = (try self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef))
                 if bt.kind == 3 {
-                    // nested array: if the element is itself an `Array[X]`, indexing
-                    // yields an array (kind 3) whose element is X — not a kind-2 value
-                    // named by the mangled element name.
-                    val er: U64 = self.arrayElemRef(start: bt.nameStart, len: bt.nameLen)
-                    if er != 0 {
-                        val rr: U64 = (try self.resolveTy(tyRef: er))
-                        if rr < self.arena.typeCount() {
-                            // an `Array[any P]` element (`xs[i]` where the element is the
-                            // existential): carry the isAny ref so a bare `xs[i].m()`
-                            // dispatches dynamically — name-only recovery below would
-                            // degrade it to the plain trait name and misroute the call.
-                            if self.arena.typeTerms[rr].isAny {
-                                return <Result.Ok value=self.typeInfoOfRef(ref: rr) />
-                            }
-                            val rt = self.arena.typeTerms[rr]
-                            if rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
-                                if rt.args.len > 0 {
-                                    val xn: Bind = (try self.arrayElemNameForRef(elemRef: self.arena.typeArgumentPool[rt.args.start + 0]))
-                                    return <Result.Ok value=<TypeInfo kind=3 nameStart=xn.nameStart nameLen=xn.nameLen ref=0 /> />
-                                }
-                            }
-                            // a compound element (`Ref[Cell]`, `Box[I32]`): carry its
-                            // structured ref so `arr[i]->field` / a generic field access
-                            // can recover the pointee/instantiation (typeInfoOfRef would
-                            // drop the ref for a non-Array compound). Only for compound
-                            // elements — a simple scalar element (`U8`) must stay scalar.
-                            if (try self.isCompoundType(ref: rr)) {
-                                return <Result.Ok value=<TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=rr /> />
-                            }
+                    // A TypeInfo head is not an element identity. The array's
+                    // complete child retains nominal owner, nested shape and
+                    // existential/projection facts for every element kind.
+                    if bt.ref != 0U64 && bt.ref < self.arena.typeCount() {
+                        val array = self.arena.typeTerms[bt.ref]
+                        if array.args.len == 1U64 {
+                            val element = try self.resolveTy(tyRef: self.arena.typeArgumentPool[array.args.start])
+                            if element != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: element) /> }
                         }
                     }
-                    return <Result.Ok value=self.typeInfoOfName(start: bt.nameStart, len: bt.nameLen, isArray: false) />
+                    return <Result.Ok value=scalarInfo() />
                 }
                 // `dict[k]` yields the Dictionary's value type V (args[1]) — the subscript
                 // desugars to `.at(key:) -> V`.
@@ -1142,27 +996,15 @@ pub impl Comp {
                     if self.cur.checkFn < self.arena.functionCount() {
                         val staticResolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: (try self.inferType(id: recv)), nameStart: nameStart, nameLen: nameLen, args: args))
                         match staticResolution {
-                            StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
-                                val result: U64 = (try self.staticRequirementCallResultType(resolution: staticResolution, args: args))
-                                if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) />}
+                            StaticMemberResolution.Missing => {}
+                            _ => {
+                                val result = try self.staticMemberCallResultType(resolution: staticResolution, receiverTerm: (try self.inferType(id: recv)), args: args)
+                                if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) /> }
                                 return <Result.Ok value=scalarInfo() />
                             }
-                            _ => {}
                         }
                     }
-                    // a method call on `self` (Self) in a trait provided-method body being
-                    // abstract-checked: resolve the result from the trait requirement's
-                    // declared return type (concrete primitive/String only, so a `Self`/
-                    // associated return stays unknown). Active only when curCheckFn is the
-                    // provided method (else isSelfTypeInProvided is false).
-                    if self.isSelfTypeInProvided(start: rt.nameStart, len: rt.nameLen) {
-                        val sMethod: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-                        val sr: TypeInfo = self.traitMemberRetInfo(traitOwner: self.arena.functionAt(index: self.cur.checkFn).provTraitOwner, traitArity: self.arena.functionAt(index: self.cur.checkFn).provTraitArity, qName: sMethod, args: args, tpStart: rt.nameStart, tpLen: rt.nameLen, depth: 0U64, useMod: self.moduleOf(offset: nameStart))
-                        if sr.nameLen != 0U64 {
-                            return <Result.Ok value=sr />
-                        }
-                        return <Result.Ok value=scalarInfo() />
-                    }
+                    if self.isSelfTypeInProvided(start: rt.nameStart, len: rt.nameLen) { return <Result.Ok value=scalarInfo() /> }
                     // a method call on an `any P` existential: the receiver names the trait
                     // P, so findMethod (which resolves methods on a TYPE) misses it. The
                     // result is the requirement's declared return grounded under the
@@ -1360,7 +1202,7 @@ pub impl Comp {
             }
             Expr.Cast(operand: _, val tyStart, val tyLen, val ty) => {
                 if ty != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: ty) /> }
-                return <Result.Ok value=self.typeInfoOfName(start: tyStart, len: tyLen, isArray: false) />
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "internal error: cast has no resolved target type") />
             }
             Expr.MatchExpr(scrut: _, val arms) => {
                 val recorded = self.semanticExprTerm(exprId: id)

@@ -67,3 +67,27 @@ A source passing now does not excuse an unstamped published nominal term.
 Fresh source check/scoped native and rejection controls, pinned hashes and an
 independent completion review are required. Global final gates remain G2.
 General type-checker/ABI/inference redesign is outside this bounded task.
+
+## Implementation Checkpoint
+
+The first source increment is ready for a fresh build, not certified complete.
+Canonical late named/Lang constructors now retain the resolved declaration;
+literals supply their fixed ambient type rather than relying on a ref-less head.
+Array indexing projects the complete saved child for simple, nested and
+existential elements. Missing nominal qualifiers and annotated callable results
+no longer create anonymous nominal terms. Chain Promise/Optional/continuation
+construction uses the same identity-preserving producer boundary.
+
+The old bound-member return-name traversal is removed in favor of the shared
+selected instance/proof. Source result queries and Record use one provided-call
+environment, retaining the selected proof. The raw bare-index test is narrowed
+to its original index-order intent, and internal async declaration clients now
+explicitly supply their minimal ambient Promise fixture; these are internal-test
+adjustments permitted by the active goal, not changes to language expectations.
+The registered-body key and Self-environment repairs remain com-6paa.
+
+Old candidate6 checks the new compiler source successfully. New positive controls
+cover late carrier owner, same-head distinct declaration construction, missing
+nominal non-creation, saved array element type and nested nominal execution.
+Fresh candidate, affected old controls, negative/corruption controls, final reader
+trace and independent completion review are still required.

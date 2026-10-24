@@ -49,6 +49,43 @@ pub impl Comp {
         return 0U64
     }
 
+    // A late nominal append receives the selected declaration. The old
+    // bare-name cache is only reusable when its semantic identity agrees.
+    inout fn declaredTypeRef(nameStart: U64, nameLen: U64, args: Array[U64], declaration: Bind) -> U64 {
+        if declaration.nameLen == 0U64 { return 0U64 }
+        if args.count() == 0U64 {
+            val prior = self.arena.firstBareTypeNamed(nameId: intern(c: inout self, start: nameStart, len: nameLen))
+            if prior < self.arena.typeCount() {
+                val term = self.arena.typeTerms[prior]
+                if term.hasDecl && term.declOffset == declaration.nameStart && term.paramId == 0U64 && term.assocNameId == 0U64 && !term.isRecord { return prior }
+            }
+        }
+        return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=args hasDecl=true declOffset=declaration.nameStart />)
+    }
+
+    // Syntax-generated carriers select the ambient declaration surface once,
+    // at production. A missing declaration is not an anonymous nominal type.
+    inout fn langTypeRefAt(nameStart: U64, nameLen: U64, args: Array[U64]) -> U64 {
+        if self.modules.langModule != 4000000000U64 {
+            val identity = self.typeDeclIdentityFromSurface(surfaceMod: self.modules.langModule, start: nameStart, len: nameLen)
+            if identity.nameLen != 0U64 { return self.declaredTypeRef(nameStart: nameStart, nameLen: nameLen, args: args, declaration: identity) }
+        }
+        // Declaration-only clients may construct primitive atoms without a
+        // library graph. Nominal carriers still require a declaration owner.
+        if args.count() != 0U64 || !(self.isPrimType(start: nameStart, len: nameLen) || rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "String")) { return 0U64 }
+        val prior = self.arena.firstBareTypeNamed(nameId: intern(c: inout self, start: nameStart, len: nameLen))
+        if prior < self.arena.typeCount() {
+            val term = self.arena.typeTerms[prior]
+            if !term.hasDecl && term.paramId == 0U64 && term.assocNameId == 0U64 && !term.isRecord { return prior }
+        }
+        return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=[] />)
+    }
+
+    inout fn langTypeRef(name: String, args: Array[U64]) -> U64 {
+        val spelling = self.internBytes(s: name)
+        return self.langTypeRefAt(nameStart: spelling.nameStart, nameLen: spelling.nameLen, args: args)
+    }
+
     // Array syntax and conversion select the declared lang item, not a
     // same-spelled user struct. The module surface owns this fixed identity.
     inout fn langArrayIdentity() -> Bind {

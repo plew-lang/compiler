@@ -335,10 +335,7 @@ pub impl Comp {
         if f.isAsync && !f.hasRet { return <Result.Ok value=self.semanticCallableReturnTerm(function: f) /> }
         if !(f.hasRet) { return <Result.Ok value=0U64 />}
         if f.retTy == 0U64 {
-            if f.retStart != 0U64 && f.retLen != 0U64 && !(f.retIsArray) {
-                return <Result.Ok value=self.simpleTypeRef(nameStart: f.retStart, nameLen: f.retLen) />
-            }
-            return <Result.Ok value=0U64 />
+            return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: f), msg: "internal error: selected callable has no annotated result term") />
         }
         return <Result.Ok value=(try self.groundTermForBody(ref: f.retTy, environment: environment, selfRef: environment.receiverRef, itemRef: (try self.bodyProvidedItemTerm(f: f, environment: environment)))) />
     }
@@ -5398,8 +5395,8 @@ pub impl Comp {
         val uInfo: TypeInfo = (try self.exprTypeWithChainHole(id: cont, chainHoleRef: vRef))
         mut val uRef: U64 = uInfo.ref
         if uRef == 0 {
-            val noTArgs: Array[U64] = []
-            uRef = self.pushType(t: <TypeRef nameStart=uInfo.nameStart nameLen=uInfo.nameLen args=noTArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+            uRef = self.typedIrRefOfInfo(ti: uInfo)
+            if uRef == 0U64 { return <Result.Ok value=0U64 /> }
         }
         // rebuild the head preserving every type argument, with the Value position -> U.
         mut val oArgs: Array[U64] = []
@@ -5459,17 +5456,12 @@ pub impl Comp {
         // type arg): register the concrete instance so the desugar's `match base.chain()`
         // sets the enum env and types the Some-payload bind (the front-end method-result
         // typeOf can recover only the ungrounded `Optional[T]` template otherwise).
-        val optN: Bind = self.internBytes(s: "Optional")
-        mut val optArgs: Array[U64] = []
-        optArgs.append(vRef)
-        val optVRef: U64 = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=optArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+        val optVRef = self.langTypeRef(name: "Optional", args: [vRef])
+        val optURef = self.langTypeRef(name: "Optional", args: [uRef])
+        if optVRef == 0U64 || optURef == 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: Chain registration has no ambient Optional declaration") />
+        }
         try self.scanType(ref: optVRef)
-        // registering the result `Head[U]` pulls in its own `chain()`, whose body builds
-        // `Optional[U]`; register that too (U may differ from V — `Head[U]` vs receiver
-        // `Head[V]`).
-        mut val optUArgs: Array[U64] = []
-        optUArgs.append(uRef)
-        val optURef: U64 = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=optUArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
         try self.scanType(ref: optURef)
         // The two factories are reached through ordinary CallTemplates
         // when the rewritten match arms are scanned below.  Do not

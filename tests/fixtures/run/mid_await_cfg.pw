@@ -7,8 +7,9 @@ use /Mid only { planCanonicalMidAsyncFrame, buildParametricMidBody, MidBuildErro
 
 fn main() {
     mut val compiler: Comp = <Comp />
+    compiler.modules.langModule = 0U64
     analyzeFrontendForRequests(c: inout compiler,
-        input: <FrontendInput.Text path="await-cfg.pw" text="struct Promise[T] {{}} async fn probe(value: Promise[I64]) {{ await value }}" />,
+        input: <FrontendInput.Text path="await-cfg.pw" text="extern(plewIntrinsic) {{ struct Promise[T] }} async fn probe(value: Promise[I64]) {{ await value }}" />,
         sources: <SourceAccess stdRoot=[] />).unwrap()
     val sourceOwner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     val function = compiler.arena.functionAt(index: sourceOwner)

@@ -425,7 +425,8 @@ pub impl Comp {
                 if f.recvId == qRecv {
                     if rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
                         if f.hasRet {
-                            return self.typeInfoOfName(start: f.retStart, len: f.retLen, isArray: f.retIsArray)
+                            if f.retTy != 0U64 { return self.typeInfoOfRef(ref: f.retTy) }
+                            return scalarInfo()
                         }
                         return scalarInfo()
                     }

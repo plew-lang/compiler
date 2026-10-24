@@ -1,0 +1,10 @@
+use @Std/Io only { print }
+struct Leaf { pub val value: I64 }
+pub impl Leaf { factory }
+fn identity[Leaf](value: Leaf) -> Leaf { return value }
+fn first(values: [Leaf]) -> Leaf { return values[0U64] }
+fn main() {
+    val values = [[<Leaf value=31I64 />], [<Leaf value=32I64 />]]
+    print(identity(value: first(values: values[0U64])).value)
+    print(values[1U64][0U64].value)
+}

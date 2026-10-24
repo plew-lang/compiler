@@ -8,7 +8,8 @@ use /Ir only { ValueConversionProof, Expr, CallTemplateKind, ExistentialBoxEvide
 // Promise result, independently of backend async-method support.
 fn main() {
     mut val compiler = <Comp />
-    val source = "fn probe(value: WorkerValue, target: any Worker) {{ val pending = target.task() }}\ntrait Worker {{ async fn task() }}\nstruct WorkerValue {{}}\nimpl WorkerValue as Worker {{ async fn task() {{}} }}\n"
+    compiler.modules.langModule = 0U64
+    val source = "extern(plewIntrinsic) {{ struct Promise[T] }}\nfn probe(value: WorkerValue, target: any Worker) {{ val pending = target.task() }}\ntrait Worker {{ async fn task() }}\nstruct WorkerValue {{}}\nimpl WorkerValue as Worker {{ async fn task() {{}} }}\n"
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="signature.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val probe = compiler.arena.functionAt(index: 0U64)
     val sourceType = compiler.funcParamAt(params: probe.params, index: 0U64).ty

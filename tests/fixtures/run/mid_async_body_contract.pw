@@ -8,6 +8,7 @@ use /Mid only { buildParametricMidBody, MidBuildError }
 // Both async logical and sync public value results need a return terminator.
 fn missingReturnRejected(source: String) {
     mut val compiler: Comp = <Comp />
+    compiler.modules.langModule = 0U64
     analyzeFrontendForRequests(c: inout compiler,
         input: <FrontendInput.Text path="missing-return.pw" text=source />,
         sources: <SourceAccess />).unwrap()
@@ -29,8 +30,9 @@ fn missingReturnRejected(source: String) {
 
 fn main() {
     mut val compiler: Comp = <Comp />
+    compiler.modules.langModule = 0U64
     analyzeFrontendForRequests(c: inout compiler,
-        input: <FrontendInput.Text path="async-contract.pw" text="struct Promise[T] {{}} async fn asynchronous(value: I64) -> Promise[I64] {{ return value }} fn synchronous(value: Promise[I64]) -> Promise[I64] {{ return value }} async fn completion(value: I64) {{}}" />,
+        input: <FrontendInput.Text path="async-contract.pw" text="extern(plewIntrinsic) {{ struct Promise[T] }} async fn asynchronous(value: I64) -> Promise[I64] {{ return value }} fn synchronous(value: Promise[I64]) -> Promise[I64] {{ return value }} async fn completion(value: I64) {{}}" />,
         sources: <SourceAccess />).unwrap()
     // Mid must not turn declaration metadata into proof of a checked body.
     match buildParametricMidBody(c: inout compiler, fnIdx: 0U64).error {
@@ -69,7 +71,7 @@ fn main() {
     match completion.error { MidBuildError.None => {} _ => { assert(false) } }
     assert(completion.body.locals.count() == 1U64)
     assert(completion.body.locals[0U64].ownsAtEntry)
-    missingReturnRejected(source: "struct Promise[T] {{}} async fn probe(value: I64) -> Promise[I64] {{}}")
-    missingReturnRejected(source: "struct Promise[T] {{}} fn probe(value: I64) -> Promise[I64] {{}}")
+    missingReturnRejected(source: "extern(plewIntrinsic) {{ struct Promise[T] }} async fn probe(value: I64) -> Promise[I64] {{}}")
+    missingReturnRejected(source: "extern(plewIntrinsic) {{ struct Promise[T] }} fn probe(value: I64) -> Promise[I64] {{}}")
     print("ok")
 }

@@ -1,0 +1,49 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Bind, Stmt, Expr, InstanceEnvironment }
+
+fn main() {
+    mut val compiler = <Comp />
+    // A minimal declaration client supplies its own ambient fixture. There is
+    // no implicit library owner to guess from an arbitrary printed type name.
+    compiler.modules.langModule = 0U64
+    val source = "extern(plewIntrinsic) {{ struct Promise[T] }} struct Array[T] {{}} enum Optional[T] {{ Some(value: T), None }} struct Item {{}} struct Other {{}} fn first(values: [Item]) -> Item {{ return values[0U64] }} async fn task() {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="late-types.pw" />, sources: <SourceAccess />).unwrap()
+    val first = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "first").nameId)
+    compiler.prepareLexicalBody(fnIdx: first).unwrap()
+    val body = compiler.internBodyInstance(fnIdx: first, environment: <InstanceEnvironment />)
+    val expression = match compiler.arena.stmts[compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: first).body, index: 0U64)] {
+        Stmt.Return(value: val value, hasValue: _, offset: _) => value
+        _ => { panic("missing first return") }
+    }
+    val term = compiler.preparedBodyExpression(bodyId: body, exprId: expression).unwrap().term
+    assert(term != 0U64)
+    assert(compiler.arena.typeAt(index: term).hasDecl)
+    val result = compiler.preparedFunctionBodySignature(fnIdx: first).unwrap().resultTerm
+    assert(compiler.typeRefEq(a: term, b: result))
+    val task = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "task").nameId)
+    val promise = compiler.semanticCallableReturnTerm(function: compiler.arena.functionAt(index: task))
+    assert(promise != 0U64)
+    assert(compiler.arena.typeAt(index: promise).hasDecl)
+    val optional = compiler.langTypeRef(name: "Optional", args: [term])
+    assert(optional != 0U64)
+    assert(compiler.arena.typeAt(index: optional).hasDecl)
+    assert(compiler.arena.typeAt(index: optional).args[0U64] == term)
+    val item = compiler.internBytes(s: "Item")
+    val other = compiler.internBytes(s: "Other")
+    val itemOwner = compiler.typeDeclIdentityInModule(mod: 0U64, start: item.nameStart, len: item.nameLen)
+    val otherOwner = compiler.typeDeclIdentityInModule(mod: 0U64, start: other.nameStart, len: other.nameLen)
+    assert(itemOwner.nameLen != 0U64 && otherOwner.nameLen != 0U64)
+    val left = compiler.declaredTypeRef(nameStart: item.nameStart, nameLen: item.nameLen, args: [], declaration: itemOwner)
+    // Same printed head can be an alias for a different resolved declaration.
+    val right = compiler.declaredTypeRef(nameStart: item.nameStart, nameLen: item.nameLen, args: [], declaration: otherOwner)
+    assert(!compiler.typeRefEq(a: left, b: right))
+    assert(compiler.arena.typeAt(index: right).declOffset == otherOwner.nameStart)
+    val missing = compiler.internBytes(s: "MissingNominal")
+    val count = compiler.arena.typeCount()
+    assert(compiler.findOrAddTypeRef(nameStart: missing.nameStart, nameLen: missing.nameLen) == 0U64)
+    assert(compiler.arena.typeCount() == count)
+    print("late-nominal-identity")
+}

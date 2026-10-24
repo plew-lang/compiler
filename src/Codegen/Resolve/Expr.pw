@@ -661,11 +661,10 @@ pub impl Comp {
 
     inout fn semanticCallableReturnTerm(function: Func) -> U64 {
         if function.isAsync && !function.hasRet {
-            val promise = self.internBytes(s: "Promise")
             // The payload is an ordinary source type, not a callable result
             // slot. Keep omitted logical Unit out of generic type arguments.
             val unit = self.semanticSourceResultTerm(ref: 0U64)
-            return self.pushType(t: <TypeRef nameStart=promise.nameStart nameLen=promise.nameLen args=[unit] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+            return self.langTypeRef(name: "Promise", args: [unit])
         }
         if !function.hasRet && !function.isDiverging {
             // Unit is an ordinary source value type. The callable ABI may
@@ -1229,8 +1228,7 @@ pub impl Comp {
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
                 val function = self.arena.functionAt(index: callee)
-                val inferred = try self.inferMethodEnvironment(f: function, receiverRef: receiverTerm, args: args, selectedProof: proof)
-                val environment = try self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment params=inferred.params args=inferred.args receiverRef=receiverTerm proof=proof />)
+                val environment = try self.staticProvidedCallEnvironment(function: function, proof: proof, receiverTerm: receiverTerm, args: args)
                 selectedEnvironment = environment
                 methodArguments = self.signatureTypeArguments(f: function, environment: environment)
                 selectedResult = try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: function), environment: environment, selfRef: receiverTerm, itemRef: 0U64)

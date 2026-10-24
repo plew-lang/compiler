@@ -18,11 +18,14 @@ pub impl Comp {
     }
 
     inout fn findOrAddTypeRef(nameStart: U64, nameLen: U64) -> U64 {
-        val q: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        val ref = self.arena.firstBareTypeNamed(nameId: q)
-        if ref < self.arena.typeCount() { return ref }
-        val noArgs: Array[U64] = []
-        return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=noArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+        // A spelling adapter can recover a nominal only in the domain of
+        // its source occurrence. Synthetic builtin spellings use Lang; there
+        // is no global "first same name" nominal selection.
+        if self.offsetIsLoaded(offset: nameStart) {
+            val declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: nameStart), start: nameStart, len: nameLen)
+            if declaration.nameLen != 0U64 { return self.declaredTypeRef(nameStart: nameStart, nameLen: nameLen, args: [], declaration: declaration) }
+        }
+        return self.langTypeRefAt(nameStart: nameStart, nameLen: nameLen, args: [])
     }
 
     inout fn closureFnTypeRef(params: Array[Param], retTy: U64, isDiverging: Bool = false) -> U64 {

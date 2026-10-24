@@ -247,6 +247,7 @@ pub impl Comp {
         val name = self.assocRecvName(recv: exprId)
         if name.nameLen == 0U64 { return <Result.Ok value=0U64 />}
         val declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: self.exprOffset(id: exprId)), start: name.nameStart, len: name.nameLen)
+        if declaration.nameLen == 0U64 { return <Result.Ok value=0U64 /> }
         val term = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=declaration.nameLen != 0U64 declOffset=declaration.nameStart />)
         if term == 0U64 || !(try self.tyRefIsGround(ref: term)) { return <Result.Ok value=0U64 />}
         val storage = self.fieldStorageTypeRef(receiverRef: term)
