@@ -1,0 +1,5 @@
+use /Ir only { Arena }
+fn main() {
+    mut val arena = <Arena />
+    arena.applyResolvedTypeDeclaration(index: 1U64, hasDecl: true, declOffset: 1U64, hasAssocTraitDecl: false, assocTraitDeclOffset: 0U64)
+}

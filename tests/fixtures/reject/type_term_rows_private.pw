@@ -1,0 +1,9 @@
+use /Ir only { Arena, TypeRef }
+fn main() {
+    mut val arena = <Arena />
+    arena.reserveTypeSentinel()
+    val first = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] hasDecl=true declOffset=42U64 />, nameCount: 0U64)
+    arena.finishTypeDeclarationResolution(resolutions: [])
+    // Raw replacement must not bypass the permanently closed facet phase.
+    arena.typeTerms.set(i: first, value: arena.typeTerms[0U64])
+}

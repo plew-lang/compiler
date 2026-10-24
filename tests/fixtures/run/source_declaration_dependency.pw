@@ -1,0 +1,39 @@
+// Source success must depend on completed declaration facets, even when this
+// body's own expressions do not demand a nominal lookup.
+use /Frontend only { Comp }
+use /Ir only { Func, Stmt }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "probe")
+    val unit = compiler.semanticSourceResultTerm(ref: 0U64)
+    // Block zero denotes a bodyless declaration, just as in the loaded AST.
+    compiler.pushBlock(stmts: [])
+    val statement = compiler.pushStmt(s: <Stmt.Return value=0U64 hasValue=false offset=name.nameStart />)
+    val body = compiler.pushBlock(stmts: [statement])
+    compiler.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=unit body=body
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    mut val ready = compiler
+    val expected = "internal error: source publication requires completed type declaration resolution"
+    match compiler.prepareLexicalBody(fnIdx: 0U64) {
+        Result.Err(error: val diagnostic) => { if diagnostic.message != expected { panic(diagnostic.message) } }
+        Result.Ok(value: _) => { panic("source success ignored declaration dependency") }
+    }
+    if compiler.preparedFunctionSemanticFacts(fnIdx: 0U64).isOk() { panic("failed dependency published source facts") }
+    if !compiler.arena.finishTypeDeclarationResolution(resolutions: []) { panic("declaration phase did not complete") }
+    // Completing a dependency later cannot overwrite this request's failure.
+    match compiler.prepareLexicalBody(fnIdx: 0U64) {
+        Result.Err(error: val diagnostic) => { if diagnostic.message != expected { panic("source failure changed") } }
+        Result.Ok(value: _) => { panic("failed owner reopened") }
+    }
+    if !ready.arena.finishTypeDeclarationResolution(resolutions: []) { panic("independent declaration phase failed") }
+    match ready.prepareLexicalBody(fnIdx: 0U64) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+    if !ready.preparedFunctionSemanticFacts(fnIdx: 0U64).unwrap().functionSignature().isSome() { panic("successful owner has no signature") }
+    print("source-declaration-dependency")
+}

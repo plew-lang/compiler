@@ -6,12 +6,16 @@ fn main() {
     mut val arena = <Arena />
     arena.reserveTypeSentinel()
     val first = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] />, nameCount: 0U64)
+    val second = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] />, nameCount: 0U64)
     mut val branch = arena
     val identity = <ResolvedTypeDeclaration index=first hasDecl=true declOffset=42U64 hasAssocTraitDecl=true assocTraitDeclOffset=43U64 />
     val missing = <ResolvedTypeDeclaration index=arena.typeCount() hasDecl=true declOffset=99U64 hasAssocTraitDecl=false assocTraitDeclOffset=0U64 />
     if arena.finishTypeDeclarationResolution(resolutions: [identity, missing]) { panic("invalid batch published") }
     if arena.typeDeclarationResolutionComplete() || arena.typeAt(index: first).hasDecl || arena.typeTerms[first].hasDecl { panic("invalid batch partly changed a type") }
     if arena.finishTypeDeclarationResolution(resolutions: [identity, identity]) { panic("duplicate row published") }
+    val secondIdentity = <ResolvedTypeDeclaration index=second hasDecl=true declOffset=44U64 hasAssocTraitDecl=false assocTraitDeclOffset=0U64 />
+    if arena.finishTypeDeclarationResolution(resolutions: [secondIdentity, identity]) { panic("unordered batch published") }
+    if arena.typeDeclarationResolutionComplete() || arena.typeAt(index: first).hasDecl || arena.typeTerms[second].hasDecl { panic("unordered batch partly changed a type") }
     if !arena.finishTypeDeclarationResolution(resolutions: [identity]) { panic("valid batch did not publish") }
     if !arena.typeDeclarationResolutionComplete() || !arena.typeAt(index: first).hasDecl || arena.typeAt(index: first).declOffset != 42U64 || arena.typeTerms[first].assocTraitDeclOffset != 43U64 { panic("type representations disagree after publication") }
     val replacement = <ResolvedTypeDeclaration index=first hasDecl=true declOffset=88U64 hasAssocTraitDecl=false assocTraitDeclOffset=0U64 />
