@@ -37,6 +37,14 @@ Each item requires implementation locations and scoped verification records, not
 10. [ ] Complete normal, generation, dependency, ASan/LSan, fixed-point and formal performance gates with matching source/carrier/artifacts. Satisfy the user-approved formal median below 7 seconds or obtain an explicit approved change; focused and old-driver checks do not substitute.
 11. [ ] Synchronize design contracts, issue state and worklog. Unresolved in-scope items preclude completion; main integration follows the normal integration criteria.
 
+## Approved Bounded3E Admission
+
+On 2026-10-25 the user explicitly accepted closing3E without below7s.
+com-fuo8/E4/com-tl9c retain functional and generation2 fixed-point admission
+at36680385 with actual median7.072914s. The independently reviewed parent
+reconciliation is recorded in com-fuo8 and met-acfl. This bounded decision
+does not certify the eleven criteria or the final G2a/G2b gates.
+
 ## Work Units
 
 The original area issues are epics for their exact existing contracts:

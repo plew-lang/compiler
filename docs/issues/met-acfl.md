@@ -1,6 +1,6 @@
 ---
 id: met-acfl
-status: open
+status: closed
 deps: [com-kp3y, com-vkw3, com-wqa0, com-m3c6, com-gnj9]
 links: []
 created: 2026-10-13T01:40:08Z
@@ -77,10 +77,12 @@ backing storage. Late nominal producers and exact proof/descriptor consumers
 are discharged by their closed B/C children rather than reopened here.
 Their outcome sections retain exact source, removal, controls and receipt scope.
 
-The area's broad completion-publication contract also needs the independently
-reviewed com-tl9c/E4 result: explicit source exit identities must reach actual
-Mid cleanup. That existing paired repair is implemented and under fresh
-verification, not yet admitted. This area remains open until that result is
-explicitly reconciled. Runtime closure ownership/startup SCC and unsupported
-unique/shared facilities remain outside this phase-three subset. G2a/G2b retain
-all current frozen-candidate correctness/performance gates.
+The broad completion-publication contract is now reconciled with com-tl9c/E4:
+explicit source exit identities reach actual Mid cleanup, with independently
+admitted functional/fixed-point artifacts at36680385. On 2026-10-25 the user
+removed below7s from that bounded3E exit; median7.072914s remains recorded.
+/root/body_receiver_completion_review confirms the D1–D4/B/C map above and this
+E4 admission leave no unfinished obligation in the existing publication subset.
+Close this area with its required descendants. Runtime closure ownership/startup
+SCC and unsupported unique/shared facilities remain outside this subset.
+G2a/G2b and whole phase-three/main/seed/adopted-carrier gates remain separate.

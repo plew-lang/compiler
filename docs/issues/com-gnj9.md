@@ -1,6 +1,6 @@
 ---
 id: com-gnj9
-status: in_progress
+status: closed
 deps: [com-2suv, com-fbqh, com-px0e, com-o7ul, com-tl9c]
 links: []
 created: 2026-10-23T10:41:58Z
@@ -38,7 +38,7 @@ current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
 
-## Current Verification and Remaining Exit
+## Completion and Independent Admission
 
 The paired com-tl9c repair now closes producer -> private publication -> saved
 identity -> actual Mid destination/cleanup at dea2b38d, refined36680385. Its
@@ -54,6 +54,9 @@ kind, foreign session/owner and same-owner nonenclosing/sibling loop mapping fai
 at the real readers. Saved relative completion remains a separate pure algebra.
 
 Independent review admits the initial90 functional cases and refined60 affected
-cases, all-source checks and exact fixed-point artifacts. However refined formal
-median7.072914s fails below7s; com-tl9c and E4 remain unclosed under the explicit
-performance stop. Functionality does not waive this exit or certify full G2.
+cases, all-source checks and exact fixed-point artifacts. Refined formal median
+is7.072914s. On 2026-10-25 the user removed below7s from the bounded3E completion
+exit. /root/body_receiver_completion_review reconciled E1–E4 and found no other
+unfinished E4 obligation. Close with com-tl9c under that approved exit; retain
+the measured time and historical unmet records. This does not certify G2,
+whole phase three or main/seed/adopted-carrier promotion.

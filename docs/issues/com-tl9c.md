@@ -1,6 +1,6 @@
 ---
 id: com-tl9c
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T14:01:36Z
@@ -65,11 +65,13 @@ internal missing/foreign/kind/same-owner sibling/nonenclosing mapping controls a
 the actual reader without exposing a private payload writer merely for tests.
 
 Fresh sourcecheck and native/cleanup controls, applicable ASan E registration,
-formal fixed point/median below7s and independent completion review are required.
+formal fixed point and independent completion review are required. The user
+removed below7s as this bounded completion exit on 2026-10-25; the actual
+measured time is retained below.
 Full final candidate gates remain G2. Any newly necessary semantics or unbounded
 repair gets its own independently reviewed scope before widening this task.
 
-## Implemented Boundary and Performance Stop
+## Implemented Boundary and Verification
 
 Production dea2b38d adds owner-local SourceTransferFact(Function/Block/Loop),
 private statement publication and immutable prepared lookup. Record chooses
@@ -97,15 +99,30 @@ The earlier90-case scope differs only in the two refined production files.
 Both formal runs reach generation2 fixed point with unchanged inputs and exit0.
 Initial20261024T143250-self-host-7c1dbf median7.267095s; refined
 20261024T144321-self-host-f35ef5 median7.072914s (7.546383/7.072914/7.023181).
-The below7s exit remains unmet. Alternating identical-source old E3/new E4
+The original below7s exit was not met. Alternating identical-source old E3/new E4
 medians7.071088/7.064008, identical LLVM, do not establish an E4-specific slowdown.
 No further clear low-cost removal within this boundary was found; broader common
 Mid performance investigation is needed, not weaker target validation. This is
 not a claim that improvement is inherently impossible. The independent reviewer
-recognizes functional completion and the performance stop, so this ticket and E4
-remain in_progress. No enclosing area/G2/main/seed/carrier promotion follows.
+recognized functional completion and the original performance stop. The revised
+completion decision is recorded below; no G2/main/seed/carrier promotion follows.
 
 Durable records: meta evidence/existing-feature-conformance/source-owner-facts/
 phase3e-transfer-targets.json, phase3e-transfer-targets-initial-self-host.json,
 phase3e-transfer-targets-cost-self-host.json and
 phase3e-transfer-targets-same-source.json. All sessions are recovered.
+
+## Completion Under the User-Approved Exit
+
+On 2026-10-25 the user explicitly accepted completing 3E without satisfying
+below7s. Only that bounded performance exit is removed; median **7.072914s**
+and both original unmet performance records remain unchanged.
+
+/root/body_receiver_completion_review reconciled the full E1–E4 contracts and
+confirmed no other unfinished exit for this repair/E4. Existing functional and
+fixed-point artifact admission remains applicable: production36680385, refined
+60 controls,303 current focused inputs,5929 formal inputs and measured compiler
+090240dd513a530998c9025c43323f3243fc3206653e1aee1af657ed7503ddad.
+No production input changed and no extra execution is required for this
+documentation-only admission. The repair is complete under the revised exit.
+Final frozen-candidate gates and whole phase-three completion remain separate.
