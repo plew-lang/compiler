@@ -1,6 +1,6 @@
 ---
 id: com-e9l2
-status: in_progress
+status: closed
 deps: [com-qehq]
 links: []
 created: 2026-10-23T10:41:58Z
@@ -79,3 +79,25 @@ Independent static review by /root/body_receiver_completion_review on f05188b4
 confirms no Project producer or surviving reader requires the removed fields,
 and the source/final/Mid identity and Unit contracts are retained. No static
 blocker; fresh execution and final completion review remain pending.
+
+
+## Bounded Completion
+
+Production **f05188b4**, fixture **2fb6bbbc**, fresh compiler SHA256
+**1de586137a35096c5ddbdd9c838843e6bacba82fec2ddbb54ec882411dd13664**.
+Standard build **20261024T081828-build-9359f6** and full fresh compiler-source
+check pass; scoped native19/reject4 all pass with unchanged inputs.
+
+Independent completion review by /root/body_receiver_completion_review finds
+no blocker and recognizes this bounded task complete. It checks all9 referenced
+file SHA values and233 input fingerprints against current files. Live variants
+retain producer/source-reader/body-publication/Mid identity; the unused Project
+lookup/fields are removed. The original overflow in a new wrong-owner control
+is preserved as an initial false run, then corrected to avoid incrementing the
+maximum global-owner sentinel and fully rerun. No assertion or golden is weakened.
+
+Canonical receipt: meta **0a15f579**, evidence/existing-feature-conformance/
+source-owner-facts/phase3c-result-recipe-closure.json, including exact variant
+map, controls, input and carrier hashes, standard receipt, source check, failure
+and review. C5 onward and G2a/b remain incomplete; this bounded closure neither
+measures latest formal performance nor closes parent phase three/main integration.
