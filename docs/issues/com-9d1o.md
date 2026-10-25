@@ -1,6 +1,6 @@
 ---
 id: com-9d1o
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-24T19:45:10Z
@@ -34,3 +34,21 @@ Controls compiler/tmp/perf-six-type-pools/normal-failure-controls/; durable fina
 performance milestone receipt will reference them. Independent b2 accepted
 this finite diagnosis/fixture-maintenance scope. Normal20261024T193137-test-625275
 remains failed; required before G2b green, not a new performance regression.
+
+## Confirmed Failure and Fixture Repair
+
+The staged native diagnostic publication-diagnostic-1 reaches both incremental
+publications and idempotence assertions, then fails specifically at
+`destruction-enqueue`: body receiver does not match its selected declaration.
+The generic unwrap panic was not evidence of an Index failure. The actual
+broken precondition is simpleTypeRef(Resource), which omits the selected nominal
+owner now required by destructor body admission.
+
+Use canonical Core Index/IndexSet source input and a real std source root,
+select Resource explicitly rather than the first unique library type, and
+construct the destruction receiver from its registered declaration identity.
+Keep every publication/provenance/idempotence/malformed ABI/repeat-failure
+assertion. Named require helpers retain diagnostics on unexpected preparation
+failure; they do not accept errors. No production change is needed unless these
+valid inputs expose a further compiler defect. Original intent:37df9c94 and
+later c53a16b5/781253b2 move publication through explicit call/body APIs.

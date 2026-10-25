@@ -1,5 +1,6 @@
 use /Frontend only { Comp, FrontendInput, FinalizationPublication, analyzeFrontendDeclarations, spansEqual }
 use /SourceAccess only { SourceAccess }
+use /Diag only { CompileDiagnostic }
 use @Std/Io only { print }
 
 fn owner(c: inout Comp, name: String) -> U64 {
@@ -13,40 +14,50 @@ fn owner(c: inout Comp, name: String) -> U64 {
     panic "missing declaration"
 }
 
+fn require[T](result: Result[T, CompileDiagnostic], stage: String) -> T {
+    match result {
+        Result.Ok(value: val value) => { return value }
+        Result.Err(error: val diagnostic) => { print(stage) panic(diagnostic.message) }
+    }
+}
+
 fn main() {
     mut val c = <Comp />
-    val source = "trait Index[K] {{ type Output fn index(key: K) -> Output }} trait IndexSet[K] {{ type Value inout fn indexSet(key: K, value~: Value) }} struct Shelf {{ mut val value: I64 }} impl Shelf as Index[U64] {{ type Output = I64 fn index(key: U64) -> I64 {{ return self.value }} }} impl Shelf as IndexSet[U64] {{ type Value = I64 inout fn indexSet(key: U64, value~: I64) {{ self.value = value }} }} fn take(target: inout I64) {{ target = 2I64 }} fn first() {{ mut val shelf = <Shelf value=1I64 /> take(target: inout shelf[0U64]) }} fn second() {{ mut val shelf = <Shelf value=3I64 /> take(target: inout shelf[0U64]) }} unique struct Resource {{}} impl Resource {{ deinit {{}} }} fn main() {{}}"
-    analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text path="publication.pw" text=source />, sources: <SourceAccess />).unwrap()
+    val source = "use @Std/Core only {{ Index, IndexSet }} struct Shelf {{ mut val value: I64 }} impl Shelf as Index[U64] {{ type Output = I64 fn index(key: U64) -> I64 {{ return self.value }} }} impl Shelf as IndexSet[U64] {{ type Value = I64 inout fn indexSet(key: U64, value~: I64) {{ self.value = value }} }} fn take(target: inout I64) {{ target = 2I64 }} fn first() {{ mut val shelf = <Shelf value=1I64 /> take(target: inout shelf[0U64]) }} fn second() {{ mut val shelf = <Shelf value=3I64 /> take(target: inout shelf[0U64]) }} unique struct Resource {{}} impl Resource {{ deinit {{}} }} fn main() {{}}"
+    require(result: analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text path="publication.pw" text=source />, sources: <SourceAccess stdRoot="std".bytes() />), stage: "frontend")
     c.inCollection = true
-    c.initializeFinalCallables().unwrap()
+    require(result: c.initializeFinalCallables(), stage: "initialize")
     mut val publication = <FinalizationPublication />
-    val first = c.enqueueFinalBody(fnIdx: owner(c: inout c, name: "first"), args: [], recvInstRef: 0U64).unwrap()
-    c.scanFinalBodyInstance(bodyId: first).unwrap()
-    c.publishFinalCallables(state: inout publication).unwrap()
+    val first = require(result: c.enqueueFinalBody(fnIdx: owner(c: inout c, name: "first"), args: [], recvInstRef: 0U64), stage: "first-enqueue")
+    require(result: c.scanFinalBodyInstance(bodyId: first), stage: "first-scan")
+    require(result: c.publishFinalCallables(state: inout publication), stage: "publish")
     val accesses = c.arena.semanticAccesses.count()
     val inputs = c.arena.semanticAccessInputs.count()
     if accesses == 0U64 || inputs == 0U64 { panic "no writeback provenance published" }
     val original = c.arena.semanticAccesses[0U64]
     val calls = c.arena.finalCalleeCount()
-    val second = c.enqueueFinalBody(fnIdx: owner(c: inout c, name: "second"), args: [], recvInstRef: 0U64).unwrap()
-    c.scanFinalBodyInstance(bodyId: second).unwrap()
-    c.publishFinalCallables(state: inout publication).unwrap()
+    val second = require(result: c.enqueueFinalBody(fnIdx: owner(c: inout c, name: "second"), args: [], recvInstRef: 0U64), stage: "second-enqueue")
+    require(result: c.scanFinalBodyInstance(bodyId: second), stage: "second-scan")
+    require(result: c.publishFinalCallables(state: inout publication), stage: "publish")
     if c.arena.semanticAccesses.count() != accesses * 2U64 || c.arena.semanticAccessInputs.count() != inputs * 2U64 { panic "publication rebuilt or lost earlier access rows" }
     val preserved = c.arena.semanticAccesses[0U64]
     if preserved.bodyId != first || preserved.readResolution != original.readResolution || preserved.writeResolution != original.writeResolution || preserved.parentResolution != original.parentResolution || preserved.baseInput != original.baseInput || preserved.keyInput != original.keyInput || preserved.accessInput != original.accessInput { panic "published identity changed" }
     if c.arena.semanticAccesses[accesses].bodyId != second || c.arena.semanticAccesses[accesses].parentResolution < calls { panic "new access points at old body" }
     val total = c.arena.finalCalleeCount()
-    c.publishFinalCallables(state: inout publication).unwrap()
+    require(result: c.publishFinalCallables(state: inout publication), stage: "publish")
     if c.arena.finalCalleeCount() != total || c.arena.semanticAccesses.count() != accesses * 2U64 || c.arena.semanticAccessInputs.count() != inputs * 2U64 { panic "empty publication changed tables" }
 
     // A malformed destructor ABI must not be published, even when ready.
     // The same publisher keeps that diagnostic and does not repeat partial work.
+    val resourceName = c.internBytes(s: "Resource")
     mut val structure = 0U64
     while structure < c.arena.structCount() {
         val declaration = c.arena.structAt(index: structure)
-        if declaration.isUnique {
-            val term = c.simpleTypeRef(nameStart: declaration.nameStart, nameLen: declaration.nameLen)
-            c.enqueueFinalDestruction(typeRef: term).unwrap()
+        if declaration.isUnique && declaration.nameId == resourceName.nameId {
+            val identity = c.typeDeclIdentityAt(useMod: c.moduleOf(offset: declaration.nameStart), start: declaration.nameStart, len: declaration.nameLen)
+            val term = c.declaredTypeRef(nameStart: declaration.nameStart, nameLen: declaration.nameLen, args: [], declaration: identity)
+            if term == 0U64 { panic "missing canonical destructor receiver" }
+            require(result: c.enqueueFinalDestruction(typeRef: term), stage: "destruction-enqueue")
             val contract = c.arena.finalDestructions[c.finalDestructionIndex(typeRef: term) - 1U64]
             c.arena.setBodySignature(bodyId: contract.deinitCall.bodyId, parameters: [], passings: [], result: term)
             break
