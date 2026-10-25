@@ -748,7 +748,7 @@ pub impl Comp {
                     self.arena.exprs[exprId] = <Expr.Method recv=recv nameStart=callStart nameLen=callLen args=args />
                     val origin = self.nextExprOriginSerial
                     self.nextExprOriginSerial += 1U64
-                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=receiver receiverIsType=true selectedFactory=<Optional.Some v=selected /> />)
+                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=receiver receiverIsType=true selectedDeclaration=<Optional.Some v=selected /> />)
                 } else {
                     self.arena.resolvedMemberwiseFactories.insert(exprId)
                     self.normalizeMemberwiseDefaultsAt(exprId: exprId)

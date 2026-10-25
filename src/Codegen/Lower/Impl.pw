@@ -535,7 +535,7 @@ pub impl Comp {
     // A via declaration owns its requirement contract. Its synthesized body
     // forwards through an ordinary call, so argument passing, constraints and
     // ownership use the same semantic pipeline as an authored implementation.
-    inout fn lowerViaBody(params: Array[Param], receiver: Bind, receiverType: U64, target: Bind, isAssoc: Bool, isAsync: Bool, hasRet: Bool, resultType: U64, isFactory: Bool, offset: U64) -> Result[U64, CompileDiagnostic] {
+    inout fn lowerViaBody(params: Array[Param], receiver: Bind, receiverType: U64, target: Bind, isAssoc: Bool, isAsync: Bool, hasRet: Bool, resultType: U64, isFactory: Bool, offset: U64, selectedDeclaration: Optional[U64] = <Optional.None />, selectedConformance: U64 = 0U64, selectedTypeArgs: Array[U64] = []) -> Result[U64, CompileDiagnostic] {
         mut val arguments: Array[Arg] = []
         for val parameter in params {
             mut val value = self.pushExpr(e: <Expr.Ident start=parameter.nameStart len=parameter.nameLen />)
@@ -551,8 +551,8 @@ pub impl Comp {
         self.arena.exprSpanStart[receiverExpression] = offset
         val call = self.pushExpr(e: <Expr.Method recv=receiverExpression nameStart=target.nameStart nameLen=target.nameLen args=self.pushArgs(args: arguments) />)
         self.arena.exprSpanStart[call] = offset
-        if isAssoc {
-            try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call kind=if isFactory { give <SyntheticCallKind.Factory /> } else { give <SyntheticCallKind.Ordinary /> } originSerial=self.arena.exprOriginSerial[call] receiverTerm=receiverType receiverIsType=true />)
+        if isAssoc || selectedDeclaration.isSome() {
+            try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call kind=if isFactory { give <SyntheticCallKind.Factory /> } else { give <SyntheticCallKind.Ordinary /> } originSerial=self.arena.exprOriginSerial[call] receiverTerm=receiverType receiverIsType=isAssoc selectedDeclaration=selectedDeclaration selectedConformance=selectedConformance selectedTypeArgs=selectedTypeArgs />)
         }
         mut val result = call
         if isAsync {
@@ -598,15 +598,19 @@ pub impl Comp {
         return <Optional.Some v=self.pushFuncParams(params: parameters) />
     }
 
-    inout fn createCallableFormWitness(sourceIndex: U64, requirement: Func, parameters: FuncParamRange) -> Result[U64, CompileDiagnostic] {
+    inout fn createCallableFormWitness(sourceIndex: U64, conformanceIndex: U64, requirement: Func, parameters: FuncParamRange) -> Result[U64, CompileDiagnostic] {
         val source = self.arena.functionAt(index: sourceIndex)
         val unitBridge = !source.isAsync && self.callableResultIsUnit(ref: source.retTy) && self.callableResultIsUnit(ref: requirement.retTy)
         val result = if unitBridge { give requirement } else { give source }
         val receiver = <Bind nameStart=source.recvStart nameLen=source.recvLen fieldStart=source.recvStart fieldLen=source.recvLen />
         val target = <Bind nameStart=source.nameStart nameLen=source.nameLen fieldStart=source.nameStart fieldLen=source.nameLen />
+        mut val forwardedTypes: Array[U64] = []
+        for parameter in self.copyFuncBinds(binds: source.typeParams) {
+            forwardedTypes.append(self.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen paramId=parameter.paramId args=[] />))
+        }
         val body = try self.lowerViaBody(params: self.copyFuncParams(params: parameters), receiver: receiver,
             receiverType: source.recvTy, target: target, isAssoc: source.isAssoc, isAsync: source.isAsync,
-            hasRet: result.hasRet, resultType: result.retTy, isFactory: source.isFactory, offset: source.defOffset)
+            hasRet: result.hasRet, resultType: result.retTy, isFactory: source.isFactory, offset: source.defOffset, selectedDeclaration: <Optional.Some v=sourceIndex />, selectedConformance: conformanceIndex + 1U64, selectedTypeArgs: forwardedTypes)
         val index = self.arena.functionCount()
         try self.registerDeclaredFunc(f: <Func nameStart=requirement.nameStart nameLen=requirement.nameLen nameId=requirement.nameId
             recvId=source.recvId recvTy=source.recvTy recvPatternParams=source.recvPatternParams recvTraitArgs=source.recvTraitArgs
@@ -693,7 +697,7 @@ pub impl Comp {
                     }
                     if found {
                         changed = true
-                        val adapter = try self.createCallableFormWitness(sourceIndex: selected, requirement: requirement, parameters: selectedParameters)
+                        val adapter = try self.createCallableFormWitness(sourceIndex: selected, conformanceIndex: conformanceIndex, requirement: requirement, parameters: selectedParameters)
                         if self.arena.functionAt(index: selected).params.count() == requirement.params.count() {
                             witnesses.set(i: selectedSourceIndex, value: self.arena.functionAt(index: adapter))
                             functions.set(i: selectedSourceIndex, value: adapter)

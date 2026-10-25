@@ -127,7 +127,7 @@ pub impl Comp {
     // environment is the explicit "not a receiver-instantiated callable"
     // outcome; a valid non-generic method has a nonzero receiverRef and no
     // parameter entries.
-    inout fn inferMethodEnvironment(f: Func, receiverRef: U64, args: ArgRange, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
+    inout fn inferMethodEnvironment(f: Func, receiverRef: U64, args: ArgRange, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />, retainedArguments: Array[U64] = []) -> Result[InstanceEnvironment, CompileDiagnostic] {
         val semanticReceiver = try self.callReceiverTerm(f: f, receiverRef: receiverRef, args: args)
         if semanticReceiver == 0U64 || semanticReceiver >= self.arena.typeCount() { return <Result.Ok value=<InstanceEnvironment /> /> }
         // A method's generic binder list can contain the nominal declaration
@@ -160,6 +160,20 @@ pub impl Comp {
         while proofIndex < proofArgs.count() && proofIndex < fullArgs.count() {
             if fullArgs[proofIndex] == 0U64 { fullArgs[proofIndex] = proofArgs[proofIndex] }
             proofIndex += 1U64
+        }
+        if retainedArguments.count() != 0U64 {
+            if retainedArguments.count() != f.typeParams.count() || fullArgs.count() != f.typeParams.count() {
+                return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "selected forwarding declaration has an invalid binder vector") />
+            }
+            mut val index = 0U64
+            while index < retainedArguments.count() {
+                val retained = retainedArguments[index]
+                if retained == 0U64 || (fullArgs[index] != 0U64 && !self.typeRefEq(a: fullArgs[index], b: retained)) {
+                    return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "selected forwarding arguments conflict with the receiver evidence") />
+                }
+                fullArgs.set(i: index, value: retained)
+                index += 1U64
+            }
         }
         // Fill only binders the receiver pattern did not determine. Those are
         // method-owned generic parameters and may be inferred from arguments.
@@ -317,8 +331,8 @@ pub impl Comp {
 
     // Reuse the exact selected provided environment for source result queries
     // and the signature saved by Record.
-    inout fn staticProvidedCallEnvironment(function: Func, proof: StaticConformanceProof, receiverTerm: U64, args: ArgRange) -> Result[InstanceEnvironment, CompileDiagnostic] {
-        val inferred = try self.inferMethodEnvironment(f: function, receiverRef: receiverTerm, args: args, selectedProof: proof)
+    inout fn staticProvidedCallEnvironment(function: Func, proof: StaticConformanceProof, receiverTerm: U64, args: ArgRange, retainedArguments: Array[U64] = []) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        val inferred = try self.inferMethodEnvironment(f: function, receiverRef: receiverTerm, args: args, selectedProof: proof, retainedArguments: retainedArguments)
         return self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment params=inferred.params args=inferred.args receiverRef=receiverTerm proof=proof />)
     }
 

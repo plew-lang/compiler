@@ -126,10 +126,67 @@ pub impl Comp {
         return self.typeParameterQualifierTerm(exprId: receiverExpr)
     }
 
+    // The synthetic producer has already chosen an implementation and its
+    // conformance. Admit that pair; never choose the same-name omission adapter.
+    inout fn writtenStaticMemberResolution(exprId: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64 = 0U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
+        val index = self.syntheticCallSiteIndex(exprId: exprId)
+        if index < self.decls.syntheticCallSites.count() {
+            val site = self.decls.syntheticCallSites[index]
+            if site.selectedConformance != 0U64 {
+                val selected = match site.selectedDeclaration {
+                    Optional.Some(v: val declaration) => declaration,
+                    Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "selected forwarding conformance has no declaration") /> },
+                }
+                if selected >= self.arena.functionCount() || site.selectedConformance > self.decls.conformCount() || self.cur.checkFn >= self.arena.functionCount() {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "selected forwarding declaration has an invalid owner") />
+                }
+                val conformance = self.decls.conformAt(index: site.selectedConformance - 1U64)
+                val function = self.arena.functionAt(index: selected)
+                val traitIndex = self.decls.traitIndexByOffset(offset: conformance.traitStart)
+                mut val ownsForwarder = false
+                for functionIndex in self.copyConformFuncIds(ids: conformance.witnessFuncIds) {
+                    if functionIndex == self.cur.checkFn { ownsForwarder = true }
+                }
+                if !ownsForwarder || traitIndex >= self.decls.traitCount() || function.originTraitOwner != conformance.traitStart || function.originTraitId != conformance.traitId || function.recvStart != conformance.typeStart {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "selected forwarding declaration does not belong to its conformance") />
+                }
+                val candidates = try self.traitMemberInstanceProofs(baseRef: receiverRef, traitId: conformance.traitId, traitOwner: conformance.traitStart, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn), includeConcrete: true)
+                mut val selection = <TraitProofSelection />
+                for proof in candidates {
+                    val witness = self.proofWitnessForTrait(proof: proof, traitIdx: traitIndex)
+                    if witness.conformIdx != site.selectedConformance || !self.selectedWitnessReceiverMatches(witness: witness, receiverRef: receiverRef) { continue }
+                    try self.collectTraitProof(selection: inout selection, candidate: proof, traitOwner: conformance.traitStart, preferred: false, demand: <ConformanceProofDemand.MemberDispatch />, assocNames: [], assocValues: [])
+                }
+                val answer = try self.finishTraitProofSelection(selection: inout selection, traitOwner: conformance.traitStart, demand: <ConformanceProofDemand.MemberDispatch />)
+                val proof = try self.requireConformanceProof(answer: answer)
+                if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "selected forwarding declaration has no conformance evidence") /> }
+                return <Result.Ok value=<StaticMemberResolution.Provided proof=proof traitIdx=traitIndex callee=selected /> />
+            }
+        }
+        return self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverRef, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner)
+    }
+
+    inout fn syntheticSelectedTypeArguments(exprId: U64, declaration: U64) -> Result[Array[U64], CompileDiagnostic] {
+        val index = self.syntheticCallSiteIndex(exprId: exprId)
+        if index < self.decls.syntheticCallSites.count() {
+            val site = self.decls.syntheticCallSites[index]
+            if site.selectedConformance != 0U64 {
+                match site.selectedDeclaration {
+                    Optional.Some(v: val selected) => {
+                        if selected == declaration { return <Result.Ok value=site.selectedTypeArgs /> }
+                    }
+                    Optional.None => {}
+                }
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "selected forwarding type arguments have a different declaration") />
+            }
+        }
+        return <Result.Ok value=[] />
+    }
+
     inout fn resolveWrittenMethod(exprId: U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         val synthetic = self.syntheticCallSiteIndex(exprId: exprId)
         if synthetic < self.decls.syntheticCallSites.count() {
-            match self.decls.syntheticCallSites[synthetic].selectedFactory {
+            match self.decls.syntheticCallSites[synthetic].selectedDeclaration {
                 Optional.Some(v: val declaration) => { return <Result.Ok value=declaration /> }
                 Optional.None => {}
             }
@@ -1218,7 +1275,7 @@ pub impl Comp {
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
                 val function = self.arena.functionAt(index: callee)
-                val environment = try self.staticProvidedCallEnvironment(function: function, proof: proof, receiverTerm: receiverTerm, args: args)
+                val environment = try self.staticProvidedCallEnvironment(function: function, proof: proof, receiverTerm: receiverTerm, args: args, retainedArguments: (try self.syntheticSelectedTypeArguments(exprId: exprId, declaration: callee)))
                 selectedEnvironment = environment
                 methodArguments = self.signatureTypeArguments(f: function, environment: environment)
                 selectedResult = try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: function), environment: environment, selfRef: receiverTerm, itemRef: 0U64)

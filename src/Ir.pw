@@ -3274,8 +3274,11 @@ pub struct SyntheticCallSite {
     // Allocated at the synthesis point.  Generated nodes have no source span,
     // so an arena index is only a navigation anchor, never their origin.
     pub val originSerial: U64 = 0U64
-    // A typed construction has already selected its declaration.
-    pub val selectedFactory: Optional[U64] = <Optional.None />
+    // Typed construction and synthesized forwarding retain their selection.
+    pub val selectedDeclaration: Optional[U64] = <Optional.None />
+    // One-based conformance owner for a selected implementation forwarding call.
+    pub val selectedConformance: U64 = 0U64
+    pub val selectedTypeArgs: Array[U64] = []
     pub val receiverIsType: Bool = false
     pub val receiverTerm: U64
 }

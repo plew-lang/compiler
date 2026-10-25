@@ -683,7 +683,7 @@ pub impl Comp {
             sourceTraitReceiver = self.methodRecvIsTrait(f: self.arena.functionAt(index: self.cur.checkFn))
         }
         if (sourceTraitReceiver || self.methodRecvIsTrait(f: f)) && (sourceTraitReceiver || f.originTraitId != 0U64) {
-            val staticResolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
+            val staticResolution: StaticMemberResolution = (try self.writtenStaticMemberResolution(exprId: exprId, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
             match staticResolution {
                 StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
                     val result: U64 = (try self.staticRequirementCallResultType(resolution: staticResolution, args: args))
@@ -716,7 +716,7 @@ pub impl Comp {
         if f.isAssoc { finalReceiverSource = <CallTemplateReceiver.Term term=receiverTerm /> }
         mut val proof: StaticConformanceProof = finalEnvironment.proof
         if f.isProvided {
-            val resolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
+            val resolution: StaticMemberResolution = (try self.writtenStaticMemberResolution(exprId: exprId, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
             match resolution {
                 StaticMemberResolution.Requirement(proof: val selected, traitIdx: _, reqIdx: _) => { proof = selected }
                 StaticMemberResolution.Provided(proof: val selected, traitIdx: _, callee: _) => { proof = selected }
@@ -1469,7 +1469,7 @@ pub impl Comp {
             val baseTerm: U64 = self.parametricExprTerm(exprId: baseExpr)
             if baseTerm != 0U64 && baseTerm < self.arena.typeCount() {
                 val baseReceiver: CallTemplateReceiver = (try self.directReceiverTemplateForExpr(exprId: baseExpr))
-                val resolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: baseTerm, nameStart: callStart, nameLen: callLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
+                val resolution: StaticMemberResolution = (try self.writtenStaticMemberResolution(exprId: exprId, receiverRef: baseTerm, nameStart: callStart, nameLen: callLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
                 match resolution {
                     StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
                         try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: baseTerm, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: (try self.staticRequirementCallResultType(resolution: resolution, args: args)))
@@ -1748,7 +1748,7 @@ pub impl Comp {
                     // the abstract checker validates that requirement, and Mono
                     // chooses the concrete witness only in the body environment.
                 }
-                val boundMember: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
+                val boundMember: StaticMemberResolution = (try self.writtenStaticMemberResolution(exprId: exprId, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
                 match boundMember {
                     StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => { methodCallee = self.arena.functionCount() }
                     StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => { methodCallee = self.arena.functionCount() }
@@ -1828,7 +1828,7 @@ pub impl Comp {
                     eprint(text: "\n")
                 }
                 if methodCallee >= self.arena.functionCount() {
-                    val resolution = try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
+                    val resolution = try self.writtenStaticMemberResolution(exprId: exprId, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
                     try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: resolution)
                 }
                 if methodCallee < self.arena.functionCount() {
