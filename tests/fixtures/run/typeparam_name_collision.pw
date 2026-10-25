@@ -1,0 +1,12 @@
+// A nominal V and Dictionary's formal V have distinct declaration identities.
+// Retain the original no-stack-overflow construction, then consume a value
+// through the generic insert/get path to check the resulting substitution.
+use @Std/Io only { print }
+struct V { val n: I64 }
+
+fn main() {
+    val d: Dictionary[String, V] = [:]
+    mut val filled = d
+    filled.insert(key: "item", value: <V n=42I64 />)
+    print(filled.get(key: "item").unwrap().n)
+}
