@@ -769,7 +769,18 @@ pub impl Comp {
         mut val fi: U64 = 0
         while fi < guardHi {
             val f: Func = self.arena.functionAt(index: fi)
-            if f.hasRecv || f.isAssoc {
+            // Associated namespace helpers are not inherited provided
+            // methods. Only this edge's saved requirement witnesses acquire
+            // a concrete surface without an ABI self operand.
+            mut val associatedWitness = false
+            if f.isAssoc && f.recvId == blanket.typeId {
+                mut val witness = 0U64
+                while witness < blanket.witnessFuncIds.count() {
+                    if self.conformFuncIdAt(ids: blanket.witnessFuncIds, index: witness) == fi { associatedWitness = true }
+                    witness += 1U64
+                }
+            }
+            if f.hasRecv || associatedWitness {
                 if f.recvId == blanket.typeId {
                     // skip if the type already has an inherent method of this name
                     // (inherent wins); sibling conferred copies (appended ≥ guardHi) do
@@ -850,7 +861,7 @@ pub impl Comp {
                 // implementation with a body may be copied onto a conformance
                 // surface; copying the requirement itself creates a second,
                 // body-less callable next to the real implementation.
-                if (f.hasRecv || f.isAssoc) && f.body != 0U64 {
+                if f.hasRecv && f.body != 0U64 {
                     val copyOwnerMod: U64 = self.traitModuleByOwner(owner: cf.traitStart)
                     // match the conformance to the right same-name trait by arity (spec/08:
                     // trait names share a flat namespace — a user `trait Sub` vs Core's
@@ -924,7 +935,7 @@ pub impl Comp {
                             mut val receiverTerm = cf.subjectTy
                             if cf.subjectTraitOwner != 0U64 { receiverTerm = f.recvTy }
                             val copyIdx: U64 = self.arena.functionCount()
-                            self.arena.registerFunction(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId lexicalOwnerFnId=lexicalOwner recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) recvTy=receiverTerm recvPatternParams=self.pushFuncBinds(binds: self.copyConformBinds(binds: cf.typeParams)) recvTraitArgs=f.recvTraitArgs typeParams=self.pushFuncBinds(binds: copiedTP) params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=f.hasRecv recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isFactory=f.isFactory isAnonymousFactory=f.isAnonymousFactory isAsync=f.isAsync isDiverging=f.isDiverging isExtern=f.isExtern isPub=f.isPub isProvided=true sourceWitnessFuncId=f.sourceWitnessFuncId srcTraitId=cf.traitId srcTraitOwner=cf.traitStart originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity originConformIdx=originConformIdx sourceConformIdx=sourceConformIdx providedOwnerMod=providedOwnerMod extId=effectiveExtId provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner defOffset=f.defOffset />, registerSurface: self.arena.functionIsSourceCallable(index: fi))
+                            self.arena.registerFunction(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId lexicalOwnerFnId=lexicalOwner recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) recvTy=receiverTerm recvPatternParams=self.pushFuncBinds(binds: self.copyConformBinds(binds: cf.typeParams)) recvTraitArgs=f.recvTraitArgs typeParams=self.pushFuncBinds(binds: copiedTP) params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isFactory=f.isFactory isAnonymousFactory=f.isAnonymousFactory isAsync=f.isAsync isDiverging=f.isDiverging isExtern=f.isExtern isPub=f.isPub isProvided=true sourceWitnessFuncId=f.sourceWitnessFuncId srcTraitId=cf.traitId srcTraitOwner=cf.traitStart originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity originConformIdx=originConformIdx sourceConformIdx=sourceConformIdx providedOwnerMod=providedOwnerMod extId=effectiveExtId provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner defOffset=f.defOffset />, registerSurface: self.arena.functionIsSourceCallable(index: fi))
                             if self.arena.functionIsSourceCallable(index: fi) { try self.registerCallable(funcIdx: copyIdx) }
                     }
                 }

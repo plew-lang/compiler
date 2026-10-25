@@ -5,9 +5,6 @@ trait Report { assoc fn value() -> I64 }
 pub impl Source as Report {
     assoc fn value() -> I64 { return 7I64 }
 }
-pub impl Report {
-    assoc fn twice() -> I64 { return 14I64 }
-}
 struct B {}
 struct A {}
 struct Left {}
@@ -19,21 +16,14 @@ impl[T] Box[T] as Source {}
 newtype WrappedA = A
 
 fn requested[T](value: T) -> I64 where T: Report { return T.value() }
-fn repeated[T](value: T) -> I64 where T: Report { return T.twice() }
 
 fn main() {
     print(A.value())
     print(B.value())
-    print(A.twice())
-    print(B.twice())
     print(requested(value: <A />))
     print(requested(value: <B />))
-    print(repeated(value: <A />))
-    print(repeated(value: <B />))
-    print(Box[Left].value())
-    print(Box[Right].twice())
     print(requested(value: <Box[Left] />))
-    print(repeated(value: <Box[Right] />))
+    print(requested(value: <Box[Right] />))
     print(WrappedA.value())
     print(requested(value: <A /> as WrappedA))
 }
