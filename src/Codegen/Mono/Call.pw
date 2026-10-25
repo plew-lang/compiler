@@ -3405,13 +3405,6 @@ pub impl Comp {
         return <Result.Ok value=0U64 />
     }
 
-    // Same selector rule as witness-table construction: labels choose a trait
-    // requirement; verification has already established its argument types.
-    // Keeping it in Mono makes that choice part of the final-callable record.
-    inout fn finalAnyRequirementSlot(anyRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> U64 {
-        return self.recordAnyRequirementSlot(anyRef: anyRef, nameStart: nameStart, nameLen: nameLen, args: args)
-    }
-
     inout fn finalAnyTraitIdx(anyRef: U64) -> U64 {
         return self.recordAnyTraitIndex(anyRef: anyRef)
     }

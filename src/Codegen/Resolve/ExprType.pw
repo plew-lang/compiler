@@ -1029,7 +1029,7 @@ pub impl Comp {
                         if rt.ref < self.arena.typeCount() {
                             if self.arena.typeTermAt(index: rt.ref).isAny {
                                 val traitIndex = self.recordAnyTraitIndex(anyRef: rt.ref)
-                                val slot = self.recordAnyRequirementSlot(anyRef: rt.ref, nameStart: nameStart, nameLen: nameLen, args: args)
+                                val slot = try self.recordAnyRequirementSlot(anyRef: rt.ref, nameStart: nameStart, nameLen: nameLen, args: args)
                                 if traitIndex < self.decls.traitCount() && slot != 0U64 {
                                     val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
                                     return <Result.Ok value=(try self.anyMemberRetInfo(anyRef: rt.ref, req: requirement)) />

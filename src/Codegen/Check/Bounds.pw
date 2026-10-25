@@ -191,7 +191,7 @@ pub impl Comp {
         val item = self.existentialIterationItemTerm(receiver: receiver)
         if item == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "for-loop requires an Iterable or Iterator") /> }
         val name = self.internBytes(s: "iterator")
-        val slot = self.recordAnyRequirementSlot(anyRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: self.pushArgs(args: []))
+        val slot = try self.recordAnyRequirementSlot(anyRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: self.pushArgs(args: []))
         if slot == 0U64 { return <Result.Ok value=() /> }
         val traitIndex = self.recordAnyTraitIndex(anyRef: receiver)
         val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
@@ -320,6 +320,13 @@ pub impl Comp {
     inout fn staticMemberMatchRank(proof: StaticConformanceProof, traitIdx: U64, requirement: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         if !self.paramsLabelsOk(params: requirement.params, args: args) { return <Result.Ok value=0U64 /> }
         val bound = try self.staticProofBound(proof: proof, traitIdx: traitIdx)
+        return self.boundMemberTypeMatchRank(bound: bound, traitIdx: traitIdx, requirement: requirement, args: args)
+    }
+
+    // Label applicability is established by the caller. Static and erased
+    // receivers then use one candidate-local type matcher under an explicit
+    // trait instance; dispatch evidence is separate from argument applicability.
+    inout fn boundMemberTypeMatchRank(bound: TraitBound, traitIdx: U64, requirement: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         if bound.subject == 0U64 { return <Result.Ok value=0U64 /> }
         val parameters = self.copyFuncBinds(binds: requirement.typeParams)
         mut val values: Array[U64] = []

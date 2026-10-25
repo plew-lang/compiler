@@ -1,0 +1,7 @@
+struct Box[T] { val value: T }
+fn pick(values: Array[Box[I64]]) {}
+fn pick(values: Array[Box[Bool]]) {}
+fn main() {
+    val values: Array[Box[String]] = [<Box[String] value="wrong" />]
+    pick(values: values)
+}

@@ -1,0 +1,29 @@
+use @Std/Io only { print }
+trait First {
+    fn pick(value: I64) -> I64
+    fn pick(value: Bool) -> I64
+}
+trait Reversed {
+    fn pick(value: Bool) -> I64
+    fn pick(value: I64) -> I64
+}
+struct FirstWorker {}
+struct ReversedWorker {}
+impl FirstWorker as First {
+    fn pick(value: I64) -> I64 { return 10I64 }
+    fn pick(value: Bool) -> I64 { return 20I64 }
+}
+impl ReversedWorker as Reversed {
+    fn pick(value: Bool) -> I64 { return 20I64 }
+    fn pick(value: I64) -> I64 { return 10I64 }
+}
+fn forward(operation: any First, value: Bool) -> I64 { return operation.pick(value: value) }
+fn main() {
+    val first: any First = <FirstWorker />
+    val reversed: any Reversed = <ReversedWorker />
+    print(first.pick(value: true))
+    print(reversed.pick(value: true))
+    print(first.pick(value: 4I64))
+    print(reversed.pick(value: 4I64))
+    print(forward(operation: first, value: true))
+}

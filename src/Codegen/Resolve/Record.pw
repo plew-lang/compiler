@@ -495,18 +495,27 @@ pub impl Comp {
         return self.decls.traitCount()
     }
 
-    inout fn recordAnyRequirementSlot(anyRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> U64 {
-        val traitIndex: U64 = self.recordAnyTraitIndex(anyRef: anyRef)
-        if traitIndex >= self.decls.traitCount() { return 0U64 }
-        val nameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        val tr: TraitDef = self.decls.traitAt(index: traitIndex)
-        mut val i: U64 = 0U64
-        while i < tr.reqs.count() {
-            val req: Func = self.traitReqAt(reqs: tr.reqs, index: i)
-            if req.nameId == nameId && self.paramsLabelsOk(params: req.params, args: args) { return i + 1U64 }
-            i += 1U64
+    inout fn recordAnyRequirementSlot(anyRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+        val traitIndex = self.recordAnyTraitIndex(anyRef: anyRef)
+        if traitIndex >= self.decls.traitCount() { return <Result.Ok value=0U64 /> }
+        val nameId = intern(c: inout self, start: nameStart, len: nameLen)
+        val declaration = self.decls.traitAt(index: traitIndex)
+        val bound = try self.existentialRequirementBound(target: anyRef, traitIndex: traitIndex, receiver: anyRef, offset: nameStart)
+        mut val selected = 0U64
+        mut val bestRank = 0U64
+        mut val index = 0U64
+        while index < declaration.reqs.count() {
+            val requirement = self.traitReqAt(reqs: declaration.reqs, index: index)
+            if requirement.nameId == nameId && self.paramsLabelsOk(params: requirement.params, args: args) {
+                val rank = try self.boundMemberTypeMatchRank(bound: bound, traitIdx: traitIndex, requirement: requirement, args: args)
+                if rank == 2U64 && bestRank == 2U64 {
+                    return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous call: multiple trait requirements match the arguments") />
+                }
+                if rank > bestRank { selected = index + 1U64 bestRank = rank }
+            }
+            index += 1U64
         }
-        return 0U64
+        return <Result.Ok value=selected />
     }
 
     // A method expression whose receiver is a function-valued field or an
@@ -537,7 +546,7 @@ pub impl Comp {
         val recvTy: TypeRef = self.arena.typeAt(index: receiverTerm)
         if recvTy.isAny {
             val traitIndex: U64 = self.recordAnyTraitIndex(anyRef: receiverTerm)
-            val slot: U64 = self.recordAnyRequirementSlot(anyRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+            val slot: U64 = try self.recordAnyRequirementSlot(anyRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
             if traitIndex < self.decls.traitCount() && slot != 0U64 {
                 val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
                 try self.checkExistentialRequirementCall(req: requirement, target: receiverTerm, traitIndex: traitIndex, requirement: slot - 1U64, offset: self.exprOffset(id: exprId))

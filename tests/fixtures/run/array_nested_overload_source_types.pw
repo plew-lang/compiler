@@ -1,0 +1,25 @@
+use @Std/Io only { print }
+struct Box[T] { val value: T }
+fn pick(values: Array[Box[I64]]) -> I64 { return 10I64 }
+fn pick(values: Array[Box[Bool]]) -> I64 { return 20I64 }
+fn reversed(values: Array[Box[Bool]]) -> I64 { return 20I64 }
+fn reversed(values: Array[Box[I64]]) -> I64 { return 10I64 }
+struct Picker {}
+impl Picker {
+    fn pick(values: Array[Box[I64]]) -> I64 { return 10I64 }
+    fn pick(values: Array[Box[Bool]]) -> I64 { return 20I64 }
+    fn reversed(values: Array[Box[Bool]]) -> I64 { return 20I64 }
+    fn reversed(values: Array[Box[I64]]) -> I64 { return 10I64 }
+}
+fn main() {
+    val values: Array[Box[Bool]] = [<Box[Bool] value=true />]
+    val picker = <Picker />
+    print(pick(values: values))
+    print(reversed(values: values))
+    print(picker.pick(values: values))
+    print(picker.reversed(values: values))
+    print(pick(values: { give values }))
+    val integers: Array[Box[I64]] = [<Box[I64] value=4 />]
+    print(pick(values: integers))
+    print(picker.pick(values: integers))
+}

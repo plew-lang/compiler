@@ -240,7 +240,10 @@ pub impl Comp {
         val ti: TypeInfo = (try self.argResolvedTypeInfo(argExpr: argExpr))
         if p.tyIsArray {
             if ti.kind == 3 {
-                return <Result.Ok value=intern(c: inout self, start: ti.nameStart, len: ti.nameLen) == p.tyNameId />
+                // An array's element spelling omits nested arguments and
+                // declaration identity. Its complete semantic term is the
+                // discriminator, just as for other generic values.
+                return <Result.Ok value=ti.ref != 0U64 && p.ty != 0U64 && self.typeRefEq(a: ti.ref, b: p.ty) />
             }
             return <Result.Ok value=false />
         }
@@ -408,6 +411,8 @@ pub impl Comp {
                         } else if intern(c: inout self, start: actual.nameStart, len: actual.nameLen) != expectedTerm.nameId {
                             allMatch = false
                         }
+                    } else if actual.kind == 3I64 {
+                        if actual.ref == 0U64 || !self.typeRefEq(a: actual.ref, b: expected) { allMatch = false }
                     } else {
                         val et: TypeRef = self.arena.typeAt(index: expected)
                         if actual.kind == 0I64 && actual.nameLen == 0U64 {

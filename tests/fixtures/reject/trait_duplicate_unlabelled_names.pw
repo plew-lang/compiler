@@ -1,0 +1,5 @@
+trait Picker {
+    fn pick(first~: I64)
+    fn pick(second~: I64)
+}
+fn main() {}

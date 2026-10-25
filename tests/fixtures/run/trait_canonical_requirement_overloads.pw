@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+struct Box[T] { val value: T }
+trait Picker {
+    fn pick(value: Box[I64]) -> I64
+    fn pick(value: Box[Bool]) -> I64
+}
+struct Worker {}
+impl Worker as Picker {
+    fn pick(value: Box[I64]) -> I64 { return 10I64 }
+    fn pick(value: Box[Bool]) -> I64 { return 20I64 }
+}
+fn forward[T](picker: T, value: Box[Bool]) -> I64 where T: Picker { return picker.pick(value: value) }
+fn main() {
+    val worker = <Worker />
+    val picker: any Picker = worker
+    val value = <Box[Bool] value=true />
+    print(picker.pick(value: value))
+    print(picker.pick(value: <Box[I64] value=4 />))
+    print(forward(picker: worker, value: value))
+}

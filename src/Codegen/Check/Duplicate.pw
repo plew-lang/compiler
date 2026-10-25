@@ -35,42 +35,6 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn sameLabels(a: FuncParamRange, b: FuncParamRange) -> Bool {
-        if a.count() != b.count() {
-            return false
-        }
-        mut val i: U64 = 0
-        while i < a.count() {
-            if self.funcParamAt(params: a, index: i).nameId != self.funcParamAt(params: b, index: i).nameId {
-                return false
-            }
-            if self.funcParamAt(params: a, index: i).noLabel != self.funcParamAt(params: b, index: i).noLabel {
-                return false
-            }
-            i += 1
-        }
-        return true
-    }
-
-    inout fn paramTypesEqual(a: FuncParamRange, b: FuncParamRange) -> Bool {
-        if a.count() != b.count() {
-            return false
-        }
-        mut val i: U64 = 0
-        while i < a.count() {
-            val ap: Param = self.funcParamAt(params: a, index: i)
-            val bp: Param = self.funcParamAt(params: b, index: i)
-            if ap.tyIsArray != bp.tyIsArray {
-                return false
-            }
-            if intern(c: inout self, start: ap.tyStart, len: ap.tyLen) != intern(c: inout self, start: bp.tyStart, len: bp.tyLen) {
-                return false
-            }
-            i += 1
-        }
-        return true
-    }
-
     inout fn checkDuplicateTraitReqs() -> Result[(), CompileDiagnostic] {
         mut val ti: U64 = 0
         while ti < self.decls.traitCount() {
@@ -80,10 +44,11 @@ pub impl Comp {
                 mut val b: U64 = a + 1U64
                 while b < reqs.count() {
                     if reqs[a].nameId == reqs[b].nameId {
-                        if self.sameLabels(a: reqs[a].params, b: reqs[b].params) {
-                            if self.paramTypesEqual(a: reqs[a].params, b: reqs[b].params) {
-                                return <Result.Err error=self.diagnosticAt(offset: reqs[b].nameStart, msg: "duplicate trait requirement: another requirement has the same name, labels, and parameter types (spec/08)") />
-                            }
+                        // Requirements expose ordinary callable forms too.
+                        // Share registration's canonical type/binder/label
+                        // overlap relation, never an element/head-name test.
+                        if self.callableFormsMayOverlap(a: reqs[a], b: reqs[b]) {
+                            return <Result.Err error=self.diagnosticAt(offset: reqs[b].nameStart, msg: "duplicate trait requirement: another requirement has the same name, labels, and parameter types (spec/08)") />
                         }
                     }
                     b += 1U64

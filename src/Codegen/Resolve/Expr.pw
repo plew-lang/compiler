@@ -1440,7 +1440,7 @@ pub impl Comp {
         if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
             if self.arena.typeTermAt(index: receiverTerm).isAny {
                 val owner = self.finalAnyTraitIdx(anyRef: receiverTerm)
-                val requirementSlot = self.finalAnyRequirementSlot(anyRef: receiverTerm, nameStart: name.nameStart, nameLen: name.nameLen, args: arguments)
+                val requirementSlot = try self.recordAnyRequirementSlot(anyRef: receiverTerm, nameStart: name.nameStart, nameLen: name.nameLen, args: arguments)
                 if owner < self.decls.traitCount() && requirementSlot != 0U64 {
                     val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: requirementSlot - 1U64)
                     resultTerm = (try self.anyMemberRetInfo(anyRef: receiverTerm, req: requirement)).ref
