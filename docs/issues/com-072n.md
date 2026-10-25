@@ -1,7 +1,7 @@
 ---
 id: com-072n
 status: open
-deps: [com-i20o, com-9p68]
+deps: [com-i20o, com-9p68, com-9clj]
 links: []
 created: 2026-10-24T20:09:24Z
 type: bug
