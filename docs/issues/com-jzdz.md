@@ -1,6 +1,6 @@
 ---
 id: com-jzdz
-status: in_progress
+status: closed
 deps: [com-wrjh]
 links: []
 created: 2026-10-25T10:39:41Z
@@ -68,11 +68,38 @@ is diagnostic observation, not a formal regression/speedup or G2a certification.
 The implementation adds only a fixed-size source exit mask/union per loop,
 with no new walk, payload field, copy, allocation or downstream selector.
 
-**Not complete.** Independent review confirmed [com-wrjh](com-wrjh.md): a
-covered match arm return is still accepted by both old/new candidates. The
-loop-specific fix cannot certify the task's broader prohibition. The new real
-dependency blocks closure; source validity must not be reduced to live joins.
-The user-requested task-omission stop applies. No match-arm repair was made;
-E3/G1/G2/G3/parent, main/seed/carrier promotion remain incomplete.
-Durable evidence: meta/evidence/existing-feature-conformance/source-owner-facts/
-loop-source-exit-repair.json.
+The covered-arm dependency com-wrjh is now resolved by the independently
+accepted source-owner admission below. The loop-producer evidence remains
+valid for its finite scope; the full prohibition no longer relies on that
+aggregate summary.
+
+## Independently Accepted Repair
+
+Resolved at production/fixtures a9556c25, candidate
+bin/plewc-return-owner-admission SHA256
+7f4dbc4f8b4930baf09eea79c07367888577abcb10b2c87a102845dbe8be33fb.
+The sole direct-transfer recording boundary now selects a return target using
+its actual source owner and declared invocation contract. Global owners reject;
+diverging function/closure owners reject independently of arm coverage.
+checkDivergingBody no longer infers forbidden returns from live completion joins;
+it retains execution fallthrough checking. Valid target facts and immutable
+publication still authorize the actual Mid return and cleanup consumers.
+
+Standard build20261025T112941-build-ac44b7 exits0;6038 inputs fixed.
+Native9/reject27 and check/run18 pass, including cached owner failure, failed
+reader admission, valid global closure execution, ordinary covered returns,
+closure isolation, loop completion and actual saved-target Mid consumers.
+The first never-green mode diagnostic driver incorrectly expected --run to
+check an unused body; its failure is retained. The corrected control preserves
+that lazy success and separately requests the invalid body, which rejects.
+No maintained fixture expectation or source rule was weakened.
+
+Independent source_return_owner_completion_review accepted com-wrjh, com-nr7y
+and com-jzdz individually at their finite scope, tracing producer to final
+consumer/failure and checking actual outputs and source hashes. Same-source
+alternating diagnostic medians old09d1 5.948563s/new7f4d 5.947388s,8 LLVM
+outputs identical,6038 inputs unchanged: no slowdown evidence, not a formal
+G2a or speedup claim. Full E3/G1/G2/G3 and phase three remain open.
+Durable report, sources, raw results, initial driver failure and coverage:
+meta/evidence/existing-feature-conformance/source-owner-facts/
+return-owner-admission-repair.json.
