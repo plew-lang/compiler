@@ -1,7 +1,7 @@
 ---
 id: com-9l3b
 status: in_progress
-deps: [com-p5um, com-o3vw, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-072n, com-3qne, com-uuya, com-vuv9]
+deps: [com-p5um, com-o3vw, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-072n, com-3qne, com-uuya, com-vuv9, com-6cw6]
 links: []
 created: 2026-10-23T10:41:59Z
 type: task
@@ -50,6 +50,6 @@ while fresh c50d2a04 and measured 73078e5d reproduce all regressions.
 Do not change these valid language-test expectations or count this normal green.
 
 Receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-normal-initial-failure.json
-retains gate totals and comparison hashes. A finite named source-copy placement
-repair is being reviewed before adding its task/dependencies. Affected area/G1
+retains gate totals and comparison hashes. Required source-copy placement repair [com-6cw6](com-6cw6.md) has an independently
+reviewed finite scope and explicit dependencies. Affected area/G1
 admission must reopen; G2b remains incomplete. Gen/deps/ASan were not started.
