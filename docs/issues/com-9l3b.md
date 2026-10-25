@@ -65,8 +65,14 @@ Full gen20261025T065138-gen-d05081 passes25 positive/5 reject, skip0/
 fail0 and gen-input-ast; deps20261025T065242-deps-1bd648 passes all10
 dependency checks. Both exit0 with unchanged inputs. Corresponding tracked
 receipts phase3g-gen.json / phase3g-deps.json retain exact compiler and result
-hashes. LLVM22 full ASan-LSan20261025T065258-asan-3d0f5a is in progress;
-G2b remains open until all required A-E markers and independent review.
+hashes. LLVM22 full ASan-LSan20261025T065258-asan-3d0f5a exits0 with unchanged
+5,990 inputs: A1/B2603/C1524/D50/E80, all levels clean,76.38 minutes.
+Receipt phase3g-asan.json. Independent final gate/identity/input review is
+pending; G3 and the parent remain unaccepted.
+
+All four profiles use exact measured compiler3c532ce1 from refreshed G2a.
+A byte-identical convenience copy is saved as bin/plewc-phase3-final; this
+is a candidate, not adoption, seed promotion or a replacement of tracked bin/plewc.
 
 The earlier gen failure is retained at
 meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-gen-initial-failure.json.
