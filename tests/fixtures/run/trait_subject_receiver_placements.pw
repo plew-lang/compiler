@@ -1,0 +1,41 @@
+// Declaration order is deliberately B before A; layout is identical.
+use @Std/Io only { print }
+
+trait Source { fn read() -> I64 }
+trait Report { fn report() -> I64 }
+pub impl Source as Report {
+    fn report() -> I64 { return self.read() + 1I64 }
+}
+pub impl Report {
+    fn twice() -> I64 { return self.report() * 2I64 }
+}
+struct B { val number: I64 }
+struct A { val number: I64 }
+struct Left {}
+struct Right {}
+struct Box[T] { val number: I64 }
+pub impl B { factory }
+pub impl A { factory }
+pub impl[T] Box[T] { factory }
+impl B as Source { fn read() -> I64 { return self.number * 10I64 } }
+impl A as Source { fn read() -> I64 { return self.number } }
+impl[T] Box[T] as Source { fn read() -> I64 { return self.number } }
+
+fn requested[T](value: T) -> I64 where T: Report { return value.twice() }
+
+fn main() {
+    val first = <A number=4I64 />
+    val second = <B number=2I64 />
+    print(first.report())
+    print(second.report())
+    print(first.twice())
+    print(second.twice())
+    print(requested(value: first))
+    print(requested(value: second))
+    val left = <Box[Left] number=7I64 />
+    val right = <Box[Right] number=9I64 />
+    print(left.report())
+    print(right.report())
+    print(requested(value: left))
+    print(requested(value: right))
+}

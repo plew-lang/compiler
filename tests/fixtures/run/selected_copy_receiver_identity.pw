@@ -1,0 +1,41 @@
+// Selection of a conferred body retains both source proof and full receiver.
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { TraitConstraint, TraitInstanceKey, ConformanceProofDemand }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "trait Source {{ fn read() -> I64 }} trait Report {{ fn report() -> I64 }} pub impl Source as Report {{ fn report() -> I64 {{ return self.read() }} }} struct B {{ val number: I64 }} struct A {{ val number: I64 }} struct Left {{}} struct Right {{}} struct Box[T] {{ val number: I64 }} impl B as Source {{ fn read() -> I64 {{ return self.number }} }} impl A as Source {{ fn read() -> I64 {{ return self.number }} }} impl[T] Box[T] as Source {{ fn read() -> I64 {{ return self.number }} }} fn context(first: A, second: B, left: Box[Left], right: Box[Right]) {{}}"
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="copy-receiver-identity.pw" text=source />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val context = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "context").nameId)
+    val parameters = compiler.arena.functionAt(index: context).params
+    val report = compiler.decls.traitIndexByOffset(offset: compiler.decls.traitAt(index: 1U64).nameStart)
+    val constraint = <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: report).nameStart positionalArgs=[] /> assocPredicates=[] />
+    mut val keys: Array[U64] = []
+    mut val index = 0U64
+    while index < parameters.count() {
+        val receiver = compiler.funcParamAt(params: parameters, index: index).ty
+        val proof = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: receiver, constraint: constraint).unwrap()
+        val selected = compiler.proofConcreteWitness(proof: proof, receiverRef: receiver, traitIdx: report, reqIdx: 0U64).unwrap()
+        assert(selected < compiler.arena.functionCount())
+        val function = compiler.arena.functionAt(index: selected)
+        assert(function.isProvided)
+        val environment = compiler.bodyInstanceEnvironment(fnIdx: selected, args: [], recvInstRef: receiver, selectedProof: proof).unwrap()
+        assert(compiler.bodyReceiverMatchesDeclaration(function: function, environment: environment))
+        val key = compiler.internBodyInstance(fnIdx: selected, environment: environment)
+        for previous in keys { assert(previous != key) }
+        keys.append(key)
+        val other = compiler.funcParamAt(params: parameters, index: (index + 1U64) % parameters.count()).ty
+        assert(compiler.proofConcreteWitness(proof: proof, receiverRef: other, traitIdx: report, reqIdx: 0U64).unwrap() == compiler.arena.functionCount())
+        val foreign = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: receiver,
+            constraint: <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: 0U64).nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+        assert(compiler.proofConcreteWitness(proof: foreign, receiverRef: receiver, traitIdx: report, reqIdx: 0U64).unwrap() == compiler.arena.functionCount())
+        index += 1U64
+    }
+    assert(keys.count() == 4U64)
+    print("selected-copy-receiver-identity")
+}
