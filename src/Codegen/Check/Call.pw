@@ -53,9 +53,31 @@ pub impl Comp {
                 }
                 return <Result.Ok value=<SourceCallParameterState.Selected function=function signature=(try self.selectedStaticCallSignature(template: template, function: function, typeArgs: typeArgs, resolution: resolution)) /> />
             }
+            CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
+                match target {
+                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot, interfaceRoot: val root) => {
+                        return self.sourceExistentialCallParameters(template: template, traitIndex: traitIndex, slot: slot, root: root)
+                    }
+                    _ => { return <Result.Ok value=<SourceCallParameterState.NotApplicable /> /> }
+                }
+            }
             CallTemplateKind.Pending | CallTemplateKind.ExpectedValue => { return <Result.Ok value=<SourceCallParameterState.Unselected /> /> }
             _ => { return <Result.Ok value=<SourceCallParameterState.NotApplicable /> /> }
         }
+    }
+
+    // Erasure changes dispatch, not the source parameter contract. Interpret
+    // the retained requirement and interface proof through the same signature
+    // projection used by Record contexts, argument checking and source closure.
+    inout fn sourceExistentialCallParameters(template: CallTemplate, traitIndex: U64, slot: U64, root: U64) -> Result[SourceCallParameterState, CompileDiagnostic] {
+        if traitIndex >= self.decls.traitCount() || slot == 0U64 || slot > self.decls.traitAt(index: traitIndex).reqs.count() {
+            return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "internal error: selected dynamic call has no requirement") />
+        }
+        val source = try self.requireSourceInterfaceRoot(root: root, site: template.siteKey, receiver: template.receiverTypeTerm, traitIndex: traitIndex)
+        val function = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
+        val proof = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Interface index=root - 1U64 /> />
+        val signature = <SourceCallSignature.Trait bound=source.bound traitIndex=traitIndex environment=<InstanceEnvironment receiverRef=source.bound.subject proof=proof /> />
+        return <Result.Ok value=<SourceCallParameterState.Selected function=function signature=signature /> />
     }
 
     inout fn checkRecordedCallLiteralArguments(exprId: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {

@@ -1,0 +1,42 @@
+// Invalid selected dynamic arguments cannot publish usable facts or leak cursors.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Diag only { CompileDiagnostic }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn function(compiler: inout Comp, name: String) -> U64 {
+    val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    assert(index < compiler.arena.functionCount())
+    return index
+}
+
+fn failure(result: Result[(), CompileDiagnostic], message: String) {
+    match result {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == message) }
+        Result.Ok(value: _) => { panic("invalid dynamic argument published owner success") }
+    }
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    val resources = [
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64, Bool }}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 struct Bool }}" />,
+    ]
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="dynamic-owner.pw" text="trait Operation {{ fn bump(value: inout I64) }}\nstruct Worker {{}}\nimpl Worker as Operation {{ fn bump(value: inout I64) {{}} }}\nfn broken(operation: any Operation) {{ val number = 4I64 operation.bump(value: inout number) }}\nfn good(operation: any Operation) {{ mut val number = 4I64 operation.bump(value: inout number) }}\nfn main() {{}}\n" />,
+        sources: <SourceAccess stdRoot="plew:std/".bytes() resources=resources />).unwrap()
+    val broken = function(compiler: inout compiler, name: "broken")
+    val good = function(compiler: inout compiler, name: "good")
+    compiler.cur.checkFn = 70001U64
+    compiler.cur.bodyId = 70002U64
+    val divergingMessage = "an `inout` argument must be a mutable place; declare it `mut val` (spec/03)"
+    failure(result: compiler.prepareLexicalBody(fnIdx: broken), message: divergingMessage)
+    failure(result: compiler.prepareLexicalBody(fnIdx: broken), message: divergingMessage)
+    assert(compiler.preparedFunctionSemanticFacts(fnIdx: broken).isErr())
+    assert(compiler.cur.checkFn == 70001U64 && compiler.cur.bodyId == 70002U64)
+    compiler.prepareLexicalBody(fnIdx: good).unwrap()
+    assert(compiler.preparedFunctionSemanticFacts(fnIdx: good).isOk())
+    print("source-dynamic-argument-admission")
+}

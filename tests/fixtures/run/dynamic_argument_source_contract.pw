@@ -1,0 +1,24 @@
+use @Std/Io only { print }
+trait Operation {
+    fn bump(value: inout I64)
+    fn small(value: I8) -> I8
+}
+struct Worker {}
+impl Worker as Operation {
+    fn bump(value: inout I64) { value += 1I64 }
+    fn small(value: I8) -> I8 { return value }
+}
+
+trait Input[T] { fn take(value: T) -> T }
+impl Worker as Input[I8] { fn take(value: I8) -> I8 { return value } }
+fn forward(operation: any Operation) -> I8 { return operation.small(value: { give 6 }) }
+fn main() {
+    val operation: any Operation = <Worker />
+    mut val number = 4I64
+    operation.bump(value: inout number)
+    print(number)
+    print(operation.small(value: 4))
+    print(forward(operation: operation))
+    val input: any Input[I8] = <Worker />
+    print(input.take(value: 7))
+}

@@ -629,6 +629,17 @@ pub impl Comp {
                     }
                 }
                 try self.checkCallTemplateArguments(args: args, parameterCount: parameterCount, offset: offset)
+                match target {
+                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot, interfaceRoot: val root) => {
+                        match (try self.sourceExistentialCallParameters(template: template, traitIndex: traitIndex, slot: slot, root: root)) {
+                            SourceCallParameterState.Selected(function: val function, signature: val signature) => {
+                                try self.checkSourceCallArguments(template: template, function: function, arguments: args, signature: signature)
+                            }
+                            _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected dynamic call has no parameter signature") /> }
+                        }
+                    }
+                    _ => {}
+                }
             }
             _ => {}
         }

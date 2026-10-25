@@ -1,0 +1,13 @@
+trait Operation {
+    fn bump(value: inout I64)
+    fn small(value: I8) -> I8
+}
+struct Worker {}
+impl Worker as Operation {
+    fn bump(value: inout I64) { value += 1I64 }
+    fn small(value: I8) -> I8 { return value }
+}
+fn main() {
+    val operation: any Operation = <Worker />
+    operation.small(value: "wrong")
+}
