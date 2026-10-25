@@ -1,6 +1,6 @@
 ---
 id: com-p5um
-status: in_progress
+status: closed
 deps: [com-61jt, com-auvx]
 links: []
 created: 2026-10-23T10:41:59Z
@@ -40,21 +40,18 @@ waived by a bounded child closing.
 
 ## Outcome
 
-Independent c2_classification_review accepts the refreshed standard gate
-20261025T050217-self-host-8da5f2 at source8997fa7e (productionb16439fa,
-fixture573ff620). Exit0 and5,982 unchanged inputs match G1 and actual files.
-Generation1 ->2 changes LLVM; generation2 ->3 matches LLVM/runtime exactly.
-All measured outputs match. Timings6.460528 /6.179747 /5.886134 seconds give
-formal median6.179747 seconds, below7. No sampling or overlapping validation.
+Independent c2_classification_review accepts refreshed standard gate
+20261025T061121-self-host-f849e0 at sourcef225570e (production043e2402,
+fixture17537a40). Exit0, all5,990 inputs unchanged and matching G1/current
+files/tools/dependencies. Generation1 ->2 changes LLVM; generation2 ->3
+matches LLVM/runtime exactly. All measured outputs match. Timings6.384374 /
+5.954309 /5.924183 seconds give formal median5.954309 seconds, below7
+(and below6). No sampling or overlapping validation.
 
-Measured compiler: meta/tmp/validation/20261025T050217-self-host-8da5f2/self-host/generation-2/next/plewc,
-SHA256 2d7c785b55fa33ffc143b749a8f17986c437521140e2abf4d80687b59e5a3c49.
+Measured compiler: meta/tmp/validation/20261025T061121-self-host-f849e0/self-host/generation-2/next/plewc,
+SHA256 3c532ce1c7d1e2b0be6bc1c24b8c215a92be87625c65f531a0d83dc1719830b1.
 The generation3 successor has the same hash. G2b consumes this exact compiler.
 Receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-self-host.json
-retains all timing/artifact references. Old gate5.954835 remains in Git/raw
-history and is not a same-source comparison. Full suites, parent completion
-and main/seed/adopted-carrier promotion remain uncertified.
-
-The final generator gate exposed com-v1wa/com-tkz7 after this measurement.
-Those production repairs reopen this task; the recorded6.179747 gate remains
-historical input evidence, not new-candidate certification. Refresh after G1.
+retains all timing/artifact references. Older gates remain in Git/raw history
+and are not same-source speed comparisons or new-candidate certification.
+Full suites, parent completion and main/seed/adopted carrier remain uncertified.
