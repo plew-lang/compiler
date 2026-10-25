@@ -1,22 +1,47 @@
+// Parent type storage must not depend on a newer unrelated expression row.
+// This is a source-recording test, not a Mid execution test.
 use @Std/Io only { print }
 use @Std/Core only { assert }
-use /Frontend only { Comp }
-use /Ir only { Expr, ExprRange }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Ir only { Expr, Stmt, SemanticExpressionTypeState }
 
 fn main() {
-    mut val compiler: Comp = <Comp />
-    compiler.arena.reserveTypeSentinel()
-    val integer = compiler.internBytes(s: "I64")
-    val array = compiler.internBytes(s: "Array")
-    compiler.arena.exprs.append(<Expr.Int value=4U64 offset=integer.nameStart isBool=false tyStart=integer.nameStart tyLen=integer.nameLen isNeg=false />)
-    compiler.arena.exprChildPool.append(0U64)
-    compiler.arena.exprs.append(<Expr.Array elems=<ExprRange start=0U64 len=1U64 /> />)
-    // The parent is newer than its child and has no preallocated type row.
-    compiler.recordExpr(exprId: 1U64).unwrap()
-    val term = compiler.semanticExprTerm(exprId: 1U64)
-    assert(term != 0U64)
+    mut val compiler = <Comp />
+    val sources = <SourceAccess stdRoot="plew:std/".bytes() resources=[
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64 }} pub struct Array[Element] {{}}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 }}" />,
+        <SourceResource path="plew:std/ArrayProbe.pw".bytes() text="fn probe() {{ val values = [4I64] }}" />,
+    ] />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="plew:std/ArrayProbe.pw" />, sources: sources).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: owner).body, index: 0U64)
+    val parent = match compiler.arena.stmts[statement] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val expression) => expression,
+        _ => { panic("missing array initializer") },
+    }
+    val child = match compiler.arena.exprs[parent] {
+        Expr.Array(elems: val elements) => {
+            assert(elements.len == 1U64)
+            give compiler.exprAt(exprs: elements, index: 0U64)
+        }
+        _ => { panic("missing array parent") },
+    }
+    assert(parent > child)
+    compiler.cur.checkFn = owner
+    assert(compiler.preparedFunctionSemanticFacts(fnIdx: owner).isErr())
+    val before = compiler.sourceSemanticExprTypeAt(index: parent)
+    assert(before.term == 0U64)
+    match before.typeState {
+        SemanticExpressionTypeState.Unrecorded => {}
+        _ => { panic("parent type fact was preallocated") }
+    }
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    val term = facts.expression(exprId: parent).unwrap().term
+    assert(term != 0U64 && compiler.isLangArrayType(ref: term))
     val recorded = compiler.arena.typeAt(index: term)
-    assert(recorded.nameStart == array.nameStart && recorded.args.count() == 1U64)
-    assert(compiler.typeRefEq(a: recorded.args[0U64], b: compiler.semanticExprTerm(exprId: 0U64)))
+    assert(recorded.args.count() == 1U64)
+    assert(compiler.typeRefEq(a: recorded.args[0U64], b: facts.expression(exprId: child).unwrap().term))
     print("ok")
 }

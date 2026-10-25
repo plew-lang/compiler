@@ -1,6 +1,6 @@
 ---
 id: com-0uw9
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-24T19:53:11Z
@@ -34,3 +34,18 @@ Independent b2 accepted this finite scope. Raw baseline/current controls and
 llvm-identity.json are in compiler/tmp/perf-six-type-pools/normal-failure-controls.
 Normal20261024T193137-test-625275 remains failed; required before G2b green,
 separate from the successfully measured performance task.
+
+## Confirmed Precondition and Repair
+
+Staged array-diagnostic-1 reproduces the old fixture's exact Err:
+array construction requires the ambient Array declaration. The original
+creation commit d27dc611 tested storage allocation before recording a parent
+newer than its literal child; it was not a Mid execution or arbitrary bare-Comp
+API contract. Preserve that purpose under the current owner-local storage.
+
+The fixture now loads a minimal canonical Lang/Core graph, parses one authored
+array initializer, asserts parent > child and an Unrecorded/zero parent fact
+before any owner publication, then requests the real lexical body and reads its
+immutable payload. Canonical Array identity, one child and child/element type
+equality remain mandatory. Do not expose writer APIs, manually append incomplete
+AST metadata or accept the old Err. No production implementation changes.
