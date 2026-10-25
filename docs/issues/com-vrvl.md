@@ -1,6 +1,6 @@
 ---
 id: com-vrvl
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-23T10:41:58Z
@@ -52,3 +52,11 @@ The task's exact four inputs remain demand/finalization/initializers/registry.
 The older session-traced-jit.json fourth case is mid_requests, so that historical
 success does not certify registry. No current normal-CLI execution was started
 during this preparation.
+
+## Fresh Isolated Outcome
+
+Candidate09dac934/source1f442206 ran the exact demand/finalization/initializers/registry inputs independently via normal CLI `--run SOURCE`. All four exit124 at about61 seconds from the unchanged60-second no-progress watchdog; no normal golden output is claimed. Inputs remain unchanged. One native sample per case at25seconds observed active SourceBodyGenerator, native Plew prepare callback and ORC module/compilation work; this is evidence of work at that instant, not proof that the entire interval progressed or that no later deadlock exists.
+
+The precise observation gap is normal run's default tracePhases=false and synchronous requested body/ORC preparation without a watched work-unit publisher. Required finite repair com-auvx names the actual producers and process_watch consumer, prohibiting heartbeat/deadline/JIT-policy substitutes. F3's bounded investigation exit allows this precise phase plus required child; met-rzt4/G1 remain open until repair and fresh success. The first never-successful scratch runner wrongly passed a trace flag in the source position; normal-1 is retained as setup failure, normal-2 uses correct unchanged CLI arguments. This is unrelated to application semantic failure.
+
+Durable evidence: meta/evidence/existing-feature-conformance/source-owner-facts/phase3f-session-cli-investigation.json. Independent c2_classification_review matched all receipt references,251 inputs/carrier and4 stdout/stderr hashes, observed samples and mandatory successor dependencies; accepted bounded investigation completion. New progress alone will not certify the four cases; com-auvx must obtain actual outcomes or assign any newly precise mandatory repair.

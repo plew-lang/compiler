@@ -1,6 +1,6 @@
 ---
 id: com-s248
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-10-23T10:41:58Z
@@ -37,3 +37,7 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Disposition Deliverable
+
+The parent met-si6j Historical and Risk Disposition (F4) section now contains exactly six rows D1–D6, with maintained positive/reject/corruption inputs, source owner/fact/final reader, finite repair owner and scoped receipt. This is evidence assignment, not final-candidate recertification. Current arrow_store_literal and associated-copy producer gaps are required repairs com-o3vw/com-9clj; F3 session progress remains com-vrvl. G1/G2 and area tasks stay open. Independent review found that com-o3vw needed an explicit G1 dependency in addition to G2b; that dependency and the D1 row are now synchronized. Independent b2_completion_review verified all six rows, maintained fixtures/receipts and the repaired G1 dependency; accepted the finite evidence assignment as complete. no new source run or defect was inferred from a risk label.
