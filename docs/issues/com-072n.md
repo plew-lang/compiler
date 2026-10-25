@@ -1,6 +1,6 @@
 ---
 id: com-072n
-status: open
+status: closed
 deps: [com-i20o, com-9p68, com-9clj]
 links: []
 created: 2026-10-24T20:09:24Z
@@ -21,4 +21,8 @@ All failures were reproduced against the same frozen latest source/std/fixtures.
 
 ## Independent Root Classification
 
-At476b8e2b, measured6dd and original090 reproduce the same associated-function/gen mismatch. Independent body_receiver_completion_review confirms two distinct roots, now finite required children: com-i20o (lexical Self plus namespace identity, also F1 prerequisite) and com-9p68 (selected proof placement plus receiver matching). G1 and callable/interface areas depend on this parent. Existing finite C3/com-6paa admission is unchanged. No receiver checker relaxation is authorized.
+At476b8e2b, measured6dd and original090 reproduce the same associated-function/gen mismatch. Independent body_receiver_completion_review confirms two initially distinct roots, subsequently closed through three finite required children: com-i20o (lexical Self plus namespace identity, also F1 prerequisite) com-9p68 (selected proof placement plus receiver matching), and com-9clj (the discovered associated witness-copy producer). G1 and callable/interface areas depend on this parent. Existing finite C3/com-6paa admission is unchanged. No receiver checker relaxation is authorized.
+
+## Outcome
+
+Resolved in its original trait_assoc_fn/trait_blanket receiver-declaration scope. All three required children are independently accepted. At4fa816d5/candidate803550d6, original native outputs42/15 and5/21/10/9 remain unchanged; associated producer closure has27 native/5reject, whole sourcecheck and F1run6 fifteen groups. Independent body_receiver_completion_review accepts this parent and com-9clj after checking the durable receipt and current hashes. Required default-forwarding com-3qne and CLI progress com-auvx remain outside this finite parent and block G1. This is not final whole-candidate acceptance.

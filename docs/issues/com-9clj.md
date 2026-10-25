@@ -1,6 +1,6 @@
 ---
 id: com-9clj
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-25T00:44:22Z
@@ -36,3 +36,7 @@ findAssoc retains its existing inherent/trait-namespace path and sends only gene
 ## Abstract Path Preservation
 
 Independent completion review required source_provided_path_conditions. Fresh52a3ca0d passed21 native/5reject, whole sourcecheck and F1 fifteen groups, but this existing internal fixture aborted: the completed T:Q → Q-as-P candidate is AssumedTraitPath and proofWitnessForTrait ignored its retained edges. The central edge reader now reads both concrete and assumption-rooted path edges while leaving a bare AssumedBound without a fabricated witness. The selected full proof and its declaration assumption/conditions remain unchanged. Revalidate both proof-source lanes with and without conditions, existing endpoint/path controls and ambiguity rejects before closure. The associated default forwarding control is assigned to required com-3qne, not claimed by this nondefault producer closure.
+
+## Outcome
+
+Resolved for the finite nondefault bare trait-subject associated witness family at4fa816d5, candidate803550d6. Independent body_receiver_completion_review verified the producer-to-final-consumer closure,306 focused inputs,27 native/5reject success, whole sourcecheck, F1run6 fifteen groups/301 unchanged inputs and9 receipt references. The meta receipt associated-witness-producer-repair.json is authoritative. Default forwarding remains required com-3qne; namespace-helper inheritance, Self.namespace and extension-associated production are not certified. No final G2, main, seed or carrier promotion.
