@@ -1,37 +1,75 @@
-use /Frontend only { Comp }
-use /Ir only { TraitDef, TraitOwner, Func, ArgRange, TypeRef }
+// Same-spelled traits retain distinct source authorities through sealed calls.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Ir only { Stmt, CallTemplateKind, StaticMemberResolution, TypeRef, InstanceEnvironment }
+use @Std/Core only { assert }
 use @Std/Io only { print }
+
+fn inspect(compiler: inout Comp, name: String, provided: Bool, resultName: String) -> U64 {
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    val function = compiler.arena.functionAt(index: owner)
+    val expectedName = compiler.internBytes(s: resultName)
+    val expected = compiler.langTypeRefAt(nameStart: expectedName.nameStart, nameLen: expectedName.nameLen, args: [])
+    assert(compiler.typeRefEq(a: function.retTy, b: expected))
+    val statement = compiler.blockStmtAt(blkId: function.body, index: 0U64)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Return(value: val value, hasValue: _, offset: _) => value
+        _ => { panic("missing fixture return") }
+    }
+    val reader = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    assert(compiler.typeRefEq(a: reader.expression(exprId: expression).unwrap().term, b: function.retTy))
+    val key = compiler.templateCallSiteKey(fnIdx: owner, exprId: expression).unwrap()
+    val selected = reader.operationAt(index: 0U64).unwrap()
+    assert(selected.siteKey.sameKey(other: key))
+    assert(reader.operationAt(index: 1U64).isNone())
+    val body = compiler.internBodyInstance(fnIdx: owner, environment: <InstanceEnvironment />)
+    assert(compiler.typeRefEq(a: compiler.preparedBodyExpression(bodyId: body, exprId: expression).unwrap().term, b: expected))
+    val resolution = match selected.kind {
+        CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: _, resultTerm: val result) => {
+            assert(compiler.typeRefEq(a: result, b: function.retTy))
+            give resolution
+        }
+        _ => { panic("missing selected static member") }
+    }
+    match resolution {
+        StaticMemberResolution.Requirement(proof: _, traitIdx: val trait, reqIdx: _) => { assert(!provided) return trait }
+        StaticMemberResolution.Provided(proof: _, traitIdx: val trait, callee: _) => { assert(provided) return trait }
+        _ => { panic("missing owner proof") }
+    }
+}
 fn main() {
     mut val compiler = <Comp />
-    compiler.arena.reserveTypeSentinel()
-    val padding = compiler.internBytes(s: "padding")
-    val first = compiler.internBytes(s: "Read")
-    val second = compiler.arena.bytes.count()
-    compiler.arena.bytes.append('R')
-    compiler.arena.bytes.append('e')
-    compiler.arena.bytes.append('a')
-    compiler.arena.bytes.append('d')
-    val read = compiler.internBytes(s: "read")
-    val hidden = compiler.internBytes(s: "hidden")
-    val intType = compiler.internBytes(s: "I64")
-    val stringType = compiler.internBytes(s: "String")
-    compiler.decls.registerTraitOwner(<TraitOwner sourceModule=1U64 nameStart=first.nameStart nameLen=4U64 nameId=first.nameId arity=0U64 />)
-    compiler.decls.registerTraitOwner(<TraitOwner sourceModule=2U64 nameStart=second nameLen=4U64 nameId=first.nameId arity=0U64 />)
-    compiler.decls.registerTrait(<TraitDef nameStart=first.nameStart nameLen=4U64 nameId=first.nameId reqs=compiler.pushTraitReqs(reqs: [<Func nameStart=read.nameStart nameLen=read.nameLen nameId=read.nameId retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false hasRet=true retStart=intType.nameStart retLen=intType.nameLen />]) />)
-    compiler.decls.registerTrait(<TraitDef nameStart=second nameLen=4U64 nameId=first.nameId reqs=compiler.pushTraitReqs(reqs: [<Func nameStart=read.nameStart nameLen=read.nameLen nameId=read.nameId retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false hasRet=true retStart=stringType.nameStart retLen=stringType.nameLen />]) />)
-    compiler.arena.registerFunction(<Func nameStart=hidden.nameStart nameLen=hidden.nameLen hasRet=true retStart=intType.nameStart retLen=intType.nameLen retIsArray=false retTy=0U64 body=0U64 recvStart=first.nameStart recvLen=first.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false hasRecv=true recvId=first.nameId provTraitOwner=first.nameStart nameId=hidden.nameId isPub=false />)
-    val args = <ArgRange start=0U64 len=0U64 />
-    // Exercise the retained source type query, not an independent boolean
-    // candidate-exists implementation with its own trait traversal.
-    val firstHidden = compiler.traitMemberRetInfo(traitOwner: first.nameStart, traitArity: 0U64, qName: hidden.nameId, args: args, tpStart: padding.nameStart, tpLen: padding.nameLen, depth: 0U64, useMod: 1U64)
-    val secondHidden = compiler.traitMemberRetInfo(traitOwner: second, traitArity: 0U64, qName: hidden.nameId, args: args, tpStart: padding.nameStart, tpLen: padding.nameLen, depth: 0U64, useMod: 1U64)
-    print(firstHidden.nameStart == intType.nameStart)
-    print(secondHidden.nameLen != 0U64)
-    val result = compiler.traitMemberRetInfo(traitOwner: second, traitArity: 0U64, qName: read.nameId, args: args, tpStart: padding.nameStart, tpLen: padding.nameLen, depth: 0U64, useMod: 2U64)
-    print(result.nameStart == stringType.nameStart)
-    val anySecond = compiler.pushType(t: <TypeRef nameStart=first.nameStart nameLen=4U64 args=[] isAny=true hasDecl=true declOffset=second />)
-    val missing = compiler.pushType(t: <TypeRef nameStart=first.nameStart nameLen=4U64 args=[] isAny=true hasDecl=true declOffset=999999U64 />)
-    print(compiler.recordAnyTraitIndex(anyRef: anySecond) == 1U64)
+    val sources = <SourceAccess stdRoot="plew:std/".bytes() resources=[
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64, String }}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 struct String }}" />,
+        <SourceResource path="plew:std/First.pw".bytes() text="pub trait Read {{ fn read() -> I64 }} impl Read {{ fn hidden() -> I64 {{ return 1I64 }} }} pub fn firstHidden[T](value: T) -> I64 where T: Read {{ return value.hidden() }} pub fn firstRead[T](value: T) -> I64 where T: Read {{ return value.read() }}" />,
+        <SourceResource path="plew:std/Second.pw".bytes() text="pub trait Read {{ fn read() -> String }} pub fn secondRead[T](value: T) -> String where T: Read {{ return value.read() }}" />,
+        <SourceResource path="plew:std/Probe.pw".bytes() text="use ./First as First use ./Second as Second fn secondHidden[T](value: T) -> I64 where T: Second.Read {{ return value.hidden() }} fn foreignHidden[T](value: T) -> I64 where T: First.Read {{ return value.hidden() }} fn existential(value: any Second.Read) {{}}" />,
+    ] />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="plew:std/Probe.pw" />, sources: sources).unwrap()
+    val first = inspect(compiler: inout compiler, name: "firstRead", provided: false, resultName: "I64")
+    val second = inspect(compiler: inout compiler, name: "secondRead", provided: false, resultName: "String")
+    assert(first != second)
+    assert(compiler.decls.traitAt(index: first).nameId == compiler.decls.traitAt(index: second).nameId)
+    assert(compiler.moduleOf(offset: compiler.decls.traitAt(index: first).nameStart) != compiler.moduleOf(offset: compiler.decls.traitAt(index: second).nameStart))
+    print(inspect(compiler: inout compiler, name: "firstHidden", provided: true, resultName: "I64") == first)
+    for name in ["secondHidden", "foreignHidden"] {
+        val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+        match compiler.prepareLexicalBody(fnIdx: owner) {
+            Result.Err(error: val error) => {
+                assert(error.message == "no matching method for this argument list: method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
+                if name == "secondHidden" { print(false) }
+            }
+            Result.Ok(value: _) => { panic("private provided member leaked") }
+        }
+        assert(compiler.preparedFunctionSemanticFacts(fnIdx: owner).isErr())
+    }
+    print(compiler.decls.traitAt(index: second).nameStart != compiler.decls.traitAt(index: first).nameStart)
+    val existential = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "existential").nameId)
+    val anySecond = compiler.funcParamAt(params: compiler.arena.functionAt(index: existential).params, index: 0U64).ty
+    val original = compiler.arena.typeAt(index: anySecond)
+    val missing = compiler.pushType(t: <TypeRef nameStart=original.nameStart nameLen=original.nameLen args=[] isAny=true hasDecl=true declOffset=999999U64 />)
+    print(compiler.recordAnyTraitIndex(anyRef: anySecond) == second)
     print(compiler.recordAnyTraitIndex(anyRef: missing) == compiler.decls.traitCount())
-
 }
