@@ -1,0 +1,53 @@
+// Invalid source invocation exits cannot publish usable facts or leak cursors.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Diag only { CompileDiagnostic }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn function(compiler: inout Comp, name: String) -> U64 {
+    val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    assert(index < compiler.arena.functionCount())
+    return index
+}
+
+fn failure(result: Result[(), CompileDiagnostic], message: String) {
+    match result {
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message == message) }
+        Result.Ok(value: _) => { panic("invalid return published owner success") }
+    }
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    val resources = [
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64, Bool }}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 struct Bool }}" />,
+    ]
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="return-owner.pw" text="diverge fn broken(flag: Bool) {{\n    match flag {{\n        _ => {{ while true {{}} }}\n        true => {{ return }}\n    }}\n}}\nfn good() -> I64 {{ return 3I64 }}\nval badGlobal: I64 = if true {{ return 4I64 }} else {{ give 5I64 }}\nval goodGlobal: I64 = {{ val callback = fn() -> I64 {{ return 7I64 }} give callback() }}\nfn main() {{}}\n" />,
+        sources: <SourceAccess stdRoot="plew:std/".bytes() resources=resources />).unwrap()
+    val broken = function(compiler: inout compiler, name: "broken")
+    val good = function(compiler: inout compiler, name: "good")
+    compiler.cur.checkFn = 70001U64
+    compiler.cur.bodyId = 70002U64
+    val divergingMessage = "a diverging function cannot return to its caller (spec/04)"
+    failure(result: compiler.prepareLexicalBody(fnIdx: broken), message: divergingMessage)
+    failure(result: compiler.prepareLexicalBody(fnIdx: broken), message: divergingMessage)
+    assert(compiler.preparedFunctionSemanticFacts(fnIdx: broken).isErr())
+    assert(compiler.cur.checkFn == 70001U64 && compiler.cur.bodyId == 70002U64)
+    compiler.prepareLexicalBody(fnIdx: good).unwrap()
+    assert(compiler.preparedFunctionSemanticFacts(fnIdx: good).isOk())
+    val badGlobal = compiler.arena.globals[0U64].nameStart
+    val goodGlobal = compiler.arena.globals[1U64].nameStart
+    val globalMessage = "`return` requires an enclosing source function; a global initializer is not a function (spec/11)"
+    failure(result: compiler.prepareGlobalInitializer(target: badGlobal), message: globalMessage)
+    failure(result: compiler.prepareGlobalInitializer(target: badGlobal), message: globalMessage)
+    assert(!compiler.globalInitializerPrepared(target: badGlobal))
+    assert(compiler.preparedGlobalSemanticFacts(target: badGlobal).isErr())
+    assert(compiler.cur.checkFn == 70001U64 && compiler.cur.bodyId == 70002U64)
+    compiler.prepareGlobalInitializer(target: goodGlobal).unwrap()
+    assert(compiler.globalInitializerPrepared(target: goodGlobal))
+    assert(compiler.preparedGlobalSemanticFacts(target: goodGlobal).isOk())
+    print("source-return-owner-admission")
+}

@@ -58,10 +58,38 @@ impl Comp {
         if isContinue { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`continue` outside a loop (spec/11)") /> }
         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`break` outside a loop (spec/11)") />
     }
+    // A return belongs to a source invocation, not an emitted helper or a
+    // reachability-filtered completion join. Check every admitted transfer,
+    // including covered match arms, before publishing its owner/target fact.
+    inout fn sourceTransferReturnTarget(owner: SemanticCompletionOwner, offset: U64) -> Result[SourceExitTarget, CompileDiagnostic] {
+        mut val diverging = false
+        match owner {
+            SemanticCompletionOwner.Function(index: val index) => {
+                if index >= self.arena.functionCount() {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: return has no source function declaration") />
+                }
+                diverging = self.arena.functionAt(index: index).isDiverging
+            }
+            SemanticCompletionOwner.Closure(expression: val expression) => {
+                match self.arena.exprs[expression] {
+                    Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: val declared) => { diverging = declared }
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: return has no source closure declaration") /> }
+                }
+            }
+            SemanticCompletionOwner.Global(target: _) => {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`return` requires an enclosing source function; a global initializer is not a function (spec/11)") />
+            }
+        }
+        if diverging {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a diverging function cannot return to its caller (spec/04)") />
+        }
+        return <Result.Ok value=<SourceExitTarget.Function /> />
+    }
     inout fn recordSourceTransfer(stmtId: U64, owner: SemanticCompletionOwner) -> Result[(), CompileDiagnostic] {
         val fact = match self.arena.stmts[stmtId] {
-            Stmt.Return(value: _, hasValue: _, offset: _) => {
-                give <SourceTransferFact owner=owner statementId=stmtId transfer=<CompletionTransfer.Return /> target=<SourceExitTarget.Function /> />
+            Stmt.Return(value: _, hasValue: _, offset: val offset) => {
+                val target = try self.sourceTransferReturnTarget(owner: owner, offset: offset)
+                give <SourceTransferFact owner=owner statementId=stmtId transfer=<CompletionTransfer.Return /> target=target />
             }
             Stmt.Give(value: val value) => {
                 val target = try self.sourceTransferBlockTarget(value: value)

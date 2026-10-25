@@ -1,0 +1,7 @@
+diverge fn stop(flag: Bool) {
+    match flag {
+        _ => { while true {} }
+        true => { return }
+    }
+}
+fn main() { stop(flag: true) }

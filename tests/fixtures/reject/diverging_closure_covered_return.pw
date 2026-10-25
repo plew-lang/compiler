@@ -1,0 +1,8 @@
+fn main() {
+    val callback = diverge fn(flag: Bool) {
+        match flag {
+            _ => { while true {} }
+            true => { return }
+        }
+    }
+}

@@ -1,0 +1,5 @@
+val broken: I64 = {
+    while true { return }
+    give 5I64
+}
+fn main() {}

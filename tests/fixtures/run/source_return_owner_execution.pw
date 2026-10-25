@@ -1,0 +1,28 @@
+use @Std/Io only { print }
+
+val globalValue: I64 = {
+    val callback = fn() -> I64 { return 7I64 }
+    give callback()
+}
+
+// The covered return remains statically valid in an ordinary invocation.
+fn first(flag: Bool) -> I64 {
+    match flag {
+        _ => { return 3I64 }
+        true => { return 4I64 }
+    }
+}
+
+// Constructing a returning closure is not a return from its enclosing owner.
+diverge fn dormant(flag: Bool) {
+    val callback = fn() { return }
+    match flag {
+        _ => { while true {} }
+        true => { while true {} }
+    }
+}
+
+fn main() {
+    print(globalValue)
+    print(first(flag: true))
+}

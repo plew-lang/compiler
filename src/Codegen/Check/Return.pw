@@ -251,14 +251,11 @@ pub impl Comp {
         }
     }
 
-    // Declaration and closure bodies share the same invocation contract.
-    // Use source exits for forbidden returns, including a return after a
-    // non-terminating loop; use execution continuation for fallthrough.
+    // Direct return legality is checked at source target admission, including
+    // statically checked dead arms. This summary owns only fallthrough: live
+    // completion joins intentionally exclude covered match arms.
     inout fn checkDivergingBody(blkId: U64, offset: U64) -> Result[(), CompileDiagnostic] {
         val flow = self.blockCompletion(blkId: blkId)
-        if flow.source.returns() {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a diverging function cannot return to its caller (spec/04)") />
-        }
         if flow.execution.normal() {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a diverging function cannot reach the end of its body (spec/04)") />
         }

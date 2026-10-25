@@ -1,0 +1,2 @@
+val broken: I64 = if true { return 4I64 } else { give 5I64 }
+fn main() {}

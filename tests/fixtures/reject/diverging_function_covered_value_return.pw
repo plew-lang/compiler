@@ -1,0 +1,8 @@
+diverge fn stop(flag: Bool) {
+    val value: Bool = match flag {
+        _ => true
+        true => { return }
+    }
+    while true {}
+}
+fn main() {}

@@ -1,0 +1,5 @@
+val broken: I64 = match true {
+    _ => 5I64
+    true => { return }
+}
+fn main() {}
