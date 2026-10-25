@@ -690,13 +690,15 @@ pub impl Comp {
                                 // is THIS impl's subject. A single bare path → root 0 (bare).
                                 mut val vr: U64 = cand.viewRootId
                                 mut val rootOwner = cand.viewRootOwner
+                                mut val rootConformIdx = cand.viewRootConformIdx
                                 if vr == 0U64 {
                                     if self.subjectPathCount(typeRef: cand.subjectTy, traitOwner: cf.traitStart, aTraitArgs: <PatternTypeInput.Conformance range=cf.traitArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />) > 1U64 {
                                         vr = cf.typeId
                                         rootOwner = cf.subjectTraitOwner
+                                        rootConformIdx = ci + 1U64
                                     }
                                 }
-                                try self.applyBlanketTo(blanket: cf, blanketConformIdx: ci + 1U64, receiver: cand, guardHi: guardHi, viewRoot: vr, viewRootOwner: rootOwner)
+                                try self.applyBlanketTo(blanket: cf, blanketConformIdx: ci + 1U64, receiver: cand, guardHi: guardHi, viewRoot: vr, viewRootOwner: rootOwner, viewRootConformIdx: rootConformIdx)
                             }
                         }
                         cj += 1
@@ -776,7 +778,7 @@ pub impl Comp {
         return <Result.Ok value=selected />
     }
 
-    inout fn applyBlanketTo(blanket: Conform, blanketConformIdx: U64, receiver: Conform, guardHi: U64, viewRoot: U64, viewRootOwner: U64) -> Result[(), CompileDiagnostic] {
+    inout fn applyBlanketTo(blanket: Conform, blanketConformIdx: U64, receiver: Conform, guardHi: U64, viewRoot: U64, viewRootOwner: U64, viewRootConformIdx: U64) -> Result[(), CompileDiagnostic] {
         val recvStart = receiver.typeStart
         val recvLen = receiver.typeLen
         val recvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
@@ -859,7 +861,7 @@ pub impl Comp {
                         // pair `(owner: Iterator, id: FilterIter)`, so an
                         // otherwise selected Iterator witness could never
                         // ground a provided method's associated output.
-                        self.arena.registerFunction(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId lexicalOwnerFnId=lexicalOwner recvId=recvId recvTy=receiver.subjectTy recvPatternParams=self.pushFuncBinds(binds: self.copyConformBinds(binds: receiver.typeParams)) recvTraitArgs=f.recvTraitArgs typeParams=self.pushFuncBinds(binds: copiedTP) params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=f.hasRecv recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isFactory=f.isFactory isAnonymousFactory=f.isAnonymousFactory isAsync=f.isAsync isDiverging=f.isDiverging isExtern=f.isExtern isPub=f.isPub isProvided=true sourceWitnessFuncId=f.sourceWitnessFuncId srcTraitId=srcTag srcTraitOwner=sourceOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity originConformIdx=blanketConformIdx sourceConformIdx=blanketConformIdx providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />, registerSurface: self.arena.functionIsSourceCallable(index: fi))
+                        self.arena.registerFunction(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId lexicalOwnerFnId=lexicalOwner recvId=recvId recvTy=receiver.subjectTy recvPatternParams=self.pushFuncBinds(binds: self.copyConformBinds(binds: receiver.typeParams)) recvTraitArgs=f.recvTraitArgs typeParams=self.pushFuncBinds(binds: copiedTP) params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=f.hasRecv recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isFactory=f.isFactory isAnonymousFactory=f.isAnonymousFactory isAsync=f.isAsync isDiverging=f.isDiverging isExtern=f.isExtern isPub=f.isPub isProvided=true sourceWitnessFuncId=f.sourceWitnessFuncId srcTraitId=srcTag srcTraitOwner=sourceOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity originConformIdx=blanketConformIdx sourceConformIdx=blanketConformIdx sourceRootConformIdx=viewRootConformIdx providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />, registerSurface: self.arena.functionIsSourceCallable(index: fi))
                         if self.arena.functionIsSourceCallable(index: fi) { try self.registerCallable(funcIdx: copyIdx) }
                     }
                 }
@@ -867,7 +869,7 @@ pub impl Comp {
             fi += 1
         }
         if !(self.conformWithRootExists(typeId: recvId, traitId: blanket.traitId, viewRootOwner: viewRootOwner)) {
-            self.decls.registerConform(<Conform subjectTraitOwner=receiver.subjectTraitOwner sourceModule=blanket.sourceModule typeStart=recvStart typeLen=recvLen typeId=recvId subjectTy=receiver.subjectTy subjectArgs=receiver.subjectArgs typeParams=receiver.typeParams typeArity=receiver.typeArity traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot viewRootOwner=viewRootOwner defOffset=blanket.defOffset />, authoredFunctions: <Optional.Some v=blanket.authoredFuncIds />)
+            self.decls.registerConform(<Conform subjectTraitOwner=receiver.subjectTraitOwner sourceModule=blanket.sourceModule typeStart=recvStart typeLen=recvLen typeId=recvId subjectTy=receiver.subjectTy subjectArgs=receiver.subjectArgs typeParams=receiver.typeParams typeArity=receiver.typeArity traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot viewRootOwner=viewRootOwner viewRootConformIdx=viewRootConformIdx defOffset=blanket.defOffset />, authoredFunctions: <Optional.Some v=blanket.authoredFuncIds />)
         }
         return <Result.Ok value=() />
     }

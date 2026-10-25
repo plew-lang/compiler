@@ -18,7 +18,7 @@ pub impl Decls {
             subjectTraitOwner=declaration.subjectTraitOwner subjectTy=declaration.subjectTy subjectArgs=declaration.subjectArgs
             typeParams=declaration.typeParams bounds=declaration.bounds typeArity=declaration.typeArity
             traitStart=declaration.traitStart traitLen=declaration.traitLen traitId=declaration.traitId traitArgs=declaration.traitArgs
-            derived=declaration.derived isPub=declaration.isPub extId=declaration.extId viewRootId=declaration.viewRootId viewRootOwner=declaration.viewRootOwner
+            derived=declaration.derived isPub=declaration.isPub extId=declaration.extId viewRootId=declaration.viewRootId viewRootOwner=declaration.viewRootOwner viewRootConformIdx=declaration.viewRootConformIdx
             defOffset=declaration.defOffset assocBindingIds=declaration.assocBindingIds witnessed=declaration.witnessed
             authoredFuncIds=authored witnessFuncIds=declaration.witnessFuncIds />)
     }
@@ -31,7 +31,7 @@ pub impl Decls {
             subjectTraitOwner=source.subjectTraitOwner subjectTy=source.subjectTy subjectArgs=source.subjectArgs
             typeParams=source.typeParams bounds=source.bounds typeArity=source.typeArity
             traitStart=source.traitStart traitLen=source.traitLen traitId=source.traitId traitArgs=source.traitArgs
-            derived=source.derived isPub=source.isPub extId=source.extId viewRootId=source.viewRootId viewRootOwner=source.viewRootOwner
+            derived=source.derived isPub=source.isPub extId=source.extId viewRootId=source.viewRootId viewRootOwner=source.viewRootOwner viewRootConformIdx=source.viewRootConformIdx
             defOffset=source.defOffset assocBindingIds=source.assocBindingIds witnessed=witnesses authoredFuncIds=source.authoredFuncIds witnessFuncIds=functions />)
     }
 }

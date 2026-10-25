@@ -1479,6 +1479,9 @@ pub struct Conform {
     // Canonical declaration of the propagated chain root; never infer this
     // from the lexical owner of the shared witness body.
     pub val viewRootOwner: U64 = 0
+    // Original edge where this path first became root-gated. Later edges
+    // propagate that anchor rather than choosing a new root. One-based.
+    pub val viewRootConformIdx: U64 = 0
     // source offset of the impl declaration. Conform.typeStart is an interned span,
     // so diagnostics and owner-module checks must use this source anchor.
     pub val defOffset: U64 = 0
@@ -2823,6 +2826,9 @@ pub struct Func {
     // used only to substitute those binders at the final call; 0 means the
     // provided template has no such source-edge substitution.
     pub val sourceConformIdx: U64 = 0
+    // Root-birth edge retained by a conferred copy. Zero is an unrooted
+    // placement; this is separate from the terminal implementation edge.
+    pub val sourceRootConformIdx: U64 = 0
     // for a non-public provided-method copy (`impl Trait { ... }`, not
     // `pub impl Trait`): the trait owner's module id. Such helper copies are
     // callable only from that module. The sentinel means "no module-only gate"

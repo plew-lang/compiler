@@ -3599,14 +3599,56 @@ impl Comp {
         return self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: witness.selfRef), b: self.typeRefWithoutOuterViews(ref: receiverRef))
     }
 
-    inout fn providedCopyReceiverMatches(function: Func, receiverRef: U64, placement: WitnessMatch, environment: InstanceEnvironment, proof: StaticConformanceProof) -> Result[Bool, CompileDiagnostic] {
-        val declaration = self.decls.conformAt(index: placement.conformIdx - 1U64)
-        // A chain-rooted surface is placed through a retained proof path. The
-        // terminal witness and nominal receiver alone cannot distinguish two
-        // paths that share one authored body. Keep the full proof for this read.
-        if function.viewOnly && function.extId == 0U64 {
-            if function.srcTraitOwner == 0U64 || !self.traitProofMatchesSources(proof: proof, traitOwner: declaration.traitStart, sourceOwners: [function.srcTraitOwner]) { return <Result.Ok value=false /> }
+    // Root establishment is a one-way producer operation: once established,
+    // that root propagates through later edges. Interpret the same order in the
+    // already selected proof. Merely containing a root owner is insufficient:
+    // S -> Root -> Via -> Base contains both owners, while the alternative
+    // Root -> Base placement is not on that proof at all.
+    inout fn selectedProvidedRoot(function: Func, receiverRef: U64, placement: WitnessMatch, environment: InstanceEnvironment, proof: StaticConformanceProof) -> Result[U64, CompileDiagnostic] {
+        mut val edges: Array[WitnessMatch] = []
+        match proof {
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => { edges.append(witness) }
+            StaticConformanceProof.TraitPath(edges: val path, terminalConformIdx: _) => { edges = path }
+            StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: val path) => { edges = path }
+            _ => {}
         }
+        val owner = if function.lexicalOwnerFnId != 0U64 { give function.lexicalOwnerFnId - 1U64 } else { give function.sourceWitnessFuncId - 1U64 }
+        mut val selected = 0U64
+        mut val position = edges.count()
+        mut val index = self.arena.firstProvidedCopy(owner: owner)
+        while index < self.arena.functionCount() {
+            val candidate = self.arena.functionAt(index: index)
+            if candidate.extId == 0U64 && candidate.sourceConformIdx == function.sourceConformIdx && candidate.sourceWitnessFuncId == function.sourceWitnessFuncId && candidate.originTraitOwner == function.originTraitOwner && candidate.originTraitId == function.originTraitId && candidate.sourceRootConformIdx != 0U64 {
+                if candidate.sourceRootConformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: candidate.defOffset, msg: "internal error: provided root has no declaration edge") /> }
+                val root = self.decls.conformAt(index: candidate.sourceRootConformIdx - 1U64)
+                if root.derived || root.subjectTraitOwner != candidate.srcTraitOwner || root.typeId != candidate.srcTraitId { return <Result.Err error=self.diagnosticAt(offset: candidate.defOffset, msg: "internal error: provided root does not match its declaration edge") /> }
+                if try self.providedCopyReceiverPatternMatches(function: candidate, receiverRef: receiverRef, placement: placement, environment: environment) {
+                    mut val edgeIndex = 0U64
+                    while edgeIndex < position {
+                        if edges[edgeIndex].conformIdx == candidate.sourceRootConformIdx { selected = candidate.sourceRootConformIdx position = edgeIndex break }
+                        edgeIndex += 1U64
+                    }
+                }
+            }
+            index = self.arena.nextProvidedCopy(index: index)
+        }
+        return <Result.Ok value=selected />
+    }
+
+    inout fn providedCopyReceiverMatches(function: Func, receiverRef: U64, placement: WitnessMatch, environment: InstanceEnvironment, proof: StaticConformanceProof) -> Result[Bool, CompileDiagnostic] {
+        if !(try self.providedCopyReceiverPatternMatches(function: function, receiverRef: receiverRef, placement: placement, environment: environment)) { return <Result.Ok value=false /> }
+        // Extension-owned providers have their own explicit source admission.
+        // Bare trait-subject conferral uses the propagated root-birth edge.
+        if function.sourceConformIdx != 0U64 && function.sourceWitnessFuncId != 0U64 && function.extId == 0U64 {
+            if function.viewOnly != (function.sourceRootConformIdx != 0U64) { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "internal error: provided root metadata is incomplete") /> }
+            val root = try self.selectedProvidedRoot(function: function, receiverRef: receiverRef, placement: placement, environment: environment, proof: proof)
+            return <Result.Ok value=root == function.sourceRootConformIdx />
+        }
+        return <Result.Ok value=true />
+    }
+
+    inout fn providedCopyReceiverPatternMatches(function: Func, receiverRef: U64, placement: WitnessMatch, environment: InstanceEnvironment) -> Result[Bool, CompileDiagnostic] {
+        val declaration = self.decls.conformAt(index: placement.conformIdx - 1U64)
         // The saved receiver owner identifies a shared abstract template.
         // recvTraitArgs belongs to its lexical target trait, whose arity may
         // differ from the placement subject's; it cannot classify this copy.

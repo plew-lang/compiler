@@ -150,8 +150,11 @@ an rvalue does not silently become a mutable named place.
 
 A conferred callable retains its source surface's canonical chain-root owner
 separately from the shared body's lexical trait and original conformance edge.
-Registration and transitive conferral preserve that owner. Copy admission uses
-the complete retained proof path as well as the original edge and receiver;
+Registration and transitive conferral preserve that owner and the original edge
+where the root was first established. Later edges propagate the first root.
+Copy admission interprets that ordering on the already selected complete proof,
+using full receiver patterns and the exact root-birth edge, rather than testing
+only whether an owner appears somewhere on the path;
 terminal-witness/receiver equality alone is insufficient when two paths place
 the same shared body. Exact duplicate placements remain invariant failures.
 Bare lookup may retain fully applicable gated sources for an ambiguity diagnostic,

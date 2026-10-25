@@ -1,0 +1,17 @@
+use @Std/Io only { print }
+trait Root {}
+trait Via {}
+trait Base { fn base() -> I64 }
+trait Target { fn shared() -> I64 }
+struct S {}
+impl S as Root {}
+impl Root as Via {}
+impl Root as Base { fn base() -> I64 { return 1I64 } }
+impl Via as Base { fn base() -> I64 { return 2I64 } }
+impl Base as Target { fn shared() -> I64 { return 9I64 } }
+fn through[T](value: T) -> I64 where T: Target { return value.shared() }
+fn main() {
+    val s = <S />
+    print(s#Via.shared())
+    print(through(value: s#Via))
+}
