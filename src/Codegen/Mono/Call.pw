@@ -339,7 +339,7 @@ impl Comp {
             if sourceWitness.conformIdx != targetConformIdx || placementWitness.conformIdx != f.originConformIdx { continue }
             if !self.selectedWitnessReceiverMatches(witness: sourceWitness, receiverRef: receiverRef) || !self.selectedWitnessReceiverMatches(witness: placementWitness, receiverRef: receiverRef) { continue }
             val environment = try self.selectedConstraintEnvironment(witness: placementWitness)
-            if !(try self.providedCopyReceiverMatches(function: f, receiverRef: receiverRef, placement: placementWitness, environment: environment)) { continue }
+            if !(try self.providedCopyReceiverMatches(function: f, receiverRef: receiverRef, placement: placementWitness, environment: environment, proof: proof)) { continue }
             // Reuse the established endpoint/path identity and ambiguity policy.
             try self.collectTraitProof(selection: inout selection, candidate: proof, traitOwner: target.traitStart, preferred: false, demand: <ConformanceProofDemand.MemberDispatch />, assocNames: [], assocValues: [])
         }
@@ -3599,8 +3599,14 @@ impl Comp {
         return self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: witness.selfRef), b: self.typeRefWithoutOuterViews(ref: receiverRef))
     }
 
-    inout fn providedCopyReceiverMatches(function: Func, receiverRef: U64, placement: WitnessMatch, environment: InstanceEnvironment) -> Result[Bool, CompileDiagnostic] {
+    inout fn providedCopyReceiverMatches(function: Func, receiverRef: U64, placement: WitnessMatch, environment: InstanceEnvironment, proof: StaticConformanceProof) -> Result[Bool, CompileDiagnostic] {
         val declaration = self.decls.conformAt(index: placement.conformIdx - 1U64)
+        // A chain-rooted surface is placed through a retained proof path. The
+        // terminal witness and nominal receiver alone cannot distinguish two
+        // paths that share one authored body. Keep the full proof for this read.
+        if function.viewOnly && function.extId == 0U64 {
+            if function.srcTraitOwner == 0U64 || !self.traitProofMatchesSources(proof: proof, traitOwner: declaration.traitStart, sourceOwners: [function.srcTraitOwner]) { return <Result.Ok value=false /> }
+        }
         // The saved receiver owner identifies a shared abstract template.
         // recvTraitArgs belongs to its lexical target trait, whose arity may
         // differ from the placement subject's; it cannot classify this copy.
@@ -3677,7 +3683,7 @@ pub impl Comp {
                         // B-as-A witness distinct from another A witness that
                         // happens to have the same member name.
                         if candidate.isProvided && candidate.sourceWitnessFuncId == sourceIdx + 1U64 && candidate.sourceConformIdx == conformIdx && candidate.originTraitId == self.decls.traitAt(index: traitIdx).nameId && candidate.originTraitOwner == self.decls.traitAt(index: traitIdx).nameStart {
-                            if try self.providedCopyReceiverMatches(function: candidate, receiverRef: receiverRef, placement: witness, environment: environment) {
+                            if try self.providedCopyReceiverMatches(function: candidate, receiverRef: receiverRef, placement: witness, environment: environment, proof: proof) {
                                 if selected < self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: source.defOffset, msg: "internal error: selected trait witness has multiple receiver copies") /> }
                                 selected = ci
                             }
@@ -3710,7 +3716,7 @@ pub impl Comp {
         while candidate < self.arena.functionCount() {
             val function = self.arena.functionAt(index: candidate)
             if function.originConformIdx == placement.conformIdx {
-                if try self.providedCopyReceiverMatches(function: function, receiverRef: receiverRef, placement: placement, environment: environment) {
+                if try self.providedCopyReceiverMatches(function: function, receiverRef: receiverRef, placement: placement, environment: environment, proof: proof) {
                     if selected < self.arena.functionCount() {
                         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: provided declaration has multiple copies for its selected proof") />
                     }

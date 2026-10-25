@@ -689,12 +689,14 @@ pub impl Comp {
                                 // through more than one subject trait (multi-path): the root
                                 // is THIS impl's subject. A single bare path → root 0 (bare).
                                 mut val vr: U64 = cand.viewRootId
+                                mut val rootOwner = cand.viewRootOwner
                                 if vr == 0U64 {
                                     if self.subjectPathCount(typeRef: cand.subjectTy, traitOwner: cf.traitStart, aTraitArgs: <PatternTypeInput.Conformance range=cf.traitArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />) > 1U64 {
                                         vr = cf.typeId
+                                        rootOwner = cf.subjectTraitOwner
                                     }
                                 }
-                                try self.applyBlanketTo(blanket: cf, blanketConformIdx: ci + 1U64, receiver: cand, guardHi: guardHi, viewRoot: vr)
+                                try self.applyBlanketTo(blanket: cf, blanketConformIdx: ci + 1U64, receiver: cand, guardHi: guardHi, viewRoot: vr, viewRootOwner: rootOwner)
                             }
                         }
                         cj += 1
@@ -725,12 +727,12 @@ pub impl Comp {
         return false
     }
 
-    inout fn conformWithRootExists(typeId: U64, traitId: U64, viewRootId: U64) -> Bool {
+    inout fn conformWithRootExists(typeId: U64, traitId: U64, viewRootOwner: U64) -> Bool {
         mut val i: U64 = 0
         while i < self.decls.conformCount() {
             if self.decls.conformAt(index: i).typeId == typeId {
                 if self.decls.conformAt(index: i).traitId == traitId {
-                    if self.decls.conformAt(index: i).viewRootId == viewRootId {
+                    if self.decls.conformAt(index: i).viewRootOwner == viewRootOwner {
                         return true
                     }
                 }
@@ -774,13 +776,15 @@ pub impl Comp {
         return <Result.Ok value=selected />
     }
 
-    inout fn applyBlanketTo(blanket: Conform, blanketConformIdx: U64, receiver: Conform, guardHi: U64, viewRoot: U64) -> Result[(), CompileDiagnostic] {
+    inout fn applyBlanketTo(blanket: Conform, blanketConformIdx: U64, receiver: Conform, guardHi: U64, viewRoot: U64, viewRootOwner: U64) -> Result[(), CompileDiagnostic] {
         val recvStart = receiver.typeStart
         val recvLen = receiver.typeLen
         val recvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
+        mut val sourceOwner = blanket.subjectTraitOwner
         mut val srcTag: U64 = blanket.typeId
         if viewRoot != 0U64 {
             srcTag = viewRoot
+            sourceOwner = viewRootOwner
         }
         mut val fi: U64 = 0
         while fi < guardHi {
@@ -813,7 +817,7 @@ pub impl Comp {
                     // wins bare lookup: generic and explicit-source calls still
                     // need this body. Only the same path and complete receiver
                     // pattern may suppress an idempotent fixpoint re-scan.
-                    if !(self.conferredCopyExists(recvId: recvId, receiverRef: receiver.subjectTy, nameId: f.nameId, srcTraitId: srcTag, srcTraitOwner: f.provTraitOwner, sourceWitnessFuncId: f.sourceWitnessFuncId)) {
+                    if !(self.conferredCopyExists(recvId: recvId, receiverRef: receiver.subjectTy, nameId: f.nameId, srcTraitId: srcTag, srcTraitOwner: sourceOwner, sourceWitnessFuncId: f.sourceWitnessFuncId)) {
                         // drop the subject param from the method's type params (none for a
                         // trait subject), keep the method-own params.
                         mut val copiedTP: Array[Bind] = []
@@ -855,15 +859,15 @@ pub impl Comp {
                         // pair `(owner: Iterator, id: FilterIter)`, so an
                         // otherwise selected Iterator witness could never
                         // ground a provided method's associated output.
-                        self.arena.registerFunction(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId lexicalOwnerFnId=lexicalOwner recvId=recvId recvTy=receiver.subjectTy recvPatternParams=self.pushFuncBinds(binds: self.copyConformBinds(binds: receiver.typeParams)) recvTraitArgs=f.recvTraitArgs typeParams=self.pushFuncBinds(binds: copiedTP) params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=f.hasRecv recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isFactory=f.isFactory isAnonymousFactory=f.isAnonymousFactory isAsync=f.isAsync isDiverging=f.isDiverging isExtern=f.isExtern isPub=f.isPub isProvided=true sourceWitnessFuncId=f.sourceWitnessFuncId srcTraitId=srcTag srcTraitOwner=f.provTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity originConformIdx=blanketConformIdx sourceConformIdx=blanketConformIdx providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />, registerSurface: self.arena.functionIsSourceCallable(index: fi))
+                        self.arena.registerFunction(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId lexicalOwnerFnId=lexicalOwner recvId=recvId recvTy=receiver.subjectTy recvPatternParams=self.pushFuncBinds(binds: self.copyConformBinds(binds: receiver.typeParams)) recvTraitArgs=f.recvTraitArgs typeParams=self.pushFuncBinds(binds: copiedTP) params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=f.hasRecv recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isFactory=f.isFactory isAnonymousFactory=f.isAnonymousFactory isAsync=f.isAsync isDiverging=f.isDiverging isExtern=f.isExtern isPub=f.isPub isProvided=true sourceWitnessFuncId=f.sourceWitnessFuncId srcTraitId=srcTag srcTraitOwner=sourceOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity originConformIdx=blanketConformIdx sourceConformIdx=blanketConformIdx providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />, registerSurface: self.arena.functionIsSourceCallable(index: fi))
                         if self.arena.functionIsSourceCallable(index: fi) { try self.registerCallable(funcIdx: copyIdx) }
                     }
                 }
             }
             fi += 1
         }
-        if !(self.conformWithRootExists(typeId: recvId, traitId: blanket.traitId, viewRootId: viewRoot)) {
-            self.decls.registerConform(<Conform subjectTraitOwner=receiver.subjectTraitOwner sourceModule=blanket.sourceModule typeStart=recvStart typeLen=recvLen typeId=recvId subjectTy=receiver.subjectTy subjectArgs=receiver.subjectArgs typeParams=receiver.typeParams typeArity=receiver.typeArity traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot defOffset=blanket.defOffset />, authoredFunctions: <Optional.Some v=blanket.authoredFuncIds />)
+        if !(self.conformWithRootExists(typeId: recvId, traitId: blanket.traitId, viewRootOwner: viewRootOwner)) {
+            self.decls.registerConform(<Conform subjectTraitOwner=receiver.subjectTraitOwner sourceModule=blanket.sourceModule typeStart=recvStart typeLen=recvLen typeId=recvId subjectTy=receiver.subjectTy subjectArgs=receiver.subjectArgs typeParams=receiver.typeParams typeArity=receiver.typeArity traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot viewRootOwner=viewRootOwner defOffset=blanket.defOffset />, authoredFunctions: <Optional.Some v=blanket.authoredFuncIds />)
         }
         return <Result.Ok value=() />
     }

@@ -1476,6 +1476,9 @@ pub struct Conform {
     // root trait (the divergent subject). Such a conform does NOT make the type
     // conform bare (it is reached only via `value#root`); 0 = a bare conformance.
     pub val viewRootId: U64 = 0
+    // Canonical declaration of the propagated chain root; never infer this
+    // from the lexical owner of the shared witness body.
+    pub val viewRootOwner: U64 = 0
     // source offset of the impl declaration. Conform.typeStart is an interned span,
     // so diagnostics and owner-module checks must use this source anchor.
     pub val defOffset: U64 = 0
