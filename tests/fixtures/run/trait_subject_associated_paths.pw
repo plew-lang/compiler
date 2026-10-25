@@ -1,0 +1,13 @@
+use @Std/Io only { print }
+trait LeftSource {}
+trait RightSource {}
+trait Target { assoc fn value() -> I64 }
+impl LeftSource as Target { assoc fn value() -> I64 { return 7I64 } }
+impl RightSource as Target { assoc fn value() -> I64 { return 11I64 } }
+struct S {}
+impl S as LeftSource {}
+impl S as RightSource {}
+fn main() {
+    print(S#LeftSource.value())
+    print(S#RightSource.value())
+}

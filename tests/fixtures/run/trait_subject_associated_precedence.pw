@@ -1,0 +1,27 @@
+use @Std/Io only { print }
+trait Source {}
+trait Target {
+    assoc fn value() -> I64
+    assoc fn value(input: String) -> I64
+}
+impl Source as Target {
+    assoc fn value() -> I64 { return 7I64 }
+    assoc fn value(input: String) -> I64 { return 11I64 }
+}
+struct S {}
+impl S as Source {}
+impl S {
+    assoc fn value() -> I64 { return 99I64 }
+    assoc fn value(input: I64) -> I64 { return input + 100I64 }
+}
+fn requested[T](value: T) -> I64 where T: Target { return T.value() }
+fn text[T](value: T) -> I64 where T: Target { return T.value(input: "x") }
+fn main() {
+    print(S.value())
+    print(S.value(input: 3I64))
+    print(S.value(input: "x"))
+    print(requested(value: <S />))
+    print(text(value: <S />))
+    print(S#Source.value())
+    print(S#Source.value(input: "x"))
+}
