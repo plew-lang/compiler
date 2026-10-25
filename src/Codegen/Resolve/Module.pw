@@ -452,7 +452,7 @@ pub impl Comp {
         // Root-gated members remain unavailable to bare selection. Retain
         // their fully applicable semantic sources only for an accurate final
         // diagnostic when there is no ordinary bare candidate.
-        mut val gatedSources: Array[ViewSource] = []
+        mut val gatedCandidates: Array[U64] = []
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         val receiverDeclaration = if associated && recvRef == 0U64 {
@@ -473,13 +473,8 @@ pub impl Comp {
                 // a multi-path inter-trait conformance witness (spec/09) does not join
                 // bare resolution — the type does not conform to the target trait bare;
                 // it is reachable only through the path view `value#P` (findExtMethodById).
-                if f.viewOnly && f.extId == 0U64 && cand.sourceKind == 2U64 && f.nameId == qNameId && self.methodIsVisible(mf: f, offset: if useOffset != 0U64 { give useOffset } else { give nameStart }) {
-                    if (try self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef)) && (try self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef)) == 2U64 {
-                        val source = self.callableSourceKey(c: cand)
-                        mut val seen = false
-                        for existing in gatedSources { if self.sameViewSource(a: existing, b: source) { seen = true } }
-                        if !seen { gatedSources.append(source) }
-                    }
+                if f.viewOnly && f.extId == 0U64 && cand.sourceKind == 2U64 && f.nameId == qNameId {
+                    gatedCandidates.append(i)
                 }
                 if !(f.viewOnly) {
                 if f.nameId == qNameId {
@@ -542,6 +537,18 @@ pub impl Comp {
         }
         if !typeMatchOnly && firstLabel != self.arena.functionCount() {
             return <Result.Ok value=firstLabel />
+        }
+        mut val gatedSources: Array[ViewSource] = []
+        for candidate in gatedCandidates {
+            val entry = self.decls.callableAt(index: candidate)
+            val function = self.arena.functionAt(index: entry.funcIdx)
+            if !self.methodIsVisible(mf: function, offset: if useOffset != 0U64 { give useOffset } else { give nameStart }) { continue }
+            if !(try self.callableReceiverMatches(f: function, recvId: qRecvId, recvRef: recvRef)) { continue }
+            if (try self.groundedMethodArgMatchRank(f: function, args: args, recvRef: recvRef)) != 2U64 { continue }
+            val source = self.callableSourceKey(c: entry)
+            mut val seen = false
+            for existing in gatedSources { if self.sameViewSource(a: existing, b: source) { seen = true } }
+            if !seen { gatedSources.append(source) }
         }
         if gatedSources.count() > 1U64 {
             return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous bare call: two conformed traits provide this method; select the source with `a#P.method()`") />
