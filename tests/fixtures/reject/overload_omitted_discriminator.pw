@@ -1,0 +1,3 @@
+fn pick(kind: I64 = 0I64, value: Bool) {}
+fn pick(kind: String = "", value: Bool) {}
+fn main() {}

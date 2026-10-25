@@ -2871,6 +2871,9 @@ pub struct ViewSource {
 pub impl ViewSource { factory }
 
 pub struct Callable {
+    // Source declarations reserve identity before nominal type resolution;
+    // their overload group must pass the common admission boundary afterward.
+    pub val requiresDeclarationAdmission: Bool = false
     pub val funcIdx: U64
     pub val sourceKind: U64
     // Source spelling is retained only to resolve a written `#X`. It is not the

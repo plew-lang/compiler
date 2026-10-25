@@ -1,6 +1,6 @@
 ---
 id: com-qlnc
-status: closed
+status: open
 deps: []
 links: []
 created: 2026-10-25T14:02:11Z
@@ -90,7 +90,7 @@ implementation and producer-to-final-consumer verification after this prerequisi
 
 ## Outcome
 
-Resolved as a documentation task. Specification revision cc13283 updates the
+The initial documentation checkpoint was accepted. Specification revision cc13283 updates the
 six relevant chapters (functions, factories, generics, methods, traits and
 operators). The accompanying compiler design update changes name-lookup,
 generics and frontend-handoffs; Shared Overload Declaration Admission is the
@@ -105,4 +105,29 @@ It found no blocking omission or stale normative equal-generic-shape restriction
 Diff whitespace checks and targeted contradictory-wording searches passed.
 No compiler/test run was performed or claimed. met-g53w owns implementing and
 verifying the now-canonical contract; neither it nor phase three is complete.
+
+## Reopened: Standard API Conflict Requiring User Decision
+
+The implementation probe disproves the completeness of that documentation
+acceptance. The new rule rejects Optional[T]'s existing pair in std/Lang.pw:
+unwrapOr(fallback: T) and unwrapOr(fallback: fn() -> T). Both argument types
+depend on T, so neither supplies a fixed discriminator. Spec/12's Nil-coalescing
+section explicitly promises eager/lazy overloads of this same API, and spec/05's
+Optional discussion also refers to them. Those contracts were not reconciled in
+the nine-document review. The old specification already combined a concrete-
+position restriction with this API; the new explicit rule makes the unresolved
+contradiction decisive. Do not silently declare the API implementation wrong.
+
+The built WIP rejects even `fn main() {}` at std/Lang.pw:88; the prior candidate
+accepts that exact source with the same std. Evidence is retained in meta/
+evidence/existing-feature-conformance/source-owner-facts/overload-admission-stopped.json.
+
+User judgment is required: keep the simple fixed-discriminator rule and change
+the public lazy operation (recommended: unwrapOrElse), or retain the public
+overloads and reconsider acceptance for dependent, structurally non-overlapping
+types. Neither API renaming nor a new structural-disjointness exception is
+authorized by implementation convenience. Reconcile the chosen API/rule and all
+references, audit other standard public overloads against the final contract,
+and independently re-review before this prerequisite closes again. The previous
+review remains evidence of its inspected scope, not current completion.
 

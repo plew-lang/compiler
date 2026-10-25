@@ -1973,9 +1973,6 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     // Existential formation (spec/08) requires a known trait and complete
     // type-argument/associated-type bindings; operations are checked at use.
     if c.genMode { try c.checkAnyFormation() }
-    // Candidate-table registration has already enforced declaration collisions
-    // while lowering. The remaining checks concern non-table semantic rules.
-    try c.checkDuplicateTraitReqs()
     try c.checkImplOnBuiltin()
     try c.checkImplOnNewtype()
     // module visibility (spec/15): a name brought in by `use … only { }` must be
@@ -1992,7 +1989,9 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
         try c.checkSourceTypeUses(types: c.loweringTypeUses)
     }
     try c.resolveTypeDeclIdentities()
-    try c.checkMemberwiseFactoryCollisions()
+    // Registration reserves identities. Admit all overload groups under the
+    // shared rule only after nominal identities are authoritative.
+    try c.checkCallableDeclarationAdmission()
     // recursive value types (spec/03): mark fields that close a containment cycle
     // onto their owner; codegen stores them behind a heap pointer so the C type is
     // finite (hidden indirection; value semantics kept by deref-read/repoint-write).

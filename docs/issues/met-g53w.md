@@ -99,11 +99,41 @@ The source-selection area met-ucze and G1 require this separate repair.
 
 ## Current Planning Boundary
 
-The documentation prerequisite has passed independent completion review; the
-user authorized phase-three resumption. Implement the shared admission contract
-next. Existing return-owner/dynamic-argument closures remain valid in their
-scopes. The three overload repairs are still check-only WIP; this shared
-declaration-admission repair has not been implemented.
+Stopped on a specification/API conflict discovered by the built implementation;
+com-qlnc is reopened pending user judgment. A new WIP routes ordinary, trait,
+provided-extension and memberwise entries through callableDeclarationConflict,
+removes sameGenericShape and callableFormsMayOverlap, and defers initial group
+admission until nominal identities resolve. Callable rows distinguish initial
+declaration admission from derived placement; later registrations use the same
+authority. This code is not independently reviewed or accepted.
+
+Build 20261025T153817-build-3074d1 passed using carrier23f7 with 6086 fixed
+inputs. Candidate bin/plewc-overload-admission SHA256
+508b1bdae60984f9aea6e9516c2b4f8265e73bd7bef80ec913b92dba6725d599
+rejects the ambient std Optional.unwrapOr overload pair at Lang.pw:88, even for
+an empty main. Old23f7 accepts that same empty main/std. This is a conflict
+between the selected fixed-type rule and an explicitly promised public API;
+do not fix it through an undocumented exception or silent API rename.
+
+Targeted native/reject slice failed before meaningful application verification;
+apparent reject passes from the std error are not successful target evidence.
+New positive fixture1 also had never-green unsupported factory[T] syntax, now
+corrected to a generic impl factory after slice exit. Compiler source matches
+the successful build; this fixture is the sole postbuild input delta. No new
+performance, fixed-point, full suite or implementation acceptance is claimed.
+
+Authorized fixture updates under the new rule: overload_generic_shape_mismatch
+moves from reject to run because fixed first types distinguish it. The former
+run overload_generic_nonoverlap_cycle (introduced to exercise finite structural
+unification; source retained at12e819f6) and factory_receiver_type_overload
+(created202fe764 to ground receiver-dependent signatures) move to reject: neither
+pair has a fixed discriminator. Their original purposes/source and proposed
+new outcomes are retained in the stopped receipt; these changes remain WIP
+until the API/rule decision and fresh target verification.
+
+Existing return-owner/dynamic-argument closures retain their finite scopes. The
+three preceding overload repairs and this implementation remain WIP. Receipt:
+meta/evidence/existing-feature-conformance/source-owner-facts/overload-admission-stopped.json.
 
 ## Review of the Selected Contract Change
 

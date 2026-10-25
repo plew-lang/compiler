@@ -1,0 +1,47 @@
+use @Std/Io only { print }
+fn pick[T](value: I64, other: T) -> I64 { return 10I64 }
+fn pick(value: Bool, other: Bool) -> I64 { return 20I64 }
+struct Methods {}
+impl Methods {
+    fn pick[T](value: I64, other: T) -> I64 { return 30I64 }
+    fn pick(value: Bool, other: Bool) -> I64 { return 40I64 }
+    assoc fn choose[T](value: I64, other: T) -> I64 { return 50I64 }
+    assoc fn choose(value: Bool, other: Bool) -> I64 { return 60I64 }
+    fn accepts(value: Self) -> I64 { return 110I64 }
+    fn accepts(value: I64) -> I64 { return 120I64 }
+}
+struct Built[T] { val raw: I64 }
+impl[T] Built[T] {
+    factory(value: I64, other: T) { return <Built[T] raw=70I64 /> }
+    factory(value: Bool, other: Bool) { return <Built[T] raw=80I64 /> }
+}
+trait Picker {
+    fn pick[T](value: I64, other: T) -> I64
+    fn pick(value: Bool, other: Bool) -> I64
+}
+struct Worker {}
+impl Worker as Picker {
+    fn pick[T](value: I64, other: T) -> I64 { return 90I64 }
+    fn pick(value: Bool, other: Bool) -> I64 { return 100I64 }
+}
+fn forward[T](worker: T) -> I64 where T: Picker { return worker.pick(value: true, other: false) }
+fn main() {
+    print(pick[String](value: 1I64, other: "other"))
+    print(pick(value: true, other: false))
+    val methods = <Methods />
+    print(methods.pick(value: 1I64, other: "other"))
+    print(methods.pick(value: true, other: false))
+    print(Methods.choose(value: 1I64, other: "other"))
+    print(Methods.choose(value: true, other: false))
+    val first = <Built[String] value=1I64 other="other" />
+    val second = <Built[String] value=true other=false />
+    print(first.raw)
+    print(second.raw)
+    val worker = <Worker />
+    print(worker.pick(value: 1I64, other: "other"))
+    val erased: any Picker = worker
+    print(erased.pick(value: true, other: false))
+    print(forward(worker: worker))
+    print(methods.accepts(value: methods))
+    print(methods.accepts(value: 1I64))
+}

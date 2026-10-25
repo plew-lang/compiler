@@ -1,0 +1,3 @@
+fn pick[T](value: I64, other: T) {}
+fn pick(value: Bool, other: Bool) {}
+fn main() { pick[I64](value: true, other: false) }

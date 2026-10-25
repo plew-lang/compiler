@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+// Fixed first-argument types distinguish declarations with different generic shapes.
+fn choose[T](first: I16, second: T) -> I64 { return 1I64 }
+fn choose(first: I32, second: I32) -> I64 { return 2I64 }
+
+fn main() {
+    print(choose[I64](first: 1I16, second: 2I64))
+    print(choose(first: 1I32, second: 2I32))
+}

@@ -1,0 +1,2 @@
+trait Picker { fn pick(value: Self) fn pick(value: I64) }
+fn main() {}

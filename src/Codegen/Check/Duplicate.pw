@@ -1,13 +1,10 @@
 // Part of compile-time checks (root: _.pw): trait-requirement and overload
 // collision detection.
 
-// Whether two parameter lists have the same label sequence (arity + labels) —
-// the "selector" minus types. Used to detect a generic/concrete overload clash.
-
 pub impl Comp {
     // Memberwise constructors have no executable Func, but expose an ordinary
     // callable signature. Compare that signature with custom anonymous factories
-    // using the same receiver/default-argument unification as registration.
+    // through the same complete admission decision as ordinary registration.
     inout fn checkMemberwiseFactoryCollisions() -> Result[(), CompileDiagnostic] {
         mut val index = 0U64
         while index < self.arena.functionCount() {
@@ -24,7 +21,7 @@ pub impl Comp {
                             parameters.append(<Param nameStart=field.nameStart nameLen=field.nameLen nameId=field.nameId tyStart=info.nameStart tyLen=info.nameLen tyIsArray=info.kind == 3I64 ty=term isInout=false isMove=false isBorrow=false noLabel=false hasDefault=field.hasDefault defaultExpr=field.defaultVal />)
                         }
                         val memberwise = <Func nameStart=function.nameStart nameLen=function.nameLen nameId=function.nameId recvTy=function.recvTy typeParams=function.typeParams params=self.pushFuncParams(params: parameters) hasRet=true retStart=structure.nameStart retLen=structure.nameLen retIsArray=false retTy=function.recvTy body=0U64 hasRecv=false recvStart=function.recvStart recvLen=function.recvLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />
-                        if self.callableFormsMayOverlap(a: function, b: memberwise) {
+                        if try self.callableDeclarationConflict(a: function, b: memberwise) {
                             return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "anonymous factory overlaps the implicit memberwise factory (spec/05,07)") />
                         }
                     }
@@ -44,11 +41,10 @@ pub impl Comp {
                 mut val b: U64 = a + 1U64
                 while b < reqs.count() {
                     if reqs[a].nameId == reqs[b].nameId {
-                        // Requirements expose ordinary callable forms too.
-                        // Share registration's canonical type/binder/label
-                        // overlap relation, never an element/head-name test.
-                        if self.callableFormsMayOverlap(a: reqs[a], b: reqs[b]) {
-                            return <Result.Err error=self.diagnosticAt(offset: reqs[b].nameStart, msg: "duplicate trait requirement: another requirement has the same name, labels, and parameter types (spec/08)") />
+                        // A requirement group uses the complete declaration
+                        // rule, not a separate duplicate-only approximation.
+                        if try self.callableDeclarationConflict(a: reqs[a], b: reqs[b]) {
+                            return <Result.Err error=self.diagnosticAt(offset: reqs[b].nameStart, msg: "duplicate trait requirement: a common callable form has no distinct fixed argument type (spec/07,08)") />
                         }
                     }
                     b += 1U64

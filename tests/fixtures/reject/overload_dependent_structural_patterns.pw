@@ -1,0 +1,4 @@
+struct Box[T] { val item: T }
+fn pick[T](value: Array[T]) {}
+fn pick[U](value: Box[U]) {}
+fn main() {}

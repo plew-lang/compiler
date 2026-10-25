@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+fn pick[T](a: I64, b: Bool, c: T) -> I64 { return 1I64 }
+fn pick[U](a: Bool, b: U, c: I64) -> I64 { return 2I64 }
+fn pick[V](a: V, b: I64, c: Bool) -> I64 { return 3I64 }
+fn main() {
+    print(pick(a: 1I64, b: true, c: "first"))
+    print(pick(a: true, b: "second", c: 2I64))
+    print(pick(a: "third", b: 3I64, c: true))
+}

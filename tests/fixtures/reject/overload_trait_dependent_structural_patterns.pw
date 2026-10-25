@@ -1,0 +1,3 @@
+struct Box[T] { val item: T }
+trait Picker { fn pick[T](value: Array[T]) fn pick[U](value: Box[U]) }
+fn main() {}

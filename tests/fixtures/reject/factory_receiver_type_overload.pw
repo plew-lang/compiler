@@ -1,3 +1,4 @@
+// The factory signatures depend on receiver parameters; A and B may coincide.
 use @Std/Io only { print }
 
 struct Selection[A, B] { val tag: I64 }

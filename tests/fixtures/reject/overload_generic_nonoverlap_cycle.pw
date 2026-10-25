@@ -1,3 +1,4 @@
+// Dependent structural patterns alone do not provide a fixed discriminator.
 use @Std/Io only { print }
 
 struct Box[T] { pub val value: T }

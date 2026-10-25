@@ -20,7 +20,13 @@ pub impl Comp {
         if a.hasRecv != b.hasRecv { return false }
         if a.isAssoc != b.isAssoc { return false }
         if a.hasRecv || a.isAssoc {
-            if a.recvId != b.recvId { return false }
+            if a.recvTy < self.arena.typeCount() && b.recvTy < self.arena.typeCount() {
+                val left = self.arena.typeTermAt(index: a.recvTy)
+                val right = self.arena.typeTermAt(index: b.recvTy)
+                if left.hasDecl && right.hasDecl {
+                    if left.declOffset != right.declOffset { return false }
+                } else if a.recvId != b.recvId { return false }
+            } else if a.recvId != b.recvId { return false }
         }
         return a.extId == b.extId
     }
@@ -131,33 +137,6 @@ pub impl Comp {
             if i < ta.assocTraitArgLabels.count() { al = ta.assocTraitArgLabels[i] }
             if i < tb.assocTraitArgLabels.count() { bl = tb.assocTraitArgLabels[i] }
             if al != bl || !(self.typeRefsAlphaEq(a: ta.assocTraitArgs[i], b: tb.assocTraitArgs[i], aParams: aParams, bParams: bParams)) { return false }
-            i += 1U64
-        }
-        return true
-    }
-
-    inout fn typeRefUsesBinders(ref: U64, params: Array[Bind]) -> Bool {
-        if ref == 0U64 || ref >= self.arena.typeCount() { return false }
-        val t: TypeRef = self.arena.typeAt(index: ref)
-        if self.binderIndex(params: <PatternBindInput.Values values=params />, nameId: t.nameId) < params.count() { return true }
-        mut val i: U64 = 0
-        while i < t.args.count() {
-            if self.typeRefUsesBinders(ref: t.args[i], params: params) { return true }
-            i += 1U64
-        }
-        i = 0U64
-        while i < t.assocTraitArgs.count() {
-            if self.typeRefUsesBinders(ref: t.assocTraitArgs[i], params: params) { return true }
-            i += 1U64
-        }
-        return false
-    }
-
-    inout fn sameGenericShape(a: Func, b: Func) -> Bool {
-        if a.typeParams.count() != b.typeParams.count() || a.params.count() != b.params.count() { return false }
-        mut val i: U64 = 0
-        while i < a.params.count() {
-            if self.typeRefUsesBinders(ref: self.funcParamAt(params: a.params, index: i).ty, params: self.copyFuncBinds(binds: a.typeParams)) != self.typeRefUsesBinders(ref: self.funcParamAt(params: b.params, index: i).ty, params: self.copyFuncBinds(binds: b.typeParams)) { return false }
             i += 1U64
         }
         return true
@@ -517,59 +496,75 @@ pub impl Comp {
         return self.unifyPatterns(a: a.recvTy, aSide: 0U64, b: b.recvTy, bSide: 1U64, aParams: <PatternBindInput.Function range=a.typeParams />, bParams: <PatternBindInput.Function range=b.typeParams />, binds: inout binds, ignoreTopView: true)
     }
 
-    // Search the two default-argument selector automata for a shared form. A
-    // label match is not forced: either side may omit a defaulted parameter to
-    // expose a later form, so each branch owns an independent substitution.
-    inout fn callableFormsMayOverlapAt(a: Func, b: Func, ai: U64, bi: U64, binds: Array[UnifyBind]) -> Bool {
-        if ai == a.params.count() && bi == b.params.count() { return true }
-        if ai == a.params.count() {
-            if self.funcParamAt(params: b.params, index: bi).hasDefault {
-                return self.callableFormsMayOverlapAt(a: a, b: b, ai: ai, bi: bi + 1U64, binds: binds)
-            }
-            return false
-        }
-        if bi == b.params.count() {
-            if self.funcParamAt(params: a.params, index: ai).hasDefault {
-                return self.callableFormsMayOverlapAt(a: a, b: b, ai: ai + 1U64, bi: bi, binds: binds)
-            }
-            return false
-        }
-        val ap: Param = self.funcParamAt(params: a.params, index: ai)
-        val bp: Param = self.funcParamAt(params: b.params, index: bi)
-        if ap.noLabel == bp.noLabel && (ap.noLabel || ap.nameId == bp.nameId) {
-            if ap.tyIsArray == bp.tyIsArray {
-                mut val matched: Array[UnifyBind] = self.copyUnifyBinds(binds: binds)
-                if self.unifyPatterns(a: ap.ty, aSide: 0U64, b: bp.ty, bSide: 1U64, aParams: <PatternBindInput.Function range=a.typeParams />, bParams: <PatternBindInput.Function range=b.typeParams />, binds: inout matched) {
-                    if self.callableFormsMayOverlapAt(a: a, b: b, ai: ai + 1U64, bi: bi + 1U64, binds: matched) { return true }
+    // Declaration acceptance, not call applicability or pattern unification.
+    // Normalize only this declaration's Self and retained signature equalities;
+    // never borrow a caller/body cursor or substitute prospective call arguments.
+    inout fn callableAdmissionTypes(function: Func) -> Result[Array[U64], CompileDiagnostic] {
+        mut val types: Array[U64] = []
+        mut val index = 0U64
+        while index < function.params.count() {
+            val parameter = self.funcParamAt(params: function.params, index: index)
+            mut val term = parameter.ty
+            if !self.arena.typeIsClosed(ref: term) {
+                term = self.groundTermInEnvironment(ref: term, params: [], values: [], selfRef: function.recvTy)
+                if self.arena.typeContainsAssociatedProjection(ref: term) {
+                    mut val boundIndex = 0U64
+                    while boundIndex < function.signatureBounds.len {
+                        val clause = self.conformBoundAt(bounds: function.signatureBounds, index: boundIndex)
+                        val bound = <TraitBound subject=clause.subject constraint=clause.constraint offset=clause.offset />
+                        val traitIndex = self.decls.traitIndexByOffset(offset: bound.constraint.key.owner)
+                        if traitIndex < self.decls.traitCount() {
+                            term = self.traitBoundTypeTerm(ref: term, bound: bound, traitIndex: traitIndex)
+                        }
+                        boundIndex += 1U64
+                    }
+                    term = try self.closeBodyProjectionTerms(ref: term, environment: <InstanceEnvironment />, selfRef: function.recvTy, itemRef: 0U64)
                 }
             }
+            types.append(term)
+            index += 1U64
         }
-        if ap.hasDefault {
-            if self.callableFormsMayOverlapAt(a: a, b: b, ai: ai + 1U64, bi: bi, binds: self.copyUnifyBinds(binds: binds)) { return true }
+        return <Result.Ok value=types />
+    }
+
+    // Search common selectors of the two default-omission automata. Matching a
+    // fixed, different type discharges that path; every remaining common form
+    // is a conflict. Dependent structural non-overlap is deliberately irrelevant.
+    inout fn callableFormsConflictAt(a: Func, b: Func, aTypes: Array[U64], bTypes: Array[U64], ai: U64, bi: U64) -> Bool {
+        if ai == a.params.count() && bi == b.params.count() { return true }
+        if ai == a.params.count() {
+            return self.funcParamAt(params: b.params, index: bi).hasDefault && self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, ai: ai, bi: bi + 1U64)
         }
-        if bp.hasDefault {
-            if self.callableFormsMayOverlapAt(a: a, b: b, ai: ai, bi: bi + 1U64, binds: self.copyUnifyBinds(binds: binds)) { return true }
+        if bi == b.params.count() {
+            return self.funcParamAt(params: a.params, index: ai).hasDefault && self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, ai: ai + 1U64, bi: bi)
         }
+        val ap = self.funcParamAt(params: a.params, index: ai)
+        val bp = self.funcParamAt(params: b.params, index: bi)
+        if ap.noLabel == bp.noLabel && (ap.noLabel || ap.nameId == bp.nameId) {
+            val distinct = self.arena.typeIsClosed(ref: aTypes[ai]) && self.arena.typeIsClosed(ref: bTypes[bi]) && !self.typeRefEq(a: aTypes[ai], b: bTypes[bi])
+            if !distinct && self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, ai: ai + 1U64, bi: bi + 1U64) { return true }
+        }
+        if ap.hasDefault && self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, ai: ai + 1U64, bi: bi) { return true }
+        if bp.hasDefault && self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, ai: ai, bi: bi + 1U64) { return true }
         return false
     }
 
-    // Do the two declarations expose one common callable form? Receiver and
-    // selected arguments share one substitution: after `Box[T]` meets
-    // `Box[I64]`, later `T` positions are necessarily I64 too.
-    inout fn callableFormsMayOverlap(a: Func, b: Func) -> Bool {
-        mut val binds: Array[UnifyBind] = []
-        if a.hasRecv || a.isAssoc {
-            if !(self.unifyPatterns(a: a.recvTy, aSide: 0U64, b: b.recvTy, bSide: 1U64, aParams: <PatternBindInput.Function range=a.typeParams />, bParams: <PatternBindInput.Function range=b.typeParams />, binds: inout binds, ignoreTopView: true)) { return false }
-        }
-        return self.callableFormsMayOverlapAt(a: a, b: b, ai: 0U64, bi: 0U64, binds: binds)
+    // One complete ordinary-overload decision for all declaration entries.
+    // Domain/origin participation is supplied by the entry; receiver domains
+    // remain a separate, explicit exclusion before the fixed-argument rule.
+    inout fn callableDeclarationConflict(a: Func, b: Func) -> Result[Bool, CompileDiagnostic] {
+        if a.nameId != b.nameId || !self.receiverPatternsMayOverlap(a: a, b: b) { return <Result.Ok value=false /> }
+        val aTypes = try self.callableAdmissionTypes(function: a)
+        val bTypes = try self.callableAdmissionTypes(function: b)
+        return <Result.Ok value=self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, ai: 0U64, bi: 0U64) />
     }
 
-    inout fn checkFuncRegistration(f: Func, sourceModule: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkFuncRegistration(f: Func, sourceModule: U64, before: U64) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = self.decls.firstCallableNamed(nameId: f.nameId)
         while i < self.decls.callableCount() {
             val priorEntry: Callable = self.decls.callableAt(index: i)
             val prior: Func = self.arena.functionAt(index: priorEntry.funcIdx)
-            if !prior.isProvided {
+            if priorEntry.funcIdx < before && !prior.isProvided {
                 // A bare declaration namespace is module-owned.  A named
                 // extension is instead its own bundle: `#Ext` carries no module
                 // qualifier at a call site, so every declaration named Ext must
@@ -584,16 +579,9 @@ pub impl Comp {
                         if !(f.hasRecv || f.isAssoc) && prior.nameId == f.nameId && (prior.isExtern || f.isExtern) {
                             return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "duplicate function name: extern declarations and ordinary functions share one top-level namespace in a module") />
                         }
-                    if prior.nameId == f.nameId {
-                    if self.sameFuncSelector(a: prior, b: f) && self.receiverPatternsMayOverlap(a: prior, b: f) {
-                        if !(self.sameGenericShape(a: prior, b: f)) {
-                            return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "generic overloads with the same selector must have the same type-argument count and generic parameter positions (spec/07)") />
+                        if try self.callableDeclarationConflict(a: prior, b: f) {
+                            return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "duplicate or overlapping callable form in one declaration namespace: no distinct fixed argument type (spec/04,07,09)") />
                         }
-                    }
-                    if self.callableFormsMayOverlap(a: prior, b: f) {
-                        return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "duplicate or overlapping callable form in one declaration namespace (spec/04,07,09)") />
-                    }
-                    }
                     }
                 }
             }
@@ -616,7 +604,7 @@ pub impl Comp {
             val prior: Func = self.arena.functionAt(index: self.decls.callableAt(index: i).funcIdx)
             if !(prior.isProvided) && prior.extId == f.extId && prior.nameId == f.nameId {
                 if self.sameFuncCandidateBucket(a: prior, b: f) {
-                    if self.callableFormsMayOverlap(a: prior, b: f) {
+                    if try self.callableDeclarationConflict(a: prior, b: f) {
                         return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "direct and trait-provided members overlap on one extension surface; selectability cannot distinguish them (spec/09)") />
                     }
                 }
@@ -682,10 +670,10 @@ pub impl Comp {
         // call-indistinguishable candidate.  Provided copies are synthesized
         // dispatch artifacts; their source trait is selected separately and
         // therefore deliberately bypass this source-declaration check.
-        if checkCollisions {
-            try self.checkFuncRegistration(f: f, sourceModule: sourceModule)
+        if self.arena.typeDeclarationResolutionComplete() {
+            if checkCollisions { try self.checkFuncRegistration(f: f, sourceModule: sourceModule, before: funcIdx) }
+            try self.checkProvidedExtensionSurfaceCollision(f: f)
         }
-        try self.checkProvidedExtensionSurfaceCollision(f: f)
         mut val sourceKind: U64 = 0U64
         mut val sourceId: U64 = 0U64
         mut val sourceOwner: U64 = 0U64
@@ -709,7 +697,23 @@ pub impl Comp {
             sourceOwner = f.srcTraitOwner
             if sourceOwner == 0U64 { sourceOwner = f.provTraitOwner }
         }
-        self.decls.registerCallable(<Callable funcIdx=funcIdx sourceKind=sourceKind sourceId=sourceId sourceOwner=sourceOwner sourceArity=sourceArity traitId=traitId traitOwner=traitOwner traitArity=traitArity sourceModule=sourceModule />, nameId: f.nameId, nameCount: self.interner.entries.count())
+        self.decls.registerCallable(<Callable funcIdx=funcIdx sourceKind=sourceKind sourceId=sourceId sourceOwner=sourceOwner sourceArity=sourceArity traitId=traitId traitOwner=traitOwner traitArity=traitArity sourceModule=sourceModule requiresDeclarationAdmission=checkCollisions />, nameId: f.nameId, nameCount: self.interner.entries.count())
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkCallableDeclarationAdmission() -> Result[(), CompileDiagnostic] {
+        mut val index = 0U64
+        while index < self.decls.callableCount() {
+            val candidate = self.decls.callableAt(index: index)
+            val function = self.arena.functionAt(index: candidate.funcIdx)
+            if candidate.requiresDeclarationAdmission {
+                try self.checkFuncRegistration(f: function, sourceModule: candidate.sourceModule, before: candidate.funcIdx)
+            }
+            try self.checkProvidedExtensionSurfaceCollision(f: function)
+            index += 1U64
+        }
+        try self.checkDuplicateTraitReqs()
+        try self.checkMemberwiseFactoryCollisions()
         return <Result.Ok value=() />
     }
 
