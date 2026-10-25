@@ -460,7 +460,7 @@ pub impl Comp {
         mut val i: U64 = lo
         while i < hi {
             val f: Func = self.arena.functionAt(index: i)
-            if f.hasRecv {
+            if f.hasRecv || f.isAssoc {
                 if f.recvId == qRecv {
                     if f.nameId == qName {
                         return true
@@ -729,7 +729,7 @@ pub impl Comp {
         mut val i: U64 = self.arena.firstFunctionNamed(nameId: nameId)
         while i < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: i)
-            if f.hasRecv {
+            if f.hasRecv || f.isAssoc {
                 if f.recvId == recvId {
                     if f.nameId == nameId {
                         if f.srcTraitId == srcTraitId && f.srcTraitOwner == srcTraitOwner && f.sourceWitnessFuncId == sourceWitnessFuncId {
@@ -769,7 +769,7 @@ pub impl Comp {
         mut val fi: U64 = 0
         while fi < guardHi {
             val f: Func = self.arena.functionAt(index: fi)
-            if f.hasRecv {
+            if f.hasRecv || f.isAssoc {
                 if f.recvId == blanket.typeId {
                     // skip if the type already has an inherent method of this name
                     // (inherent wins); sibling conferred copies (appended ≥ guardHi) do
@@ -817,7 +817,7 @@ pub impl Comp {
                         // pair `(owner: Iterator, id: FilterIter)`, so an
                         // otherwise selected Iterator witness could never
                         // ground a provided method's associated output.
-                        self.arena.registerFunction(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId lexicalOwnerFnId=lexicalOwner recvId=recvId recvTy=receiver.subjectTy recvPatternParams=self.pushFuncBinds(binds: self.copyConformBinds(binds: receiver.typeParams)) recvTraitArgs=f.recvTraitArgs typeParams=self.pushFuncBinds(binds: copiedTP) params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isFactory=f.isFactory isAnonymousFactory=f.isAnonymousFactory isAsync=f.isAsync isDiverging=f.isDiverging isExtern=f.isExtern isPub=f.isPub isProvided=true sourceWitnessFuncId=f.sourceWitnessFuncId srcTraitId=srcTag srcTraitOwner=f.provTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity originConformIdx=blanketConformIdx sourceConformIdx=blanketConformIdx providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />, registerSurface: self.arena.functionIsSourceCallable(index: fi))
+                        self.arena.registerFunction(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId lexicalOwnerFnId=lexicalOwner recvId=recvId recvTy=receiver.subjectTy recvPatternParams=self.pushFuncBinds(binds: self.copyConformBinds(binds: receiver.typeParams)) recvTraitArgs=f.recvTraitArgs typeParams=self.pushFuncBinds(binds: copiedTP) params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=f.hasRecv recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isFactory=f.isFactory isAnonymousFactory=f.isAnonymousFactory isAsync=f.isAsync isDiverging=f.isDiverging isExtern=f.isExtern isPub=f.isPub isProvided=true sourceWitnessFuncId=f.sourceWitnessFuncId srcTraitId=srcTag srcTraitOwner=f.provTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity originConformIdx=blanketConformIdx sourceConformIdx=blanketConformIdx providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />, registerSurface: self.arena.functionIsSourceCallable(index: fi))
                         if self.arena.functionIsSourceCallable(index: fi) { try self.registerCallable(funcIdx: copyIdx) }
                     }
                 }
@@ -850,7 +850,7 @@ pub impl Comp {
                 // implementation with a body may be copied onto a conformance
                 // surface; copying the requirement itself creates a second,
                 // body-less callable next to the real implementation.
-                if f.hasRecv && f.body != 0U64 {
+                if (f.hasRecv || f.isAssoc) && f.body != 0U64 {
                     val copyOwnerMod: U64 = self.traitModuleByOwner(owner: cf.traitStart)
                     // match the conformance to the right same-name trait by arity (spec/08:
                     // trait names share a flat namespace — a user `trait Sub` vs Core's
@@ -924,7 +924,7 @@ pub impl Comp {
                             mut val receiverTerm = cf.subjectTy
                             if cf.subjectTraitOwner != 0U64 { receiverTerm = f.recvTy }
                             val copyIdx: U64 = self.arena.functionCount()
-                            self.arena.registerFunction(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId lexicalOwnerFnId=lexicalOwner recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) recvTy=receiverTerm recvPatternParams=self.pushFuncBinds(binds: self.copyConformBinds(binds: cf.typeParams)) recvTraitArgs=f.recvTraitArgs typeParams=self.pushFuncBinds(binds: copiedTP) params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isFactory=f.isFactory isAnonymousFactory=f.isAnonymousFactory isAsync=f.isAsync isDiverging=f.isDiverging isExtern=f.isExtern isPub=f.isPub isProvided=true sourceWitnessFuncId=f.sourceWitnessFuncId srcTraitId=cf.traitId srcTraitOwner=cf.traitStart originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity originConformIdx=originConformIdx sourceConformIdx=sourceConformIdx providedOwnerMod=providedOwnerMod extId=effectiveExtId provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner defOffset=f.defOffset />, registerSurface: self.arena.functionIsSourceCallable(index: fi))
+                            self.arena.registerFunction(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId lexicalOwnerFnId=lexicalOwner recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) recvTy=receiverTerm recvPatternParams=self.pushFuncBinds(binds: self.copyConformBinds(binds: cf.typeParams)) recvTraitArgs=f.recvTraitArgs typeParams=self.pushFuncBinds(binds: copiedTP) params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=f.hasRecv recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isFactory=f.isFactory isAnonymousFactory=f.isAnonymousFactory isAsync=f.isAsync isDiverging=f.isDiverging isExtern=f.isExtern isPub=f.isPub isProvided=true sourceWitnessFuncId=f.sourceWitnessFuncId srcTraitId=cf.traitId srcTraitOwner=cf.traitStart originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity originConformIdx=originConformIdx sourceConformIdx=sourceConformIdx providedOwnerMod=providedOwnerMod extId=effectiveExtId provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner defOffset=f.defOffset />, registerSurface: self.arena.functionIsSourceCallable(index: fi))
                             if self.arena.functionIsSourceCallable(index: fi) { try self.registerCallable(funcIdx: copyIdx) }
                     }
                 }

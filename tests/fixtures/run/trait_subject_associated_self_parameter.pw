@@ -1,0 +1,19 @@
+use @Std/Io only { print }
+trait Source { fn seed() -> I64 }
+trait Target { assoc fn value(value: Self) -> I64 }
+impl Source as Target {
+    assoc fn value(value: Self) -> I64 { return value.seed() + 1I64 }
+}
+struct B { val number: I64 }
+struct A { val number: I64 }
+impl B as Source { fn seed() -> I64 { return self.number * 10I64 } }
+impl A as Source { fn seed() -> I64 { return self.number } }
+fn requested[T](value: T) -> I64 where T: Target { return T.value(value: value) }
+fn main() {
+    val first = <A number=4I64 />
+    val second = <B number=2I64 />
+    print(A.value(value: first))
+    print(B.value(value: second))
+    print(requested(value: first))
+    print(requested(value: second))
+}
