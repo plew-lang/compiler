@@ -46,7 +46,14 @@ A shared trait-subject template is identified by its saved receiver declaration
 and the selected placement subject, not by ABI self presence or the lexical
 trait's argument count. Match its canonical lexical Self under the edge's
 substitution; match a nominal copy directionally under that same substitution.
-Require one applicable copy rather than accepting the first registered copy.
+Require one applicable copy rather than accepting the first registered copy. When
+reconstructing a source candidate's placement proof, filter completed paths by
+both saved source and placement edges before applying the existing dispatch
+uniqueness policy. An arbitrary existence path followed by an edge mismatch is
+not evidence that the selected copy is absent. Keep semantic witness generation
+independent of inherent bare-lookup precedence; an inherent name cannot erase
+the body required by a generic or explicit-source call. Idempotent copy admission
+also compares the complete canonical receiver pattern, not only its head name.
 
 
 ### Shared Type-Argument Constraint Matching

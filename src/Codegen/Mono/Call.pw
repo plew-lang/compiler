@@ -319,6 +319,36 @@ pub impl Comp {
     // The provided copy itself records which conformance created it. Preserve
     // that fact in the body environment: matching by the receiver again would
     // conflate same-head parameterized or view-selected witnesses.
+}
+
+impl Comp {
+    // A candidate already names both source and placement declarations.
+    // Filter complete proof paths by those exact edges before choosing any
+    // path; an arbitrary existence proof can belong to another copy.
+    inout fn providedPlacementProof(f: Func, receiverRef: U64, proofReceiver: U64, targetConformIdx: U64, assumptions: Array[DeclarationBoundRef]) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        val target = self.decls.conformAt(index: targetConformIdx - 1U64)
+        val placement = self.decls.conformAt(index: f.originConformIdx - 1U64)
+        val targetTrait = self.decls.traitIndexByOffset(offset: target.traitStart)
+        val placementTrait = self.decls.traitIndexByOffset(offset: placement.traitStart)
+        if targetTrait >= self.decls.traitCount() || placementTrait >= self.decls.traitCount() { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+        mut val selection = <TraitProofSelection />
+        val candidates = try self.traitMemberInstanceProofs(baseRef: proofReceiver, traitId: target.traitId, traitOwner: target.traitStart, assumptions: assumptions, includeConcrete: true)
+        for proof in candidates {
+            val sourceWitness = self.proofWitnessForTrait(proof: proof, traitIdx: targetTrait)
+            val placementWitness = self.proofWitnessForTrait(proof: proof, traitIdx: placementTrait)
+            if sourceWitness.conformIdx != targetConformIdx || placementWitness.conformIdx != f.originConformIdx { continue }
+            if !self.selectedWitnessReceiverMatches(witness: sourceWitness, receiverRef: receiverRef) || !self.selectedWitnessReceiverMatches(witness: placementWitness, receiverRef: receiverRef) { continue }
+            val environment = try self.selectedConstraintEnvironment(witness: placementWitness)
+            if !(try self.providedCopyReceiverMatches(function: f, receiverRef: receiverRef, placement: placementWitness, environment: environment)) { continue }
+            // Reuse the established endpoint/path identity and ambiguity policy.
+            try self.collectTraitProof(selection: inout selection, candidate: proof, traitOwner: target.traitStart, preferred: false, demand: <ConformanceProofDemand.MemberDispatch />, assocNames: [], assocValues: [])
+        }
+        val result = try self.finishTraitProofSelection(selection: inout selection, traitOwner: target.traitStart, demand: <ConformanceProofDemand.MemberDispatch />)
+        return self.requireConformanceProof(answer: result)
+    }
+}
+
+pub impl Comp {
     inout fn providedBodyProof(f: Func, receiverRef: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
         if !(f.isProvided) || f.originConformIdx == 0U64 || receiverRef == 0U64 { return <Result.Ok value=<StaticConformanceProof.Missing /> />}
         val ci: U64 = f.originConformIdx - 1U64
@@ -345,7 +375,7 @@ pub impl Comp {
                 val sources: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=source.extId />]
                 proofReceiver = self.typeRefWithAddedViewSources(ref: proofReceiver, additions: sources)
             }
-            return <Result.Ok value=(try self.concreteConformanceProof(baseRef: proofReceiver, traitId: source.traitId, traitOwner: source.traitStart, traitArgs: <PatternTypeInput.Conformance range=source.traitArgs />, assumptions: assumptions)) />
+            return self.providedPlacementProof(f: f, receiverRef: receiverRef, proofReceiver: proofReceiver, targetConformIdx: f.sourceConformIdx, assumptions: assumptions)
         }
         // `originConformIdx` pins the placement edge that created this copy.
         // Its target must be the callable's origin trait. `srcTrait*` is the
@@ -376,7 +406,7 @@ pub impl Comp {
             val sources: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=f.extId />]
             proofReceiver = self.typeRefWithAddedViewSources(ref: proofReceiver, additions: sources)
         }
-        return <Result.Ok value=(try self.concreteConformanceProof(baseRef: proofReceiver, traitId: cf.traitId, traitOwner: cf.traitStart, traitArgs: <PatternTypeInput.Conformance range=cf.traitArgs />, assumptions: assumptions)) />
+        return self.providedPlacementProof(f: f, receiverRef: receiverRef, proofReceiver: proofReceiver, targetConformIdx: f.originConformIdx, assumptions: assumptions)
     }
 
     inout fn proofIsMissing(proof: StaticConformanceProof) -> Bool {

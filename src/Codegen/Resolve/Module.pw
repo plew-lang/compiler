@@ -441,7 +441,7 @@ pub impl Comp {
     // selector for a synthetic call (`[]` -> `index`).  Visibility belongs to
     // the source call-site, not that interned helper span, so callers can pass
     // the real AST offset explicitly.
-    inout fn findMethod(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64, useOffset: U64 = 0U64, associated: Bool = false) -> Result[U64, CompileDiagnostic] {
+    inout fn findMethod(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64, useOffset: U64 = 0U64, associated: Bool = false, typeMatchOnly: Bool = false) -> Result[U64, CompileDiagnostic] {
         mut val firstLabel: U64 = self.arena.functionCount()
         mut val typeMatch: U64 = self.arena.functionCount()
         mut val typeMatch2: U64 = self.arena.functionCount()
@@ -528,7 +528,7 @@ pub impl Comp {
             try self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
             return <Result.Ok value=typeMatch />
         }
-        if firstLabel != self.arena.functionCount() {
+        if !typeMatchOnly && firstLabel != self.arena.functionCount() {
             return <Result.Ok value=firstLabel />
         }
         return <Result.Ok value=self.arena.functionCount() />
@@ -1157,7 +1157,7 @@ pub impl Comp {
         // A concrete trait-subject witness carries a trait source even on
         // the bare surface. Keep inherent/namespace calls above, then use
         // the shared provided-call contract instead of dropping that source.
-        val provided = try self.findMethod(recvStart: rnu.nameStart, recvLen: rnu.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef, associated: true)
+        val provided = try self.findMethod(recvStart: rnu.nameStart, recvLen: rnu.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef, associated: true, typeMatchOnly: true)
         if provided < self.arena.functionCount() { return <Result.Ok value=provided /> }
         return <Result.Ok value=firstLabel />
     }

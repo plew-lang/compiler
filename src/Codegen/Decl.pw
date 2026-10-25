@@ -454,24 +454,6 @@ pub impl Comp {
         return actual == expected
     }
 
-    inout fn methodInRange(lo: U64, hi: U64, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
-        val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
-        val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = lo
-        while i < hi {
-            val f: Func = self.arena.functionAt(index: i)
-            if f.hasRecv || f.isAssoc {
-                if f.recvId == qRecv {
-                    if f.nameId == qName {
-                        return true
-                    }
-                }
-            }
-            i += 1
-        }
-        return false
-    }
-
     inout fn providedCopyTypeParams(receiverRef: U64, recvStart: U64, recvLen: U64, ownParams: Array[Bind]) -> Array[Bind] {
         mut val out: Array[Bind] = []
         mut val declaration = <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
@@ -725,12 +707,12 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn conferredCopyExists(recvId: U64, nameId: U64, srcTraitId: U64, srcTraitOwner: U64, sourceWitnessFuncId: U64) -> Bool {
+    inout fn conferredCopyExists(recvId: U64, receiverRef: U64, nameId: U64, srcTraitId: U64, srcTraitOwner: U64, sourceWitnessFuncId: U64) -> Bool {
         mut val i: U64 = self.arena.firstFunctionNamed(nameId: nameId)
         while i < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: i)
             if f.hasRecv || f.isAssoc {
-                if f.recvId == recvId {
+                if f.recvId == recvId && self.typeRefEq(a: f.recvTy, b: receiverRef) {
                     if f.nameId == nameId {
                         if f.srcTraitId == srcTraitId && f.srcTraitOwner == srcTraitOwner && f.sourceWitnessFuncId == sourceWitnessFuncId {
                             return true
@@ -782,11 +764,11 @@ pub impl Comp {
             }
             if f.hasRecv || associatedWitness {
                 if f.recvId == blanket.typeId {
-                    // skip if the type already has an inherent method of this name
-                    // (inherent wins); sibling conferred copies (appended ≥ guardHi) do
-                    // not block, so multiple paths' methods coexist. Also skip if this
-                    // exact path was already conferred (idempotent fixpoint re-scan).
-                    if !(self.methodInRange(lo: 0, hi: guardHi, recvStart: recvStart, recvLen: recvLen, nameStart: f.nameStart, nameLen: f.nameLen)) && !(self.conferredCopyExists(recvId: recvId, nameId: f.nameId, srcTraitId: srcTag, srcTraitOwner: f.provTraitOwner, sourceWitnessFuncId: f.sourceWitnessFuncId)) {
+                    // Keep the semantic witness even when an inherent member
+                    // wins bare lookup: generic and explicit-source calls still
+                    // need this body. Only the same path and complete receiver
+                    // pattern may suppress an idempotent fixpoint re-scan.
+                    if !(self.conferredCopyExists(recvId: recvId, receiverRef: receiver.subjectTy, nameId: f.nameId, srcTraitId: srcTag, srcTraitOwner: f.provTraitOwner, sourceWitnessFuncId: f.sourceWitnessFuncId)) {
                         // drop the subject param from the method's type params (none for a
                         // trait subject), keep the method-own params.
                         mut val copiedTP: Array[Bind] = []

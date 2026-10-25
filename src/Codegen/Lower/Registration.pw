@@ -771,32 +771,12 @@ pub impl Comp {
             }
         }
         if originIsTraitSubject && recvRef != 0U64 {
-            // A provided copy's `recv*` describes the surface it was copied
-            // onto (for `impl B as A`, B), not the trait that declared its
-            // requirement/provided body (A).  Its origin metadata is the
-            // only canonical target for proof selection.
-            mut val traitId: U64 = f.originTraitId
-            mut val traitOwner: U64 = f.originTraitOwner
-            mut val traitArgs: PatternTypeInput = <PatternTypeInput.Values values=[] />
-            if f.originConformIdx != 0U64 {
-                val ci: U64 = f.originConformIdx - 1U64
-                if ci < self.decls.conformCount() {
-                    val origin: Conform = self.decls.conformAt(index: ci)
-                    traitId = origin.traitId
-                    traitOwner = origin.traitStart
-                    traitArgs = <PatternTypeInput.Conformance range=origin.traitArgs />
-                }
-            }
-            val proof: StaticConformanceProof = (try self.concreteConformanceProof(baseRef: recvRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs))
-            if self.proofIsMissing(proof: proof) { return <Result.Ok value=false /> }
-            val traitIndex = self.decls.traitIndexByOffset(offset: traitOwner)
-            val placement = self.proofWitnessForTrait(proof: proof, traitIdx: traitIndex)
-            if placement.conformIdx != f.originConformIdx || !self.selectedWitnessReceiverMatches(witness: placement, receiverRef: recvRef) { return <Result.Ok value=false /> }
-            val environment = try self.selectedConstraintEnvironment(witness: placement)
-            // Proof availability does not make A's concrete copy a candidate
-            // for B. Source selection and later selected-copy interpretation
-            // share the same receiver/placement admission contract.
-            return self.providedCopyReceiverMatches(function: f, receiverRef: recvRef, placement: placement, environment: environment)
+            // Candidate provenance fixes the proof's source and placement.
+            // Find matching completed paths before deciding their uniqueness.
+            val proof = try self.providedBodyProof(f: f, receiverRef: recvRef)
+            // The shared interpreter validated both distinct edge identities
+            // and this candidate's complete receiver before publishing proof.
+            return <Result.Ok value=!self.proofIsMissing(proof: proof) />
         }
         if f.recvId != recvId {
             if f.isProvided && self.methodRecvIsTrait(f: f) && recvRef != 0U64 {
