@@ -1,6 +1,6 @@
 ---
 id: com-lzpe
-status: in_progress
+status: closed
 deps: [com-9l3b]
 links: []
 created: 2026-10-23T10:41:59Z
@@ -58,4 +58,11 @@ input/dependency/generation, runtime/startup, diagnostic and current Ref/FFI
 contracts. No absent spawn/unique-generic feature, main merge, seed or adopted
 carrier promotion is included. Receipt
 meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-completion.json.
-Independent final review pending before this task/met-si6j close.
+Independent body_receiver_completion_review accepts final closure at
+compiler5de6e4bc/meta da67bdc4. The68-node dependency snapshot matches actual
+issues without missing ID/cycle; only parent/G3 awaited this review. Sixteen
+receipt SHA references, five5,990-input maps/current files, exact compiler/
+saved candidate and adopted carrier match. All292 active document links resolve.
+The final review covers the eleven criteria and scoped producer/removal/consumer
+evidence, full gates and preserved phase4 boundaries. This task and met-si6j
+can close; com-604k and integration remain open.

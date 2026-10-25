@@ -21,7 +21,7 @@ Scope classification is [com-esri](com-esri.md). Its pinned matrix records inclu
 
 Phase 2 is complete under [com-io5f](com-io5f.md). Phase 3's supported
 frontend contracts and exact-candidate gates are complete under [met-si6j](met-si6j.md),
-with final G3 independent synchronization pending. These bounded closures do
+with final G3 independent synchronization accepted. These bounded closures do
 not close this epic. Remaining phase-four task contracts and the final
 integration/main criteria below still apply. The manual diagnostic repair
 com-ydgx is not a prerequisite when using the existing standard sanitizer gate.
