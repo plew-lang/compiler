@@ -1,7 +1,7 @@
 ---
 id: com-61jt
 status: open
-deps: [met-ucze, met-ia09, met-6e6k, met-acfl, com-fuo8, met-rzt4, com-gyup, com-4bib, com-s248, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-s5k5, com-f0mq, com-fbqh, com-px0e, com-o7ul, com-tl9c, com-072n, com-9clj, com-o3vw, com-auvx, com-3qne]
+deps: [met-ucze, met-ia09, met-6e6k, met-acfl, com-fuo8, met-rzt4, com-gyup, com-4bib, com-s248, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-s5k5, com-f0mq, com-fbqh, com-px0e, com-o7ul, com-tl9c, com-072n, com-9clj, com-o3vw, com-auvx, com-3qne, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-uuya, com-vuv9]
 links: []
 created: 2026-10-23T10:41:59Z
 type: task
@@ -37,3 +37,52 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Admission Reconciliation
+
+The required A-F contracts and named repairs are closed. The area Outcomes
+met-ucze/met-ia09 (body_receiver_completion_review), met-6e6k/met-rzt4
+(b2_completion_review), and already closed met-acfl/com-fuo8/com-gyup provide
+scoped producer, immutable fact, explicit instantiation, final Mid/backend
+consumer, removal and positive/reject/corruption controls. No new feature is
+added by joining these results. Parent mapping remains the single eleven-row
+criterion assignment; its decisive closure owners are reconciled below.
+
+| Criterion | Current decisive closure / remaining gate |
+| --- | --- |
+| 1 | A/C1, C3 producer repairs and E1 preserve committed shape/type; com-o3vw additionally stamps structural-index U64 at its producer. |
+| 2 | C1/C3/C4/C5/C6 and D1-D4 separate unrecorded/pending/rigid/Unit/no-normal states and seal only complete source facts; E1-E3 separate completion from callable values. |
+| 3 | met-ucze's eight-path table, met-ia09's exact environment table, C4-C6 and D1-D4 connect selected source authority to final consumers; com-9clj/com-3qne close later witness/default producers. |
+| 4 | B1/B2/B3/B4 and com-4kti admit full signature/labels/passing/bounds, including bodyless and implicit calls; defaults preserve the original full declaration ABI. |
+| 5 | C1/E1/E2/E4 retain equivalent permitted context and live joins through direct/block/if/match/short-circuit; lexical forward inference is preserved. |
+| 6 | com-fuo8's reconciled E1-E4 table and com-gyup discharge approved divergence, loop reachability, saved transfer targets and actual cleanup/CFG. |
+| 7 | F1/com-4bib's requested-body mode matrix, F2/com-d57o and F3/com-vrvl/com-auvx; lazy unused omission is intentional. CLI session controls use opt-in progress and separate quiet contrasts. |
+| 8 | All B/C/D/E Outcome removal audits and retained-adapter classification; missing/foreign/post-outcome writes fail at actual readers. |
+| 9 | The parent F4 six-row disposition has current controls and owners; later source-copy/index/CLI repairs are complete rather than deferred risks. |
+| 10 | NOT certified here. G2a must prove formal fixed point and median below seven seconds, then G2b must run complete normal/gen/deps/LLVM22 sanitizer gates on its measured compiler. |
+| 11 | Area Outcomes, dependencies and F4 are synchronized; G3 owns final checklist discharge and handoff after G2, not this admission. |
+
+Remaining adapters are one-way operations: source construction creates synthetic
+factory/default/provided calls with an already selected original declaration;
+proof interpretation establishes that source path's concrete witness; inherited
+adapters convert logical/physical Self at a retained boundary; result recipes
+substitute saved owner/site terms; final descriptors lower selected calls.
+providedBodyProof is placement evidence, not name-based source reselection.
+No adapter may repair a missing selection by searching another declaration.
+
+The seven normal-failure fixture-maintenance tasks are explicit G1 prerequisites
+as well as G2b prerequisites, so reopening a known required fix blocks admission.
+Their Outcomes preserve creation intent and canonical semantics without exposing
+writers or weakening verifier/test obligations. The old full normal remains
+failed, not relabeled green.
+
+G1 candidate: production b6645ac1 with maintained fixture commit 7e0648c1;
+source/std/native/resolve/tests/scripts/manifests remain byte-identical through
+the area-only documentation reconciliation. Syntax exact 0.1.11-dev.30 at
+8c89204230c3d865ea95a03382c3fd213731e1de, spec 9b3e18d, no override.
+Adopted input carrier remains bin/plewc-orc-lifetime, SHA256
+c36716d9f95e123f2b62158e44e2287476757eaf52b6bd93e41bc1a2a47d18b3.
+Current scoped WIP is c50d2a04. G2a will save full input/tool fingerprints and
+produce the separate measured compiler that G2b must consume. Receipt applicability
+is limited to each pinned input/scope; old runs are not reused as final gates.
+Main/seed/adopted-carrier promotion is excluded.
