@@ -1,6 +1,6 @@
 ---
 id: com-61jt
-status: open
+status: closed
 deps: [met-ucze, met-ia09, met-6e6k, met-acfl, com-fuo8, met-rzt4, com-gyup, com-4bib, com-s248, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-s5k5, com-f0mq, com-fbqh, com-px0e, com-o7ul, com-tl9c, com-072n, com-9clj, com-o3vw, com-auvx, com-3qne, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-uuya, com-vuv9, com-6cw6, com-v1wa, com-tkz7]
 links: []
 created: 2026-10-23T10:41:59Z
@@ -88,5 +88,14 @@ Both sets have independent scoped completion/affected-area readmission. The
 refreshed receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-admission.json
 records tracked groups/manifests/carriers. Prior admission/formal/normal results
 remain valid only for their inputs; this freeze needs fresh G2a/G2b exact measured
-compiler gates. Refreshed independent G1 confirmation pending. Main/seed/adopted
+compiler gates. Refreshed independent G1 confirmation accepted. Main/seed/adopted
 carrier promotion remains outside this admission.
+
+## Refreshed Outcome
+
+Independent c2_classification_review accepts G1 at e484e854. All63 required
+descendants closed, no missing ID/cycle; all5,925 tracked files/six groups,
+manifests/carriers/spec/Syntax and current scoped inputs match. Fixture17537a40
+precedes Gen head-span repair043e2402; the receipt explicitly records that
+verified difference. No target input changes after043e2402. New G2a/G2b
+remain required; previous gates are not reused for this input.

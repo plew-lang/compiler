@@ -1,6 +1,6 @@
 ---
 id: com-p5um
-status: open
+status: in_progress
 deps: [com-61jt, com-auvx]
 links: []
 created: 2026-10-23T10:41:59Z
