@@ -112,7 +112,13 @@ Conformance registration freezes its authored implementation declarations. The
 normalized witness set may append default-argument adapters or replace a Unit
 result bridge; it does not erase the original declaration's ownership. Derived
 conformances retain that source snapshot, while witness completion updates only
-the normalized dispatch set.
+the normalized dispatch set. Copy preparation reads authored and normalized
+membership under a unique original conformance, rejects conflicting ownership,
+and never adopts a derived placement as the declaration owner. An implementation
+from another target edge cannot be copied just because its receiver has the same
+source trait. Bare conformance copies are produced by trait-subject expansion;
+namespace-provider expansion handles pure providers and extension witnesses
+excluded from that pass. The producers do not both place the same bare witness.
 
 A synthesized forwarding call retains its selected full declaration, exact
 conformance edge and lexical type arguments. Source admission validates that the

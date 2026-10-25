@@ -740,6 +740,40 @@ pub impl Comp {
         return false
     }
 
+    // Read declaration ownership before copies are created. Authored sources
+    // survive Unit normalization, adapters belong to the normalized set, and
+    // derived placements never become new declaration owners.
+    inout fn sourceConformanceForDeclaration(functionIndex: U64) -> Result[U64, CompileDiagnostic] {
+        if functionIndex >= self.arena.functionCount() { return <Result.Ok value=0U64 /> }
+        val function = self.arena.functionAt(index: functionIndex)
+        mut val selected = 0U64
+        mut val index = 0U64
+        while index < self.decls.conformCount() {
+            val conformance = self.decls.conformAt(index: index)
+            if !conformance.derived {
+                mut val owns = false
+                mut val member = 0U64
+                while member < conformance.authoredFuncIds.count() {
+                    if self.conformFuncIdAt(ids: conformance.authoredFuncIds, index: member) == functionIndex { owns = true }
+                    member += 1U64
+                }
+                member = 0U64
+                while member < conformance.witnessFuncIds.count() {
+                    if self.conformFuncIdAt(ids: conformance.witnessFuncIds, index: member) == functionIndex { owns = true }
+                    member += 1U64
+                }
+                if owns {
+                    if function.recvStart != conformance.typeStart || function.provTraitOwner != conformance.subjectTraitOwner || function.originTraitOwner != conformance.traitStart || function.originTraitId != conformance.traitId || selected != 0U64 {
+                        return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "internal error: implementation declaration has an inconsistent source conformance") />
+                    }
+                    selected = index + 1U64
+                }
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=selected />
+    }
+
     inout fn applyBlanketTo(blanket: Conform, blanketConformIdx: U64, receiver: Conform, guardHi: U64, viewRoot: U64) -> Result[(), CompileDiagnostic] {
         val recvStart = receiver.typeStart
         val recvLen = receiver.typeLen
@@ -769,6 +803,12 @@ pub impl Comp {
             }
             if f.hasRecv || associatedWitness {
                 if f.recvId == blanket.typeId {
+                    // A different Source-as-Target edge cannot borrow this
+                    // implementation merely because its receiver is Source.
+                    if f.originTraitOwner != 0U64 && (try self.sourceConformanceForDeclaration(functionIndex: fi)) != blanketConformIdx {
+                        fi += 1U64
+                        continue
+                    }
                     // Keep the semantic witness even when an inherent member
                     // wins bare lookup: generic and explicit-source calls still
                     // need this body. Only the same path and complete receiver
@@ -855,6 +895,15 @@ pub impl Comp {
                     // operator `Sub[Rhs]`). Without the arity gate a provided method on the
                     // 0-ary `Sub` would copy onto every type conforming to `Sub[Rhs]`.
                     if f.recvId == cf.traitId && f.provTraitArity == cf.traitArgs.count() && f.provTraitOwner == cf.traitStart && self.traitInstanceArgsMatch(pattern: <PatternTypeInput.Values values=self.copyFuncTypes(types: f.recvTraitArgs) />, patternParams: <PatternBindInput.Function range=f.typeParams />, actual: <PatternTypeInput.Conformance range=cf.traitArgs />) {
+                            val sourceConformIdx = try self.sourceConformanceForDeclaration(functionIndex: fi)
+                            // Bare conformance implementations were already
+                            // placed by instantiateTraitSubjectConforms. This
+                            // producer owns namespace providers and the
+                            // extension witnesses excluded from that pass.
+                            if sourceConformIdx != 0U64 && self.decls.conformAt(index: sourceConformIdx - 1U64).extId == 0U64 {
+                                fi += 1U64
+                                continue
+                            }
                         // Two conformed traits providing the same name both copy here, each tagged with
                         // its source trait (srcTraitId) — they coexist; bare `a.foo()` is
                         // then a use-site ambiguity (findMethod), while `a#P.foo()` selects
@@ -898,21 +947,11 @@ pub impl Comp {
                             // the body's receiver environment, while the
                             // source edge owns the source impl binders.
                             val originConformIdx: U64 = ci + 1U64
-                            mut val sourceConformIdx: U64 = 0U64
-                            mut val sourceConform: U64 = 0U64
-                            while sourceConform < self.decls.conformCount() {
-                                val sourceIds: Array[U64] = self.copyConformFuncIds(ids: self.decls.conformAt(index: sourceConform).witnessFuncIds)
-                                mut val sourceWi: U64 = 0U64
-                                while sourceWi < sourceIds.count() {
-                                    if sourceIds[sourceWi] == fi {
-                                        originTraitId = self.decls.conformAt(index: sourceConform).traitId
-                                        originTraitOwner = self.decls.conformAt(index: sourceConform).traitStart
-                                        originTraitArity = self.decls.conformAt(index: sourceConform).traitArgs.count()
-                                        sourceConformIdx = sourceConform + 1U64
-                                    }
-                                    sourceWi += 1U64
-                                }
-                                sourceConform += 1U64
+                            if sourceConformIdx != 0U64 {
+                                val sourceConformance = self.decls.conformAt(index: sourceConformIdx - 1U64)
+                                originTraitId = sourceConformance.traitId
+                                originTraitOwner = sourceConformance.traitStart
+                                originTraitArity = sourceConformance.traitArgs.count()
                             }
                             mut val lexicalOwner: U64 = f.lexicalOwnerFnId
                             if lexicalOwner == 0U64 { lexicalOwner = fi + 1U64 }

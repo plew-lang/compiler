@@ -42,6 +42,8 @@ fn main() {
         if compiler.arena.functionAt(index: candidate).params.count() == 0U64 { adapter = candidate }
     }
     assert(adapter < compiler.arena.functionCount())
+    assert(compiler.sourceConformanceForDeclaration(functionIndex: selected).unwrap() == site.selectedConformance)
+    assert(compiler.sourceConformanceForDeclaration(functionIndex: adapter).unwrap() == site.selectedConformance)
     compiler.cur.checkFn = adapter
     val arguments = compiler.pushArgs(args: [])
     val resolution = require(result: compiler.writtenStaticMemberResolution(exprId: site.exprId, receiverRef: site.receiverTerm,
@@ -96,5 +98,7 @@ fn main() {
     assert(compiler.bodyInstanceEnvironment(fnIdx: generator, args: [integer], recvInstRef: first, selectedProof: proof).isOk())
     assert(compiler.bodyInstanceEnvironment(fnIdx: generator, args: [integer], recvInstRef: third, selectedProof: proof).isErr())
     assert(compiler.bodyInstanceEnvironment(fnIdx: generator, args: [integer], recvInstRef: second, selectedProof: foreign).isErr())
+    compiler.decls.registerConform(conformance)
+    assert(compiler.sourceConformanceForDeclaration(functionIndex: selected).isErr())
     print("callable-form-source-identity")
 }
