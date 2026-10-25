@@ -1,0 +1,10 @@
+trait Source {}
+trait Target { fn result[Element]() -> Optional[Element] }
+impl Source as Target {
+    fn result[Element](count: I64 = 5I64) -> Optional[Element] { return <Optional.None /> }
+}
+struct S {}
+impl S as Source {}
+fn main() {
+    val result = <S />.result()
+}

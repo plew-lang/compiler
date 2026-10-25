@@ -106,6 +106,30 @@ the same evidence reader with their explicit caller environment. Root and sealed
 synthetic plans remain separate first-evidence producers. Extern/bodyless calls
 admit their substituted signature and evidence without inventing a checked body.
 
+### Synthesized Callable-form Origins
+
+Conformance registration freezes its authored implementation declarations. The
+normalized witness set may append default-argument adapters or replace a Unit
+result bridge; it does not erase the original declaration's ownership. Derived
+conformances retain that source snapshot, while witness completion updates only
+the normalized dispatch set.
+
+A synthesized forwarding call retains its selected full declaration, exact
+conformance edge and lexical type arguments. Source admission validates that the
+adapter and source belong to their respective sets, admits the completed selected
+edge, and records a static provided operation. It does not repeat name lookup or
+infer known method binders from omitted arguments. Normal default planning and
+concrete provided-copy interpretation consume this operation. A source removed
+from the normalized surface can still require a private implementation copy.
+
+An authored conformance implementation and its default generators interpret
+logical Self under the retained proof. Exact target, authored membership and
+complete receiver validate that use; an origin flag or a synthetic marker does
+not excuse trait-namespace validation. Pure trait namespace helpers retain their
+namespace contract. Source contextual inference preserves admitted receiver and
+proof facts while method arguments remain unknown; publication still requires a
+complete checked call.
+
 ## 4. Instance Identity and Registration
 
 An executable body identity includes its selected declaration/body origin and complete semantic environment. Different receiver terms, lexical mappings, or selected static evidence cannot collapse merely because their machine layouts or ABI signatures match. Closure, global-initializer, default-generator, and adapter origins must remain distinct where their bodies or obligations differ. A registry may represent them using synthetic function keys, provided those keys have explicit ownership and stable provenance.

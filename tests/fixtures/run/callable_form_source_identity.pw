@@ -1,0 +1,92 @@
+// Authored implementation identity survives normalized callable-form witnesses.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { SyntheticCallSite, StaticMemberResolution, TraitConstraint, TraitInstanceKey, ConformanceProofDemand }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn replacement(site: SyntheticCallSite, declaration: U64, conformance: U64, arguments: Array[U64]) -> SyntheticCallSite {
+    return <SyntheticCallSite exprId=site.exprId kind=site.kind originSerial=site.originSerial
+        selectedDeclaration=<Optional.Some v=declaration /> selectedConformance=conformance
+        selectedTypeArgs=arguments receiverIsType=site.receiverIsType receiverTerm=site.receiverTerm />
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "trait Source[Item] {{}} trait Target {{ assoc fn value[Element]() -> I64 }} trait Higher {{}} impl Target as Higher {{}} impl Source[I64] as Target {{ assoc fn value[Element](count: I64 = 5I64) -> I64 {{ return count }} }} impl Source[String] as Target {{ assoc fn value[Element](count: I64 = 9I64) -> I64 {{ return count }} }} struct A {{}} struct B {{}} struct C {{}} impl A as Source[I64] {{}} impl B as Source[String] {{}} fn context(first: A, second: B, third: C) {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="callable-source.pw" text=source />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    mut val sites: Array[U64] = []
+    for index in 0U64..<compiler.decls.syntheticCallSites.count() {
+        if compiler.decls.syntheticCallSites[index].selectedConformance != 0U64 { sites.append(index) }
+    }
+    assert(sites.count() == 2U64)
+    val siteIndex = sites[0U64]
+    val site = compiler.decls.syntheticCallSites[siteIndex]
+    val other = compiler.decls.syntheticCallSites[sites[1U64]]
+    val selected = site.selectedDeclaration.unwrap()
+    val function = compiler.arena.functionAt(index: selected)
+    val conformance = compiler.decls.conformAt(index: site.selectedConformance - 1U64)
+    assert(conformance.authoredFuncIds.count() == 1U64)
+    assert(conformance.witnessFuncIds.count() == 2U64)
+    mut val adapter = compiler.arena.functionCount()
+    for candidate in compiler.copyConformFuncIds(ids: conformance.witnessFuncIds) {
+        if compiler.arena.functionAt(index: candidate).params.count() == 0U64 { adapter = candidate }
+    }
+    assert(adapter < compiler.arena.functionCount())
+    compiler.cur.checkFn = adapter
+    val arguments = compiler.pushArgs(args: [])
+    val resolution = compiler.writtenStaticMemberResolution(exprId: site.exprId, receiverRef: site.receiverTerm,
+        nameStart: function.nameStart, nameLen: function.nameLen, args: arguments).unwrap()
+    match resolution {
+        StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
+            assert(callee == selected && !compiler.proofIsMissing(proof: proof))
+            assert(compiler.selectedStaticCallDeclaration(resolution: resolution, offset: 0U64).isOk())
+        }
+        _ => { panic("forwarder lost its selected implementation") }
+    }
+    compiler.decls.syntheticCallSites.set(i: siteIndex, value: replacement(site: site,
+        declaration: other.selectedDeclaration.unwrap(), conformance: site.selectedConformance, arguments: other.selectedTypeArgs))
+    assert(compiler.writtenStaticMemberResolution(exprId: site.exprId, receiverRef: site.receiverTerm,
+        nameStart: function.nameStart, nameLen: function.nameLen, args: arguments).isErr())
+    compiler.decls.syntheticCallSites.set(i: siteIndex, value: replacement(site: site,
+        declaration: selected, conformance: other.selectedConformance, arguments: site.selectedTypeArgs))
+    assert(compiler.writtenStaticMemberResolution(exprId: site.exprId, receiverRef: site.receiverTerm,
+        nameStart: function.nameStart, nameLen: function.nameLen, args: arguments).isErr())
+    compiler.decls.syntheticCallSites.set(i: siteIndex, value: replacement(site: site,
+        declaration: selected, conformance: site.selectedConformance, arguments: []))
+    assert(compiler.writtenStaticMemberResolution(exprId: site.exprId, receiverRef: site.receiverTerm,
+        nameStart: function.nameStart, nameLen: function.nameLen, args: arguments).isErr())
+    compiler.decls.syntheticCallSites.set(i: siteIndex, value: site)
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.langTypeRefAt(nameStart: integerName.nameStart, nameLen: integerName.nameLen, args: [])
+    compiler.decls.syntheticCallSites.set(i: siteIndex, value: replacement(site: site,
+        declaration: selected, conformance: site.selectedConformance, arguments: [integer]))
+    assert(compiler.writtenStaticMemberResolution(exprId: site.exprId, receiverRef: site.receiverTerm,
+        nameStart: function.nameStart, nameLen: function.nameLen, args: arguments).isErr())
+    compiler.decls.syntheticCallSites.set(i: siteIndex, value: site)
+    val context = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "context").nameId)
+    val parameters = compiler.arena.functionAt(index: context).params
+    val first = compiler.funcParamAt(params: parameters, index: 0U64).ty
+    val second = compiler.funcParamAt(params: parameters, index: 1U64).ty
+    val third = compiler.funcParamAt(params: parameters, index: 2U64).ty
+    val target = compiler.decls.traitAt(index: 1U64)
+    val constraint = <TraitConstraint key=<TraitInstanceKey owner=target.nameStart positionalArgs=[] /> assocPredicates=[] />
+    val proof = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: first, constraint: constraint).unwrap()
+    val foreign = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: second, constraint: constraint).unwrap()
+    assert(compiler.selectedImplementationDeclarationMatches(function: function, proof: proof, receiverRef: first))
+    assert(!compiler.selectedImplementationDeclarationMatches(function: function, proof: proof, receiverRef: third))
+    assert(!compiler.selectedImplementationDeclarationMatches(function: function, proof: foreign, receiverRef: second))
+    val higher = compiler.decls.traitAt(index: 2U64)
+    val higherProof = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: first,
+        constraint: <TraitConstraint key=<TraitInstanceKey owner=higher.nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+    val wrongTarget = <StaticMemberResolution.Provided proof=higherProof traitIdx=2U64 callee=selected />
+    assert(compiler.selectedStaticCallDeclaration(resolution: wrongTarget, offset: 0U64).isErr())
+    compiler.prepareDefaultArgumentGenerators().unwrap()
+    val generator = compiler.defaultArgumentGenerator(ownerFnIdx: selected, parameterIndex: 0U64)
+    assert(generator < compiler.arena.functionCount())
+    assert(compiler.bodyInstanceEnvironment(fnIdx: generator, args: [integer], recvInstRef: first, selectedProof: proof).isOk())
+    assert(compiler.bodyInstanceEnvironment(fnIdx: generator, args: [integer], recvInstRef: third, selectedProof: proof).isErr())
+    assert(compiler.bodyInstanceEnvironment(fnIdx: generator, args: [integer], recvInstRef: second, selectedProof: foreign).isErr())
+    print("callable-form-source-identity")
+}

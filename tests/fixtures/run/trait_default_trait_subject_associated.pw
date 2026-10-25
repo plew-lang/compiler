@@ -1,8 +1,9 @@
 use @Std/Io only { print }
 trait Source {}
-trait Target { assoc fn value() -> I64 }
+trait Target { assoc fn value() -> I64 fn read() -> I64 }
 impl Source as Target {
     assoc fn value(count: I64 = 5I64) -> I64 { return count }
+    fn read(count: I64 = 5I64) -> I64 { return count }
 }
 struct S {}
 impl S as Source {}
@@ -10,4 +11,7 @@ fn invoke[T](value: T) -> I64 where T: Target { return T.value() }
 fn main() {
     print(S.value())
     print(invoke(value: <S />))
+    print(S.value(count: 9I64))
+    val value = <S />
+    print(value.read(count: 13I64))
 }

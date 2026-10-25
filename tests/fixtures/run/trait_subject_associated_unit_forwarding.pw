@@ -1,0 +1,17 @@
+use @Std/Io only { print }
+trait Source {}
+trait Implicit { assoc fn first() }
+trait Explicit { assoc fn second() -> () }
+impl Source as Implicit { assoc fn first() -> () { print(7I64) return () } }
+impl Source as Explicit { assoc fn second() { print(11I64) } }
+struct S {}
+impl S as Source {}
+fn invoke[T](value: T) where T: Implicit, T: Explicit {
+    T.first()
+    T.second()
+}
+fn main() {
+    S.first()
+    S.second()
+    invoke(value: <S />)
+}

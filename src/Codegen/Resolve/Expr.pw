@@ -657,7 +657,7 @@ pub impl Comp {
                         return <Result.Ok value=function />
                     }
                     val witness = self.proofWitnessForTrait(proof: proof, traitIdx: traitIndex)
-                    if self.selectedImplementationDeclarationMatches(function: function, proof: proof, receiverRef: witness.selfRef) {
+                    if function.originTraitOwner == trait.nameStart && function.originTraitId == trait.nameId && self.selectedImplementationDeclarationMatches(function: function, proof: proof, receiverRef: witness.selfRef) {
                         return <Result.Ok value=function />
                     }
                 }
