@@ -1,0 +1,66 @@
+// A trait namespace is semantic receiver context, never an ABI self argument.
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { TypeRef, InstanceEnvironment, CallResolution }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "trait Alpha {{}} impl Alpha {{ assoc fn code() -> I64 {{ return 7I64 }} }} trait Beta {{}} impl Beta {{ assoc fn code() -> I64 {{ return 9I64 }} }} trait Family[T] {{}} impl[T] Family[T] {{ assoc fn code() -> I64 {{ return 11I64 }} }}"
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="associated-environment.pw" text=source />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val integerName = compiler.internBytes(s: "I64")
+    val textName = compiler.internBytes(s: "String")
+    val integer = compiler.langTypeRefAt(nameStart: integerName.nameStart, nameLen: integerName.nameLen, args: [])
+    val text = compiler.langTypeRefAt(nameStart: textName.nameStart, nameLen: textName.nameLen, args: [])
+    mut val checked = 0U64
+    mut val index = 0U64
+    while index < compiler.arena.functionCount() {
+        val function = compiler.arena.functionAt(index: index)
+        if function.isAssoc && function.provTraitOwner != 0U64 {
+            assert(!function.hasRecv && !function.isProvided)
+            val traitIndex = compiler.decls.traitIndexByOffset(offset: function.provTraitOwner)
+            val declaration = compiler.decls.traitAt(index: traitIndex)
+            mut val arguments: Array[U64] = []
+            if function.typeParams.count() != 0U64 { arguments.append(integer) }
+            val receiver = compiler.pushType(t: <TypeRef nameStart=function.recvStart nameLen=function.recvLen args=arguments hasDecl=true declOffset=function.provTraitOwner />)
+            val environment = compiler.bodyInstanceEnvironment(fnIdx: index, args: arguments, recvInstRef: receiver).unwrap()
+            assert(compiler.typeRefEq(a: compiler.groundTermInEnvironment(ref: function.recvTy, params: environment.params, values: environment.args), b: receiver))
+            assert(compiler.bodyReceiverMatchesDeclaration(function: function, environment: environment))
+            val key = compiler.internBodyInstance(fnIdx: index, environment: environment)
+            val repeated = compiler.bodyInstanceEnvironment(fnIdx: index, args: arguments, recvInstRef: receiver).unwrap()
+            assert(key == compiler.internBodyInstance(fnIdx: index, environment: repeated))
+            // Abstract preparation uses this exact lexical Self, never another binder.
+            assert(compiler.bodyInstanceEnvironment(fnIdx: index, args: arguments, recvInstRef: function.recvTy).isOk())
+            val ownerless = compiler.pushType(t: <TypeRef nameStart=function.recvStart nameLen=function.recvLen args=arguments />)
+            assert(compiler.bodyInstanceEnvironment(fnIdx: index, args: arguments, recvInstRef: ownerless).isErr())
+            assert(!compiler.bodyReceiverMatchesDeclaration(function: function, environment: <InstanceEnvironment />))
+            // Same spelling/representation must not substitute another trait owner.
+            val otherIndex = (traitIndex + 1U64) % compiler.decls.traitCount()
+            val other = compiler.decls.traitAt(index: otherIndex)
+            assert(other.nameStart != declaration.nameStart)
+            val foreign = compiler.pushType(t: <TypeRef nameStart=function.recvStart nameLen=function.recvLen args=arguments hasDecl=true declOffset=other.nameStart />)
+            assert(compiler.bodyInstanceEnvironment(fnIdx: index, args: arguments, recvInstRef: foreign).isErr())
+            val otherSelf = compiler.pushType(t: <TypeRef nameStart=function.recvStart nameLen=function.recvLen args=[] paramId=other.selfParamId />)
+            assert(compiler.bodyInstanceEnvironment(fnIdx: index, args: arguments, recvInstRef: otherSelf).isErr())
+            if arguments.count() != 0U64 {
+                val wrongArgument = compiler.pushType(t: <TypeRef nameStart=function.recvStart nameLen=function.recvLen args=[text] hasDecl=true declOffset=function.provTraitOwner />)
+                assert(compiler.bodyInstanceEnvironment(fnIdx: index, args: arguments, recvInstRef: wrongArgument).isErr())
+            }
+            compiler.arena.setBodySignature(bodyId: key, parameters: [], passings: [], result: integer, receiverType: 0U64)
+            assert(compiler.arena.bodySignature(bodyId: key).receiverType == 0U64)
+            if arguments.count() == 0U64 {
+                val call = <CallResolution bodyId=key exprId=0U64 callee=index calleeBodyId=key recvTypeRef=receiver resultTypeRef=integer />
+                assert(compiler.finalStaticCalleeIsComplete(e: call).unwrap())
+                compiler.arena.setBodySignature(bodyId: key, parameters: [], passings: [], result: integer, receiverType: receiver)
+                assert(!compiler.finalStaticCalleeIsComplete(e: call).unwrap())
+            }
+            checked += 1U64
+        }
+        index += 1U64
+    }
+    assert(checked == 3U64)
+    print("trait-associated-body-environment")
+}
