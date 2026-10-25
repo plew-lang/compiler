@@ -53,3 +53,12 @@ Receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-no
 retains gate totals and comparison hashes. Required source-copy placement repair [com-6cw6](com-6cw6.md) has an independently
 reviewed finite scope and explicit dependencies. Affected area/G1
 admission must reopen; G2b remains incomplete. Gen/deps/ASan were not started.
+
+## Refreshed Candidate Gate Progress
+
+Measured compiler2d7c785b from refreshed G2a passes full normal
+20261025T051128-test-ed8f9a: run1523, panic50, reject1028, part93,
+partreject84, midcoverage1, midborrowedread1; skip0/fail0, exit0, inputs
+unchanged. Receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-normal.json.
+The original fifteen regressions remain fixed without expectation edits.
+Gen/deps/LLVM22 ASan-LSan are pending; G2b remains in progress.
