@@ -19,8 +19,10 @@ Scope is the compiler's currently provided type-checking surface and the already
 
 The supported frontend surface is tracked through the finite area and child
 contracts below. Completion is reopened by [com-bkqq](com-bkqq.md):
-[com-ugee](com-ugee.md) is a confirmed missing-value producer defect in the
-shared value-region contract, not a new feature. [G1 admission](com-61jt.md) reconciles source-to-final-use
+[com-ugee](com-ugee.md) repaired the confirmed missing-value producer defect;
+its E1/completion scope is independently re-admitted at e73a8476/candidate073f.
+The phase-three parent remains open pending fresh final admission and gates.
+[G1 admission](com-61jt.md) reconciles source-to-final-use
 authorities, removals, controls and remaining excluded boundaries. [G2a](com-p5um.md)
 proves the frozen candidate's fixed point/performance; [G2b](com-9l3b.md) proves
 its complete correctness/sanitizer gates. [G3](com-lzpe.md) owns the final
@@ -65,9 +67,10 @@ restart design, and [com-gyup](com-gyup.md) the closed bounded ownership study.
 A–F area/child Outcomes retain their independently reviewed producer, saved
 authority, final consumer and removed-path records. The [type/conversion area](met-6e6k.md#reconciled-area-completion)
 and [eight-path selection area](met-ucze.md#reconciled-area-completion) provide
-closure routing; actual states and prerequisites belong to tk. G1/E1/completion/G3 are reopened for com-ugee. G2 retains valid evidence for
-the unchanged3c candidate; it cannot certify a future repair without the
-necessary fresh candidate checks.
+closure routing; actual states and prerequisites belong to tk. E1/completion and
+com-ugee have scoped independent re-admission. G1, G2a,
+G2b and G3 remain open for current-candidate reconciliation. Previous3c gates
+remain evidence only for that unchanged candidate.
 
 The [work-breakdown review](com-hxtr.md#outcome) is addressed by separating
 milestones 3B–3F from their real child tickets. The tickets name actual entry
@@ -250,11 +253,13 @@ reachability must not authorize the same result-forming decision. Criteria1/2/
 5/6/8 are reopened; criterion11 remains pending final repaired synchronization.
 The original criterion wording and seven-second target are unchanged.
 
-E1/com-2suv, completion/com-fuo8, G1 and G3 are reopened with the actual repair
-dependency. B0/B1 receive new individual independent acceptance in their own
-issues; the earlier missing durable review records are not presumed to have
-existed. Stale storage-pending descriptions are corrected. No production source
-or existing test is changed by the review; implementation has not started.
+The repair is implemented at e73a8476/candidate073f and independently accepted
+for com-ugee/E1/completion. Focused producer/publication/final-reader controls
+and full normal/gen/deps pass with immutable inputs. The durable repair receipt
+is meta/evidence/existing-feature-conformance/source-owner-facts/
+value-region-producer-repair.json. B0/B1 individual independent acceptance is
+recorded in their own issues. G1 must still reconcile the current evidence and
+com-uutc's heterogeneous any-join observation; final gates and G3 remain open.
 
 The previous exact-candidate gates remain valid for production043e2402/fixture
 17537a40 and compiler3c532ce1: generation3 fixed point, formal median5.954309s,
@@ -266,8 +271,8 @@ phase3-completion-rereview.json and com-bkqq.
 
 ## Current Outcome
 
-**Not complete.** Close com-ugee from shared producer through publication and
-actual final consumers, independently re-review its task/area, readmit G1 and
-perform the necessary new-candidate G2/G3 reconciliation before parent closure.
+**Not complete.** The com-ugee producer/publication/final-consumer repair and
+its task/area reviews are complete. Readmit G1 and perform the necessary
+new-candidate G2/G3 reconciliation before parent closure.
 Do not restart already verified call/proof/storage work without affected evidence.
 Phase four, main, seeds and adopted-carrier promotion have not started here.

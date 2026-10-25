@@ -1,6 +1,6 @@
 ---
 id: com-2suv
-status: open
+status: closed
 deps: [com-f0mq, com-ugee]
 links: []
 created: 2026-10-23T10:41:58Z
@@ -12,15 +12,22 @@ tags: [frontend, verification]
 ---
 # Verify block branch and short-circuit completion use one result authority
 
-## Current Reopening
+## Current Scoped Admission
 
-[com-bkqq](com-bkqq.md) reproduced [com-ugee](com-ugee.md) on exact final
-candidate3c532ce1: analytical loop noncontinuation suppresses missing-give
-rejection, and expected context becomes a value-region result. This contract is
-reopened until the shared producer/publication/final-consumer repair and its
-independent controls close. The scoped evidence below remains attached to its
-named inputs; it no longer proves this area's complete current admission.
-No production repair has been made. Parent criteria1/2/5/6/8 are affected.
+[com-ugee](com-ugee.md) is repaired at production e73a8476, exact candidate
+073f0375. The common Record boundary admits a real give before publishing a
+normal value result and preserves its checked contextual destination. Verify's
+competing execution-reachability missing-give decisions are removed. Function
+return completeness, CFG and ownership keep their separate execution analysis.
+
+Independent phase3_flow_modes_audit and phase3_evidence_scope_audit accept the
+repair and affected E1/completion scope. Fresh native15/reject13 and18 mode
+controls pass; full normal1526/panic50/reject1035/part93/partreject84 plus2 Mid
+controls, gen25/reject5 and dependency10 checks all exit0 without skips or
+changed inputs. Evidence is meta/evidence/existing-feature-conformance/
+source-owner-facts/value-region-producer-repair.json. This scoped re-admission
+closes this area's repair, not G1, new formal G2a, full final-candidate G2b,
+G3 or the phase-three parent. Earlier evidence below retains its named scope.
 
 ## Boundary
 

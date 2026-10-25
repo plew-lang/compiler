@@ -1,6 +1,6 @@
 ---
 id: com-ugee
-status: in_progress
+status: closed
 deps: []
 links: [com-bkqq]
 created: 2026-10-25T08:52:16Z
@@ -79,4 +79,49 @@ Mid cleanup/ownership analyses.
 
 The review receipt retains all11 check-only controls and hashes. No infinite
 loop was executed. The two absent loop-expression controls are classified as
-unsupported, not proof of this defect. Implementation is in progress: source result admission and result-term production move to the common Record value-region boundary; Verify's independent missing-give decision is removed. New source rejects and producer/publication controls are being verified.
+unsupported, not proof of this defect. Implementation and scoped verification are complete; the repair and current evidence follow.
+
+## Implemented Repair and Scoped Review
+
+Production e73a8476, saved bin/plewc-value-producer-final SHA256
+073f0375a63a5f8d57b5a2a4fa2e305c09a4cf57178d09a1386e4d27699c0036.
+recordValueBlock now keeps construction context separate from result existence.
+A source-normal region must contain an admitted give before storing any result;
+that producer has already passed the shared block's type and generic checks.
+The contextual conversion/join destination is retained after admission, or the
+producer supplies the type when no context exists. Non-normal source branches
+continue to store no result. Verify's separate block/if/match missing-give
+selectors are removed; operand/ownership checks and execution-normal function
+return/CFG/cleanup decisions remain unchanged.
+
+Standard build20261025T093208-build-b7e22a exits0 with6006 immutable inputs.
+Native15/reject13 plus18 check/run/global/closure/default/warning controls pass.
+The internal source_value_region_production control proves actual give-backed
+publication, separate source/execution flow, retained/foreign/missing-owner
+coverage through the companion existing controls, stable failed retry and another
+owner's reader stability. Six source rejects enter the ordinary maintained suite.
+No existing golden or verifier obligation changed.
+
+Independent phase3_flow_modes_audit accepts this task and affected E1/completion
+scope at e73a8476 after reviewing the code, actual outputs/diagnostics,28 current
+fixture hashes,18 mode controls, candidate and build before/after/current6006
+input hashes. The original/raw intermediate candidate's over-broad raw-result
+change was corrected to preserve admitted contextual conversions; a never-green
+fixture naming error and diagnostic-driver optional-file assumption were fixed
+without weakening existing tests. Their failed scratch artifacts remain failed.
+
+Same-source alternating diagnostic medians are old3c5.929661s/new073f5.880087s;
+all eight generated LLVM outputs match, input fingerprints unchanged. This is
+not the final formal fixed-point/performance gate and is not a speedup claim.
+Full normal20261025T093945-test-ae5670 passes run1526/panic50/reject1035/
+part93/partreject84 plus2 Mid controls. Gen20261025T101116-gen-807d96 passes
+25/reject5 plus gen-input-ast; deps20261025T101315-deps-e0b5dc passes10 checks.
+All exit0, zero skips/failures, exact073f candidate and6006 before/after/current
+inputs unchanged. Independent phase3_evidence_scope_audit also accepts the
+scoped repair evidence. Resolved; E1/completion are independently re-admitted.
+G1 current admission and new final G2/G3 remain separate open obligations.
+The retained heterogeneous-any-join observation in com-uutc still requires G1
+classification; it is neither a successful conversion control nor a new regression.
+
+Durable source/result/hash evidence:
+meta/evidence/existing-feature-conformance/source-owner-facts/value-region-producer-repair.json.

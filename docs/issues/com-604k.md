@@ -21,9 +21,10 @@ Scope classification is [com-esri](com-esri.md). Its pinned matrix records inclu
 
 Phase 2 is complete under [com-io5f](com-io5f.md). Phase 3 remains active under [met-si6j](met-si6j.md): the fresh
 [completion re-review](com-bkqq.md) found the existing missing-value producer
-violation [com-ugee](com-ugee.md) and reopened E1/completion/G1/G3. The prior
-exact-candidate gates remain valid evidence for their unchanged binary, but
-are not the repaired frontend's completion. These bounded closures do
+violation [com-ugee](com-ugee.md). Its repair and E1/completion scope are now
+independently re-admitted at e73a8476/candidate073f; G1/new G2/G3 remain open.
+Prior exact-candidate gates remain evidence only for their unchanged binary,
+not the repaired frontend's complete final certification. These bounded closures do
 not close this epic. Remaining phase-four task contracts and the final
 integration/main criteria below still apply. The manual diagnostic repair
 com-ydgx is not a prerequisite when using the existing standard sanitizer gate.

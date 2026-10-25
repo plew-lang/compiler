@@ -41,8 +41,9 @@ waived by a bounded child closing.
 ## Current Reopening
 
 [com-bkqq](com-bkqq.md) supersedes the preceding final authorization. The
-[missing value-producer repair](com-ugee.md) reopens E1/completion and G1;
-this task now explicitly depends on G1 as well as the retained G2b gate.
+[missing value-producer repair](com-ugee.md) and E1/completion are now
+independently re-admitted at e73a8476/candidate073f. G1 and this final review
+remain open, with new G2a/G2b final-candidate obligations.
 The parent is not complete. Original eleven criteria and scope remain unchanged.
 
 production043e2402/fixture17537a40, exact compiler3c532ce1 and saved candidate
@@ -52,7 +53,8 @@ reproduced negative case or a future source fix. The old phase3g-completion.json
 is a frozen prior authorization; current findings and reconciliation are in
 phase3-completion-rereview.json and com-bkqq.
 
-After the actual shared-boundary repair and independent task/area review,
-readmit G1, verify the appropriate final-candidate gates, reconcile all eleven
+After the completed shared-boundary repair and independent task/area review,
+readmit G1 (including com-uutc observation classification), verify the appropriate
+final-candidate gates, reconcile all eleven
 criteria and documentation, and obtain a fresh final review. Only then close
 G3/met-si6j. Phase4/com-604k, main and seed/carrier promotion remain separate.

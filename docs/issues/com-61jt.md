@@ -12,15 +12,17 @@ tags: [frontend, verification]
 ---
 # Reconcile all phase three closure evidence before freezing a candidate
 
-## Current Reopening
+## Current Admission Boundary
 
-[com-bkqq](com-bkqq.md) reproduced [com-ugee](com-ugee.md) on exact final
-candidate3c532ce1: analytical loop noncontinuation suppresses missing-give
-rejection, and expected context becomes a value-region result. This contract is
-reopened until the shared producer/publication/final-consumer repair and its
-independent controls close. The scoped evidence below remains attached to its
-named inputs; it no longer proves this area's complete current admission.
-No production repair has been made. Parent criteria1/2/5/6/8 are affected.
+The confirmed [com-ugee](com-ugee.md) repair and E1/completion scope are now
+independently accepted at e73a8476/candidate073f. Fresh normal/gen/deps and
+focused controls pass; durable evidence is the value-region-producer-repair.json
+receipt in meta. G1 remains open: reconcile current source-to-final-use facts,
+removed authorities, controls and exclusions before freezing a candidate. In
+particular, classify the retained heterogeneous any-join observation in
+[com-uutc](com-uutc.md) against existing admitted/excluded result-shape contracts;
+do not silently declare it unsupported or reuse it as a successful control.
+Old3c gates cannot certify the new source; G2a/G2b/G3 remain required.
 
 ## Boundary
 
