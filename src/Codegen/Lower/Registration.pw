@@ -788,10 +788,15 @@ pub impl Comp {
                 }
             }
             val proof: StaticConformanceProof = (try self.concreteConformanceProof(baseRef: recvRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs))
-            match proof {
-                StaticConformanceProof.Missing => { return <Result.Ok value=false />}
-                _ => { return <Result.Ok value=true />}
-            }
+            if self.proofIsMissing(proof: proof) { return <Result.Ok value=false /> }
+            val traitIndex = self.decls.traitIndexByOffset(offset: traitOwner)
+            val placement = self.proofWitnessForTrait(proof: proof, traitIdx: traitIndex)
+            if placement.conformIdx != f.originConformIdx || !self.selectedWitnessReceiverMatches(witness: placement, receiverRef: recvRef) { return <Result.Ok value=false /> }
+            val environment = try self.selectedConstraintEnvironment(witness: placement)
+            // Proof availability does not make A's concrete copy a candidate
+            // for B. Source selection and later selected-copy interpretation
+            // share the same receiver/placement admission contract.
+            return self.providedCopyReceiverMatches(function: f, receiverRef: recvRef, placement: placement, environment: environment)
         }
         if f.recvId != recvId {
             if f.isProvided && self.methodRecvIsTrait(f: f) && recvRef != 0U64 {

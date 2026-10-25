@@ -3,7 +3,7 @@ use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { TraitConstraint, TraitInstanceKey, ConformanceProofDemand, TypeRef }
+use /Ir only { TraitConstraint, TraitInstanceKey, ConformanceProofDemand, TypeRef, Func }
 
 fn main() {
     mut val compiler = <Comp />
@@ -43,11 +43,23 @@ fn main() {
     val selected = compiler.providedCopyForDeclaration(declaration: declaration, receiverRef: receiver, proof: proof, traitIdx: report, offset: 0U64).unwrap()
     val valid = compiler.arena.functionAt(index: selected)
     assert(valid.isProvided)
-    mut val malformed = valid
     // Keep the exact edge and lexical declaration, but use another trait's Self.
     val otherSelf = compiler.decls.traitAt(index: 0U64).selfParamId
     val otherTerm = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 paramId=otherSelf args=[] />)
-    malformed.recvTy = otherTerm
+    val malformed = <Func
+        nameStart=valid.nameStart nameLen=valid.nameLen lexicalOwnerFnId=valid.lexicalOwnerFnId nameId=valid.nameId
+        recvId=valid.recvId recvTy=otherTerm recvPatternParams=valid.recvPatternParams recvTraitArgs=valid.recvTraitArgs
+        typeParams=valid.typeParams params=valid.params hasRet=valid.hasRet retStart=valid.retStart
+        retLen=valid.retLen retIsArray=valid.retIsArray retTy=valid.retTy body=valid.body
+        hasRecv=valid.hasRecv recvStart=valid.recvStart recvLen=valid.recvLen selfInout=valid.selfInout
+        selfMove=valid.selfMove isFactory=valid.isFactory isAnonymousFactory=valid.isAnonymousFactory isAssoc=valid.isAssoc
+        isAsync=valid.isAsync isDiverging=valid.isDiverging isExtern=valid.isExtern isExposed=valid.isExposed
+        isCExtern=valid.isCExtern runtimeIntrinsic=valid.runtimeIntrinsic isPub=valid.isPub isProvided=valid.isProvided
+        sourceWitnessFuncId=valid.sourceWitnessFuncId extId=valid.extId srcTraitId=valid.srcTraitId srcTraitOwner=valid.srcTraitOwner
+        originTraitId=valid.originTraitId originTraitOwner=valid.originTraitOwner originTraitArity=valid.originTraitArity originConformIdx=valid.originConformIdx
+        sourceConformIdx=valid.sourceConformIdx providedOwnerMod=valid.providedOwnerMod provTraitArity=valid.provTraitArity provTraitOwner=valid.provTraitOwner
+        viewOnly=valid.viewOnly defOffset=valid.defOffset signatureBounds=valid.signatureBounds
+    />
     compiler.arena.registerFunction(malformed, registerSurface: false)
     assert(compiler.providedCopyForDeclaration(declaration: declaration, receiverRef: receiver, proof: proof, traitIdx: report, offset: 0U64).unwrap() == selected)
     compiler.arena.registerFunction(valid, registerSurface: false)
