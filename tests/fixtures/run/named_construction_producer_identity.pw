@@ -1,0 +1,73 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, Stmt }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn inspect(function: String, missing: Bool = false) {
+    mut val compiler = <Comp />
+    val source = "struct Item {{ val value: I64 }} struct Box[T] {{ val value: T }} fn plain() {{ val value = <Item value=7I64 /> }} fn inferred() {{ val value = <Box value=8I64 /> }} fn contextual() -> Box[I64] {{ return <Box value=9 /> }} fn record() {{ val value = (value: 10I64) }}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="construction.pw" text=source />, sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: function).nameId)
+    val statement = compiler.arena.stmts[compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: owner).body, index: 0U64)]
+    val expression = match statement {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val value) => value,
+        Stmt.Return(value: val value, hasValue: _, offset: _) => value,
+        _ => { panic("missing construction statement") },
+    }
+    val original = compiler.arena.exprs[expression]
+    mut val selectedOwner = 0U64
+    match original {
+        Expr.Make(typeStart: val start, typeLen: val length, variantStart: val variant, variantLen: val variantLength, isEnum: val isEnum, ty: val type, fields: val fields) => {
+            if length != 0U64 {
+                assert(type != 0U64)
+                assert(compiler.arena.typeAt(index: type).hasDecl)
+                selectedOwner = compiler.arena.typeAt(index: type).declOffset
+            }
+            if missing {
+                assert(length != 0U64)
+                compiler.arena.exprs[expression] = <Expr.Make typeStart=start typeLen=length variantStart=variant variantLen=variantLength isEnum=isEnum ty=0U64 fields=fields />
+            }
+        }
+        _ => { panic("expected construction") },
+    }
+    val prepared = compiler.prepareLexicalBody(fnIdx: owner)
+    if missing {
+        match prepared {
+            Result.Err(error: val error) => { assert(error.message == "internal error: named construction is missing its producer type term") }
+            _ => { panic("missing producer term admitted") },
+        }
+    } else {
+        prepared.unwrap()
+        val facts = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+        val aggregate = facts.aggregate(ownerFnIdx: owner, exprId: expression).unwrap()
+        assert(aggregate.resultTerm != 0U64)
+        val result = compiler.arena.typeAt(index: aggregate.resultTerm)
+        if function == "record" {
+            assert(result.isRecord)
+        } else {
+            assert(result.hasDecl && result.declOffset == selectedOwner)
+            if function != "plain" { assert(result.args.count() == 1U64) }
+        }
+        // The published fact remains authoritative if an internal AST client
+        // later damages the old syntax carrier. No name lookup repairs it.
+        match original {
+            Expr.Make(typeStart: val start, typeLen: val length, variantStart: val variant, variantLen: val variantLength, isEnum: val isEnum, ty: _, fields: val fields) => {
+                compiler.arena.exprs[expression] = <Expr.Make typeStart=start typeLen=length variantStart=variant variantLen=variantLength isEnum=isEnum ty=0U64 fields=fields />
+            }
+            _ => {},
+        }
+        compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+        assert(compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap().aggregate(ownerFnIdx: owner, exprId: expression).unwrap().resultTerm == aggregate.resultTerm)
+    }
+}
+
+fn main() {
+    inspect(function: "plain")
+    inspect(function: "inferred")
+    inspect(function: "contextual")
+    inspect(function: "record")
+    inspect(function: "plain", missing: true)
+    inspect(function: "inferred", missing: true)
+    print("construction-owner")
+}

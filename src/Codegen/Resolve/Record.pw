@@ -1892,12 +1892,13 @@ pub impl Comp {
                 // argument list; it cannot undo a prior contextual solution.
                 mut val instance = self.semanticExprTerm(exprId: exprId)
                 if instance == 0U64 { instance = ty }
-                // Synthesized nominal constructions can retain the selected
-                // name without an annotation term. Resolve that declaration
-                // here, before field context and aggregate publication, rather
-                // than depending on a later legacy expression-type visit.
+                // Named construction producers retain their selected head,
+                // even when generic arguments still need field/context
+                // inference. Recreating a head from spelling here would lose
+                // declaration or lexical binder identity. Anonymous records
+                // and omitted nominal heads keep their ordinary context path.
                 if instance == 0U64 && typeLen != 0U64 {
-                    instance = self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen)
+                    return <Result.Err error=self.diagnosticAt(offset: typeStart, msg: "internal error: named construction is missing its producer type term") />
                 }
                 if (try self.makeAcceptsExpectedTerm(exprId: exprId, writtenTerm: instance, isEnum: isEnum, fields: fields, expectedTerm: normalizedContext)) {
                     instance = normalizedContext
