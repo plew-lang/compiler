@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+trait Source {}
+trait Target { assoc fn value() -> I64 }
+impl Source as Target { assoc fn value() -> I64 { return 7I64 } }
+struct Left {}
+struct Right {}
+struct Box[T] {}
+impl Box[Left] as Source {}
+impl Box[Right] as Source {}
+fn requested[T](value: T) -> I64 where T: Target { return T.value() }
+fn main() {
+    print(requested(value: <Box[Left] />))
+    print(requested(value: <Box[Right] />))
+}

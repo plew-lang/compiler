@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+trait Source {}
+trait Target { fn value() -> I64 }
+impl Source as Target { fn value() -> I64 { return 7I64 } }
+struct S {}
+impl S as Source {}
+impl S { fn value() -> I64 { return 99I64 } }
+fn requested[T](value: T) -> I64 where T: Target { return value.value() }
+fn main() {
+    val value = <S />
+    print(value.value())
+    print(requested(value: value))
+    print(value#Source.value())
+}
