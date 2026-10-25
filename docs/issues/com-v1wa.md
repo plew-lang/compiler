@@ -36,3 +36,24 @@ Common untyped-Make admission is separately owned by com-tkz7.
 
 Independent b2_completion_review accepts this finite scope and separation;
 completion remains subject to actual results and independent final review.
+
+## Targeted Implementation and Results
+
+Production043e2402 (ff016aae/9849c4b1/4a9e2e30) with fixture17537a40
+passes standard build20261025T060222-build-122b57, focused-3 native12/
+reject7, sourcecheck-3 and full gen20261025T060459-gen-6ca12d positive25/
+reject5/skip0/fail0. All terminate0 with recorded inputs unchanged. Candidate
+bin/plewc-gen-receiver-3 SHA256
+f67e25ae60b8ee8bba902325f6341c805fa39619100f6402ebd29b8230c88785.
+Receipt meta/evidence/existing-feature-conformance/source-owner-facts/synthetic-construction-identity-repair.json.
+
+The exact directive owner offset is distinct from its canonical struct name
+span. An initial new implementation confused those fields of the legacy Bind
+identity carrier; the intermediate failed gen remains failed. The corrected
+producer gets spelling from the selected StructDef and retains its offset as
+identity. Bare derives do not manufacture a construction term. Common Record
+consumes saved/typed heads without spelling recovery; typed generic/rigid/Self/
+record controls and missing-head corruption remain distinct. No receiver
+verifier or visibility rule was weakened. Original directiveargs unchanged.
+Independent final result/fingerprint review pending; latest static review has
+no blocker. Full changed-input G1/G2 obligations remain mandatory.
