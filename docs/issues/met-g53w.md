@@ -77,3 +77,66 @@ remain independently complete. The three overload repairs are WIP with source
 check-only contrasts, not complete or area admitted; this new group-contract
 repair has not been implemented. Record the task and required dependencies,
 then await a user instruction to resume the updated finite work scope.
+
+## Review of the Proposed Contract Change
+
+The user proposed replacing the equal-generic-shape restriction with a concrete
+argument discriminator and requested independent review. This section records a
+reviewed proposal, **not an adopted specification or an implemented repair**.
+The confirmed ordinary/trait behavior above remains evidence against the
+currently written specification; adopting this proposal would change the repair
+direction rather than require adding the old restriction to trait requirements.
+
+Three independent reviewers examined specification consistency, call ambiguity
+and soundness, and source-to-consumer architecture. All recommend adoption;
+none found a fundamental obstacle or a further major semantic decision needed.
+This was a static design review; no compiler/test execution was performed.
+
+Recommended wording for ordinary type-overload declaration admission:
+
+> For every pair of callable forms with the same selector in the same
+> declaration-conflict domain, at least one corresponding argument position must
+> have two semantically distinct types, neither depending on unresolved type
+> parameters. Generic arity and parameter usage at other positions need not match.
+
+Required clarifications:
+
+- A selector is the name plus ordered argument labels. Different selectors are
+  separate operations; this type-overload condition does not compare them.
+- The discriminator is pairwise. Three declarations may distinguish each pair
+  at different positions; no one position need discriminate the whole group.
+- Compare normalized semantic type identity. Array[I64] is independent of type
+  parameters; Array[T] is not. Include receiver/impl/trait binders, abstract Self
+  and unresolved associated projections in the dependency check. Concrete Self
+  or a projection already resolved by retained equalities may normalize to a
+  fixed type. Do not search new general trait constraints to invent a discriminator.
+- Different names for the same type do not discriminate. Conversely, distinct
+  nominal types remain distinct even if their representation is identical.
+- Apply the condition to default-omitted callable forms. For example,
+  f(kind: I64 = 0I64, value: Bool) and
+  f(kind: String = "", value: Bool) collide on f(value:).
+- Declaration admission does not prove every call unique. Unsuffixed literals,
+  contextual literals and closures, existential injection, and sendability
+  guarantee erasure can leave more than one applicable candidate. Preserve the
+  existing ambiguity error, forward contextual-inference rules, and source
+  selection boundary; do not invent priority or retry another candidate after
+  selected generic inference/constraints fail.
+- Generic argument count and general where bounds are not new discriminators.
+  Keep the separate adopted capability-conditioned candidate contract, receiver
+  domains, import-origin rules, and trait-provided-member coexistence/preferences.
+
+Implementation consequence: removing sameGenericShape alone does not implement
+the proposed contract. callableFormsMayOverlap can establish structural
+non-overlap between dependent patterns such as Array[T] and Box[U], but neither
+argument is a fixed discriminator under this conservative proposal. Ordinary
+functions, methods, associated functions, factories and trait requirements need
+the same explicit declaration-admission relation, including default forms.
+Retain selected declaration/requirement identity and its own binder environment
+through generic/existential consumers; do not add a trait-only approximation.
+
+If adopted, synchronize spec/07, linked factory/operator explanations, the
+name-lookup/generics contracts and this task's end state. Cover different generic
+counts/positions, pairwise three-candidate groups, dependent-only rejection,
+labels, defaults, Self/projections, explicit type arguments and ambiguous calls;
+then verify retained selections through native/JIT/generic/any execution.
+The existing WIP check-only evidence does not satisfy those completion conditions.
