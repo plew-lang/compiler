@@ -1,6 +1,6 @@
 ---
 id: com-p5um
-status: closed
+status: open
 deps: [com-61jt, com-auvx]
 links: []
 created: 2026-10-23T10:41:59Z
@@ -11,6 +11,16 @@ parent: met-si6j
 tags: [frontend, verification]
 ---
 # Verify the frozen candidate fixed point and formal self compilation time
+
+## Current Candidate Refresh
+
+Reopened for the source repair e73a8476 in [com-ugee](com-ugee.md). The prior
+043e2402/3c532ce1 gate remains valid only for its recorded inputs/binary; it does
+not certify the new source or candidate073f0375. G1 current admission and the
+actual final measured compiler must determine which checks can apply. The
+current ordinary suite on candidate073f0375 is a repair milestone, not evidence
+that an as-yet unmeasured successor passed the gate. Do not weaken any final
+fixed-point, performance, gen/deps or LLVM22 sanitizer requirement.
 
 ## Boundary
 

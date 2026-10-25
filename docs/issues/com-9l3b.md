@@ -1,6 +1,6 @@
 ---
 id: com-9l3b
-status: closed
+status: open
 deps: [com-p5um, com-o3vw, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-072n, com-3qne, com-uuya, com-vuv9, com-6cw6, com-v1wa, com-tkz7]
 links: []
 created: 2026-10-23T10:41:59Z
@@ -11,6 +11,16 @@ parent: met-si6j
 tags: [frontend, verification]
 ---
 # Run all final correctness and sanitizer gates on the measured compiler
+
+## Current Candidate Refresh
+
+Reopened for the source repair e73a8476 in [com-ugee](com-ugee.md). The prior
+043e2402/3c532ce1 gate remains valid only for its recorded inputs/binary; it does
+not certify the new source or candidate073f0375. G1 current admission and the
+actual final measured compiler must determine which checks can apply. The
+current ordinary suite on candidate073f0375 is a repair milestone, not evidence
+that an as-yet unmeasured successor passed the gate. Do not weaken any final
+fixed-point, performance, gen/deps or LLVM22 sanitizer requirement.
 
 ## Boundary
 
