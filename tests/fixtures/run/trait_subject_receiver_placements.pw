@@ -11,6 +11,7 @@ pub impl Report {
 }
 struct B { val number: I64 }
 struct A { val number: I64 }
+newtype WrappedA = A
 struct Left {}
 struct Right {}
 struct Box[T] { val number: I64 }
@@ -32,6 +33,10 @@ fn main() {
     print(second.twice())
     print(requested(value: first))
     print(requested(value: second))
+    val wrapped = first as WrappedA
+    print(wrapped.report())
+    print(wrapped.twice())
+    print(requested(value: wrapped))
     val left = <Box[Left] number=7I64 />
     val right = <Box[Right] number=9I64 />
     print(left.report())

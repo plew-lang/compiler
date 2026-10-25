@@ -3,11 +3,11 @@ use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { TraitConstraint, TraitInstanceKey, ConformanceProofDemand }
+use /Ir only { TraitConstraint, TraitInstanceKey, ConformanceProofDemand, TypeRef }
 
 fn main() {
     mut val compiler = <Comp />
-    val source = "trait Source {{ fn read() -> I64 }} trait Report {{ fn report() -> I64 }} pub impl Source as Report {{ fn report() -> I64 {{ return self.read() }} }} struct B {{ val number: I64 }} struct A {{ val number: I64 }} struct Left {{}} struct Right {{}} struct Box[T] {{ val number: I64 }} impl B as Source {{ fn read() -> I64 {{ return self.number }} }} impl A as Source {{ fn read() -> I64 {{ return self.number }} }} impl[T] Box[T] as Source {{ fn read() -> I64 {{ return self.number }} }} fn context(first: A, second: B, left: Box[Left], right: Box[Right]) {{}}"
+    val source = "trait Source {{ fn read() -> I64 }} trait Report {{ fn report() -> I64 }} pub impl Source as Report {{ fn report() -> I64 {{ return self.read() }} }} pub impl Report {{ fn twice() -> I64 {{ return self.report() }} }} struct B {{ val number: I64 }} struct A {{ val number: I64 }} struct Left {{}} struct Right {{}} struct Box[T] {{ val number: I64 }} impl B as Source {{ fn read() -> I64 {{ return self.number }} }} impl A as Source {{ fn read() -> I64 {{ return self.number }} }} impl[T] Box[T] as Source {{ fn read() -> I64 {{ return self.number }} }} fn context(first: A, second: B, left: Box[Left], right: Box[Right]) {{}}"
     analyzeFrontendForRequests(c: inout compiler,
         input: <FrontendInput.Text path="copy-receiver-identity.pw" text=source />,
         sources: <SourceAccess stdRoot=[] />).unwrap()
@@ -37,5 +37,20 @@ fn main() {
         index += 1U64
     }
     assert(keys.count() == 4U64)
+    val receiver = compiler.funcParamAt(params: parameters, index: 0U64).ty
+    val proof = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: receiver, constraint: constraint).unwrap()
+    val declaration = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "twice").nameId)
+    val selected = compiler.providedCopyForDeclaration(declaration: declaration, receiverRef: receiver, proof: proof, traitIdx: report, offset: 0U64).unwrap()
+    val valid = compiler.arena.functionAt(index: selected)
+    assert(valid.isProvided)
+    mut val malformed = valid
+    // Keep the exact edge and lexical declaration, but use another trait's Self.
+    val otherSelf = compiler.decls.traitAt(index: 0U64).selfParamId
+    val otherTerm = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 paramId=otherSelf args=[] />)
+    malformed.recvTy = otherTerm
+    compiler.arena.registerFunction(malformed, registerSurface: false)
+    assert(compiler.providedCopyForDeclaration(declaration: declaration, receiverRef: receiver, proof: proof, traitIdx: report, offset: 0U64).unwrap() == selected)
+    compiler.arena.registerFunction(valid, registerSurface: false)
+    assert(compiler.providedCopyForDeclaration(declaration: declaration, receiverRef: receiver, proof: proof, traitIdx: report, offset: 0U64).isErr())
     print("selected-copy-receiver-identity")
 }

@@ -39,6 +39,16 @@ Receiver-pattern matching is directional. For an impl pattern `Packed[Array[T]]`
 
 A provided copy retains two relevant provenances: the conformance placing the body on its concrete receiver determines body `Self` and nested requirements; the source witness identifies the original impl binders to substitute. One conformance index cannot silently stand for both. The lexical source owner remains the authority for source types and visibility, while concrete placement belongs to this instance.
 
+Selecting a provided copy consumes that saved edge and the complete logical
+receiver, including newtype identity and nested type arguments. Equal ABI or a
+common source witness does not make two receiver placements interchangeable.
+A shared trait-subject template is identified by its saved receiver declaration
+and the selected placement subject, not by ABI self presence or the lexical
+trait's argument count. Match its canonical lexical Self under the edge's
+substitution; match a nominal copy directionally under that same substitution.
+Require one applicable copy rather than accepting the first registered copy.
+
+
 ### Shared Type-Argument Constraint Matching
 
 Call arguments, expected-result refinement, and construction fields use one structural constraint-matching contract. The input explicitly identifies which binders may be inferred: only the selected callee or construction binders are variables; caller binders remain rigid even with identical spelling. Read canonical type heads, children, and labels, and do not invert associated projections to invent bindings.

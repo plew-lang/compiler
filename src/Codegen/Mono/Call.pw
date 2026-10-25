@@ -3561,9 +3561,12 @@ impl Comp {
     }
 
     inout fn providedCopyReceiverMatches(function: Func, receiverRef: U64, placement: WitnessMatch, environment: InstanceEnvironment) -> Result[Bool, CompileDiagnostic] {
-        if self.methodRecvIsTrait(f: function) {
-            val declaration = self.decls.conformAt(index: placement.conformIdx - 1U64)
-            if declaration.subjectTraitOwner == 0U64 || function.recvStart != declaration.subjectTraitOwner || function.recvStart != declaration.typeStart || function.recvId != declaration.typeId || function.recvLen != declaration.typeLen { return <Result.Ok value=false /> }
+        val declaration = self.decls.conformAt(index: placement.conformIdx - 1U64)
+        // The saved receiver owner identifies a shared abstract template.
+        // recvTraitArgs belongs to its lexical target trait, whose arity may
+        // differ from the placement subject's; it cannot classify this copy.
+        if declaration.subjectTraitOwner != 0U64 && function.recvStart == declaration.subjectTraitOwner {
+            if function.recvStart != declaration.subjectTraitOwner || function.recvStart != declaration.typeStart || function.recvId != declaration.typeId || function.recvLen != declaration.typeLen { return <Result.Ok value=false /> }
             val lexical = try self.lexicalFunction(f: function)
             val traitIndex = self.decls.traitIndexByOffset(offset: lexical.provTraitOwner)
             if traitIndex >= self.decls.traitCount() || function.recvTy == 0U64 || function.recvTy >= self.arena.typeCount() { return <Result.Ok value=false /> }
@@ -3618,7 +3621,7 @@ pub impl Comp {
                     // still need the conferred copy below: their receiver is
                     // abstract (for example `impl B as A`) and cannot be
                     // emitted for S without the preceding S-as-B edge.
-                    if !(self.methodRecvIsTrait(f: source)) && source.originTraitId == self.decls.traitAt(index: traitIdx).nameId && source.originTraitOwner == self.decls.traitAt(index: traitIdx).nameStart {
+                    if conform.subjectTraitOwner == 0U64 && source.originTraitId == self.decls.traitAt(index: traitIdx).nameId && source.originTraitOwner == self.decls.traitAt(index: traitIdx).nameStart {
                         return <Result.Ok value=sourceIdx />
                     }
                     val environment = try self.selectedConstraintEnvironment(witness: witness)
@@ -3642,7 +3645,7 @@ pub impl Comp {
                         }
                         ci += 1U64
                     }
-                    return <Result.Ok value=selected />
+                    if selected < self.arena.functionCount() { return <Result.Ok value=selected /> }
                 }
             }
             wi += 1U64
