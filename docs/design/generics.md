@@ -25,6 +25,16 @@ An instance environment contains an explicit mapping from lexical `ParamId` to s
 
 When two contributions bind the same parameter, accept them only if the semantic types agree. Do not resolve a conflict by last-write wins. Trait lexical `Self` is bound explicitly to the selected receiver. When projecting the callable's type arguments for a signature or call record, use that declaration's parameter identities and order; do not include incidental derived bindings or index a different owner's shorter parameter vector.
 
+Trait ownership is independent of a physical receiver parameter. A trait-owned
+associated function still carries its lexical `Self` binding and namespace
+identity, while its ABI signature has no self operand. For an authored namespace
+call, validate that namespace against the saved lexical trait owner and grounded
+trait arguments before treating the Self substitution as evidence of a matching
+receiver. The exact lexical Self may remain symbolic during declaration
+preparation; a foreign trait namespace or another binder cannot replace it.
+A provided copy's concrete placement and a nominal associated function retain
+their respective receiver contracts instead of acquiring this namespace rule.
+
 Receiver-pattern matching is directional. For an impl pattern `Packed[Array[T]]` matched against `Packed[Array[Yes]]`, the impl binder `T` maps to `Yes`, not `Array[Yes]`. Method-owned arguments remain separate contributions. Query-side parameters are rigid, even if they share the printed name `T` with an impl parameter. The simultaneous-substitution rule and proof-driven projection handling are defined in [types and evidence](types-and-evidence.md).
 
 A provided copy retains two relevant provenances: the conformance placing the body on its concrete receiver determines body `Self` and nested requirements; the source witness identifies the original impl binders to substitute. One conformance index cannot silently stand for both. The lexical source owner remains the authority for source types and visibility, while concrete placement belongs to this instance.

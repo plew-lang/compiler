@@ -629,6 +629,9 @@ pub impl Comp {
         if !(function.hasRecv || function.isAssoc) { return true }
         val receiver = environment.receiverRef
         if receiver == 0U64 || receiver >= self.arena.typeCount() { return false }
+        if !function.hasRecv && function.isAssoc && !function.isProvided && function.provTraitOwner != 0U64 {
+            if !self.traitNamespaceReceiverMatches(function: function, environment: environment) { return false }
+        }
         val pattern = self.parametricSelfRef(f: function)
         if pattern == 0U64 || pattern >= self.arena.typeCount() { return false }
         val declared = self.groundTermInEnvironment(ref: pattern, params: environment.params, values: environment.args, selfRef: receiver)
@@ -640,6 +643,29 @@ pub impl Comp {
         if self.fieldStorageTypeRef(receiverRef: expected) != expected { return false }
         val storage = self.fieldStorageTypeRef(receiverRef: actual)
         return storage != actual && self.typeRefEq(a: expected, b: self.typeRefWithoutOuterViews(ref: storage))
+    }
+
+    // Associated calls have a namespace even without an ABI self operand.
+    // Binding Self alone cannot prove that the namespace is the selected one.
+    inout fn traitNamespaceReceiverMatches(function: Func, environment: InstanceEnvironment) -> Bool {
+        val owner = self.decls.traitIndexByOffset(offset: function.provTraitOwner)
+        if owner >= self.decls.traitCount() { return false }
+        val receiver = self.typeRefWithoutOuterViews(ref: environment.receiverRef)
+        if receiver == 0U64 || receiver >= self.arena.typeCount() { return false }
+        val term = self.arena.typeTermAt(index: receiver)
+        if term.isRecord || term.isAny || term.assocNameId != 0U64 { return false }
+        if term.paramId != 0U64 {
+            // Declaration preparation can still carry this exact abstract Self.
+            return !term.hasDecl && term.args.len == 0U64 && term.paramId == self.decls.traitAt(index: owner).selfParamId
+        }
+        if !term.hasDecl || term.declOffset != function.provTraitOwner || term.args.len != function.recvTraitArgs.count() { return false }
+        mut val index = 0U64
+        while index < term.args.len {
+            val declared = self.groundTermInEnvironment(ref: self.funcTypeAt(types: function.recvTraitArgs, index: index), params: environment.params, values: environment.args, selfRef: environment.receiverRef)
+            if !self.typeRefEq(a: declared, b: self.arena.typeArgumentAt(index: term.args.start + index)) { return false }
+            index += 1U64
+        }
+        return true
     }
 
     // Callable, impl-pattern and nominal binders contribute to one mapping.
@@ -772,7 +798,9 @@ pub impl Comp {
     // the selected receiver; Cursor's legacy Self spelling is not a binder.
     inout fn withLexicalSelfBinding(f: Func, environment: InstanceEnvironment) -> Result[InstanceEnvironment, CompileDiagnostic] {
         val declaration: Func = (try self.lexicalFunction(f: f))
-        if !(declaration.isProvided || self.methodRecvIsTrait(f: declaration)) || declaration.provTraitOwner == 0U64 { return <Result.Ok value=environment />}
+        // Lexical ownership does not depend on a physical self parameter:
+        // trait-associated functions retain the same authored Self binder.
+        if declaration.provTraitOwner == 0U64 { return <Result.Ok value=environment />}
         return self.withTraitSelfBinding(traitOwner: declaration.provTraitOwner, environment: environment, offset: declaration.defOffset)
     }
 
