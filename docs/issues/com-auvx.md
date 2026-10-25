@@ -1,6 +1,6 @@
 ---
 id: com-auvx
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-25T00:50:48Z
@@ -28,3 +28,9 @@ F3 receipt: meta/evidence/existing-feature-conformance/source-owner-facts/phase3
 Independent c2_classification_review recommends a CLI-only native environment query in Compiler/native compiler_execution, then explicit FrontendOptions.tracePhases transport through executeProgram to both CompilerSession and LlvmJit. Neither the reusable execution API nor the LLVM backend reads ambient environment. Ordinary run stays quiet; embedding callers retain explicit options. Preserve the existing no-argument native JIT constructor for existing consumers and use an explicit per-instance diagnostic setter before registration instead of changing JIT policy or process-global LLVM flags.
 
 Publish only real source-preparation completion and module-submission completion, identifying JIT/session/body and a monotonically increasing completed-unit counter. Submission does not mean machine-code materialization. An actual machine-code completion event requires its own real ORC completion boundary. Existing trace-phase/watch-command parsing is sufficient; no synthetic heartbeat or deadline increase. Outer lazy preparation is the initial bounded observation route; fixture-internal sessions with default options do not inherit tracing, and a newly isolated inner silent interval remains a failure to diagnose rather than a reason to broaden ambient settings.
+
+## Outcome
+
+Resolved atc8761ebf/candidatecc2165b8, standard build20261025T014619-build-b1086a. Independent c2_classification_review accepts the production wiring and completion evidence after checking251 unchanged inputs and all references. Four original CLI --run cases exit0 with exact goldens; quiet/traced small CLI outputs match and quiet stderr is empty; whole sourcecheck succeeds. Native first-call controls produce exactly14 monotonic events for7 requested bodies, no events for repeated calls/unused bodies, and a stalled callback is interrupted by the unchanged watchdog at61.126seconds, exit124/events0.
+
+Meta receipt cli-lazy-progress-repair.json records commands, environment, input/output hashes and the native/CLI contrasts. Diagnostic durations are not formal performance measurements. No fixed-point, normal/gen/deps/ASan-LSan, main, seed or adopted-carrier acceptance follows from this bounded closure.
