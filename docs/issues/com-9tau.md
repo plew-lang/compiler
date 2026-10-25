@@ -1,7 +1,7 @@
 ---
 id: com-9tau
 status: open
-deps: [com-fbqh, com-px0e, com-o7ul, com-jzdz]
+deps: [com-fbqh, com-px0e, com-o7ul, com-jzdz, com-wrjh]
 links: []
 created: 2026-10-23T10:41:58Z
 type: task

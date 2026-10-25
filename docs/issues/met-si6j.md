@@ -244,6 +244,15 @@ The existing typed-source parent is the frontend workstream within com-604k, not
 
 ## Current Reconciliation and Reopening
 
+The loop-producer repair7ac54779 has scoped native11/reject20/mode14 acceptance,
+but its independent review exposes [com-wrjh](com-wrjh.md), a covered-match-arm
+forbidden-return gap. It is a new mandatory dependency of com-jzdz/E3/G1.
+The current known finding inventory is12 findings in11 finite repair tasks
+(the original F3/F4 remain one Unit task). Under the user's planning stop,
+implementation pauses for this discovered task omission; no current contract
+or completion criterion is weakened. Evidence is loop-source-exit-repair.json.
+
+
 Fresh specification-first [com-9hf7](com-9hf7.md) confirms11 in-scope findings
 (3 P1/8 P2), assigned to10 finite required repair issues. The affected
 selection, callee/evidence, type/conversion, publication and completion areas

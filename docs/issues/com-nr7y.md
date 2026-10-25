@@ -2,7 +2,7 @@
 id: com-nr7y
 status: open
 deps: []
-links: []
+links: [com-wrjh]
 created: 2026-10-25T10:39:42Z
 type: bug
 priority: 1
