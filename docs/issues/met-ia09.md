@@ -1,7 +1,7 @@
 ---
 id: met-ia09
-status: closed
-deps: [com-v2xk, com-yojf]
+status: open
+deps: [com-v2xk, com-yojf, com-072n]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
