@@ -13,7 +13,7 @@ fn inspect(function: String, missing: Bool = false) {
     val expression = match statement {
         Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val value) => value,
         Stmt.Return(value: val value, hasValue: _, offset: _) => value,
-        _ => { panic("missing construction statement") },
+        _ => { panic("missing construction statement") }
     }
     val original = compiler.arena.exprs[expression]
     mut val selectedOwner = 0U64
@@ -29,13 +29,13 @@ fn inspect(function: String, missing: Bool = false) {
                 compiler.arena.exprs[expression] = <Expr.Make typeStart=start typeLen=length variantStart=variant variantLen=variantLength isEnum=isEnum ty=0U64 fields=fields />
             }
         }
-        _ => { panic("expected construction") },
+        _ => { panic("expected construction") }
     }
     val prepared = compiler.prepareLexicalBody(fnIdx: owner)
     if missing {
         match prepared {
             Result.Err(error: val error) => { assert(error.message == "internal error: named construction is missing its producer type term") }
-            _ => { panic("missing producer term admitted") },
+            _ => { panic("missing producer term admitted") }
         }
     } else {
         prepared.unwrap()
@@ -55,7 +55,7 @@ fn inspect(function: String, missing: Bool = false) {
             Expr.Make(typeStart: val start, typeLen: val length, variantStart: val variant, variantLen: val variantLength, isEnum: val isEnum, ty: _, fields: val fields) => {
                 compiler.arena.exprs[expression] = <Expr.Make typeStart=start typeLen=length variantStart=variant variantLen=variantLength isEnum=isEnum ty=0U64 fields=fields />
             }
-            _ => {},
+            _ => {}
         }
         compiler.prepareLexicalBody(fnIdx: owner).unwrap()
         assert(compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap().aggregate(ownerFnIdx: owner, exprId: expression).unwrap().resultTerm == aggregate.resultTerm)

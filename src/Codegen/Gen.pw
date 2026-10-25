@@ -70,6 +70,8 @@ pub impl Comp {
             }
             ai += 1
         }
+        // Bare derives use a namespace Ident, not a constructed receiver.
+        if d.args.count() == 0U64 { return <Result.Ok value=0U64 /> }
         // This admission already selected the directive's declaration in its
         // source module. Carry that owner into the synthetic construction;
         // spelling alone cannot identify its receiver at the body boundary.
