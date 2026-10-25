@@ -1795,7 +1795,7 @@ pub impl Comp {
                     try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true)
                     i += 1
                 }
-                mut val receiverTerm: U64 = self.parametricExprTerm(exprId: recv)
+                mut val receiverTerm: U64 = (try self.methodReceiverTerm(exprId: recv))
                 if source.surfaceId != 0U64 && receiverTerm != 0U64 {
                     val additions: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=source.surfaceId traitOwner=source.traitOwner />]
                     receiverTerm = self.typeRefWithAddedViewSources(ref: receiverTerm, additions: additions)
