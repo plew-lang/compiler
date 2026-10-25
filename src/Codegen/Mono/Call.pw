@@ -630,7 +630,15 @@ pub impl Comp {
         val receiver = environment.receiverRef
         if receiver == 0U64 || receiver >= self.arena.typeCount() { return false }
         if !function.hasRecv && function.isAssoc && !function.isProvided && function.provTraitOwner != 0U64 {
-            if !self.traitNamespaceReceiverMatches(function: function, environment: environment) { return false }
+            // A default generator has no self operand even when its authored
+            // method does. Namespace ownership follows that source declaration.
+            val declaration = match self.lexicalFunction(f: function) {
+                Result.Ok(value: val declaration) => declaration,
+                Result.Err(error: _) => { return false },
+            }
+            if !declaration.hasRecv && declaration.isAssoc && declaration.provTraitOwner != 0U64 {
+                if !self.traitNamespaceReceiverMatches(function: declaration, environment: environment) { return false }
+            }
         }
         val pattern = self.parametricSelfRef(f: function)
         if pattern == 0U64 || pattern >= self.arena.typeCount() { return false }
