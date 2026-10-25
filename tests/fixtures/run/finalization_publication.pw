@@ -1,5 +1,5 @@
 use /Frontend only { Comp, FrontendInput, FinalizationPublication, analyzeFrontendDeclarations, spansEqual }
-use /SourceAccess only { SourceAccess }
+use /SourceAccess only { SourceAccess, SourceResource }
 use /Diag only { CompileDiagnostic }
 use @Std/Io only { print }
 
@@ -24,7 +24,12 @@ fn require[T](result: Result[T, CompileDiagnostic], stage: String) -> T {
 fn main() {
     mut val c = <Comp />
     val source = "use @Std/Core only {{ Index, IndexSet }} struct Shelf {{ mut val value: I64 }} impl Shelf as Index[U64] {{ type Output = I64 fn index(key: U64) -> I64 {{ return self.value }} }} impl Shelf as IndexSet[U64] {{ type Value = I64 inout fn indexSet(key: U64, value~: I64) {{ self.value = value }} }} fn take(target: inout I64) {{ target = 2I64 }} fn first() {{ mut val shelf = <Shelf value=1I64 /> take(target: inout shelf[0U64]) }} fn second() {{ mut val shelf = <Shelf value=3I64 /> take(target: inout shelf[0U64]) }} unique struct Resource {{}} impl Resource {{ deinit {{}} }} fn main() {{}}"
-    require(result: analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text path="publication.pw" text=source />, sources: <SourceAccess stdRoot="std".bytes() />), stage: "frontend")
+    val sources = <SourceAccess stdRoot="plew:std/".bytes() resources=[
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64, U64 }}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 struct U64 }} pub trait Index[K] {{ type Output fn index(key: K) -> Output }} pub trait IndexSet[K] {{ type Value inout fn indexSet(key: K, value~: Value) }}" />,
+        <SourceResource path="plew:std/PublicationProbe.pw".bytes() text=source />,
+    ] />
+    require(result: analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.File path="plew:std/PublicationProbe.pw" />, sources: sources), stage: "frontend")
     c.inCollection = true
     require(result: c.initializeFinalCallables(), stage: "initialize")
     mut val publication = <FinalizationPublication />

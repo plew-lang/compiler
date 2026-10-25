@@ -44,7 +44,7 @@ The generic unwrap panic was not evidence of an Index failure. The actual
 broken precondition is simpleTypeRef(Resource), which omits the selected nominal
 owner now required by destructor body admission.
 
-Use canonical Core Index/IndexSet source input and a real std source root,
+Use canonical Core Index/IndexSet source input in a minimal embedded standard graph,
 select Resource explicitly rather than the first unique library type, and
 construct the destruction receiver from its registered declaration identity.
 Keep every publication/provenance/idempotence/malformed ABI/repeat-failure
@@ -52,3 +52,11 @@ assertion. Named require helpers retain diagnostics on unexpected preparation
 failure; they do not accept errors. No production change is needed unless these
 valid inputs expose a further compiler defect. Original intent:37df9c94 and
 later c53a16b5/781253b2 move publication through explicit call/body APIs.
+
+The first new canonical-input attempt used a filesystem stdRoot without its
+required directory separator and fails during frontend preparation. Preserve
+publication-1 as a failed test setup. Use the existing internal-test embedded
+SourceResource pattern instead: minimal Lang/Core at canonical plew:std paths,
+public primitive declarations and canonical Core indexing requirements, with the
+probe in its own module. This keeps the test isolated from unrelated library
+bodies while exercising actual module/trait identity.
