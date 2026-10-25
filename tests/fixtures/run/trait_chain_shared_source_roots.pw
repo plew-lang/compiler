@@ -1,0 +1,30 @@
+use @Std/Io only { print }
+
+// The outer proof chooses a source surface; this constant shared body has no
+// bare Base requirement that a caller could accidentally disambiguate.
+trait LeftRoot {}
+trait RightRoot {}
+trait Left {}
+trait Right {}
+trait Base { fn base() -> I64 }
+trait Target { fn shared() -> I64 }
+struct Shelf[T] { val marker: T }
+impl[T] Shelf[T] as LeftRoot {}
+impl[T] Shelf[T] as RightRoot {}
+impl LeftRoot as Left {}
+impl RightRoot as Right {}
+pub impl Left as Base { fn base() -> I64 { return 1I64 } }
+pub impl Right as Base { fn base() -> I64 { return 2I64 } }
+pub impl Base as Target { fn shared() -> I64 { return 9I64 } }
+fn through[T](value: T) -> I64 where T: Target { return value.shared() }
+fn main() {
+    val shelf = <Shelf marker=42I64 />
+    print(shelf#Left.base())
+    print(shelf#Right.base())
+    print(shelf#Left.shared())
+    print(shelf#Right.shared())
+    print(through(value: shelf#Left))
+    print(through(value: shelf#Right))
+    val text = <Shelf marker="owned" />
+    print(through(value: text#Right))
+}

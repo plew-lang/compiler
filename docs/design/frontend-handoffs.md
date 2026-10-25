@@ -148,6 +148,16 @@ read. Receiver selection context and receiver evaluation dependency are separate
 The receiver is evaluated once as the appropriate value/place/read/inout/move;
 an rvalue does not silently become a mutable named place.
 
+A conferred callable retains its source surface's canonical chain-root owner
+separately from the shared body's lexical trait and original conformance edge.
+Registration and transitive conferral preserve that owner. Copy admission uses
+the complete retained proof path as well as the original edge and receiver;
+terminal-witness/receiver equality alone is insufficient when two paths place
+the same shared body. Exact duplicate placements remain invariant failures.
+Bare lookup may retain fully applicable gated sources for an ambiguity diagnostic,
+but cannot select or publish a gated callable. Caller source views do not change
+the authored shared body's lexical lookup.
+
 Explicit arguments execute in written order, followed by omitted defaults in
 parameter declaration order. ABI parameter order is a separate mapping. Each
 omitted occurrence evaluates its generator; sharing authored generator identity
