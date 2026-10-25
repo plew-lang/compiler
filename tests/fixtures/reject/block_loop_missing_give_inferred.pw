@@ -1,0 +1,4 @@
+fn body(flag: Bool) {
+    val value = { while true {} }
+}
+fn main() {}

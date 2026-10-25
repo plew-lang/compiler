@@ -1,6 +1,6 @@
 ---
 id: com-ugee
-status: open
+status: in_progress
 deps: []
 links: [com-bkqq]
 created: 2026-10-25T08:52:16Z
@@ -79,4 +79,4 @@ Mid cleanup/ownership analyses.
 
 The review receipt retains all11 check-only controls and hashes. No infinite
 loop was executed. The two absent loop-expression controls are classified as
-unsupported, not proof of this defect. Implementation has not started.
+unsupported, not proof of this defect. Implementation is in progress: source result admission and result-term production move to the common Record value-region boundary; Verify's independent missing-give decision is removed. New source rejects and producer/publication controls are being verified.

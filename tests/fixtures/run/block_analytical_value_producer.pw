@@ -1,0 +1,27 @@
+use @Std/Io only { print }
+fn nonreturning() -> I64 { while true {} }
+fn block() -> I64 {
+    val value: I64 = { while true {}
+        give 1I64 }
+    return value
+}
+fn branch(flag: Bool) -> I64 {
+    return if flag { while true {}
+        give 1I64 } else { give 2I64 }
+}
+fn arm(flag: Bool) -> I64 {
+    return match flag {
+        true => { while true {}
+            give 3I64 }
+        false => 4I64
+    }
+}
+fn identity[T](value: T) -> T {
+    return { while false {}
+        give value }
+}
+fn main() {
+    print(branch(flag: false))
+    print(arm(flag: false))
+    print(identity(value: 6I64))
+}

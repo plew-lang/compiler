@@ -1,0 +1,45 @@
+// Published value-region results originate in the give, not its expectation.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, Stmt }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="production.pw" text="fn good() -> I64 {{ return {{ while true {{}}
+ give 1I64 }} }} fn missing() {{ val value: I64 = {{ while true {{}} }} }}" />,
+        sources: <SourceAccess />).unwrap()
+    val good = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "good").nameId)
+    compiler.prepareLexicalBody(fnIdx: good).unwrap()
+    val reader = compiler.preparedFunctionSemanticFacts(fnIdx: good).unwrap()
+    val returned = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: good).body, index: 0U64)
+    val expression = match compiler.arena.stmts[returned] {
+        Stmt.Return(value: val value, hasValue: _, offset: _) => value
+        _ => { panic("missing return") }
+    }
+    val block = match compiler.arena.exprs[expression] {
+        Expr.Block(body: val body, offset: _) => body
+        _ => { panic("missing block") }
+    }
+    val give = compiler.blockStmtAt(blkId: block, index: 1U64)
+    val producer = match compiler.arena.stmts[give] {
+        Stmt.Give(value: val value) => value
+        _ => { panic("missing give") }
+    }
+    val result = reader.valueBlock(blockId: block).unwrap()
+    if !result.completion.source.normal() || result.completion.execution.normal() { panic("source and execution completion were conflated") }
+    if result.resultTerm == 0U64 || !compiler.typeRefEq(a: result.resultTerm, b: reader.expression(exprId: producer).unwrap().term) { panic("result was not produced by the give") }
+    if !compiler.typeRefEq(a: result.resultTerm, b: reader.expression(exprId: expression).unwrap().term) { panic("expression changed its region result") }
+    val missing = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "missing").nameId)
+    val failure = match compiler.prepareLexicalBody(fnIdx: missing) {
+        Result.Err(error: val diagnostic) => diagnostic.message
+        Result.Ok(value: _) => { panic("expectation supplied a missing value") }
+    }
+    if compiler.preparedFunctionSemanticFacts(fnIdx: missing).isOk() { panic("missing producer published an owner") }
+    match compiler.prepareLexicalBody(fnIdx: missing) {
+        Result.Err(error: val diagnostic) => { if diagnostic.message != failure { panic("failed result changed") } }
+        Result.Ok(value: _) => { panic("retry supplied a missing value") }
+    }
+    if reader.valueBlock(blockId: block).unwrap().resultTerm != result.resultTerm { panic("failed owner changed another result") }
+    print("ok")
+}

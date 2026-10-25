@@ -1,0 +1,4 @@
+fn body(flag: Bool) {
+    val value: I64 = match flag { true => { while true {} } false => 1I64 }
+}
+fn main() {}

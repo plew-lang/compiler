@@ -1173,19 +1173,21 @@ pub impl Comp {
     // are still in scope. All value-control forms share this boundary.
     inout fn recordValueBlock(exprId: U64, blockId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
         val mark = self.scopeMark()
-        mut val resultTerm = expectedTerm
-        if resultTerm == 0U64 { resultTerm = self.semanticExprTerm(exprId: exprId) }
-        val completion = try self.recordBlockContents(blkId: blockId, resultContext: <BlockResultContext.Value expectedTerm=resultTerm />)
+        mut val context = expectedTerm
+        if context == 0U64 { context = self.semanticExprTerm(exprId: exprId) }
+        val completion = try self.recordBlockContents(blkId: blockId, resultContext: <BlockResultContext.Value expectedTerm=context />)
+        mut val resultTerm = 0U64
         if completion.source.normal() {
+            // Analytical noncontinuation does not supply a source value. Only
+            // an admitted give can produce this region's published result;
+            // the surrounding expectation remains context for that producer.
             val value = self.blockGiveExpr(blkId: blockId)
-            if value < self.arena.exprs.count() {
-                if resultTerm == 0U64 {
-                    resultTerm = self.parametricExprTerm(exprId: value)
-                }
-                self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
+            if value >= self.arena.exprs.count() {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a normally completing value block requires `give` to yield its value (spec/11)") />
             }
+            resultTerm = self.parametricExprTerm(exprId: value)
+            self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
         }
-        if !completion.source.normal() { resultTerm = 0U64 }
         try self.storeBuildingValueBlock(blockId: blockId, expression: exprId, completion: completion, resultTerm: resultTerm)
         self.popLocals(mark: mark)
         return <Result.Ok value=() />

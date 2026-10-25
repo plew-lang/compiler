@@ -1,0 +1,4 @@
+fn body(flag: Bool) {
+    val value = if flag { while true {} } else { give 1I64 }
+}
+fn main() {}
