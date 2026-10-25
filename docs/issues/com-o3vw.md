@@ -1,6 +1,6 @@
 ---
 id: com-o3vw
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T19:45:10Z
@@ -46,3 +46,24 @@ identity and final compatibility unchanged. Preserve the original42/99 fixture,
 and contrast unsuffixed structural keys, generic/nested/read/write uses, an
 explicit I32 key and an explicit I64 value for an I32 field. Raw before trace:
 compiler/tmp/phase3-indexed-reference/before.stderr.
+
+## Outcome
+
+Resolved atb6645ac1. Standard build20261025T031210-build-cd8270 passed;
+fresh bin/plewc-indexed-reference-1 SHA256
+c50d2a0467a298a85be3f31f2f9c4a0a0b286a0abd2f866acb13ae8460235246
+passes10 native controls,2 explicit-type rejects and whole-compiler sourcecheck.
+All inputs remain unchanged. The original fixture is byte-identical and prints
+42/99. Generic/nested/read/write/String.bytes/ref-field, Buffer, compound store,
+Index overload and inout-key evaluation controls reach final native execution.
+The explicit I32 key and I64 value for an I32 field still reject at the expected
+source line, without an internal error.
+
+Independent c2_classification_review certifies the finite completion after
+matching carrier, build,268 focused/sourcecheck inputs, actual goldens and
+producer-to-saved-term/strict-compatibility/final-consumer closure. No checker
+or equality rule changed. Receipt:
+meta/evidence/existing-feature-conformance/source-owner-facts/structural-index-context-repair.json.
+Raw compiler/tmp/phase3-indexed-reference retains the before diagnostic and
+fresh manifests/results. G2 complete suites, formal performance/fixed point and
+main/seed/carrier promotion remain mandatory and uncertified.
