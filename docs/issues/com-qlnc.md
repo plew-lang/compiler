@@ -10,124 +10,118 @@ assignee: Koji Murata
 parent: met-ucze
 tags: [frontend, generics, documentation]
 ---
-# Specify shared concrete-argument overload admission
 
-## Boundary and Decision
+# Specify bounded structural disjointness and shared overload admission
 
-Canonical specification/design update prerequisite for [met-g53w](met-g53w.md).
-The user selected the independently reviewed concrete-argument rule and requested
-this task before implementation. The three-reviewer synthesis and edge cases
-are retained in [the implementation task](met-g53w.md#review-of-the-selected-contract-change).
-The canonical update and independent finite-scope acceptance are recorded below.
+## Selected Direction and Dependency
 
-For ordinary type overloads in the same declaration-conflict domain and selector,
-every pair of callable forms must have at least one corresponding argument
-position with semantically distinct types independent of unresolved type
-parameters. Generic arity and other generic parameter positions need not match.
-Different ordered labels are different selectors, not type overloads.
+Specification/design prerequisite for [met-g53w](met-g53w.md). The user selected
+bounded structural reasoning after the fixed-type-only rule rejected the public
+Optional.unwrapOr API. Keep its eager/lazy names and signatures; do not rename
+the lazy operation to unwrapOrElse to accommodate the implementation.
 
-## Architectural Problem to Address
+For ordinary type overloads in the same conflict domain and selector, establish
+a distinguishing argument position for each pair of common callable forms.
+That position may use ordinary type structure and already established type
+equalities to prove the two parameter types different for all allowed receiver
+substitutions. Closed concrete types remain a simple sufficient case, not the
+only permitted discriminator. Different ordered labels are different selectors.
+General where/trait satisfiability, candidate priority and specialization are
+not introduced. Document this refinement before changing the implementation.
 
-The ordinary/trait acceptance mismatch exposes fragmented declaration-admission
-responsibility, not only an incorrect individual predicate. Registration owns
-an extra generic-shape condition outside the shared overlap relation, while the
-trait requirement entry calls only that relation. Sharing a type-comparison
-helper therefore did not share the complete acceptance contract.
+## Required Examples and Binder Identity
 
-The design update must make the owner and complete inputs/results of overload
-declaration admission explicit. Each entry supplies its declaration domain,
-normalized signature/binder context and callable forms to that authority;
-entry-specific traversal or diagnostics must not reimplement semantic acceptance.
-This obligation is bounded to overload declaration admission, not a claim that
-all compiler decisions or all declaration-kind rules should be merged.
+The receiver environment is common to the compared methods. Its parameters are
+shared symbolic types, even while checking a generic body; treating them as fixed
+for one invocation does not prove distinctness for every possible receiver.
+Method-owned parameters belong to each declaration separately and are fresh
+relative to those of another candidate. Neither spelling nor declaration-list
+position establishes that two binders are the same.
 
-## Finite Work
+| Parameter types | Required outcome and reason |
+| --- | --- |
+| I64 vs Bool | Distinguishable concrete types. |
+| Array[I64] vs Array[Bool] | Distinguishable complete nominal arguments. |
+| Receiver T vs I64 | Not a guaranteed discriminator: T can be I64. |
+| Receiver A vs receiver B | Not guaranteed: A and B can coincide. |
+| Receiver T vs fn() -> the same T | Distinguishable: equality would require a cyclic structural substitution. Preserve Optional.unwrapOr. |
+| Array[T] vs Box[U] | Distinguishable nominal constructors, without solving bounds. |
+| Array[T] vs Array[I64] | Not guaranteed: T can be I64. |
+| Candidate-owned T vs fn() -> other candidate-owned U | Can coincide with T = fn() -> I64 and U = I64; reject without another discriminator. |
 
-1. Update spec/02-type-system/07-methods-impl.md to remove the blanket generic
-   shape restriction and state the pairwise rule. Align related examples and
-   explanations in functions/defaults, factories, traits, generics and operators;
-   search the spec for contradictory claims rather than only editing one section.
-2. Define type independence and normalized semantic identity: method, enclosing
-   nominal/impl/trait parameters, abstract Self and unresolved projections count
-   as dependencies; already fixed Self/equalities can normalize to concrete
-   types. Array[I64] can discriminate, Array[T] cannot. Do not add general
-   constraint solving to manufacture a discriminator.
-3. Cover omitted-default callable forms, three candidates distinguished at
-   different pairwise positions, dependent-only rejection, and ambiguity at a
-   call despite valid declarations. Preserve separate capability-conditioned
-   groups, receiver/origin domains, and existing forward-inference rules.
-   Type-argument count, return types and general where success do not become
-   fallback discriminators or a new candidate priority.
-4. Update docs/design/name-lookup.md and the relevant generics/frontend handoff
-   contracts: one declaration-admission relation shared by free functions,
-   methods, associated functions, factories and trait requirements; source
-   selection retains the chosen declaration/requirement and binder environment
-   through concrete and existential consumers. Distinguish declaration conflicts,
-   call applicability and successful publication. Map every supported declaration
-   entry to the common authority, define where successful declaration admission
-   is established, and identify the independent checks the implementation must
-   remove. Preserve genuinely distinct receiver/origin/capability rules as explicit
-   inputs or separate contracts rather than accidental caller-specific exceptions.
-5. Reconcile met-g53w's implementation acceptance cases with the resulting
-   canonical contracts. Record spec/compiler document revisions and obtain
-   independent completion review of the documentation before closing this task.
+A finite occurs check detects a variable inside its own proposed replacement;
+it does not require infinite expansion or a general proof of nontermination.
+Recursive nominal structs/enums retain their declared identity; do not unfold
+fields or equate a nominal recursive type with a structural function type.
+An unresolved associated projection is unknown unless retained equalities
+normalize it. Unproved disjointness and proved overlap must remain distinct,
+even when both require rejection under the conservative acceptance policy.
+
+## Architectural Problem and Finite Work
+
+The original ordinary/trait mismatch exposed fragmented admission authority:
+registration had an extra generic-shape predicate outside the shared overlap
+helper, while trait checking called only the helper. Specify one owner of the
+complete decision, not parallel entry-specific predicates kept in sync.
+
+1. Revise spec07's fixed-type-only wording from cc13283 to this bounded structural
+   criterion. Reconcile functions/defaults, factories/memberwise factories,
+   generics, trait requirements and operators, including Optional's explicit
+   eager/lazy specification. Audit standard public overloads against the rule;
+   do not repeat the prior review's omission of the nil-coalescing API.
+2. Define the proof inputs: canonical type/declaration identities, shared
+   receiver substitutions, separate lexical method binders, known equalities,
+   callable omission forms and existing receiver/origin/capability domains.
+   Keep generic arity/usage free to differ. Explain why method-owned T and U are
+   not one variable and why receiver-owned T is shared across candidates.
+3. State the bounded structural operations and their limits: compare nominal,
+   function and other ordinary type structure, maintain consistent substitutions
+   and perform occurs checks; use retained normalization evidence. Do not solve
+   arbitrary trait bounds, assume unknown projections distinct, or fall back to
+   eventual concrete instantiation to rescue a source ambiguity. Preserve the
+   existing fixed analysis-limit policy and distinguish AnalysisLimit/unknown
+   from a proof. Retain the earlier requirement of a distinguishing position:
+   refine how that position is proved, rather than accepting solely because of
+   interactions between multiple individually non-distinguishing positions.
+4. Apply the same rule to common default-omitted forms and pairwise candidate
+   comparisons. Keep declaration admission separate from call ambiguity caused
+   by literals/conversions, forward inference and selected-candidate constraint
+   validation; do not invent ranking or retry a failed candidate.
+5. Update name-lookup, generics and frontend-handoffs to define the common
+   authority's complete inputs/result, every supported declaration entry,
+   successful-admission boundary and removal of independent predicates.
+   Free functions, methods, associated functions, factories and requirements
+   must follow one rule. Entry-specific traversal/diagnostics and genuine
+   domain/origin/capability contracts remain explicit.
+6. Reconcile met-g53w's acceptance cases and WIP fixture classifications with the
+   final documents. Record revisions, check links/contradictory claims and obtain
+   independent completion review before closing this prerequisite.
 
 ## Completion and Exclusions
 
-The spec and design agree on acceptance/rejection examples and the ownership of
-each decision; old generic-shape claims and links are reconciled. The reviewed
-decision is readable from the canonical documents without depending on chat.
-Validate the documentation diff, local links and relevant contradictory wording.
-The design explains the fragmented responsibility evidenced above and specifies
-how all supported declaration entries consume one complete admission decision.
-A generic instruction to share helpers, or a trait-only missing-check fix, is
-insufficient to close this documentation task.
+Canonical spec/design agree on the examples, proof scope, binder identities,
+unknown/limit outcomes and decision ownership. In particular, unwrapOr remains
+valid while receiver T/I64 and A/B are not declared distinct merely because
+receiver parameters are not method-owned. Preserve pairwise/default rules,
+selected identity/environment through final consumers and the requirement to
+remove independent acceptance authorities. A helper-sharing instruction alone
+is insufficient.
 
-This task changes documentation and implementation-task contracts only. It does
-not implement overload resolution, alter compiler/test expectations, run builds
-or claim fixed-point/performance/full-suite success. met-g53w remains open for
-implementation and producer-to-final-consumer verification after this prerequisite.
+This is a documentation task, not overload implementation, test expectation
+maintenance, a build or performance gate. Keep it open until the real documents
+and independent review are complete; the present request only updates tasks.
 
-## Outcome
+## Evidence and Superseded Checkpoint
 
-The initial documentation checkpoint was accepted. Specification revision cc13283 updates the
-six relevant chapters (functions, factories, generics, methods, traits and
-operators). The accompanying compiler design update changes name-lookup,
-generics and frontend-handoffs; Shared Overload Declaration Admission is the
-single owning contract, including complete inputs/results, all supported
-entries, successful-admission boundaries and removal of independent predicates.
+Spec cc13283 / compiler design220a3f56 adopted an overly restrictive fixed-type
+criterion; independent review inspected six spec and three design diffs but
+missed its conflict with the documented eager/lazy unwrapOr API. The probe in
+meta/evidence/existing-feature-conformance/source-owner-facts/
+overload-admission-stopped.json shows old23f7 accepting an empty application
+and strict WIP508b rejecting it at std/Lang.pw:88. That review does not establish
+completion for the structural contract above. The task remains reopened; the
+former fixed-only plan and API-rename recommendation are superseded.
 
-Independent overload_rule_semantics_review inspected all nine document diffs
-and accepted this finite scope: pairwise fixed discriminators, all binder/Self/
-projection dependencies, omitted defaults/memberwise factories, existing
-capability/origin exceptions, ambiguity and chosen-binder preservation agree.
-It found no blocking omission or stale normative equal-generic-shape restriction.
-Diff whitespace checks and targeted contradictory-wording searches passed.
-No compiler/test run was performed or claimed. met-g53w owns implementing and
-verifying the now-canonical contract; neither it nor phase three is complete.
-
-## Reopened: Standard API Conflict Requiring User Decision
-
-The implementation probe disproves the completeness of that documentation
-acceptance. The new rule rejects Optional[T]'s existing pair in std/Lang.pw:
-unwrapOr(fallback: T) and unwrapOr(fallback: fn() -> T). Both argument types
-depend on T, so neither supplies a fixed discriminator. Spec/12's Nil-coalescing
-section explicitly promises eager/lazy overloads of this same API, and spec/05's
-Optional discussion also refers to them. Those contracts were not reconciled in
-the nine-document review. The old specification already combined a concrete-
-position restriction with this API; the new explicit rule makes the unresolved
-contradiction decisive. Do not silently declare the API implementation wrong.
-
-The built WIP rejects even `fn main() {}` at std/Lang.pw:88; the prior candidate
-accepts that exact source with the same std. Evidence is retained in meta/
-evidence/existing-feature-conformance/source-owner-facts/overload-admission-stopped.json.
-
-User judgment is required: keep the simple fixed-discriminator rule and change
-the public lazy operation (recommended: unwrapOrElse), or retain the public
-overloads and reconsider acceptance for dependent, structurally non-overlapping
-types. Neither API renaming nor a new structural-disjointness exception is
-authorized by implementation convenience. Reconcile the chosen API/rule and all
-references, audit other standard public overloads against the final contract,
-and independently re-review before this prerequisite closes again. The previous
-review remains evidence of its inspected scope, not current completion.
-
+Reference for the finite occurs-check mechanism:
+[Rust InferCtxt documentation](https://doc.rust-lang.org/stable/nightly-rustc/rustc_trait_selection/infer/struct.InferCtxt.html).
+This supports the mechanism, not adoption of Rust's overload/language rules.

@@ -10,7 +10,7 @@ assignee: Koji Murata
 parent: met-ucze
 tags: [frontend, generics, verification]
 ---
-# Unify overload declaration admission using fixed argument types
+# Unify overload declaration admission with bounded structural proofs
 
 ## Confirmed Contract and Evidence
 
@@ -18,8 +18,9 @@ P2 finding from independent review of com-ra96/com-zy6r/com-y8l4.
 This is a newly recorded ordinary/trait inconsistency, not a regression in that
 repair. At the recorded baseline spec/07 required matching generic arity and
 positions, while spec/08 gave trait requirements the ordinary rules. The user
-selected a reviewed replacement rule; [com-qlnc](com-qlnc.md) closes its canonical
-specification/design update at spec cc13283. Do not implement the superseded
+selected a structural refinement after the strict fixed-type rule at cc13283
+rejected the existing Optional API. [com-qlnc](com-qlnc.md) remains the open
+canonical specification/design prerequisite. Do not implement the superseded
 plan of imposing the old generic-shape restriction on trait requirements.
 
 ```plew
@@ -63,21 +64,28 @@ entry has already been audited or that unrelated declaration rules are identical
 
 ## Design Boundary and Required Finite End State
 
-After com-qlnc closes, implement its canonical pairwise concrete-discriminator
-contract through one source declaration-admission relation shared by ordinary
-callables and trait requirements. Preserve semantic type/binder identity,
-default-omitted forms and the existing selector/origin/capability boundaries.
-Remove the old blanket sameGenericShape restriction and any replaced independent
-admission authority; simply deleting that check is insufficient because the
-current overlap relation can prove non-overlap between dependent type patterns.
+After com-qlnc closes, implement its bounded structural distinguishing-position
+contract through one source declaration-admission authority. Keep the receiver's
+parameter environment common across compared methods, but candidate-owned
+method parameters lexically distinct. A parameter merely coming from the
+receiver does not prove it different from another type for all receivers.
+Use the specified type structure, consistent substitutions, occurs check and
+retained equalities; do not solve general where bounds to discriminate candidates.
+Concrete-type differences remain sufficient but are not mandatory.
+
+Preserve default omission and existing selector/origin/capability boundaries.
+Remove the old generic-shape restriction and independent acceptance predicates;
+neither the old unifier's binder-by-position shortcuts nor the strict WIP's
+closedness gate implement the selected contract. Audit the existing structural
+relation against lexical binder identities and cyclic substitutions before reuse.
 
 Reject invalid groups before successful declaration/source publication even
 when unused. Preserve selected identity/evidence through generic and existential
 consumers, without trait-only inference, late source reselection or weaker full
 argument checks. Trace successful admission and failure to actual retained use.
 
-Cover different generic counts/positions, pairwise groups, dependent-only
-rejection, aliases/Self/projections, defaults, ordinary/trait consistency,
+Cover different generic counts/positions, pairwise groups, structurally proved
+distinction versus possible overlap, aliases/Self/projections, defaults, ordinary/trait consistency,
 explicit type arguments and ambiguous calls. Perform affected execution modes
 and independent finite completion review. Final G1/G2a/G2b/G3 remain required;
 no threshold, verifier or test weakening is authorized by this contract update.
@@ -99,21 +107,22 @@ The source-selection area met-ucze and G1 require this separate repair.
 
 ## Current Planning Boundary
 
-Stopped on a specification/API conflict discovered by the built implementation;
-com-qlnc is reopened pending user judgment. A new WIP routes ordinary, trait,
-provided-extension and memberwise entries through callableDeclarationConflict,
-removes sameGenericShape and callableFormsMayOverlap, and defers initial group
-admission until nominal identities resolve. Callable rows distinguish initial
-declaration admission from derived placement; later registrations use the same
-authority. This code is not independently reviewed or accepted.
+The user resolved the API/rule choice in favor of bounded structural proofs
+and preserving Optional.unwrapOr. Await com-qlnc's actual spec/design update and
+independent review before resuming implementation. This request updates task
+contracts only. Existing WIP routes ordinary, trait, provided-extension and
+memberwise entries through callableDeclarationConflict, removes sameGenericShape
+and callableFormsMayOverlap, and defers initial group admission until nominal
+identities resolve. Its strict fixed-type discriminator is superseded, so this
+WIP is not an implementation of the new structural contract or an accepted fix.
 
 Build 20261025T153817-build-3074d1 passed using carrier23f7 with 6086 fixed
 inputs. Candidate bin/plewc-overload-admission SHA256
 508b1bdae60984f9aea6e9516c2b4f8265e73bd7bef80ec913b92dba6725d599
 rejects the ambient std Optional.unwrapOr overload pair at Lang.pw:88, even for
 an empty main. Old23f7 accepts that same empty main/std. This is a conflict
-between the selected fixed-type rule and an explicitly promised public API;
-do not fix it through an undocumented exception or silent API rename.
+between the superseded fixed-type rule and an explicitly promised public API.
+The chosen resolution changes the general structural rule, not that API.
 
 Targeted native/reject slice failed before meaningful application verification;
 apparent reject passes from the std error are not successful target evidence.
@@ -122,76 +131,30 @@ corrected to a generic impl factory after slice exit. Compiler source matches
 the successful build; this fixture is the sole postbuild input delta. No new
 performance, fixed-point, full suite or implementation acceptance is claimed.
 
-Authorized fixture updates under the new rule: overload_generic_shape_mismatch
+Fixture changes made under the superseded fixed-only rule: overload_generic_shape_mismatch
 moves from reject to run because fixed first types distinguish it. The former
 run overload_generic_nonoverlap_cycle (introduced to exercise finite structural
 unification; source retained at12e819f6) and factory_receiver_type_overload
 (created202fe764 to ground receiver-dependent signatures) move to reject: neither
 pair has a fixed discriminator. Their original purposes/source and proposed
 new outcomes are retained in the stopped receipt; these changes remain WIP
-until the API/rule decision and fresh target verification.
+until each case is classified against the structural contract and freshly
+verified. In particular, the new dependent-only rejection fixtures cannot be
+retained merely because both signatures mention parameters: Array[T]/Box[U]
+should be accepted, whereas T/I64 can overlap. Re-evaluate the whole fixture
+change set from original intent; do not mechanically preserve WIP outcomes.
 
 Existing return-owner/dynamic-argument closures retain their finite scopes. The
 three preceding overload repairs and this implementation remain WIP. Receipt:
 meta/evidence/existing-feature-conformance/source-owner-facts/overload-admission-stopped.json.
 
-## Review of the Selected Contract Change
+## Current Review Boundary
 
-The user selected the reviewed concrete-argument rule and requested a dedicated
-spec/design prerequisite. This section preserves its review, **not a claim that
-the canonical documents or implementation already satisfy it**. The required
-repair is now unification under that rule, rather than extending the old ban.
-
-Three independent reviewers examined specification consistency, call ambiguity
-and soundness, and source-to-consumer architecture. All recommend adoption;
-none found a fundamental obstacle or a further major semantic decision needed.
-This was a static design review; no compiler/test execution was performed.
-
-Recommended wording for ordinary type-overload declaration admission:
-
-> For every pair of callable forms with the same selector in the same
-> declaration-conflict domain, at least one corresponding argument position must
-> have two semantically distinct types, neither depending on unresolved type
-> parameters. Generic arity and parameter usage at other positions need not match.
-
-Required clarifications:
-
-- A selector is the name plus ordered argument labels. Different selectors are
-  separate operations; this type-overload condition does not compare them.
-- The discriminator is pairwise. Three declarations may distinguish each pair
-  at different positions; no one position need discriminate the whole group.
-- Compare normalized semantic type identity. Array[I64] is independent of type
-  parameters; Array[T] is not. Include receiver/impl/trait binders, abstract Self
-  and unresolved associated projections in the dependency check. Concrete Self
-  or a projection already resolved by retained equalities may normalize to a
-  fixed type. Do not search new general trait constraints to invent a discriminator.
-- Different names for the same type do not discriminate. Conversely, distinct
-  nominal types remain distinct even if their representation is identical.
-- Apply the condition to default-omitted callable forms. For example,
-  f(kind: I64 = 0I64, value: Bool) and
-  f(kind: String = "", value: Bool) collide on f(value:).
-- Declaration admission does not prove every call unique. Unsuffixed literals,
-  contextual literals and closures, existential injection, and sendability
-  guarantee erasure can leave more than one applicable candidate. Preserve the
-  existing ambiguity error, forward contextual-inference rules, and source
-  selection boundary; do not invent priority or retry another candidate after
-  selected generic inference/constraints fail.
-- Generic argument count and general where bounds are not new discriminators.
-  Keep the separate adopted capability-conditioned candidate contract, receiver
-  domains, import-origin rules, and trait-provided-member coexistence/preferences.
-
-Implementation consequence: removing sameGenericShape alone does not implement
-the proposed contract. callableFormsMayOverlap can establish structural
-non-overlap between dependent patterns such as Array[T] and Box[U], but neither
-argument is a fixed discriminator under this conservative proposal. Ordinary
-functions, methods, associated functions, factories and trait requirements need
-the same explicit declaration-admission relation, including default forms.
-Retain selected declaration/requirement identity and its own binder environment
-through generic/existential consumers; do not add a trait-only approximation.
-
-The com-qlnc prerequisite synchronizes spec/07, linked factory/operator
-explanations and name-lookup/generics contracts. This repair covers different generic
-counts/positions, pairwise three-candidate groups, dependent-only rejection,
-labels, defaults, Self/projections, explicit type arguments and ambiguous calls;
-then verify retained selections through native/JIT/generic/any execution.
-The existing WIP check-only evidence does not satisfy those completion conditions.
+The three earlier reviews accepted the strict fixed-type proposal, not the
+structural contract now selected. Their historical reports and the stopped
+probe remain in Git/evidence. com-qlnc requires a new independent review of the
+actual specification/design changes, including standard APIs and shared versus
+independent binders. This task then requires producer-to-final-consumer target
+verification and its own independent completion review. A successful build of
+the strict WIP, the old public API's existence or a new predicate in isolation
+cannot close this task or certify phase three.
