@@ -64,7 +64,8 @@ obligations. The reviewed candidate remains073f0375, productione73a8476.
 - P2 CALL-4: [com-y8l4](com-y8l4.md) — Compare full canonical trait requirement signatures for duplicates.
 - P2 T1: [com-l8m1](com-l8m1.md) — Preserve shared value region result conversions through final Mid.
 - P2 T2: [com-6zph](com-6zph.md) — Seal source conversion evidence against post publication mutation.
-- P2 F3,F4: [com-sby0](com-sby0.md) — Normalize Unit return contracts across source checking and lowering.
+- P2 F3: [com-sby0 — Unit return values](com-sby0.md#f3-unit-return-values-must-use-semantic-compatibility).
+- P2 F4: [com-sby0 — explicit Unit fallthrough](com-sby0.md#f4-explicit-unit-functions-must-permit-fallthrough).
 - P2 F5: [com-l9yo](com-l9yo.md) — Check scalar async return completeness at source admission.
 
 The review considered all18 design chapter responsibilities and18 specification

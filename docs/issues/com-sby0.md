@@ -26,6 +26,50 @@ Production e73a8476, exact candidate073f0375, spec9b3e18d.
 
 Full minimal source and real outcomes are retained in meta evidence/existing-feature-conformance/source-owner-facts/phase3-specification-rereview.json (source `flow/unit-return-call-implicit.pw`); raw scratch is meta/tmp/phase3-current-rereview/.
 
+## F3: Unit Return Values Must Use Semantic Compatibility
+
+An omitted result and explicit `-> ()` denote the same logical result contract.
+This valid call-result form currently rejects when the wrapper omits its result:
+
+```plew
+fn action() {}
+fn wrapper() { return action() }
+fn main() { wrapper() }
+```
+
+Unit local values and `return { give () }` show the same annotation-dependent
+failure. Unit closures reject nonliteral Unit returns too. Literal `return ()`
+and an explicitly annotated named wrapper are positive contrasts. Full sources,
+check/build/run results and candidate hashes are in the review receipt under
+`unit-results.json`, `unit-followup-results.json` and `mode-results.json`.
+
+- [ ] F3: omitted/explicit named and closure Unit returns accept compatible
+  literal/call/local/block values using saved semantic types, while non-Unit
+  returns still reject. Remove the syntax-shaped `exprIsUnit` admission decision.
+
+## F4: Explicit Unit Functions Must Permit Fallthrough
+
+This explicitly Unit-returning function currently rejects with missing return:
+
+```plew
+fn action() -> () {}
+fn main() { action() }
+```
+
+The omitted-result version, an explicit Unit closure and explicit Unit with a
+bare return are positive contrasts. Spec/04 expressly permits Unit fallthrough.
+The source signature's `hasReturnValue=f.hasRet` and final Mid result/terminator
+handling must be normalized too; suppressing only the first error is not enough.
+The separate F4 source and real mode outcomes are retained in the same receipt.
+
+- [ ] F4: omitted/explicit Unit bodies have equivalent fallthrough behavior and
+  valid saved signatures, Mid result destinations/terminators and AOT/JIT output.
+  Non-Unit completeness and diverging-body restrictions remain enforced.
+
+Both obligations belong to one canonical callable-result repair. This issue
+cannot close with only F3 or F4 fixed; no artificial ordering dependency between
+the two is introduced.
+
 ## Required Finite End State
 
 Use one logical callable result contract for named/closure omitted/explicit Unit. Perform value compatibility by saved semantic types, normalize body signature and Mid return destination/fallthrough accordingly. Close F3 and F4 together; adding an AST exemption or only suppressing the first verifier error is insufficient.
