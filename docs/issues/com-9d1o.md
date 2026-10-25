@@ -1,6 +1,6 @@
 ---
 id: com-9d1o
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T19:45:10Z
@@ -10,7 +10,7 @@ assignee: Koji Murata
 parent: met-si6j
 tags: [validation, phase3, regression]
 ---
-# Restore finalization publication fixture with canonical indexing traits
+# Use a canonical destructor receiver in the publication fixture
 
 
 ## Boundary
@@ -60,3 +60,20 @@ SourceResource pattern instead: minimal Lang/Core at canonical plew:std paths,
 public primitive declarations and canonical Core indexing requirements, with the
 probe in its own module. This keeps the test isolated from unrelated library
 bodies while exercising actual module/trait identity.
+
+## Outcome
+
+Resolved by fixture commits 08cde1ea/b7b6ab4a; production remains b6645ac1.
+Fresh c50d2a04 executes the complete publication-2 fixture with exit 0,
+original ok golden and empty stderr; 248 recorded inputs remain unchanged.
+Both incremental access/provenance publications, earlier row/callee identity,
+empty publication idempotence, malformed destructor ABI rejection and repeated
+failure stability execute. No implementation, publisher API or verifier changed.
+
+Independent c2_classification_review checked original 37df9c94 intent,
+c53a16b5/781253b2 API updates, all retained assertions, staged before failure,
+canonical source graph and Resource identity, carrier/output/input hashes.
+It certifies this finite internal maintenance. The failed publication-1 setup
+is retained separately. Raw compiler/tmp/phase3-internal-fixtures/publication-2;
+durable meta/evidence/existing-feature-conformance/source-owner-facts/publication-fixture-maintenance.json.
+Final G2 complete gates remain mandatory and uncertified.
