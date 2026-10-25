@@ -1,7 +1,7 @@
 ---
 id: met-rzt4
-status: closed
-deps: [com-d57o, com-vrvl, com-auvx]
+status: open
+deps: [com-d57o, com-vrvl, com-auvx, com-v1wa]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic

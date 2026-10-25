@@ -1,7 +1,7 @@
 ---
 id: com-9l3b
 status: in_progress
-deps: [com-p5um, com-o3vw, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-072n, com-3qne, com-uuya, com-vuv9, com-6cw6]
+deps: [com-p5um, com-o3vw, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-072n, com-3qne, com-uuya, com-vuv9, com-6cw6, com-v1wa, com-tkz7]
 links: []
 created: 2026-10-23T10:41:59Z
 type: task
@@ -61,4 +61,9 @@ Measured compiler2d7c785b from refreshed G2a passes full normal
 partreject84, midcoverage1, midborrowedread1; skip0/fail0, exit0, inputs
 unchanged. Receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-normal.json.
 The original fifteen regressions remain fixed without expectation edits.
-Gen/deps/LLVM22 ASan-LSan are pending; G2b remains in progress.
+Gen20261025T054226-gen-36c9dc fails directiveargs harness compilation,
+23 positive/5 reject/1 failure, exit1 and unchanged inputs. Receipt
+meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-gen-initial-failure.json.
+Independent scoped repairs com-v1wa/com-tkz7 retain selected derive type and
+close common untyped Make admission separately. Affected areas/G1/G2a reopen
+for changed inputs. Deps/LLVM22 ASan-LSan were not started.
