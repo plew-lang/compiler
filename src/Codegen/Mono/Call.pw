@@ -3543,28 +3543,20 @@ pub impl Comp {
     inout fn proofWitnessForTrait(proof: StaticConformanceProof, traitIdx: U64) -> WitnessMatch {
         if traitIdx >= self.decls.traitCount() { return <WitnessMatch /> }
         val requested: TraitDef = self.decls.traitAt(index: traitIdx)
+        // Both concrete and assumption-rooted paths retain selected witness
+        // edges. The assumption itself is never a concrete conformance edge.
+        mut val edges: Array[WitnessMatch] = []
         match proof {
-            StaticConformanceProof.ConcreteWitness(witness: val witness) => {
-                if witness.conformIdx != 0U64 && witness.conformIdx <= self.decls.conformCount() {
-                    val conform: Conform = self.decls.conformAt(index: witness.conformIdx - 1U64)
-                    if conform.traitId == requested.nameId && conform.traitStart == requested.nameStart { return witness }
-                }
-            }
-            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
-                // The path is ordered from the direct receiver conformance to
-                // its derived target.  Each trait can occur at most once in a
-                // validated acyclic proof, so its matching edge is exact.
-                mut val edgeIdx: U64 = 0U64
-                while edgeIdx < edges.count() {
-                    val witness: WitnessMatch = edges[edgeIdx]
-                    if witness.conformIdx != 0U64 && witness.conformIdx <= self.decls.conformCount() {
-                        val conform: Conform = self.decls.conformAt(index: witness.conformIdx - 1U64)
-                        if conform.traitId == requested.nameId && conform.traitStart == requested.nameStart { return witness }
-                    }
-                    edgeIdx += 1U64
-                }
-            }
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => { edges.append(witness) }
+            StaticConformanceProof.TraitPath(edges: val path, terminalConformIdx: _) => { edges = path }
+            StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: val path) => { edges = path }
             _ => {}
+        }
+        for witness in edges {
+            if witness.conformIdx != 0U64 && witness.conformIdx <= self.decls.conformCount() {
+                val conform = self.decls.conformAt(index: witness.conformIdx - 1U64)
+                if conform.traitId == requested.nameId && conform.traitStart == requested.nameStart { return witness }
+            }
         }
         return <WitnessMatch />
     }
