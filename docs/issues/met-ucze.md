@@ -1,6 +1,6 @@
 ---
 id: met-ucze
-status: open
+status: closed
 deps: [com-qehq, com-qb05, com-17yh, com-4kti, com-fyxe, com-072n, com-3qne, com-o3vw, com-6cw6]
 links: []
 created: 2026-10-13T01:40:08Z
@@ -96,3 +96,16 @@ No unfinished in-scope source-selection family remains in this area. Final
 frozen-candidate normal/gen/deps/sanitizer/fixed-point/performance gates remain
 G2a/G2b obligations; neither phase three nor main/seed/carrier promotion is
 certified by this scoped closure.
+
+## Trait Chain Readmission
+
+com-6cw6 closes the G2b-discovered placement regression at production b16439fa /
+fixture573ff620. Original source edge, complete receiver, surface owner and root
+birth edge remain distinct from lexical provided-body ownership. Both concrete
+copy readers interpret the saved ordered proof; gated diagnostic candidates
+never select a call. Independent body_receiver_completion_review accepts the
+repair and this area's reclosure after native47/reject23 and sourcecheck, with
+both 381-input maps unchanged. Original fifteen rejection pairs and 3qne41/6
+remain intact; nested-root and exact-duplicate controls pass. Receipt
+meta/evidence/existing-feature-conformance/source-owner-facts/trait-chain-placement-repair.json.
+Final changed-input G1/G2 gates remain separate; historical gates do not qualify.

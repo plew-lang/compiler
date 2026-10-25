@@ -1,6 +1,6 @@
 ---
 id: met-ia09
-status: open
+status: closed
 deps: [com-v2xk, com-yojf, com-072n, com-3qne, com-6cw6]
 links: []
 created: 2026-10-13T01:40:08Z
@@ -171,3 +171,16 @@ separates formation from individual member availability.
 distinguishes a box from its hidden conforming type; no general opening feature
 is introduced by this repair. [Rust placeholder checking](https://rustc-dev-guide.rust-lang.org/traits/hrtb.html)
 informs rigid identity and capture avoidance, not new lifetime/HRTB syntax.
+
+## Trait Chain Readmission
+
+com-6cw6 closes the G2b-discovered placement regression at production b16439fa /
+fixture573ff620. Original source edge, complete receiver, surface owner and root
+birth edge remain distinct from lexical provided-body ownership. Both concrete
+copy readers interpret the saved ordered proof; gated diagnostic candidates
+never select a call. Independent body_receiver_completion_review accepts the
+repair and this area's reclosure after native47/reject23 and sourcecheck, with
+both 381-input maps unchanged. Original fifteen rejection pairs and 3qne41/6
+remain intact; nested-root and exact-duplicate controls pass. Receipt
+meta/evidence/existing-feature-conformance/source-owner-facts/trait-chain-placement-repair.json.
+Final changed-input G1/G2 gates remain separate; historical gates do not qualify.

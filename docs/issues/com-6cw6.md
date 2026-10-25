@@ -1,6 +1,6 @@
 ---
 id: com-6cw6
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-25T04:23:49Z
@@ -70,5 +70,9 @@ reject23 and sourcecheck-3, exit zero and recorded inputs unchanged. All fifteen
 original reject sources/expectations and default-forwarding41/6 are retained.
 Receipt meta/evidence/existing-feature-conformance/source-owner-facts/trait-chain-placement-repair.json
 records current results and initial failures remain in scratch.
-Independent final result/fingerprint confirmation is pending; static re-review
-reports no blocker. Changed-candidate G1/G2 obligations remain open.
+Independent body_receiver_completion_review accepts bounded closure: both
+381-input maps match current files and the candidate matches the standard build
+artifact; all 23 rejections exit1 with matching diagnostics and no internal
+error. Both final readers preserve duplicate rejection; actual nested-root
+execution is 9/9. Producer-to-final-use and lexical/caller separation are closed.
+Changed-candidate G1/G2 obligations remain open.

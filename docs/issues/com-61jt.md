@@ -52,7 +52,7 @@ criterion assignment; its decisive closure owners are reconciled below.
 | --- | --- |
 | 1 | A/C1, C3 producer repairs and E1 preserve committed shape/type; com-o3vw additionally stamps structural-index U64 at its producer. |
 | 2 | C1/C3/C4/C5/C6 and D1-D4 separate unrecorded/pending/rigid/Unit/no-normal states and seal only complete source facts; E1-E3 separate completion from callable values. |
-| 3 | met-ucze's eight-path table, met-ia09's exact environment table, C4-C6 and D1-D4 connect selected source authority to final consumers; com-9clj/com-3qne close later witness/default producers. |
+| 3 | met-ucze's eight-path table, met-ia09's exact environment table, C4-C6 and D1-D4 connect selected source authority to final consumers; com-9clj/com-3qne/com-6cw6 close later witness/default/root-placement producers. |
 | 4 | B1/B2/B3/B4 and com-4kti admit full signature/labels/passing/bounds, including bodyless and implicit calls; defaults preserve the original full declaration ABI. |
 | 5 | C1/E1/E2/E4 retain equivalent permitted context and live joins through direct/block/if/match/short-circuit; lexical forward inference is preserved. |
 | 6 | com-fuo8's reconciled E1-E4 table and com-gyup discharge approved divergence, loop reachability, saved transfer targets and actual cleanup/CFG. |
@@ -76,28 +76,18 @@ Their Outcomes preserve creation intent and canonical semantics without exposing
 writers or weakening verifier/test obligations. The old full normal remains
 failed, not relabeled green.
 
-G1 candidate: production b6645ac1 with maintained fixture commit 7e0648c1;
-source/std/native/resolve/tests/scripts/manifests remain byte-identical through
-the area-only documentation reconciliation. Syntax exact 0.1.11-dev.30 at
-8c89204230c3d865ea95a03382c3fd213731e1de, spec 9b3e18d, no override.
-Adopted input carrier remains bin/plewc-orc-lifetime, SHA256
-c36716d9f95e123f2b62158e44e2287476757eaf52b6bd93e41bc1a2a47d18b3.
-Current scoped WIP is c50d2a04. G2a will save full input/tool fingerprints and
-produce the separate measured compiler that G2b must consume. Receipt applicability
-is limited to each pinned input/scope; old runs are not reused as final gates.
-Main/seed/adopted-carrier promotion is excluded.
+G1 candidate: production b16439fa with fixture573ff620; scoped binary
+bin/plewc-chain-placement-3 SHA256
+550bb667e81c70addc44005caf46d61a866c69ebdc917a0599b0d20acfdc57bc.
+Syntax exact 0.1.11-dev.30 at 8c89204230c3d865ea95a03382c3fd213731e1de,
+spec9b3e18d, no override. Adopted carrier remains bin/plewc-orc-lifetime,
+SHA256 c36716d9f95e123f2b62158e44e2287476757eaf52b6bd93e41bc1a2a47d18b3.
 
-## Outcome
-
-Independent c2_classification_review accepts G1 at d802ca75. All sixty
-prerequisite descendants are closed, with no missing ID or dependency cycle.
-The reviewer checked the eleven-row reconciliation, scoped area reviews, later
-required fixes, retained adapters and final-gate ownership. Six tracked input
-groups totaling 5,907 files, package manifests and carrier hashes match the
-freeze receipt, with no runtime/test/script changes after 7e0648c1.
-
-Receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-admission.json
-retains the group digests and accepted review. This closes evidence admission
-only. G2a must now record the complete source/tool/dependency fingerprints, prove
-fixed point and a median below seven seconds, then G2b must consume that measured
-compiler. G3, parent completion and main/seed/carrier promotion remain unaccepted.
+com-6cw6 is an explicit admission prerequisite and independently closes the
+original fifteen normal rejections plus nested-root and duplicate controls.
+Affected areas met-ucze/met-ia09 have independent readmission. The refreshed
+receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-admission.json
+records six tracked input groups, exact manifests and carrier. Prior admission
+and formal gates are historical; independent refreshed G1 confirmation remains
+pending. G2a must produce a new measured compiler for G2b. No full gate, parent
+completion or main/seed/carrier promotion is accepted here.
