@@ -1,6 +1,6 @@
 ---
 id: com-p5um
-status: in_progress
+status: closed
 deps: [com-61jt, com-auvx]
 links: []
 created: 2026-10-23T10:41:59Z
@@ -37,3 +37,21 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## Outcome
+
+Independent c2_classification_review accepts the standard gate
+20261025T034133-self-host-290b80 at source 3aef0546 (production b6645ac1,
+fixture 7e0648c1). Exit 0 and 5,972 unchanged inputs match G1, tools and fixed
+Syntax. Generation 1 -> 2 changes LLVM; generation 2 -> 3 matches LLVM and
+runtime exactly. All three fixed-point measurements emit identical outputs:
+6.468564 / 5.954835 / 5.924573 seconds, formal median 5.954835 seconds.
+No diagnostic sampling or overlapping build/test was used.
+
+Measured compiler: meta/tmp/validation/20261025T034133-self-host-290b80/self-host/generation-2/next/plewc,
+SHA256 73078e5da70d0c96647f30efd78cdf3f73aad462e01ae3d6fab92d3471980578.
+The generation 3 successor has the same hash. G2b uses this exact measured
+compiler, starting only after the formal gate completed.
+Receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-self-host.json
+retains all measurements and raw references. G2b, phase three and main/seed/
+adopted-carrier promotion remain uncertified.
