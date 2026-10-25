@@ -178,11 +178,21 @@ Other comparisons isolate which parts transfer:
 
 ## 11. Implementation Mapping and Limits
 
-Inspected source base: `6fe09bc7c0e75260b3f773643921478b5020b94f`. [Record.pw](../../src/Codegen/Resolve/Record.pw) contains `prepareLexicalBodyUncached`, which runs recording, generic checking, declaration verification, and recording again. This locates the current source preparation boundary; it does not prove those passes share one selector. `SemanticExprType`, `SemanticClosure`, and `CallResolution` in [Ir.pw](../../src/Ir.pw) show existing storage for expression, closure, and final-call facts, including legacy carriers.
+[Lexical preparation](../../src/Codegen/Resolve/Record.pw) owns source-body
+requests and their cached outcomes. [Source facts](../../src/SourceFacts.pw)
+separate constructing owners from immutable prepared readers; explicit instance
+environments interpret those facts for final consumers. Multiple validation
+walks do not authorize independent source selection or post-publication writes.
 
-The paused type-checking review identifies incomplete producer-to-consumer closure, independent selectors, and expensive snapshot acquisition. Its retained implementation candidates are not all present in this inspected source base. This chapter describes the intended authority and publication contracts without claiming those candidates have completed them. Every expression form, synthetic path, storage cost, and final consumer has not been audited here. No compiler execution or performance measurement was performed; retained implementation follow-up work belongs in [local issues](../issues/README.md).
-
-Chapter review checked source authority, inference/completion semantics, owner publication, final-consumer paths, and the primary-language comparisons. Receiver and logical result signature contents and forward-inference/completion examples were made explicit. No required semantic correction remained within that scope. The physical storage/API contract is adopted in the supplement; its scoped reconciliation and fresh baseline are recorded in [met-j9mv](../issues/met-j9mv.md), while storage implementation and final-consumer validation remain pending.
+The supported frontend surface is reconciled by [the phase-three parent](../issues/met-si6j.md),
+[call-selection paths](../issues/met-ucze.md#reconciled-area-completion),
+[type/conversion consumers](../issues/met-6e6k.md#reconciled-area-completion), and
+[publication](../issues/met-acfl.md). Those records own exact implementations,
+removed decisions, scoped controls and final-candidate gate status. A component's
+closure does not certify the parent's final gates or unrelated compiler boundaries.
+The [physical storage supplement](checked-body-storage.md) remains the concrete
+API contract; [existing-feature conformance](../issues/com-604k.md) retains work
+outside this frontend surface.
 
 ## Retained Follow-up Investigations
 

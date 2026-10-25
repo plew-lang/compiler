@@ -111,11 +111,20 @@ Validation should cover repeated success and failure, foreign-session/foreign-ow
 
 ## 9. Implementation Mapping and Audit Limits
 
-Inspected source base: `6fe09bc7c0e75260b3f773643921478b5020b94f` (documentation changes excluded). Focused reading covered [`CompilerSession` and preparation result types](../../src/CheckedProgram.pw), [`InstanceEnvironment`](../../src/Ir.pw), and the [native session registry](../../src/CompilerSessions.pw). The session hides mutable `Comp`; instance environments carry substitutions, receiver, and proof; the registry uses non-recycled numeric IDs and shared cells, with ORC destruction required before unregistering.
+[`CompilerSession` and preparation results](../../src/CheckedProgram.pw),
+[`InstanceEnvironment`](../../src/Ir.pw), the [source-fact directory](../../src/SourceFacts.pw),
+and [native session registry](../../src/CompilerSessions.pw) implement distinct
+session, source-owner, instance and external-handle identities. A completed
+source owner publishes immutable readers; an explicit callee environment
+interprets selected facts without relying on an ambient caller cursor.
 
-These observations do not prove every request key, writer, cycle path, or final reader satisfies this chapter. The paused type-checking work still requires implementing the specified publication/storage boundaries and removing source-selection duplication. No new runtime or performance experiment was performed for this chapter. [Owner publication and final-consumer closure](../issues/met-si6j.md) tracks the retained migration boundary; absence of additional issue links is not an implementation-completeness claim.
-
-Chapter review found no blocking design problem. The physical storage/API contract is now specified in its supplement; this review does not certify their implementation.
+[Owner publication and final-consumer closure](../issues/met-si6j.md) owns the
+current supported frontend reconciliation and exact validation status. Its
+area/child outcomes, rather than private store presence or this chapter alone,
+establish the verified boundary. This does not certify every other request key,
+cycle or runtime/driver consumer. Remaining existing-feature boundaries belong
+to [their conformance owners](../issues/com-604k.md), separately from unimplemented
+language features.
 
 ## Physical Checked-body Storage
 

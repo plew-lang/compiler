@@ -111,10 +111,21 @@ When migrating an old selector, identify its callers and remove independent sele
 
 ## 9. Implementation Mapping and Limits
 
-Inspected source base: `6fe09bc7c0e75260b3f773643921478b5020b94f`. Focused reading covered [module/visibility helpers](../../src/Codegen/Resolve/Module.pw), [lexical module qualification](../../src/Codegen/Resolve/Lexical.pw), and existing candidate-index contracts. These files locate current entry points; their broad “Resolve” naming does not define the intended decision ownership.
+[Module/visibility helpers](../../src/Codegen/Resolve/Module.pw),
+[lexical qualification](../../src/Codegen/Resolve/Lexical.pw), and registered
+candidate indexes implement lookup inputs. Their broad `Resolve` naming does not
+grant each caller authority to select or replace a source operation.
 
-Current `moduleOf` returns the entry module for unmatched offsets, and `methodInEntryModule` derives membership from body statements. Those mechanisms cannot establish arbitrary synthetic or empty-body ownership and must not be treated as the intended provenance contract. Their complete caller impact remains unaudited. The paused type-checking review also identifies independent source member selection across checking passes; this chapter specifies its replacement boundary, not its completed removal.
+The [eight-path source-selection reconciliation](../issues/met-ucze.md#reconciled-area-completion)
+and [exact callee environments](../issues/met-ia09.md) record the supported
+frontend handoff from selected declarations/proofs to actual final calls. The
+[phase-three parent](../issues/met-si6j.md) owns whole-candidate gate status.
+Preserved source/view placement and lexical body ownership are distinct; a
+gated diagnostic candidate is never an admitted callable.
 
-No new compiler execution or performance measurement was performed. Complete scope reconstruction, conflict checking, all generated paths, and final-consumer closure remain unverified. Retained follow-up work belongs in [local issues](../issues/README.md); absence of an issue link is not evidence that an unverified path has been resolved.
-
-Chapter review checked the lookup/selection boundary against the module, method, extension, and binding specifications. Clarifications for additive views and module-private trait helpers were incorporated and re-reviewed; no required correction remains within that review scope.
+These closures do not establish arbitrary synthetic provenance through
+`moduleOf`'s unmatched-offset behavior or certify every caller of legacy
+module-membership helpers. Those uses require their explicit source-domain
+contracts and assigned [existing-feature conformance work](../issues/com-604k.md).
+Do not infer complete scope reconstruction or generated-path coverage from
+lookup-index presence, helper names or absence of an issue link.
