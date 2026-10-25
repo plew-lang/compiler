@@ -6,8 +6,7 @@ use @Std/Io only { print }
 fn main() {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler,
-        input: <FrontendInput.Text path="production.pw" text="fn good() -> I64 {{ return {{ while true {{}}
- give 1I64 }} }} fn missing() {{ val value: I64 = {{ while true {{}} }} }}" />,
+        input: <FrontendInput.Text path="production.pw" text="fn good() -> I64 {{ return {{ while true {{}}\n give 1I64 }} }} fn missing() {{ val value: I64 = {{ while true {{}} }} }}" />,
         sources: <SourceAccess />).unwrap()
     val good = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "good").nameId)
     compiler.prepareLexicalBody(fnIdx: good).unwrap()
@@ -21,8 +20,8 @@ fn main() {
         Expr.Block(body: val body, offset: _) => body
         _ => { panic("missing block") }
     }
-    val give = compiler.blockStmtAt(blkId: block, index: 1U64)
-    val producer = match compiler.arena.stmts[give] {
+    val giveStatement = compiler.blockStmtAt(blkId: block, index: 1U64)
+    val producer = match compiler.arena.stmts[giveStatement] {
         Stmt.Give(value: val value) => value
         _ => { panic("missing give") }
     }

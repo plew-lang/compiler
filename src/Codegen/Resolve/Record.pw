@@ -1185,7 +1185,11 @@ pub impl Comp {
             if value >= self.arena.exprs.count() {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a normally completing value block requires `give` to yield its value (spec/11)") />
             }
-            resultTerm = self.parametricExprTerm(exprId: value)
+            // recordBlockContents admitted this producer against its result
+            // context. Preserve that destination for boxing/repacking joins;
+            // without one, infer from the admitted producer itself.
+            resultTerm = context
+            if resultTerm == 0U64 { resultTerm = self.parametricExprTerm(exprId: value) }
             self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
         }
         try self.storeBuildingValueBlock(blockId: blockId, expression: exprId, completion: completion, resultTerm: resultTerm)

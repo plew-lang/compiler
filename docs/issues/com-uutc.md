@@ -31,3 +31,17 @@ For each combination record current source and minimal positive/reject controls,
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Mixed: split current subset**.
 
 Current admitted combinations are bounded controls for met-si6j/met-ucze/met-ia09/met-acfl/met-6e6k, com-w4c2 and com-2p9p: contextual arrays, nominal/generic binders, overload labels/ownership, views/projections currently present, aggregate defaults and return results. Historically absent explicit free-call type arguments or new projection/interface paths remain unimplemented; reject/diagnose unsupported forms. Existing wrapping/type-annotation discrepancies cannot be dismissed as new feature work.
+
+## Retained Value-region Erasure Observation
+
+During com-ugee review, an exploratory heterogeneous `any Metric` if-join
+(`Small`/`Large` with different physical sizes) passes --check but fails native
+compilation with program Mid preparation failed on both the previous3c532ce1
+candidate and the intermediate repair candidate. This is not evidence of a
+repair regression or a successful context-conversion control. Exact inputs and
+logs are retained in meta tmp/phase3-value-producer-repair/context and the repair
+evidence. Reconcile it with the mixed unsupported interface/result shapes before
+claiming a new supported combination or a resolved source-to-Mid boundary.
+The current com-ugee fix preserves the existing contextual target once an
+actual give has been admitted; it does not use this failed experiment to weaken
+the missing-value result contract.
