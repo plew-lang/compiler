@@ -3550,16 +3550,58 @@ pub impl Comp {
         return <Result.Ok value=self.conformanceParameterTypesMatch(cf: conform, witness: source, requirement: requirement, parameters: source.params) />
     }
 
-    // Select a concrete member through the exact proof edge, not by
-    // re-ranking the receiver surface.  The edge's witnessFuncIds names the
-    // declaration which supplied the requirement; a trait-subject edge then
-    // contributes one conferred copy with the same body/definition and the
-    // selected path's source trait/extension identity.
+}
+
+impl Comp {
+    inout fn selectedWitnessReceiverMatches(witness: WitnessMatch, receiverRef: U64) -> Bool {
+        if witness.selfRef == 0U64 || witness.selfRef >= self.arena.typeCount() || receiverRef == 0U64 || receiverRef >= self.arena.typeCount() { return false }
+        // Placement retains logical Self. Only outer selection views may differ;
+        // newtypes and nested arguments/views remain distinct semantic types.
+        return self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: witness.selfRef), b: self.typeRefWithoutOuterViews(ref: receiverRef))
+    }
+
+    inout fn providedCopyReceiverMatches(function: Func, receiverRef: U64, placement: WitnessMatch, environment: InstanceEnvironment) -> Result[Bool, CompileDiagnostic] {
+        if self.methodRecvIsTrait(f: function) {
+            val declaration = self.decls.conformAt(index: placement.conformIdx - 1U64)
+            if declaration.subjectTraitOwner == 0U64 || function.recvStart != declaration.subjectTraitOwner || function.recvStart != declaration.typeStart || function.recvId != declaration.typeId || function.recvLen != declaration.typeLen { return <Result.Ok value=false /> }
+            val lexical = try self.lexicalFunction(f: function)
+            val traitIndex = self.decls.traitIndexByOffset(offset: lexical.provTraitOwner)
+            if traitIndex >= self.decls.traitCount() || function.recvTy == 0U64 || function.recvTy >= self.arena.typeCount() { return <Result.Ok value=false /> }
+            val pattern = self.arena.typeTermAt(index: self.typeRefWithoutOuterViews(ref: function.recvTy))
+            val selfParameter = self.decls.traitAt(index: traitIndex).selfParamId
+            if selfParameter == 0U64 || pattern.paramId != selfParameter || pattern.hasDecl || pattern.isRecord || pattern.isAny || pattern.assocNameId != 0U64 || pattern.args.len != 0U64 { return <Result.Ok value=false /> }
+            val bound = try self.withLexicalSelfBinding(f: function, environment: environment)
+            val receiver = self.groundTermInEnvironment(ref: function.recvTy, params: bound.params, values: bound.args, selfRef: bound.receiverRef)
+            return <Result.Ok value=self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: receiver), b: self.typeRefWithoutOuterViews(ref: receiverRef)) />
+        }
+        val matched = try self.methodReceiverEnvironment(f: function, instRef: receiverRef)
+        if matched.conformIdx == 0U64 { return <Result.Ok value=false /> }
+        mut val params = environment.params
+        mut val values = environment.args
+        mut val patternParams = function.typeParams
+        if function.recvPatternParams.count() != 0U64 { patternParams = function.recvPatternParams }
+        mut val index = 0U64
+        while index < patternParams.count() {
+            val parameter = self.funcBindAt(binds: patternParams, index: index)
+            val binding = self.witnessBindParamIndex(binds: matched.binds, paramId: parameter.paramId)
+            if parameter.paramId != 0U64 && binding < matched.binds.count() {
+                try self.mergeInstanceBinding(parameter: parameter, value: matched.binds[binding].term, params: inout params, values: inout values, offset: function.defOffset)
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=true />
+    }
+}
+
+pub impl Comp {
+    // Interpret only the selected proof edge. A conferred copy additionally
+    // needs the complete receiver; the source edge alone can place A and B.
     inout fn proofConcreteWitness(proof: StaticConformanceProof, receiverRef: U64, traitIdx: U64, reqIdx: U64) -> Result[U64, CompileDiagnostic] {
         if traitIdx >= self.decls.traitCount() || reqIdx >= self.decls.traitAt(index: traitIdx).reqs.count() { return <Result.Ok value=self.arena.functionCount() />}
         val witness: WitnessMatch = self.proofWitnessForTrait(proof: proof, traitIdx: traitIdx)
         val conformIdx: U64 = witness.conformIdx
         if conformIdx == 0U64 || conformIdx > self.decls.conformCount() { return <Result.Ok value=self.arena.functionCount() />}
+        if !self.selectedWitnessReceiverMatches(witness: witness, receiverRef: receiverRef) { return <Result.Ok value=self.arena.functionCount() /> }
         val conform: Conform = self.decls.conformAt(index: conformIdx - 1U64)
         val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
         mut val wi: U64 = 0U64
@@ -3579,6 +3621,8 @@ pub impl Comp {
                     if !(self.methodRecvIsTrait(f: source)) && source.originTraitId == self.decls.traitAt(index: traitIdx).nameId && source.originTraitOwner == self.decls.traitAt(index: traitIdx).nameStart {
                         return <Result.Ok value=sourceIdx />
                     }
+                    val environment = try self.selectedConstraintEnvironment(witness: witness)
+                    mut val selected = self.arena.functionCount()
                     mut val ci: U64 = 0U64
                     while ci < self.arena.functionCount() {
                         val candidate: Func = self.arena.functionAt(index: ci)
@@ -3591,10 +3635,14 @@ pub impl Comp {
                         // B-as-A witness distinct from another A witness that
                         // happens to have the same member name.
                         if candidate.isProvided && candidate.sourceWitnessFuncId == sourceIdx + 1U64 && candidate.sourceConformIdx == conformIdx && candidate.originTraitId == self.decls.traitAt(index: traitIdx).nameId && candidate.originTraitOwner == self.decls.traitAt(index: traitIdx).nameStart {
-                            return <Result.Ok value=ci />
+                            if try self.providedCopyReceiverMatches(function: candidate, receiverRef: receiverRef, placement: witness, environment: environment) {
+                                if selected < self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: source.defOffset, msg: "internal error: selected trait witness has multiple receiver copies") /> }
+                                selected = ci
+                            }
                         }
                         ci += 1U64
                     }
+                    return <Result.Ok value=selected />
                 }
             }
             wi += 1U64
@@ -3610,19 +3658,17 @@ pub impl Comp {
         if placement.conformIdx == 0U64 || placement.conformIdx > self.decls.conformCount() {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: provided declaration has no selected placement proof") />
         }
-        val traitSubject = self.decls.conformAt(index: placement.conformIdx - 1U64).subjectTraitOwner != 0U64
+        if !self.selectedWitnessReceiverMatches(witness: placement, receiverRef: receiverRef) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: provided declaration receiver does not match its selected proof") /> }
+        // Interpret this one edge for matching only. The final call retains
+        // its original full proof, including any preceding path edges.
+        val environment = try self.selectedConstraintEnvironment(witness: placement)
         val owner = try self.semanticBodyOwner(fnIdx: declaration)
         mut val selected = self.arena.functionCount()
         mut val candidate = self.arena.firstProvidedCopy(owner: owner)
         while candidate < self.arena.functionCount() {
             val function = self.arena.functionAt(index: candidate)
             if function.originConformIdx == placement.conformIdx {
-                mut val receiverMatches = traitSubject
-                if !receiverMatches {
-                    val receiver = try self.methodReceiverEnvironment(f: function, instRef: receiverRef)
-                    receiverMatches = receiver.conformIdx != 0U64
-                }
-                if receiverMatches {
+                if try self.providedCopyReceiverMatches(function: function, receiverRef: receiverRef, placement: placement, environment: environment) {
                     if selected < self.arena.functionCount() {
                         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: provided declaration has multiple copies for its selected proof") />
                     }
