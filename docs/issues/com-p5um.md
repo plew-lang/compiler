@@ -1,6 +1,6 @@
 ---
 id: com-p5um
-status: in_progress
+status: closed
 deps: [com-61jt, com-auvx]
 links: []
 created: 2026-10-23T10:41:59Z
@@ -38,25 +38,19 @@ current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
 
-## Historical Gate and Current Refresh
+## Outcome
 
-Independent c2_classification_review accepts the standard gate
-20261025T034133-self-host-290b80 at source 3aef0546 (production b6645ac1,
-fixture 7e0648c1). Exit 0 and 5,972 unchanged inputs match G1, tools and fixed
-Syntax. Generation 1 -> 2 changes LLVM; generation 2 -> 3 matches LLVM and
-runtime exactly. All three fixed-point measurements emit identical outputs:
-6.468564 / 5.954835 / 5.924573 seconds, formal median 5.954835 seconds.
-No diagnostic sampling or overlapping build/test was used.
+Independent c2_classification_review accepts the refreshed standard gate
+20261025T050217-self-host-8da5f2 at source8997fa7e (productionb16439fa,
+fixture573ff620). Exit0 and5,982 unchanged inputs match G1 and actual files.
+Generation1 ->2 changes LLVM; generation2 ->3 matches LLVM/runtime exactly.
+All measured outputs match. Timings6.460528 /6.179747 /5.886134 seconds give
+formal median6.179747 seconds, below7. No sampling or overlapping validation.
 
-Measured compiler: meta/tmp/validation/20261025T034133-self-host-290b80/self-host/generation-2/next/plewc,
-SHA256 73078e5da70d0c96647f30efd78cdf3f73aad462e01ae3d6fab92d3471980578.
-The generation 3 successor has the same hash. G2b uses this exact measured
-compiler, starting only after the formal gate completed.
+Measured compiler: meta/tmp/validation/20261025T050217-self-host-8da5f2/self-host/generation-2/next/plewc,
+SHA256 2d7c785b55fa33ffc143b749a8f17986c437521140e2abf4d80687b59e5a3c49.
+The generation3 successor has the same hash. G2b consumes this exact compiler.
 Receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-self-host.json
-retains all measurements and raw references. G2b, phase three and main/seed/
-adopted-carrier promotion remain uncertified.
-
-Production com-6cw6 changed the frozen inputs after the recorded gate. This
-task is reopened: the result above remains valid for its recorded input only.
-After refreshed G1 admission, rerun standard self-host with the unchanged
-adopted carrier and use its new measured compiler for G2b.
+retains all timing/artifact references. Old gate5.954835 remains in Git/raw
+history and is not a same-source comparison. Full suites, parent completion
+and main/seed/adopted-carrier promotion remain uncertified.
