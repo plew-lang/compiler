@@ -147,8 +147,26 @@ pub impl Comp {
                 for functionIndex in self.copyConformFuncIds(ids: conformance.witnessFuncIds) {
                     if functionIndex == self.cur.checkFn { ownsForwarder = true }
                 }
-                if !ownsForwarder || traitIndex >= self.decls.traitCount() || function.originTraitOwner != conformance.traitStart || function.originTraitId != conformance.traitId || function.recvStart != conformance.typeStart {
+                mut val ownsSource = false
+                for functionIndex in self.copyConformFuncIds(ids: conformance.authoredFuncIds) {
+                    if functionIndex == selected { ownsSource = true }
+                }
+                if !ownsForwarder || !ownsSource || site.selectedTypeArgs.count() != function.typeParams.count() || traitIndex >= self.decls.traitCount() || function.originTraitOwner != conformance.traitStart || function.originTraitId != conformance.traitId || function.recvStart != conformance.typeStart {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "selected forwarding declaration does not belong to its conformance") />
+                }
+                val forwarder = self.arena.functionAt(index: self.cur.checkFn)
+                if forwarder.typeParams.count() != function.typeParams.count() {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "selected forwarding source has a different binder owner") />
+                }
+                mut val parameterIndex = 0U64
+                while parameterIndex < function.typeParams.count() {
+                    val parameter = self.funcBindAt(binds: function.typeParams, index: parameterIndex)
+                    val current = self.funcBindAt(binds: forwarder.typeParams, index: parameterIndex)
+                    val expected = self.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen paramId=parameter.paramId args=[] />)
+                    if parameter.paramId == 0U64 || current.paramId != parameter.paramId || !self.typeRefEq(a: expected, b: site.selectedTypeArgs[parameterIndex]) {
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "selected forwarding arguments do not preserve their lexical binders") />
+                    }
+                    parameterIndex += 1U64
                 }
                 val candidates = try self.traitMemberInstanceProofs(baseRef: receiverRef, traitId: conformance.traitId, traitOwner: conformance.traitStart, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn), includeConcrete: true)
                 mut val selection = <TraitProofSelection />
@@ -173,7 +191,7 @@ pub impl Comp {
             if site.selectedConformance != 0U64 {
                 match site.selectedDeclaration {
                     Optional.Some(v: val selected) => {
-                        if selected == declaration { return <Result.Ok value=site.selectedTypeArgs /> }
+                        if selected == declaration && declaration < self.arena.functionCount() && site.selectedTypeArgs.count() == self.arena.functionAt(index: declaration).typeParams.count() { return <Result.Ok value=site.selectedTypeArgs /> }
                     }
                     Optional.None => {}
                 }
@@ -636,6 +654,10 @@ pub impl Comp {
                     val function = self.arena.functionAt(index: callee)
                     val trait = self.decls.traitAt(index: traitIndex)
                     if !function.isProvided && function.hasRecv && function.body != 0U64 && function.recvId == trait.nameId && function.provTraitOwner == trait.nameStart {
+                        return <Result.Ok value=function />
+                    }
+                    val witness = self.proofWitnessForTrait(proof: proof, traitIdx: traitIndex)
+                    if self.selectedImplementationDeclarationMatches(function: function, proof: proof, receiverRef: witness.selfRef) {
                         return <Result.Ok value=function />
                     }
                 }

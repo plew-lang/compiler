@@ -653,6 +653,23 @@ pub impl Comp {
         }
     }
 
+    // An authored conformance implementation is not a trait-namespace helper.
+    // Its exact selected edge and original declaration snapshot justify Self;
+    // matching an origin flag or a printed receiver alone never does.
+    inout fn selectedImplementationDeclarationMatches(function: Func, proof: StaticConformanceProof, receiverRef: U64) -> Bool {
+        if function.isProvided || function.body == 0U64 || function.sourceWitnessFuncId == 0U64 || function.sourceWitnessFuncId > self.arena.functionCount() { return false }
+        val traitIndex = self.decls.traitIndexByOffset(offset: function.originTraitOwner)
+        if traitIndex >= self.decls.traitCount() { return false }
+        val witness = self.proofWitnessForTrait(proof: proof, traitIdx: traitIndex)
+        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() || !self.selectedWitnessReceiverMatches(witness: witness, receiverRef: receiverRef) { return false }
+        val conformance = self.decls.conformAt(index: witness.conformIdx - 1U64)
+        if conformance.traitStart != function.originTraitOwner || conformance.traitId != function.originTraitId || conformance.typeStart != function.recvStart { return false }
+        for declaration in self.copyConformFuncIds(ids: conformance.authoredFuncIds) {
+            if declaration + 1U64 == function.sourceWitnessFuncId { return true }
+        }
+        return false
+    }
+
     // Validation consumes the selected declaration and its explicit bindings.
     // It neither selects a conformance nor recovers a missing nominal owner.
     inout fn bodyReceiverMatchesDeclaration(function: Func, environment: InstanceEnvironment) -> Bool {
@@ -667,7 +684,7 @@ pub impl Comp {
                 Result.Err(error: _) => { return false },
             }
             if !declaration.hasRecv && declaration.isAssoc && declaration.provTraitOwner != 0U64 {
-                if !self.traitNamespaceReceiverMatches(function: declaration, environment: environment) { return false }
+                if !self.traitNamespaceReceiverMatches(function: declaration, environment: environment) && !self.selectedImplementationDeclarationMatches(function: declaration, proof: environment.proof, receiverRef: receiver) { return false }
             }
         }
         val pattern = self.parametricSelfRef(f: function)

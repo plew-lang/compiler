@@ -755,11 +755,17 @@ pub impl Comp {
             // methods. Only this edge's saved requirement witnesses acquire
             // a concrete surface without an ABI self operand.
             mut val associatedWitness = false
+            mut val normalizedWitness = false
             if f.isAssoc && f.recvId == blanket.typeId {
                 mut val witness = 0U64
                 while witness < blanket.witnessFuncIds.count() {
-                    if self.conformFuncIdAt(ids: blanket.witnessFuncIds, index: witness) == fi { associatedWitness = true }
+                    if self.conformFuncIdAt(ids: blanket.witnessFuncIds, index: witness) == fi { associatedWitness = true normalizedWitness = true }
                     witness += 1U64
+                }
+            }
+            if f.isAssoc && f.recvId == blanket.typeId && !associatedWitness {
+                for functionIndex in self.copyConformFuncIds(ids: blanket.authoredFuncIds) {
+                    if functionIndex == fi { associatedWitness = true }
                 }
             }
             if f.hasRecv || associatedWitness {
@@ -810,15 +816,15 @@ pub impl Comp {
                         // pair `(owner: Iterator, id: FilterIter)`, so an
                         // otherwise selected Iterator witness could never
                         // ground a provided method's associated output.
-                        self.arena.registerFunction(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId lexicalOwnerFnId=lexicalOwner recvId=recvId recvTy=receiver.subjectTy recvPatternParams=self.pushFuncBinds(binds: self.copyConformBinds(binds: receiver.typeParams)) recvTraitArgs=f.recvTraitArgs typeParams=self.pushFuncBinds(binds: copiedTP) params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=f.hasRecv recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isFactory=f.isFactory isAnonymousFactory=f.isAnonymousFactory isAsync=f.isAsync isDiverging=f.isDiverging isExtern=f.isExtern isPub=f.isPub isProvided=true sourceWitnessFuncId=f.sourceWitnessFuncId srcTraitId=srcTag srcTraitOwner=f.provTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity originConformIdx=blanketConformIdx sourceConformIdx=blanketConformIdx providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />, registerSurface: self.arena.functionIsSourceCallable(index: fi))
-                        if self.arena.functionIsSourceCallable(index: fi) { try self.registerCallable(funcIdx: copyIdx) }
+                        self.arena.registerFunction(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId lexicalOwnerFnId=lexicalOwner recvId=recvId recvTy=receiver.subjectTy recvPatternParams=self.pushFuncBinds(binds: self.copyConformBinds(binds: receiver.typeParams)) recvTraitArgs=f.recvTraitArgs typeParams=self.pushFuncBinds(binds: copiedTP) params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=f.hasRecv recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isFactory=f.isFactory isAnonymousFactory=f.isAnonymousFactory isAsync=f.isAsync isDiverging=f.isDiverging isExtern=f.isExtern isPub=f.isPub isProvided=true sourceWitnessFuncId=f.sourceWitnessFuncId srcTraitId=srcTag srcTraitOwner=f.provTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity originConformIdx=blanketConformIdx sourceConformIdx=blanketConformIdx providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />, registerSurface: self.arena.functionIsSourceCallable(index: fi) && (!f.isAssoc || normalizedWitness))
+                        if self.arena.functionIsSourceCallable(index: fi) && (!f.isAssoc || normalizedWitness) { try self.registerCallable(funcIdx: copyIdx) }
                     }
                 }
             }
             fi += 1
         }
         if !(self.conformWithRootExists(typeId: recvId, traitId: blanket.traitId, viewRootId: viewRoot)) {
-            self.decls.registerConform(<Conform subjectTraitOwner=receiver.subjectTraitOwner sourceModule=blanket.sourceModule typeStart=recvStart typeLen=recvLen typeId=recvId subjectTy=receiver.subjectTy subjectArgs=receiver.subjectArgs typeParams=receiver.typeParams typeArity=receiver.typeArity traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot defOffset=blanket.defOffset />)
+            self.decls.registerConform(<Conform subjectTraitOwner=receiver.subjectTraitOwner sourceModule=blanket.sourceModule typeStart=recvStart typeLen=recvLen typeId=recvId subjectTy=receiver.subjectTy subjectArgs=receiver.subjectArgs typeParams=receiver.typeParams typeArity=receiver.typeArity traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot defOffset=blanket.defOffset />, authoredFunctions: <Optional.Some v=blanket.authoredFuncIds />)
         }
         return <Result.Ok value=() />
     }

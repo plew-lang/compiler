@@ -1491,6 +1491,9 @@ pub struct Conform {
     // order. `witnessed` intentionally remains a signature-only validation
     // carrier; final call/proof resolution must use these stable Func ids
     // rather than reconstructing a member from spelling and receiver surface.
+    // Original implementation declarations, frozen at registration. Callable
+    // form normalization may replace dispatch witnesses but not their origins.
+    pub val authoredFuncIds: ConformFuncIdRange = <ConformFuncIdRange start=0U64 len=0U64 />
     pub val witnessFuncIds: ConformFuncIdRange = <ConformFuncIdRange start=0U64 len=0U64 />
 }
 

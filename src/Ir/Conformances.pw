@@ -6,11 +6,21 @@ pub impl Decls {
     fn traitSubjectConformCount() -> U64 { return self.traitSubjectConformIndices.count() }
     fn traitSubjectConformIndexAt(index: U64) -> U64 { return self.traitSubjectConformIndices[index] }
 
-    inout fn registerConform(declaration~: Conform) {
+    inout fn registerConform(declaration~: Conform, authoredFunctions: Optional[ConformFuncIdRange] = <Optional.None />) {
+        // Initialization at the sole writer, not a missing-fact read fallback.
+        // Derived rows explicitly carry their original declaration snapshot.
+        val authored = authoredFunctions.unwrapOr(fallback: declaration.witnessFuncIds)
         if declaration.subjectTraitOwner != 0U64 {
             self.traitSubjectConformIndices.append(self.conformRows.count())
         }
-        self.conformRows.append(declaration)
+        self.conformRows.append(<Conform
+            sourceModule=declaration.sourceModule typeStart=declaration.typeStart typeLen=declaration.typeLen typeId=declaration.typeId
+            subjectTraitOwner=declaration.subjectTraitOwner subjectTy=declaration.subjectTy subjectArgs=declaration.subjectArgs
+            typeParams=declaration.typeParams bounds=declaration.bounds typeArity=declaration.typeArity
+            traitStart=declaration.traitStart traitLen=declaration.traitLen traitId=declaration.traitId traitArgs=declaration.traitArgs
+            derived=declaration.derived isPub=declaration.isPub extId=declaration.extId viewRootId=declaration.viewRootId
+            defOffset=declaration.defOffset assocBindingIds=declaration.assocBindingIds witnessed=declaration.witnessed
+            authoredFuncIds=authored witnessFuncIds=declaration.witnessFuncIds />)
     }
     // Complete declaration-owned callable forms before proofs are requested.
     // The row identity and subject index remain stable.
@@ -22,6 +32,6 @@ pub impl Decls {
             typeParams=source.typeParams bounds=source.bounds typeArity=source.typeArity
             traitStart=source.traitStart traitLen=source.traitLen traitId=source.traitId traitArgs=source.traitArgs
             derived=source.derived isPub=source.isPub extId=source.extId viewRootId=source.viewRootId
-            defOffset=source.defOffset assocBindingIds=source.assocBindingIds witnessed=witnesses witnessFuncIds=functions />)
+            defOffset=source.defOffset assocBindingIds=source.assocBindingIds witnessed=witnesses authoredFuncIds=source.authoredFuncIds witnessFuncIds=functions />)
     }
 }
