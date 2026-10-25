@@ -498,6 +498,7 @@ extern(c) {
     fn plew_llvm_emit_object(module~: LLVMModuleRef, output~: CPtr[U8], cpu~: CPtr[U8], trace~: I32) -> I32
     fn plew_llvm_empty_name() -> CPtr[U8]
     fn plew_llvm_jit_create() -> PlewLlvmJitRef
+    fn plew_llvm_jit_set_trace(jit~: PlewLlvmJitRef, enabled~: I32)
     fn plew_llvm_jit_destroy(jit~: PlewLlvmJitRef)
     fn plew_llvm_jit_failed(jit~: PlewLlvmJitRef) -> I32
     fn plew_llvm_jit_add(jit~: PlewLlvmJitRef, module~: LLVMModuleRef, context~: LLVMContextRef) -> I32
@@ -790,9 +791,10 @@ pub unique enum LlvmJitCreation {
     Failure
 }
 pub impl LlvmJit {
-    assoc fn create() -> LlvmJitCreation {
+    assoc fn create(tracePhases: Bool = false) -> LlvmJitCreation {
         val handle = plew_llvm_jit_create()
         if plew_llvm_jit_failed(handle) != 0I32 { return <LlvmJitCreation.Failure /> }
+        if tracePhases { plew_llvm_jit_set_trace(handle, 1I32) }
         return <LlvmJitCreation.Success jit=<LlvmJit handle=handle /> />
     }
 

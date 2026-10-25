@@ -9,6 +9,16 @@ implementation observations are retained in [Frontend Handoffs](frontend-handoff
 
 The driver turns an explicit target/configuration into requests to compiler services, selects artifact consumers, reports results, and manages execution resources. It does not provide alternative checking, ownership, or overload rules. CLI parsing is an adapter to these requests, not the authority for language acceptance.
 
+Diagnostic observation follows the same boundary. The CLI can opt in through
+`PLEW_TRACE_RUN=1`; only its native driver adapter reads this environment value.
+Reusable execution receives explicit frontend options and passes phase observation
+to the session and native JIT instance. Default application execution stays quiet.
+Source preparation and module submission report only newly completed work, with
+session/body identity and a monotonic per-instance counter. Submission is not
+machine-code materialization or semantic success. Observation never changes JIT
+policy, runtime behavior, request boundaries or the no-progress deadline, and a
+stuck preparation unit cannot generate periodic progress merely by remaining alive.
+
 The [source/module boundary](sources-and-modules.md) owns input discovery and provenance; the [session model](compiler-state.md) owns request identity and retained results. Checking, instantiation, Mid preparation, and the [LLVM backend](llvm-backend.md) own their respective publication guarantees. The driver combines those guarantees without promoting a weaker result into execution permission. [Runtime](runtime.md) owns the common execution protocol; this chapter owns when it can be entered and how long its code/state dependencies remain alive.
 
 A framework may eventually use the common compiler/execution services independently of the CLI. That intent does not promise that an arbitrary Plew stack can unwind into a surviving host after terminal failure. Window management, watching, installation, and Restart orchestration belong to external tools/frameworks.

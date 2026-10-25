@@ -2,10 +2,19 @@
 #include "llvm_backend.h"
 #include <climits>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
 extern "C" char **plew_exchange_args(int, char **, int *);
+
+// CLI diagnostics are opt-in. Reusable execution/backend APIs receive an
+// explicit option instead of inheriting an ambient process setting.
+extern "C" int plew_compiler_trace_run(void) {
+  const char *value = std::getenv("PLEW_TRACE_RUN");
+  return value && std::strcmp(value, "1") == 0;
+}
 
 struct PlewProgramArguments {
   std::vector<std::string> strings;

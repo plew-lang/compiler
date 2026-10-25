@@ -45,7 +45,7 @@ pub fn executeProgram(input: FrontendInput, sources: SourceAccess,
             // Before publication, an error unregisters the scoped session.
             val registration = <SessionRegistration id=id />
             val shared = findCompilerSession(registry: compilerSessionSnapshot(), sessionId: id).unwrap()
-            match LlvmJit.create() {
+            match LlvmJit.create(tracePhases: options.tracePhases) {
                 LlvmJitCreation.Failure => { eprint(text: "plew: JIT creation failed\n") return 1I32 }
                 LlvmJitCreation.Success(jit: val created) => {
                     val execution: MutableRef[ProcessExecution] = <MutableRef value=<ProcessExecution jit=move created arguments=<ProgramArguments.copied arguments=arguments /> registration=move registration /> />

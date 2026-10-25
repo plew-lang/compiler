@@ -2,6 +2,7 @@
 """Native first-call source callback diagnostic, not the product CLI gate."""
 import argparse
 import os
+import re
 from pathlib import Path
 import subprocess
 
@@ -46,5 +47,21 @@ with (evidence / 'failure.stderr').open('wb') as err:
                              stdout=subprocess.PIPE, timeout=60)
 assert failure.returncode == 1 and not failure.stdout
 assert 'lazy compilation failed' in (evidence / 'failure.stderr').read_text()
+with (evidence / 'trace.stderr').open('wb') as err:
+    traced = subprocess.run([str(binary), 'trace'], env=environment, stderr=err,
+                            stdout=subprocess.PIPE, timeout=60, check=True)
+assert not traced.stdout
+lines = (evidence / 'trace.stderr').read_text().splitlines()
+events = [re.fullmatch(r'\[trace-phase\] jit=(0x[0-9a-f]+) session=(\d+) body=(\d+) completed=(\d+) (source:prepared|module:submitted)', line)
+          for line in lines]
+assert len(events) == 14 and all(events), lines
+assert len({event[1] for event in events}) == 1
+assert all(int(event[2]) == 0xf000000100000003 for event in events)
+assert [int(event[4]) for event in events] == list(range(1, 15))
+assert {int(event[3]) for event in events} == {0, 1, 2, 3, 4, 6, 7}
+for prepared, submitted in zip(events[::2], events[1::2]):
+    assert prepared[3] == submitted[3]
+    assert (prepared[5], submitted[5]) == ('source:prepared', 'module:submitted')
 print('PASS first-call compilation, canonical identity, single-thread callback and terminal failure')
+print('PASS opt-in progress: completed new bodies only; repeat calls and unused bodies stay quiet')
 (evidence / 'summary.txt').write_text('status=passed\nllvm=' + query('--version') + '\n')

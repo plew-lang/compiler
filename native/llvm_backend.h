@@ -27,8 +27,11 @@ typedef struct PlewProgramArguments PlewProgramArguments;
 PlewProgramArguments *plew_compiler_arguments_create(uint64_t count, char **values);
 void plew_compiler_arguments_destroy(PlewProgramArguments *arguments);
 int plew_compiler_jit_main(PlewLlvmJit *jit, PlewProgramArguments *arguments);
+int plew_compiler_trace_run(void);
 
 PlewLlvmJit *plew_llvm_jit_create(void);
+// Per-instance diagnostic observation only; no JIT policy or LLVM flags change.
+void plew_llvm_jit_set_trace(PlewLlvmJit *jit, int enabled);
 void plew_llvm_jit_destroy(PlewLlvmJit *jit);
 int plew_llvm_jit_failed(const PlewLlvmJit *jit);
 int plew_llvm_jit_define(PlewLlvmJit *jit, const char *name,

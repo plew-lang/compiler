@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstring>
 #include <thread>
+#include <chrono>
 #include <unordered_map>
 
 struct State {
@@ -10,6 +11,7 @@ struct State {
   PlewLlvmJit *jit = nullptr;
   std::thread::id thread = std::this_thread::get_id();
   bool fail = false;
+  bool stall = false;
 };
 static std::unordered_map<uint64_t, State *> sessions;
 static int prepare(uint64_t session, uint64_t body, LLVMModuleRef *out,
@@ -19,6 +21,7 @@ static int prepare(uint64_t session, uint64_t body, LLVMModuleRef *out,
   auto &state = *found->second;
   assert(state.thread == std::this_thread::get_id());
   assert(body < 8 && body != 5 && ++state.calls[body] == 1);
+  if (state.stall) std::this_thread::sleep_for(std::chrono::seconds(70));
   *context = LLVMContextCreate();
   *out = LLVMModuleCreateWithNameInContext("requested", *context);
   if (state.fail) return 1; // Failure still transfers allocated handles.
@@ -88,8 +91,11 @@ int main(int argc, char **argv) {
   constexpr uint64_t session = UINT64_C(0xf000000100000003);
   sessions.emplace(session, &state);
   state.fail = argc > 1 && std::strcmp(argv[1], "fail") == 0;
+  state.stall = argc > 1 && std::strcmp(argv[1], "stall") == 0;
   auto jit = plew_llvm_jit_create();
   assert(jit);
+  if (state.stall || (argc > 1 && std::strcmp(argv[1], "trace") == 0))
+    plew_llvm_jit_set_trace(jit, 1);
   state.jit = jit;
   assert(plew_llvm_jit_defer(jit, "first", 0, prepare, session) == 0);
   assert(plew_llvm_jit_defer(jit, "unused", 5, prepare, session) == 0);

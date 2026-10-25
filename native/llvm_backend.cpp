@@ -55,6 +55,8 @@ struct PlewLlvmJit {
   llvm::orc::DefinitionGenerator *sourceBodies = nullptr;
   bool failed = false;
   bool preparing = false;
+  bool tracePhases = false;
+  uint64_t completedUnits = 0;
   uint64_t nextBody = 0;
   int mainParameters = -1;
   std::unordered_set<std::string> hostSymbols;
@@ -72,6 +74,19 @@ struct PlewLlvmJit {
 };
 
 namespace {
+void traceJitUnit(PlewLlvmJit &jit, uint64_t session, uint64_t body,
+                  const char *stage) {
+  if (!jit.tracePhases) return;
+  // Called only at completed work boundaries, never on a timer or repeated
+  // lookup. Submission is deliberately not called machine-code completion.
+  std::fprintf(stderr,
+      "[trace-phase] jit=%p session=%llu body=%llu completed=%llu %s\n",
+      static_cast<void *>(&jit), static_cast<unsigned long long>(session),
+      static_cast<unsigned long long>(body),
+      static_cast<unsigned long long>(++jit.completedUnits), stage);
+  std::fflush(stderr);
+}
+
 struct MessageDisposer {
   void operator()(char *message) const { LLVMDisposeMessage(message); }
 };
@@ -114,6 +129,10 @@ bool optimize(LLVMModuleRef module, LLVMTargetMachineRef machine,
 extern "C" const unsigned char *plew_llvm_empty_name(void) {
   static const unsigned char empty[] = "";
   return empty;
+}
+
+extern "C" void plew_llvm_jit_set_trace(PlewLlvmJit *jit, int enabled) {
+  if (jit) jit->tracePhases = enabled != 0;
 }
 
 extern "C" PlewLlvmJit *plew_llvm_jit_create(void) {
@@ -389,8 +408,11 @@ private:
       }
       return llvm::Error::success();
     });
-    if (!error)
+    if (!error) {
+      traceJitUnit(jit, session, body, "source:prepared");
       error = jit.engine->addIRModule(destination, std::move(*owned));
+      if (!error) traceJitUnit(jit, session, body, "module:submitted");
+    }
     if (error)
       jit.failed = true;
     return error;
