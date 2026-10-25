@@ -244,16 +244,17 @@ The existing typed-source parent is the frontend workstream within com-604k, not
 
 ## Current Reconciliation and Reopening
 
-The source return-owner admission repair a9556c25 independently closes
-com-wrjh/com-nr7y/com-jzdz at finite scope. The current finding inventory remains
-12 findings in11 repair tasks (original F3/F4 share one Unit task); resolved
-status is in each issue, not a reduced parent scope. Native9/reject27/mode18
-and unchanged-input diagnostic comparison are retained in
-return-owner-admission-repair.json. Other mandatory repairs and fresh final
-gates remain open. com-cwu1 is now independently accepted at1cff794a
-(native11/reject17/check-run14/associated3), with proof and complete argument
-contracts shared through final dynamic consumers. Next is canonical overload
-applicability/requirement identity in com-ra96/com-zy6r/com-y8l4.
+The return-owner repair a9556c25 and dynamic-argument repair1cff794a
+independently close com-wrjh/com-nr7y/com-jzdz/com-cwu1 at finite scope.
+The current inventory is13 findings in12 repair tasks (original F3/F4 share
+one Unit task). Three canonical overload/duplicate repairs are WIP at
+a22670c5; build and bounded check contrasts do not certify actual dispatch
+or mode/full/performance gates. Their independent reviewer confirms new
+[met-g53w](met-g53w.md), a separate existing trait selector-group generic-shape
+admission gap. Required deps to met-ucze and G1 are recorded. Work stops under
+the user's task-omission condition; the new group repair is not implemented.
+Evidence is overload-identity-checkpoint.json. All area/G1/G2/G3 gates and
+other required repairs remain open, without shrinking the parent contract.
 
 Fresh specification-first [com-9hf7](com-9hf7.md) confirms11 in-scope findings
 (3 P1/8 P2), assigned to10 finite required repair issues. The affected
