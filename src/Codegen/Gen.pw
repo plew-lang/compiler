@@ -80,7 +80,13 @@ pub impl Comp {
         if owner.nameLen == 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: d.nameStart, msg: "directive type declaration was not resolved") />
         }
-        return <Result.Ok value=self.pushType(t: <TypeRef nameStart=owner.nameStart nameLen=owner.nameLen args=[] hasDecl=true declOffset=owner.nameStart />) />
+        // The identity bind carries the declaration offset, not a source name
+        // span. Diagnostic/legacy head spelling comes from that declaration.
+        if structIndex >= self.arena.structCount() {
+            return <Result.Err error=self.diagnosticAt(offset: d.nameStart, msg: "internal error: admitted directive configuration has no struct declaration") />
+        }
+        val declaration = self.arena.structAt(index: structIndex)
+        return <Result.Ok value=self.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] hasDecl=true declOffset=owner.nameStart />) />
     }
 
     inout fn synthGenMain() -> Result[(), CompileDiagnostic] {
