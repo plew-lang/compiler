@@ -58,7 +58,7 @@ pub impl Comp {
         return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
     }
 
-    inout fn checkDirectiveArgsPublic(d: DeriveReq) -> Result[(), CompileDiagnostic] {
+    inout fn directiveConstructionTerm(d: DeriveReq) -> Result[U64, CompileDiagnostic] {
         val owner = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: d.nameStart), start: d.nameStart, len: d.nameLen)
         val structIndex = self.arena.structIndexByOffset(offset: owner.nameStart)
         mut val ai: U64 = 0
@@ -70,7 +70,15 @@ pub impl Comp {
             }
             ai += 1
         }
-        return <Result.Ok value=() />
+        // This admission already selected the directive's declaration in its
+        // source module. Carry that owner into the synthetic construction;
+        // spelling alone cannot identify its receiver at the body boundary.
+        // Generic arguments, when omitted, remain for ordinary construction
+        // inference; selecting the head does not guess those arguments.
+        if owner.nameLen == 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: d.nameStart, msg: "directive type declaration was not resolved") />
+        }
+        return <Result.Ok value=self.pushType(t: <TypeRef nameStart=owner.nameStart nameLen=owner.nameLen args=[] hasDecl=true declOffset=owner.nameStart />) />
     }
 
     inout fn synthGenMain() -> Result[(), CompileDiagnostic] {
@@ -103,7 +111,7 @@ pub impl Comp {
             // The annotation names a source declaration before the trusted
             // harness is synthesized. Apply ordinary use visibility here.
             try self.checkTypeName(siteOffset: d.nameStart, start: d.nameStart, len: d.nameLen)
-            try self.checkDirectiveArgsPublic(d: d)
+            val constructionTerm = try self.directiveConstructionTerm(d: d)
             // `parseItem(source: <item src>, start: declStart, end: declEnd)` — the
             // annotated item's own source slice, with its original offset so the macro
             // sees spans in original coordinates. (Synthesized post-checks, so the
@@ -124,7 +132,7 @@ pub impl Comp {
             if d.args.count() == 0 {
                 recv = self.pushExpr(e: <Expr.Ident start=d.nameStart len=d.nameLen />)
             } else {
-                recv = self.pushExpr(e: <Expr.Make typeStart=d.nameStart typeLen=d.nameLen variantStart=0 variantLen=0 isEnum=false ty=0 fields=self.pushMakeFields(fields: d.args) />)
+                recv = self.pushExpr(e: <Expr.Make typeStart=d.nameStart typeLen=d.nameLen variantStart=0 variantLen=0 isEnum=false ty=constructionTerm fields=self.pushMakeFields(fields: d.args) />)
             }
             // `recv.derive(input: parseItem(...))`
             mut val dargs: Array[Arg] = []

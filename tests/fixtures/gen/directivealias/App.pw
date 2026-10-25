@@ -1,0 +1,15 @@
+use @Std/Io only { write }
+use ./Left only { Tagged as LeftTag }
+use ./Right only { Tagged as RightTag }
+
+@[LeftTag(prefix: "L", times: 2)]
+struct First {}
+@[RightTag(prefix: "R", times: 1)]
+struct Second {}
+
+fn main() {
+    write(s: First.left())
+    write(s: "\n")
+    write(s: Second.right())
+    write(s: "\n")
+}
