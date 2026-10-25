@@ -41,7 +41,7 @@ waived by a bounded child closing.
 ## Outcome
 
 Investigated at **4c78bb38**, source/fixtures equal **09e5a277**. The
-[eight-row reconciliation](met-ucze.md#current-eight-path-reconciliation)
+[eight-row reconciliation](met-ucze.md#reconciled-area-completion)
 records exact producers, saved identities, instance environments and final
 Mid/LLVM consumers. The
 [static receipt](https://github.com/plew-lang/meta/blob/main/evidence/existing-feature-conformance/source-owner-facts/phase3b-call-path-inventory.json)
@@ -61,3 +61,15 @@ Closing B0 means its finite inventory is complete. It does not close B1–B4,
 the selection epic, other phase-three areas or final-candidate gates. Next:
 B1, beginning with removing the competing free-call Verify selector while
 retaining complete selected-signature validation.
+
+## New Independent Task Review
+
+B0: reconciled exactly eight current source call families against actual Record/CallTemplate/instance/Mid/LLVM paths; no unassigned required ninth family found. Inventory closure does not certify later repairs.
+
+phase3_semantic_audit independently accepts this task at compiler dab97d52 /
+meta58c9713d in [com-bkqq](com-bkqq.md). This is a new task-specific review,
+not an inference that a prior unrecorded review occurred. The evidence reviewer
+confirms the cited current controls actually PASS in final normal gate
+20261025T062041-test-509a3f using exact candidate3c532ce1, with unchanged inputs.
+This scoped acceptance does not certify the reopened value-result boundary or
+phase-three parent.

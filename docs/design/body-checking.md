@@ -128,7 +128,7 @@ Body success is scoped. Source semantic success does not imply Mid ownership/acc
 The [storage supplement](checked-body-storage.md) makes the adopted owner-local payload
 layout concrete: fields/keys, private builders, sealing/failure, read-only
 handles, separate instance results and final-consumer migration. It also compares
-the shared-store alternative and states measurement criteria. The scoped [restart reconciliation](../issues/met-j9mv.md#cumulative-restart-reconciliation) and fresh cumulative baseline are recorded separately; storage implementation and its validation remain pending. This chapter owns the logical source
+the shared-store alternative and states measurement criteria. The scoped [restart reconciliation](../issues/met-j9mv.md#cumulative-restart-reconciliation) and cumulative baseline are recorded separately. Owner-local storage/publication implementation and scoped controls are recorded in [com-kp3y](../issues/com-kp3y.md); current end-to-end admission belongs to [met-si6j](../issues/met-si6j.md). The [completion re-review](../issues/com-bkqq.md) reopened the value-result boundary without invalidating the separate storage controls. This chapter owns the logical source
 result; the supplement is the single home for the physical choice. Neither
 private arrays alone nor a wrapper around all-owner snapshots satisfies it.
 

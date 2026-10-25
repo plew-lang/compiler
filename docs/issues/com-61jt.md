@@ -1,7 +1,7 @@
 ---
 id: com-61jt
-status: closed
-deps: [met-ucze, met-ia09, met-6e6k, met-acfl, com-fuo8, met-rzt4, com-gyup, com-4bib, com-s248, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-s5k5, com-f0mq, com-fbqh, com-px0e, com-o7ul, com-tl9c, com-072n, com-9clj, com-o3vw, com-auvx, com-3qne, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-uuya, com-vuv9, com-6cw6, com-v1wa, com-tkz7]
+status: open
+deps: [met-ucze, met-ia09, met-6e6k, met-acfl, com-fuo8, met-rzt4, com-gyup, com-4bib, com-s248, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-s5k5, com-f0mq, com-fbqh, com-px0e, com-o7ul, com-tl9c, com-072n, com-9clj, com-o3vw, com-auvx, com-3qne, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-uuya, com-vuv9, com-6cw6, com-v1wa, com-tkz7, com-ugee]
 links: []
 created: 2026-10-23T10:41:59Z
 type: task
@@ -11,6 +11,16 @@ parent: met-si6j
 tags: [frontend, verification]
 ---
 # Reconcile all phase three closure evidence before freezing a candidate
+
+## Current Reopening
+
+[com-bkqq](com-bkqq.md) reproduced [com-ugee](com-ugee.md) on exact final
+candidate3c532ce1: analytical loop noncontinuation suppresses missing-give
+rejection, and expected context becomes a value-region result. This contract is
+reopened until the shared producer/publication/final-consumer repair and its
+independent controls close. The scoped evidence below remains attached to its
+named inputs; it no longer proves this area's complete current admission.
+No production repair has been made. Parent criteria1/2/5/6/8 are affected.
 
 ## Boundary
 
@@ -40,7 +50,7 @@ waived by a bounded child closing.
 
 ## Admission Reconciliation
 
-The required A-F contracts and named repairs are closed. The area Outcomes
+At the preceding freeze the required A-F contracts and named repairs were admitted. The current missing-value repair blocks re-admission. The area Outcomes
 met-ucze/met-ia09 (body_receiver_completion_review), met-6e6k/met-rzt4
 (b2_completion_review), and already closed met-acfl/com-fuo8/com-gyup provide
 scoped producer, immutable fact, explicit instantiation, final Mid/backend
@@ -91,7 +101,7 @@ remain valid only for their inputs; this freeze needs fresh G2a/G2b exact measur
 compiler gates. Refreshed independent G1 confirmation accepted. Main/seed/adopted
 carrier promotion remains outside this admission.
 
-## Refreshed Outcome
+## Retained Freeze Evidence
 
 Independent c2_classification_review accepts G1 at e484e854. All63 required
 descendants closed, no missing ID/cycle; all5,925 tracked files/six groups,

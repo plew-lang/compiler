@@ -1,7 +1,7 @@
 ---
 id: com-2suv
-status: closed
-deps: [com-f0mq]
+status: open
+deps: [com-f0mq, com-ugee]
 links: []
 created: 2026-10-23T10:41:58Z
 type: task
@@ -11,6 +11,16 @@ parent: com-fuo8
 tags: [frontend, verification]
 ---
 # Verify block branch and short-circuit completion use one result authority
+
+## Current Reopening
+
+[com-bkqq](com-bkqq.md) reproduced [com-ugee](com-ugee.md) on exact final
+candidate3c532ce1: analytical loop noncontinuation suppresses missing-give
+rejection, and expected context becomes a value-region result. This contract is
+reopened until the shared producer/publication/final-consumer repair and its
+independent controls close. The scoped evidence below remains attached to its
+named inputs; it no longer proves this area's complete current admission.
+No production repair has been made. Parent criteria1/2/5/6/8 are affected.
 
 ## Boundary
 

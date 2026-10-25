@@ -1,7 +1,7 @@
 ---
 id: com-lzpe
-status: closed
-deps: [com-9l3b]
+status: open
+deps: [com-9l3b, com-61jt]
 links: []
 created: 2026-10-23T10:41:59Z
 type: task
@@ -38,31 +38,21 @@ current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
 
-## Prepared Final Reconciliation
+## Current Reopening
 
-All required implementation/area tasks and G1/G2 are closed. The parent eleven
-criteria reference G1's single assignment plus G2a/G2b exact-candidate receipts.
-The producer/removal/consumer checks are not inferred from final tests alone.
-Source043e2402, fixture17537a40, measured compiler3c532ce1 and saved candidate
-bin/plewc-phase3-final are pinned; adopted carrierc36716d9 remains unchanged.
+[com-bkqq](com-bkqq.md) supersedes the preceding final authorization. The
+[missing value-producer repair](com-ugee.md) reopens E1/completion and G1;
+this task now explicitly depends on G1 as well as the retained G2b gate.
+The parent is not complete. Original eleven criteria and scope remain unchanged.
 
-The obsolete parent links and F4 target/repair references are corrected.
-body-checking/compiler-state/name-lookup no longer describe an old paused
-baseline as current. body_receiver_completion_review accepts that documentation
-change at8aa1857e without weakening uninspected module-membership/runtime
-boundaries or ORC teardown contracts. Parent/worklog/progress now distinguish
-all-gate completion from this pending final synchronization review.
+production043e2402/fixture17537a40, exact compiler3c532ce1 and saved candidate
+bin/plewc-phase3-final retain their valid previous normal/gen/deps/LLVM22
+ASan-LSan and fixed-point/performance evidence. That does not cover the newly
+reproduced negative case or a future source fix. The old phase3g-completion.json
+is a frozen prior authorization; current findings and reconciliation are in
+phase3-completion-rereview.json and com-bkqq.
 
-com-604k remains open with the assigned phase-four ownership, collection,
-input/dependency/generation, runtime/startup, diagnostic and current Ref/FFI
-contracts. No absent spawn/unique-generic feature, main merge, seed or adopted
-carrier promotion is included. Receipt
-meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-completion.json.
-Independent body_receiver_completion_review accepts final closure at
-compiler5de6e4bc/meta da67bdc4. The68-node dependency snapshot matches actual
-issues without missing ID/cycle; only parent/G3 awaited this review. Sixteen
-receipt SHA references, five5,990-input maps/current files, exact compiler/
-saved candidate and adopted carrier match. All292 active document links resolve.
-The final review covers the eleven criteria and scoped producer/removal/consumer
-evidence, full gates and preserved phase4 boundaries. This task and met-si6j
-can close; com-604k and integration remain open.
+After the actual shared-boundary repair and independent task/area review,
+readmit G1, verify the appropriate final-candidate gates, reconcile all eleven
+criteria and documentation, and obtain a fresh final review. Only then close
+G3/met-si6j. Phase4/com-604k, main and seed/carrier promotion remain separate.

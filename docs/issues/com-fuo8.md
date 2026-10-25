@@ -1,7 +1,7 @@
 ---
 id: com-fuo8
-status: closed
-deps: [com-2suv, com-0ssn, com-9tau, com-gnj9]
+status: open
+deps: [com-2suv, com-0ssn, com-9tau, com-gnj9, com-ugee]
 links: []
 created: 2026-10-21T15:16:01Z
 type: epic
@@ -11,6 +11,16 @@ parent: com-tijs
 tags: [design, verification]
 ---
 # Close saved completion and divergence for admitted expression forms
+
+## Current Reopening
+
+[com-bkqq](com-bkqq.md) reproduced [com-ugee](com-ugee.md) on exact final
+candidate3c532ce1: analytical loop noncontinuation suppresses missing-give
+rejection, and expected context becomes a value-region result. This contract is
+reopened until the shared producer/publication/final-consumer repair and its
+independent controls close. The scoped evidence below remains attached to its
+named inputs; it no longer proves this area's complete current admission.
+No production repair has been made. Parent criteria1/2/5/6/8 are affected.
 
 ## Bounded Execution and Gate Ownership
 
@@ -51,7 +61,7 @@ bounded3E completion exit on 2026-10-25; final G2 gates remain separate. This ta
 
 ## Reconciled Area Completion
 
-Closed after independent parent-contract review by
+The retained scoped checkpoint was accepted by
 /root/body_receiver_completion_review on 2026-10-25. All required descendants
 and their repairs are complete under the user-approved3E exit:
 
@@ -66,8 +76,8 @@ The linked child outcomes retain exact producer/saved fact/consumer, removed
 decision paths, positive/reject/corruption controls and independently checked
 artifacts. Latest production36680385 reaches generation2 fixed point and passes
 its affected60 controls. Median7.072914s is retained; the user explicitly removed
-only this bounded below7s exit. No other area obligation is unfinished.
+only this bounded below7s exit. That checkpoint did not cover the missing-give combination now reproduced by com-ugee.
 
-This closes existing admitted expression forms, not new loop/value-break syntax,
+The scoped checkpoint covered existing admitted expression forms, not new loop/value-break syntax,
 Never, unsupported ownership features, mixed com-tijs, the eleven phase-three
 criteria, full frozen-candidate G2 gates or main/seed/adopted-carrier promotion.

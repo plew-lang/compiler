@@ -1,7 +1,7 @@
 ---
 id: met-si6j
-status: closed
-deps: [met-ucze, met-ia09, met-acfl, met-6e6k, com-gyup, met-rzt4, com-fuo8, com-4bib, com-s248, com-lzpe]
+status: in_progress
+deps: [met-ucze, met-ia09, met-acfl, met-6e6k, com-gyup, met-rzt4, com-fuo8, com-4bib, com-s248, com-lzpe, com-bkqq]
 links: []
 created: 2026-10-13T01:29:29Z
 type: epic
@@ -17,12 +17,14 @@ This is the parent for the active phase-three type-resolution/type-checking reme
 
 Scope is the compiler's currently provided type-checking surface and the already approved divergence/flow changes. This is not a requirement to implement every unsupported feature, broaden inference or implicit conversions, redesign runtime/backend, or add persistent incremental compilation. Declaration worklists interpret saved obligations; they must not become another AST-driven type checker.
 
-The supported frontend surface is implemented through the finite area and child
-contracts below. [G1 admission](com-61jt.md) reconciles source-to-final-use
+The supported frontend surface is tracked through the finite area and child
+contracts below. Completion is reopened by [com-bkqq](com-bkqq.md):
+[com-ugee](com-ugee.md) is a confirmed missing-value producer defect in the
+shared value-region contract, not a new feature. [G1 admission](com-61jt.md) reconciles source-to-final-use
 authorities, removals, controls and remaining excluded boundaries. [G2a](com-p5um.md)
 proves the frozen candidate's fixed point/performance; [G2b](com-9l3b.md) proves
 its complete correctness/sanitizer gates. [G3](com-lzpe.md) owns the final
-independent eleven-criterion synchronization; its final review is accepted.
+independent eleven-criterion synchronization; its prior final approval is superseded by the current re-review.
 [Existing-feature conformance](com-604k.md) remains open for phase four and final
 integration. Worklog owns the current candidate and next action; scoped evidence
 does not substitute for a final candidate's gates.
@@ -34,17 +36,17 @@ Design authorities: [Body Checking](../design/body-checking.md), [Types and Evid
 
 Each item requires implementation locations and scoped verification records, not checkbox completion from wrappers or green tests alone.
 
-1. [x] Expected types only fill permitted unknown information or check compatibility; they never overwrite expression shape, explicit or committed semantic type.
-2. [x] Distinguish unrecorded facts, local inference variables, deferred obligations, incompatibility, Unit, rigid parameters and no normal value. No unresolved source typing obligation survives successful publication.
+1. [ ] Expected types only fill permitted unknown information or check compatibility; they never overwrite expression shape, explicit or committed semantic type.
+2. [ ] Distinguish unrecorded facts, local inference variables, deferred obligations, incompatibility, Unit, rigid parameters and no normal value. No unresolved source typing obligation survives successful publication.
 3. [x] One authority for types, calls, proofs and conversions connects source recording/success through explicit instantiation to final Mid/backend consumers; no AST reinference or name reselection by final readers.
 4. [x] Functions, factories, adapters, operators and implicit calls check complete signature, labels, ownership modes and bounds; candidate existence is not final validity.
-5. [x] Under the same available context, expression wrapping changes acceptance only where the adopted value/divergence rules require it. Block/if/match/short-circuit share normal results and exit targets; checked dead code cannot contaminate live joins.
-6. [x] Integrate approved divergence: value-position rejection, following-code errors versus analytical-loop warnings, loop-following give, empty match, diverging function values versus invocation and forbidden normal-function conversion. Centralize semantic completion; keep diagnostic reachability distinct from execution/ownership flow.
+5. [ ] Under the same available context, expression wrapping changes acceptance only where the adopted value/divergence rules require it. Block/if/match/short-circuit share normal results and exit targets; checked dead code cannot contaminate live joins.
+6. [ ] Integrate approved divergence: value-position rejection, following-code errors versus analytical-loop warnings, loop-following give, empty match, diverging function values versus invocation and forbidden normal-function conversion. Centralize semantic completion; keep diagnostic reachability distinct from execution/ownership flow.
 7. [x] check/build/run/gen use the same semantics for requested bodies. Lazy run may omit unused bodies; it may not defer invalidity in a requested body.
-8. [x] Remove migrated reinference fallbacks, partial acceptance and duplicate semantic state; structurally separate constructing writers from immutable readers. Retained adapters are one-way representation transforms. Demonstrate final consumers, removed decisions and post-completion write rejection.
+8. [ ] Remove migrated reinference fallbacks, partial acceptance and duplicate semantic state; structurally separate constructing writers from immutable readers. Retained adapters are one-way representation transforms. Demonstrate final consumers, removed decisions and post-completion write rejection.
 9. [x] Close historical D1/D4/D5 controls and classify/address D2/D3/D6 risks. Uninspected coverage is not completion; preserve representative positive/reject combinations.
 10. [x] Complete normal, generation, dependency, ASan/LSan, fixed-point and formal performance gates with matching source/carrier/artifacts. Satisfy the user-approved formal median below 7 seconds or obtain an explicit approved change; focused and old-driver checks do not substitute.
-11. [x] Synchronize design contracts, issue state and worklog. Unresolved in-scope items preclude completion; main integration follows the normal integration criteria.
+11. [ ] Synchronize design contracts, issue state and worklog. Unresolved in-scope items preclude completion; main integration follows the normal integration criteria.
 
 ## Work Units
 
@@ -63,8 +65,9 @@ restart design, and [com-gyup](com-gyup.md) the closed bounded ownership study.
 A–F area/child Outcomes retain their independently reviewed producer, saved
 authority, final consumer and removed-path records. The [type/conversion area](met-6e6k.md#reconciled-area-completion)
 and [eight-path selection area](met-ucze.md#reconciled-area-completion) provide
-closure routing; actual states and prerequisites belong to tk. G1 and G2 are
-closed, including independent G3 final documentation/criterion review.
+closure routing; actual states and prerequisites belong to tk. G1/E1/completion/G3 are reopened for com-ugee. G2 retains valid evidence for
+the unchanged3c candidate; it cannot certify a future repair without the
+necessary fresh candidate checks.
 
 The [work-breakdown review](com-hxtr.md#outcome) is addressed by separating
 milestones 3B–3F from their real child tickets. The tickets name actual entry
@@ -99,6 +102,7 @@ open/in_progress/closed and real prerequisites.
 | D3 (3D) | [com-wqa0](com-wqa0.md): Close operation and constraint API write authority after semantic selection | Bounded API/removal verification |
 | D4 (3D) | [com-m3c6](com-m3c6.md): Verify nominal facet batch publication remains one-way | Bounded API/removal verification |
 | E1 (3E) | [com-2suv](com-2suv.md): Verify block branch and short-circuit completion use one result authority | Bounded semantic closure verification |
+| E1 result-producer repair | [com-ugee](com-ugee.md): Require source value production despite analytical loop noncontinuation | Finite common value-region producer/publication/consumer repair from completion re-review |
 | E2 (3E) | [com-0ssn](com-0ssn.md): Verify explicit transfer errors remain distinct from loop reachability warnings | Bounded diagnostic/flow verification |
 | E3 (3E) | [com-9tau](com-9tau.md): Verify diverging callable types survive value storage and invocation | Bounded callable-contract verification |
 | E4 (3E) | [com-gnj9](com-gnj9.md): Verify saved exit targets drive Mid cleanup and final lowering | Bounded final-consumer verification |
@@ -235,46 +239,35 @@ Stop for erroneous tests except authorized cases: tests broken by an approved sp
 
 The existing typed-source parent is the frontend workstream within com-604k, not the parent of every conformance task. Its 11 criteria remain mandatory on the admitted source surface, with the approved below-7-second target. Missing unique-generic/loop/new-reference facilities remain separate. Current acceptance controls from com-uutc are discharged here; unsupported forms are not enabled to close this parent.
 
-## Final Criterion Reconciliation
+## Current Reconciliation and Reopening
 
-The single eleven-row assignment is [G1](com-61jt.md#admission-reconciliation);
-area/child Outcomes establish the implementation and removed authority behind
-each row. G1 independently admitted all63 required prerequisites and the current
-tracked inputs. Latest required repairs retain exact trait root-birth placement
-(com-6cw6), directive receiver identity (com-v1wa), and missing named-construction
-producer refusal without bare-name recovery (com-tkz7). Earlier failed gates
-remain failed in their receipts and were not reused.
+The single eleven-row assignment is [G1](com-61jt.md#admission-reconciliation).
+[Fresh completion re-review](com-bkqq.md) found one confirmed P2 implementation
+violation: [com-ugee](com-ugee.md). A required value region with only an
+analytically nonterminating while is accepted when an expected type is supplied,
+although it has no source value producer. Source completion and execution
+reachability must not authorize the same result-forming decision. Criteria1/2/
+5/6/8 are reopened; criterion11 remains pending final repaired synchronization.
+The original criterion wording and seven-second target are unchanged.
 
-Production043e2402/fixture17537a40 uses exact Syntax0.1.11-dev.30, unchanged
-spec9b3e18d and adopted carrierc36716d9. G2a20261025T061121-self-host-f849e0
-reaches generation3 fixed point, formal6.384374/5.954309/5.924183 seconds,
-median5.954309 below7. Its measured compiler3c532ce1 passes G2b normal1524/
-panic50/reject1029/part93/partreject84 plus both Mid controls, gen25/5 and
-gen-input-ast, dependencies10, LLVM22 ASan-LSan A1/B2603/C1524/D50/E80.
-All profiles exit0, input fingerprints unchanged, no skips/failures.
+E1/com-2suv, completion/com-fuo8, G1 and G3 are reopened with the actual repair
+dependency. B0/B1 receive new individual independent acceptance in their own
+issues; the earlier missing durable review records are not presumed to have
+existed. Stale storage-pending descriptions are corrected. No production source
+or existing test is changed by the review; implementation has not started.
 
-Tracked receipts meta/evidence/existing-feature-conformance/source-owner-facts/
-phase3g-admission.json, phase3g-self-host.json and phase3g-final-gates.json
-retain the exact scopes, hashes, controls and accepted independent reviews.
-G3 final synchronization is independently accepted by body_receiver_completion_review.
-This checklist covers the supported frontend and approved divergence work only.
-It does not close phase4/com-604k, absent language features, main integration,
-seeds or adopted-carrier promotion.
+The previous exact-candidate gates remain valid for production043e2402/fixture
+17537a40 and compiler3c532ce1: generation3 fixed point, formal median5.954309s,
+normal/gen/deps/LLVM22 ASan-LSan all passed. These are evidence for that binary,
+not proof that the newly reproduced missing-give input was rejected. The frozen
+phase3g-completion.json records the preceding authorization at its named
+revisions; it is superseded as a live completion claim by
+phase3-completion-rereview.json and com-bkqq.
 
-## Outcome
+## Current Outcome
 
-Resolved for the compiler's supported frontend surface and approved divergence
-changes. Independent body_receiver_completion_review accepts G3/met-si6j at
-compiler5de6e4bc and meta da67bdc4, following independently accepted G1/G2.
-All eleven criteria connect to their source-to-final-use/removal controls and
-the exact final measured compiler's gates. The68-node required graph has no
-missing ID/cycle; only the parent/G3 awaited this authorization to close.
-Sixteen receipt references and all gate/current input fingerprints match;
-292 active documentation links/anchors resolve. No target input changed after
-production043e2402.
-
-Saved candidate bin/plewc-phase3-final is byte-identical to measured/gen3
-compiler3c532ce1; adopted carrierc36716d9 remains unchanged.
-meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-completion.json
-is the final receipt. Hand off to phase4 under com-604k, which remains open.
-Main integration, seed/carrier promotion and unsupported features are excluded.
+**Not complete.** Close com-ugee from shared producer through publication and
+actual final consumers, independently re-review its task/area, readmit G1 and
+perform the necessary new-candidate G2/G3 reconciliation before parent closure.
+Do not restart already verified call/proof/storage work without affected evidence.
+Phase four, main, seeds and adopted-carrier promotion have not started here.

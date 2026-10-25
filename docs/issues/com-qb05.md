@@ -106,3 +106,15 @@ Normal/gen/deps/full ASan-LSan and fixed-point/formal performance remain G2a/G2b
 No timing was measured or attributed to this candidate; the f67c8fce formal
 6.815672-second median remains a historical baseline. Main/seed/carrier are
 unchanged. Next selection belongs to worklog, not this closed task.
+
+## New Independent Task Review
+
+B1: traced ordinary/method/factory/default producers through saved selection, complete signatures/evidence and explicit instances into actual Mid/LLVM. Verified removal of free-call Verify reselection and Dictionary label-based type override, plus wrong/missing-selected controls.
+
+phase3_semantic_audit independently accepts this task at compiler dab97d52 /
+meta58c9713d in [com-bkqq](com-bkqq.md). This is a new task-specific review,
+not an inference that a prior unrecorded review occurred. The evidence reviewer
+confirms the cited current controls actually PASS in final normal gate
+20261025T062041-test-509a3f using exact candidate3c532ce1, with unchanged inputs.
+This scoped acceptance does not certify the reopened value-result boundary or
+phase-three parent.
