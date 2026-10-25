@@ -117,10 +117,12 @@ the normalized dispatch set.
 A synthesized forwarding call retains its selected full declaration, exact
 conformance edge and lexical type arguments. Source admission validates that the
 adapter and source belong to their respective sets, admits the completed selected
-edge, and records a static provided operation. It does not repeat name lookup or
-infer known method binders from omitted arguments. Normal default planning and
+edge for a trait-subject source, and records a static provided operation. A
+nominal source keeps its selected direct declaration. Neither route repeats name lookup or
+infers known method binders from omitted arguments. Normal default planning and
 concrete provided-copy interpretation consume this operation. A source removed
-from the normalized surface can still require a private implementation copy.
+from the normalized witness set still retains its original callable surface;
+synthesized adapters remain private implementation copies.
 
 An authored conformance implementation and its default generators interpret
 logical Self under the retained proof. Exact target, authored membership and

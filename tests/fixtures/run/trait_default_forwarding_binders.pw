@@ -10,6 +10,11 @@ impl Source as Target {
 }
 struct S {}
 impl S as Source {}
+struct Nominal {}
+impl Nominal as Target {
+    fn result[Element](count: I64 = 9I64) -> Optional[Element] { return <Optional.None /> }
+    assoc fn associated[Element](count: I64 = 9I64) -> Optional[Element] { return <Optional.None /> }
+}
 fn instance[T](value: T) -> Optional[I64] where T: Target { return value.result() }
 fn associated[T](value: T) -> Optional[String] where T: Target { return T.associated() }
 fn main() {
@@ -20,4 +25,11 @@ fn main() {
     print(second.isNone())
     print(instance(value: value).isNone())
     print(associated(value: value).isNone())
+    val nominal = <Nominal />
+    val third: Optional[I64] = nominal.result()
+    val fourth: Optional[String] = Nominal.associated()
+    print(third.isNone())
+    print(fourth.isNone())
+    print(instance(value: nominal).isNone())
+    print(associated(value: nominal).isNone())
 }

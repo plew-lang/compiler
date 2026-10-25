@@ -168,6 +168,10 @@ pub impl Comp {
                     }
                     parameterIndex += 1U64
                 }
+                // A nominal implementation is already a concrete declaration.
+                // Its selected source follows Direct; only a trait-subject body
+                // needs proof-driven placement onto a concrete provided copy.
+                if conformance.subjectTraitOwner == 0U64 { return <Result.Ok value=<StaticMemberResolution.Missing /> /> }
                 val candidates = try self.traitMemberInstanceProofs(baseRef: receiverRef, traitId: conformance.traitId, traitOwner: conformance.traitStart, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn), includeConcrete: true)
                 mut val selection = <TraitProofSelection />
                 for proof in candidates {

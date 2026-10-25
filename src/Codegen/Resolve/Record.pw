@@ -704,7 +704,7 @@ pub impl Comp {
         // Source result context can still fill method-owned binders. Keep the
         // already admitted receiver/proof while that local join is pending;
         // final publication still requires the completed callable signature.
-        val finalEnvironment: InstanceEnvironment = (try self.inferMethodEnvironment(f: f, receiverRef: receiverTerm, args: args))
+        val finalEnvironment: InstanceEnvironment = (try self.inferMethodEnvironment(f: f, receiverRef: receiverTerm, args: args, retainedArguments: (try self.syntheticSelectedTypeArguments(exprId: exprId, declaration: callee))))
         val result: U64 = (try self.groundFinalMethodSignatureInEnvironment(f: f, environment: finalEnvironment, signatureTerm: self.semanticCallableReturnTerm(function: f)))
         // The final callable's complete ParamId substitution is provenance,
         // not a Mono inference request.  Persist it beside the selected
