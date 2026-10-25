@@ -441,7 +441,7 @@ pub impl Comp {
     // selector for a synthetic call (`[]` -> `index`).  Visibility belongs to
     // the source call-site, not that interned helper span, so callers can pass
     // the real AST offset explicitly.
-    inout fn findMethod(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64, useOffset: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
+    inout fn findMethod(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64, useOffset: U64 = 0U64, associated: Bool = false) -> Result[U64, CompileDiagnostic] {
         mut val firstLabel: U64 = self.arena.functionCount()
         mut val typeMatch: U64 = self.arena.functionCount()
         mut val typeMatch2: U64 = self.arena.functionCount()
@@ -451,11 +451,18 @@ pub impl Comp {
         mut val inherentMatch2: U64 = self.arena.functionCount()
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
+        val receiverDeclaration = if associated && recvRef == 0U64 {
+            give self.typeDeclIdentityAt(useMod: self.moduleOf(offset: recvStart), start: recvStart, len: recvLen)
+        } else { give self.missingDeclIdentity() }
         mut val i: U64 = self.decls.firstCallableNamed(nameId: qNameId)
         while i < self.decls.callableCount() {
             val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
-            if f.hasRecv {
+            // Namespace-only associated helpers use findAssoc's own admission.
+            // A conferred associated witness uses this same bare/provided
+            // source, receiver, signature and ambiguity contract as a method.
+            val eligible = (!associated && f.hasRecv) || (associated && f.isAssoc && f.isProvided && self.receiverDeclarationMatches(f: f, receiverRef: recvRef) && self.receiverDeclarationHasOwner(f: f, declaration: receiverDeclaration))
+            if eligible {
                 // an extension method does not join bare resolution (spec/09): it is
                 // reachable only through a `value#Ext.m()` view (findExtMethod).
                 if cand.sourceKind != 1U64 {
@@ -1147,6 +1154,11 @@ pub impl Comp {
             try self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
             return <Result.Ok value=typeMatch />
         }
+        // A concrete trait-subject witness carries a trait source even on
+        // the bare surface. Keep inherent/namespace calls above, then use
+        // the shared provided-call contract instead of dropping that source.
+        val provided = try self.findMethod(recvStart: rnu.nameStart, recvLen: rnu.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef, associated: true)
+        if provided < self.arena.functionCount() { return <Result.Ok value=provided /> }
         return <Result.Ok value=firstLabel />
     }
 
