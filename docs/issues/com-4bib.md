@@ -1,6 +1,6 @@
 ---
 id: com-4bib
-status: in_progress
+status: closed
 deps: [com-i20o]
 links: []
 created: 2026-10-23T10:41:58Z
@@ -38,50 +38,41 @@ current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
 
-## Prepared Seven-Row Request Map (Not Executed)
+## Outcome: Bounded Mode Parity Verified
 
-Read-only preparation at36680385 finds no new mode-specific defect; this is
-not current-candidate parity certification. The finite comparison remains:
+Source01e17fdb, fresh compiler bin/plewc-trait-associated-owner-2
+SHA033ff8473787d5fd300e6ce5d2f2df9b6e7a978c7188acbfb947f4f3dd84e244.
+F1 run3 completed15/15 groups and60 commands, inputs unchanged. Seven rows:
 
-| Row | Shared source request/owner | Required contrast |
-| --- | --- | --- |
-| ordinary | prepareLexicalBody -> recordParametricFunction/checkGenericFunction/verifyFunctionDeclaration; Function(canonical declaration) | same requested body under check/build/run, positive and missing-call rejection |
-| generic/provided | same lexical preparation; provided semanticBodyOwner, separate concrete instance | symbolic generic and provided method requested in all modes |
-| closure | nested source preparation/publication; Closure(expression), separate bodyKey | parent construction and demanded child success/failure |
-| global | prepareGlobalInitializer(target), individual Global(target); startup root is separate | same startup positive/reject under all modes |
-| default | registered parameter/field generator Function, retained DefaultGeneratorOrigin | omitted parameter/field defaults plus independent owner publication |
-| generated | gen harness uses ordinary lexical preparation; resulting application is a separate program | harness positive/reject and generated application check/build/run |
-| invalid unused | check/build request whole target; lazy session/run omit unrelated body | whole-target rejection versus requested-only success, then explicit request rejection |
+| Row | Shared source authority and verified contrast |
+| --- | --- |
+| ordinary | prepareLexicalBody/Function(owner); same positive output and missing-call rejection in check/AOT/run |
+| generic/provided | canonical semanticBodyOwner, declaration-bound abstract checking and separate concrete environment; requested positive/negative in all modes |
+| closure | parent source publication/checkNestedSourceFacts, Closure(expression)/bodyKey then canonical Mid; invoked child positive/negative in all modes |
+| global initializer | prepareGlobalInitializer(target), independent Global(target) payload then startup root; same startup positive/negative |
+| default generator | independent Function(generator), DefaultGeneratorOrigin; omitted parameter/field defaults and immutable-owner publication pass |
+| generated body | separate selected generator host and application; greet/helperboundary positives, invalid macro helper, requested invalid generated method, and incomplete AST-input Eq contrast |
+| invalid unused | whole check/build reject; lazy run omits unrelated invalid body; internal repeated failure/owner isolation controls pass |
 
-Existing source_typing_owner_requests/default_generator_source_publication and
-gen greet/helperboundary/UnresolvedField controls supply intent. The current
-scratch plan/runner at compiler/tmp/phase3f-mode-parity is unexecuted; its pinned
-initial E4 carrier must be reviewed/updated before use. No F3 InternalSession CLI
-job or historical diagnostic-host success is reused as current product success.
+Compiler.compileSource uses CheckedProgram.check for ordinary whole builds and
+separate analyzeFrontend(genMode) for the selected generator host. Check consumes
+checkCompilerSession/completeFrontendDeclarations; run opens CompilerSession and
+requests declaration roots through common source preparation. The driver adds
+no alternative source checker or runtime.
 
-## Current F1 Contrast and Assigned Blocker
+Initial6dd13/14 stopped at Eq.derive's associated receiver environment. Required
+com-i20o repaired the lexical Self/namespace boundary and is independently closed.
+The original033 run2 then correctly generated Eq but stopped on a mistaken,
+never-successful scratch expectation. Its empty main does not request invalid
+Eq: whole check/build reject the exact missing Eq/Ord witness, lazy run succeeds.
+The separate generated-method negative actually called by main rejects identically
+in all three modes. Original language fixtures and their expectations are unchanged;
+failed earlier runs remain failed. Frozen preparation README is historical, not
+current status.
 
-Measured compiler6ddf8f75 (source58e5888f), isolated scratch run
-compiler/tmp/phase3f-mode-parity/run-1, completed13/14 groups. Ordinary,
-generic/provided, closure, global and default positives execute with matching
-AOT/run goldens; their requested missing-call negatives reject consistently in
-check/build/run. Whole check/build reject the unused invalid body while run
-prints requested-only. Both internal owner/default-publication controls pass.
-Greet/helperboundary generate and their applications pass all three modes;
-invalid macro helper is rejected as source code.
-
-The generated-AST UnresolvedField case stops before host emission at Syntax
-Eq.derive: body receiver mismatch, pattern Self@19/actual Eq/expected Self@19.
-Original baseline090240dd reproduces the exact failure. This belongs to the
-already required com-072n receiver identity boundary, not permission to reject
-semantically incomplete macro AST input. Its no-value-receiver trait-associated
-path and concrete conferred-copy selection are separately classified before
-repair, as that task requires. F1 remains in_progress; the unexecuted generated
-application contrast and completion review remain required.
-
-Durable initial receipt: meta/evidence/existing-feature-conformance/
-source-owner-facts/phase3f-mode-parity-initial.json. Run inputs unchanged; all
-38 Syntax dependency files also match the preceding frozen normal input record.
-The next run must enumerate that cache and copy the gen-AST manifests as the
-canonical gen harness does. These are receipt/setup limits, not a successful
-final-candidate gen gate. No production source or test input was changed.
+Durable receipt: meta/evidence/existing-feature-conformance/source-owner-facts/
+phase3f-mode-parity.json; earlier limits/failures in phase3f-mode-parity-initial.json
+and trait-associated-namespace-repair.json. Independent b2 verified128 references,
+301 final and208 reused inputs plus the static handoff, and accepted this finite
+exit with no material gap. F3, gen-all, G2, phase3/main and seed promotion are not
+certified. Required B/com-9p68 remains linked through com-072n, areas and G1.
