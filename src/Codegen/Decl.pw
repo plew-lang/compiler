@@ -711,14 +711,14 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn conferredCopyExists(recvId: U64, receiverRef: U64, nameId: U64, srcTraitId: U64, srcTraitOwner: U64, sourceWitnessFuncId: U64) -> Bool {
+    inout fn conferredCopyExists(recvId: U64, receiverRef: U64, nameId: U64, srcTraitId: U64, srcTraitOwner: U64, sourceWitnessFuncId: U64, sourceRootConformIdx: U64) -> Bool {
         mut val i: U64 = self.arena.firstFunctionNamed(nameId: nameId)
         while i < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: i)
             if f.hasRecv || f.isAssoc {
                 if f.recvId == recvId && self.typeRefEq(a: f.recvTy, b: receiverRef) {
                     if f.nameId == nameId {
-                        if f.srcTraitId == srcTraitId && f.srcTraitOwner == srcTraitOwner && f.sourceWitnessFuncId == sourceWitnessFuncId {
+                        if f.srcTraitId == srcTraitId && f.srcTraitOwner == srcTraitOwner && f.sourceWitnessFuncId == sourceWitnessFuncId && f.sourceRootConformIdx == sourceRootConformIdx {
                             return true
                         }
                     }
@@ -729,12 +729,12 @@ pub impl Comp {
         return false
     }
 
-    inout fn conformWithRootExists(typeId: U64, traitId: U64, viewRootOwner: U64) -> Bool {
+    inout fn conformWithRootExists(typeId: U64, traitId: U64, viewRootOwner: U64, viewRootConformIdx: U64) -> Bool {
         mut val i: U64 = 0
         while i < self.decls.conformCount() {
             if self.decls.conformAt(index: i).typeId == typeId {
                 if self.decls.conformAt(index: i).traitId == traitId {
-                    if self.decls.conformAt(index: i).viewRootOwner == viewRootOwner {
+                    if self.decls.conformAt(index: i).viewRootOwner == viewRootOwner && self.decls.conformAt(index: i).viewRootConformIdx == viewRootConformIdx {
                         return true
                     }
                 }
@@ -819,7 +819,7 @@ pub impl Comp {
                     // wins bare lookup: generic and explicit-source calls still
                     // need this body. Only the same path and complete receiver
                     // pattern may suppress an idempotent fixpoint re-scan.
-                    if !(self.conferredCopyExists(recvId: recvId, receiverRef: receiver.subjectTy, nameId: f.nameId, srcTraitId: srcTag, srcTraitOwner: sourceOwner, sourceWitnessFuncId: f.sourceWitnessFuncId)) {
+                    if !(self.conferredCopyExists(recvId: recvId, receiverRef: receiver.subjectTy, nameId: f.nameId, srcTraitId: srcTag, srcTraitOwner: sourceOwner, sourceWitnessFuncId: f.sourceWitnessFuncId, sourceRootConformIdx: viewRootConformIdx)) {
                         // drop the subject param from the method's type params (none for a
                         // trait subject), keep the method-own params.
                         mut val copiedTP: Array[Bind] = []
@@ -868,7 +868,7 @@ pub impl Comp {
             }
             fi += 1
         }
-        if !(self.conformWithRootExists(typeId: recvId, traitId: blanket.traitId, viewRootOwner: viewRootOwner)) {
+        if !(self.conformWithRootExists(typeId: recvId, traitId: blanket.traitId, viewRootOwner: viewRootOwner, viewRootConformIdx: viewRootConformIdx)) {
             self.decls.registerConform(<Conform subjectTraitOwner=receiver.subjectTraitOwner sourceModule=blanket.sourceModule typeStart=recvStart typeLen=recvLen typeId=recvId subjectTy=receiver.subjectTy subjectArgs=receiver.subjectArgs typeParams=receiver.typeParams typeArity=receiver.typeArity traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot viewRootOwner=viewRootOwner viewRootConformIdx=viewRootConformIdx defOffset=blanket.defOffset />, authoredFunctions: <Optional.Some v=blanket.authoredFuncIds />)
         }
         return <Result.Ok value=() />
