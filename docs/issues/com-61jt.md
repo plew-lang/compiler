@@ -1,6 +1,6 @@
 ---
 id: com-61jt
-status: open
+status: closed
 deps: [met-ucze, met-ia09, met-6e6k, met-acfl, com-fuo8, met-rzt4, com-gyup, com-4bib, com-s248, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-s5k5, com-f0mq, com-fbqh, com-px0e, com-o7ul, com-tl9c, com-072n, com-9clj, com-o3vw, com-auvx, com-3qne, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-uuya, com-vuv9, com-6cw6]
 links: []
 created: 2026-10-23T10:41:59Z
@@ -88,6 +88,15 @@ original fifteen normal rejections plus nested-root and duplicate controls.
 Affected areas met-ucze/met-ia09 have independent readmission. The refreshed
 receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-admission.json
 records six tracked input groups, exact manifests and carrier. Prior admission
-and formal gates are historical; independent refreshed G1 confirmation remains
-pending. G2a must produce a new measured compiler for G2b. No full gate, parent
+and formal gates are historical. G2a must produce a new measured compiler for G2b. No full gate, parent
 completion or main/seed/carrier promotion is accepted here.
+
+## Refreshed Outcome
+
+Independent c2_classification_review accepts G1 at31a550f2. All61 prerequisite
+descendants are closed, with no missing ID/cycle. Both381-input scoped maps,
+all5,917 tracked input files in six groups, manifests, actual carrier hashes,
+spec and Syntax pins match the refreshed receipt. Inputs have not changed
+since fixture573ff620. Eleven-condition ownership, affected area readmission and
+the proof-interpretation versus reselection distinction are reconciled. G2a
+starts with this freeze; its new measured compiler must be used for G2b.
