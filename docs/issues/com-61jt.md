@@ -1,6 +1,6 @@
 ---
 id: com-61jt
-status: open
+status: closed
 deps: [met-ucze, met-ia09, met-6e6k, met-acfl, com-fuo8, met-rzt4, com-gyup, com-4bib, com-s248, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-s5k5, com-f0mq, com-fbqh, com-px0e, com-o7ul, com-tl9c, com-072n, com-9clj, com-o3vw, com-auvx, com-3qne, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-uuya, com-vuv9]
 links: []
 created: 2026-10-23T10:41:59Z
@@ -86,3 +86,18 @@ Current scoped WIP is c50d2a04. G2a will save full input/tool fingerprints and
 produce the separate measured compiler that G2b must consume. Receipt applicability
 is limited to each pinned input/scope; old runs are not reused as final gates.
 Main/seed/adopted-carrier promotion is excluded.
+
+## Outcome
+
+Independent c2_classification_review accepts G1 at d802ca75. All sixty
+prerequisite descendants are closed, with no missing ID or dependency cycle.
+The reviewer checked the eleven-row reconciliation, scoped area reviews, later
+required fixes, retained adapters and final-gate ownership. Six tracked input
+groups totaling 5,907 files, package manifests and carrier hashes match the
+freeze receipt, with no runtime/test/script changes after 7e0648c1.
+
+Receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-admission.json
+retains the group digests and accepted review. This closes evidence admission
+only. G2a must now record the complete source/tool/dependency fingerprints, prove
+fixed point and a median below seven seconds, then G2b must consume that measured
+compiler. G3, parent completion and main/seed/carrier promotion remain unaccepted.
