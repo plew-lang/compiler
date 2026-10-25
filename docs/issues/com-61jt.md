@@ -1,7 +1,7 @@
 ---
 id: com-61jt
 status: open
-deps: [met-ucze, met-ia09, met-6e6k, met-acfl, com-fuo8, met-rzt4, com-gyup, com-4bib, com-s248, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-s5k5, com-f0mq, com-fbqh, com-px0e, com-o7ul, com-tl9c, com-072n, com-9clj, com-o3vw, com-auvx, com-3qne, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-uuya, com-vuv9, com-6cw6, com-v1wa, com-tkz7, com-ugee]
+deps: [met-ucze, met-ia09, met-6e6k, met-acfl, com-fuo8, met-rzt4, com-gyup, com-4bib, com-s248, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-s5k5, com-f0mq, com-fbqh, com-px0e, com-o7ul, com-tl9c, com-072n, com-9clj, com-o3vw, com-auvx, com-3qne, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-uuya, com-vuv9, com-6cw6, com-v1wa, com-tkz7, com-ugee, com-jzdz, com-nr7y, com-cwu1, com-ra96, com-zy6r, com-y8l4, com-l8m1, com-6zph, com-sby0, com-l9yo, com-9hf7]
 links: []
 created: 2026-10-23T10:41:59Z
 type: task
@@ -12,7 +12,18 @@ tags: [frontend, verification]
 ---
 # Reconcile all phase three closure evidence before freezing a candidate
 
-## Current Admission Boundary
+## Current Specification-first Review
+
+[com-9hf7](com-9hf7.md) finds11 confirmed existing-contract gaps and registers
+10 finite required repairs. Affected areas are reopened; this task remains
+open and may not admit the candidate using prior scoped closure. The
+com-uutc heterogeneous-any observation is now a confirmed in-scope
+[common result conversion defect](com-l8m1.md), not an unresolved exclusion.
+Follow actual dependencies and independently re-admit current evidence after
+repairs; new exact-candidate G2a/G2b/G3 are still required. The following
+previous checkpoints retain their named scope only.
+
+## Prior Admission Boundary
 
 The confirmed [com-ugee](com-ugee.md) repair and E1/completion scope are now
 independently accepted at e73a8476/candidate073f. Fresh normal/gen/deps and

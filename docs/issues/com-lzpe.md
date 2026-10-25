@@ -12,6 +12,17 @@ tags: [frontend, verification]
 ---
 # Synchronize phase three parents and discharge the eleven criteria
 
+## Current Specification-first Review
+
+[com-9hf7](com-9hf7.md) finds11 confirmed existing-contract gaps and registers
+10 finite required repairs. Affected areas are reopened; this task remains
+open and may not admit the candidate using prior scoped closure. The
+com-uutc heterogeneous-any observation is now a confirmed in-scope
+[common result conversion defect](com-l8m1.md), not an unresolved exclusion.
+Follow actual dependencies and independently re-admit current evidence after
+repairs; new exact-candidate G2a/G2b/G3 are still required. The following
+previous checkpoints retain their named scope only.
+
 ## Boundary
 
 Phase 3G / G3. **Final closure and handoff.** Parent criteria: 11.
@@ -38,7 +49,7 @@ current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
 
-## Current Reopening
+## Prior Reopening Checkpoint
 
 [com-bkqq](com-bkqq.md) supersedes the preceding final authorization. The
 [missing value-producer repair](com-ugee.md) and E1/completion are now

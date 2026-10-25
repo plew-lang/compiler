@@ -1,7 +1,7 @@
 ---
 id: met-acfl
-status: closed
-deps: [com-kp3y, com-vkw3, com-wqa0, com-m3c6, com-gnj9]
+status: open
+deps: [com-kp3y, com-vkw3, com-wqa0, com-m3c6, com-gnj9, com-nr7y, com-6zph]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -11,6 +11,16 @@ parent: met-si6j
 tags: [frontend, generics, verification]
 ---
 # Finish semantic-fact publication and final reader closure
+
+## Current Review Reopening
+
+The fresh specification-first [com-9hf7](com-9hf7.md) review found required
+existing-contract gaps. This task/area is reopened for [com-nr7y](com-nr7y.md), [com-6zph](com-6zph.md).
+Prior scoped controls and accepted repairs retain their exact inputs, but do
+not certify this newly evidenced boundary. Follow these finite dependencies
+through source production, successful publication and actual final use, then
+independently re-admit the affected contract. No new language feature is
+required; no prior gate is attributed to a repaired future candidate.
 
 ## Bounded Execution and Gate Ownership
 

@@ -1,7 +1,7 @@
 ---
 id: met-6e6k
-status: closed
-deps: [com-g2qg, com-nplw, com-nucu, com-m0bf, com-e9l2, com-loyb, com-3q2n, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-o3vw, com-v1wa, com-tkz7]
+status: open
+deps: [com-g2qg, com-nplw, com-nucu, com-m0bf, com-e9l2, com-loyb, com-3q2n, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-o3vw, com-v1wa, com-tkz7, com-l8m1, com-6zph]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -11,6 +11,16 @@ parent: met-si6j
 tags: [frontend, generics, verification]
 ---
 # Audit saved conversions, descriptors and first-concrete consumer boundaries
+
+## Current Review Reopening
+
+The fresh specification-first [com-9hf7](com-9hf7.md) review found required
+existing-contract gaps. This task/area is reopened for [com-l8m1](com-l8m1.md), [com-6zph](com-6zph.md).
+Prior scoped controls and accepted repairs retain their exact inputs, but do
+not certify this newly evidenced boundary. Follow these finite dependencies
+through source production, successful publication and actual final use, then
+independently re-admit the affected contract. No new language feature is
+required; no prior gate is attributed to a repaired future candidate.
 
 ## Bounded Execution and Gate Ownership
 

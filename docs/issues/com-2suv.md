@@ -1,7 +1,7 @@
 ---
 id: com-2suv
-status: closed
-deps: [com-f0mq, com-ugee]
+status: open
+deps: [com-f0mq, com-ugee, com-l8m1]
 links: []
 created: 2026-10-23T10:41:58Z
 type: task
@@ -12,7 +12,17 @@ tags: [frontend, verification]
 ---
 # Verify block branch and short-circuit completion use one result authority
 
-## Current Scoped Admission
+## Current Review Reopening
+
+The fresh specification-first [com-9hf7](com-9hf7.md) review found required
+existing-contract gaps. This task/area is reopened for [com-l8m1](com-l8m1.md).
+Prior scoped controls and accepted repairs retain their exact inputs, but do
+not certify this newly evidenced boundary. Follow these finite dependencies
+through source production, successful publication and actual final use, then
+independently re-admit the affected contract. No new language feature is
+required; no prior gate is attributed to a repaired future candidate.
+
+## Earlier Scoped Admission
 
 [com-ugee](com-ugee.md) is repaired at production e73a8476, exact candidate
 073f0375. The common Record boundary admits a real give before publishing a

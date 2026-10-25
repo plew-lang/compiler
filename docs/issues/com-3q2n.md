@@ -1,7 +1,7 @@
 ---
 id: com-3q2n
-status: closed
-deps: []
+status: open
+deps: [com-cwu1, com-ra96]
 links: []
 created: 2026-10-23T10:41:58Z
 type: task
@@ -11,6 +11,16 @@ parent: met-6e6k
 tags: [frontend, verification]
 ---
 # Verify closure and dynamic descriptors retain semantic dependencies
+
+## Current Review Reopening
+
+The fresh specification-first [com-9hf7](com-9hf7.md) review found required
+existing-contract gaps. This task/area is reopened for [com-cwu1](com-cwu1.md), [com-ra96](com-ra96.md).
+Prior scoped controls and accepted repairs retain their exact inputs, but do
+not certify this newly evidenced boundary. Follow these finite dependencies
+through source production, successful publication and actual final use, then
+independently re-admit the affected contract. No new language feature is
+required; no prior gate is attributed to a repaired future candidate.
 
 ## Boundary
 

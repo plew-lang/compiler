@@ -19,15 +19,14 @@ Scope classification is [com-esri](com-esri.md). Its pinned matrix records inclu
 
 ## Ordering and Start Conditions
 
-Phase 2 is complete under [com-io5f](com-io5f.md). Phase 3 remains active under [met-si6j](met-si6j.md): the fresh
-[completion re-review](com-bkqq.md) found the existing missing-value producer
-violation [com-ugee](com-ugee.md). Its repair and E1/completion scope are now
-independently re-admitted at e73a8476/candidate073f; G1/new G2/G3 remain open.
-Prior exact-candidate gates remain evidence only for their unchanged binary,
-not the repaired frontend's complete final certification. These bounded closures do
-not close this epic. Remaining phase-four task contracts and the final
-integration/main criteria below still apply. The manual diagnostic repair
-com-ydgx is not a prerequisite when using the existing standard sanitizer gate.
+Phase 2 is complete under [com-io5f](com-io5f.md). Phase 3 remains active under
+[met-si6j](met-si6j.md): the fresh specification-first [com-9hf7](com-9hf7.md)
+review confirms11 existing-contract gaps, assigned to10 required finite repairs.
+The scoped com-ugee repair remains complete; it is not whole-frontend closure.
+Source-area/G1 re-admission and new final G2/G3 follow those repairs. Prior gates
+remain valid only for their exact candidate/input scope. Phase four and final
+integration/main/seed/carrier requirements remain separate. The manual
+com-ydgx diagnostic repair is not a prerequisite of the standard sanitizer gate.
 
 
 com-w4c2 follows the approved root-only use rule, with one module-wide binding environment shared by parts. Its scope includes real part/provider/consumer migration; the former file-local lookup direction is superseded. Reconsideration conditions for macro dependency verbosity/collisions belong to the source design, not an immediate exception or another mandatory feature family.

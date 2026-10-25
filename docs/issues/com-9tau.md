@@ -1,7 +1,7 @@
 ---
 id: com-9tau
-status: closed
-deps: [com-fbqh, com-px0e, com-o7ul]
+status: open
+deps: [com-fbqh, com-px0e, com-o7ul, com-jzdz]
 links: []
 created: 2026-10-23T10:41:58Z
 type: task
@@ -11,6 +11,16 @@ parent: com-fuo8
 tags: [frontend, verification]
 ---
 # Verify diverging callable types survive value storage and invocation
+
+## Current Review Reopening
+
+The fresh specification-first [com-9hf7](com-9hf7.md) review found required
+existing-contract gaps. This task/area is reopened for [com-jzdz](com-jzdz.md).
+Prior scoped controls and accepted repairs retain their exact inputs, but do
+not certify this newly evidenced boundary. Follow these finite dependencies
+through source production, successful publication and actual final use, then
+independently re-admit the affected contract. No new language feature is
+required; no prior gate is attributed to a repaired future candidate.
 
 ## Boundary
 

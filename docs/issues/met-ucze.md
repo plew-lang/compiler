@@ -1,7 +1,7 @@
 ---
 id: met-ucze
-status: closed
-deps: [com-qehq, com-qb05, com-17yh, com-4kti, com-fyxe, com-072n, com-3qne, com-o3vw, com-6cw6]
+status: open
+deps: [com-qehq, com-qb05, com-17yh, com-4kti, com-fyxe, com-072n, com-3qne, com-o3vw, com-6cw6, com-ra96, com-zy6r, com-y8l4]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -11,6 +11,16 @@ parent: met-si6j
 tags: [frontend, generics, verification]
 ---
 # Unify source member selection without downstream reselection
+
+## Current Review Reopening
+
+The fresh specification-first [com-9hf7](com-9hf7.md) review found required
+existing-contract gaps. This task/area is reopened for [com-ra96](com-ra96.md), [com-zy6r](com-zy6r.md), [com-y8l4](com-y8l4.md).
+Prior scoped controls and accepted repairs retain their exact inputs, but do
+not certify this newly evidenced boundary. Follow these finite dependencies
+through source production, successful publication and actual final use, then
+independently re-admit the affected contract. No new language feature is
+required; no prior gate is attributed to a repaired future candidate.
 
 ## Contract
 

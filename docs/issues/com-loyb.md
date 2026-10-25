@@ -1,7 +1,7 @@
 ---
 id: com-loyb
-status: closed
-deps: []
+status: open
+deps: [com-6zph]
 links: []
 created: 2026-10-23T10:41:58Z
 type: task
@@ -11,6 +11,16 @@ parent: met-6e6k
 tags: [frontend, verification]
 ---
 # Verify source conversion proofs retain exact endpoints and ownership
+
+## Current Review Reopening
+
+The fresh specification-first [com-9hf7](com-9hf7.md) review found required
+existing-contract gaps. This task/area is reopened for [com-6zph](com-6zph.md).
+Prior scoped controls and accepted repairs retain their exact inputs, but do
+not certify this newly evidenced boundary. Follow these finite dependencies
+through source production, successful publication and actual final use, then
+independently re-admit the affected contract. No new language feature is
+required; no prior gate is attributed to a repaired future candidate.
 
 ## Boundary
 

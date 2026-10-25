@@ -40,11 +40,11 @@ Each item requires implementation locations and scoped verification records, not
 
 1. [ ] Expected types only fill permitted unknown information or check compatibility; they never overwrite expression shape, explicit or committed semantic type.
 2. [ ] Distinguish unrecorded facts, local inference variables, deferred obligations, incompatibility, Unit, rigid parameters and no normal value. No unresolved source typing obligation survives successful publication.
-3. [x] One authority for types, calls, proofs and conversions connects source recording/success through explicit instantiation to final Mid/backend consumers; no AST reinference or name reselection by final readers.
-4. [x] Functions, factories, adapters, operators and implicit calls check complete signature, labels, ownership modes and bounds; candidate existence is not final validity.
+3. [ ] One authority for types, calls, proofs and conversions connects source recording/success through explicit instantiation to final Mid/backend consumers; no AST reinference or name reselection by final readers.
+4. [ ] Functions, factories, adapters, operators and implicit calls check complete signature, labels, ownership modes and bounds; candidate existence is not final validity.
 5. [ ] Under the same available context, expression wrapping changes acceptance only where the adopted value/divergence rules require it. Block/if/match/short-circuit share normal results and exit targets; checked dead code cannot contaminate live joins.
 6. [ ] Integrate approved divergence: value-position rejection, following-code errors versus analytical-loop warnings, loop-following give, empty match, diverging function values versus invocation and forbidden normal-function conversion. Centralize semantic completion; keep diagnostic reachability distinct from execution/ownership flow.
-7. [x] check/build/run/gen use the same semantics for requested bodies. Lazy run may omit unused bodies; it may not defer invalidity in a requested body.
+7. [ ] check/build/run/gen use the same semantics for requested bodies. Lazy run may omit unused bodies; it may not defer invalidity in a requested body.
 8. [ ] Remove migrated reinference fallbacks, partial acceptance and duplicate semantic state; structurally separate constructing writers from immutable readers. Retained adapters are one-way representation transforms. Demonstrate final consumers, removed decisions and post-completion write rejection.
 9. [x] Close historical D1/D4/D5 controls and classify/address D2/D3/D6 risks. Uninspected coverage is not completion; preserve representative positive/reject combinations.
 10. [ ] Complete normal, generation, dependency, ASan/LSan, fixed-point and formal performance gates with matching source/carrier/artifacts. Satisfy the user-approved formal median below 7 seconds or obtain an explicit approved change; focused and old-driver checks do not substitute.
@@ -244,35 +244,35 @@ The existing typed-source parent is the frontend workstream within com-604k, not
 
 ## Current Reconciliation and Reopening
 
-The single eleven-row assignment is [G1](com-61jt.md#admission-reconciliation).
-[Fresh completion re-review](com-bkqq.md) found one confirmed P2 implementation
-violation: [com-ugee](com-ugee.md). A required value region with only an
-analytically nonterminating while is accepted when an expected type is supplied,
-although it has no source value producer. Source completion and execution
-reachability must not authorize the same result-forming decision. Criteria1/2/
-5/6/8 are reopened; criterion11 remains pending final repaired synchronization.
-The original criterion wording and seven-second target are unchanged.
+Fresh specification-first [com-9hf7](com-9hf7.md) confirms11 in-scope findings
+(3 P1/8 P2), assigned to10 finite required repair issues. The affected
+selection, callee/evidence, type/conversion, publication and completion areas
+are reopened with actual prerequisites. Criteria1-8,10 and11 remain pending;
+criterion9 retains only its exact historical six-row disposition scope.
+Review completion and green prior controls do not certify these new boundaries.
 
-The repair is implemented at e73a8476/candidate073f and independently accepted
-for com-ugee/E1/completion. Focused producer/publication/final-reader controls
-and full normal/gen/deps pass with immutable inputs. The durable repair receipt
-is meta/evidence/existing-feature-conformance/source-owner-facts/
-value-region-producer-repair.json. B0/B1 individual independent acceptance is
-recorded in their own issues. G1 must still reconcile the current evidence and
-com-uutc's heterogeneous any-join observation; final gates and G3 remain open.
+The common failures include lost invocation returns at loop boundaries,
+nonexistent global return targets, incomplete dynamic call signatures and
+shallow type comparisons, stale shared-result refinement, unsealed conversion
+backing and noncanonical Unit/async return contracts. These are existing
+feature contracts, not new inference, Never, capability generics or runtime
+feature requirements. Detailed sources/actual outputs and ownership paths are
+in meta/evidence/existing-feature-conformance/source-owner-facts/
+phase3-specification-rereview.json and the linked repair issues.
 
-The previous exact-candidate gates remain valid for production043e2402/fixture
-17537a40 and compiler3c532ce1: generation3 fixed point, formal median5.954309s,
-normal/gen/deps/LLVM22 ASan-LSan all passed. These are evidence for that binary,
-not proof that the newly reproduced missing-give input was rejected. The frozen
-phase3g-completion.json records the preceding authorization at its named
-revisions; it is superseded as a live completion claim by
-phase3-completion-rereview.json and com-bkqq.
+The com-ugee missing-producer repair remains independently complete in its
+finite scope. Earlier unrelated successful source/proof/storage paths remain
+usable evidence when inputs and contract match. No full restart is authorized
+merely by a new finding. New073f normal/gen/deps milestones remain valid; old3c
+formal fixed-point/ASan gates apply only to old3c. New final G2a/G2b/G3 remain
+required after source repair and G1 admission.
 
 ## Current Outcome
 
-**Not complete.** The com-ugee producer/publication/final-consumer repair and
-its task/area reviews are complete. Readmit G1 and perform the necessary
-new-candidate G2/G3 reconciliation before parent closure.
-Do not restart already verified call/proof/storage work without affected evidence.
-Phase four, main, seeds and adopted-carrier promotion have not started here.
+**Not complete.** Address the finite required repairs from com-9hf7 (priorityP1
+first), independently re-admit affected task/areas and G1, then run the necessary
+new-candidate G2a/G2b and G3 reconciliation. Preserve valid unaffected work;
+do not substitute checks at a final reader for complete source admission and
+sealed producer-to-consumer authority. No new specification decision is needed
+for the confirmed findings. Phase four, main, seeds and adopted-carrier promotion
+remain outside this boundary.
