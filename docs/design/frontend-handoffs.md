@@ -85,9 +85,17 @@ struct, enum, type, and bound additions update the corresponding indexes at the
 same boundary; value copying must copy rows and indexes consistently. Readers
 must not alter visibility, arity, aliases, or candidate order.
 
+[Shared overload declaration admission](name-lookup.md#shared-overload-declaration-admission)
+owns the complete acceptance condition across ordinary callable and requirement
+entries. Registering a row reserves identity; it does not replace the declaration
+group's admission result. Entry-specific checks cannot silently add or omit
+generic-shape or concrete-discriminator conditions. Preserve the domain,
+normalized binder context and default forms through that boundary.
+
 Lookup readers preserve the complete same-name candidate set and continue past
-inapplicable candidates. Generic arity, source visibility and selected namespace
-remain part of applicability. A missing-reader result is transient: no cached
+inapplicable candidates. Source visibility and selected namespace remain inputs
+to applicability. Generic arity is validated against the source-selected
+declaration; it does not provide a fallback discriminator. A missing-reader result is transient: no cached
 absence may hide a later registered/generated declaration. Lexical parameter
 identity is not supplied by a global spelling-membership query, and a bare-name
 index is not structural type equality. Concrete legacy index/sentinel behavior is
@@ -290,11 +298,11 @@ No field-set guess chooses a nominal type. Memberwise default expansion occurs
 after selection and records written versus synthesized fields. Anonymous records
 are structural and do not receive nominal memberwise defaults.
 A default memberwise factory has a callable signature even without an executable
-`Func`. Declaration conflict checking compares the signature derived from field
-types/defaults with custom anonymous factories through the common
-`callableFormsMayOverlap` operation, unifying receiver and arguments in one
-shared environment. Check unused declarations too; call-site ambiguity alone
-cannot replace this declaration check.
+`Func`. The shared declaration-admission authority compares its signature derived
+from field types/defaults with custom anonymous factories under one receiver and
+binder context, including common omission forms. A structural overlap helper
+alone does not establish the specification's fixed-type discriminator. Check
+unused declarations too; call-site ambiguity cannot replace declaration admission.
 
 Structural records use sorted labels and complete field terms; a layout ID or
 synthetic nominal name is not semantic authority. Grounding a record need not

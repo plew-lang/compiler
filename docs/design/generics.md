@@ -9,6 +9,16 @@ Generic source checking establishes a body's meaning under its declared paramete
 
 A non-generic declaration follows the same pipeline with no explicit type arguments. It is not exempt from source checking, instance identity, conversion evidence, or execution preparation. Methods without method-owned type parameters can still depend on receiver, impl, and trait environments.
 
+[Shared declaration admission](name-lookup.md#shared-overload-declaration-admission)
+does not require overloads to share generic arity or parameter positions. A fixed
+argument discriminator selects the source operation under the ordinary rules;
+explicit/inferred type arguments and bounds are then checked against that chosen
+declaration's own binders. A count or constraint failure cannot restart selection
+on another declaration. Type-parameter dependence for admission includes all
+enclosing environments, not only method-owned parameters. Instantiation preserves
+the chosen identity instead of exploiting new concrete types to resolve a source
+ambiguity.
+
 The [generic specification](https://github.com/plew-lang/spec/blob/main/spec/02-type-system/06-generics.md) owns invariant type arguments, parameter capabilities, and declaration-time abstract checking. [Body checking](body-checking.md) owns source choices. [Types and evidence](types-and-evidence.md) owns structural substitution and conformance derivations. This chapter owns the instance environment, instance-specific discharge, and transport to final consumers. It does not define new specialization or fallback lookup rules.
 
 ## 2. Abstract Checking Is Not Template Acceptance

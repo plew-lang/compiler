@@ -19,6 +19,57 @@ Registration associates each declaration with its kind, lexical/module owner, so
 
 Aliases and re-publication preserve the original declaration identity. An imported local name is a binding to that identity or overload set, not a copied declaration with new visibility rights. A generated callable also needs an explicit semantic owner and origin; appended synthetic text cannot determine its privileges.
 
+### Shared Overload Declaration Admission
+
+Declaration admission owns the complete overload acceptance decision, before a
+declaration group is reported successfully admitted. Free functions, methods,
+associated functions, custom and default/memberwise factories, and trait
+requirements all use this authority. Sharing type equality or overlap helpers
+while leaving additional acceptance predicates in individual callers is not this
+contract: the same semantic declarations must not pass or fail according to the
+entry point that registered them.
+
+Inputs are the declaration-conflict domain and origin policy, receiver domain,
+name and ordered labels, complete normalized parameter terms, lexical binders
+and retained equalities, omitted-default callable forms, and the applicable
+capability conditions. Each entry constructs those inputs from its declaration
+kind. A default memberwise signature is available from fields/defaults even
+without an executable function. Traversal and diagnostic rendering may remain
+entry-specific; semantic acceptance may not.
+
+The [specification's overload rule](https://github.com/plew-lang/spec/blob/main/spec/02-type-system/07-methods-impl.md)
+requires, for every pair of ordinary callable forms in one conflict domain and
+selector, a corresponding position whose two types are independent of unresolved
+parameters and semantically different. Different pairs can use different
+positions. Normalize existing type identities/equalities, including concrete
+Self, without solving new general constraints to create a discriminator.
+Dependence includes function, enclosing nominal/impl/trait parameters, abstract
+Self and unresolved associated projections. Array[I64] is fixed; Array[T] is not.
+Generic arity and use at other positions need not match. Structural non-overlap
+between dependent patterns is not a substitute for the required fixed position.
+
+Receiver/origin domains, independently provided trait-member coexistence and
+inherent preference, and the adopted capability-conditioned groups retain their
+explicit contracts. They are not caller-specific exceptions to the ordinary
+type-discriminator test. Different selectors are distinct operations. Apply the
+rule to common default-omitted forms without requiring eager enumeration of
+every omission combination.
+
+The result establishes successful admission of the checked group or rejection
+with the conflicting declaration/form and provenance. Reserved registration
+identities or a passing overlap query alone do not establish admission. Changes
+to a declaration domain must pass the same authority before reporting its new
+state admitted. This result does not prove a body checked or a call uniquely
+applicable: conversions, literals and contextual expressions can make a call
+ambiguous even when its declarations are valid.
+
+Verification maps every supported declaration entry to this authority and its
+success boundary, records removed independent predicates and legitimate domain
+checks, and compares valid/reject cases including unused declarations and
+default forms. A copied trait check or an assertion comparing two independent
+acceptance decisions is not the completed architecture. The implementation gap
+is tracked by [met-g53w](../issues/met-g53w.md).
+
 Name indices accelerate candidate discovery. They must remain consistent with their owning declaration store through its registration API. A global spelling-presence query does not prove lexical binding, visibility, arity, conformance, or unique applicability. An index's iteration order is not a semantic priority.
 
 ### Index and Query Cost Boundaries

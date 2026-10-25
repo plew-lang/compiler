@@ -1,6 +1,6 @@
 ---
 id: com-qlnc
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-10-25T14:02:11Z
@@ -18,7 +18,7 @@ Canonical specification/design update prerequisite for [met-g53w](met-g53w.md).
 The user selected the independently reviewed concrete-argument rule and requested
 this task before implementation. The three-reviewer synthesis and edge cases
 are retained in [the implementation task](met-g53w.md#review-of-the-selected-contract-change).
-The current written equal-generic-shape restriction has not yet been replaced.
+The canonical update and independent finite-scope acceptance are recorded below.
 
 For ordinary type overloads in the same declaration-conflict domain and selector,
 every pair of callable forms must have at least one corresponding argument
@@ -87,4 +87,22 @@ This task changes documentation and implementation-task contracts only. It does
 not implement overload resolution, alter compiler/test expectations, run builds
 or claim fixed-point/performance/full-suite success. met-g53w remains open for
 implementation and producer-to-final-consumer verification after this prerequisite.
+
+## Outcome
+
+Resolved as a documentation task. Specification revision cc13283 updates the
+six relevant chapters (functions, factories, generics, methods, traits and
+operators). The accompanying compiler design update changes name-lookup,
+generics and frontend-handoffs; Shared Overload Declaration Admission is the
+single owning contract, including complete inputs/results, all supported
+entries, successful-admission boundaries and removal of independent predicates.
+
+Independent overload_rule_semantics_review inspected all nine document diffs
+and accepted this finite scope: pairwise fixed discriminators, all binder/Self/
+projection dependencies, omitted defaults/memberwise factories, existing
+capability/origin exceptions, ambiguity and chosen-binder preservation agree.
+It found no blocking omission or stale normative equal-generic-shape restriction.
+Diff whitespace checks and targeted contradictory-wording searches passed.
+No compiler/test run was performed or claimed. met-g53w owns implementing and
+verifying the now-canonical contract; neither it nor phase three is complete.
 

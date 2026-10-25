@@ -1,6 +1,6 @@
 ---
 id: met-g53w
-status: open
+status: in_progress
 deps: [com-qlnc]
 links: [com-y8l4]
 created: 2026-10-25T12:03:16Z
@@ -16,10 +16,10 @@ tags: [frontend, generics, verification]
 
 P2 finding from independent review of com-ra96/com-zy6r/com-y8l4.
 This is a newly recorded ordinary/trait inconsistency, not a regression in that
-repair. The currently written spec/07 requires matching generic arity and
-positions, while spec/08 gives trait requirements the ordinary rules. The user
-has now selected a reviewed replacement rule; [com-qlnc](com-qlnc.md) must first
-update the canonical specification and design. Do not implement the superseded
+repair. At the recorded baseline spec/07 required matching generic arity and
+positions, while spec/08 gave trait requirements the ordinary rules. The user
+selected a reviewed replacement rule; [com-qlnc](com-qlnc.md) closes its canonical
+specification/design update at spec cc13283. Do not implement the superseded
 plan of imposing the old generic-shape restriction on trait requirements.
 
 ```plew
@@ -35,7 +35,7 @@ Old candidate bin/plewc-dynamic-argument-admission SHA256
 and WIP bin/plewc-overload-identity-wip SHA256
 b0f8cccb49deb0dc3fb271c62b1e044f8a4201b3f0216f6958987ddd6a9429a5
 both accept this unused requirement group with --check exit0 (contrary to the
-currently written rule; acceptance is intended under the selected replacement).
+baseline written rule; acceptance is intended under the new canonical rule).
 The equivalent ordinary free declarations both reject with the spec/07
 same-type-argument-count/generic-positions diagnostic. A trait group with
 matching generic shapes, differing concrete first arguments and alpha-renamed
@@ -99,11 +99,11 @@ The source-selection area met-ucze and G1 require this separate repair.
 
 ## Current Planning Boundary
 
-The documentation prerequisite is open; this implementation task is blocked on
-it. The current user request is task creation, not documentation implementation
-or a compiler restart. Existing return-owner/dynamic-argument closures remain
-valid in their scopes. The three overload repairs are still check-only WIP;
-this shared declaration-admission repair has not been implemented.
+The documentation prerequisite has passed independent completion review; the
+user authorized phase-three resumption. Implement the shared admission contract
+next. Existing return-owner/dynamic-argument closures remain valid in their
+scopes. The three overload repairs are still check-only WIP; this shared
+declaration-admission repair has not been implemented.
 
 ## Review of the Selected Contract Change
 
