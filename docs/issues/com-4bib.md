@@ -58,3 +58,30 @@ gen greet/helperboundary/UnresolvedField controls supply intent. The current
 scratch plan/runner at compiler/tmp/phase3f-mode-parity is unexecuted; its pinned
 initial E4 carrier must be reviewed/updated before use. No F3 InternalSession CLI
 job or historical diagnostic-host success is reused as current product success.
+
+## Current F1 Contrast and Assigned Blocker
+
+Measured compiler6ddf8f75 (source58e5888f), isolated scratch run
+compiler/tmp/phase3f-mode-parity/run-1, completed13/14 groups. Ordinary,
+generic/provided, closure, global and default positives execute with matching
+AOT/run goldens; their requested missing-call negatives reject consistently in
+check/build/run. Whole check/build reject the unused invalid body while run
+prints requested-only. Both internal owner/default-publication controls pass.
+Greet/helperboundary generate and their applications pass all three modes;
+invalid macro helper is rejected as source code.
+
+The generated-AST UnresolvedField case stops before host emission at Syntax
+Eq.derive: body receiver mismatch, pattern Self@19/actual Eq/expected Self@19.
+Original baseline090240dd reproduces the exact failure. This belongs to the
+already required com-072n receiver identity boundary, not permission to reject
+semantically incomplete macro AST input. Its no-value-receiver trait-associated
+path and concrete conferred-copy selection are separately classified before
+repair, as that task requires. F1 remains in_progress; the unexecuted generated
+application contrast and completion review remain required.
+
+Durable initial receipt: meta/evidence/existing-feature-conformance/
+source-owner-facts/phase3f-mode-parity-initial.json. Run inputs unchanged; all
+38 Syntax dependency files also match the preceding frozen normal input record.
+The next run must enumerate that cache and copy the gen-AST manifests as the
+canonical gen harness does. These are receipt/setup limits, not a successful
+final-candidate gen gate. No production source or test input was changed.
