@@ -1,7 +1,7 @@
 ---
 id: met-ia09
-status: open
-deps: [com-v2xk, com-yojf, com-072n]
+status: closed
+deps: [com-v2xk, com-yojf, com-072n, com-3qne]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -136,22 +136,29 @@ covered by interface_boxing_conditions and existential_newtype_condition_witness
 Self in inherited trait arguments and existing generic-method derivations have
 separate positive controls.
 
-## Current Boundary and Remaining Work
+## Reconciled Area Completion
 
-Inherited-receiver and availability/integrity increments are implemented and
-have scoped fresh/static/dynamic controls; the exact source, carrier and gate
-scope remain in the worklog/evidence index. B3 reconciles their actual final
-call paths; B4 isolates the stronger universal nominal predicate question.
-These successes do not establish all hidden substitutions or whole-parent
-readiness. Do not relabel a nominal hidden-Self witness universal merely because
-it has no explicit interface-assumption child. Missing/malformed/foreign evidence
-must not become an unavailable slot by error-string handling.
+Independent body_receiver_completion_review accepts the finite evidence contract
+with all required children and repairs closed. Original conditions and selected
+paths reach the real callee; the following Outcomes retain exact source, removed
+paths, applicable controls and independent receipts.
 
-Coordinate partial-input enumeration and raw/conversion/descriptor producers
-with [met-6e6k](met-6e6k.md) and write authority with [met-acfl](met-acfl.md).
-SourceAdmission requires the exact complete trait instance; a positional presence
-probe is not that certificate. Full final candidate gates remain the parent
-G2a/G2b obligation, separate from this area's scoped closure.
+| Contract | Closure evidence owners |
+| --- | --- |
+| Existence / SourceAdmission / MemberDispatch, precedence and ambiguity | com-4kti and B4/com-yojf: complete instances and path authority; output mismatch cannot choose another source. |
+| Original condition IDs, method ParamIds, associated/supertrait evidence | B3/com-v2xk: retained requirement-to-implementation derivation shared by both worklists and real body environments. |
+| Placement vs lexical source vs body identity | B3, com-6paa, com-072n/com-9clj and com-3qne: original source remains separate from concrete placement; exact receiver survives body keys and signatures. |
+| First concrete admission, prepared-empty vs missing | B3 and D3/com-wqa0: retained conditions interpreted in explicit caller environments; missing/unprepared evidence cannot become success. |
+| Hidden Self, Universal vs Ready, formation vs availability | B4 and C6/com-3q2n: four root authorities, static escape rejection and corrupted/unavailable distinctions through Mid/dynamic descriptors. |
+| Inherited logical/physical Self and boxing | B3: two-stage newtype chains, original clauses, alpha maps, real adapters and Mid. |
+| Written, implicit, root, bodyless and synthetic entry | B1/B2/B3, com-6paa, C6 and com-3qne: complete signature admission and saved callee identity rather than downstream name selection. |
+
+providedBodyProof and concrete witness interpretation retain an already selected
+copy's placement evidence. They do not revive removed source-selection fallbacks.
+The original exact-environment contract has no unfinished in-scope descendant.
+This scoped closure adds no general opening, allowunique, runtime trait solver or
+new ABI. Whole frozen-candidate gates remain G2a/G2b; phase three and main/seed/
+adopted-carrier promotion remain uncertified here.
 
 ## Reference Boundaries
 

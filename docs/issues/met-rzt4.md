@@ -1,6 +1,6 @@
 ---
 id: met-rzt4
-status: open
+status: closed
 deps: [com-d57o, com-vrvl, com-auvx]
 links: []
 created: 2026-10-13T01:40:08Z
@@ -46,49 +46,22 @@ Acceptance: minimal current controls, bounded termination or actionable error, f
 
 Current bounded parser recovery for the retained malformed input and the distinct InternalSession JIT abort. Use exact old inputs/revisions, current error/exit controls and stage evidence. Keep the libcall issue separate. Do not weaken watchdogs or introduce unsupported syntax to restore old acceptance.
 
-## Bounded Current Recheck and Materialization Observation (WIP)
+## Reconciled Area Completion
 
-5e1dd64b, measured compiler SHA256
-007423150e3c3624740dd9d5ff83a04de3d5c4ce4b396683d5bd06616fbd7f4e:
-representative match/trait name declarations terminate, and malformed use of
-those names returns a positioned parse error. The retained historical ledger
-names the spellings but does not retain its exact original scratch source; do
-not claim an exact-input replay or general keyword-validity certification.
-The ordinary-name control also terminates. No parser change was needed for these
-bounded current controls.
+Independent b2_completion_review accepts this finite investigation/repair area
+with F2/com-d57o, F3/com-vrvl and its required repair com-auvx closed.
 
-The exact compiler_session_demand fixture still hits the unchanged 60-second
-no-progress deadline in CLI JIT, with no application output. Two samples on a
-repeat show active host compiler body preparation at 20 seconds and LLVM ORC
-IRCompileLayer / greedy register allocation at 45 seconds, not a stationary
-mutex wait. The full normal gate with eight workers was also active; this does
-not establish an isolated elapsed-time comparison or prove the entire historical
-failure class has one cause. Do not classify active, unreported compilation as
-a proven deadlock.
+| Contract | Current decisive evidence |
+| --- | --- |
+| Retained parser recovery | Four maintained inputs terminate with success or positioned rejection. The exact historical scratch was not retained; this is not an invented exact replay or general keyword certification. |
+| Normal CLI compiler-session execution | com-auvx runs all four original CLI --run fixtures with opt-in PLEW_TRACE_RUN=1 progress observation and exact golden output. Quiet/traced equivalence and quiet stderr are a separate smaller CLI control. |
+| Genuine progress vs liveness | Seven newly requested bodies produce fourteen monotonic completion events; repeated/unused work produces none. A stalled callback remains interrupted by the unchanged watchdog after 61.126 seconds, exit 124/events 0. |
+| Shared execution and failure ownership | Progress options are transported explicitly through CompilerSession/LlvmJit; reusable execution and backend do not consult ambient environment. Native source/module completion events retain their real boundary. |
 
-Candidate repair: explicitly request CodeGenOptLevel::None from the host
-JITTargetMachineBuilder. LLJIT otherwise uses its default machine-code optimizer
-on raw source IR. Materialization latency is the development JIT's responsibility;
-the shared runtime, checking, body preparation and AOT optimization remain common
-or unchanged. Validate the four retained InternalSession fixtures and native ORC
-controls; keep the 60-second watchdog and exact output/failure checks. If a long
-phase remains, expose real phase progress rather than periodic heartbeat success.
-The candidate was built at 2154af1b. Its four exact CLI controls still hit the
-unchanged silence deadline; None alone did not solve the observation problem.
-An embedding diagnostic using the same executeProgram/runtime/preparation path,
-with only the existing tracePhases option enabled, completes all four exact
-fixtures with golden output at frozen 2154af1b (370.302 / 444.301 / 427.047 /
-561.319 seconds). The same Plew host object relinked with the previous default
-native policy also completes compiler_session_demand with golden output.
-Those diagnostic runs overlapped, so their elapsed times are not a controlled
-performance comparison. Native ORC/lazy controls pass normally and with LLVM22
-ASan/LSan; this does not instrument every generated JIT instruction.
-
-[Traced controls](https://github.com/plew-lang/meta/blob/main/evidence/existing-feature-conformance/source-owner-facts/session-traced-jit.json),
-[default-policy control](https://github.com/plew-lang/meta/blob/main/evidence/existing-feature-conformance/source-owner-facts/session-traced-default-jit.json),
-and [native controls](https://github.com/plew-lang/meta/blob/main/evidence/existing-feature-conformance/source-owner-facts/jit-codegen-native-controls.json)
-record the exact scope. All process handles are recovered. This establishes
-bounded successful current diagnostic executions, not normal CLI completion
-under its no-progress watchdog or a universal historical-cause claim. Keep the
-remaining CLI observability/materialization-latency question explicit; do not
-mislabel active compilation as a demonstrated deadlock or weaken the watchdog.
+The task Outcomes and cli-lazy-progress-repair.json retain source/candidate/input
+hashes, commands and independent checks. Traced embedding diagnostics and JIT
+optimization policy experiments are historical bounded observations, not new
+runtime semantics or proof that the entire old stall class had a single cause.
+No deadline/heartbeat relaxation or mandatory noisy application stderr was added.
+The area has no remaining in-scope implementation obligation; final frozen
+candidate G2a/G2b, phase three and main/seed/carrier promotion remain uncertified.
