@@ -54,16 +54,17 @@ retains gate totals and comparison hashes. Required source-copy placement repair
 reviewed finite scope and explicit dependencies. Affected area/G1
 admission must reopen; G2b remains incomplete. Gen/deps/ASan were not started.
 
-## Refreshed Candidate Gate Progress
+## Current Frozen-Candidate Gate Progress
 
-Measured compiler2d7c785b from refreshed G2a passes full normal
-20261025T051128-test-ed8f9a: run1523, panic50, reject1028, part93,
-partreject84, midcoverage1, midborrowedread1; skip0/fail0, exit0, inputs
-unchanged. Receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-normal.json.
-The original fifteen regressions remain fixed without expectation edits.
-Gen20261025T054226-gen-36c9dc fails directiveargs harness compilation,
-23 positive/5 reject/1 failure, exit1 and unchanged inputs. Receipt
+Measured compiler3c532ce1 from G2a20261025T061121-self-host-f849e0
+passes normal20261025T062041-test-509a3f: run1524, panic50, reject1029,
+part93, partreject84, midcoverage1 and midborrowedread1; skip0/fail0,
+exit0 and inputs unchanged. Receipt
+meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-normal.json.
+Full gen/deps/LLVM22 ASan-LSan on this exact candidate remain pending.
+
+The earlier gen failure is retained at
 meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-gen-initial-failure.json.
-Independent scoped repairs com-v1wa/com-tkz7 retain selected derive type and
-close common untyped Make admission separately. Affected areas/G1/G2a reopen
-for changed inputs. Deps/LLVM22 ASan-LSan were not started.
+com-v1wa/com-tkz7 independently close the synthetic owner/span producer and
+common named-Make recovery; their scoped gen25/5 does not replace this final
+measured-candidate gen gate. No valid old fixture expectation was changed.
