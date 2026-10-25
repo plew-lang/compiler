@@ -76,27 +76,17 @@ Their Outcomes preserve creation intent and canonical semantics without exposing
 writers or weakening verifier/test obligations. The old full normal remains
 failed, not relabeled green.
 
-G1 candidate: production b16439fa with fixture573ff620; scoped binary
-bin/plewc-chain-placement-3 SHA256
-550bb667e81c70addc44005caf46d61a866c69ebdc917a0599b0d20acfdc57bc.
-Syntax exact 0.1.11-dev.30 at 8c89204230c3d865ea95a03382c3fd213731e1de,
-spec9b3e18d, no override. Adopted carrier remains bin/plewc-orc-lifetime,
-SHA256 c36716d9f95e123f2b62158e44e2287476757eaf52b6bd93e41bc1a2a47d18b3.
+G1 candidate: production043e2402 with fixture17537a40; scoped binary
+bin/plewc-gen-receiver-3 SHA256
+f67e25ae60b8ee8bba902325f6341c805fa39619100f6402ebd29b8230c88785.
+Syntax exact0.1.11-dev.30 /8c89204230c3d865ea95a03382c3fd213731e1de,
+spec9b3e18d and adopted carrier c36716d9 remain unchanged, no override.
 
-com-6cw6 is an explicit admission prerequisite and independently closes the
-original fifteen normal rejections plus nested-root and duplicate controls.
-Affected areas met-ucze/met-ia09 have independent readmission. The refreshed
-receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-admission.json
-records six tracked input groups, exact manifests and carrier. Prior admission
-and formal gates are historical. G2a must produce a new measured compiler for G2b. No full gate, parent
-completion or main/seed/carrier promotion is accepted here.
-
-## Refreshed Outcome
-
-Independent c2_classification_review accepts G1 at31a550f2. All61 prerequisite
-descendants are closed, with no missing ID/cycle. Both381-input scoped maps,
-all5,917 tracked input files in six groups, manifests, actual carrier hashes,
-spec and Syntax pins match the refreshed receipt. Inputs have not changed
-since fixture573ff620. Eleven-condition ownership, affected area readmission and
-the proof-interpretation versus reselection distinction are reconciled. G2a
-starts with this freeze; its new measured compiler must be used for G2b.
+com-6cw6 closes original chain placement rejects; com-v1wa/com-tkz7 close the
+final-gen exposed synthetic configuration producer and common Make recovery.
+Both sets have independent scoped completion/affected-area readmission. The
+refreshed receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-admission.json
+records tracked groups/manifests/carriers. Prior admission/formal/normal results
+remain valid only for their inputs; this freeze needs fresh G2a/G2b exact measured
+compiler gates. Refreshed independent G1 confirmation pending. Main/seed/adopted
+carrier promotion remains outside this admission.

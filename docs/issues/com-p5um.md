@@ -54,3 +54,7 @@ Receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-se
 retains all timing/artifact references. Old gate5.954835 remains in Git/raw
 history and is not a same-source comparison. Full suites, parent completion
 and main/seed/adopted-carrier promotion remain uncertified.
+
+The final generator gate exposed com-v1wa/com-tkz7 after this measurement.
+Those production repairs reopen this task; the recorded6.179747 gate remains
+historical input evidence, not new-candidate certification. Refresh after G1.

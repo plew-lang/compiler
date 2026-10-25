@@ -1,6 +1,6 @@
 ---
 id: met-6e6k
-status: open
+status: closed
 deps: [com-g2qg, com-nplw, com-nucu, com-m0bf, com-e9l2, com-loyb, com-3q2n, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-o3vw, com-v1wa, com-tkz7]
 links: []
 created: 2026-10-13T01:40:08Z
@@ -79,3 +79,15 @@ to the new candidate. No unfinished in-scope implementation remains here.
 Broader unimplemented existential/interface shapes remain com-uutc/com-b1ro,
 not added requirements of this existing-feature closure. Final candidate G2a/G2b,
 phase-three completion and main/seed/adopted-carrier promotion remain separate.
+
+## Synthetic Construction Readmission
+
+Independent b2_completion_review accepts com-v1wa/com-tkz7 at043e2402
+and this area's reclosure under its earlier finite coverage review. Gen retains
+the admitted declaration offset separately from canonical name spelling; shared
+Record rejects missing named producer terms instead of recreating them. Gen25
+positive/5 reject and gen-input-ast, native12/reject7 and sourcecheck pass,
+inputs unchanged and independently matched. Original directiveargs unchanged;
+alias/homonymous configuration and missing/retained fact controls pass. Receipt
+meta/evidence/existing-feature-conformance/source-owner-facts/synthetic-construction-identity-repair.json.
+Changed-input G1/G2 and parent completion remain separate obligations.

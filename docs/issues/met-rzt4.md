@@ -1,6 +1,6 @@
 ---
 id: met-rzt4
-status: open
+status: closed
 deps: [com-d57o, com-vrvl, com-auvx, com-v1wa]
 links: []
 created: 2026-10-13T01:40:08Z
@@ -65,3 +65,15 @@ runtime semantics or proof that the entire old stall class had a single cause.
 No deadline/heartbeat relaxation or mandatory noisy application stderr was added.
 The area has no remaining in-scope implementation obligation; final frozen
 candidate G2a/G2b, phase three and main/seed/carrier promotion remain uncertified.
+
+## Synthetic Construction Readmission
+
+Independent b2_completion_review accepts com-v1wa/com-tkz7 at043e2402
+and this area's reclosure under its earlier finite coverage review. Gen retains
+the admitted declaration offset separately from canonical name spelling; shared
+Record rejects missing named producer terms instead of recreating them. Gen25
+positive/5 reject and gen-input-ast, native12/reject7 and sourcecheck pass,
+inputs unchanged and independently matched. Original directiveargs unchanged;
+alias/homonymous configuration and missing/retained fact controls pass. Receipt
+meta/evidence/existing-feature-conformance/source-owner-facts/synthetic-construction-identity-repair.json.
+Changed-input G1/G2 and parent completion remain separate obligations.
