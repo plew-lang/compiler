@@ -1,0 +1,23 @@
+use @Std/Io only { print }
+
+// This declared nonreturning body is checked, but never invoked.
+// Returns inside another invocation must not escape closure construction.
+diverge fn waitForever() {
+    val callback = fn() -> I64 { while true { return 7I64 } }
+    while true {}
+}
+
+fn nestedReturn() -> I64 {
+    while true { while true { return 9I64 } }
+}
+
+fn warnedValue() -> I64 {
+    while true { return 4I64 }
+    val value: I64 = { give 8I64 }
+    return value
+}
+
+fn main() {
+    print(nestedReturn())
+    print(warnedValue())
+}

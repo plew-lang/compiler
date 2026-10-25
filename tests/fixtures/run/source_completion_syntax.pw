@@ -25,7 +25,7 @@ fn main() {
     val staticResult = completion(source: "fn body() {{ val value = {{ while true {{}}\n give 1I64 }} }}")
     assert(staticResult.source.normal() && !staticResult.execution.normal(), message: "staticResult")
     val loopReturn = completion(source: "fn body() {{ while true {{ return 0I64 }} }}")
-    assert(loopReturn.source.normal() && !loopReturn.execution.normal() && loopReturn.execution.returns(), message: "loopReturn")
+    assert(loopReturn.source.normal() && loopReturn.source.returns() && !loopReturn.execution.normal() && loopReturn.execution.returns(), message: "loopReturn")
     val mixed = completion(source: "fn body() {{ if flag {{ return 0I64 }} else {{ while true {{}} }} }}")
     assert(mixed.source.normal() && !mixed.execution.normal(), message: "mixed")
     val allReturns = completion(source: "fn body() {{ if flag {{ return 0I64 }} else {{ return 1I64 }} }}")

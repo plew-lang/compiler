@@ -1,0 +1,3 @@
+diverge fn stop(flag: Bool) { while flag { return () }
+    while true {} }
+fn main() { stop(flag: true) }

@@ -36,9 +36,9 @@ fn main() {
     val valueBranch = completionChoice(first: completionBlock(flow: giving), second: returning)
     assert(valueBranch.source.normal() && valueBranch.execution.normal())
 
-    // loop { return value }: preserve the execution transfer, not source divergence.
+    // A loop retains a possible invocation return and permits later source typing.
     val returningLoop = completionLoop(body: returning, maySkip: false)
-    assert(returningLoop.source.normal() && !returningLoop.source.returns())
+    assert(returningLoop.source.normal() && returningLoop.source.returns())
     assert(!returningLoop.execution.normal() && returningLoop.execution.returns())
 
     // A block does not consume an enclosing loop's exits; that loop does.
@@ -55,6 +55,16 @@ fn main() {
     val nested = completionLoop(body: brokenLoop, maySkip: false)
     assert(nested.source.normal() && !nested.execution.normal())
     val optionalLoop = completionLoop(body: returning, maySkip: true)
+    assert(optionalLoop.source.normal() && optionalLoop.source.returns())
     assert(optionalLoop.execution.normal() && optionalLoop.execution.returns())
+    val nestedReturn = completionLoop(body: returningLoop, maySkip: false)
+    assert(nestedReturn.source.normal() && nestedReturn.source.returns())
+    assert(!nestedReturn.execution.normal() && nestedReturn.execution.returns())
+    val warnedReturn = completionLoop(body: completionThen(prefix: endless, next: returning), maySkip: false)
+    assert(warnedReturn.source.normal() && warnedReturn.source.returns())
+    assert(!warnedReturn.execution.normal() && !warnedReturn.execution.returns())
+    val divergingLoop = completionLoop(body: diverging, maySkip: false)
+    assert(divergingLoop.source.normal() && divergingLoop.source.diverges())
+    assert(!divergingLoop.execution.normal() && divergingLoop.execution.diverges())
     print("ok")
 }

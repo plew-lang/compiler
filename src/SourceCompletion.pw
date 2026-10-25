@@ -74,11 +74,13 @@ pub fn completionBlock(flow: SourceCompletion) -> SourceCompletion {
 }
 
 pub fn completionLoop(body: SourceCompletion, maySkip: Bool) -> SourceCompletion {
-    // Only return/diverge escape the loop's execution boundary. Source typing
-    // continues after a loop regardless of its analyzed execution behavior.
+    // Loops consume their break/continue edges, not invocation-level exits.
+    // Source typing still continues afterwards, including when execution cannot;
+    // retaining possible return/diverge does not remove that normal source edge.
+    val source = <CompletionEdges bits=1U64 | (body.source.bits & 48U64) />
     mut val bits = body.execution.bits & 48U64
     if maySkip || body.execution.breaks() { bits |= 1U64 }
-    return <SourceCompletion execution=<CompletionEdges bits=bits /> />
+    return <SourceCompletion source=source execution=<CompletionEdges bits=bits /> />
 }
 
 // Source block result context distinguishes statements from value regions.
