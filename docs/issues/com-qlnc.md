@@ -26,6 +26,21 @@ position with semantically distinct types independent of unresolved type
 parameters. Generic arity and other generic parameter positions need not match.
 Different ordered labels are different selectors, not type overloads.
 
+## Architectural Problem to Address
+
+The ordinary/trait acceptance mismatch exposes fragmented declaration-admission
+responsibility, not only an incorrect individual predicate. Registration owns
+an extra generic-shape condition outside the shared overlap relation, while the
+trait requirement entry calls only that relation. Sharing a type-comparison
+helper therefore did not share the complete acceptance contract.
+
+The design update must make the owner and complete inputs/results of overload
+declaration admission explicit. Each entry supplies its declaration domain,
+normalized signature/binder context and callable forms to that authority;
+entry-specific traversal or diagnostics must not reimplement semantic acceptance.
+This obligation is bounded to overload declaration admission, not a claim that
+all compiler decisions or all declaration-kind rules should be merged.
+
 ## Finite Work
 
 1. Update spec/02-type-system/07-methods-impl.md to remove the blanket generic
@@ -48,7 +63,11 @@ Different ordered labels are different selectors, not type overloads.
    methods, associated functions, factories and trait requirements; source
    selection retains the chosen declaration/requirement and binder environment
    through concrete and existential consumers. Distinguish declaration conflicts,
-   call applicability and successful publication.
+   call applicability and successful publication. Map every supported declaration
+   entry to the common authority, define where successful declaration admission
+   is established, and identify the independent checks the implementation must
+   remove. Preserve genuinely distinct receiver/origin/capability rules as explicit
+   inputs or separate contracts rather than accidental caller-specific exceptions.
 5. Reconcile met-g53w's implementation acceptance cases with the resulting
    canonical contracts. Record spec/compiler document revisions and obtain
    independent completion review of the documentation before closing this task.
@@ -59,6 +78,10 @@ The spec and design agree on acceptance/rejection examples and the ownership of
 each decision; old generic-shape claims and links are reconciled. The reviewed
 decision is readable from the canonical documents without depending on chat.
 Validate the documentation diff, local links and relevant contradictory wording.
+The design explains the fragmented responsibility evidenced above and specifies
+how all supported declaration entries consume one complete admission decision.
+A generic instruction to share helpers, or a trait-only missing-check fix, is
+insufficient to close this documentation task.
 
 This task changes documentation and implementation-task contracts only. It does
 not implement overload resolution, alter compiler/test expectations, run builds

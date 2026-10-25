@@ -45,6 +45,22 @@ are retained in meta/evidence/existing-feature-conformance/source-owner-facts/
 overload-identity-checkpoint.json; raw scratch is meta/tmp/
 phase3-overload-identity-repair/generic-shape/results.json.
 
+## Exposed Design Defect: Fragmented Admission Authority
+
+This is not merely an incorrect valid/invalid result or a missing trait check.
+The complete overload-admission contract is scattered across entry points:
+Lower/Registration.pw::checkFuncRegistration applies sameGenericShape outside
+callableFormsMayOverlap, whereas Check/Duplicate.pw::checkDuplicateTraitReqs
+calls only callableFormsMayOverlap. A shared overlap helper did not prevent the
+callers from implementing different acceptance contracts.
+
+The required repair centralizes responsibility for that complete decision.
+Adding an equivalent condition to the trait loop, keeping parallel predicates
+in sync, or adding an assertion that compares independent authorities is not the
+finite end state. This causal finding is based on the inspected paths and the
+ordinary/trait check contrasts above; it does not assert that every callable
+entry has already been audited or that unrelated declaration rules are identical.
+
 ## Design Boundary and Required Finite End State
 
 After com-qlnc closes, implement its canonical pairwise concrete-discriminator
@@ -65,6 +81,17 @@ rejection, aliases/Self/projections, defaults, ordinary/trait consistency,
 explicit type arguments and ambiguous calls. Perform affected execution modes
 and independent finite completion review. Final G1/G2a/G2b/G3 remain required;
 no threshold, verifier or test weakening is authorized by this contract update.
+
+Completion must include an entry-to-authority audit covering free functions,
+methods, associated functions, explicit and default/memberwise factories,
+trait requirements and default-omitted callable forms. Record the actual
+producer/decision locations, remaining legitimate domain-specific checks,
+removed independent predicates and successful-admission boundary. All supported
+entries must use the canonical overload rule before reporting declaration
+success. Paired valid/reject controls across applicable declaration kinds must
+demonstrate agreement, including unused declarations; call/runtime controls
+must retain the selected identity through final use. Matching outputs for the
+original counterexample alone do not establish this architectural completion.
 
 This is distinct from com-y8l4's canonical duplicate-signature identity and is
 linked for coordination, not imposed as an invented sequencing dependency.
