@@ -49,3 +49,26 @@ changed candidate's G2a/G2b. The prior formal result remains historical evidence
 Independent body_receiver_completion_review accepts this finite task scope and
 its split condition. It is not cause confirmation or implementation acceptance.
 No new language surface, ABI, altered watchdog or test/verifier weakening.
+
+## Implemented Boundary and Targeted Results
+
+Production b16439fa (with a79c7b8c/5028e749/d88d92ac) separates
+lexical body ownership from callable surface ownership. Conform.viewRootOwner
+and viewRootConformIdx preserve where a root first became necessary; Func
+sourceRootConformIdx survives copy production and deduplication. Both final
+copy readers use the already selected ordered proof and complete receiver to
+interpret that anchor. Membership of an owner anywhere in the path is no longer
+sufficient. The nested Root -> Via -> Base and Root -> Base contrast prevents
+that regression; exact duplicate selected placements still fail both readers.
+The diagnostic-only gated candidate bucket preserves ordinary/inherent priority
+and labels/types; it never selects or publishes a gated call.
+
+Fixture 573ff620 and candidate bin/plewc-chain-placement-3 (SHA256
+550bb667e81c70addc44005caf46d61a866c69ebdc917a0599b0d20acfdc57bc)
+from standard build 20261025T045029-build-8b56fb pass focused-2 native47 /
+reject23 and sourcecheck-3, exit zero and recorded inputs unchanged. All fifteen
+original reject sources/expectations and default-forwarding41/6 are retained.
+Receipt meta/evidence/existing-feature-conformance/source-owner-facts/trait-chain-placement-repair.json
+records current results and initial failures remain in scratch.
+Independent final result/fingerprint confirmation is pending; static re-review
+reports no blocker. Changed-candidate G1/G2 obligations remain open.

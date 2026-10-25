@@ -1,6 +1,6 @@
 ---
 id: com-p5um
-status: closed
+status: open
 deps: [com-61jt, com-auvx]
 links: []
 created: 2026-10-23T10:41:59Z
@@ -38,7 +38,7 @@ current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
 
-## Outcome
+## Historical Gate and Current Refresh
 
 Independent c2_classification_review accepts the standard gate
 20261025T034133-self-host-290b80 at source 3aef0546 (production b6645ac1,
@@ -55,3 +55,8 @@ compiler, starting only after the formal gate completed.
 Receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-self-host.json
 retains all measurements and raw references. G2b, phase three and main/seed/
 adopted-carrier promotion remain uncertified.
+
+Production com-6cw6 changed the frozen inputs after the recorded gate. This
+task is reopened: the result above remains valid for its recorded input only.
+After refreshed G1 admission, rerun standard self-host with the unchanged
+adopted carrier and use its new measured compiler for G2b.
