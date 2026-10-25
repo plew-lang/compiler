@@ -61,7 +61,12 @@ passes normal20261025T062041-test-509a3f: run1524, panic50, reject1029,
 part93, partreject84, midcoverage1 and midborrowedread1; skip0/fail0,
 exit0 and inputs unchanged. Receipt
 meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-normal.json.
-Full gen/deps/LLVM22 ASan-LSan on this exact candidate remain pending.
+Full gen20261025T065138-gen-d05081 passes25 positive/5 reject, skip0/
+fail0 and gen-input-ast; deps20261025T065242-deps-1bd648 passes all10
+dependency checks. Both exit0 with unchanged inputs. Corresponding tracked
+receipts phase3g-gen.json / phase3g-deps.json retain exact compiler and result
+hashes. LLVM22 full ASan-LSan20261025T065258-asan-3d0f5a is in progress;
+G2b remains open until all required A-E markers and independent review.
 
 The earlier gen failure is retained at
 meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-gen-initial-failure.json.
