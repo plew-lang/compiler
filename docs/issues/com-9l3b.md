@@ -1,6 +1,6 @@
 ---
 id: com-9l3b
-status: in_progress
+status: closed
 deps: [com-p5um, com-o3vw, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-072n, com-3qne, com-uuya, com-vuv9, com-6cw6, com-v1wa, com-tkz7]
 links: []
 created: 2026-10-23T10:41:59Z
@@ -67,8 +67,8 @@ dependency checks. Both exit0 with unchanged inputs. Corresponding tracked
 receipts phase3g-gen.json / phase3g-deps.json retain exact compiler and result
 hashes. LLVM22 full ASan-LSan20261025T065258-asan-3d0f5a exits0 with unchanged
 5,990 inputs: A1/B2603/C1524/D50/E80, all levels clean,76.38 minutes.
-Receipt phase3g-asan.json. Independent final gate/identity/input review is
-pending; G3 and the parent remain unaccepted.
+Receipt phase3g-asan.json. Independent c2_classification_review accepts all final gates/identities/inputs;
+G3 and the parent remain unaccepted until final synchronization.
 
 All four profiles use exact measured compiler3c532ce1 from refreshed G2a.
 A byte-identical convenience copy is saved as bin/plewc-phase3-final; this
@@ -79,3 +79,17 @@ meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-gen-initia
 com-v1wa/com-tkz7 independently close the synthetic owner/span producer and
 common named-Make recovery; their scoped gen25/5 does not replace this final
 measured-candidate gen gate. No valid old fixture expectation was changed.
+
+## Outcome
+
+Independent c2_classification_review accepts this bounded gate task. All four
+receipt/raw/config/log hashes and each5,990-input before/after/current map
+match the frozen source and G1. G2a shared inputs match except profile-specific
+tools/carrier. Actual measured compiler3c532ce1 is common to all profiles.
+LLVM22.1.8 tools, every A-E final marker, E80 exact manifest/3A registration,
+raw compiler instrumentation and actual UAF detector controls are confirmed.
+No skips/failures or missing final markers.
+
+Receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-final-gates.json
+links the four tracked gates. G3 now owns final eleven-criterion synchronization.
+This does not close phase4/com-604k or promote main/seeds/adopted carrier.

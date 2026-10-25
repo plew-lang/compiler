@@ -1,6 +1,6 @@
 ---
 id: com-lzpe
-status: open
+status: in_progress
 deps: [com-9l3b]
 links: []
 created: 2026-10-23T10:41:59Z
