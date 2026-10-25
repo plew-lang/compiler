@@ -2,7 +2,7 @@ use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { TraitConstraint, TraitInstanceKey, ConformanceProofDemand }
+use /Ir only { TraitConstraint, TraitInstanceKey, ConformanceProofDemand, CallResolution }
 
 fn main() {
     mut val compiler = <Comp />
@@ -14,6 +14,8 @@ fn main() {
     val parameters = compiler.arena.functionAt(index: context).params
     val target = 1U64
     val constraint = <TraitConstraint key=<TraitInstanceKey owner=compiler.decls.traitAt(index: target).nameStart positionalArgs=[] /> assocPredicates=[] />
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.langTypeRefAt(nameStart: integerName.nameStart, nameLen: integerName.nameLen, args: [])
     mut val keys: Array[U64] = []
     mut val index = 0U64
     while index < parameters.count() {
@@ -28,6 +30,11 @@ fn main() {
         val body = compiler.internBodyInstance(fnIdx: selected, environment: environment)
         for previous in keys { assert(previous != body) }
         keys.append(body)
+        compiler.arena.setBodySignature(bodyId: body, parameters: [], passings: [], result: integer, receiverType: 0U64)
+        val call = <CallResolution bodyId=body exprId=0U64 callee=selected calleeBodyId=body recvTypeRef=receiver resultTypeRef=integer />
+        assert(compiler.finalStaticCalleeIsComplete(e: call).unwrap())
+        compiler.arena.setBodySignature(bodyId: body, parameters: [], passings: [], result: integer, receiverType: receiver)
+        assert(!compiler.finalStaticCalleeIsComplete(e: call).unwrap())
         val foreign = compiler.funcParamAt(params: parameters, index: 1U64 - index).ty
         assert(compiler.proofConcreteWitness(proof: proof, receiverRef: foreign, traitIdx: target, reqIdx: 0U64).unwrap() == compiler.arena.functionCount())
         index += 1U64
