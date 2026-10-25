@@ -1,0 +1,4 @@
+fn main() {
+    val values: Array[I32] = [1]
+    val value = values[0I32]
+}

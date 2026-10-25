@@ -1,6 +1,6 @@
 ---
 id: com-o3vw
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-24T19:45:10Z
@@ -32,3 +32,17 @@ compiler/tmp/perf-six-type-pools/arrow-control/summary.json; durable final
 performance milestone receipt will reference it. Independent b2 classified
 this separately from two internal fixture maintenance tasks. Required before
 G2b green; does not block the separately scoped speed goal.
+
+## Confirmed Producer
+
+Fresh56fc7954 reproduces the unchanged fixture with trace-codegen:
+`expected=U64 inferred=U64 expr=16 position=index unresolved=false`.
+The failure is the unsuffixed index0, before the assignment RHS. Source Record's
+structural Array/Buffer branch constructed its U64 expectation via simpleTypeRef,
+losing ambient declaration identity; tcCheckArrayIndex correctly reads the
+canonical lang U64. The actual source field expectation is not the cause.
+Repair this one contextual producer with langTypeRefAt and keep strict head/type
+identity and final compatibility unchanged. Preserve the original42/99 fixture,
+and contrast unsuffixed structural keys, generic/nested/read/write uses, an
+explicit I32 key and an explicit I64 value for an I32 field. Raw before trace:
+compiler/tmp/phase3-indexed-reference/before.stderr.

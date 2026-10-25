@@ -1,0 +1,7 @@
+use @Std/Core only { MutableRef }
+struct Box { pub mut val value: I32 }
+pub impl Box { factory }
+fn main() {
+    val values: Array[MutableRef[Box]] = [<MutableRef[Box] value=<Box value=1 /> />]
+    values[0]->value = 99I64
+}

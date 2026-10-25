@@ -2032,7 +2032,7 @@ pub impl Comp {
                             // Publish context before recording the key so Mid
                             // never has to infer an unsuffixed literal's type.
                             val keyName: Bind = self.kwSpan(kw: "U64", kwLen: 3U64)
-                            keyTerm = self.simpleTypeRef(nameStart: keyName.nameStart, nameLen: keyName.nameLen)
+                            keyTerm = self.langTypeRefAt(nameStart: keyName.nameStart, nameLen: keyName.nameLen, args: [])
                         }
                     }
                 }

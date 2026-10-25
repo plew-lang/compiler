@@ -1,0 +1,19 @@
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
+struct Box { pub mut val value: I32 }
+pub impl Box { factory }
+fn element[Element](values: Array[Element]) -> Element { return values[0] }
+fn main() {
+    mut val numbers: Array[I32] = [3, 4]
+    print(numbers[0])
+    numbers[1] = 8
+    print(element(values: numbers))
+    print(numbers[1])
+    val nested: Array[Array[I32]] = [numbers]
+    print(nested[0][1])
+    val bytes = "A".bytes()
+    print(bytes[0])
+    val references: Array[MutableRef[Box]] = [<MutableRef[Box] value=<Box value=1 /> />]
+    references[0]->value = 42
+    print(references[0]->value)
+}
