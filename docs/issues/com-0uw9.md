@@ -1,6 +1,6 @@
 ---
 id: com-0uw9
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T19:53:11Z
@@ -49,3 +49,18 @@ before any owner publication, then requests the real lexical body and reads its
 immutable payload. Canonical Array identity, one child and child/element type
 equality remain mandatory. Do not expose writer APIs, manually append incomplete
 AST metadata or accept the old Err. No production implementation changes.
+
+## Outcome
+
+Resolved by fixture-only commit 4a2c3388; production remains b6645ac1.
+Fresh c50d2a04 executes the complete array-1 fixture with exit 0 and original
+ok golden; 248 recorded inputs are unchanged. Independent
+body_receiver_completion_review inspected d27dc611 and the exact old Err,
+confirmed that Unrecorded/zero parent precedes real lexical-body recording,
+and checked canonical Array/child equality through the immutable payload.
+It certifies this finite maintenance without exposing writers or changing
+production, API, verifier or language semantics. The before diagnostic is kept.
+
+Raw compiler/tmp/phase3-internal-fixtures/array-1; receipt
+meta/evidence/existing-feature-conformance/source-owner-facts/array-record-fixture-maintenance.json.
+Final complete G2 gates remain mandatory and uncertified.
