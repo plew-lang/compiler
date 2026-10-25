@@ -250,7 +250,10 @@ com-wrjh/com-nr7y/com-jzdz at finite scope. The current finding inventory remain
 status is in each issue, not a reduced parent scope. Native9/reject27/mode18
 and unchanged-input diagnostic comparison are retained in
 return-owner-admission-repair.json. Other mandatory repairs and fresh final
-gates remain open; next P1 is com-cwu1.
+gates remain open. com-cwu1 is now independently accepted at1cff794a
+(native11/reject17/check-run14/associated3), with proof and complete argument
+contracts shared through final dynamic consumers. Next is canonical overload
+applicability/requirement identity in com-ra96/com-zy6r/com-y8l4.
 
 Fresh specification-first [com-9hf7](com-9hf7.md) confirms11 in-scope findings
 (3 P1/8 P2), assigned to10 finite required repair issues. The affected
