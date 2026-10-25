@@ -16,7 +16,9 @@ fn main() {
     if !compiler.typeRefEq(a: grounded, b: expected) { panic "parameter view lost" }
     val legacy = compiler.pushType(t: <TypeRef nameStart=binderName.nameStart nameLen=binderName.nameLen args=[] viewIds=[7U64] />)
     val legacyGrounded = compiler.groundTermInEnvironment(ref: legacy, params: [binder], values: [argument])
-    if !compiler.typeRefEq(a: legacyGrounded, b: expected) { panic "legacy parameter view lost" }
+    // A same-spelled leaf without the binder's ParamId is not that parameter.
+    // Substitution must preserve both its identity and its original view.
+    if legacyGrounded != legacy { panic "unowned same-spelled leaf substituted" }
     val foreign = compiler.pushType(t: <TypeRef nameStart=binderName.nameStart nameLen=binderName.nameLen paramId=22U64 args=[] viewIds=[7U64] />)
     if compiler.groundTermInEnvironment(ref: foreign, params: [binder], values: [argument]) != foreign { panic "foreign binder substituted" }
     val nested = compiler.pushType(t: <TypeRef nameStart=containerName.nameStart nameLen=containerName.nameLen args=[parameter] viewIds=[9U64] />)
