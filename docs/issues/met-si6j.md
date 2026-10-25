@@ -17,7 +17,16 @@ This is the parent for the active phase-three type-resolution/type-checking reme
 
 Scope is the compiler's currently provided type-checking surface and the already approved divergence/flow changes. This is not a requirement to implement every unsupported feature, broaden inference or implicit conversions, redesign runtime/backend, or add persistent incremental compilation. Declaration worklists interpret saved obligations; they must not become another AST-driven type checker.
 
-Implementation has resumed as phase three of existing-feature conformance. The initial [com-kp3y](com-kp3y.md) owner-storage increment and subsequent source-selection/evidence increments are implemented in part; their remaining closure follows the execution plan below. Completing a component does not complete this parent. [com-nsxb](com-nsxb.md) retains the detailed static findings and repair boundaries. [Checked-body storage and the restart design](../design/checked-body-storage.md) are adopted and reviewed; [met-j9mv](met-j9mv.md) retains the reconciled cumulative candidate and fresh baseline. Preserve these successful increments/evidence; do not repeat an unchanged baseline solely because this issue previously described the gate as pending. Worklog owns the selected candidate/carrier, active handles, verification and next step. Historical candidates and measurements in [migration evidence](https://github.com/plew-lang/meta/blob/main/evidence/typechecking-remediation/design-migration.md) do not establish current-tree readiness.
+The supported frontend surface is implemented through the finite area and child
+contracts below. [G1 admission](com-61jt.md) reconciles source-to-final-use
+authorities, removals, controls and remaining excluded boundaries. [G2a](com-p5um.md)
+proves the frozen candidate's fixed point/performance; [G2b](com-9l3b.md) proves
+its complete correctness/sanitizer gates. [G3](com-lzpe.md) owns the final
+independent eleven-criterion synchronization; that review is pending.
+[Existing-feature conformance](com-604k.md) remains open for phase four and final
+integration. Worklog owns the current candidate and next action; scoped evidence
+does not substitute for a final candidate's gates.
+
 
 Design authorities: [Body Checking](../design/body-checking.md), [Types and Evidence](../design/types-and-evidence.md), [Generics](../design/generics.md), [Compiler State](../design/compiler-state.md), [Frontend Handoffs](../design/frontend-handoffs.md). The storage supplement owns the adopted physical design and restart details; these chapters own logical contracts.
 
@@ -25,25 +34,17 @@ Design authorities: [Body Checking](../design/body-checking.md), [Types and Evid
 
 Each item requires implementation locations and scoped verification records, not checkbox completion from wrappers or green tests alone.
 
-1. [ ] Expected types only fill permitted unknown information or check compatibility; they never overwrite expression shape, explicit or committed semantic type.
-2. [ ] Distinguish unrecorded facts, local inference variables, deferred obligations, incompatibility, Unit, rigid parameters and no normal value. No unresolved source typing obligation survives successful publication.
-3. [ ] One authority for types, calls, proofs and conversions connects source recording/success through explicit instantiation to final Mid/backend consumers; no AST reinference or name reselection by final readers.
-4. [ ] Functions, factories, adapters, operators and implicit calls check complete signature, labels, ownership modes and bounds; candidate existence is not final validity.
-5. [ ] Under the same available context, expression wrapping changes acceptance only where the adopted value/divergence rules require it. Block/if/match/short-circuit share normal results and exit targets; checked dead code cannot contaminate live joins.
-6. [ ] Integrate approved divergence: value-position rejection, following-code errors versus analytical-loop warnings, loop-following give, empty match, diverging function values versus invocation and forbidden normal-function conversion. Centralize semantic completion; keep diagnostic reachability distinct from execution/ownership flow.
-7. [ ] check/build/run/gen use the same semantics for requested bodies. Lazy run may omit unused bodies; it may not defer invalidity in a requested body.
-8. [ ] Remove migrated reinference fallbacks, partial acceptance and duplicate semantic state; structurally separate constructing writers from immutable readers. Retained adapters are one-way representation transforms. Demonstrate final consumers, removed decisions and post-completion write rejection.
-9. [ ] Close historical D1/D4/D5 controls and classify/address D2/D3/D6 risks. Uninspected coverage is not completion; preserve representative positive/reject combinations.
-10. [ ] Complete normal, generation, dependency, ASan/LSan, fixed-point and formal performance gates with matching source/carrier/artifacts. Satisfy the user-approved formal median below 7 seconds or obtain an explicit approved change; focused and old-driver checks do not substitute.
-11. [ ] Synchronize design contracts, issue state and worklog. Unresolved in-scope items preclude completion; main integration follows the normal integration criteria.
-
-## Approved Bounded3E Admission
-
-On 2026-10-25 the user explicitly accepted closing3E without below7s.
-com-fuo8/E4/com-tl9c retain functional and generation2 fixed-point admission
-at36680385 with actual median7.072914s. The independently reviewed parent
-reconciliation is recorded in com-fuo8 and met-acfl. This bounded decision
-does not certify the eleven criteria or the final G2a/G2b gates.
+1. [x] Expected types only fill permitted unknown information or check compatibility; they never overwrite expression shape, explicit or committed semantic type.
+2. [x] Distinguish unrecorded facts, local inference variables, deferred obligations, incompatibility, Unit, rigid parameters and no normal value. No unresolved source typing obligation survives successful publication.
+3. [x] One authority for types, calls, proofs and conversions connects source recording/success through explicit instantiation to final Mid/backend consumers; no AST reinference or name reselection by final readers.
+4. [x] Functions, factories, adapters, operators and implicit calls check complete signature, labels, ownership modes and bounds; candidate existence is not final validity.
+5. [x] Under the same available context, expression wrapping changes acceptance only where the adopted value/divergence rules require it. Block/if/match/short-circuit share normal results and exit targets; checked dead code cannot contaminate live joins.
+6. [x] Integrate approved divergence: value-position rejection, following-code errors versus analytical-loop warnings, loop-following give, empty match, diverging function values versus invocation and forbidden normal-function conversion. Centralize semantic completion; keep diagnostic reachability distinct from execution/ownership flow.
+7. [x] check/build/run/gen use the same semantics for requested bodies. Lazy run may omit unused bodies; it may not defer invalidity in a requested body.
+8. [x] Remove migrated reinference fallbacks, partial acceptance and duplicate semantic state; structurally separate constructing writers from immutable readers. Retained adapters are one-way representation transforms. Demonstrate final consumers, removed decisions and post-completion write rejection.
+9. [x] Close historical D1/D4/D5 controls and classify/address D2/D3/D6 risks. Uninspected coverage is not completion; preserve representative positive/reject combinations.
+10. [x] Complete normal, generation, dependency, ASan/LSan, fixed-point and formal performance gates with matching source/carrier/artifacts. Satisfy the user-approved formal median below 7 seconds or obtain an explicit approved change; focused and old-driver checks do not substitute.
+11. [x] Synchronize design contracts, issue state and worklog. Unresolved in-scope items preclude completion; main integration follows the normal integration criteria.
 
 ## Work Units
 
@@ -59,14 +60,11 @@ restart design, and [com-gyup](com-gyup.md) the closed bounded ownership study.
 
 ## Phase Three Execution Plan
 
-**3A is complete** through [com-g2qg](com-g2qg.md), with the existing
-[closure record](met-6e6k.md#reconciled-area-completion) and
-[independent review](com-h4pz.md#outcome). [B0](com-qehq.md) has completed the eight-path reconciliation. Its
-[current table](met-ucze.md#reconciled-area-completion) routes remaining
-work to the bounded owners. [B1](com-qb05.md#outcome) closes written static
-calls with scoped fresh controls; the selected next task belongs to worklog.
-Existing storage, selection and proof handoff are preserved; individual child
-closure does not certify other assigned repairs or final-candidate gates.
+A–F area/child Outcomes retain their independently reviewed producer, saved
+authority, final consumer and removed-path records. The [type/conversion area](met-6e6k.md#reconciled-area-completion)
+and [eight-path selection area](met-ucze.md#reconciled-area-completion) provide
+closure routing; actual states and prerequisites belong to tk. G1 and G2 are
+closed. Only the G3 final documentation/criterion review remains in this parent.
 
 The [work-breakdown review](com-hxtr.md#outcome) is addressed by separating
 milestones 3B–3F from their real child tickets. The tickets name actual entry
@@ -236,3 +234,29 @@ Stop for erroneous tests except authorized cases: tests broken by an approved sp
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
 
 The existing typed-source parent is the frontend workstream within com-604k, not the parent of every conformance task. Its 11 criteria remain mandatory on the admitted source surface, with the approved below-7-second target. Missing unique-generic/loop/new-reference facilities remain separate. Current acceptance controls from com-uutc are discharged here; unsupported forms are not enabled to close this parent.
+
+## Final Criterion Reconciliation
+
+The single eleven-row assignment is [G1](com-61jt.md#admission-reconciliation);
+area/child Outcomes establish the implementation and removed authority behind
+each row. G1 independently admitted all63 required prerequisites and the current
+tracked inputs. Latest required repairs retain exact trait root-birth placement
+(com-6cw6), directive receiver identity (com-v1wa), and missing named-construction
+producer refusal without bare-name recovery (com-tkz7). Earlier failed gates
+remain failed in their receipts and were not reused.
+
+Production043e2402/fixture17537a40 uses exact Syntax0.1.11-dev.30, unchanged
+spec9b3e18d and adopted carrierc36716d9. G2a20261025T061121-self-host-f849e0
+reaches generation3 fixed point, formal6.384374/5.954309/5.924183 seconds,
+median5.954309 below7. Its measured compiler3c532ce1 passes G2b normal1524/
+panic50/reject1029/part93/partreject84 plus both Mid controls, gen25/5 and
+gen-input-ast, dependencies10, LLVM22 ASan-LSan A1/B2603/C1524/D50/E80.
+All profiles exit0, input fingerprints unchanged, no skips/failures.
+
+Tracked receipts meta/evidence/existing-feature-conformance/source-owner-facts/
+phase3g-admission.json, phase3g-self-host.json and phase3g-final-gates.json
+retain the exact scopes, hashes, controls and accepted independent reviews.
+G3 final synchronization is prepared; independent final closure review pending.
+This checklist covers the supported frontend and approved divergence work only.
+It does not close phase4/com-604k, absent language features, main integration,
+seeds or adopted-carrier promotion.

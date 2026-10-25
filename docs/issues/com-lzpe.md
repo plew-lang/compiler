@@ -38,30 +38,24 @@ current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
 
-## Independent Closure Preparation Review
+## Prepared Final Reconciliation
 
-body_receiver_completion_review confirms the required graph is finite and
-contains no missing IDs; after all G2b gates pass, G3 can discharge the parent
-without another implementation audit. This preparation is not final acceptance.
+All required implementation/area tasks and G1/G2 are closed. The parent eleven
+criteria reference G1's single assignment plus G2a/G2b exact-candidate receipts.
+The producer/removal/consumer checks are not inferred from final tests alone.
+Source043e2402, fixture17537a40, measured compiler3c532ce1 and saved candidate
+bin/plewc-phase3-final are pinned; adopted carrierc36716d9 remains unchanged.
 
-Synchronize these exact documentation boundaries after the gates:
+The obsolete parent links and F4 target/repair references are corrected.
+body-checking/compiler-state/name-lookup no longer describe an old paused
+baseline as current. body_receiver_completion_review accepts that documentation
+change at8aa1857e without weakening uninspected module-membership/runtime
+boundaries or ORC teardown contracts. Parent/worklog/progress now distinguish
+all-gate completion from this pending final synchronization review.
 
-- Connect the eleven criteria to G1/areas and the exact G2a measured compiler's
-  normal/gen/deps/full sanitizer evidence. Normal alone does not close criterion10.
-- Fix met-si6j's obsolete met-6e6k#current-increment-closure-inventory and
-  met-ucze#current-eight-path-reconciliation links to #reconciled-area-completion.
-- Replace stale partial/reopened/next-G2a prose in parent/worklog/progress with
-  actual phase3 closure and phase4 handoff; keep failed runs in their receipts.
-- F4 D5 uses saved explicit source target identity, not relative targets. D2
-  includes com-6cw6's root-birth repair (and latest synthetic producer repairs
-  where applicable) rather than only the earlier owner controls.
-- body-checking/compiler-state/name-lookup implementation mappings still refer
-  to an old inspected baseline. Replace obsolete status with current scoped
-  closure references and explicit limits; do not claim uninspected moduleOf
-  callers or phase4 boundary work complete. Normative contracts need no change.
-- Keep com-604k and assigned phase4 ownership/collection/input/dependency/gen/
-  runtime/global-startup/diagnostic/current-Ref-FFI work open. Do not add absent
-  spawn/unique generic features, merge main or promote carriers/seeds here.
-
-Independent final review must inspect the synchronized record and actual full
-G2b results before this task and met-si6j close.
+com-604k remains open with the assigned phase-four ownership, collection,
+input/dependency/generation, runtime/startup, diagnostic and current Ref/FFI
+contracts. No absent spawn/unique-generic feature, main merge, seed or adopted
+carrier promotion is included. Receipt
+meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-completion.json.
+Independent final review pending before this task/met-si6j close.

@@ -19,11 +19,22 @@ Scope classification is [com-esri](com-esri.md). Its pinned matrix records inclu
 
 ## Ordering and Start Conditions
 
-Phase 2 is complete: com-p10m (checked Buffer arithmetic/allocation publication), com-w4c2 (root-owned use), com-6ygf (layout admission) and its teardown prerequisite com-34wl are closed. The strengthened declaration controls from independent review com-i5vp now pass after the symbol-pool lifetime repair. The [completion audit](../../../evidence/existing-feature-conformance/phase-two-review/completion-audit.json) matches current source/std/fixture and native-test hashes to the applicable saved gates, verifies affected native/product checks, and confirms generation-2 fixed point with median 6.211262 seconds. The fresh independent re-review [com-io5f](com-io5f.md) now recognizes all phase-two units, including the repaired ORC lifetime, with no blocking findings. This is bounded phase-two completion, not completion of the epic. Proceed to the frontend increment below; final integration gates remain required. The manual diagnostic repair com-ydgx is not a prerequisite when that repair uses the existing standard sanitizer gate.
+Phase 2 is complete under [com-io5f](com-io5f.md). Phase 3's supported
+frontend contracts and exact-candidate gates are complete under [met-si6j](met-si6j.md),
+with final G3 independent synchronization pending. These bounded closures do
+not close this epic. Remaining phase-four task contracts and the final
+integration/main criteria below still apply. The manual diagnostic repair
+com-ydgx is not a prerequisite when using the existing standard sanitizer gate.
+
 
 com-w4c2 follows the approved root-only use rule, with one module-wide binding environment shared by parts. Its scope includes real part/provider/consumer migration; the former file-local lookup direction is superseded. Reconsideration conditions for macro dependency verbosity/collisions belong to the source design, not an immediate exception or another mandatory feature family.
 
-The frontend uses com-kp3y for owner-local header/expression/binding/completion publication through actual Mid/Mono readers, then met-ucze/met-ia09/met-6e6k and final met-acfl closure. Existing closures/globals/aggregate/try/pattern readers must remain valid during each increment. Sequence is recommended implementation order, not evidence that every entire task blocks another: record a hard tk edge only where the complete named contract actually needs the prerequisite. met-si6j retains its existing current-surface criteria.
+The frontend closure connects owner-local facts and selection/evidence through
+explicit instances to actual Mid/backend consumers; source authority is not
+reconstructed at final use. Its implementation/removal and eleven-condition
+evidence belong to met-si6j and its closed areas. Phase four consumes that
+boundary instead of reopening type checking as an unspecified catch-all.
+
 
 Current-gen handoff/framing/receipts are scoped by [met-8b8w](met-8b8w.md); its parent com-vy62 retains the absent macro/macrointerface public-role migration, which does not block current-feature integration. This is a migration boundary, not a change to the adopted final macro design.
 
