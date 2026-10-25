@@ -1,6 +1,6 @@
 ---
 id: com-3qne
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T20:09:24Z
@@ -39,7 +39,7 @@ Isolated source cb6e411d builds but fresh-1 rejects the instance and assoc defau
 
 The result-only method-binder control also exposes recordParametricMethodCall using the strict finalMethodEnvironment before expected-result completion, dropping an already known provided proof along with unresolved method arguments. Source recording now retains inferMethodEnvironment's partial substitution/proof until the existing expected-result join and unchanged complete-call publication checks finish it. This is a finite paired call-record boundary in the same generic forwarding control; no final validation is weakened.
 
-## Current Implementation and Remaining Verification
+## Outcome and Scoped Evidence
 
 The isolated implementation at5c7b6562 keeps the selected declaration,
 conformance and exact lexical binder vector through ordinary source recording.
@@ -56,19 +56,34 @@ removes last-wins source-owner recovery and copying an unrelated target's
 implementation merely because it has the same receiver trait. Synthesized
 adapters stay private; authored source-callable surfaces remain available.
 
-The independent static review accepted these as the same finite paired
-forwarding repair. Fresh3 and fresh4 failures are retained. Fresh4 passes20/21
-native controls including the original crash, nominal defaults, generic binder
-transport and corruption controls; its new multi-target Unit test still exposes
-the copy-owner defect repaired at5c7b6562. That revision is not yet execution-
-certified: standard build20261025T025908-build-2e0884, the expanded native/reject
-controls, whole-source check and targeted LLVM22 ASan/LSan remain required.
-No final performance, fixed point, complete suite or main admission is claimed.
+The isolated production5c7b6562 was integrated asba447c9d; the reviewed
+primary head02235cfa has identical production/fixture inputs. Fresh compiler
+bin/plewc-forwarding-checked-5 has SHA256
+56fc795458e509f043f83389c599e7fc8cf9c0f1e243e4600013480089f1f0bf.
+Standard build20261025T025908-build-2e0884 passed. Native41/reject6,
+whole-compiler sourcecheck and targeted LLVM22 raw-IR ASan/LSan9 all passed with
+unchanged inputs. Every reject exits1 without an internal diagnostic. Sanitizer
+checks retain raw attributes, instrumented memory-access calls and leak detection.
+The original gm577_9_b11 now evaluates its ordinary default and calls the full
+gm576_9_b6(i64), without self recursion. Associated gf12() calls gf6(i64), with
+no ABI self operand. Unit instance/associated2-way bridges, default/full source,
+result-only binders, extension/view/newtype and foreign/duplicate owner controls
+execute successfully.
+
+Independent body_receiver_completion_review certifies this finite completion:
+335 fresh inputs,335 sourcecheck inputs,265 sanitizer inputs and293 integrated
+inputs match; producer, saved source/ParamId/proof, ordinary default planning,
+unique copy ownership and final body/ABI consumption close together. The
+normalized-only/derived/last-wins owner and cross-target copy paths are removed.
+Receipt: meta/evidence/existing-feature-conformance/source-owner-facts/default-forwarding-repair.json.
+Raw records, including failed iterations, are retained in the primary checkout
+under compiler/tmp/phase3-default-forwarding. G2 formal performance, fixed point,
+complete suites and main/seed/carrier admission remain mandatory and uncertified.
 
 The new internal identity fixture initially failed before its assertions because
 its two same-named associated implementations violated declaration overlap.
 Using separate source traits preserves the foreign-owner test's purpose; its
 staged diagnostic then executed successfully. The new Bool golden was corrected
 to the existing1/0 print contract. These were never-green new test setup errors,
-not changes to established source tests. All failed runs remain in the isolated
+not changes to established source tests. All failed runs remain in the primary
 checkout's tmp/phase3-default-forwarding directory.
