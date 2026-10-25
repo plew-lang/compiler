@@ -17,8 +17,18 @@ fn check(compiler: inout Comp) {
     assert(first.constraint.assocPredicates.count() == 1U64)
     val predicate = first.constraint.assocPredicates[0U64]
     assert(predicate.member == compiler.internBytes(s: "Item").nameId)
-    assert(compiler.arena.typeAt(index: predicate.value).nameId == predicate.member)
+    // A bare associated name lowers to Self#Collection[T].Item, not an
+    // unowned nominal leaf whose head happens to be spelled Item.
+    val projection = compiler.arena.typeAt(index: predicate.value)
+    assert(projection.assocNameId == predicate.member)
+    assert(projection.hasAssocTraitDecl)
+    assert(projection.assocTraitDeclOffset == declaration.nameStart)
+    assert(projection.assocTraitId == declaration.nameId)
+    val receiver = compiler.typeTermProjectionReceiver(t: projection)
+    assert(compiler.arena.typeTermAt(index: receiver).paramId == declaration.selfParamId)
+    assert(projection.assocTraitArgs.count() == 1U64)
     val parameter = compiler.traitBindAt(binds: declaration.typeParams, index: 0U64)
+    assert(compiler.arena.typeTermAt(index: projection.assocTraitArgs[0U64]).paramId == parameter.paramId)
     assert(compiler.arena.typeTermAt(index: third.constraint.assocPredicates[0U64].value).paramId == parameter.paramId)
     assert(first.constraint.key.positionalArgs.count() == 1U64)
     assert(!first.constraint.positionalArgsOpen)
@@ -33,6 +43,7 @@ fn main() {
     mut val parser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
     val file = Syntax.parseProgramSyntaxFile(p: inout parser)
     mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
     compiler.appendSrc(from: source.bytes())
     compiler.syntax = file
     mut val index = 0U64
@@ -47,6 +58,7 @@ fn main() {
     mut val valueParser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
     val values = Syntax.parseProgramAst(p: inout valueParser)
     mut val legacy = <Comp />
+    legacy.arena.reserveTypeSentinel()
     legacy.appendSrc(from: source.bytes())
     for val item in values { legacy.predeclareTraitItem(item: item) }
     for val item in values {
