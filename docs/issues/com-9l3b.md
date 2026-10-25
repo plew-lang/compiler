@@ -37,3 +37,19 @@ carrier hashes, decisive result/receipt and remaining scope here. Do not infer
 current success from this plan. Existing successful evidence can be reused only
 with matching scope/inputs. Full final-candidate gates are G2a/G2b; no gate is
 waived by a bounded child closing.
+
+## First Frozen-Candidate Gate Failure
+
+20261025T034939-test-9cc5f8 on measured 73078e5d exits 1 with unchanged
+inputs: run 1520, panic 50, reject 1011, part 93 and partreject 84 success;
+skip 0 / fail 15. All fifteen are diagnostic mismatches in the existing
+trait_subject_chain_conflict family and try_from_body_obligation. Eleven now
+report internal multiple receiver copies; four report no matching method.
+Same-input old 6ddf8f75 produces all fifteen expected ambiguous bare refusals,
+while fresh c50d2a04 and measured 73078e5d reproduce all regressions.
+Do not change these valid language-test expectations or count this normal green.
+
+Receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-normal-initial-failure.json
+retains gate totals and comparison hashes. A finite named source-copy placement
+repair is being reviewed before adding its task/dependencies. Affected area/G1
+admission must reopen; G2b remains incomplete. Gen/deps/ASan were not started.
