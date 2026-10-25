@@ -38,3 +38,37 @@ Review refinement: pass the known conformance edge together with the selected fu
 Isolated source cb6e411d builds but fresh-1 rejects the instance and assoc default controls at selectedStaticCallDeclaration: Provided admitted only pure trait-owned provided methods, not an exact conformance implementation. The follow-up distinguishes immutable authored implementation functions from normalized witness functions, initialized once in registerConform and retained through derived copies and completeConformWitnesses. The exact saved proof/receiver and authored source justify implementation/default-generator admission; ordinary trait namespace checks remain intact. No synthetic exemption is added.
 
 The result-only method-binder control also exposes recordParametricMethodCall using the strict finalMethodEnvironment before expected-result completion, dropping an already known provided proof along with unresolved method arguments. Source recording now retains inferMethodEnvironment's partial substitution/proof until the existing expected-result join and unchanged complete-call publication checks finish it. This is a finite paired call-record boundary in the same generic forwarding control; no final validation is weakened.
+
+## Current Implementation and Remaining Verification
+
+The isolated implementation at5c7b6562 keeps the selected declaration,
+conformance and exact lexical binder vector through ordinary source recording.
+Conformance registration freezes authored functions separately from normalized
+witnesses. Direct nominal sources retain Direct calls; trait-subject sources
+retain completed proof-backed Provided calls. Expected-result inference can
+complete unknown method binders without discarding the known receiver/proof.
+
+Copy preparation reads authored and normalized membership under a unique
+original edge. Derived placements are not declaration owners. Bare conformance
+implementations are copied by trait-subject expansion, and namespace expansion
+keeps pure providers and extension witnesses excluded from that pass. This
+removes last-wins source-owner recovery and copying an unrelated target's
+implementation merely because it has the same receiver trait. Synthesized
+adapters stay private; authored source-callable surfaces remain available.
+
+The independent static review accepted these as the same finite paired
+forwarding repair. Fresh3 and fresh4 failures are retained. Fresh4 passes20/21
+native controls including the original crash, nominal defaults, generic binder
+transport and corruption controls; its new multi-target Unit test still exposes
+the copy-owner defect repaired at5c7b6562. That revision is not yet execution-
+certified: standard build20261025T025908-build-2e0884, the expanded native/reject
+controls, whole-source check and targeted LLVM22 ASan/LSan remain required.
+No final performance, fixed point, complete suite or main admission is claimed.
+
+The new internal identity fixture initially failed before its assertions because
+its two same-named associated implementations violated declaration overlap.
+Using separate source traits preserves the foreign-owner test's purpose; its
+staged diagnostic then executed successfully. The new Bool golden was corrected
+to the existing1/0 print contract. These were never-green new test setup errors,
+not changes to established source tests. All failed runs remain in the isolated
+checkout's tmp/phase3-default-forwarding directory.
