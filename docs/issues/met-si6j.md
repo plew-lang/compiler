@@ -27,6 +27,9 @@ authorities, removals, controls and remaining excluded boundaries. [G2a](com-p5u
 proves the frozen candidate's fixed point/performance; [G2b](com-9l3b.md) proves
 its complete correctness/sanitizer gates. [G3](com-lzpe.md) owns the final
 independent eleven-criterion synchronization; its prior final approval is superseded by the current re-review.
+[The closure-assurance retrospective](#closure-assurance-retrospective) explains
+why prior reviewed completion was premature and proposes the recovery boundary.
+Do not equate completing the four lexical repairs with re-certifying this parent.
 [Existing-feature conformance](com-604k.md) remains open for phase four and final
 integration. Worklog owns the current candidate and next action; scoped evidence
 does not substitute for a final candidate's gates.
@@ -279,10 +282,149 @@ merely by a new finding. New073f normal/gen/deps milestones remain valid; old3c
 formal fixed-point/ASan gates apply only to old3c. New final G2a/G2b/G3 remain
 required after source repair and G1 admission.
 
+## Closure Assurance Retrospective
+
+This is the user-requested investigation of the **completion method**, following
+[met-tfbl](met-tfbl.md), not another implementation acceptance. Original eleven
+criteria remain unchanged. The recovery below is a proposal for task-plan
+reconciliation; it has not silently created tasks, changed dependencies, or
+authorized source repair.
+
+### Evidence and Failure of the Previous Inference
+
+The original completion at dab97d52/production043e2402 was real and was withdrawn
+after [com-bkqq](com-bkqq.md). Its exact saved compiler3c532ce1 reproduces the
+representative V1/V2/V3/V4 defects, plus the gen-related unrelated-name rejection:
+8 fixed-input projects,38 watched commands, check/native/JIT and selected gen
+contrasts. The renamed positive controls pass. std/Plew.toml/Plew.lock are
+unchanged from043e2402 through aaf7f134. These defects were present in the
+accepted candidate; they are not explained solely by subsequent repairs.
+The additional gen contrasts emit host LLVM, not actual host execution.
+
+Sources, original-candidate commands/results, historical code/blame, exact old
+fixture contents and selected prior review records are retained in meta/evidence/
+existing-feature-conformance/source-owner-facts/phase3-assurance-retrospective.json.
+Full previous reviews remain in their existing receipts; no duplicate review
+transcripts or second task register is introduced.
+
+| Recorded observation | Consequence for the assurance claim |
+| --- | --- |
+| B0/com-qehq defined exactly8 broad call families. Its58-source hash manifest omits Check/Visibility; negative source checks focus on removed final selectors. | A family name was treated as a closed path, although preselection vetoes and classification branches were not evidenced. A file hash is not read coverage, and an absent hash does not prove nobody read it; the saved evidence nevertheless cannot establish that boundary. |
+| B1/com-qb05 removed a **Verify** free-name rescan after selection. Its shadowing fixture uses a same-module free function. | This useful repair and positive control do not establish absence of the analogous **preselection Visibility** decision against unrelated modules. Reviewing only the changed selector/removal tail leaves another authority outside the frame. |
+| C6/com-3q2n verifies retained closure binding/field/type identity and final descriptors, including deliberately corrupted records. | A downstream reader can faithfully preserve an incorrectly classified or insufficiently admitted source operation. Corruption rejection cannot certify correctness of its source producer. |
+| global_closure_invocation copies the global closure to a local before invoking it; global_closure_call_constraints checks global preparation internally. Existing closure_arg_label_mismatch fixtures check literal-to-function-type compatibility. | Those successful tests do not execute direct global invocation or wrong labels at a closure **call**. These tests are valid, but their names/categories cannot substitute for inspecting the exercised path. |
+| F1/com-4bib's seven owner/mode rows use representative contrasts. Later specification-first review combines closure/interface into one dynamic row; its calls manifest does not establish Visibility/resolvedCallee coverage. | Owner, mode and call-family coverage does not automatically cover binding kind, type readiness, provenance and argument admission. Reading all chapters or listing all issues is not equivalent to tracing every relevant decision boundary. |
+| G3's retained acceptance verifies11 criterion links,68 graph nodes, receipt/input/artifact identity and292 documentation links. | Evidence consistency was promoted into semantic sufficiency. Those checks and the green full gates remain valuable and genuine, but do not establish missing semantic coverage. |
+| com-bkqq explicitly found no durable task-specific B0/B1 review record and supplied a **new** acceptance later. | The required per-task review discipline was not demonstrably complete at first closure. Do not retrospectively assume the original review happened. The later correction does not erase the original control failure. |
+
+The primary root is **claim scope larger than demonstrated decision coverage**.
+Task partitioning followed representations and familiar successful lanes more
+closely than every place that can decide acceptance, binding, type, conversion
+or control flow. Leaf evidence was finite, but its union was used to assert an
+entire supported surface without independently establishing completeness of the
+partition. Repeated reviewers starting from those same inventories/fixtures can
+inherit the same blind spots; separate agents alone do not establish independent
+coverage. This is an inference from recorded methods/results, not a claim about
+reviewers' private reasoning or fabricated execution.
+
+The design and execution plan already required source-to-final closure, removal
+of competing authorities, full source admission and explicit unverified bounds.
+More repetitions of those words would not fix this failure: **the plan was not
+operationally demonstrated at its claimed scope**. The previous parent completion
+was premature. Neither the presence of many bugs nor the current evidence proves
+every implementation path is defective, but known tests plus another general
+"thorough review" cannot currently justify another global completion claim.
+
+### Proposed Recovery Before Further Completion Claims
+
+1. **Freeze the investigation input and retain valid work.** Pin source/spec,
+   candidate and current scope. Keep old scoped results as scoped evidence;
+   withdraw aggregate conclusions whose coverage cannot be shown. No wholesale
+   rewrite, rollback, seed promotion or phase-four expansion follows from this
+   retrospective.
+2. **Rebuild the phase-three decision inventory from executable entries and
+   contracts, then reconcile the old tickets.** Inspect every relevant normal,
+   lazy, global/default/provided/closure and generated request from admission
+   onward. Include code that accepts/rejects before a saved fact exists, not just
+   readers after publication. Search/index helpers, diagnostic failures, builtin
+   intercepts, compatibility passes and mode privileges need explicit disposition.
+   Search results are leads, not an exhaustive call-graph proof.
+3. **Make each inventory row actionable.** Name input/owner/preconditions,
+   decision and authority, actual callers/guards, retained fact and publication
+   guarantee, final readers, legitimate remaining validation, replaced sites and
+   corresponding source-level positive/negative controls. Distinguish local versus
+   global, callable versus noncallable/pending, and ordinary versus synthetic
+   provenance where code branches. A broad family is an organizing label, not a
+   sufficient row. Untraced relevant decisions remain explicitly unverified.
+4. **Close the inventory before claiming the repair set is sufficient.** Every
+   relevant decision site must be classified as covered with evidence, needing a
+   bounded repair, or outside scope with a normative reason. Four met-tfbl repair
+   units remain valid findings, not proof they exhaust phase three. A first-pass
+   reviewer derives boundaries/counterexamples from spec and actual entries before
+   seeing the implementation's coverage verdict; reconciliation follows. Do not
+   promise every program or a combinatorial product of all features.
+5. **Reconcile finite tasks against that inventory.** Preserve already valid
+   leaf repairs; reopen only invalidated claims and assign uncovered boundaries
+   to named owners/dependencies. For example, complete existential argument
+   admission in com-cwu1 does not certify fn-value arguments. Resolve required
+   specification boundaries separately. Review revised scope sufficiency before
+   resuming the repair sequence; do not silently amend the plan on each discovery.
+6. **Pair structural closure with public semantic execution.** Verify source
+   admission and saved identity through the actual final consumer. Deliberately
+   corrupted-record tests supplement, not replace, valid/wrong-label/count/mode/
+   type/ownership source cases. Confirm the expected rejection stage/category;
+   an unrelated visibility failure or internal error is not a successful reject.
+   Use finite contrasting classes and interaction pairs: unrelated declaration
+   rename/addition, same versus other module, direct versus local alias, inferred
+   versus explicit equivalent type, wrapped versus direct, cold versus prepared
+   cache when relevant. Respect intentional lazy unused-body omission.
+7. **Separate three review obligations.** Leaf review checks its bounded fix and
+   removals. Area integration review checks inventory completeness and interactions
+   between leaves. Final G3 reconciles already justified semantic evidence and
+   exact-candidate gates. Integrity checks and large green suites cannot discharge
+   the missing area review; a leaf review cannot certify its containing area.
+8. **Re-certify once the evidence supports the original contract.** Require zero
+   known unresolved in-scope defects and zero unclassified high-risk decisions in
+   the agreed inventory, the actual structural removals and behavioral controls,
+   independent area acceptance, then G1/new fixed-point and below7-second G2a/
+   complete G2b/G3 on applicable fixed inputs. A newly found omitted authority
+   invalidates the affected inventory/area claim and requires reconciliation,
+   rather than merely adding one regression and repeating broad approval.
+
+### Recurrence Prevention and Limits
+
+Use the existing issue records for the decision rows and their coverage, with
+real dependencies. Do not create another hand-maintained index or treat task/test/
+agent/hash counts as confidence scores. A completion report must state the exact
+claim, the branch/entry distinctions tested, remaining limits and why its evidence
+is sufficient. An implementation or test name never establishes what ran.
+
+When a bug exposes a duplicated authority, audit its finite sibling routes and
+the containing contract's coverage before closing it; do not add a syntax-specific
+exception. Changes to an authority, published fact or reader invalidate the
+affected semantic evidence explicitly. Unchanged valid evidence need not be rerun.
+Put recovered public-source regressions and essential isolation contrasts into
+the maintained suites, not only scratch or manually invoked internal fixtures.
+Where it preserves semantics and cost, encode the authority boundary in API/stage
+construction and remove obsolete entry paths so later callers cannot bypass it.
+This does not mean adding a second full type checker or weakening legitimate
+independent readiness/integrity verification.
+
+No finite review proves zero latent bugs. The completion claim sought is the
+original, bounded design-conformance contract with inspectable coverage and no
+known unresolved required boundary, not a promise that another reviewer can never
+find a defect. Repeated new simple violations of that same contract are evidence
+to question the inventory/completion method, rather than routine reasons to keep
+extending an allegedly complete surface.
+
 ## Current Outcome
 
-**Not complete.** Address the finite required repairs from com-9hf7 (priorityP1
-first), independently re-admit affected task/areas and G1, then run the necessary
+**Not complete.** The user-requested retrospective now questions sufficiency of
+the previous coverage/closure method. Review the recovery proposal above before
+resuming the repair sequence; no revised task graph has yet been adopted.
+Retain the finite required repairs from com-9hf7 and the four met-tfbl proposals,
+but do not assume that list exhausts required work. After scope reconciliation,
+independently re-admit affected task/areas and G1, then run the necessary
 new-candidate G2a/G2b and G3 reconciliation. Preserve valid unaffected work;
 do not substitute checks at a final reader for complete source admission and
 sealed producer-to-consumer authority. No new specification decision is needed
