@@ -105,6 +105,48 @@ This is distinct from com-y8l4's canonical duplicate-signature identity and is
 linked for coordination, not imposed as an invented sequencing dependency.
 The source-selection area met-ucze and G1 require this separate repair.
 
+## Executable Repair and Acceptance Cases
+
+1. After com-qlnc closes, construct the comparison environment from canonical
+   receiver/trait identity and its parameter mapping. Unify the receiver domain
+   before comparing arguments, so its shared parameters denote the same type
+   across candidates. Keep each method's own ParamIds independent, including
+   alpha-renamed, reordered and different-length binder lists. Remove the old
+   assumption that equal binder-list positions identify one logical variable.
+2. Replace the strict WIP's typeIsClosed-only discriminator in
+   callableAdmissionTypes/callableFormsConflictAt with the documented bounded
+   structural proof. Maintain a consistent substitution and finite occurs check
+   inside each distinguishing-position query. Preserve different nominal heads,
+   function/record structure, nested arguments and known projection equalities;
+   do not unfold recursive nominal fields or invoke general trait satisfiability.
+   Do not add an Optional-specific exception or rename its public operations.
+3. Return a justified distinction, possible overlap, or an unproved/limit result
+   with provenance. Unknown/AnalysisLimit is not proof of distinction or overlap.
+   Receiver-domain unification may share the existing primitive only after its
+   lexical identity/occurs behavior is audited. If that primitive changes, cover
+   its affected conformance/witness callers too; do not repair overloads by
+   silently changing the meaning of those other consumers.
+4. Keep the WIP's legitimate shared-admission wiring only where it satisfies the
+   final design: ordinary registration, trait groups, provided-extension domains,
+   default/memberwise signatures and later registrations. Enumerate actual entry
+   and success locations, remove independent acceptance gates and verify common
+   omitted forms. Preserve one distinguishing position per candidate pair;
+   cross-position constraint interactions alone do not expand acceptance.
+5. Reclassify WIP fixtures by the final contract before testing. Require receiver
+   T/fn()->same T and Array[T]/Box[U] to distinguish; receiver T/I64, A/B,
+   Array[T]/Array[I64] and candidate-owned T/fn()->independent U can overlap and
+   must reject without another discriminator. Exercise shared receiver versus
+   independent method binders in normal/trait/factory routes where applicable,
+   defaults that remove a discriminator, aliases/projections and unused groups.
+   Restore real Optional.unwrapOr eager/lazy success and conditional execution
+   controls, including generic callers. A standard-library failure cannot count
+   as a successful application reject test.
+6. Follow accepted declarations through saved source selection, generic/any
+   consumers and native/JIT execution with full argument validation. Record a
+   fresh build, fixed inputs, targeted success/reject/mode results, same-source
+   performance comparison and independent task/area completion review. Keep
+   formal G2a/G2b/G3 separate; no earlier fixed-only review/build closes this task.
+
 ## Current Planning Boundary
 
 The user resolved the API/rule choice in favor of bounded structural proofs
