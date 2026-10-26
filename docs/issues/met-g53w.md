@@ -1,7 +1,7 @@
 ---
 id: met-g53w
 status: in_progress
-deps: [com-qlnc]
+deps: [com-qlnc, met-tfbl]
 links: [com-y8l4]
 created: 2026-10-25T12:03:16Z
 type: bug
@@ -267,8 +267,10 @@ Two positives remain failing; neither is reclassified as a successful rejection:
    and the finite Verify/Call repair recorded in com-qb05. A new finite repair
    must own lexical call visibility from binding through all modes/final use,
    remove the global-name reclassification, retain real import failures and
-   include shadowed parameter/local/global closure controls. Proposed attachment:
-   met-ucze, com-qb05 and G1. It has not been silently added or implemented.
+   include shadowed parameter/local/global closure controls. Investigation is
+   assigned to [met-tfbl](met-tfbl.md), with met-ucze, com-qb05 and G1 depending
+   on its evidence-backed disposition. The user requires thorough investigation
+   before selecting a repair; implementation has not started.
 2. Boxing Worker as any Picker fails when Picker has an unused generic requirement,
    even when only its nongeneric overload is called. An isolated single generic
    requirement reproduces the same unbound implementation parameter error on
@@ -279,9 +281,12 @@ Two positives remain failing; neither is reclassified as a successful rejection:
    and assign a bounded repair or evidenced future-feature disposition. General
    com-uutc wording is insufficient evidence to dismiss this actual failure.
 
-The goal's task-omission/modification stop condition applies to finding1. Keep
-met-g53w and all dependent areas/gates open. Proposed task assignment needs the
-user's next instruction; no new task or dependency was added here. The intermediate
+The initial task-omission stop was recorded before assignment. The user has now
+requested an investigation-first ticket: [met-tfbl](met-tfbl.md) owns lexical
+priority, candidate/failure handling and diagnostic isolation, including deleting
+an optional inaccessible-name hint if appropriate. This task depends on that
+investigation; its repaired disposition must precede completion. Keep met-g53w
+and all dependent areas/gates open. No implementation repair is claimed. The intermediate
 soundness review's Unit matching concern was also probed: a Bool/Unit method group
 with a literal Unit argument passes --check on both carriers. This check-only
 contrast does not prove all Unit contexts; com-sby0 retains the broader audit.
@@ -289,3 +294,14 @@ contrast does not prove all Unit contexts; com-sby0 retains the broader audit.
 Durable receipt: meta/evidence/existing-feature-conformance/source-owner-facts/
 overload-structural-checkpoint.json. Its exact inputs and failed sources are the
 handoff boundary; do not turn partial slice success into phase-three completion.
+
+## User-directed Investigation Boundary
+
+Do not presume this is only a missing closure exemption or only a hint defect.
+The user requests a thorough investigation of multiple possible responsibility
+failures before repair. met-tfbl distinguishes confirmed misrejection from
+unproven priority/fallback defects, inventories scoped and unrestricted searches,
+checks genuine error versus optional hints, and produces finite follow-up tasks.
+Removing a hint is permitted; removing legitimate visibility enforcement is not.
+The unrelated generic-requirement boxing observation remains unclassified here,
+and was not bundled into the newly requested lexical/visibility task.

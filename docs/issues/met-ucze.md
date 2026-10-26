@@ -1,7 +1,7 @@
 ---
 id: met-ucze
 status: open
-deps: [com-qehq, com-qb05, com-17yh, com-4kti, com-fyxe, com-072n, com-3qne, com-o3vw, com-6cw6, com-ra96, com-zy6r, com-y8l4, met-g53w]
+deps: [com-qehq, com-qb05, com-17yh, com-4kti, com-fyxe, com-072n, com-3qne, com-o3vw, com-6cw6, com-ra96, com-zy6r, com-y8l4, met-g53w, met-tfbl]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -11,6 +11,17 @@ parent: met-si6j
 tags: [frontend, generics, verification]
 ---
 # Unify source member selection without downstream reselection
+
+## Lexical Visibility Investigation
+
+[met-tfbl](met-tfbl.md) is a required investigation before fresh closure. An
+unrelated loaded module's same-named function makes a local closure parameter
+call fail visibility. The user requests a responsibility-level audit of lexical
+priority, candidate continuation/failure categories and diagnostic-only search,
+not an assumed closure-specific patch. The optional missing-use hint may be
+removed if it interferes; actual visibility rejection must remain. The audit
+must assign confirmed repairs before closing; no earlier finite call/argument
+repair or green gate certifies this new boundary.
 
 ## Current Review Reopening
 
