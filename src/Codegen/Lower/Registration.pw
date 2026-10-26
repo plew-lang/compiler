@@ -31,19 +31,6 @@ pub impl Comp {
         return a.extId == b.extId
     }
 
-    inout fn sameFuncSelector(a: Func, b: Func) -> Bool {
-        if a.nameId != b.nameId || a.params.count() != b.params.count() { return false }
-        mut val i: U64 = 0
-        while i < a.params.count() {
-            val ap: Param = self.funcParamAt(params: a.params, index: i)
-            val bp: Param = self.funcParamAt(params: b.params, index: i)
-            if ap.noLabel != bp.noLabel { return false }
-            if !(ap.noLabel) && ap.nameId != bp.nameId { return false }
-            i += 1U64
-        }
-        return true
-    }
-
     inout fn binderIndex(params: PatternBindInput, nameId: U64) -> U64 {
         mut val i: U64 = 0
         while i < params.count() {
@@ -490,10 +477,101 @@ pub impl Comp {
         return self.unifyPatterns(a: provider.subjectTy, aSide: 0U64, b: subject.subjectTy, bSide: 1U64, aParams: <PatternBindInput.Conformance range=provider.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true)
     }
 
-    inout fn receiverPatternsMayOverlap(a: Func, b: Func) -> Bool {
-        if !(a.hasRecv || a.isAssoc) { return true }
-        mut val binds: Array[UnifyBind] = []
-        return self.unifyPatterns(a: a.recvTy, aSide: 0U64, b: b.recvTy, bSide: 1U64, aParams: <PatternBindInput.Function range=a.typeParams />, bParams: <PatternBindInput.Function range=b.typeParams />, binds: inout binds, ignoreTopView: true)
+    // Canonical ParamIds identify lexical variables across the whole comparison.
+    // Receiver unification relates separate impl binders; trait-owned binders
+    // already share their owner identity. Method-owned ParamIds remain distinct.
+    // Never use the positional alpha-matcher above as a disjointness oracle.
+    inout fn structuralBindingIndex(bindings: Array[StructuralBinding], paramId: U64) -> U64 {
+        mut val index = 0U64
+        while index < bindings.count() {
+            if bindings[index].paramId == paramId { return index }
+            index += 1U64
+        }
+        return bindings.count()
+    }
+
+    inout fn structuralVariable(ref: U64) -> U64 {
+        if ref == 0U64 || ref >= self.arena.typeTermCount() { return 0U64 }
+        val term = self.arena.typeTermAt(index: ref)
+        if term.paramId == 0U64 || term.assocNameId != 0U64 || term.hasTopLevelView() || term.isAny || term.isSendable || term.isDiverging || self.typeTermRefChildCount(ref: ref) != 0U64 { return 0U64 }
+        return term.paramId
+    }
+
+    inout fn structuralOccurrence(paramId: U64, ref: U64, bindings: Array[StructuralBinding], depth: U64) -> StructuralOccurrence {
+        if depth >= 128U64 { return <StructuralOccurrence.AnalysisLimit /> }
+        if ref >= self.arena.typeTermCount() { return <StructuralOccurrence.Unproved /> }
+        val variable = self.structuralVariable(ref: ref)
+        if variable != 0U64 {
+            if variable == paramId { return <StructuralOccurrence.Present /> }
+            val index = self.structuralBindingIndex(bindings: bindings, paramId: variable)
+            if index < bindings.count() { return self.structuralOccurrence(paramId: paramId, ref: bindings[index].term, bindings: bindings, depth: depth + 1U64) }
+            return <StructuralOccurrence.Absent />
+        }
+        val term = self.arena.typeTermAt(index: ref)
+        if term.assocNameId != 0U64 || term.paramId != 0U64 { return <StructuralOccurrence.Unproved /> }
+        mut val result = <StructuralOccurrence.Absent />
+        mut val index = 0U64
+        while index < self.typeTermRefChildCount(ref: ref) {
+            match self.structuralOccurrence(paramId: paramId, ref: self.typeTermRefChildRef(ref: ref, index: index), bindings: bindings, depth: depth + 1U64) {
+                StructuralOccurrence.Present => { return <StructuralOccurrence.Present /> }
+                StructuralOccurrence.AnalysisLimit => { return <StructuralOccurrence.AnalysisLimit /> }
+                StructuralOccurrence.Unproved => { result = <StructuralOccurrence.Unproved /> }
+                StructuralOccurrence.Absent => {}
+            }
+            index += 1U64
+        }
+        return result
+    }
+
+    // Finite first-order structural equality under a retained substitution.
+    // Unknown projections never supply negative evidence. Nominal fields are
+    // not expanded; records, function labels and associated arguments use the
+    // canonical child traversal shared with type identity.
+    inout fn structuralOverlap(a: U64, b: U64, bindings: inout Array[StructuralBinding], depth: U64) -> StructuralOverlap {
+        if depth >= 128U64 { return <StructuralOverlap.AnalysisLimit /> }
+        if a >= self.arena.typeTermCount() || b >= self.arena.typeTermCount() { return <StructuralOverlap.Unproved /> }
+        if a == b { return <StructuralOverlap.Possible /> }
+        val av = self.structuralVariable(ref: a)
+        val bv = self.structuralVariable(ref: b)
+        if av != 0U64 {
+            val index = self.structuralBindingIndex(bindings: bindings, paramId: av)
+            if index < bindings.count() { return self.structuralOverlap(a: bindings[index].term, b: b, bindings: inout bindings, depth: depth + 1U64) }
+        }
+        if bv != 0U64 {
+            val index = self.structuralBindingIndex(bindings: bindings, paramId: bv)
+            if index < bindings.count() { return self.structuralOverlap(a: a, b: bindings[index].term, bindings: inout bindings, depth: depth + 1U64) }
+        }
+        if av != 0U64 {
+            if av == bv { return <StructuralOverlap.Possible /> }
+            match self.structuralOccurrence(paramId: av, ref: b, bindings: bindings, depth: depth + 1U64) {
+                StructuralOccurrence.Present => { return <StructuralOverlap.Disjoint /> }
+                StructuralOccurrence.Unproved => { return <StructuralOverlap.Unproved /> }
+                StructuralOccurrence.AnalysisLimit => { return <StructuralOverlap.AnalysisLimit /> }
+                StructuralOccurrence.Absent => {}
+            }
+            bindings.append(<StructuralBinding paramId=av term=b />)
+            return <StructuralOverlap.Possible />
+        }
+        if bv != 0U64 { return self.structuralOverlap(a: b, b: a, bindings: inout bindings, depth: depth + 1U64) }
+        val left = self.arena.typeTermAt(index: a)
+        val right = self.arena.typeTermAt(index: b)
+        if left.assocNameId != 0U64 || right.assocNameId != 0U64 || left.paramId != 0U64 || right.paramId != 0U64 { return <StructuralOverlap.Unproved /> }
+        if !self.typeTermRefSameHead(a: a, b: b) { return <StructuralOverlap.Disjoint /> }
+        val count = self.typeTermRefChildCount(ref: a)
+        if count != self.typeTermRefChildCount(ref: b) { return <StructuralOverlap.Disjoint /> }
+        mut val result = <StructuralOverlap.Possible />
+        mut val index = 0U64
+        while index < count {
+            if self.typeTermRefIdentityChildLabel(ref: a, index: index) != self.typeTermRefIdentityChildLabel(ref: b, index: index) { return <StructuralOverlap.Disjoint /> }
+            match self.structuralOverlap(a: self.typeTermRefChildRef(ref: a, index: index), b: self.typeTermRefChildRef(ref: b, index: index), bindings: inout bindings, depth: depth + 1U64) {
+                StructuralOverlap.Disjoint => { return <StructuralOverlap.Disjoint /> }
+                StructuralOverlap.AnalysisLimit => { return <StructuralOverlap.AnalysisLimit /> }
+                StructuralOverlap.Unproved => { result = <StructuralOverlap.Unproved /> }
+                StructuralOverlap.Possible => {}
+            }
+            index += 1U64
+        }
+        return result
     }
 
     // Declaration acceptance, not call applicability or pattern unification.
@@ -518,7 +596,6 @@ pub impl Comp {
                         }
                         boundIndex += 1U64
                     }
-                    term = try self.closeBodyProjectionTerms(ref: term, environment: <InstanceEnvironment />, selfRef: function.recvTy, itemRef: 0U64)
                 }
             }
             types.append(term)
@@ -528,35 +605,97 @@ pub impl Comp {
     }
 
     // Search common selectors of the two default-omission automata. Matching a
-    // fixed, different type discharges that path; every remaining common form
-    // is a conflict. Dependent structural non-overlap is deliberately irrelevant.
-    inout fn callableFormsConflictAt(a: Func, b: Func, aTypes: Array[U64], bTypes: Array[U64], ai: U64, bi: U64) -> Bool {
-        if ai == a.params.count() && bi == b.params.count() { return true }
+    // structurally disjoint argument discharges that path. Each position starts
+    // from receiver bindings, never substitutions from other argument positions.
+    inout fn combineStructuralAlternatives(a: StructuralOverlap, b: StructuralOverlap) -> StructuralOverlap {
+        match a {
+            StructuralOverlap.Possible => { return a }
+            StructuralOverlap.AnalysisLimit => { return a }
+            _ => {}
+        }
+        match b {
+            StructuralOverlap.Possible => { return b }
+            StructuralOverlap.AnalysisLimit => { return b }
+            _ => {}
+        }
+        match a { StructuralOverlap.Unproved => { return a } _ => {} }
+        return b
+    }
+
+    inout fn callableFormsConflictAt(a: Func, b: Func, aTypes: Array[U64], bTypes: Array[U64], receiverBindings: Array[StructuralBinding], ai: U64, bi: U64, memo: inout Dictionary[U64, StructuralOverlap]) -> Result[StructuralOverlap, CompileDiagnostic] {
+        val key = ai * (b.params.count() + 1U64) + bi
+        match memo.get(key: key) {
+            Optional.Some(v: val result) => { return <Result.Ok value=result /> }
+            Optional.None => {}
+        }
+        val result = try self.callableFormsConflictUncached(a: a, b: b, aTypes: aTypes, bTypes: bTypes, receiverBindings: receiverBindings, ai: ai, bi: bi, memo: inout memo)
+        memo[key] = result
+        return <Result.Ok value=result />
+    }
+
+    inout fn callableFormsConflictUncached(a: Func, b: Func, aTypes: Array[U64], bTypes: Array[U64], receiverBindings: Array[StructuralBinding], ai: U64, bi: U64, memo: inout Dictionary[U64, StructuralOverlap]) -> Result[StructuralOverlap, CompileDiagnostic] {
+        if ai == a.params.count() && bi == b.params.count() { return <Result.Ok value=<StructuralOverlap.Possible /> /> }
         if ai == a.params.count() {
-            return self.funcParamAt(params: b.params, index: bi).hasDefault && self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, ai: ai, bi: bi + 1U64)
+            if !self.funcParamAt(params: b.params, index: bi).hasDefault { return <Result.Ok value=<StructuralOverlap.Disjoint /> /> }
+            return self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, receiverBindings: receiverBindings, ai: ai, bi: bi + 1U64, memo: inout memo)
         }
         if bi == b.params.count() {
-            return self.funcParamAt(params: a.params, index: ai).hasDefault && self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, ai: ai + 1U64, bi: bi)
+            if !self.funcParamAt(params: a.params, index: ai).hasDefault { return <Result.Ok value=<StructuralOverlap.Disjoint /> /> }
+            return self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, receiverBindings: receiverBindings, ai: ai + 1U64, bi: bi, memo: inout memo)
         }
         val ap = self.funcParamAt(params: a.params, index: ai)
         val bp = self.funcParamAt(params: b.params, index: bi)
+        mut val result = <StructuralOverlap.Disjoint />
         if ap.noLabel == bp.noLabel && (ap.noLabel || ap.nameId == bp.nameId) {
-            val distinct = self.arena.typeIsClosed(ref: aTypes[ai]) && self.arena.typeIsClosed(ref: bTypes[bi]) && !self.typeRefEq(a: aTypes[ai], b: bTypes[bi])
-            if !distinct && self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, ai: ai + 1U64, bi: bi + 1U64) { return true }
+            mut val trial = receiverBindings
+            val comparison = self.structuralOverlap(a: aTypes[ai], b: bTypes[bi], bindings: inout trial, depth: 0U64)
+            match comparison {
+                StructuralOverlap.AnalysisLimit => { return <Result.Err error=self.diagnosticAt(offset: bp.nameStart, msg: "overload argument structural analysis limit exceeded") /> }
+                StructuralOverlap.Disjoint => {}
+                _ => {
+                    result = try self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, receiverBindings: receiverBindings, ai: ai + 1U64, bi: bi + 1U64, memo: inout memo)
+                    match comparison {
+                        StructuralOverlap.Unproved => { match result { StructuralOverlap.Possible => { result = <StructuralOverlap.Unproved /> } _ => {} } }
+                        _ => {}
+                    }
+                }
+            }
         }
-        if ap.hasDefault && self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, ai: ai + 1U64, bi: bi) { return true }
-        if bp.hasDefault && self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, ai: ai, bi: bi + 1U64) { return true }
-        return false
+        if ap.hasDefault {
+            val skipped = try self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, receiverBindings: receiverBindings, ai: ai + 1U64, bi: bi, memo: inout memo)
+            result = self.combineStructuralAlternatives(a: result, b: skipped)
+        }
+        if bp.hasDefault {
+            val skipped = try self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, receiverBindings: receiverBindings, ai: ai, bi: bi + 1U64, memo: inout memo)
+            result = self.combineStructuralAlternatives(a: result, b: skipped)
+        }
+        return <Result.Ok value=result />
     }
 
     // One complete ordinary-overload decision for all declaration entries.
     // Domain/origin participation is supplied by the entry; receiver domains
-    // remain a separate, explicit exclusion before the fixed-argument rule.
+    // are retained as explicit constraints for every argument-position query.
     inout fn callableDeclarationConflict(a: Func, b: Func) -> Result[Bool, CompileDiagnostic] {
-        if a.nameId != b.nameId || !self.receiverPatternsMayOverlap(a: a, b: b) { return <Result.Ok value=false /> }
+        if a.nameId != b.nameId { return <Result.Ok value=false /> }
+        mut val receiverBindings: Array[StructuralBinding] = []
+        if a.hasRecv || a.isAssoc {
+            val comparison = self.structuralOverlap(a: self.typeRefWithoutOuterViews(ref: a.recvTy), b: self.typeRefWithoutOuterViews(ref: b.recvTy), bindings: inout receiverBindings, depth: 0U64)
+            match comparison {
+                StructuralOverlap.Disjoint => { return <Result.Ok value=false /> }
+                StructuralOverlap.Unproved => { return <Result.Err error=self.diagnosticAt(offset: b.defOffset, msg: "cannot prove overload receiver domain compatibility: unresolved type structure") /> }
+                StructuralOverlap.AnalysisLimit => { return <Result.Err error=self.diagnosticAt(offset: b.defOffset, msg: "overload receiver structural analysis limit exceeded") /> }
+                StructuralOverlap.Possible => {}
+            }
+        }
         val aTypes = try self.callableAdmissionTypes(function: a)
         val bTypes = try self.callableAdmissionTypes(function: b)
-        return <Result.Ok value=self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, ai: 0U64, bi: 0U64) />
+        mut val memo: Dictionary[U64, StructuralOverlap] = [:]
+        match try self.callableFormsConflictAt(a: a, b: b, aTypes: aTypes, bTypes: bTypes, receiverBindings: receiverBindings, ai: 0U64, bi: 0U64, memo: inout memo) {
+            StructuralOverlap.Possible => { return <Result.Ok value=true /> }
+            StructuralOverlap.Disjoint => { return <Result.Ok value=false /> }
+            StructuralOverlap.Unproved => { return <Result.Err error=self.diagnosticAt(offset: b.defOffset, msg: "cannot prove overload argument types distinct: unresolved type structure") /> }
+            StructuralOverlap.AnalysisLimit => { return <Result.Err error=self.diagnosticAt(offset: b.defOffset, msg: "overload structural analysis limit exceeded") /> }
+        }
     }
 
     inout fn checkFuncRegistration(f: Func, sourceModule: U64, before: U64) -> Result[(), CompileDiagnostic] {
@@ -580,7 +719,7 @@ pub impl Comp {
                             return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "duplicate function name: extern declarations and ordinary functions share one top-level namespace in a module") />
                         }
                         if try self.callableDeclarationConflict(a: prior, b: f) {
-                            return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "duplicate or overlapping callable form in one declaration namespace: no distinct fixed argument type (spec/04,07,09)") />
+                            return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "duplicate or overlapping callable form in one declaration namespace: no provably distinct argument type (spec/04,07,09)") />
                         }
                     }
                 }

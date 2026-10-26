@@ -1,0 +1,6 @@
+struct Holder[T] { val stored: T }
+impl[T] Holder[T] {
+    fn select(value: Array[T]) {}
+    fn select(value: Array[I64]) {}
+}
+fn main() {}

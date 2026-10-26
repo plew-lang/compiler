@@ -1,0 +1,21 @@
+use @Std/Io only { print }
+struct Holder[T] { val stored: T }
+impl[T] Holder[T] { fn select(value: T) -> I64 { return 1I64 } }
+impl[U] Holder[U] { fn select(value: fn() -> U) -> I64 { return 2I64 } }
+fn record[T](value: (left: T, right: T)) -> I64 { return 3I64 }
+fn record(value: (left: I64, right: Bool)) -> I64 { return 4I64 }
+fn fallback[T](value: Optional[T], fallback: fn() -> T) -> T { return value.unwrapOr(fallback: fallback) }
+fn eager() -> I64 { print(10I64) return 11I64 }
+fn lazy() -> I64 { print(20I64) return 21I64 }
+fn main() {
+    val holder = <Holder[I64] stored=0I64 />
+    print(holder.select(value: 1I64))
+    print(holder.select(value: fn() -> I64 { return 2I64 }))
+    print(record(value: (left: true, right: false)))
+    print(record(value: (left: 1I64, right: true)))
+    val present: Optional[I64] = <.Some v=5I64 />
+    val absent: Optional[I64] = <.None />
+    print(present.unwrapOr(fallback: eager()))
+    print(present.unwrapOr(fallback: fn() -> I64 { return lazy() }))
+    print(fallback(value: absent, fallback: fn() -> I64 { return lazy() }))
+}

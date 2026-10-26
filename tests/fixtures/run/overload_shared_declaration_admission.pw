@@ -26,7 +26,7 @@ impl Worker as Picker {
 }
 fn forward[T](worker: T) -> I64 where T: Picker { return worker.pick(value: true, other: false) }
 fn main() {
-    print(pick[String](value: 1I64, other: "other"))
+    print(pick(value: 1I64, other: "other"))
     print(pick(value: true, other: false))
     val methods = <Methods />
     print(methods.pick(value: 1I64, other: "other"))

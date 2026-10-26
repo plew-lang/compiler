@@ -293,32 +293,49 @@ pub impl Comp {
         return <Result.Ok value=self.isIntType(start: p.tyStart, len: p.tyLen) />
     }
 
-    // Whether every provided argument's type matches its parameter's declared type.
-    // Defaulted positions have already been checked at the declaration.
-    inout fn paramsTypesMatch(params: FuncParamRange, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
-        mut val ai: U64 = 0
-        while ai < args.len {
-            val pi: U64 = self.paramIndexForArg(params: params, args: args, argIdx: ai)
-            if pi < params.count() {
-                if !((try self.argMatchesParam(argExpr: self.argAt(args: args, index: ai).expr, p: self.funcParamAt(params: params, index: pi)))) {
-                    return <Result.Ok value=false />
-                }
+    // One candidate-local forward type matcher for ordinary and requirement
+    // calls. Entries normalize only their receiver/trait environment; this owner
+    // keeps method inference transactional and checks the complete parameter.
+    inout fn callableParameterTypeMatchRank(function: Func, args: ArgRange, signatures: Array[U64], receiver: U64, initialValues: Array[U64]) -> Result[U64, CompileDiagnostic] {
+        mut val values = initialValues
+        mut val index = 0U64
+        while index < args.len {
+            val parameter = self.paramIndexForArg(params: function.params, args: args, argIdx: index)
+            if parameter >= signatures.count() { return <Result.Ok value=1U64 /> }
+            val signature = signatures[parameter]
+            mut val expected = try self.groundKnownCallTypeArguments(ref: signature, params: function.typeParams, values: values, receiver: receiver)
+            if expected >= self.arena.typeCount() { return <Result.Ok value=1U64 /> }
+            val expression = self.argAt(args: args, index: index).expr
+            if self.expressionNeedsTypeContext(exprId: expression) {
+                if !(try self.contextualArgumentMatchesType(exprId: expression, expected: expected)) { return <Result.Ok value=1U64 /> }
             } else {
-                return <Result.Ok value=false />
+                val term = self.arena.typeAt(index: expected)
+                if self.semanticExprTerm(exprId: expression) == 0U64 && contextualNumericExpression(self.arena.exprs, exprId: expression) {
+                    if self.isFloatType(start: term.nameStart, len: term.nameLen) || ((try self.argIsUntypedIntLit(argExpr: expression)) && self.isIntType(start: term.nameStart, len: term.nameLen)) { index += 1U64 continue }
+                }
+                val actual = try self.inferenceArgumentType(exprId: expression)
+                mut val candidate = values
+                match self.matchCallTypeArguments(pattern: signature, argument: actual, params: function.typeParams, values: inout candidate) {
+                    TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { values = candidate }
+                    TypeArgumentMatch.Mismatch => {}
+                    TypeArgumentMatch.Conflict => { return <Result.Ok value=1U64 /> }
+                }
+                expected = try self.groundKnownCallTypeArguments(ref: signature, params: function.typeParams, values: values, receiver: receiver)
+                if !(try self.typesCompatible(expected: expected, inferred: actual)) { return <Result.Ok value=1U64 /> }
             }
-            ai += 1
+            index += 1U64
         }
-        return <Result.Ok value=true />
+        return <Result.Ok value=2U64 />
     }
 
-    // The resolver's one argument-side classification.  Rank 0 is no exposed
-    // callable form, 1 is a selector-only match (for diagnostics/fallback),
-    // and 2 is a complete call match.  Every resolver entry point consumes the
-    // same rank instead of composing label and type tests independently.
+    // Rank 0: no selector; 1: selector-only diagnostic fallback; 2: full match.
     inout fn callableArgMatchRank(f: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
-        if !(self.paramsLabelsOk(params: f.params, args: args)) { return <Result.Ok value=0U64 />}
-        if (try self.paramsTypesMatch(params: f.params, args: args)) { return <Result.Ok value=2U64 />}
-        return <Result.Ok value=1U64 />
+        if !self.paramsLabelsOk(params: f.params, args: args) { return <Result.Ok value=0U64 /> }
+        mut val signatures: Array[U64] = []
+        for parameter in self.copyFuncParams(params: f.params) { signatures.append(parameter.ty) }
+        mut val values: Array[U64] = []
+        while values.count() < f.typeParams.count() { values.append(0U64) }
+        return self.callableParameterTypeMatchRank(function: f, args: args, signatures: signatures, receiver: 0U64, initialValues: values)
     }
 
     // Method declarations carry the receiver's generic binders in their
@@ -339,14 +356,11 @@ pub impl Comp {
         // `Self#Iterator.Item`; evaluating it under Array's temporary
         // receiver was the provenance leak that became
         // `Array#Iterator.Item`.
-        val callerEnvironment: InstanceEnvironment = <InstanceEnvironment params=self.cur.typeParams args=self.cur.typeArgs receiverRef=self.cur.recvInstRef proof=self.cur.bodyEnvironment.proof />
-        val callerSelf: U64 = self.cur.selfRef
-        val callerItem: U64 = self.cur.itemRef
         // This is the candidate's immutable receiver-only substitution.
         // `methodReceiverEnvironment` is the shared structural unifier used
-        // by finalization too. Method-owned binders deliberately remain
-        // absent while ranking; final callable publication performs their
-        // one complete inference.
+        // by finalization too. This stage fixes only receiver binders;
+        // the shared candidate-local matcher below tentatively infers the
+        // method-owned binders before final selected-call publication.
         val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: receiver))
         // A failed structural receiver match is not an empty substitution.
         // Provided members may instead be justified by a trait path; their
@@ -378,57 +392,15 @@ pub impl Comp {
             bindI += 1U64
         }
         val calleeEnvironment: InstanceEnvironment = <InstanceEnvironment params=calleeParams args=calleeArgs receiverRef=receiver />
-        mut val allMatch: Bool = true
-        mut val ai: U64 = 0U64
-        while ai < args.len {
-            val pi: U64 = self.paramIndexForArg(params: f.params, args: args, argIdx: ai)
-            if pi >= f.params.count() {
-                allMatch = false
-            } else {
-                val expected: U64 = (try self.groundTermForBody(ref: self.funcParamAt(params: f.params, index: pi).ty, environment: calleeEnvironment, selfRef: receiver, itemRef: (try self.finalMethodItemRef(f: f, receiverRef: receiver))))
-                // A method-owned binder remains abstract at this stage.  It is
-                // intentionally inferred from the argument later; receiver
-                // binders, by contrast, are concrete in calleeEnvironment.
-                if expected != 0U64 && self.expressionNeedsTypeContext(exprId: self.argAt(args: args, index: ai).expr) {
-                    if !(try self.contextualArgumentMatchesType(exprId: self.argAt(args: args, index: ai).expr, expected: expected)) { allMatch = false }
-                }
-                if expected != 0U64 && (try self.tyRefIsGround(ref: expected)) && !self.expressionNeedsTypeContext(exprId: self.argAt(args: args, index: ai).expr) {
-                    val actual: TypeInfo = (try self.groundSemanticExprTypeInfo(exprId: self.argAt(args: args, index: ai).expr, environment: callerEnvironment, selfRef: callerSelf, itemRef: callerItem))
-                    if actual.kind == 2I64 {
-                        // Keep this discriminator congruent with argMatchesParam:
-                        // a plain named type does not necessarily retain a TypeRef
-                        // during method lookup, while generic/fn/any/view terms do
-                        // require their complete semantic identity.
-                        val expectedTerm: TypeRef = self.arena.typeAt(index: expected)
-                        val actualViews: Array[U64] = (try self.argViewIds(argExpr: self.argAt(args: args, index: ai).expr, ti: actual))
-                        val expectedViews: Array[U64] = self.typeRefViewIds(ref: expected)
-                        if !(self.sameViewIdSet(a: actualViews, b: expectedViews)) {
-                            allMatch = false
-                        } else if self.refsGenericArgComparable(a: actual.ref, b: expected) || (self.isFnType(ref: actual.ref) && self.isFnType(ref: expected)) || (actual.ref != 0U64 && actual.ref < self.arena.typeCount() && (self.arena.typeTermAt(index: actual.ref).isAny || expectedTerm.isAny)) {
-                            if !(self.typeRefEq(a: actual.ref, b: expected)) {
-                                allMatch = false
-                            }
-                        } else if intern(c: inout self, start: actual.nameStart, len: actual.nameLen) != expectedTerm.nameId {
-                            allMatch = false
-                        }
-                    } else if actual.kind == 3I64 {
-                        if actual.ref == 0U64 || !self.typeRefEq(a: actual.ref, b: expected) { allMatch = false }
-                    } else {
-                        val et: TypeRef = self.arena.typeAt(index: expected)
-                        if actual.kind == 0I64 && actual.nameLen == 0U64 {
-                            // Keep untyped integer literals adaptable after
-                            // receiver substitution, just as argMatchesParam.
-                            if !self.isIntType(start: et.nameStart, len: et.nameLen) { allMatch = false }
-                        } else if actual.nameLen == 0U64 || intern(c: inout self, start: actual.nameStart, len: actual.nameLen) != et.nameId {
-                            allMatch = false
-                        }
-                    }
-                }
-            }
-            ai += 1U64
+        mut val signatures: Array[U64] = []
+        mut val parameter = 0U64
+        while parameter < f.params.count() {
+            signatures.append(try self.groundTermForBody(ref: self.funcParamAt(params: f.params, index: parameter).ty, environment: calleeEnvironment, selfRef: receiver, itemRef: (try self.finalMethodItemRef(f: f, receiverRef: receiver))))
+            parameter += 1U64
         }
-        if allMatch { return <Result.Ok value=2U64 />}
-        return <Result.Ok value=1U64 />
+        mut val values: Array[U64] = []
+        while values.count() < f.typeParams.count() { values.append(0U64) }
+        return self.callableParameterTypeMatchRank(function: f, args: args, signatures: signatures, receiver: receiver, initialValues: values)
     }
 
     // An argument that is an unsuffixed integer literal carries no type name, so it

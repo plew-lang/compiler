@@ -342,41 +342,15 @@ pub impl Comp {
             }
             index += 1U64
         }
-        val receiverValues = values
+        mut val signatures: Array[U64] = []
         index = 0U64
-        while index < args.len {
-            val parameter = self.paramIndexForArg(params: requirement.params, args: args, argIdx: index)
-            if parameter >= requirement.params.count() { return <Result.Ok value=1U64 /> }
-            val original = self.funcParamAt(params: requirement.params, index: parameter)
+        while index < requirement.params.count() {
+            val original = self.funcParamAt(params: requirement.params, index: index)
             val traitType = self.traitBoundTypeTerm(ref: original.ty, bound: bound, traitIndex: traitIdx)
-            val signature = try self.groundKnownCallTypeArguments(ref: traitType, params: requirement.typeParams, values: receiverValues, receiver: bound.subject)
-            mut val expected = try self.groundKnownCallTypeArguments(ref: signature, params: requirement.typeParams, values: values, receiver: bound.subject)
-            if expected == 0U64 || expected >= self.arena.typeCount() { return <Result.Ok value=1U64 /> }
-            val expression = self.argAt(args: args, index: index).expr
-            if self.expressionNeedsTypeContext(exprId: expression) {
-                if !(try self.contextualArgumentMatchesType(exprId: expression, expected: expected)) { return <Result.Ok value=1U64 /> }
-            } else {
-                // Uncommitted numeric syntax may adapt to a numeric parameter;
-                // a saved typed value never passes via a head-name shortcut.
-                val term = self.arena.typeAt(index: expected)
-                if self.semanticExprTerm(exprId: expression) == 0U64 && contextualNumericExpression(self.arena.exprs, exprId: expression) {
-                    if self.isFloatType(start: term.nameStart, len: term.nameLen) || ((try self.argIsUntypedIntLit(argExpr: expression)) && self.isIntType(start: term.nameStart, len: term.nameLen)) { index += 1U64 continue }
-                }
-                val actual = try self.inferenceArgumentType(exprId: expression)
-                mut val candidate = values
-                match self.matchCallTypeArguments(pattern: signature, argument: actual, params: requirement.typeParams, values: inout candidate) {
-                    TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { values = candidate }
-                    TypeArgumentMatch.Mismatch => {}
-                    TypeArgumentMatch.Conflict => { return <Result.Ok value=1U64 /> }
-                }
-                expected = try self.groundKnownCallTypeArguments(ref: signature, params: requirement.typeParams, values: values, receiver: bound.subject)
-                // Includes complete arrays/functions/records and legal boxing.
-                // Errors remain tentative until the candidate frontier closes.
-                if !(try self.typesCompatible(expected: expected, inferred: actual)) { return <Result.Ok value=1U64 /> }
-            }
+            signatures.append(try self.groundKnownCallTypeArguments(ref: traitType, params: requirement.typeParams, values: values, receiver: bound.subject))
             index += 1U64
         }
-        return <Result.Ok value=2U64 />
+        return self.callableParameterTypeMatchRank(function: requirement, args: args, signatures: signatures, receiver: bound.subject, initialValues: values)
     }
 
     // Canonical protocols already carry an exact admitted instance. Select

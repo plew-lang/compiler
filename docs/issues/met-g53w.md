@@ -200,3 +200,92 @@ independent binders. This task then requires producer-to-final-consumer target
 verification and its own independent completion review. A successful build of
 the strict WIP, the old public API's existence or a new predicate in isolation
 cannot close this task or certify phase three.
+
+## Structural Implementation Checkpoint
+
+The structural implementation uses canonical lexical ParamIds and receiver-domain
+substitutions, copied independently for each argument-position proof. It uses
+canonical head/child/label traversal for nominal/function/record terms, consistent
+substitution within one position and an occurs check; unresolved projections are
+unproved. The previous directional witness matcher is not a disjointness oracle:
+its positional alpha shortcuts cannot establish this contract. Existing witness
+consumers remain unchanged in this slice. Obsolete receiver-overlap/selector
+helpers are removed rather than left as alternative admission predicates.
+
+The independent intermediate soundness review found no concrete false-Disjoint
+counterexample, but required retaining Unproved to diagnosis and avoiding repeated
+default-omission paths. The follow-up keeps Possible/Unproved/AnalysisLimit distinct
+and memoizes the finite (left-position,right-position) selector state per pair.
+No additional rule-count, elapsed-time or user-adjustable acceptance budget is added.
+
+Initial build 20261026T010113-build-0743b7 passed after the failed prior build's
+missing root imports were fixed. Native slice restored std Optional.unwrapOr and
+passed the preceding existential/array/trait-signature inputs. New generic-shape
+calls still failed because ordinary ranking compared abstract generic parameters
+as concrete names, while method ranking skipped abstract expected terms. The repair
+extracts the existing trait candidate-local inference/full-type algorithm into
+callableParameterTypeMatchRank and connects normalized free/method/trait entries.
+Candidate inference stays transactional; where bounds do not rank candidates.
+No successful source selection is replaced by a later overload search.
+
+The new never-green tests also inadvertently used explicit free-call type argument
+syntax. That feature is already classified as absent/future by [com-uutc](com-uutc.md),
+not an admitted feature being repaired in phase three. Positive calls now use the
+supported inference form. The new explicit-count reject was removed: rejection as
+an Index operation did not test selected-call arity and must not count as evidence.
+Preserve spec06's explicit-call contract; do not implement that excluded feature
+or claim its semantic arity/bounds gate tested here. Cover inference/bounds failure
+and no reselection on supported calls instead. Historical receipts retain the
+initial failed inputs; they are not current acceptance evidence.
+
+This remains implementation WIP pending the fresh build, target modes, performance
+comparison and independent completion review. No task/area/full gate is closed by
+this intermediate structural review or initial slice.
+
+## Resumption Results and Required Task-Assignment Stop
+
+Fresh build **20261026T010812-build-b038fc** passes using carrier23f7 with fixed
+inputs. Saved candidate **bin/plewc-overload-structural-shared**, SHA256
+**e6ff9d19d8501b32422f7c7bc1c8e0a8fc189105015fef6d67bc00347cdf0a6d**,
+passes the complete compiler-source --check smoke. The target slice passes
+11/13 native cases and16/16 rejects (the latter include6 existing missing-give
+controls). The pairwise generic shapes, inferred free calls, standard eager/lazy
+Optional controls and prior existential/array/trait signatures execute successfully.
+Unknown projections and depth-limit rejects have distinct required diagnostics.
+No performance, fixed-point, full-mode/full-suite or completion acceptance is claimed.
+Only a nonsemantic method-inference comment was corrected after the fixed-input build.
+
+Two positives remain failing; neither is reclassified as a successful rejection:
+
+1. An app-level free function named fallback makes std Optional.unwrapOr's local
+   closure parameter call fallback() fail visibility. The isolated standard-shadow
+   input fails --check on both old23f7 and newe6ff. Check/Visibility.pw::
+   checkExpressionVisibility(Expr.Call) classifies a call with global spelling
+   searches without consuming its lexical/dynamic binding. This is a separate
+   semantic authority, not an overload constraint or a reason to rename a user
+   function. The independent architecture review finds it outside closed com-cwu1
+   and the finite Verify/Call repair recorded in com-qb05. A new finite repair
+   must own lexical call visibility from binding through all modes/final use,
+   remove the global-name reclassification, retain real import failures and
+   include shadowed parameter/local/global closure controls. Proposed attachment:
+   met-ucze, com-qb05 and G1. It has not been silently added or implemented.
+2. Boxing Worker as any Picker fails when Picker has an unused generic requirement,
+   even when only its nongeneric overload is called. An isolated single generic
+   requirement reproduces the same unbound implementation parameter error on
+   old23f7 and newe6ff. The independent review found no precise recorded exclusion
+   for this formation case; generic existential invocation is not thereby assumed
+   implemented. Save a finite investigation/classification task, separate unused
+   formation/nongeneric member availability from invoking a generic requirement,
+   and assign a bounded repair or evidenced future-feature disposition. General
+   com-uutc wording is insufficient evidence to dismiss this actual failure.
+
+The goal's task-omission/modification stop condition applies to finding1. Keep
+met-g53w and all dependent areas/gates open. Proposed task assignment needs the
+user's next instruction; no new task or dependency was added here. The intermediate
+soundness review's Unit matching concern was also probed: a Bool/Unit method group
+with a literal Unit argument passes --check on both carriers. This check-only
+contrast does not prove all Unit contexts; com-sby0 retains the broader audit.
+
+Durable receipt: meta/evidence/existing-feature-conformance/source-owner-facts/
+overload-structural-checkpoint.json. Its exact inputs and failed sources are the
+handoff boundary; do not turn partial slice success into phase-three completion.

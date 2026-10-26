@@ -44,7 +44,7 @@ pub impl Comp {
                         // A requirement group uses the complete declaration
                         // rule, not a separate duplicate-only approximation.
                         if try self.callableDeclarationConflict(a: reqs[a], b: reqs[b]) {
-                            return <Result.Err error=self.diagnosticAt(offset: reqs[b].nameStart, msg: "duplicate trait requirement: a common callable form has no distinct fixed argument type (spec/07,08)") />
+                            return <Result.Err error=self.diagnosticAt(offset: reqs[b].nameStart, msg: "duplicate trait requirement: a common callable form has no provably distinct argument type (spec/07,08)") />
                         }
                     }
                     b += 1U64

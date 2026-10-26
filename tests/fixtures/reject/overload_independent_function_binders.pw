@@ -1,0 +1,3 @@
+fn select[T](value: T) {}
+fn select[U](value: fn() -> U) {}
+fn main() {}

@@ -75,3 +75,22 @@ the two is introduced.
 Use one logical callable result contract for named/closure omitted/explicit Unit. Perform value compatibility by saved semantic types, normalize body signature and Mid return destination/fallthrough accordingly. Close F3 and F4 together; adding an AST exemption or only suppressing the first verifier error is insufficient.
 
 Close producer -> saved/publication -> explicit instance -> actual final reader, and remove the superseded semantic decision/writer rather than add a late verifier-only patch. Preserve existing positive and rejecting contracts. Verify decisive new controls and affected modes, then independently review this task and affected area. Final G2a/G2b/G3 remain mandatory, separately owned; no gate, verifier, existing expected output or seven-second condition may be weakened. No new language meaning is required or authorized by this finding.
+
+## Shared Candidate Matching Interaction
+
+The met-g53w intermediate independent review identified a related Unit argument
+boundary during extraction of the shared candidate-local matcher. Canonical Unit
+may be term0, while typeCompatibility(0,0) reports Unresolved. A Bool/Unit same-label
+overload group with choose(value: ()) (and a Unit local) can therefore leave the
+Unit candidate selector-only instead of fully applicable. Check free, method and
+trait entries and both declaration orders with this repair. The previous method
+matcher skipped expected0; preserve neither that blind acceptance nor a matcher-only
+literal exception. Distinguish known Unit from absent type information at the
+semantic compatibility boundary, and verify final argument/return use. This is a
+reviewed affected boundary, not yet a newly reproduced independent issue or a
+claim that met-g53w/this task is complete.
+
+The first direct contrast (Bool/Unit method overload, literal Unit argument) passes
+--check on old23f7 and newe6ff. It does not confirm the review hypothesis as a real
+regression. The source/outcomes are retained in the structural-overload checkpoint;
+local/call-derived Unit and final native/JIT remain separate required coverage.

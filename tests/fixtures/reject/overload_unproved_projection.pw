@@ -1,0 +1,7 @@
+trait Source { type Item }
+struct Holder[T] { val stored: T }
+impl[T] Holder[T] where T: Source {
+    fn select(value: T#Source.Item) {}
+    fn select(value: I64) {}
+}
+fn main() {}

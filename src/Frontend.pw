@@ -1,3 +1,4 @@
+use ./Ir only { StructuralOverlap, StructuralOccurrence, StructuralBinding }
 use ./Ir only { SourceExitTarget, SourceTransferFact }
 use ./Ir only { DeclarationScopeOrigin }
 use @Std/Core only { Ref }

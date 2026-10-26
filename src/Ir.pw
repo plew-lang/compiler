@@ -2911,6 +2911,27 @@ pub struct UnifyBind {
 }
 pub impl UnifyBind { factory }
 
+// Declaration admission proves disjointness, whereas directional witness
+// matching asks for a substitution for one provider. A failed/unknown witness
+// match is not evidence that two declarations are disjoint.
+pub enum StructuralOverlap {
+    Possible
+    Disjoint
+    Unproved
+    AnalysisLimit
+}
+pub enum StructuralOccurrence {
+    Absent
+    Present
+    Unproved
+    AnalysisLimit
+}
+pub struct StructuralBinding {
+    pub val paramId: U64
+    pub val term: U64
+}
+pub impl StructuralBinding { factory }
+
 // A declaration-time trait member selected from static evidence.  It is kept
 // separate from the eventual CallResolution because generic template checking
 // needs a symbolic requirement before a concrete dispatch target exists.

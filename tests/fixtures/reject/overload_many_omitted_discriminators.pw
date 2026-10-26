@@ -1,0 +1,3 @@
+fn select(field0: I64 = 0I64, field1: I64 = 0I64, field2: I64 = 0I64, field3: I64 = 0I64, field4: I64 = 0I64, field5: I64 = 0I64, field6: I64 = 0I64, field7: I64 = 0I64, field8: I64 = 0I64, field9: I64 = 0I64, field10: I64 = 0I64, field11: I64 = 0I64, field12: I64 = 0I64, field13: I64 = 0I64) {}
+fn select(field0: Bool = false, field1: Bool = false, field2: Bool = false, field3: Bool = false, field4: Bool = false, field5: Bool = false, field6: Bool = false, field7: Bool = false, field8: Bool = false, field9: Bool = false, field10: Bool = false, field11: Bool = false, field12: Bool = false, field13: Bool = false) {}
+fn main() {}
