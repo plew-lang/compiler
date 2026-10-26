@@ -1,6 +1,6 @@
 ---
 id: met-tfbl
-status: open
+status: in_progress
 deps: []
 links: [met-g53w, com-cwu1]
 created: 2026-10-26T05:22:49Z
@@ -150,3 +150,213 @@ recorded in met-g53w; it is not silently bundled into this lexical/visibility au
 This ticket's creation authorizes investigation planning, not a language change or
 an already accepted implementation. No compiler source or test expectation is
 changed by registering this task.
+
+## Investigation Results (Implementation Not Started)
+
+Source reviewed at a8f85323 (semantic source b5df0276); no compiler/std/test
+source was edited or rebuilt. Old23f7 and newe6ff were compared on **65 distinct
+probe projects** through check/native/JIT, with supplemental gen controls.
+All five diagnostic batches finished exit0 with fixed inputs; **588 watched
+commands** include compile/link/runtime steps and the initial invalid macro setup.
+Exit0 of the collector does not mean the observed programs are correct. Old/new
+exit codes and actual execution stdout agree for every compared case.
+
+The four new macro probes initially lacked a package manifest. Their missing
+Syntax dependency errors are setup failures, not visibility evidence. Re-running
+with the existing exact Syntax manifest/lock fixes that setup; those fresh
+macro outcomes replace the initial four for semantic conclusions.
+
+Durable commands, source catalogs, binary/source/std/tool hashes, logs' primary
+diagnostics and observed output: meta/evidence/existing-feature-conformance/
+source-owner-facts/lexical-visibility-audit.json. Source catalogs and runner code
+are saved, so tmp is not the sole reproducibility record. No formal performance,
+fixed point, sanitizer/full suite or repaired acceptance is claimed.
+
+### Authority and Reader Map
+
+| Boundary | Current owner/result | Audited outcome |
+| --- | --- | --- |
+| Namespace qualification | Resolve/Lexical::namespaceExprModule and resolveLexicalModuleExpr, lexical name list plus ImportOrigin | Distinguishes a local value from a same-spelled module; explicit qualified call remains qualified. Both controls execute correctly. |
+| Module/global binding | Check/Visibility::moduleBindingAt, Resolve/Global::globalIndexAtUse | Original module/use identity restricts global candidates. This lookup is not inherently an unrestricted global-name search. |
+| Local lookup | Resolve/Locals::localIndexByName, newest local first; typedLocal forces a pending global type | Correct nearest-value identity is available. Global declaration installation and global type completion are separate. |
+| Identifier classification | Check/Generic::resolveIdent returns Value/Function/TypeQualifier/Undefined plus target | Prefers a value independently of its callability. Call-name selection does not consume this classification. |
+| Pre-call visibility | Record::recordExpr invokes checkExpressionVisibility before its Call branch; gen performs checkUseVisibility on the whole expression arena | Reconstructs free-function meaning from spelling without the local binding or selected operation. Can fail before the real selector runs. |
+| Call classification/cache | Resolve/Expr::resolvedCallee, AST-expression CachedCallee | Suppresses free lookup only if the currently observed local.ty already is fn. Noncallable or pending values fall through; NoStaticCallee conflates dynamic/no-match states. |
+| Free candidates | Resolve/Module::visibleFreeFunctions and findFunc | Collects module declarations and public import/re-export overloads, checks all candidates, preserves ambiguity; first selector-only candidate is diagnostic fallback. Tested union/order/invalid controls do not show global precedence. |
+| Source operation | Record::recordFreeCallExpression, recordDynamicLocalCall; direct/dynamic CallTemplate | Selected local closure records bindingDeclStart and function term. Raw globals are nevertheless encoded as ClosureLocal. pow is classified separately by name before ordinary lexical resolution. |
+| Closure arguments | Resolve/Expr::recordDynamicCallTemplate, Check/Call::checkCallArgs, source template closure | Context/types are partly checked, but labels/access modes/full arity do not share the ordinary signature admission contract. Template closure later asserts plan count. |
+| Instantiation/final use | Mono/Call::selectDynamicTemplateCall and checkFinalClosureCallEvidence; Backend/Llvm/Mid::midCanonicalClosureCallPreflight | Consumes retained binding/function type. Preflight requires a matching Mid local for ClosureLocal, so a global selected under that variant fails later. It does not repair the original source name decision. |
+| Generation harness | Codegen/Gen::synthGenMain and Module::findFunc genMode fallback | Synthetic parseItem/write calls rely on global spelling lookup after the early sweep. The fallback itself has no synthetic-origin check; removal of the sweep alone is not a complete safe repair. |
+
+### Confirmed Findings
+
+**V1 — Diagnostic-driven preselection (the original failure).**
+checkExpressionVisibility has two terminal-error paths: no visible free function
+plus any loaded same-name free declaration; or some visible free declaration
+without matching labels plus any loaded same-name matching-label declaration.
+Neither first tests whether the call is a lexical value invocation. Both
+firstFuncByName and labelMatchOnlyInvisible are used only by this checker;
+firstVisibleFuncByName also has a legitimate resolveIdent consumer and must not
+be removed indiscriminately. The restricted/free candidate resolver is not the
+source of the original external-name interference.
+
+The failure reproduces for parameters, locals, a global callable value, aliased
+names, defaults and provided methods. Public versus private unrelated declarations
+both interfere; renaming/removing the unrelated declaration restores correct
+42 output where the independent global/capture limitations do not intervene.
+Adding a private zero-argument declaration can break a previously valid local
+closure even when a public wrong-label free overload is already imported.
+
+This is **not an isolated optional hint facility**. These functions emit terminal
+errors before lookup failure is established. The user permits deleting the hint:
+recommend removing the unrestricted pre-call diagnostic search, with genuine
+visibility enforcement owned by lexical/source selection. Do not merely hide the
+message, special-case closures/std, or weaken missing-use/private rejection.
+
+**V2 — Type-dependent lexical priority and incomplete classification.**
+A fn-typed parameter named callback correctly overrides callback(). Changing that
+parameter to I64 makes callback() invoke the ordinary same-named function and
+print11. Rebinding a fn-valued local to a scalar behaves the same way. resolveIdent
+would retain the nearest value, but resolvedCallee implements its own type-based
+condition. Thus the suspected priority problem exists separately from V1; it is
+not evidence that the ordinary free resolver always prefers global functions.
+
+A pending inferred global callback is not typed before the fn test. When a
+same-named ordinary function exists, it is selected and prints11. An explicit
+equivalent fn annotation sends the call into the dynamic/global path, where V4
+then fails. Lookup uses value type readiness as a binding discriminator and
+caches that decision. A missing binding, a noncallable binding, a pending value
+and a selected dynamic target must not be represented by one failure sentinel.
+Independent review confirms that falling through a noncallable local/parameter
+violates spec03's nearest lexical binding rule and design/name-lookup section3.
+This is an existing contract violation, not a new specification choice.
+
+**V3 — Incomplete closure signature admission.**
+Both a local/parameter closure and a closure-valued field declared with
+fn(value: I64) accept callback(other: 42I64), and native/JIT print42. Spec04
+requires closure labels and declaration order to match. Missing/extra arguments
+instead produce internal error: selected call has an incomplete argument plan.
+Unexpected inout to a by-value closure passes check then fails Mid preparation.
+Wrong argument types and out-of-range I8 literals do reject normally: do not
+replace the useful existing context/type checks with a weaker new checker.
+The producer records positional arguments and template closure checks their
+count; no single source admission owner checks the complete fn-value signature
+before publication. This is a separate repair from com-cwu1's already accepted
+existential requirement argument checks.
+
+**V4 — Global callable receiver loses storage kind.**
+A simple noncapturing global fn value, with no name collision, passes check but
+fails native/JIT with function/main requires verified Mid lowering. The lexical
+lookup returns a Local record flagged isGlobal; recordDynamicLocalCall publishes
+ClosureLocal without preserving that distinction. Final preflight then searches
+only Mid locals by bindingDeclStart. Keep the source/global identity and lower a
+real global receiver through the canonical pipeline; do not weaken the local
+receiver preflight, reinterpret identity as a string or introduce AST emission.
+This finding concerns a noncapturing global value, not adding a new capture shape.
+
+**G1 — Generation compensates for an unscoped fallback with an ownerless sweep.**
+The same V1 failure occurs during gen, including in an application-only helper
+unneeded by the macro. Normal lazy run can omit that valid unused helper;
+check/native and gen currently reject it. Conversely genuine unused missing()
+is omitted by lazy run as intended. Gen's findFunc fallback searches every
+loaded free declaration whenever genMode is set, not only trusted generated calls.
+The source shows a policy gap; the probes do not demonstrate successful private
+user dispatch through it. Remove broad mode privileges by retaining explicit
+synthetic declaration/origin identity. Then check requested user bodies in their
+lexical environment instead of checking all Expr.Call rows without their owners.
+
+### Correct or Separately Scoped Controls
+
+- Correctly typed local/parameter closures override a same-module or explicitly
+  imported matching free function and execute42. An imported and a module-local
+  overload form one candidate set; reversing which origin owns I64/Bool yields
+  the same11/42 outputs. No early-first-candidate defect was found in those cases.
+  Reversing declarations/imports preserves these results. A call before a local
+  declaration invokes the free function11; a later call invokes the new local42.
+  Wrapping the local closure in a value block preserves both V1's collision
+  failure and its renamed positive control, without introducing a new cause.
+- Missing imports, selective import of a private function, an imported public
+  overload with a private matching alternative, wrong visible labels/types,
+  ambiguity and numeric range errors remain rejected. These are preservation
+  controls; the new repair may simplify diagnostic wording without granting access.
+- Explicit namespace qualification and a module name shadowed by a local value
+  behave correctly. A generic T with an unrelated module struct T succeeds in
+  check/native/run/gen. No corresponding type/namespace leak is established.
+- A closure capturing another function value is rejected by checkedCaptureCell.
+  com-b1ro/com-esri explicitly exclude that environment shape from current feature
+  conformance. Do not mislabel its earlier expected-positive probe or expand
+  phase3 to implement that shape. V1 can precede this independent limitation.
+- Global-closure Mid failures, missing/extra-argument internal errors and wrong
+  labels are actual unsuccessful or invalidly accepted probes, not passing gates.
+  No repaired-path performance or final task/area completion is claimed.
+
+### Specification Interpretation Boundary
+
+A local closure parameter named pow that would return42 is ignored for
+pow(base: 2I64, exp: 3U64); actual native/JIT output is8. Both Record and ExprType
+prioritize the named Pow protocol operation before the ordinary lexical path.
+Spec12 explicitly defines this named operation, unlike an ordinary imported
+function, but does not spell out its interaction with same-named local values.
+Do not silently change that language-facing behavior as a repair side effect.
+Before touching this special route, confirm whether the existing named-operation
+contract permits the priority or whether ordinary lexical shadowing must win.
+The general noncallable-value fallback is separately confirmed as V2's violation
+of the existing lexical contract. Do not use pow's special boundary to defer V2.
+
+### Proposed Finite Repair Decomposition (Not Yet Registered)
+
+1. **Binding-first call selection and visibility, eager/lazy paths (V1/V2).**
+   Share the lexical binding classifier with call-name selection. Retain binding
+   identity/kind before deciding callability or completing pending global types.
+   Separate absent/noncallable/pending/selected states and candidate exclusions;
+   scope caches to the admitted source decision. Apply visibility to the selected
+   declaration/origin, remove unrestricted pre-call hint searches and preserve
+   valid/free overload frontiers. Binding classification must not promote
+   resolveIdent's firstVisibleFuncByName result into a selected overload: collect
+   and apply the complete free-function frontier separately. This unit replaces
+   the normal body Record precheck; unit4 owns the gen sweep/fallback migration.
+   Verify local/parameter, aliases, defaults and
+   provided bodies end to end in check/native/run. Preserve named-operation
+   semantics until their scope interaction has an explicit disposition.
+2. **Complete closure-value signature admission (V3), independent of1.**
+   Project an already selected function-value signature through shared argument
+   validation for labels/order/count/type/context/access passing before recording
+   a complete argument plan. Cover local and field targets with valid, wrong
+   label/order/count, unexpected-inout, wrong type and literal-range controls;
+   preserve actual dynamic target through Mid and native/JIT. Do not reopen the
+   unrelated finite existential repair merely to hide the new required scope.
+3. **Global closure receiver through final use (V4), consuming1's binding kind.**
+   Carry global declaration/storage identity from selection through the source
+   target, instance, canonical Mid receiver and LLVM call. Cover inferred/explicit
+   globals, same-name functions, aliases and module provenance; retain real local
+   preflight checks. Native/JIT must execute the actual global closure42, not
+   merely pass check or compile a different free function11.
+4. **Explicit gen-harness authority and lexical gen requests (G1), consuming1.**
+   Replace the mode-wide global fallback with explicit trusted synthetic target
+   identities/origins, while source macro/default/provided helpers use ordinary
+   lexical decisions. Remove/replace the ownerless call-visibility sweep only
+   after its required enforcement has an owner. Exercise macro helper and unused
+   application contrasts plus genuine inaccessible source calls, real generated
+   parseItem/write execution and the existing full gen gate.
+   If gen's old paths remain after unit1, record that explicit transitional gap;
+   unit1 alone cannot establish visibility authority for every mode.
+
+### Independent Review and Current Disposition
+
+Two independent reviewers accepted the source-level causes, evidence limitations
+and four finite repair units. Architecture review verified V1/V2/G1 and the
+binding-classification versus overload-selection distinction. Signature/consumer
+review independently verified V3/V4's producer-to-reader chain and their inclusion
+in existing-feature conformance; function-typed capture remains excluded.
+
+Both independently recounted the initial58 projects/522 commands. Architecture
+review additionally verified the final7 order/wrapping controls, giving65 projects
+and588 commands, with unchanged inputs and no old/new exit/stdout differences.
+Neither review certifies a repaired implementation or any final validation gate.
+Review conclusions and required scope refinements are incorporated above rather
+than stored in separate review files.
+
+New repair tasks/dependencies have not yet been added: the goal requires stopping
+when required task changes are discovered. This investigation remains in_progress
+pending assignment of the required repairs/decision dispositions; investigation
+and decomposition review are complete. Parent/G1 must not close on this report.
