@@ -1,6 +1,6 @@
 ---
 id: com-5by1
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-26T12:48:12Z
@@ -49,14 +49,15 @@ The user's follow-up requests shorter wording without changing these contracts.
 This is documentation work: no compiler RED/rebuild is required. Actual process
 compliance, detection effectiveness and cost remain with [com-bv1s](com-bv1s.md).
 
-## Evidence and Current Boundary
+## Outcome and Evidence
 
-The initial wording at compiler `2f1f9b44` / meta `fc6e0ee0` passed local links,
-workflow heading references and independent reviewer `/root/review_tdd_rules`
-(no inherited conversation). It followed the normal entry paths, checked 148
-file/heading references and reported no required correction. Detailed evidence
-is retained in Git at compiler `4054b83f`; this is not review of the shorter text.
+Resolved at compiler `90efda0f` / meta `a7fef840`. Local links and 17 workflow
+heading references passed; both repository diffs passed whitespace checks.
+Independent reviewer `/root/review_tdd_rules` rechecked the affected contracts
+against compiler `4054b83f` / meta `db8eb591`: required entry, scenario coverage,
+RED/GREEN, exceptions, records/gates and reasoned review remain intact. It found
+no required correction and permits closure; the author accepts this grounded
+conclusion. The initial fresh-context review remains in Git at `4054b83f`.
 
-Reopened for the user-requested wording refinement. Close after verifying the
-shorter documents preserve the contracts above and independently reviewing the
-affected conclusions. No runtime or formal performance result is claimed.
+Compiler execution and operating effectiveness were not tested; those remain
+with [com-bv1s](com-bv1s.md). No source, expectation or gate change is claimed.
