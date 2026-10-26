@@ -89,7 +89,7 @@ must not alter visibility, arity, aliases, or candidate order.
 owns the complete acceptance condition across ordinary callable and requirement
 entries. Registering a row reserves identity; it does not replace the declaration
 group's admission result. Entry-specific checks cannot silently add or omit
-generic-shape or concrete-discriminator conditions. Preserve the domain,
+binder-domain or structural-discriminator conditions. Preserve the domain,
 normalized binder context and default forms through that boundary.
 
 Lookup readers preserve the complete same-name candidate set and continue past
@@ -301,7 +301,8 @@ A default memberwise factory has a callable signature even without an executable
 `Func`. The shared declaration-admission authority compares its signature derived
 from field types/defaults with custom anonymous factories under one receiver and
 binder context, including common omission forms. A structural overlap helper
-alone does not establish the specification's fixed-type discriminator. Check
+alone does not establish the specification's per-position structural proof;
+its binder mapping must distinguish shared receiver and independent method terms. Check
 unused declarations too; call-site ambiguity cannot replace declaration admission.
 
 Structural records use sorted labels and complete field terms; a layout ID or

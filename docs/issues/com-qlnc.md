@@ -1,6 +1,6 @@
 ---
 id: com-qlnc
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-10-25T14:02:11Z
@@ -125,3 +125,21 @@ former fixed-only plan and API-rename recommendation are superseded.
 Reference for the finite occurs-check mechanism:
 [Rust InferCtxt documentation](https://doc.rust-lang.org/stable/nightly-rustc/rustc_trait_selection/infer/struct.InferCtxt.html).
 This supports the mechanism, not adoption of Rust's overload/language rules.
+
+## Revised Documentation Outcome
+
+Resolved at spec5bd65a5 and the accompanying three-chapter compiler design
+update. The six spec chapters now permit bounded per-position structural
+distinction, explicitly share receiver binders and separate method-owned ones,
+retain default/origin/capability boundaries, and preserve Optional.unwrapOr's
+public eager/lazy overloads. Unknown projections, occurs checks, nominal
+recursion and analysis limits have explicit contracts.
+
+Independent overload_rule_semantics_review and overload_rule_architecture_review
+both accepted the actual six-spec/three-design diff. This time both checked the
+real standard Optional API and related Result/collection/format surfaces;
+the semantic review also checked nominal recursion against the occurs argument.
+The architectural review's nonblocking generic-shape wording was replaced with
+binder-domain wording. No blocking omission remained. Targeted stale-contract
+search and diff whitespace checks passed. This is documentation acceptance,
+not success of the strict WIP or completion of met-g53w/phase three.

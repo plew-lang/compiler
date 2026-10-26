@@ -19,8 +19,9 @@ This is a newly recorded ordinary/trait inconsistency, not a regression in that
 repair. At the recorded baseline spec/07 required matching generic arity and
 positions, while spec/08 gave trait requirements the ordinary rules. The user
 selected a structural refinement after the strict fixed-type rule at cc13283
-rejected the existing Optional API. [com-qlnc](com-qlnc.md) remains the open
-canonical specification/design prerequisite. Do not implement the superseded
+rejected the existing Optional API. [com-qlnc](com-qlnc.md) has now passed two
+independent documentation reviews at spec5bd65a5 and the companion design update.
+Do not implement the superseded
 plan of imposing the old generic-shape restriction on trait requirements.
 
 ```plew
@@ -149,10 +150,9 @@ The source-selection area met-ucze and G1 require this separate repair.
 
 ## Current Planning Boundary
 
-The user resolved the API/rule choice in favor of bounded structural proofs
-and preserving Optional.unwrapOr. Await com-qlnc's actual spec/design update and
-independent review before resuming implementation. This request updates task
-contracts only. Existing WIP routes ordinary, trait, provided-extension and
+The user authorized phase-three resumption. The structural spec/design update
+has passed independent review; implement that now-canonical contract while
+preserving Optional.unwrapOr. Existing WIP routes ordinary, trait, provided-extension and
 memberwise entries through callableDeclarationConflict, removes sameGenericShape
 and callableFormsMayOverlap, and defers initial group admission until nominal
 identities resolve. Its strict fixed-type discriminator is superseded, so this

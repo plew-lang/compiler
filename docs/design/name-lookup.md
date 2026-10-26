@@ -38,20 +38,39 @@ without an executable function. Traversal and diagnostic rendering may remain
 entry-specific; semantic acceptance may not.
 
 The [specification's overload rule](https://github.com/plew-lang/spec/blob/main/spec/02-type-system/07-methods-impl.md)
-requires, for every pair of ordinary callable forms in one conflict domain and
-selector, a corresponding position whose two types are independent of unresolved
-parameters and semantically different. Different pairs can use different
-positions. Normalize existing type identities/equalities, including concrete
-Self, without solving new general constraints to create a discriminator.
-Dependence includes function, enclosing nominal/impl/trait parameters, abstract
-Self and unresolved associated projections. Array[I64] is fixed; Array[T] is not.
-Generic arity and use at other positions need not match. Structural non-overlap
-between dependent patterns is not a substitute for the required fixed position.
+requires a distinguishing argument position for every pair of common ordinary
+callable forms in one conflict domain and selector. Different pairs can use
+different positions. Fixed unequal concrete types are sufficient, but the
+bounded structural relation can also prove dependent terms distinct.
+
+Compare under the common receiver domain: receiver-derived parameters describe
+one shared environment, while method-owned binders from different declarations
+remain independent. Derive sharing from canonical receiver/trait identity and
+its parameter mapping, never spelling or binder-list position. A common receiver
+parameter T can coincide with I64; two receiver parameters A/B can coincide too.
+For the same shared T, T and fn() -> T cannot coincide in a finite structural
+type. Independent method parameters T and U can satisfy T = fn() -> U.
+
+The relation uses canonical nominal/function/record structure, consistent
+substitutions, finite occurs checks and previously established type equalities.
+Array[T] and Box[U] have different nominal constructors; Array[T] and Array[I64]
+can coincide. Normalize concrete Self and retained projection equalities, but do
+not search general trait bounds to manufacture a discriminator. Unresolved
+projections preserve unknown; recursive nominal fields are not unfolded. A
+cyclic substitution is not a legal recursive structural type. The existing
+bounded analysis policy applies; distinguish a proved mismatch, a possible
+match and unknown/AnalysisLimit. Only proved mismatch supplies a discriminator.
+
+Each position is queried under the same receiver-domain constraints, but a
+substitution introduced to test one argument position is not evidence for
+another: the specification requires an individually distinguishing position,
+not solely an inconsistent conjunction of otherwise overlapping positions.
+Generic arity and use positions need not match, and neither is a discriminator.
 
 Receiver/origin domains, independently provided trait-member coexistence and
 inherent preference, and the adopted capability-conditioned groups retain their
 explicit contracts. They are not caller-specific exceptions to the ordinary
-type-discriminator test. Different selectors are distinct operations. Apply the
+structural-discriminator test. Different selectors are distinct operations. Apply the
 rule to common default-omitted forms without requiring eager enumeration of
 every omission combination.
 
