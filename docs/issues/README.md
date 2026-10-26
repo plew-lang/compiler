@@ -5,6 +5,11 @@ work, and optional improvements. [Design](../design/README.md) owns adopted
 contracts; issues link to those contracts instead of duplicating them. Current
 work selection belongs in the meta worklog. This directory has no manual index.
 
+Before starting every task, read the meta repository's required
+[task-start TDD rules](../../../agents/development-workflow.md#タスク開始時に必ず読むtdd規則),
+including their investigation, documentation and pure-refactor applicability.
+That section owns the execution procedure; this document owns ticket contracts.
+
 ## Tool and Store
 
 Use `scripts/issues/tk` from the compiler root, or its absolute path from any
@@ -50,18 +55,45 @@ Priority is work ordering, not a claim that every issue is a defect:
 - 3: useful improvement without a current blocking dependency.
 - 4: deferred option requiring further justification.
 
-Each body states the current problem/question, related design contract,
-evidence (revision and inspected/verified scope), and completion conditions.
+Titles describe the action to perform; keep the guarantee and its limits in the
+body rather than turning the title into a long assurance statement. Each body
+states, as applicable:
+
+- The problem/question, intended guarantee and canonical spec/design contract.
+- Covered and excluded behavior, owners, input shapes and relevant modes.
+- The decision owner, producer, publication/instantiation and final consumer;
+  replaced paths and duplicated authorities that must be removed.
+- A scenario list derived from the complete guarantee and preserved behavior,
+  with existing/new test references, oracle grounds, discriminating assertions,
+  actual paths and results. Extend it when new cases are discovered; do not
+  silently remove required cases to finish the task.
+- Intended RED/GREEN evidence, or characterization and structural acceptance
+  for a pure refactor; investigation/documentation checks instead of fake RED.
+- Independent review, applicable gates, real prerequisites and decisive closing
+  evidence. Investigations state finite questions, outputs and disposition owners.
+
 Distinguish a known violation from an unverified boundary. Do not turn every
 uninspected combination into a mandatory bug. Record dependencies only when
 one issue actually prevents completion of another. Assignees, dates, and
-estimates are not mandatory.
+estimates are not mandatory. A short list and links in the existing ticket are
+enough; do not introduce a second status ledger or mandatory large test template.
 
 For implementation work, completion requires the contract to hold from producer
 to final consumer, removal of replaced paths and duplicated authorities,
 applicable correctness/performance gates, and synchronized documentation. A
 new check or saved table alone does not close the issue. Investigation can close
 with findings and linked follow-up work without claiming the fix is complete.
+
+Before closure, reconcile the guarantee against the scenario list and meaningful
+executed assertions, including important boundaries and interactions. Check
+oracle validity and detection strength, not just green results or code coverage.
+Structural API/removal conditions need their own source/structural evidence.
+Obtain an independent completion review under the meta
+[review procedure](../../../agents/development-workflow.md#独立レビューと完了認定).
+Record revision, actual scope/results, findings and reasoned dispositions;
+reviewer count or a receipt alone is not evidence of correctness. In-scope
+confirmed violations must be resolved; optional improvements do not silently
+expand completion. Review affected conclusions again after fixes.
 
 Before closing, update the body with the reason (resolved, investigated,
 duplicate, unnecessary, or deferred), revision/scope, and decisive evidence.

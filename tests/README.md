@@ -102,6 +102,20 @@ this invocation; E still executes every manifest input and is never skipped.
 
 ## Adding or changing a test
 
+At every task start, read the required meta
+[TDD rules](../../agents/development-workflow.md#タスク開始時に必ず読むtdd規則).
+Derive scenarios from the task's entire guarantee and behavior to preserve,
+then automate them incrementally. This section owns assertion validity and
+registration; the meta workflow owns RED/GREEN/refactor and its exceptions.
+
+For each scenario, establish the expected result from the spec, or the owning
+design invariant for an internal test. Explain what error the assertion would
+detect and verify the actual entry/path/mode: a local copy is not a direct global
+call, and closure formation is not invocation admission. Reject tests need the
+intended rejection rather than an unrelated error; current compiler output is
+not an independent oracle. Preserve enough grounds in a short comment, task or
+canonical link; do not require large per-fixture paperwork.
+
 1. Search existing inputs and assertions for the same behavior and failure
    mechanism, including internal and sanitizer checks.
 2. Reuse a fixture for another independent IR/trace assertion when it already
@@ -123,3 +137,22 @@ this invocation; E still executes every manifest input and is never skipped.
 Build and diagnostic utilities live in `../scripts/{build,diagnostics,support}/`;
 production helpers are not test assertions. Scratch and generated artifacts stay
 under ignored `tmp/`, outside committed fixtures.
+
+## Test validity and coverage review
+
+Before task completion, map each guarantee to a meaningful assertion and check
+the scenario list for missing boundary, failure and interaction cases. Already
+green controls may be reused after checking their actual path and oracle. Review
+important semantic distinctions rather than enumerating every input combination;
+line coverage and fixture counts are not semantic coverage proofs. Architecture
+guarantees such as removing a competing selector need source/structural evidence
+as well as public behavior tests. Independent review includes these test claims.
+
+For a corpus audit, derive the actual input/assertion set from harness discovery,
+explicit script calls and generated cases, including manual/unregistered items.
+Independently derive required controls from spec/design and reconcile the two.
+Classify valid tests, wrong expectations, weak or unintended paths, unregistered
+checks, missing controls, unresolved semantics and separately unsupported
+features. Inspect original intent before changing or deleting expectations;
+follow existing authorization/stopping conditions. An audit closes with scoped
+evidence and owned follow-ups; it does not certify the repairs as complete.
