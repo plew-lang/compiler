@@ -1,0 +1,54 @@
+---
+id: com-x7r3
+status: open
+deps: [com-sn9w, com-lbnc]
+links: []
+created: 2026-10-26T12:48:12Z
+type: task
+priority: 1
+assignee: Koji Murata
+parent: com-jno0
+tags: [frontend, verification]
+---
+# Reconcile phase three repair tasks and admission dependencies from audits
+
+## Purpose and Inputs
+
+Reconcile the independently reviewed com-sn9w and com-lbnc findings
+against existing phase-three tasks and the already reviewed met-tfbl investigation.
+This is a finite planning/assignment task, not a residual implementation bucket.
+Read met-si6j, met-ucze, met-g53w, com-61jt and the actual current tk graph.
+
+## Actions
+
+- Preserve valid closed leaves and applicable evidence. Do not assume met-tfbl's
+  four repair units exhaust phase three; also do not reopen every old task.
+- Assign ordinary lexical binding/visibility, complete function-value argument
+  admission, global receiver preservation and explicit gen synthetic identity
+  to concrete existing or new bounded repair owners. Specify source producer,
+  saved identity, final consumer and removed competing paths for each.
+- Route all further confirmed phase-three gaps, necessary test/runner corrections
+  and material unknowns. Keep generic-requirement existential boxing as a separate
+  finite classification/repair owner; do not silently label it unsupported. Keep
+  the pow/local priority question at its existing user-decision boundary and
+  function-typed capture exclusions explicit.
+- Give repairs action titles and scoped guarantees, intended RED controls and
+  applicable mode validation/review. Record actual producer dependencies only.
+  Larger uncertain mechanisms first need a bounded investigation.
+- Connect every required repair to its area and G1 (com-61jt). Do not make G1
+  depend only on the closed audit/assignment while leaving repair tasks outside
+  its prerequisites. G1/G2a/G2b/G3 retain their original roles and seven-second
+  performance criterion; do not create duplicate admission/gate tasks here.
+- Select one bounded lexical-binding repair for com-bv1s and attach its actual
+  completion as that trial's prerequisite once identified. Do not depend on
+  met-tfbl's closure before assigning the follow-ups that allow it to close.
+
+## Exit and Evidence
+
+All input findings have an existing/new owner, disposition and correct real
+edges; phase-three closure cannot bypass confirmed required work. Oversized
+changes are split and task scope/dependency changes follow current authorization
+rules. Record the finite graph diff, expected ready/blocked behavior and an
+independent review of scope, completeness and cycles. Investigation closure is
+not repair completion. Source edits, test execution, final admission and main
+integration are excluded from this assignment task.

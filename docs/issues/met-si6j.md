@@ -2,7 +2,7 @@
 id: met-si6j
 status: in_progress
 deps: [met-ucze, met-ia09, met-acfl, met-6e6k, com-gyup, met-rzt4, com-fuo8, com-4bib, com-s248, com-lzpe, com-bkqq]
-links: []
+links: [com-jno0]
 created: 2026-10-13T01:29:29Z
 type: epic
 priority: 1
@@ -30,6 +30,12 @@ independent eleven-criterion synchronization; its prior final approval is supers
 [The closure-assurance retrospective](#closure-assurance-retrospective) explains
 why prior reviewed completion was premature and proposes the recovery boundary.
 Do not equate completing the four lexical repairs with re-certifying this parent.
+The separate [development-method and test-audit epic](com-jno0.md) groups
+operational rules, API/test audits and a bounded process trial. It does not own
+this implementation tree or replace G1/G2a/G2b/G3. G1 requires its phase-three
+recovery assignment and real-repair trial; unrelated corpus audits do not block
+phase three. Actual repair dependencies must still be attached to their areas
+and G1 before admission.
 [Existing-feature conformance](com-604k.md) remains open for phase four and final
 integration. Worklog owns the current candidate and next action; scoped evidence
 does not substitute for a final candidate's gates.

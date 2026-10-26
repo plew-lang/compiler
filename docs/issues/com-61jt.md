@@ -1,7 +1,7 @@
 ---
 id: com-61jt
 status: open
-deps: [met-ucze, met-ia09, met-6e6k, met-acfl, com-fuo8, met-rzt4, com-gyup, com-4bib, com-s248, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-s5k5, com-f0mq, com-fbqh, com-px0e, com-o7ul, com-tl9c, com-072n, com-9clj, com-o3vw, com-auvx, com-3qne, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-uuya, com-vuv9, com-6cw6, com-v1wa, com-tkz7, com-ugee, com-jzdz, com-nr7y, com-cwu1, com-ra96, com-zy6r, com-y8l4, com-l8m1, com-6zph, com-sby0, com-l9yo, com-9hf7, com-wrjh, met-g53w, met-tfbl]
+deps: [met-ucze, met-ia09, met-6e6k, met-acfl, com-fuo8, met-rzt4, com-gyup, com-4bib, com-s248, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-s5k5, com-f0mq, com-fbqh, com-px0e, com-o7ul, com-tl9c, com-072n, com-9clj, com-o3vw, com-auvx, com-3qne, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-uuya, com-vuv9, com-6cw6, com-v1wa, com-tkz7, com-ugee, com-jzdz, com-nr7y, com-cwu1, com-ra96, com-zy6r, com-y8l4, com-l8m1, com-6zph, com-sby0, com-l9yo, com-9hf7, com-wrjh, met-g53w, met-tfbl, com-x7r3, com-bv1s]
 links: []
 created: 2026-10-23T10:41:59Z
 type: task
@@ -11,6 +11,17 @@ parent: met-si6j
 tags: [frontend, verification]
 ---
 # Reconcile all phase three closure evidence before freezing a candidate
+
+## Development-method Recovery Prerequisites
+
+The separate [development and test-audit epic](com-jno0.md) owns method adoption
+and audit work, not this task's final evidence admission. Before G1, require
+[com-x7r3](com-x7r3.md) to reconcile the phase-three API/test audit findings and
+install all actual required repair dependencies, and [com-bv1s](com-bv1s.md) to
+complete the bounded real-repair process trial. A closed audit or assignment
+alone cannot substitute for repair completion. The full-corpus audits outside
+phase three are not G1 prerequisites; phase-three scope and all existing gates
+remain unchanged.
 
 ## Lexical Visibility Investigation
 

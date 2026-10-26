@@ -1,0 +1,53 @@
+---
+id: com-5zvv
+status: open
+deps: [com-5by1, com-ouh2]
+links: []
+created: 2026-10-26T12:48:12Z
+type: task
+priority: 2
+assignee: Koji Murata
+parent: com-jno0
+tags: [driver, verification, tooling]
+---
+# Audit remaining driver generation dependency and harness test contracts
+
+## Scope
+
+Audit the non-phase-three driver/gen/dependency/tooling/harness assertions
+assigned by com-ouh2: check/build/run/gen requests, package/module and
+root/part handling, AST generation registration, native/session/ORC/CLI boundaries,
+bootstrap/build/measurement/watchdog scripts and sanitizer orchestration.
+Separate supported product behavior from manual embedding diagnostics and native
+bridge probes. Name the exact requests a lazy test makes; unrequested bodies are
+not proof of their validity.
+
+Inspect runner success/failure classification itself: expected rejection versus
+unrelated exit1/internal failure, panic text/signal, stdout comparison, missing
+companions, timeout/child cleanup and instrumentation scope. Verify intentional
+negative controls are noticed. Tooling correctness follows its own design/entry
+contract and must not reuse the helper under test as the sole expected oracle.
+Do not change watchdog, gate strength or profile semantics within this audit.
+
+## Method and Exit
+
+Use the exact batches assigned by com-ouh2 and the rules in com-5by1.
+Before starting, split oversized batches under current planning rules; this is
+not an open-ended promise to inspect every conceivable combination. Previously
+reviewed assertions can be reused only with matching scope and inputs.
+
+For every assigned assertion establish original intent, spec/design oracle,
+actual path/mode, registration and a failure that discriminates the intended
+contract. Independently derive missing positive/reject and interaction controls
+from the contracts rather than filenames. Use known faults or selective isolated
+controls for important boundaries, not a blanket mutation-testing framework.
+Classify expectation errors, weak/incorrect paths, unregistered tests, missing
+controls, unresolved semantics and separately unsupported features. Check the
+original intent before recommending deletion, movement or expectation changes.
+
+Route findings and test/runner corrections to concrete finite owners before
+closing; follow existing stopping rules and keep this audit separate from actual
+repairs. Required follow-ups stay open under their responsible area. Save exact
+inventory revision, assertion dispositions, grounds and scoped independent review.
+Completion means the assigned finite audit is reconciled, not zero unknown bugs,
+all future features implemented or all resulting defects already fixed.
