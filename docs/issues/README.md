@@ -55,51 +55,32 @@ Priority is work ordering, not a claim that every issue is a defect:
 - 3: useful improvement without a current blocking dependency.
 - 4: deferred option requiring further justification.
 
-Titles describe the action to perform; keep the guarantee and its limits in the
-body rather than turning the title into a long assurance statement. Each body
-states, as applicable:
+Use an action-oriented title. Keep guarantees and limits in the body:
 
-- The problem/question, intended guarantee and canonical spec/design contract.
-- Covered and excluded behavior, owners, input shapes and relevant modes.
-- The decision owner, producer, publication/instantiation and final consumer;
-  replaced paths and duplicated authorities that must be removed.
-- A scenario list derived from the complete guarantee and preserved behavior,
-  with existing/new test references, oracle grounds, discriminating assertions,
-  actual paths and results. Extend it when new cases are discovered; do not
-  silently remove required cases to finish the task.
-- Intended RED/GREEN evidence, or characterization and structural acceptance
-  for a pure refactor; investigation/documentation checks instead of fake RED.
-- Independent review, applicable gates, real prerequisites and decisive closing
-  evidence. Investigations state finite questions, outputs and disposition owners.
+- Contract, problem and covered/excluded behavior, input shapes and modes.
+- Decision owner, producer-to-final-consumer path and competing paths to remove.
+- Scenario list covering the guarantee and preserved behavior; links to tests,
+  expected-result grounds, actual paths and RED/GREEN results.
+- Structural checks, independent review, required gates and real prerequisites.
+  Investigations instead name finite questions, deliverables and follow-up owners.
 
-Distinguish a known violation from an unverified boundary. Do not turn every
-uninspected combination into a mandatory bug. Record dependencies only when
-one issue actually prevents completion of another. Assignees, dates, and
-estimates are not mandatory. A short list and links in the existing ticket are
-enough; do not introduce a second status ledger or mandatory large test template.
+Short lists and evidence links suffice; do not create another status ledger.
+Distinguish confirmed defects from unverified cases. Add dependencies only for
+actual prerequisites. Assignees, dates and estimates are optional.
 
-For implementation work, completion requires the contract to hold from producer
-to final consumer, removal of replaced paths and duplicated authorities,
-applicable correctness/performance gates, and synchronized documentation. A
-new check or saved table alone does not close the issue. Investigation can close
-with findings and linked follow-up work without claiming the fix is complete.
+Completion requires the contract from producer to final consumer, removal of
+competing authorities, applicable gates and synchronized documents. Adding a
+check or table is not completion. Reconcile all required scenarios with meaningful
+executed assertions and structural evidence; do not silently drop required cases.
+Use the [independent review procedure](../../../agents/development-workflow.md#独立レビューと完了認定)
+to check expectation validity, detection strength and actual paths. A green suite,
+coverage number or review receipt alone cannot certify completion.
 
-Before closure, reconcile the guarantee against the scenario list and meaningful
-executed assertions, including important boundaries and interactions. Check
-oracle validity and detection strength, not just green results or code coverage.
-Structural API/removal conditions need their own source/structural evidence.
-Obtain an independent completion review under the meta
-[review procedure](../../../agents/development-workflow.md#独立レビューと完了認定).
-Record revision, actual scope/results, findings and reasoned dispositions;
-reviewer count or a receipt alone is not evidence of correctness. In-scope
-confirmed violations must be resolved; optional improvements do not silently
-expand completion. Review affected conclusions again after fixes.
-
-Before closing, update the body with the reason (resolved, investigated,
-duplicate, unnecessary, or deferred), revision/scope, and decisive evidence.
-Use standard `closed` for all these outcomes; do not invent status variants.
-Keep the issue and links after closure. Update the body for current truth;
-Git retains the discussion/history, and existing evidence stores retain logs.
+Investigations may close with evidence and owned follow-ups, without claiming
+repairs passed. Before closure, record the reason (resolved, investigated,
+duplicate, unnecessary or deferred), revision, scope, decisive evidence, review
+findings and their reasoned disposition. Use `closed` for all outcomes. Keep the
+issue and links; Git retains history and evidence stores retain results.
 
 ## Integrity Limits
 

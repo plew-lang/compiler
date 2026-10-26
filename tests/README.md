@@ -102,19 +102,16 @@ this invocation; E still executes every manifest input and is never skipped.
 
 ## Adding or changing a test
 
-At every task start, read the required meta
-[TDD rules](../../agents/development-workflow.md#タスク開始時に必ず読むtdd規則).
-Derive scenarios from the task's entire guarantee and behavior to preserve,
-then automate them incrementally. This section owns assertion validity and
-registration; the meta workflow owns RED/GREEN/refactor and its exceptions.
+Start with the required [TDD rules](../../agents/development-workflow.md#タスク開始時に必ず読むtdd規則).
+This section owns assertion validity and registration. For each scenario, check:
 
-For each scenario, establish the expected result from the spec, or the owning
-design invariant for an internal test. Explain what error the assertion would
-detect and verify the actual entry/path/mode: a local copy is not a direct global
-call, and closure formation is not invocation admission. Reject tests need the
-intended rejection rather than an unrelated error; current compiler output is
-not an independent oracle. Preserve enough grounds in a short comment, task or
-canonical link; do not require large per-fixture paperwork.
+- **Expectation:** derive it from spec/design, not the current compiler output.
+- **Detection:** assert the intended result or rejection reason; unrelated errors
+  must not make the test pass.
+- **Path:** verify the actual entry/mode and decision being exercised. Local copies
+  and direct global calls differ; closure creation does not test invocation.
+
+Keep grounds in a short comment, task or canonical link.
 
 1. Search existing inputs and assertions for the same behavior and failure
    mechanism, including internal and sanitizer checks.
@@ -140,19 +137,14 @@ under ignored `tmp/`, outside committed fixtures.
 
 ## Test validity and coverage review
 
-Before task completion, map each guarantee to a meaningful assertion and check
-the scenario list for missing boundary, failure and interaction cases. Already
-green controls may be reused after checking their actual path and oracle. Review
-important semantic distinctions rather than enumerating every input combination;
-line coverage and fixture counts are not semantic coverage proofs. Architecture
-guarantees such as removing a competing selector need source/structural evidence
-as well as public behavior tests. Independent review includes these test claims.
+Before task closure, reconcile scenarios with assertions, actual paths and
+results under the TDD rules. Reuse existing green controls only after checking
+their grounds and paths. API/removal guarantees also need structural evidence.
 
-For a corpus audit, derive the actual input/assertion set from harness discovery,
-explicit script calls and generated cases, including manual/unregistered items.
-Independently derive required controls from spec/design and reconcile the two.
-Classify valid tests, wrong expectations, weak or unintended paths, unregistered
-checks, missing controls, unresolved semantics and separately unsupported
-features. Inspect original intent before changing or deleting expectations;
-follow existing authorization/stopping conditions. An audit closes with scoped
-evidence and owned follow-ups; it does not certify the repairs as complete.
+For corpus audits, enumerate assertions from actual harness discovery, explicit
+scripts and generated cases, including manual/unregistered checks. Compare this
+set with controls derived independently from spec/design. Classify findings as
+valid, wrong expectation, weak/unintended path, unregistered, missing control,
+unresolved semantics or separately unsupported feature. Check original intent
+before changing/deleting expectations and follow existing stopping conditions.
+Audit closure requires scoped evidence and owned follow-ups, not completed repairs.
