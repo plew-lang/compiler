@@ -76,3 +76,7 @@ Batch0017 adds the supplemental run/generic_enum_field_inference.pw/.out, whose 
 ## Explicit Source-Transfer Mapping Control
 
 Batch0018 adds exactly run/source_transfer_targets.pw/.out as a supplemental internal control. Its invariant-failure branches call panic without the adopted ordinary Core import. Preserve source return/give/break/continue owner identity, wrong-session/kind rejection and the final Mid consumer mapping; this source-only read neither executes those arms nor certifies the complete internal service API. This extends the representative set to25 named roots, not all source guards.
+
+## Explicit Import-Provenance Supplemental Control
+
+Batch0019 adds run/import_origin_provenance.pw/.out. Internal provenance-table assertions use legacy unimported panic statements. Preserve original/local module identity, independent copy tables, re-export distinctions and first-binding retention through ordinary panic migration; no failure branch was executed. This is the26th named representative root, not a claim to have inventoried every internal guard or audited its complete primary service contract.
