@@ -95,3 +95,9 @@ review found no remaining required audit correction.
 The tail12 source-admission units and independent review are saved in meta/evidence/test-audit/scoped-reviews/frontend-panic-admission-tail.json and review-frontend-panic-tail.json. Together with batch0002, all50 panic source-admissions are reconciled separately from their50 outcome units; exact IDs and parent disposition are in source-admission-reconciliation.json. This task has54 inspected primary units (four outcomes plus50 admissions), remains in_progress, and closes no additional whole batch.
 
 The explicit com-jbau extension adds eight ambient roots to the original nine, preserving the static-rejection versus current dynamic-tier distinction. Existing source migration, internal guard APIs, actual-signal and destructor-attribution owners remain separate. Review found no required correction. No Plew compiler/program execution or repair occurred.
+
+## First Part Source Admissions
+
+frontend-part-0003.json and review-frontend-part-0003.json add36 source-admission units (128 full project inputs/785 lines), with31 ordinary source-shape grounds and5 qualified current/historical roots. Optional.Some(v=...) versus adopted Some(value:T) was found during parent reconciliation, independently confirmed and assigned finite met-2wca; no whole-Std or capability migration was silently transferred. Repeated publication and two manifests retain explicit met-4slo/com-7u8z scopes, old deinit met-2t3l, supplemental partdiamond reason com-ntm8. Reviewer-required qualification wording was corrected and accepted.
+
+Primary inspected count is90 (four outcomes plus86 admissions). Reconciliation of the36 plus three previously audited panic admissions and one span outcome completes exact batch0003. There are eight complete source-audit batches across owners; no new outcome count, execution, repair or frontend closure. Unread assigned units remain audit work.

@@ -40,3 +40,7 @@ same eventual bare-publication ruling, without conflating them with the
 undeclared Box[T] binder. Preserve their respective generic field, inferred
 array element and associated callable result/control coverage. The rule is
 undecided; no fixture change is authorized merely by current parser behavior.
+
+## Explicit Variant-Argument Rejection Setup
+
+The source-admission audit also reads exactly `tests/fixtures/partreject/namespace_variant_argument/{Main.pw,Models.pw,Main.err}`. Models repeats the same undeclared `pub impl Box[T]` binder. Main intends to reject `<Models.Choice.Some[I64] value=41I64 />`, with the specific reason that only the constructed type accepts type arguments. Preserve that reason while migrating the unrelated Box setup; unbound-T failure is not a substitute. This is one supplementary control, not a newly audited primary plan unit or the unread partreject corpus.
