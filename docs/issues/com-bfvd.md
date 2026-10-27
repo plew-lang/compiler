@@ -112,3 +112,7 @@ Batch0027 adds exactly reject/struct_required_array_field.pw/.err and supplement
 ## Explicit Type-Declaration and Operator-Source Controls
 
 Batch0030 adds exactly supplemental run/{type_declaration_publication,type_term_closedness,source_operator_literal_context}.pw/.out, whose guards use ordinary panic without its explicit Core import. Preserve atomic declaration publication/failure isolation, later-writer closure and Arena branch independence; recursive type closedness including unknown future children and snapshot stability; closed source operator selection and refusal to repair removed selections. These are representative roots36/37/38 only, not executed guards or complete source-service certification. The operator control also needs its exact loop-binding setup disposition in com-ntm8.
+
+## Explicit Unused Required-Field Negative
+
+Batch0033 adds exactly reject/unused_struct_required_array_field.pw/.err. Its unused guard uses legacy unimported ordinary panic. Preserve whole-target checking of the missing required Array field and its specific diagnostic under coherent panic migration; unrelated panic rejection is not a passing substitute. This is representative root39, not all unused source bodies or actual guard execution.
