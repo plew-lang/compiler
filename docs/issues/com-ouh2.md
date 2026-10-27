@@ -72,3 +72,26 @@ owner wording. Both were fixed; the final extraction records 422 unresolved
 absolute-import entries. Its limited re-review reproduced the JSON exactly in
 memory and found no remaining required correction for this initial checkpoint.
 This acceptance is not completion review of the full inventory/audit.
+
+## Registration and Failure-Classification Increment
+
+The same source snapshot now has [source-reviewed registration evidence](../../../evidence/test-audit/registration.json):
+57 actual dispatcher edges, 59 standard scripts and 11 manual scripts, ten named
+dependency checks, 31 supplemental diagnostic/support files and 381 generated-case
+locators. No orphan companion candidates were found. Imported/patched module calls,
+assertion contracts/owners and finite audit batches remain open, so this is not
+full inventory completion.
+
+[24 controlled worker observations](../../../evidence/test-audit/rejection-classification.json)
+confirm silent exit 1 and unrelated internal error exit 1 pass without a reason
+companion, in both normal negative-test workers. Their shared classification
+repair is com-fsuq. The contradictory manual returning-diagnostic instructions
+are independently owned by com-fkzm. Neither repair is a child or prerequisite
+of this inventory or its parent audit; test/runner/compiler code was unchanged.
+
+Independent reviewer review_registration_and_reject_probe matched source dispatch,
+script/file hashes and exact in-memory reproduction of both evidence outputs.
+It found an ambiguous ownership-script suffix match in the new evidence expander;
+this was changed to exact path equality and accepted on re-review. No remaining
+required finding for this limited increment. Supervisor hashes were added to the
+probe record; no actual Plew compiler execution or global test health is claimed.
