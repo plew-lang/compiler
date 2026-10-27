@@ -100,3 +100,7 @@ Batch0024 adds run/source_call_storage_publication.pw/.out. Its invariant guards
 ## Explicit Closure-Publication Supplemental Control
 
 Batch0025 adds run/source_closure_publication.pw/.out. Its invariant-failure arms call panic without the ordinary Core import. Preserve construction-versus-preparation state, failed-owner nonpublication, immutable completed closure facts and final Mid canonical-consumer checks under coherent panic migration. This31st representative root is a qualified supplemental read, not executed invariant-failure coverage or certification of every closure/source service. source_call_storage_publication was already the exact30th root in batch0024 and is reused by unchanged source identity.
+
+## Explicit Source-Typing and Value-Region Supplemental Controls
+
+Batch0026 adds exactly run/source_typing_context_closure.pw/.out and source_value_region_production.pw/.out. Their invariant guards call panic without the ordinary Core import. Preserve typed empty arrays/generic closure results/comparison context, and saved give-produced region terms versus expectation-only missing values, distinct source/execution completion and stable failed-owner nonpublication. These add two representative roots (32/33), not an all-internal migration inventory. No branch was executed or primary service outcome certified by the audit.
