@@ -92,3 +92,7 @@ Batch0021 adds run/return_paths.pw/.out. The C arm of classify uses a legacy uni
 ## Explicit Diverging Operator-Witness Negative
 
 Batch0022 adds reject/operator_diverging_witness.pw/.err. Its assoc diverge fn Neg witness uses a legacy unimported panic statement. Preserve normal-versus-diverge requirement contract mismatch and the specific incomplete-conformance diagnostic under ordinary panic migration. This29th representative input is not evidence the operator was invoked; no new conformance exception or primary control execution is claimed.
+
+## Explicit Call-Storage Publication Supplemental Control
+
+Batch0024 adds run/source_call_storage_publication.pw/.out. Its invariant guards call panic without the ordinary Core import. Preserve final storage-demand summaries, immutable publication/reopen rejection and closure stability through coherent panic migration. This30th representative root is a supplemental source/oracle read, not execution of failure branches or certification of the full call-fact service.
