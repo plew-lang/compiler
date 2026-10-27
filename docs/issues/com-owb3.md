@@ -56,3 +56,7 @@ Batch0008 adds exactly tests/fixtures/reject/assoc_disjoint_receiver_ambiguous.p
 ## Explicit Four Standalone Rejection Setups
 
 Batch0011 adds exactly tests/fixtures/reject/{closure_capture_generic_inst,concrete_conformance_does_not_match_other_instance,concrete_conformance_trait_view_mismatch,concrete_supertrait_does_not_cover_other_instance}.pw. Each has the unresolved bare generic pub impl Box { factory } publication marker, not an undeclared Box[T] binder. Include them in the same eventual source ruling while preserving distinct captured generic representation, concrete conformance instance, explicit trait-view and supertrait coverage. Capture of generic structures is an explicitly current unsupported lane, not an adopted prohibition or a request to implement it in audit. No other unread bare-owner roots are transferred.
+
+## Explicit Three Named-Extension Negative Setups
+
+Batch0014 adds exactly reject/{extension_conformance_generic_overlap,extension_conformance_only_view_generic_mismatch,extension_generic_concrete_receiver_overlap}.pw. Their pub impl Box {factory} markers repeat the unresolved bare generic publication form. Apply the same canonical shorthand/binder ruling while retaining same-extension overlapping conformance, inapplicable concrete receiver view and generic/concrete member receiver overlap as separate rejection purposes. These are not newly proved undeclared-T defects or all unread extension tests.
