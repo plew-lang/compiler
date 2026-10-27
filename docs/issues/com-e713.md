@@ -109,3 +109,11 @@ frontend-part-0004.json / review-frontend-part-0004.json reconcile40 more admiss
 New finite source-oracle questions are met-l1u5 (one internal-module versus package-public API closure rejection) and met-bejv (two extension identity/binding assumptions); two bad outer-print reason controls extend com-ntm8 and one enumaliaspartial manifest extends com-7u8z to15. Root-authored API checks do not certify all imported Std internals. Final independent review accepted both finite reports with no required correction. Contextual keyword reference is spec01-overview25, refining a broad report reference to spec04.
 
 This task has170 inspected primary units:4 outcomes,143 admissions and23 rejections. Cross-owner total408/ten complete plan batches. No compiler execution, source repair, whole-frontend or final corpus closure. Remaining negative/batch units remain this audit's work.
+
+## Remaining Multi-Module Rejections and First Standalone Negatives
+
+frontend-batch-0006/0007 and their independent review receipts add80 source-rejection obligations (132 files/330 lines and115/636). All84 partreject roots now have source-contract inspection; the first19 standalone negative roots are also reconciled. met-30q7 owns the single-box implicit-opening old oracle while the independent two-box same-T rejection remains valid. Extended package/closure/identity/binder/comment owners have explicit finite root lists.
+
+Missing diagnostic companions alone were not turned into individual mandatory defects: partfreefn and four minimal trait/any controls retain optional reason-coverage limits. Actual alternative setup failures remain concrete reason repairs. Review corrected a misattributed Git unique_array origin and a same-content extension-cycle root; path-fixed introduction diffs/source were verified. Automated --follow history alone is not original-intent proof.
+
+Primary count is250 (4 outcomes+143 admissions+103 rejections); cross-owner488 distinct obligations/twelve complete plan batches. No execution, repair, source/Std test mutation or whole-domain closure. All other finite assigned units remain audit work.
