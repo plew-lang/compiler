@@ -52,3 +52,7 @@ Batch0007 reads `tests/fixtures/reject/aggregate_infer_literal_range.pw` and its
 ## Explicit Associated-Receiver Negative Context
 
 Batch0008 adds exactly tests/fixtures/reject/assoc_disjoint_receiver_ambiguous.pw. The bare generic `pub impl Box { factory }` has the same unresolved publication meaning as the existing bare-owner representatives. Preserve its actual source requirement: Box.tag() cannot select Box[I64] versus Box[String] by declaration order without receiver type information. Missing .err alone is optional diagnostic coverage, not another proved masking bug; do not conflate a declaration-setup question with permission to resolve that ambiguous call.
+
+## Explicit Four Standalone Rejection Setups
+
+Batch0011 adds exactly tests/fixtures/reject/{closure_capture_generic_inst,concrete_conformance_does_not_match_other_instance,concrete_conformance_trait_view_mismatch,concrete_supertrait_does_not_cover_other_instance}.pw. Each has the unresolved bare generic pub impl Box { factory } publication marker, not an undeclared Box[T] binder. Include them in the same eventual source ruling while preserving distinct captured generic representation, concrete conformance instance, explicit trait-view and supertrait coverage. Capture of generic structures is an explicitly current unsupported lane, not an adopted prohibition or a request to implement it in audit. No other unread bare-owner roots are transferred.
