@@ -75,3 +75,15 @@ Batch0011 adds exactly tests/fixtures/reject/cmp_non_associative.pw. Its I64 a==
 ## Explicit Two Empty-Match Rejection Controls
 
 Batch0013 adds reject/empty_match_bool.pw and empty_match_unit.pw. Original ca23b3dd protects the rule that inhabited Bool/unit cannot have exhaustive zero-arm matches. Both instead return match value {} and have no .err: if coverage wrongly accepts zero arms, the match is classified source-diverging and its use as a return value can still reject. Isolate coverage from forbidden source-divergence value use with statement/branch context or a precise coverage reason; retain a genuinely empty enum elimination positive and rejected empty-enum direct value-use contrast. No observed candidate defect or new Never/type rule is claimed.
+
+## Explicit Floating, Named-Value and Field-Anchor Controls
+
+Batch0015 adds exactly reject/float_remainder.pw, fn_value_sig_binding.pw and field_typo_read.pw/.err. float_remainder uses two unsuffixed decimal literals inside generic print, so an erroneous floating % implementation can still leave ambiguous F32/F64 inference and satisfy exit1. Preserve original63b9b302 no-float-remainder intent using typed operands/context and valid integer/float-arithmetic contrasts.
+
+fn_value_sig_binding originated5503b46f as function-signature incompatibility, but current comment instead protects named declarations not being values. The input still also mismatches I64 and String function signatures, so generic rejection cannot isolate that newer non-value rule. Recover both purposes and reuse existing named_fn_value_{untyped,field,arg,return} negatives plus the explicit fn_value closure-wrapper positive. They already isolate the non-value boundary; this root alone has weak discrimination, not a confirmed suite-wide coverage hole. Treat its reason/comment precision or deletion as optional after checking old signature coverage, avoiding redundant new tests.
+
+field_typo_read originated3d5bd4ec to anchor .typo at the actual source token. Its specific message companion detects missing-field reason but not location, and no separate selected consumer was found by script/checker search. Retain message and add an actual path/line/token anchor assertion through the standard compiler diagnostics path; do not equate generic rejection with source-span verification. This exact three-root extension does not rewrite all missing companions, public FFI rules or unread span tests.
+
+## Explicit Foreign-Declaration Label Boundary
+
+Batch0015 also adds exactly reject/ffi_extern_c_label.pw. It intends to reject C declarations lacking explicit ~: suppression, but main invokes those labeled a:/b: parameters positionally. If declaration admission incorrectly permits labels while preserving them, ordinary call-label mismatch still yields exit1 and masks the declaration-boundary defect. Original72b7df2e requires explicit suppression rather than silently stripping labels. Isolate declaration rejection or require its exact reason, preserving a valid explicitly suppressed C declaration/call and ordinary labeled wrapper contrast. No blanket FFI change or actual compiler failure is claimed.

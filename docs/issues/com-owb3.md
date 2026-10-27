@@ -60,3 +60,7 @@ Batch0011 adds exactly tests/fixtures/reject/{closure_capture_generic_inst,concr
 ## Explicit Three Named-Extension Negative Setups
 
 Batch0014 adds exactly reject/{extension_conformance_generic_overlap,extension_conformance_only_view_generic_mismatch,extension_generic_concrete_receiver_overlap}.pw. Their pub impl Box {factory} markers repeat the unresolved bare generic publication form. Apply the same canonical shorthand/binder ruling while retaining same-extension overlapping conformance, inapplicable concrete receiver view and generic/concrete member receiver overlap as separate rejection purposes. These are not newly proved undeclared-T defects or all unread extension tests.
+
+## Explicit Generic Field-Default Control
+
+Batch0015 additionally reads run/field_defaults_generic.pw/.out, whose pub impl Box {factory} is the same unresolved bare-publication shape. Include exactly this pair in the existing source ruling, preserving concrete default field substitution, fresh array and override results5/99/0/1/2. This is supplemental control scope only, not a newly completed primary admission/outcome or an automatic invalid-binder diagnosis.
