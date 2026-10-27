@@ -115,3 +115,9 @@ Batch0021 adds reject/multiple_trait_type_view.pw. It writes both an illegal Sam
 ## Explicit Or-Pattern Legacy Setup Reclassification
 
 Batch0022 adds reject/or_pattern_bind_mismatch.pw for optional purpose/setup disposition. Legacy enum payload braces can reject before the intended unequal-binding names. The same batch's canonical or_pattern_binding_names.pw/.err already isolates that rule with typed constant body and specific diagnostic. Recover original a4ef7a08 intent before retaining/migrating/reclassifying/removing the redundant old root; do not require another duplicate mandatory test or treat the stale brace form as adopted.
+
+## Explicit Equality and Floating-Range Reason Isolation
+
+Batch0023 adds reject/payload_enum_eq.pw and range_float_iterator.pw. The first originally2428a6fa guarded payload-enum equality without Eq, but unimported ordinary print can still reject if the Eq gate regresses. The second originally5303254e guarded the absence of Step on floating types, but both floating endpoints lack type context and its bare for value refers to no existing mutable binding (spec11:209); these failures can mask Step/Iterable admission. Establish explicit floating endpoint type and a legitimate loop binding while preserving the non-Step rejection, paired with range.contains and integer iteration contrasts.
+
+The supplemental run/range_iterator_values.pw/.out has five bare for value loops with no prior mutable value binding. Preserve its six output lines, signed traversal, singleton maximum, repeated exhausted next and empty-range termination with valid new/previously mutable loop bindings. This exact positive setup pair belongs to the same finite iterator-oracle repair, not an all-for migration or a new language rule. No fixture was run or edited by the audit.
