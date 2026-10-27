@@ -100,3 +100,7 @@ Batch0032 adds exactly reject/unused_closure_capture_generic_inst.pw/.err. Its b
 ## Explicit Nested ARC and Array-Element Admission Contexts
 
 Batch0035 adds exactly run/{arc_nested_generic_box,arg_convention_guaranteed_arc,array_compound_elem}.pw/.out. Their pub impl Box {factory} markers repeat the unresolved bare generic publication form. Preserve grounded nested Box instances with String/shared-cell payloads, guaranteed argument versus stored/returned owners, and generic compound array elements through the eventual publication ruling. Reference/deinit/API qualifications remain their existing owners; no undeclared Box[T] binder error or allARC certification is inferred.
+
+## Explicit Associated-Storage Layout Admission Context
+
+Batch0037 adds exactly run/associated_storage_layout.pw/.out. Projected[T] and Wrapper[T] have bare generic-owner publication markers, repeating the unresolved shorthand. Preserve concrete and projected fields, generic receiver grounding, enum payload/value copies, newtype storage and I64/String outputs through the eventual common ruling. Holder is nongeneric and not part of this publication question. No layout/codegen outcome is newly certified by this admission role.

@@ -159,3 +159,7 @@ Also add value_if_no_give.pw and value_match_no_give.pw for their intended missi
 ## Explicit Four Array and Associated-Name Loop Controls
 
 Batch0036 adds exactly run/{array_literal_inferred_element,array_literal_unannotated_let,array_method_result_chain,assoc_type_name_collision}.pw/.out. Each uses a bare for binding without an existing mutable target. spec11 requires val/mut val for a new binding; bare spelling assigns an already mutable binding. Preserve grounded generic/enum array inference, module-level arrays, source-recorded local array type, whole array call-result chaining and associated-name lexical identity through admitted loop setup. This is four exact positive controls under the existing finite loop-oracle scope, not an all-for migration or new inference/iteration rule.
+
+## Explicit Associated-Body and Signature-Authority Loop Controls
+
+Batch0037 adds exactly run/{associated_copy_body_environment,associated_literal_signature_authority}.pw/.out. Their bare for previous/mode names have no existing mutable binding. Preserve A/B placement body identity, selected-proof receiver rejection and physical self-signature checks, plus unselected/complete/incomplete/wrong-callee/no-reconstruction signature cases, through adopted val/mut val loop declarations. Each root has separate source-admission and internal-output obligations; migration scope counts roots once and does not certify current execution.
