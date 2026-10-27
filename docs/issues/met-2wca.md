@@ -69,3 +69,7 @@ Batch0022 adds reject/optchain_chain_incomplete.pw/.err and optchain_chain_not_n
 ## Explicit Generic Type-Checker Negatives and Context Control
 
 Batch0027 adds exactly reject/tc_generic_arg_mismatch.pw, tc_generic_payload_value.pw and supplemental run/generic_enum_payload_context.pw/.out. Some(v=...) and v patterns require coherent adopted value-label migration. Preserve different Optional generic arguments, expected I64 payload checking and contextual integer typing in let/return/generic field positions with5/7/9 outputs. Wrong-label rejection must not mask the selected negative purposes (com-ntm8). Bare generic factory publication is com-owb3, not automatically an invalid binder.
+
+## Explicit Trait-Method Result-Context Control
+
+Batch0028 adds exactly supplemental run/trait_method_result_context.pw/.out. absent uses Optional.Some(v: _) against adopted value label; migrate that exact pattern coherently while preserving expected-result inference through required/provided/default generic members, block/if wrappers, associated output record members and bound discharge. Optional.None needs no payload-label change. This pair is a qualified control, not completed primary admission/outcome or a request to change inference semantics.

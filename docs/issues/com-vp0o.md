@@ -9,7 +9,7 @@ priority: 2
 assignee: Koji Murata
 tags: [frontend, ownership, verification]
 ---
-# Reconcile nine existential success fixtures with adopted erasure rules
+# Reconcile selected existential fixtures with adopted erasure rules
 
 ## Boundary
 
@@ -47,3 +47,7 @@ invariance; obtain a surface decision if the adopted contract is insufficient,
 rather than invent a conversion exception. Do not reject legal direct
 any-sendable-to-any or direct-Self result erasure. No fixture/compiler repair or
 actual execution occurred in audit; source-admission audit is still separate.
+
+## Explicit Shared-Witness Existential Array Negative
+
+Batch0028 adds exactly reject/trait_subject_chain_conflict_existential_array.pw/.err. Its intended shared self.b() witness-body ambiguity is explicitly adopted by spec09, independently of caller view. The input also converts inferred Array[S#C] wholesale to Array[any A], forbidden by generic invariance. Preserve the shared-body rejection with an admitted direct/element boxing contrast; its specific ambiguous-bare-call companion does not credit an unrelated container mismatch. This exact negative setup is not a new covariance exception or an all-chain audit. Neighboring direct/generic/closure/existential negatives remain separately audited, and no test was executed or edited.
