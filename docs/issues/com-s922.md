@@ -9,7 +9,7 @@ priority: 2
 assignee: Koji Murata
 tags: [frontend, verification]
 ---
-# Give selected floating arithmetic controls explicit numeric context
+# Give selected numeric controls explicit literal context
 
 
 ## Finite Supplemental Source Repair
@@ -25,3 +25,7 @@ Later repair requires RED/GREEN for intended source reason, meaningful output as
 ## Explicit Numeric-Base Supplemental Control
 
 Batch0019 adds run/int_literal_bases.pw/.out. The final print(1_000.5) has no unique F32/F64 context under generic print[T], even though the ten earlier integer/base/suffix observations have explicit or inherited types. Preserve all eleven expected lines by establishing explicit float context; do not drop numeric separators or introduce an implicit float default. This is a supplemental source/oracle read, not a newly completed primary outcome or execution.
+
+## Explicit Integer-Source Cast Supplemental Control
+
+Batch0032 adds exactly run/float_cast.pw/.out. Its first three numeric source operands are explicitly I64/U64, but the last val x:F64=7 as F64 leaves the integer Source width unchosen. spec02 integer literals range over I8..U64 and spec12 normalizes as to From[Source] overload selection (only newtype is exceptional); F64 destination does not select one integer Source. Preserve all four outputs and typed int-to-float conversion coverage with explicit source context, without inventing a default integer or literal-cast exception. This is the fourth named pair, not an all-cast rewrite or primary outcome/admission credit.

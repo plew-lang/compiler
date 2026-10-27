@@ -92,3 +92,7 @@ Batch0027 adds supplemental run/{struct_destructure_stmt,struct_pattern,generic_
 ## Explicit Try-From Generic Argument Control
 
 Batch0030 adds supplemental run/try_from_generic_arg_match.pw/.out. Its pub impl Box {factory} repeats the unresolved bare generic publication shape. Preserve correctly matched Box[String] From factory conversion and error55 alongside the mismatch negative through the eventual canonical publication ruling; no adopted shorthand is inferred from historical acceptance.
+
+## Explicit Unused Generic Capture Negative
+
+Batch0032 adds exactly reject/unused_closure_capture_generic_inst.pw/.err. Its bare pub impl Box {factory} repeats the unresolved generic publication shape. Preserve declaration-time diagnosis of the currently unsupported generic-struct capture shape in the unused body and its specific capture diagnostic through the eventual canonical publication ruling. com-b1ro owns that unsupported environment shape; neither fixture name nor historical rejection creates an adopted type-kind capture ban.
