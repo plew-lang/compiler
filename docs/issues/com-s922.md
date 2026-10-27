@@ -26,6 +26,25 @@ Later repair requires RED/GREEN for intended source reason, meaningful output as
 
 Batch0019 adds run/int_literal_bases.pw/.out. The final print(1_000.5) has no unique F32/F64 context under generic print[T], even though the ten earlier integer/base/suffix observations have explicit or inherited types. Preserve all eleven expected lines by establishing explicit float context; do not drop numeric separators or introduce an implicit float default. This is a supplemental source/oracle read, not a newly completed primary outcome or execution.
 
-## Explicit Integer-Source Cast Supplemental Control
+## Direct-Literal Cast Contract Reconciliation
 
-Batch0032 adds exactly run/float_cast.pw/.out. Its first three numeric source operands are explicitly I64/U64, but the last val x:F64=7 as F64 leaves the integer Source width unchosen. spec02 integer literals range over I8..U64 and spec12 normalizes as to From[Source] overload selection (only newtype is exceptional); F64 destination does not select one integer Source. Preserve all four outputs and typed int-to-float conversion coverage with explicit source context, without inventing a default integer or literal-cast exception. This is the fourth named pair, not an all-cast rewrite or primary outcome/admission credit.
+Batch0032 adds exactly run/float_cast.pw/.out as the fourth finite pair. Its first
+three int-to-float source operands have explicit I64/U64 types; the last7 as F64
+was initially described as an unconditional ambiguous Source defect. That verdict
+is withdrawn: frontend-handoffs:72-74 explicitly retains permitted direct
+unsuffixed-literal cast context, and current castLiteralContextTerm plus
+run/mid_cast_literal_context.pw protect7 as F32/-7 as F64. Current code/old goldens
+do not themselves settle adopted meaning; spec02's integer literal family and
+spec12's From[Source] explanation still need reconciliation with that design.
+
+Recover the direct-literal cast decision and determine the exact permitted
+literal/target pairs, contrasting typed integer operands, unsuffixed direct
+literals, explicit suffixes, Bool, block-wrapped operands and newtype boundaries.
+Keep all four float_cast outputs and the existing Mid literal-cast control.
+If canonical records do not decide the source oracle, obtain a focused judgment;
+do not silently repair the last literal, add a default source width, remove a
+permitted cast, or certify it source-clean from current acceptance. This is a
+finite contract/oracle question, not a confirmed compiler bug or an all-cast
+rewrite. The other three named numeric-context controls remain unchanged.
+
+Correction evidence: meta/evidence/test-audit/scoped-reviews/frontend-batch-0032-cast-context-correction.json and its independent receipt preserve the original batch/receipt hashes and replace only this verdict. No source, expected output or runner was changed or executed.
