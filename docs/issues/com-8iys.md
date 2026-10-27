@@ -55,8 +55,8 @@ all future features implemented or all resulting defects already fixed.
 ## Reconciled Outcome Subset
 
 [Cross-owner outcome reconciliation](../../../evidence/test-audit/scoped-reviews/outcome-reconciliation.json)
-now covers160 exact primary outcome units here: all43 runtime-owned panic,
-all93 part and first24 run outcomes. Four complete outcome batches0084–0087
+now covers195 exact primary outcome units here: all43 runtime-owned panic,
+all93 part and first59 run outcomes. Five complete outcome batches0084–0088
 and seven scattered internal outcomes across owners are source/oracle/runner
 reviews, not actual compiler/program execution or source-admission certification.
 All selected project inputs were read; part output arithmetic matches authored
@@ -73,4 +73,7 @@ controls. Other plan units remain audit work, not transferred as vague findings.
 The earlier87-unit independent acceptance retains its exact scope. Added80-unit
 independent reconciliation review accepted exact scope, hashes, oracles and
 finite finding owners with no required audit correction. This task remains
-in_progress; batch0088 is now being inspected.
+in_progress; added35 independent reconciliation accepted the limited source
+audit (initial partial report exposure explicitly retained) and batch0089 is
+being inspected. Batch0088 explicitly extends com-vp0o to nine roots and
+com-bfvd to seven representatives, with no repair/execution claim.

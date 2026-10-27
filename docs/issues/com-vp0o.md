@@ -9,7 +9,7 @@ priority: 2
 assignee: Koji Murata
 tags: [frontend, ownership, verification]
 ---
-# Reconcile five existential success fixtures with adopted erasure rules
+# Reconcile nine existential success fixtures with adopted erasure rules
 
 ## Boundary
 
@@ -27,3 +27,23 @@ unique existential support is met-b2la, ordinary deinit placement met-2t3l; do n
 
 Contract-derived case map, fixed-candidate RED for the targeted admission mismatch, fresh relevant positive/reject checks and structural conversion evidence; scoped independent review. No whole type-checker rewrite, new covariance semantics, whole suite cleanup or audit-domain closure.
 
+
+## Explicit Four-Input Extension From Batch0088
+
+Add exactly these run inputs to the original five: any_optional_covariant_erasure,
+any_optional_self_member_return, any_single_letter_trait_optional_self, and
+any_sendable_erasure. The first converts Optional[Person] wholesale to
+Optional[any Named]; the other three call nominal Optional[Self] results through
+an existential. Current invariance/result rules differ from their historical
+success assumptions. Preserve single-letter owner identity, Some/None handling,
+String ownership, and legal direct Self/sendability-erasure controls. Original
+intent: 3c5d8254/40c2619b/e57fb1e3/08156ab8, recorded in
+meta/evidence/test-audit/scoped-reviews/runtime-batch-0088.json.
+
+Within any_sendable_erasure, eraseArray/eraseOptional also lift sendability
+guarantee erasure through nominal containers. The direct guarantee-erasure
+arrows alone do not authorize that lift. Reconcile this separately against
+invariance; obtain a surface decision if the adopted contract is insufficient,
+rather than invent a conversion exception. Do not reject legal direct
+any-sendable-to-any or direct-Self result erasure. No fixture/compiler repair or
+actual execution occurred in audit; source-admission audit is still separate.

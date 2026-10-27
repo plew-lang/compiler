@@ -9,7 +9,7 @@ priority: 2
 assignee: Koji Murata
 tags: [frontend, runtime, verification]
 ---
-# Reconcile ordinary panic function admission in six runtime fixtures
+# Reconcile ordinary panic function admission in seven representative fixtures
 
 ## Contract, Evidence and Scope
 
@@ -32,3 +32,13 @@ claim that changing six root fixtures alone implements the public API. This
 remains bounded admission/migration investigation, not an all-compiler rewrite.
 The original first-five review remains exact historical evidence; the extension
 is recorded explicitly here rather than silently changing that report.
+
+## Explicit Seventh Representative Root
+
+Batch0088 adds `tests/fixtures/run/any_sendable_erasure.pw`: both unused failure
+arms use the legacy panic statement. Keep this positive-path context when
+inventorying ordinary imported panic admission; it is not a claim those branches
+ran or trapped. Its nominal-Self/container conversion reconciliation is com-vp0o,
+not part of implementing panic. Seven representative roots do not constitute an
+all-source migration inventory; imported guards still require the bounded
+handoff investigation above.
