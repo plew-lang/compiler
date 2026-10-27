@@ -44,3 +44,7 @@ undecided; no fixture change is authorized merely by current parser behavior.
 ## Explicit Variant-Argument Rejection Setup
 
 The source-admission audit also reads exactly `tests/fixtures/partreject/namespace_variant_argument/{Main.pw,Models.pw,Main.err}`. Models repeats the same undeclared `pub impl Box[T]` binder. Main intends to reject `<Models.Choice.Some[I64] value=41I64 />`, with the specific reason that only the constructed type accepts type arguments. Preserve that reason while migrating the unrelated Box setup; unbound-T failure is not a substitute. This is one supplementary control, not a newly audited primary plan unit or the unread partreject corpus.
+
+## Explicit Paired Literal-Range Bare-Publication Context
+
+Batch0007 reads `tests/fixtures/reject/aggregate_infer_literal_range.pw` and its .err. It repeats the bare generic `pub impl Measurement { factory }` of the already named run positive. Include this exact negative when deciding any bare-owner publication shorthand, preserving the intended 256-versus-U8 range reason and com-pxja's separate forward sibling-inference question. This is not the confirmed unbound Box[T] form or an extra source rule.

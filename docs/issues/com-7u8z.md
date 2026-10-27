@@ -50,3 +50,19 @@ Frontend source-admission batch0003 adds exactly `tests/fixtures/part/dirmodule/
 ## Explicit Partial-Pattern Rejection Manifest
 
 Batch0005 adds exactly `tests/fixtures/partreject/enumaliaspartial/Plew.toml` (name only), bringing the selected scope to fifteen manifests. Preserve Main.err's incomplete variant-field decomposition reason and imported enum alias positive; a package-version/schema setup failure is not that rejection. Source/expectation files are read as context, not transferred unread to this investigation.
+
+## Explicit Nine-Manifest Rejection-Setup Extension
+
+Batches0006/0007 add exactly these nine paths, bringing the selected scope to twenty-four manifests:
+
+- tests/fixtures/partreject/phantomdep/Plew.toml
+- tests/fixtures/partreject/publicapi_alias_hidden/Plew.toml
+- tests/fixtures/partreject/publicapi_global_alias_hidden/Plew.toml
+- tests/fixtures/partreject/publicapi_namespace_hidden/Plew.toml
+- tests/fixtures/partreject/publicapiclosure_pkg_alias/Plew.toml
+- tests/fixtures/partreject/publicapiclosure_pkg_internal/Plew.toml
+- tests/fixtures/partreject/publicapiclosure_same_name/Plew.toml
+- tests/fixtures/partreject/publicapiclosure_same_name/dep/Plew.toml
+- tests/fixtures/partreject/publicapiclosure_trait_alias/Plew.toml
+
+All omit the specified target plew version; same_name also uses the old dependency table. Preserve intended phantom dependency versus genuinely package-root-public hidden type/trait rejection, alias/global/namespace/newtype identity and same-spelling external type contrasts. Specific Main.err substring checks can fail during invalid setup and do not certify these manifests. Canonical schema reconciliation remains bounded; there is no arbitrary extension to all packages.

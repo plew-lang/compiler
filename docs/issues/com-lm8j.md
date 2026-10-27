@@ -27,3 +27,11 @@ Selected source-audit descriptions assert mechanisms no longer owned by their cu
 
 Use spec/design as authority, preserve original limited regression purposes and links to separate stronger controls. Accurate descriptions of a deliberately tested internal representation need not be erased; remove only false current-path claims and wording that promotes an incidental mechanism to a semantic requirement. Actual fixture comment edits belong to repair after audit, no requirement to add every stronger interaction or rewrite outputs. any_array_covariant_erasure admission migration remains com-vp0o; coordinate rather than retain contradicted commentary. Do not add broad startup/ARC requirements to this chore. Verify comment-only diff/unchanged executable inputs, references and independent review; no fabricated TDD RED for prose. Evidence run-head-0087.json, part-tail-0087.json, runtime-batch-0088.json and runtime-batch-0089.json under meta/evidence/test-audit/scoped-reviews. This issue is separate from audit completion.
 
+
+## Explicit Dictionary Rejection Comment
+
+Batch0007 additionally reads exactly tests/fixtures/reject/any_dict_covariant_no_repack.pw and its .err. Rejection remains correct under generic invariance. The comment instead grants Array/generic-enum covariance and justifies Dictionary exclusion by historical fixed layouts/absent backend repacking. Align that one description with the adopted invariant source rule, preserving the useful direct per-insert boxing contrast and intended rejection; do not change semantics or golden just to retain a former physical explanation.
+
+## Explicit Imported-Overload Tier Wording
+
+Batch0005 also read exactly tests/fixtures/partreject/imported_overload_ambiguity/Main.pw and its .err. Its two numeric overloads legitimately make the unsuffixed literal ambiguous, but the comment calls a directly imported module a resolution tier. Canonical spec15 combines visible public candidate sets without source-origin priority. Keep the ambiguity assertion and describe that set rather than preserving an obsolete origin-tier model. No test behavior is changed in this audit.
