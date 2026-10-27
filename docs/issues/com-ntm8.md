@@ -61,3 +61,9 @@ partfreefn was also read, but removing its intended part-only-impl restriction l
 ## Explicit Arithmetic Rejection Setup
 
 Batch0008 adds exactly tests/fixtures/reject/arith_no_trait.pw. It intends Add-unimplemented rejection for Pt, but has no .err and also writes malformed postfix `print(c.x~)` without importing print. Even if the Add check is missing, syntax/name failure can still pass the generic rejection predicate. Recover the original arithmetic-trait purpose, remove unrelated failure from the eventual scoped test and distinguish a valid Add-conforming control. Missing memberwise factory is not a defect here: same-module default construction is legal. No compiler/test modification occurred in audit.
+
+## Explicit Chain Diagnostic-Anchor Regression
+
+Batch0010 adds exactly tests/fixtures/reject/chain_value_type_mismatch.pw. Original path-fixed3d5bd4ec introduced it to ensure the synthetic optional-chain error points to the real ?.n token. The worker has no .err/reason/location assertion, so it cannot detect that original anchor regression. Moreover `use @Std/Core` binds namespace Core, not bare Chain used in its impl, and root Some(v=...) differs from the adopted payload label. Missing trait binding or label setup can reject before the intended continuation check.
+
+Preserve the real source-offset assertion and intended failure class through an explicitly valid setup. Canonical inference of the output carrier is a separate finite question; do not guess a mismatch diagnostic from current lowering or freeze a guessed language rule to repair the test. met-2wca owns label migration; the new carrier question is separately named by the batch report. No arbitrary all-no-.err rewrite or compiler/fixture repair in audit.

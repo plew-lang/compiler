@@ -9,7 +9,7 @@ priority: 2
 assignee: Koji Murata
 tags: [frontend, runtime, verification]
 ---
-# Reconcile ordinary panic function admission in eight representative fixtures
+# Reconcile ordinary panic function admission in nine representative fixtures
 
 ## Contract, Evidence and Scope
 
@@ -50,3 +50,7 @@ positive-control fallback calls use panic without importing the ordinary Core
 function. Preserve array forward context, generic String payload and nested
 empty-array checks; no failure branch was executed by this audit. This expands
 only the named representative input set, not the complete compiler migration.
+
+## Explicit Ninth Representative Root
+
+Batch0009 adds exactly tests/fixtures/reject/associated_literal_context_unknown.pw and its .err context. Holder[T].empty's unused body calls panic without explicitly importing the ordinary Core function; the intended negative is absent generic receiver/result context at Holder.empty(). Preserve that inference rejection and its specific diagnostic, rather than allowing ordinary panic name/surface migration to replace it. No failure arm or compiler was executed. This extends only one representative root, not an all-compiler migration or an audit of other unread associated calls.
