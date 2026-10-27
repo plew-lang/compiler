@@ -108,3 +108,7 @@ Batch0037 adds exactly run/associated_storage_layout.pw/.out. Projected[T] and W
 ## Explicit Associated Body-Signature Context
 
 Batch0038 adds exactly run/body_signature_associated_types.pw/.out. Bare pub impl Shelf {factory} repeats the unresolved generic publication form. Preserve exact Index[U64].Output as both parameter and result under distinct Shelf[I64]/Shelf[String] body environments through the common eventual publication ruling. No unique/generic ABI feature or new structural Index conformance is required by this source-admission question.
+
+## Explicit Generic Array-Return Inference Control
+
+Batch0039 fully reads supplemental run/generic_array_ret_infer.pw/.out. Bare pub impl Box {factory} repeats the unresolved generic publication shorthand. Preserve caller/callee binder substitution, full Array result and nested idArr/firstOf/wrapAll value types through the eventual common ruling. It is a qualified control only, with no new primary admission/outcome credit or default numeric inference.

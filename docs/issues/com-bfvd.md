@@ -128,3 +128,7 @@ Batch0037 adds exactly run/{associated_projection_constraint_identity,bare_type_
 ## Explicit Binder and Body-Instance Internal Guards
 
 Batch0038 adds exactly run/{binder_type_term,body_instance_index}.pw/.out as representative roots45–46. Their unimported legacy panic guards need the same ordinary-function admission reconciliation, while preserving lexical binder/view/structural distinctions and body environment/proof/order/copy-key invariants. The already named bare_type_registration root42–44 intake from0037 is reused for its separate admission role here, not a new representative root. No guard was executed.
+
+## Explicit Call and Callable Internal Guards
+
+Batch0039 adds exactly run/{call_closure_owner_boundary,call_template_result_arguments,call_type_argument_constraints,callable_form_source_identity,callable_method_selection,callable_name_index,callable_signature_demand}.pw/.out as representative roots47–53. Unimported legacy panic guards qualify source admission; preserve owner/frontier separation, transactional type inference, authored selection/provenance, ordered candidate/copy behavior and signature-without-body preparation. Embedded text missing() in callable_signature_demand is a deliberate later body-demand rejection, distinct from the outer source panic migration. No guard or compiler was executed.

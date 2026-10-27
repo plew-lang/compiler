@@ -87,3 +87,7 @@ Batch0035 adds run/array_enum_payload_function_copy.pw/.out for optional pipelin
 ## Explicit Same-Named Assignment Identity Comment
 
 Batch0036 adds run/assign_same_named_type.pw/.out for optional explanation precision. Its same declaration and same complete Optional/Result instances should reassign, but the comment same head name implies same id is not the general identity rule. Nominal owner and all type arguments remain part of identity. Preserve the exact contextual reassignment regression without endorsing head-only type compatibility.
+
+## Explicit Buffer, Foreign-Identifier and Cast Comments
+
+Batch0039 adds run/{buffer_floor,buffer_index,c_reserved_idents,cast}.pw/.out for optional purpose/comment precision. Ordinary Array/Buffer representation and Index semantics are owned by canonical design, so historical ptr/i64 or not-an-index-witness comments must not mandate a competing semantic path. C-reserved identifiers remain valid Plew names, independent of a retired generated-C backend. Cast is total/infallible, not necessarily lossless, and some signedness changes such as this root U16→I32 are total. Preserve all valid sources/results; no new cast rule, source-specific lowering or memory proof is introduced.

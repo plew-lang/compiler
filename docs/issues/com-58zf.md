@@ -25,3 +25,7 @@ The investigation closes with concrete finite repair owners/required controls, n
 ## Explicit Capacity and Field-Place Buffer Contexts
 
 Batch0038 adds exactly run/{buffer_capacity_cow,buffer_cow_field}.pw/.out. Current Buffer.withCapacity/new associated construction differs from the adopted named-factory surface. Preserve capacity/reserve, alias independence, zero-sized unit elements, indexed insertion and mutable struct-field buffer writes/returned removal values through the same canonical construction handoff. Current public APIs are real; their use is not intrinsically invalid call syntax. This admission audit does not newly certify physical memory retirement, sanitizer execution or unread outcome obligations.
+
+## Explicit Eight Buffer Surface Admission Roots
+
+Batch0039 adds exactly run/{buffer_floor,buffer_index,buffer_insert,buffer_metadata,buffer_nested,buffer_removal,buffer_string,buffer_struct_field}.pw/.out. Current Buffer.new associated construction is real public API but differs from adopted named factory. Preserve empty/capacity/growth, scalar/String/nested/struct-field elements, indexing, reserve/insert/remove and logical copy independence through the canonical construction migration. This source-role intake does not certify exact memory layout, element-retirement/sanitizer outcome or all collection performance paths.

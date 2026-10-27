@@ -167,3 +167,7 @@ Batch0037 adds exactly run/{associated_copy_body_environment,associated_literal_
 ## Explicit Receiver-Identity Loop Setup
 
 Batch0038 adds exactly run/body_receiver_declaration_identity.pw/.out. Bare for offset/byte have no earlier mutable targets. Preserve same-spelled cross-module declaration rejection, supplied/default receiver body identity, missing/foreign receiver and signature failures, and nested resolved-view provenance under valid val/mut val loop setup. The two source/result obligations share one root; no codegen execution or blanket internal test rewrite is claimed.
+
+## Explicit Callable-Form Source Identity Loop Setup
+
+Batch0039 adds exactly run/callable_form_source_identity.pw/.out. Bare for index/candidate do not declare new bindings and have no earlier mutable targets. Preserve authored implementation identity across normalized default callable forms, foreign declaration/conformance/type-argument/receiver rejection and duplicate source-conformance checks with valid explicit loop declarations. Outcome and admission are separate obligations, not two migration roots.

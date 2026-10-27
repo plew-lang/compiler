@@ -93,3 +93,7 @@ Batch0035 adds exactly run/{any_optional_covariant_erasure,any_optional_self_mem
 ## Explicit Forward Array and Reassignment Admission Producers
 
 Batch0036 adds exactly run/{array_forward_element_context,assign_same_named_type}.pw/.out. Some(v=...) and named v patterns use current rather than adopted value payload label. Preserve already-grounded first-element context into later None, wrapped/branch/match/empty child arrays and contextual generic reassignment. The former root is already exact com-bfvd panic setup scope; coherent label migration alone does not establish all adopted source admission. No later-sibling backward inference is adopted.
+
+## Explicit Synthetic Callable-Form Selection Producer
+
+Batch0039 adds exactly run/callable_form_source_identity.pw/.out. The replacement helper constructs Optional.Some(v=declaration), against adopted value label. Preserve exact selected-declaration/conformance/type-argument mutation controls through coherent label migration; fixing the label alone does not settle the separate loop and ordinary-panic setup qualifications.
