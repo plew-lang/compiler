@@ -103,3 +103,7 @@ Batch0018 also adds reject/impl_on_newtype.pw. Original b27eeae5 intended the pr
 ## Explicit Inline-Constraint Reason Isolation
 
 Batch0019 adds reject/inline_trait_constraint.pw. Its original f81f8480 selected adding diff intended to catch silently discarded inline [T: Show] constraints. Show is undeclared/unimported and no .err is required: a different regression accepting inline constraints normally can still fail on Show lookup. Isolate the forbidden syntax with a valid local/imported trait or an appropriate diagnostic assertion, while retaining the original silent-drop regression intent. No blanket requirement for every missing .err is implied.
+
+## Explicit Match Identity and Duplicate-Field Isolation
+
+Batch0020 adds reject/match_unknown_variant.pw and match_pattern_dup_field.pw. The former constructs current Some(v=...), so an adopted-label error can reject even if unknown variant Other is accepted; keep the unknown-variant oracle distinct during met-2wca migration. The latter repeats field a and omits b: current checkDestructureComplete separately rejects duplicates and then missing fields. Removing duplicate detection alone still rejects for missing b. Preserve the original8978934c exactly-once regression, using a duplicate-specific assertion or a form covering all real fields as well as duplicating one. This does not require every pattern error to be independently diagnosed after the first failure.

@@ -43,3 +43,7 @@ Batch0017 adds optional description-only cleanup for exactly reject/generic_fiel
 ## Explicit Generic Capability Wording
 
 Batch0018 adds optional comment precision for reject/generic_unique_arg.pw: the ordinary Box[T] parameter is copyable-only and correctly rejects File, but the comment's blanket claim that all generics are copyable-only is superseded by explicit unique/allowunique capability declarations. Preserve the useful ordinary-[T] negative and Ref-handle contrast without turning the old implementation limit into a new specification prohibition.
+
+## Explicit Match/Method Historical Backend Comments
+
+Batch0020 adds only reject/match_unknown_field.pw and method_value.pw as optional comment precision. Historical emitted-C/clang descriptions explain original failures but are not the current LLVM mechanism or oracle. Preserve unknown-field/method-nonvalue rejection. No source repair or new semantic requirement is implied.

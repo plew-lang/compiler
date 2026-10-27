@@ -80,3 +80,7 @@ Batch0018 adds exactly run/source_transfer_targets.pw/.out as a supplemental int
 ## Explicit Import-Provenance Supplemental Control
 
 Batch0019 adds run/import_origin_provenance.pw/.out. Internal provenance-table assertions use legacy unimported panic statements. Preserve original/local module identity, independent copy tables, re-export distinctions and first-binding retention through ordinary panic migration; no failure branch was executed. This is the26th named representative root, not a claim to have inventoried every internal guard or audited its complete primary service contract.
+
+## Explicit Mid Source-Owner Supplemental Control
+
+Batch0020 adds run/mid_source_owner_admission.pw/.out. Its invariant-failure arms use panic without the ordinary Core import. Preserve valid prepared source acceptance, wrong-owner statements/facts, absent admission and foreign-session rejection through coherent panic migration. This27th representative root is a qualified supplemental read; it neither ran the failure branches nor certifies all Mid/source fact APIs.

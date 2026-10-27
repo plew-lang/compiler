@@ -57,3 +57,7 @@ Batch0017 adds run/generic_enum_field_inference.pw/.out. Root Some(v=...) constr
 ## Explicit Guard Supplemental Producer
 
 Batch0018 adds run/guard_stmt.pw/.out: three Some(v=...) constructors use the current label rather than adopted value. Preserve failure-branch return, successful binding escape, combined condition and all seven output lines under a coherent migration. Positional pattern binding is a separate contract, not automatically a mislabeled constructor. No execution or primary admission/outcome credit is added.
+
+## Explicit Unknown-Variant Negative
+
+Batch0020 adds reject/match_unknown_variant.pw. Some(v=...) construction and the v punned payload pattern use the current Optional label; reconcile both with adopted value while preserving the unknown Other variant rejection, not merely rejecting on label setup. com-ntm8 owns the selected reason-isolation requirement. This exact root is not an all-pattern migration intake.
