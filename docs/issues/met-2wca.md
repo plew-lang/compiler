@@ -97,3 +97,9 @@ Batch0036 adds exactly run/{array_forward_element_context,assign_same_named_type
 ## Explicit Synthetic Callable-Form Selection Producer
 
 Batch0039 adds exactly run/callable_form_source_identity.pw/.out. The replacement helper constructs Optional.Some(v=declaration), against adopted value label. Preserve exact selected-declaration/conformance/type-argument mutation controls through coherent label migration; fixing the label alone does not settle the separate loop and ordinary-panic setup qualifications.
+
+## Explicit Chain Producers and Named-Pattern Clarification
+
+Batch0040 adds exactly run/{chain_generic,chain_trait,chain_wrapped_results}.pw/.out. Std Optional.Some(v=...) must migrate coherently to value. In chain_generic, Some(val v) is named-field punning for v:val v under spec11, so retain the binding name v by writing Some(value:val v), rather than exempting it as a positional payload pattern. Custom Loaded.Loaded(v:T)/Loaded(val v) remains its own correct field v and must not be renamed.
+
+The same clarification applies to already exact owned run/{ambient_core,any_iterator,guard_stmt}.pw/.out and reject/match_unknown_variant.pw: each has Optional.Some(val v). Spec05 named fields and spec11 punning do not provide a separate positional-pattern exception. Older audit0018/0034 language calling these positional is corrected by a retained evidence amendment; original records/hashes stay intact. All four roots were already qualified for coherent label migration, so no primary count or adopted admission classification changes.

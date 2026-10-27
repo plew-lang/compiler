@@ -132,3 +132,7 @@ Batch0038 adds exactly run/{binder_type_term,body_instance_index}.pw/.out as rep
 ## Explicit Call and Callable Internal Guards
 
 Batch0039 adds exactly run/{call_closure_owner_boundary,call_template_result_arguments,call_type_argument_constraints,callable_form_source_identity,callable_method_selection,callable_name_index,callable_signature_demand}.pw/.out as representative roots47–53. Unimported legacy panic guards qualify source admission; preserve owner/frontier separation, transactional type inference, authored selection/provenance, ordered candidate/copy behavior and signature-without-body preparation. Embedded text missing() in callable_signature_demand is a deliberate later body-demand rejection, distinct from the outer source panic migration. No guard or compiler was executed.
+
+## Explicit Chain, Checked-Program and Closure Guards
+
+Batch0040 adds exactly run/{chain_source_type_identity,checked_division_widths,checked_program_boundary,closure_completion_contract,closure_descriptor_identity,closure_enum_owned,closure_instance_environment}.pw/.out as representative roots54–60. Ordinary panic import/surface migration preserves independent contract checks. Source-only width, checked-program, descriptor and enum inputs do not newly certify their output/IR/native behavior; internal outcome credit is only the three exact assigned roles. No guard or compiler was run.

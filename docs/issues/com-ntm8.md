@@ -171,3 +171,7 @@ Batch0038 adds exactly run/body_receiver_declaration_identity.pw/.out. Bare for 
 ## Explicit Callable-Form Source Identity Loop Setup
 
 Batch0039 adds exactly run/callable_form_source_identity.pw/.out. Bare for index/candidate do not declare new bindings and have no earlier mutable targets. Preserve authored implementation identity across normalized default callable forms, foreign declaration/conformance/type-argument/receiver rejection and duplicate source-conformance checks with valid explicit loop declarations. Outcome and admission are separate obligations, not two migration roots.
+
+## Explicit Chain and Closure Loop Setup
+
+Batch0040 adds exactly run/{chain_source_type_identity,closure_array_for_arc,closure_descriptor_identity}.pw/.out. The first has bare for name/site/conversion and the latter roots bare f/body, all without earlier mutable targets. Preserve chain owner/projection/foreign-body identity, closure-element call/ARC source purpose and descriptor/body-environment negative controls using explicit val/mut val new bindings. Source-only descriptor/ARC outcomes are not newly credited.

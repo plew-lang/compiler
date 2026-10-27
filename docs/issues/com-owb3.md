@@ -112,3 +112,7 @@ Batch0038 adds exactly run/body_signature_associated_types.pw/.out. Bare pub imp
 ## Explicit Generic Array-Return Inference Control
 
 Batch0039 fully reads supplemental run/generic_array_ret_infer.pw/.out. Bare pub impl Box {factory} repeats the unresolved generic publication shorthand. Preserve caller/callee binder substitution, full Array result and nested idArr/firstOf/wrapAll value types through the eventual common ruling. It is a qualified control only, with no new primary admission/outcome credit or default numeric inference.
+
+## Explicit Chain and Closure-Field Publication Contexts
+
+Batch0040 adds exactly run/{chain_generic,closure_field}.pw/.out. BoxG/Pair and Apply bare generic-owner factory publication repeat the unresolved shorthand. Preserve generic Chain value substitution and grounded function-valued receiver field calls through the eventual shared ruling. This does not authorize arbitrary open F invocation without a function-type declaration or silently resolve Optional labels/loop setup.
