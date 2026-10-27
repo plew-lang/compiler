@@ -71,3 +71,7 @@ Batch0029 adds reject/trait_subject_cycle_generic_active_view.pw as optional pur
 ## Explicit Try Primitive Conversion Comment
 
 Batch0030 adds reject/try_error_type.pw for optional comment precision. The valid rejection is absence of From[String] on the I64 target, not absence of all from factories merely because I64 is primitive. Preserve the same error-type conversion negative and avoid introducing a primitive-only exception.
+
+## Explicit String Unary Negative Comment
+
+Batch0031 adds reject/unary_neg_string.pw for optional explanation precision. This source has no applicable Neg witness, but being a standard primitive does not in general prohibit providing external-type operator conformance inside an explicitly selected named extension (spec09). Preserve the valid bare String unary rejection; do not infer a universal extension prohibition from the current witness set.

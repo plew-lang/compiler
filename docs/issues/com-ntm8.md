@@ -143,3 +143,9 @@ Batch0030 adds exactly reject/try_on_optional.pw. Some(v=...) can reject for an 
 The exact type_operator_reject_dead_{block_59,if_68,match_77}.pw and type_operator_return_dead_invalid_add.pw originally799bc300 check bad operators after a transfer. Adopted spec11 now forbids every such source suffix. Reclassify/retain/delete their optional old purpose without demanding additional operator diagnostics after the decisive transfer error. Live-invalid operator control stays meaningful.
 
 The fully read supplemental run/source_operator_literal_context.pw/.out has two bare for operation loops without an existing mutable binding (spec11). Preserve closed first-source operator selection, contextual operands, refusal to repair missing frozen selection and comparison Bool projection through valid loop bindings. This is one exact positive setup pair, not an all-for migration; no fixture was executed or edited.
+
+## Explicit Enum-Deinit Rejection and Unique-Return Control
+
+Batch0031 adds exactly reject/unique_enum_deinit.pw. It intends to reject explicit enum deinit but its Cell struct also contains a forbidden struct-body deinit (spec03); with status-only expectation, losing enum rejection can still pass on unrelated placement error. Preserve enum-specific rejection with an admitted payload declaration under met-2t3l migration.
+
+Supplemental run/unique_move.pw/.out also returns the existing local f bare from makeFile and describes implicit move. spec03 requires explicit ownership mode and has no located local-return exception; spec04 return completion does not grant it. Preserve the four ownership/output events through adopted explicit transfer and coherent deinit migration rather than certifying this old positive as source-clean. This is one exact control, not all unique return bodies or an added implicit-move rule.
