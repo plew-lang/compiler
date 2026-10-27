@@ -9,7 +9,7 @@ priority: 2
 assignee: Koji Murata
 tags: [frontend, runtime, verification]
 ---
-# Reconcile ordinary panic function admission in nine representative fixtures
+# Reconcile ordinary panic function admission in eleven representative fixtures
 
 ## Contract, Evidence and Scope
 
@@ -54,3 +54,7 @@ only the named representative input set, not the complete compiler migration.
 ## Explicit Ninth Representative Root
 
 Batch0009 adds exactly tests/fixtures/reject/associated_literal_context_unknown.pw and its .err context. Holder[T].empty's unused body calls panic without explicitly importing the ordinary Core function; the intended negative is absent generic receiver/result context at Holder.empty(). Preserve that inference rejection and its specific diagnostic, rather than allowing ordinary panic name/surface migration to replace it. No failure arm or compiler was executed. This extends only one representative root, not an all-compiler migration or an audit of other unread associated calls.
+
+## Explicit Two Divergence-Declaration Negatives
+
+Batch0012 adds exactly reject/diverging_async_modifier.pw and reject/diverging_call_following_statement.pw with the latter .err. The first combines async/diverge illegally but also calls panic without explicit use; the second has legacy panic statement syntax inside a diverge function before testing forbidden following code at its call site. Preserve the modifier and source-transfer diagnostic purposes through ordinary imported panic migration. Specific following-statement .err prevents unrelated missing-panic rejection from being credited. Current legacy admission is not proof of adopted source validity. These extend only the representative set; compiler guards and all unread fixtures are not silently transferred.
