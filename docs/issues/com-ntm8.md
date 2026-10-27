@@ -163,3 +163,7 @@ Batch0036 adds exactly run/{array_literal_inferred_element,array_literal_unannot
 ## Explicit Associated-Body and Signature-Authority Loop Controls
 
 Batch0037 adds exactly run/{associated_copy_body_environment,associated_literal_signature_authority}.pw/.out. Their bare for previous/mode names have no existing mutable binding. Preserve A/B placement body identity, selected-proof receiver rejection and physical self-signature checks, plus unselected/complete/incomplete/wrong-callee/no-reconstruction signature cases, through adopted val/mut val loop declarations. Each root has separate source-admission and internal-output obligations; migration scope counts roots once and does not certify current execution.
+
+## Explicit Receiver-Identity Loop Setup
+
+Batch0038 adds exactly run/body_receiver_declaration_identity.pw/.out. Bare for offset/byte have no earlier mutable targets. Preserve same-spelled cross-module declaration rejection, supplied/default receiver body identity, missing/foreign receiver and signature failures, and nested resolved-view provenance under valid val/mut val loop setup. The two source/result obligations share one root; no codegen execution or blanket internal test rewrite is claimed.

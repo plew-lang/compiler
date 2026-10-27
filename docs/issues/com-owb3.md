@@ -104,3 +104,7 @@ Batch0035 adds exactly run/{arc_nested_generic_box,arg_convention_guaranteed_arc
 ## Explicit Associated-Storage Layout Admission Context
 
 Batch0037 adds exactly run/associated_storage_layout.pw/.out. Projected[T] and Wrapper[T] have bare generic-owner publication markers, repeating the unresolved shorthand. Preserve concrete and projected fields, generic receiver grounding, enum payload/value copies, newtype storage and I64/String outputs through the eventual common ruling. Holder is nongeneric and not part of this publication question. No layout/codegen outcome is newly certified by this admission role.
+
+## Explicit Associated Body-Signature Context
+
+Batch0038 adds exactly run/body_signature_associated_types.pw/.out. Bare pub impl Shelf {factory} repeats the unresolved generic publication form. Preserve exact Index[U64].Output as both parameter and result under distinct Shelf[I64]/Shelf[String] body environments through the common eventual publication ruling. No unique/generic ABI feature or new structural Index conformance is required by this source-admission question.

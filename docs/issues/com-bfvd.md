@@ -124,3 +124,7 @@ Batch0034 adds exactly run/{access_candidate_index,active_type_parameter_identit
 ## Explicit Projection and Bare-Type Internal Guards
 
 Batch0037 adds exactly run/{associated_projection_constraint_identity,bare_type_name_index,bare_type_registration}.pw/.out. Unimported legacy panic guards qualify adopted source admission, while the internal assertions still distinguish associated owner/arguments/receiver and legacy bare-name first-match, append, copy and parallel-row publication. These are representative roots42–44, not a complete guard inventory. The last root has only its outcome obligation in this batch; its separate unread admission is not transferred or counted here. No failing guard was executed.
+
+## Explicit Binder and Body-Instance Internal Guards
+
+Batch0038 adds exactly run/{binder_type_term,body_instance_index}.pw/.out as representative roots45–46. Their unimported legacy panic guards need the same ordinary-function admission reconciliation, while preserving lexical binder/view/structural distinctions and body environment/proof/order/copy-key invariants. The already named bare_type_registration root42–44 intake from0037 is reused for its separate admission role here, not a new representative root. No guard was executed.

@@ -21,3 +21,7 @@ Trace Buffer's defining type/module, current public construction producers, type
 
 The investigation closes with concrete finite repair owners/required controls, not just a broad promise to migrate all Std. Actual changes use TDD and scoped independent review; no API/compiler/fixture edits or test executions occurred in audit. Existing com-qbwg synthetic identity and com-m0bf type-term repairs are not this API migration; met-b2la unique generic support is not automatically a prerequisite. Preserve adopted surface, ask user if a new public semantic/architecture decision is needed. Evidence frontend-batch-0002.json/runtime-batch-0088.json under meta/evidence/test-audit/scoped-reviews. Unread audit units are not transferred by this issue.
 
+
+## Explicit Capacity and Field-Place Buffer Contexts
+
+Batch0038 adds exactly run/{buffer_capacity_cow,buffer_cow_field}.pw/.out. Current Buffer.withCapacity/new associated construction differs from the adopted named-factory surface. Preserve capacity/reserve, alias independence, zero-sized unit elements, indexed insertion and mutable struct-field buffer writes/returned removal values through the same canonical construction handoff. Current public APIs are real; their use is not intrinsically invalid call syntax. This admission audit does not newly certify physical memory retirement, sanitizer execution or unread outcome obligations.
