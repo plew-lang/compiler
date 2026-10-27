@@ -68,3 +68,11 @@ Batch0015 additionally reads run/field_defaults_generic.pw/.out, whose pub impl 
 ## Explicit Generic Constructor Constraint Contexts
 
 Batch0016 adds exactly reject/generic_constructor_nested_conflict.pw/.err and the fully read supplemental run/{generic_ctor_infer,generic_ctor_bottomup,generic_constructor_nested_constraints}.pw/.out. Rows, Box, Pair and Nested use the same unresolved bare-owner publication markers. Apply the eventual canonical ruling while preserving repeated-field conflict, top-down expected instance, bottom-up ground element types and nested/generic field constraints as distinct source guarantees. Qualified control reads do not complete their unread primary admission/outcome units or certify a hidden default numeric type.
+
+## Explicit Generic Receiver and Method-Where Controls
+
+Batch0017 adds the fully read supplemental run/generic_recv_arg_valid.pw/.out and generic_method_where.pw/.out. Both contain bare generic pub impl Box {factory} markers. Apply the same eventual publication ruling while preserving grounded I64/String receiver argument acceptance and actual Bar conformance discharge; these positive controls do not justify the unresolved shorthand by current output. Exact supplemental scope only, not new primary credit.
+
+## Explicit Generic Index-Call Supplemental Control
+
+Batch0017 adds run/generic_index_call_template.pw/.out, whose bare pub impl Shelf {factory} has the same unresolved generic publication shape. Preserve actual selected Index[U64].Output=T substitution and final subscript use through generic shelf with String/I64 results. No new primary audit credit or implicit structural Index conformance is claimed.

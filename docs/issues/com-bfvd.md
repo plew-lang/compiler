@@ -68,3 +68,7 @@ The fully read supplemental run/{diverging_call_flow,diverging_callable_declarat
 ## Explicit Four Memberwise-Collision Negatives
 
 Batch0015 adds exactly reject/factory_memberwise_{collision,default_collision,empty_collision,generic_collision}.pw and their .err companions. All custom factory bodies call panic() without the adopted ordinary Core import. Preserve full/default/empty/generic collision declaration rejection and its specific anonymous-factory-overlap diagnostic under a coherent panic migration. A body/name error cannot replace the required companion. The representative set is23 roots after these exact four additions; no compiler/test/expectation change or execution occurred in audit.
+
+## Explicit Generic Enum-Inference Fallback Control
+
+Batch0017 adds the supplemental run/generic_enum_field_inference.pw/.out, whose two unexecuted failure arms call panic without importing the ordinary Core function. Preserve successful array/String payload inference and fallback diagnostics without pretending those arms executed. Optional payload labels are owned by met-2wca. This adds one representative root (24 total at this intake), not all generic-enum fixtures or actual abort-path coverage.

@@ -45,3 +45,11 @@ Batch0013 adds exactly run/enum_payload_destructure.pw/.out. Its current Some(v=
 ## Explicit Generic Associated-Self Supplemental Producer
 
 Batch0016 adds run/generic_associated_self.pw/.out: two Some(v=value) constructors and the Some(v:val result) pattern use current payload label v instead of adopted value. Preserve generic/associated Self substitution through Optional[T], immediate unwrap and pattern extraction with 42/heap/42/heap outputs. This exact pair is not an all-Optional rewrite or a completed primary admission/outcome obligation.
+
+## Explicit Generic Enum-Payload Type Negative
+
+Batch0017 adds exactly reject/generic_enum_payload_wrong_type.pw. It intends Bool versus grounded I64 payload rejection but currently writes Some(v=true), against adopted Some(value:T). Preserve the payload-type reason through a coherent label migration; wrong-label rejection alone is not that type check. This is one named standalone negative, not an all-enum/Optional migration or a new primary credit for earlier controls.
+
+## Explicit Generic Enum-Inference Supplemental Producer
+
+Batch0017 adds run/generic_enum_field_inference.pw/.out. Root Some(v=...) constructors and v: payload patterns use current labels. Preserve inferred enum payload type/layout, forward context through block/match/array, owned String payload and all twelve outputs under the adopted value label. Panic fallback migration is com-bfvd's separately explicit exact root; no primary admission/outcome count is added.
