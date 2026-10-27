@@ -73,3 +73,7 @@ Batch0027 adds exactly reject/tc_generic_arg_mismatch.pw, tc_generic_payload_val
 ## Explicit Trait-Method Result-Context Control
 
 Batch0028 adds exactly supplemental run/trait_method_result_context.pw/.out. absent uses Optional.Some(v: _) against adopted value label; migrate that exact pattern coherently while preserving expected-result inference through required/provided/default generic members, block/if wrappers, associated output record members and bound discharge. Optional.None needs no payload-label change. This pair is a qualified control, not completed primary admission/outcome or a request to change inference semantics.
+
+## Explicit Shared-Witness Optional and Protocol Negatives
+
+Batch0029 adds exactly reject/trait_subject_chain_conflict_{existential_enum,protocol,protocol_bound}.pw/.err. Their Some(v=...) producers differ from adopted value. Preserve ambiguity inside shared witness bodies through generic erasure and direct/generic iteration protocol calls; the specific ambiguity companions must not pass on wrong-label rejection. The enum whole-container conversion has its separate com-vp0o setup disposition. No implicit label alias or new primary positive credit is adopted.

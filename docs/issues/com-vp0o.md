@@ -51,3 +51,7 @@ actual execution occurred in audit; source-admission audit is still separate.
 ## Explicit Shared-Witness Existential Array Negative
 
 Batch0028 adds exactly reject/trait_subject_chain_conflict_existential_array.pw/.err. Its intended shared self.b() witness-body ambiguity is explicitly adopted by spec09, independently of caller view. The input also converts inferred Array[S#C] wholesale to Array[any A], forbidden by generic invariance. Preserve the shared-body rejection with an admitted direct/element boxing contrast; its specific ambiguous-bare-call companion does not credit an unrelated container mismatch. This exact negative setup is not a new covariance exception or an all-chain audit. Neighboring direct/generic/closure/existential negatives remain separately audited, and no test was executed or edited.
+
+## Explicit Shared-Witness Optional Negative
+
+Batch0029 adds exactly reject/trait_subject_chain_conflict_existential_enum.pw/.err. It converts Optional[S#C] wholesale to Optional[any A], an unrelated invalid invariant-container setup. Preserve canonical shared self.b() ambiguity through legal direct/element erasure and retain the specific ambiguity companion; a generic mismatch is not a passing substitute. Optional.Some(v=...) migration is separately met-2wca. This extends the selected negative context by one exact root, not all Optional conversions.
