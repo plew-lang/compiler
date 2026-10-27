@@ -10,11 +10,11 @@ assignee: Koji Murata
 parent: com-jno0
 tags: [mid, ownership, backend, runtime, verification]
 ---
-# Audit remaining Mid backend ownership and runtime test expectations
+# Audit Mid backend ownership and runtime test expectations
 
 ## Scope
 
-Audit the non-phase-three Mid/backend/ownership/runtime assertions assigned by
+Audit the Mid/backend/ownership/runtime assertions assigned by
 com-ouh2: IR/ABI/codegen structure, value copying/CoW/ARC, access and
 cleanup, closure/environment lifetime, async/event-loop behavior and sanitizer
 controls. Read the corresponding design contracts and language spec where tests
@@ -26,7 +26,7 @@ JIT instructions and native bridge checks. Detection controls must actually
 exercise the memory accesses claimed; an ASan pass does not prove uninstrumented
 paths safe. Include the existing raw ownership supplement according to its
 assigned contract without requiring all ASan runs for each inspected fixture.
-Cross-reference com-lbnc for shared semantic assertions rather than copying
+Use com-ouh2's primary ownership for shared assertions rather than copying
 inputs or assigning the same assertion twice.
 
 ## Method and Exit

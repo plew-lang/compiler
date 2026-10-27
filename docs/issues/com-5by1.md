@@ -14,8 +14,8 @@ tags: [verification, tooling]
 
 ## Contract and Actions
 
-Integrate the [approved plan](https://github.com/plew-lang/meta/blob/7893c820/agents/llm-development-workflow-proposal.md)
-under the existing [verification design](../design/verification.md).
+Maintain common TDD, scoped-task and independent-review rules under the existing
+[verification design](../design/verification.md).
 
 - AGENTS/index: require reading the TDD rules at every task start.
 - Meta workflow: derive scenarios from the full guarantee and preserved behavior;
@@ -46,8 +46,8 @@ The user's follow-up requests shorter wording without changing these contracts.
 - Validate links/headings and contract preservation; obtain a fresh-context
   walkthrough and independent completion review before closing.
 
-This is documentation work: no compiler RED/rebuild is required. Actual process
-compliance, detection effectiveness and cost remain with [com-bv1s](com-bv1s.md).
+This is documentation work: no compiler RED/rebuild is required. A documentation check does not establish future compliance, detection
+effectiveness or implementation cost.
 
 ## Outcome and Evidence
 
@@ -59,5 +59,6 @@ RED/GREEN, exceptions, records/gates and reasoned review remain intact. It found
 no required correction and permits closure; the author accepts this grounded
 conclusion. The initial fresh-context review remains in Git at `4054b83f`.
 
-Compiler execution and operating effectiveness were not tested; those remain
-with [com-bv1s](com-bv1s.md). No source, expectation or gate change is claimed.
+Compiler execution and operating effectiveness were not tested. No source,
+expectation or gate change is claimed; no implementation trial is required
+to close this documentation work.

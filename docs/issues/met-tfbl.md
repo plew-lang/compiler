@@ -2,7 +2,7 @@
 id: met-tfbl
 status: in_progress
 deps: []
-links: [met-g53w, com-cwu1, com-jno0]
+links: [met-g53w, com-cwu1]
 created: 2026-10-26T05:22:49Z
 type: task
 priority: 1

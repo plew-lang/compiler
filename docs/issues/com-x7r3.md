@@ -7,7 +7,7 @@ created: 2026-10-26T12:48:12Z
 type: task
 priority: 1
 assignee: Koji Murata
-parent: com-jno0
+parent: met-si6j
 tags: [frontend, verification]
 ---
 # Reconcile phase three repair tasks and admission dependencies from audits
@@ -39,9 +39,9 @@ Read met-si6j, met-ucze, met-g53w, com-61jt and the actual current tk graph.
   depend only on the closed audit/assignment while leaving repair tasks outside
   its prerequisites. G1/G2a/G2b/G3 retain their original roles and seven-second
   performance criterion; do not create duplicate admission/gate tasks here.
-- Select one bounded lexical-binding repair for com-bv1s and attach its actual
-  completion as that trial's prerequisite once identified. Do not depend on
-  met-tfbl's closure before assigning the follow-ups that allow it to close.
+- Do not depend on met-tfbl's closure before assigning the follow-ups that
+  allow it to close. No general workflow trial or cross-compiler audit is a
+  prerequisite for phase-three repairs or admission.
 
 ## Exit and Evidence
 

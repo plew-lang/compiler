@@ -10,11 +10,11 @@ assignee: Koji Murata
 parent: com-jno0
 tags: [driver, verification, tooling]
 ---
-# Audit remaining driver generation dependency and harness test contracts
+# Audit driver generation dependency and harness test contracts
 
 ## Scope
 
-Audit the non-phase-three driver/gen/dependency/tooling/harness assertions
+Audit the driver/gen/dependency/tooling/harness assertions
 assigned by com-ouh2: check/build/run/gen requests, package/module and
 root/part handling, AST generation registration, native/session/ORC/CLI boundaries,
 bootstrap/build/measurement/watchdog scripts and sanitizer orchestration.

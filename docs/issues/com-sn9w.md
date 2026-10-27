@@ -1,21 +1,21 @@
 ---
 id: com-sn9w
 status: open
-deps: [com-5by1, com-2hx2]
+deps: [com-2hx2]
 links: []
 created: 2026-10-26T12:48:12Z
 type: task
 priority: 1
 assignee: Koji Murata
-parent: com-jno0
+parent: met-si6j
 tags: [frontend, verification]
 ---
 # Audit phase three API authority from source decisions to final consumers
 
 ## Entry and Scope
 
-Use the revision-pinned map/bounded batches from com-2hx2 under the rules
-in com-5by1. Existing evidence is a starting point, not a certificate. Audit
+Use the revision-pinned map/bounded batches from com-2hx2 and the normal
+project development rules. Existing evidence is a starting point, not a certificate. Audit
 all assigned phase-three decision boundaries, not just the lexical reproducer.
 
 For each API/constructor compare the information and operations it needs with

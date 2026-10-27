@@ -1,88 +1,73 @@
 ---
 id: com-jno0
 status: open
-deps: [com-5by1, com-2hx2, com-ouh2, com-sn9w, com-lbnc, com-x7r3, com-bv1s, com-e713, com-8iys, com-5zvv, com-tqzw, com-3p7m]
-links: [met-si6j, com-604k, met-tfbl]
+deps: [com-5by1, com-ouh2, com-e713, com-8iys, com-5zvv, com-tqzw, com-3p7m, com-am6u, com-mmk9]
+links: []
 created: 2026-10-26T12:48:12Z
 type: epic
 priority: 1
 assignee: Koji Murata
 tags: [verification, tooling]
 ---
-# Establish evidence-based compiler development and audit existing tests
+# Audit compiler API inputs and tests and establish common development rules
 
-## Purpose and Authority
+## Purpose and Scope
 
-Make compiler development depend on scoped executable evidence and enforceable
-responsibility boundaries, rather than task counts, repeated assurances or green
-suites with unexamined oracles. The user authorized this separate epic and child
-organization on 2026-10-26. The [adopted execution plan](https://github.com/plew-lang/meta/blob/7893c820/agents/llm-development-workflow-proposal.md) records the
-research, alternatives and limitations. Rule integration is work owned by
-[com-5by1](com-5by1.md), not already completed by creating this epic.
+Own the user's cross-compiler API-input audit, test-validity/coverage audit and
+common development principles. This epic is independent of implementation
+milestones: it neither owns their fixes nor requires their completion.
 
-Evidence motivating the work is the [phase-three retrospective](met-si6j.md#closure-assurance-retrospective)
-and [lexical/visibility investigation](met-tfbl.md). Existing spec and design
-remain semantic authorities. This epic introduces no language change.
+- API audit: find values/capabilities passed to functions or struct constructors
+  beyond their responsibility, across the production compiler.
+- Test audit: check actual assertions, expectation grounds, exercised paths,
+  registration and missing controls across the complete existing corpus.
+- Operating rules: intended-RED TDD from a task-wide scenario list, guarantees in
+  task bodies with action-oriented titles, independent evidence-based review.
 
-## Scope and Boundaries
-
-- Integrate intended-RED TDD, scoped task contracts, evidence-based independent
-  review and test validity checks into existing development entry points.
-- Audit phase-three APIs for unnecessary decision authority, including arguments,
-  retained fields, captures, globals and unrestricted access through Comp.
-- Audit the actual existing test corpus for valid expectations, assertions,
-  exercised paths, discovery and missing contract controls, prioritizing phase
-  three. Discovery inventory and semantic coverage are separate evidence.
-- Reconcile finite repairs with existing owners, try the method on one actual
-  repair, and verify sustained use through phase-three re-admission.
-
-Existing implementation repairs, G1/G2a/G2b/G3 and main/seed integration retain
-their current owners. Do not reparent the phase-three tree here, duplicate its
-final gates, or make all non-phase-three audits prerequisites of phase three.
-Confirmed in-scope phase-three gaps cannot be deferred to close that phase.
-Non-phase-three defects discovered by the corpus audit need owned follow-ups;
-this epic does not silently require every unsupported feature or every unrelated
-repair before the development-method work can close.
-
-No mandatory new guard, validate-task DSL, receipt format, CI system, management
-tool replacement or full mutation-testing platform is authorized by this epic.
-Existing validate/watchdogs/input freezing and the formal median below seven
-seconds remain applicable; no threshold or verifier/test weakening is allowed.
+[Architecture](../design/architecture.md), [compiler state](../design/compiler-state.md),
+[Mid](../design/mid.md), [ownership](../design/ownership-and-access.md) and
+[driver](../design/driver-and-execution.md) assign distinct API responsibilities.
+The API question therefore spans the whole compiler, not only source typing.
+Checking algorithm correctness, implementing discovered repairs/new features,
+formal performance admission and release/seed promotion are outside this epic.
 
 ## Work Routing
 
-| Responsibility | Child owner |
+| Responsibility | Owner |
 |---|---|
-| Operational rules and entry points | [com-5by1](com-5by1.md) |
-| Phase-three API/authority inventory | [com-2hx2](com-2hx2.md) |
-| Actual test discovery and disjoint audit assignment | [com-ouh2](com-ouh2.md) |
-| Phase-three API responsibility audit | [com-sn9w](com-sn9w.md) |
-| Phase-three test validity and missing controls | [com-lbnc](com-lbnc.md) |
-| Finite recovery repairs and admission dependency reconciliation | [com-x7r3](com-x7r3.md) |
-| One real lexical-binding repair as a process trial | [com-bv1s](com-bv1s.md) |
-| Remaining frontend tests | [com-e713](com-e713.md) |
-| Remaining Mid/backend/ownership/runtime tests | [com-8iys](com-8iys.md) |
-| Remaining driver/gen/deps/harness tests | [com-5zvv](com-5zvv.md) |
-| Full-corpus audit reconciliation | [com-tqzw](com-tqzw.md) |
-| Continuity, effectiveness and handoff | [com-3p7m](com-3p7m.md) |
+| Common operational rules | [com-5by1](com-5by1.md) |
+| Whole-compiler API-input inventory | [com-am6u](com-am6u.md) |
+| Whole-compiler API-input/capability audit | [com-mmk9](com-mmk9.md) |
+| Actual test discovery and audit partition | [com-ouh2](com-ouh2.md) |
+| All frontend test assertions | [com-e713](com-e713.md) |
+| Mid/backend/ownership/runtime assertions | [com-8iys](com-8iys.md) |
+| Driver/gen/deps/tooling/harness assertions | [com-5zvv](com-5zvv.md) |
+| Corpus reconciliation and finding ownership | [com-tqzw](com-tqzw.md) |
+| Durable rules and proposal cleanup | [com-3p7m](com-3p7m.md) |
 
-This is routing, not a copied status list. Use tk for live state and dependencies.
-Inventories must bound the audit batches before execution. If an assigned domain
-exceeds roughly one or two active human working days, replace its executable
-scope with finite child batches before starting the broad audit, preserving the
-complete partition and required dependencies. Creating this plan is not evidence
-that the inventory or any audit has already occurred.
+Inventories define finite batches before audit execution; use tk for state and
+actual prerequisites. No separate mutable status index is kept here.
 
 ## Completion
 
-All required child outcomes have independently reviewed evidence. The actual
-corpus is partitioned and audited without unclassified omissions; required repairs
-and specification questions have concrete owners. Phase three is re-admitted by
-its existing owners on current evidence, with all original gates and scope intact.
-A fresh-context execution demonstrates use of the rules without the user having
-to supply per-task paperwork or reminders. Record effectiveness and remove or
-simplify ineffective process, without weakening correctness obligations.
+Required rules are installed and independently reviewed. Inventories and audits
+have complete scoped dispositions; confirmed findings and questions have finite
+owners. Audit completion does not mean the findings are repaired or that unknown
+bugs are absent. A fresh-context check confirms the rules are discoverable; it
+cannot prove their future effectiveness. User per-task paperwork does not grow.
 
-Audit completion, repair completion and phase/whole-candidate admission are
-separate claims. Unknown defects are not proved absent. The epic does not merge
-main, promote a seed/carrier or close the whole conformance project.
+No implementation-phase task is a child, dependency or linked issue of this epic.
+Audits may report findings to their appropriate owners, but implementation
+completion and its gates do not become epic prerequisites. A mandatory issue
+must still be fixed before its own affected implementation scope is admitted.
+No guard platform, new tool/DSL, weakened gate or changed language semantics is
+part of this plan.
+
+## Plan Review
+
+Independent reviewer `/root/review_epic_scope_separation` reviewed the reorganization
+against compiler `a36279a0` / meta `8a054734`. It confirmed whole-compiler scope,
+complete audit partitioning and no implementation-milestone dependencies or lost
+required work, and found no mandatory correction. The author accepts the
+source/graph-backed conclusions. This is plan verification only; inventories,
+audits and operating effectiveness remain unverified.

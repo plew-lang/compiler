@@ -1,23 +1,24 @@
 ---
 id: com-lbnc
 status: open
-deps: [com-5by1, com-ouh2]
+deps: [com-2hx2]
 links: []
 created: 2026-10-26T12:48:12Z
 type: task
 priority: 1
 assignee: Koji Murata
-parent: com-jno0
+parent: met-si6j
 tags: [frontend, verification]
 ---
 # Audit phase three test oracles paths and missing contract controls
 
 ## Scope and Actions
 
-Audit the exact assertion batches assigned by com-ouh2 to existing
+Derive finite assertion batches from com-2hx2 and the current harness for existing
 phase-three contracts, including any relevant global/default/provided/gen/Mid or
 mode assertions regardless of directory. Read the eleven criteria in met-si6j,
-verification design and the spec chapters for each tested rule.
+verification design and the spec chapters for each tested rule. Build the needed
+local discovery map here; no whole-corpus audit is an input dependency.
 
 1. Derive required positive/reject/ownership/flow/mode contrasts from contracts
    before using existing test names or implementation explanations as an oracle.

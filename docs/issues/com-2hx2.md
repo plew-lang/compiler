@@ -7,12 +7,16 @@ created: 2026-10-26T12:48:12Z
 type: task
 priority: 1
 assignee: Koji Murata
-parent: com-jno0
+parent: met-si6j
 tags: [frontend, verification]
 ---
 # Map phase three semantic decision APIs and their actual authority
 
 ## Question and Boundary
+
+First work item when resuming phase-three remediation: complete this inventory
+before further broad semantic repairs. It is a phase-three task, not the general
+compiler API-input audit.
 
 Produce a bounded map of the actual phase-three semantic decision APIs, not a
 claim that current responsibilities are correct. Read [phase-three criteria](met-si6j.md#completion-criteria),

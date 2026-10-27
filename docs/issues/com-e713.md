@@ -10,16 +10,15 @@ assignee: Koji Murata
 parent: com-jno0
 tags: [frontend, verification]
 ---
-# Audit remaining frontend language test expectations and coverage
+# Audit frontend language test expectations and coverage
 
 ## Scope
 
-Audit the non-phase-three frontend assertions assigned by com-ouh2:
+Audit all frontend assertions assigned by com-ouh2:
 lexing/parsing, names/visibility, declarations, overloads/generics, type behavior,
 expressions/control flow, diagnostics and other currently provided language
 surface. The assignment follows assertion contracts, not fixture directory or
-prefix. Do not re-audit com-lbnc rows merely to count them again; preserve
-links to their scoped evidence. Unknown claims of unsupported behavior need
+prefix. Reuse existing evidence only when scope and inputs match. Unknown claims of unsupported behavior need
 contract/implementation evidence, not current rejection alone.
 
 Read relevant spec chapters and frontend design independently of current expected

@@ -2,7 +2,7 @@
 id: met-si6j
 status: in_progress
 deps: [met-ucze, met-ia09, met-acfl, met-6e6k, com-gyup, met-rzt4, com-fuo8, com-4bib, com-s248, com-lzpe, com-bkqq]
-links: [com-jno0]
+links: []
 created: 2026-10-13T01:29:29Z
 type: epic
 priority: 1
@@ -30,12 +30,11 @@ independent eleven-criterion synchronization; its prior final approval is supers
 [The closure-assurance retrospective](#closure-assurance-retrospective) explains
 why prior reviewed completion was premature and proposes the recovery boundary.
 Do not equate completing the four lexical repairs with re-certifying this parent.
-The separate [development-method and test-audit epic](com-jno0.md) groups
-operational rules, API/test audits and a bounded process trial. It does not own
-this implementation tree or replace G1/G2a/G2b/G3. G1 requires its phase-three
-recovery assignment and real-repair trial; unrelated corpus audits do not block
-phase three. Actual repair dependencies must still be attached to their areas
-and G1 before admission.
+The first resumed work is [com-2hx2](com-2hx2.md), followed by its API/decision
+and source-contract test audits [com-sn9w](com-sn9w.md) / [com-lbnc](com-lbnc.md).
+[com-x7r3](com-x7r3.md) owns the finite repair/dependency assignment before G1.
+These tasks belong directly to this parent. They cannot be replaced by a general
+API-input/test-corpus audit or by completing operating-rule documentation.
 [Existing-feature conformance](com-604k.md) remains open for phase four and final
 integration. Worklog owns the current candidate and next action; scoped evidence
 does not substitute for a final candidate's gates.
@@ -90,6 +89,10 @@ open/in_progress/closed and real prerequisites.
 
 | Unit | Action owner / deliverable | Work kind |
 |---|---|---|
+| Recovery inventory | [com-2hx2](com-2hx2.md): Map actual phase-three decision APIs before resuming broad repairs | First resumed bounded investigation |
+| Recovery API audit | [com-sn9w](com-sn9w.md): Audit source decisions through final consumers | Bounded responsibility audit |
+| Recovery test audit | [com-lbnc](com-lbnc.md): Audit tests against phase-three source contracts | Bounded oracle/path audit |
+| Recovery assignment | [com-x7r3](com-x7r3.md): Assign repairs and their actual admission dependencies | Finite task/graph reconciliation |
 | A (3A) | [com-g2qg](com-g2qg.md): Close enum field inference and approved fixture cleanup | Completed implementation increment |
 | B0 (3B) | [com-qehq](com-qehq.md): Reconcile the eight current callable paths and remaining closure sites | Bounded investigation |
 | B1 (3B) | [com-qb05](com-qb05.md): Verify written static calls consume one saved source selection | Bounded closure verification |
@@ -128,8 +131,9 @@ open/in_progress/closed and real prerequisites.
 | G2b (3G) | [com-9l3b](com-9l3b.md): Run all final correctness and sanitizer gates on the measured compiler | Final standard gates |
 | G3 (3G) | [com-lzpe](com-lzpe.md): Synchronize phase three parents and discharge the eleven criteria | Final closure and handoff |
 
-Recommended order is B0, then its actual residual callable paths, followed by the
-remaining type/publication/completion/mode work. This is not an artificial
+Current resumption order is com-2hx2, then com-sn9w/com-lbnc and com-x7r3
+before further broad semantic repairs. The A-G rows retain existing work/evidence
+owners; they are not the current priority list. This is not an artificial
 whole-area dependency: independent bounded tasks may be ready. Hard tk edges
 are only required outputs (B0 -> its call-path closures, selected-call closure ->
 operation API final closure, nominal-producer classification -> facet closure,
