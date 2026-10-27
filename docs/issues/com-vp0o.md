@@ -55,3 +55,7 @@ Batch0028 adds exactly reject/trait_subject_chain_conflict_existential_array.pw/
 ## Explicit Shared-Witness Optional Negative
 
 Batch0029 adds exactly reject/trait_subject_chain_conflict_existential_enum.pw/.err. It converts Optional[S#C] wholesale to Optional[any A], an unrelated invalid invariant-container setup. Preserve canonical shared self.b() ambiguity through legal direct/element erasure and retain the specific ambiguity companion; a generic mismatch is not a passing substitute. Optional.Some(v=...) migration is separately met-2wca. This extends the selected negative context by one exact root, not all Optional conversions.
+
+## Explicit Loop-Binding Setup in Existing Self-Result Roots
+
+Batch0034 source-admission audit confirms any_array_self_member_return has bare for x and for y without existing mutable bindings, and any_heap_self_member_return has one bare for x. In addition to forbidden nominal Self-result re-erasure, preserve meaningful dynamic dispatch/empty/ownership contrasts with legal loop binding forms (spec11:209) when reconciling these already exact roots. Keep label migration separately met-2wca; no duplicate general loop issue or extra unread fixture scope is added.

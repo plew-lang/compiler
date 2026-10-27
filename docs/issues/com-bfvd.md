@@ -116,3 +116,7 @@ Batch0030 adds exactly supplemental run/{type_declaration_publication,type_term_
 ## Explicit Unused Required-Field Negative
 
 Batch0033 adds exactly reject/unused_struct_required_array_field.pw/.err. Its unused guard uses legacy unimported ordinary panic. Preserve whole-target checking of the missing required Array field and its specific diagnostic under coherent panic migration; unrelated panic rejection is not a passing substitute. This is representative root39, not all unused source bodies or actual guard execution.
+
+## Explicit Access-Index and Binder-Identity Roots
+
+Batch0034 adds exactly run/{access_candidate_index,active_type_parameter_identity}.pw/.out. Their guards use legacy unimported ordinary panic. Preserve independent first-match/role-specific access-index oracle, holes/max IDs, late registration/copy isolation, explicit nested provenance and ParamId-based active/foreign/zero binder discrimination. These two roots have both admission and observed-behavior plan units; count each root once in migration (representatives40/41), and do not claim guard execution or allAPI correctness from static inspection.

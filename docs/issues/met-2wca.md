@@ -81,3 +81,7 @@ Batch0029 adds exactly reject/trait_subject_chain_conflict_{existential_enum,pro
 ## Explicit Optional-Try Negative and Mapping Controls
 
 Batch0030 adds exactly reject/try_on_optional.pw and supplemental run/{iter_map_retype,iter_for_map}.pw/.out. Their Some(v=...) producers need coherent adopted value-label migration. Preserve Result-only try rejection and generic Iterator map output-type retyping (five Bool outputs versus three mapped I64 outputs). com-ntm8 owns selected rejection isolation; no unread mapper corpus or new primary admission/outcome credit is included.
+
+## Explicit Ambient and Existential Admission Producers
+
+Batch0034 adds exactly run/{ambient_core,any_direct_optional_match,any_for_generic_iterable,any_for_iterable,any_for_iterator,any_heap_self_member_return,any_iterator}.pw/.out. Some(v=...) constructors and explicitly named v patterns differ from adopted value; positional payload patterns and None do not need mechanical renaming. Preserve ambient language vocabulary, legal bound Iterator/Iterable dispatch and explicit iteration binding semantics. Nominal Optional/Array[Self] result calls in two roots remain com-vp0o, so label migration alone does not certify those source admissions. This is seven exact roots, not the existential corpus.
