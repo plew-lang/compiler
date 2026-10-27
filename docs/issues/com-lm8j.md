@@ -91,3 +91,7 @@ Batch0036 adds run/assign_same_named_type.pw/.out for optional explanation preci
 ## Explicit Buffer, Foreign-Identifier and Cast Comments
 
 Batch0039 adds run/{buffer_floor,buffer_index,c_reserved_idents,cast}.pw/.out for optional purpose/comment precision. Ordinary Array/Buffer representation and Index semantics are owned by canonical design, so historical ptr/i64 or not-an-index-witness comments must not mandate a competing semantic path. C-reserved identifiers remain valid Plew names, independent of a retired generated-C backend. Cast is total/infallible, not necessarily lossless, and some signedness changes such as this root U16→I32 are total. Preserve all valid sources/results; no new cast rule, source-specific lowering or memory proof is introduced.
+
+## Explicit Closure Capture and Temporary-Lifetime Comments
+
+Batch0041 adds run/{closure_shadow_capture,closure_temp_arg_arc}.pw/.out for optional explanation precision. Capture identity is lexical independently of the retired generated-C suffix mechanism, and the first shadowed x is actually mut. Call-argument temporary retention ends at the called closure completion before the outer expression resumes (spec03:113), not generally at outer statement end. Keep source/ownership regressions; this admission audit does not certify output discrimination of cleanup timing or add unread outcome work to this comment task.

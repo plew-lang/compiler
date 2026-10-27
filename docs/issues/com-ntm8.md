@@ -175,3 +175,7 @@ Batch0039 adds exactly run/callable_form_source_identity.pw/.out. Bare for index
 ## Explicit Chain and Closure Loop Setup
 
 Batch0040 adds exactly run/{chain_source_type_identity,closure_array_for_arc,closure_descriptor_identity}.pw/.out. The first has bare for name/site/conversion and the latter roots bare f/body, all without earlier mutable targets. Preserve chain owner/projection/foreign-body identity, closure-element call/ARC source purpose and descriptor/body-environment negative controls using explicit val/mut val new bindings. Source-only descriptor/ARC outcomes are not newly credited.
+
+## Explicit Session and Proof Loop Setup
+
+Batch0041 adds exactly run/{compiler_session_body_requests,compiler_session_mid_requests,conformance_proof_demands,conformance_proof_outputs}.pw/.out. Their bare loops (3,1,1,3 sites respectively) have no earlier mutable target. Preserve selected body/declaration request, prepared Mid reuse, explicit proof source paths and output/premise query controls using val/mut val declarations. No all-session rewrite or additional outcome credit follows from this source setup intake.

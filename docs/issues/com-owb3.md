@@ -116,3 +116,7 @@ Batch0039 fully reads supplemental run/generic_array_ret_infer.pw/.out. Bare pub
 ## Explicit Chain and Closure-Field Publication Contexts
 
 Batch0040 adds exactly run/{chain_generic,closure_field}.pw/.out. BoxG/Pair and Apply bare generic-owner factory publication repeat the unresolved shorthand. Preserve generic Chain value substitution and grounded function-valued receiver field calls through the eventual shared ruling. This does not authorize arbitrary open F invocation without a function-type declaration or silently resolve Optional labels/loop setup.
+
+## Explicit Self-Projection Conformance Context
+
+Batch0041 adds exactly run/conformance_self_projection.pw/.out. Bare pub impl Box {factory} repeats the unresolved generic-owner publication shorthand. Preserve Self as the complete Box[T] trait positional input and T as the associated output across I64/String generic read calls through the common eventual ruling. This is not undeclared Box[T] or permission to infer bounds from concrete instances.

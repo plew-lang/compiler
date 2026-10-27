@@ -136,3 +136,7 @@ Batch0039 adds exactly run/{call_closure_owner_boundary,call_template_result_arg
 ## Explicit Chain, Checked-Program and Closure Guards
 
 Batch0040 adds exactly run/{chain_source_type_identity,checked_division_widths,checked_program_boundary,closure_completion_contract,closure_descriptor_identity,closure_enum_owned,closure_instance_environment}.pw/.out as representative roots54–60. Ordinary panic import/surface migration preserves independent contract checks. Source-only width, checked-program, descriptor and enum inputs do not newly certify their output/IR/native behavior; internal outcome credit is only the three exact assigned roles. No guard or compiler was run.
+
+## Explicit Session and Conformance-Proof Guards
+
+Batch0041 adds exactly run/{compiler_session_body_requests,compiler_session_demand,compiler_session_finalization,compiler_session_initializers,compiler_session_mid_requests,compiler_session_registry,conformance_proof_demands,conformance_proof_outputs}.pw/.out as representative roots61–68. Reconcile ordinary panic admission while preserving selected request/failure/snapshot/initializer/registry source purposes and exact proof-demand/output assertions. Session roots are source-only roles here; no additional session runtime/outcome or complete lazy-execution result is certified.
