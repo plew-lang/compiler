@@ -96,3 +96,7 @@ Batch0030 adds supplemental run/try_from_generic_arg_match.pw/.out. Its pub impl
 ## Explicit Unused Generic Capture Negative
 
 Batch0032 adds exactly reject/unused_closure_capture_generic_inst.pw/.err. Its bare pub impl Box {factory} repeats the unresolved generic publication shape. Preserve declaration-time diagnosis of the currently unsupported generic-struct capture shape in the unused body and its specific capture diagnostic through the eventual canonical publication ruling. com-b1ro owns that unsupported environment shape; neither fixture name nor historical rejection creates an adopted type-kind capture ban.
+
+## Explicit Nested ARC and Array-Element Admission Contexts
+
+Batch0035 adds exactly run/{arc_nested_generic_box,arg_convention_guaranteed_arc,array_compound_elem}.pw/.out. Their pub impl Box {factory} markers repeat the unresolved bare generic publication form. Preserve grounded nested Box instances with String/shared-cell payloads, guaranteed argument versus stored/returned owners, and generic compound array elements through the eventual publication ruling. Reference/deinit/API qualifications remain their existing owners; no undeclared Box[T] binder error or allARC certification is inferred.

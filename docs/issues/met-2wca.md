@@ -85,3 +85,7 @@ Batch0030 adds exactly reject/try_on_optional.pw and supplemental run/{iter_map_
 ## Explicit Ambient and Existential Admission Producers
 
 Batch0034 adds exactly run/{ambient_core,any_direct_optional_match,any_for_generic_iterable,any_for_iterable,any_for_iterator,any_heap_self_member_return,any_iterator}.pw/.out. Some(v=...) constructors and explicitly named v patterns differ from adopted value; positional payload patterns and None do not need mechanical renaming. Preserve ambient language vocabulary, legal bound Iterator/Iterable dispatch and explicit iteration binding semantics. Nominal Optional/Array[Self] result calls in two roots remain com-vp0o, so label migration alone does not certify those source admissions. This is seven exact roots, not the existential corpus.
+
+## Explicit Optional Existential and Sendability Admission Producers
+
+Batch0035 adds exactly run/{any_optional_covariant_erasure,any_optional_self_member_return,any_sendable_erasure,any_single_letter_trait_optional_self}.pw/.out. Some(v=...) producers and named v patterns differ from adopted value. Preserve direct existential guarantee erasure, direct Self dispatch and legal element/variant boxing contrasts under coherent label migration. All four roots already have separate forbidden container/nominal Self-result behavior in com-vp0o, so fixing labels alone does not certify admission. No new covariance or sendability-container lift is adopted.

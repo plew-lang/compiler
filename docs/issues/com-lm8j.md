@@ -79,3 +79,7 @@ Batch0031 adds reject/unary_neg_string.pw for optional explanation precision. Th
 ## Explicit Existential Value-Copy Comment
 
 Batch0034 adds run/any_box_value_semantics.pw/.out for optional comment precision. Its required guarantee is that mutation of the original Array field does not change the boxed value; eager deep-copy at boxing is not required by CoW/value semantics. Preserve outputs1/99 while describing semantic independence without making a physical allocation strategy the oracle. This admission audit does not claim fresh execution or verify every existential copy/drop path.
+
+## Explicit Ordinary-Function Enum-Copy Comment
+
+Batch0035 adds run/array_enum_payload_function_copy.pw/.out for optional pipeline-description precision. Its ordinary function argument/append/enum-payload regression remains useful, but its comment describes ordinary LLVM lowering versus Mid as competing function paths. The adopted backend consumes canonical Mid for ordinary functions too. Preserve the non-main ownership/source path without claiming an AST backend or duplicating an obsolete pipeline authority. This source-admission audit does not newly certify its runtime/memory outcome.
