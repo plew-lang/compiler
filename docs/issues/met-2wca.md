@@ -9,7 +9,7 @@ priority: 2
 assignee: Koji Murata
 tags: [frontend, verification]
 ---
-# Plan adopted Optional payload labels for selected Chain and array regressions
+# Plan adopted Optional payload labels for selected regressions
 
 
 ## Contract and Finite Scope
@@ -37,3 +37,7 @@ Batch0010 adds exactly tests/fixtures/reject/chain_missing_factory.pw with .err 
 ## Explicit Supplemental Coalescing Control
 
 Batch0011 also reads run/try_coalesce.pw and .out as a positive for removed ?? versus current unwrapOr and try behavior. Its Some(v=5) is the same current/adopted payload-label difference. Include this exact pair in the finite label migration, preserving six outputs, successful/error propagation and eager/lazy fallback contrasts; no all-Optional corpus intake or new primary audit count.
+
+## Explicit Enum-Destructure Supplemental Producer
+
+Batch0013 adds exactly run/enum_payload_destructure.pw/.out. Its current Some(v=7I64) must migrate coherently to the adopted value label without dropping full/discard/bare-tag pattern coverage or changing 30/10/99 outputs. It is one supplemental pair, not an all-enum rewrite or a newly audited primary admission/outcome.

@@ -9,7 +9,7 @@ priority: 2
 assignee: Koji Murata
 tags: [frontend, runtime, verification]
 ---
-# Reconcile ordinary panic function admission in eleven representative fixtures
+# Reconcile ordinary panic function admission in selected regression fixtures
 
 ## Contract, Evidence and Scope
 
@@ -58,3 +58,9 @@ Batch0009 adds exactly tests/fixtures/reject/associated_literal_context_unknown.
 ## Explicit Two Divergence-Declaration Negatives
 
 Batch0012 adds exactly reject/diverging_async_modifier.pw and reject/diverging_call_following_statement.pw with the latter .err. The first combines async/diverge illegally but also calls panic without explicit use; the second has legacy panic statement syntax inside a diverge function before testing forbidden following code at its call site. Preserve the modifier and source-transfer diagnostic purposes through ordinary imported panic migration. Specific following-statement .err prevents unrelated missing-panic rejection from being credited. Current legacy admission is not proof of adopted source validity. These extend only the representative set; compiler guards and all unread fixtures are not silently transferred.
+
+## Explicit Five Divergence-Value Negatives and Three Storage/Flow Controls
+
+Batch0013 adds exactly reject/{diverging_call_value,diverging_closure_contract_erasure,diverging_closure_contract_strengthening,diverging_dynamic_call_value,diverging_spawn_modifier}.pw with their existing companions. Four use legacy panic statement syntax; spawn uses panic() without importing it. Preserve direct/dynamic invocation value prohibition, strict normal/diverge closure contracts and forbidden spawn/diverge combination through ordinary panic migration. Specific .err predicates remain distinct from unrelated setup rejection.
+
+The fully read supplemental run/{diverging_call_flow,diverging_callable_declarations,diverging_callable_storage}.pw/.out add three bounded contexts using the same legacy/unimported panic forms. Preserve branch result42, uncalled divergence declarations and stored/copied/projected callable values; they are source/oracle controls, not evidence their abort branches executed. run/diverging_loop_invocation_boundary is a separate panic-free control, not a migration input. The finite representative set is19 roots after these exact eight additions; neither unread source nor all compiler internal guards are silently transferred.

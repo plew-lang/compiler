@@ -71,3 +71,7 @@ Preserve the real source-offset assertion and intended failure class through an 
 ## Explicit Nonassociative Comparison Detection
 
 Batch0011 adds exactly tests/fixtures/reject/cmp_non_associative.pw. Its I64 a==b==c has no diagnostic companion: if the parser incorrectly groups left-associatively, the intermediate Bool is still compared to I64 and can fail for a different reason. Thus exit1 alone does not detect the intended nonassociative syntax rule. Preserve original d4a7a247 intent with a discriminating parser reason or a well-typed Bool chain contrast and valid explicitly parenthesized control. No observed compiler regression is claimed; shared crash classification remains com-fsuq.
+
+## Explicit Two Empty-Match Rejection Controls
+
+Batch0013 adds reject/empty_match_bool.pw and empty_match_unit.pw. Original ca23b3dd protects the rule that inhabited Bool/unit cannot have exhaustive zero-arm matches. Both instead return match value {} and have no .err: if coverage wrongly accepts zero arms, the match is classified source-diverging and its use as a return value can still reject. Isolate coverage from forbidden source-divergence value use with statement/branch context or a precise coverage reason; retain a genuinely empty enum elimination positive and rejected empty-enum direct value-use contrast. No observed candidate defect or new Never/type rule is claimed.
