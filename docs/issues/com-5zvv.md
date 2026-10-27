@@ -52,15 +52,18 @@ inventory revision, assertion dispositions, grounds and scoped independent revie
 Completion means the assigned finite audit is reconciled, not zero unknown bugs,
 all future features implemented or all resulting defects already fixed.
 
-## Scoped Audit Checkpoint
+## Reconciled Outcome Subset
 
-Discovery/routing com-ouh2 is complete at source/test baseline `9665094d`.
-The [finite plan](../../../evidence/test-audit/audit-plan.json) assigns exact
-obligation IDs and batches; every assigned bundle still requires reconciliation.
-[Independent partial review](../../../evidence/test-audit/scoped-reviews/review-driver.json)
-names inspected scopes, normative grounds and unconfirmed boundaries.
-[Finding dispositions](../../../evidence/test-audit/scoped-reviews/disposition.json)
-route finite repairs separately. No compiler, expectation, test or runner changed;
-no real compiler/full suite was executed. This is not a full batch/domain closure.
-Reuse only the named assertions with matching hashes; uninspected inputs remain
-in this audit rather than being converted to an external coverage task.
+[Cross-owner outcome reconciliation](../../../evidence/test-audit/scoped-reviews/outcome-reconciliation.json)
+now covers 3 exact primary outcome units here (three internal source-file-range fail-fast outcome units). Normative conditions,
+original intent, complete selected inputs and shared runner predicates were read
+independently and by the parent. This is source-level audit, not executed compiler
+or program correctness and not the separate source-admission units. Existing
+finite findings and migration owners are retained; no repair or domain closure.
+All other plan units remain this audit's work, with shared reports reused only
+within exact matching scopes.
+
+Independent reconciliation review review_audit_inventory_partition matched exact
+IDs/owners/hash identities and scoped calculations, found no required correction,
+and accepted these source-audit records only. No compiler/candidate/domain
+certification, unread-work transfer or fixture/runner repair is implied.
