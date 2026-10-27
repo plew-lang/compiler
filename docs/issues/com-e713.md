@@ -70,3 +70,22 @@ The shared reconciliation also records80 additional runtime-primary outcomes;
 these do not increase this task's audited primary count. The six finite new
 follow-ups preserve explicit source-admission/package boundaries. Other assigned
 units here remain audit work.
+
+## First Source-Admission Batch
+
+[Batch0002](../../../evidence/test-audit/scoped-reviews/frontend-batch-0002.json)
+and its [independent review](../../../evidence/test-audit/scoped-reviews/review-frontend-0002.json)
+add38 disjoint source-admission obligations. Two prior internal outcomes are
+exactly reused, not counted twice. All76 selected source/companion files were
+read. This brings this task's inspected primary units to42 (four outcomes plus
+38 admissions); the task remains in_progress.
+
+Twenty-two ordinary setups have source-level grounds, nine reference roots
+retain current syntax and precision-sensitive dynamic-tier qualifications,
+five root panic setups retain their existing ordinary-function migration, and
+two Buffer roots exercise current public assoc APIs while factory migration is
+planned separately. com-jbau owns the exact nine-root static-alias frontier and
+dynamic control investigation; com-58zf owns two constructor operations/three
+representatives. No new source rule, arbitrary reject-or-panic PASS, fresh
+compiler execution, repair or whole-frontend closure is implied. The independent
+review found no remaining required audit correction.

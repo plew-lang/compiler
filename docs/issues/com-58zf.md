@@ -1,0 +1,23 @@
+---
+id: com-58zf
+status: open
+deps: []
+links: []
+created: 2026-10-27T20:20:53Z
+type: task
+priority: 3
+assignee: Koji Murata
+tags: [frontend, runtime, verification]
+---
+# Plan Buffer factory migration while preserving existing construction controls
+
+## Finite Migration Planning Boundary
+
+Source-only admission audit at compiler9665094d/spec5bd65a5. Exact representative inputs: tests/fixtures/panic/buffer_capacity_bytes.pw, tests/fixtures/panic/buffer_reserve_overflow.pw and tests/fixtures/run/array_drop_count.pw. They call current public assoc Buffer.new()/withCapacity(). spec02's Buffer API adopts named factories; current Core exposes assoc methods. This does not make their ordinary method-call syntax inherently invalid or their capacity/drop behavior a wrong oracle. com-p10m explicitly validates the current assoc lane and excludes absent factory migration; do not silently reopen it.
+
+## Deliverables
+
+Trace Buffer's defining type/module, current public construction producers, typed intrinsic/synthetic handoffs, factory publication and external call consumers. Produce a bounded migration/control plan for the two construction operations using adopted named factory syntax, retaining capacity overflow/no-change, empty count/capacity, final-owner release and current valid positive controls. Distinguish ordinary source construction from private compiler-generated construction authority. Account for current standard module ownership and generic T handling; do not bypass owner/private rules or remove legacy guards before replacements exist.
+
+The investigation closes with concrete finite repair owners/required controls, not just a broad promise to migrate all Std. Actual changes use TDD and scoped independent review; no API/compiler/fixture edits or test executions occurred in audit. Existing com-qbwg synthetic identity and com-m0bf type-term repairs are not this API migration; met-b2la unique generic support is not automatically a prerequisite. Preserve adopted surface, ask user if a new public semantic/architecture decision is needed. Evidence frontend-batch-0002.json/runtime-batch-0088.json under meta/evidence/test-audit/scoped-reviews. Unread audit units are not transferred by this issue.
+
