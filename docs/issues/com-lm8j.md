@@ -59,3 +59,7 @@ Batch0023 adds supplemental run/range_value.pw/.out and provided_method_valid.pw
 ## Explicit All-Diverging Match Negative Comments
 
 Batch0025 adds exactly reject/source_divergent_mid_value_match_all_diverge_{choose,throughAggregate,throughCall}.pw and their .err contexts as optional comment precision. Historical comments describe producing a match result type or emitting Mid around wholly diverging value use, while current spec11 and these specific rejection oracles forbid such value use. Preserve those negatives and the partial-divergence normal control; do not reintroduce a bottom coercion or claim these compile-reject tests exercise runtime cleanup/CFG emission.
+
+## Explicit Dictionary-Key Negative Comment
+
+Batch0027 adds reject/tc_dict_key_type.pw for optional comment precision. Its .at desugaring, skipped generic-argument checking and exclusive TypeRef-checker explanation describe a retired mechanism. Preserve Dictionary[String,I64] versus I64 key rejection through canonical Index selection; do not weaken that valid negative or require a broad comment rewrite.

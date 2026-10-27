@@ -84,3 +84,7 @@ Batch0022 adds reject/overload_generic_concrete_receiver_overlap.pw, whose pub i
 ## Explicit Shared-Pointee Method Control Setup
 
 Batch0024 adds run/ref_arrow_method.pw/.out, whose Box[T] generic has a bare pub impl Box { factory } marker. Preserve shared Counter mutation/destruction and grounded Box[I32].get result through the same unresolved publication decision. Adopted projection/deinit migration stays met-op15/met-2t3l; this exact control is not certified source-clean or newly credited as a primary outcome/admission.
+
+## Explicit Struct-Pattern and Generic-Payload Controls
+
+Batch0027 adds supplemental run/{struct_destructure_stmt,struct_pattern,generic_enum_payload_context}.pw/.out. Each uses the same unresolved bare generic pub impl Box { factory } publication marker. Preserve statement punning/rename/assignment/discard and grounded generic fields, struct match payload/value results, and contextual Optional/Box literal inference through the eventual canonical publication ruling. The last pair also has current Some(v=...) producers/patterns, owned by met-2wca. These are qualified source controls, not adopted-clean proofs or completed primary outcome/admission units.

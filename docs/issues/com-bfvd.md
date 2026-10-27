@@ -104,3 +104,7 @@ Batch0025 adds run/source_closure_publication.pw/.out. Its invariant-failure arm
 ## Explicit Source-Typing and Value-Region Supplemental Controls
 
 Batch0026 adds exactly run/source_typing_context_closure.pw/.out and source_value_region_production.pw/.out. Their invariant guards call panic without the ordinary Core import. Preserve typed empty arrays/generic closure results/comparison context, and saved give-produced region terms versus expectation-only missing values, distinct source/execution completion and stable failed-owner nonpublication. These add two representative roots (32/33), not an all-internal migration inventory. No branch was executed or primary service outcome certified by the audit.
+
+## Explicit Required-Field Negative and Supertrait-Proof Control
+
+Batch0027 adds exactly reject/struct_required_array_field.pw/.err and supplemental run/declaration_supertrait_proof.pw/.out. Both use legacy unimported ordinary panic. Preserve the missing required Array field reason in the first; preserve inherited/conferred path owners, distinct trait instances, freeze/thaw proof equality and absence of execution preparation/destruction in the second. These are representative roots34/35, not executed guards, full source-service certification or an all-internal migration.

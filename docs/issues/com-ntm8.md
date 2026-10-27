@@ -129,3 +129,9 @@ Batch0024 adds reject/selected_call_constraints_publication_private.pw/.err. Its
 Also add record_lit_destructure_bad_field.pw and ref_arrow_missing_field.pw/.err to the finite source-anchor scope. Original108951ff and3d5bd4ec moved diagnostic provenance from interned names to actual bind/field tokens; current workers observe no location (first status-only, second message-only). Preserve the selected field/bind location contracts through a meaningful assertion or existing diagnostic checker; reference syntax migration remains met-op15.
 
 return_unreachable_type.pw now violates the source-after-return rule before its old dead-type purpose. This is optional purpose reclassification/retention/deletion after original intent, like give_unreachable_name; do not require continued diagnostics after decisive forbidden suffix rejection.
+
+## Explicit Generic-Payload Label Masking and Unknown-Pattern Purpose
+
+Batch0027 adds exactly reject/tc_generic_arg_mismatch.pw and tc_generic_payload_value.pw. Both use Some(v=...) while adopted Optional declares value. Status-only rejection can survive a lost generic-instance/payload-type gate through unrelated wrong-label rejection. Original6541be59/cf3e07e4 intent is generic argument identity versus expected payload substitution, respectively. Isolate both under coherent met-2wca migration with positive grounded payload controls.
+
+struct_pattern_type_mismatch.pw uses undeclared P, but original539c37a8 deliberately covers unknown/nonstruct pattern crash-to-clean rejection. Keep that original guarantee; a known-struct/wrong-subject contrast or precise reason is optional coverage, not a newly proved mandatory mask merely because P is absent.

@@ -65,3 +65,7 @@ Batch0020 adds reject/match_unknown_variant.pw. Some(v=...) construction and the
 ## Explicit Optional-Chain Negatives and Receiver-Identity Control
 
 Batch0022 adds reject/optchain_chain_incomplete.pw/.err and optchain_chain_not_nominal.pw/.err: their Optional.Some(v=...) producers use current rather than adopted labels. Preserve whole Chain requirements versus nominal-proof absence and their specific diagnostics. Custom MyOpt.Has(v:T) is its author's field label and must not be mechanically renamed. Supplemental run/overload_receiver_structural_identity.pw/.out uses <.Some v=5I64>; migrate that exact constructor while retaining nine overload/receiver/record/eager-lazy outputs. No unread Optional roots or primary admission/outcome credits are added.
+
+## Explicit Generic Type-Checker Negatives and Context Control
+
+Batch0027 adds exactly reject/tc_generic_arg_mismatch.pw, tc_generic_payload_value.pw and supplemental run/generic_enum_payload_context.pw/.out. Some(v=...) and v patterns require coherent adopted value-label migration. Preserve different Optional generic arguments, expected I64 payload checking and contextual integer typing in let/return/generic field positions with5/7/9 outputs. Wrong-label rejection must not mask the selected negative purposes (com-ntm8). Bare generic factory publication is com-owb3, not automatically an invalid binder.
