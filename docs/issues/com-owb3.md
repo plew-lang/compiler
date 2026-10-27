@@ -64,3 +64,7 @@ Batch0014 adds exactly reject/{extension_conformance_generic_overlap,extension_c
 ## Explicit Generic Field-Default Control
 
 Batch0015 additionally reads run/field_defaults_generic.pw/.out, whose pub impl Box {factory} is the same unresolved bare-publication shape. Include exactly this pair in the existing source ruling, preserving concrete default field substitution, fresh array and override results5/99/0/1/2. This is supplemental control scope only, not a newly completed primary admission/outcome or an automatic invalid-binder diagnosis.
+
+## Explicit Generic Constructor Constraint Contexts
+
+Batch0016 adds exactly reject/generic_constructor_nested_conflict.pw/.err and the fully read supplemental run/{generic_ctor_infer,generic_ctor_bottomup,generic_constructor_nested_constraints}.pw/.out. Rows, Box, Pair and Nested use the same unresolved bare-owner publication markers. Apply the eventual canonical ruling while preserving repeated-field conflict, top-down expected instance, bottom-up ground element types and nested/generic field constraints as distinct source guarantees. Qualified control reads do not complete their unread primary admission/outcome units or certify a hidden default numeric type.
