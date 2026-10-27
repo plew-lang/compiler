@@ -48,3 +48,7 @@ The source-admission audit also reads exactly `tests/fixtures/partreject/namespa
 ## Explicit Paired Literal-Range Bare-Publication Context
 
 Batch0007 reads `tests/fixtures/reject/aggregate_infer_literal_range.pw` and its .err. It repeats the bare generic `pub impl Measurement { factory }` of the already named run positive. Include this exact negative when deciding any bare-owner publication shorthand, preserving the intended 256-versus-U8 range reason and com-pxja's separate forward sibling-inference question. This is not the confirmed unbound Box[T] form or an extra source rule.
+
+## Explicit Associated-Receiver Negative Context
+
+Batch0008 adds exactly tests/fixtures/reject/assoc_disjoint_receiver_ambiguous.pw. The bare generic `pub impl Box { factory }` has the same unresolved publication meaning as the existing bare-owner representatives. Preserve its actual source requirement: Box.tag() cannot select Box[I64] versus Box[String] by declaration order without receiver type information. Missing .err alone is optional diagnostic coverage, not another proved masking bug; do not conflate a declaration-setup question with permission to resolve that ambiguous call.

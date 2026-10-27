@@ -9,7 +9,7 @@ priority: 2
 assignee: Koji Murata
 tags: [frontend, verification]
 ---
-# Plan adopted Optional payload labels for the nominal Chain regression
+# Plan adopted Optional payload labels for selected Chain and array regressions
 
 
 ## Contract and Finite Scope
@@ -23,3 +23,9 @@ Recover the original Chain identity regression and enumerate exactly this root's
 ## Completion
 
 An explicit bounded migration/disposition with concrete owned repair if needed, preserving the current regression and adopted public signature. This audit neither changes source/Std/expectations nor adopts an alias label or new rule. Unread Optional/Result fixture obligations remain in the audit; this is not an all-Std rewrite. Evidence: meta/evidence/test-audit/scoped-reviews/frontend-part-0003.json and its independent review.
+
+## Explicit Three Array-Negative Producers
+
+Batch0008 adds exactly tests/fixtures/reject/array_forward_context_block_conflict.pw, array_forward_context_explicit_conflict.pw, and array_forward_context_none_first.pw, with their .err companions. All root-authored Some constructors use current `v=` rather than adopted `value=`. The first two must fail for incompatible I64/U64 element context, not merely wrong label yielding a generic type-mismatch message. The third must preserve the leading unbound None forward-inference rejection; its later Some label still needs a coherent public-API migration.
+
+Include these exact three roots with the existing namespace_chain_identity root, not every unread Optional/Result fixture. Preserve direct/block equivalence, explicit type mismatch and no later-element backward inference. No new label alias, capability feature prerequisite or source/expectation change is adopted by audit.

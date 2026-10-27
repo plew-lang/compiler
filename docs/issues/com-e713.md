@@ -50,70 +50,15 @@ inventory revision, assertion dispositions, grounds and scoped independent revie
 Completion means the assigned finite audit is reconciled, not zero unknown bugs,
 all future features implemented or all resulting defects already fixed.
 
-## Reconciled Outcome Subset
+## Current Reconciled Subset
 
-[Cross-owner outcome reconciliation](../../../evidence/test-audit/scoped-reviews/outcome-reconciliation.json)
-now covers 4 exact primary outcome units here (four internal declaration/interner/span fail-fast outcome units). Normative conditions,
-original intent, complete selected inputs and shared runner predicates were read
-independently and by the parent. This is source-level audit, not executed compiler
-or program correctness and not the separate source-admission units. Existing
-finite findings and migration owners are retained; no repair or domain closure.
-All other plan units remain this audit's work, with shared reports reused only
-within exact matching scopes.
+Primary source-audit count:290 of the assigned3132 obligations, comprising four internal outcomes,143 source-admissions (all50 panic and93 part), and143 source-rejections (all84 partreject plus59 standalone). Cross-owner total528 obligations/thirteen complete plan batches. Counts are inspected contract bundles, not executed assertions or whole-domain completion.
 
-Independent reconciliation review review_audit_inventory_partition matched exact
-IDs/owners/hash identities and scoped calculations, found no required correction,
-and accepted these source-audit records only. No compiler/candidate/domain
-certification, unread-work transfer or fixture/runner repair is implied.
+Exact IDs, input identity, independent receipts, accepted corrections and limits are canonical in meta/evidence/test-audit/scoped-reviews/{outcome-reconciliation,source-admission-reconciliation,frontend-rejection-reconciliation}.json and linked producer reports. Parent and contract-first reviewers read selected complete inputs, relevant positive/negative controls and source/runner contracts. All assigned unread units remain this audit's work.
 
-The shared reconciliation also records80 additional runtime-primary outcomes;
-these do not increase this task's audited primary count. The six finite new
-follow-ups preserve explicit source-admission/package boundaries. Other assigned
-units here remain audit work.
+Confirmed competing-failure setups, source/API migrations, current implementation lanes and unresolved source rules have explicit finite owners in disposition.json; the33 new follow-ups are separate from the audit epic. In particular, old deinit/reference/panic/Std labels do not certify adopted admission; package-public reachability and extension identity are not chosen from implementation behavior. Missing diagnostic companions alone are optional coverage unless concrete unintended failure can mask the intended rejection.
 
-## First Source-Admission Batch
+Reviewer corrections included false projection attribution, optional-versus-required reason scope, Optional label qualification, qualified valid-source wording and same-content Git-history misattribution. Original purpose needs selected root content and path-fixed history; --follow locators alone are not proof. Prior snapshot hashes are retained rather than rewritten as if reviewers saw later changes. Evidence records limited report/issue-text exposure honestly.
 
-[Batch0002](../../../evidence/test-audit/scoped-reviews/frontend-batch-0002.json)
-and its [independent review](../../../evidence/test-audit/scoped-reviews/review-frontend-0002.json)
-add38 disjoint source-admission obligations. Two prior internal outcomes are
-exactly reused, not counted twice. All76 selected source/companion files were
-read. This brings this task's inspected primary units to42 (four outcomes plus
-38 admissions); the task remains in_progress.
+No real Plew compiler, generated program, native sanitizer or performance run was executed; compiler/std/tests/expectations/runners remain at source baseline9665094d. Existing binary/cache dirt is excluded. Finite audit acceptance is neither repair acceptance nor whole frontend/phase-three/main/seed readiness. Next work is batches0009/0010 and the remaining assigned obligations.
 
-Twenty-two ordinary setups have source-level grounds, nine reference roots
-retain current syntax and precision-sensitive dynamic-tier qualifications,
-five root panic setups retain their existing ordinary-function migration, and
-two Buffer roots exercise current public assoc APIs while factory migration is
-planned separately. com-jbau owns the exact nine-root static-alias frontier and
-dynamic control investigation; com-58zf owns two constructor operations/three
-representatives. No new source rule, arbitrary reject-or-panic PASS, fresh
-compiler execution, repair or whole-frontend closure is implied. The independent
-review found no remaining required audit correction.
-
-## Remaining Panic Source Admissions
-
-The tail12 source-admission units and independent review are saved in meta/evidence/test-audit/scoped-reviews/frontend-panic-admission-tail.json and review-frontend-panic-tail.json. Together with batch0002, all50 panic source-admissions are reconciled separately from their50 outcome units; exact IDs and parent disposition are in source-admission-reconciliation.json. This task has54 inspected primary units (four outcomes plus50 admissions), remains in_progress, and closes no additional whole batch.
-
-The explicit com-jbau extension adds eight ambient roots to the original nine, preserving the static-rejection versus current dynamic-tier distinction. Existing source migration, internal guard APIs, actual-signal and destructor-attribution owners remain separate. Review found no required correction. No Plew compiler/program execution or repair occurred.
-
-## First Part Source Admissions
-
-frontend-part-0003.json and review-frontend-part-0003.json add36 source-admission units (128 full project inputs/785 lines), with31 ordinary source-shape grounds and5 qualified current/historical roots. Optional.Some(v=...) versus adopted Some(value:T) was found during parent reconciliation, independently confirmed and assigned finite met-2wca; no whole-Std or capability migration was silently transferred. Repeated publication and two manifests retain explicit met-4slo/com-7u8z scopes, old deinit met-2t3l, supplemental partdiamond reason com-ntm8. Reviewer-required qualification wording was corrected and accepted.
-
-Primary inspected count is90 (four outcomes plus86 admissions). Reconciliation of the36 plus three previously audited panic admissions and one span outcome completes exact batch0003. There are eight complete source-audit batches across owners; no new outcome count, execution, repair or frontend closure. Unread assigned units remain audit work.
-
-## Remaining Part Admissions and First Rejection Batch
-
-frontend-part-0004.json / review-frontend-part-0004.json reconcile40 more admissions (153 files/538 lines); frontend-batch-0005.json / review-frontend-batch-0005.json add17 admissions and23 source-rejection units (149 files/674 lines). These complete source-only admission inspection of all93 part fixtures, separate from their93 prior outcome units. Manifest setup and exact generic binder/omitted-bound questions retain finite owners.
-
-New finite source-oracle questions are met-l1u5 (one internal-module versus package-public API closure rejection) and met-bejv (two extension identity/binding assumptions); two bad outer-print reason controls extend com-ntm8 and one enumaliaspartial manifest extends com-7u8z to15. Root-authored API checks do not certify all imported Std internals. Final independent review accepted both finite reports with no required correction. Contextual keyword reference is spec01-overview25, refining a broad report reference to spec04.
-
-This task has170 inspected primary units:4 outcomes,143 admissions and23 rejections. Cross-owner total408/ten complete plan batches. No compiler execution, source repair, whole-frontend or final corpus closure. Remaining negative/batch units remain this audit's work.
-
-## Remaining Multi-Module Rejections and First Standalone Negatives
-
-frontend-batch-0006/0007 and their independent review receipts add80 source-rejection obligations (132 files/330 lines and115/636). All84 partreject roots now have source-contract inspection; the first19 standalone negative roots are also reconciled. met-30q7 owns the single-box implicit-opening old oracle while the independent two-box same-T rejection remains valid. Extended package/closure/identity/binder/comment owners have explicit finite root lists.
-
-Missing diagnostic companions alone were not turned into individual mandatory defects: partfreefn and four minimal trait/any controls retain optional reason-coverage limits. Actual alternative setup failures remain concrete reason repairs. Review corrected a misattributed Git unique_array origin and a same-content extension-cycle root; path-fixed introduction diffs/source were verified. Automated --follow history alone is not original-intent proof.
-
-Primary count is250 (4 outcomes+143 admissions+103 rejections); cross-owner488 distinct obligations/twelve complete plan batches. No execution, repair, source/Std test mutation or whole-domain closure. All other finite assigned units remain audit work.

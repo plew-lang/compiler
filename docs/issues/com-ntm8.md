@@ -57,3 +57,7 @@ Batch0005 adds exactly `tests/fixtures/partreject/crossmoduleprivate/{Main,Pub,P
 Batch0006 adds exactly partreject/partmissing/Main.pw and partreject/partcrossmodule/{Main,Other,Shared}.pw. partmissing has bare print(1) without numeric context, so rejection can persist if missing-part discovery is incorrectly skipped. partcrossmodule's Shared impl Z is also unbound in Other's module if shared membership is incorrectly allowed. Both lack Main.err. Isolate missing input and unique part membership reasons while preserving valid neighbor controls.
 
 partfreefn was also read, but removing its intended part-only-impl restriction leaves a well-typed I64 triple. Missing diagnostic text alone is not a demonstrated competing-failure setup. Its reason coverage is optional, not a newly required fixture repair or a duplicate of shared com-fsuq classification.
+
+## Explicit Arithmetic Rejection Setup
+
+Batch0008 adds exactly tests/fixtures/reject/arith_no_trait.pw. It intends Add-unimplemented rejection for Pt, but has no .err and also writes malformed postfix `print(c.x~)` without importing print. Even if the Add check is missing, syntax/name failure can still pass the generic rejection predicate. Recover the original arithmetic-trait purpose, remove unrelated failure from the eventual scoped test and distinguish a valid Add-conforming control. Missing memberwise factory is not a defect here: same-module default construction is legal. No compiler/test modification occurred in audit.
