@@ -91,3 +91,11 @@ Batch0015 also adds exactly reject/ffi_extern_c_label.pw. It intends to reject C
 ## Explicit Generic Factory Call-Syntax Context
 
 Batch0017 reads exactly reject/generic_factory_requires_construction.pw/.err. The declared generic build body incorrectly calls a factory as T.make rather than JSX, and the companion pins that specific reason. Main also uses build[Value](), a retained unimplemented explicit free-call type-argument form documented by com-uutc. Preserve the intended body/call-kind rejection independently of that unsupported caller syntax, using the normal unused generic-body checking contract or another supported caller context. Do not require implementing the unrelated explicit-call feature just to isolate this regression, or credit its generic unsupported-form diagnostic as the specific factory reason. No current candidate was executed and no wrong-error PASS is proved by the companion.
+
+## Explicit Source-Transfer and Newtype Declaration Controls
+
+Batch0018 adds reject/give_result_before_return.pw: original e607bd5b checks give-result Array[String] versus [1I64], but a following return is now independently forbidden by the adopted source-transfer rule. Isolate block-result typing from that already-invalid suffix; preserve separate source-after-give rejection. No current candidate failure is claimed.
+
+The read reject/give_unreachable_name.pw originated a73b1528 to catch an unknown name in an unreachable suffix. Since any code after give is now forbidden, it no longer discriminates unreachable-name checking. Its valid rejection can be retained/reclassified or removed as redundant after checking explicit source-transfer controls; this is optional purpose precision, not a demand for diagnostic recovery after the first error.
+
+Batch0018 also adds reject/impl_on_newtype.pw. Original b27eeae5 intended the prohibition on user impls for newtypes. Main calls print without importing ordinary Std/Io, so an unrelated missing-name rejection can mask loss of the impl gate under adopted lookup. Preserve the declaration-only ban and valid inherited-method/as contrast using an isolated reason/input; do not make newtype methods user-definable or infer a language exception from current acceptance. These are exactly three inspected roots, not all give/newtype tests.

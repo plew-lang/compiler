@@ -72,3 +72,7 @@ Batch0015 adds exactly reject/factory_memberwise_{collision,default_collision,em
 ## Explicit Generic Enum-Inference Fallback Control
 
 Batch0017 adds the supplemental run/generic_enum_field_inference.pw/.out, whose two unexecuted failure arms call panic without importing the ordinary Core function. Preserve successful array/String payload inference and fallback diagnostics without pretending those arms executed. Optional payload labels are owned by met-2wca. This adds one representative root (24 total at this intake), not all generic-enum fixtures or actual abort-path coverage.
+
+## Explicit Source-Transfer Mapping Control
+
+Batch0018 adds exactly run/source_transfer_targets.pw/.out as a supplemental internal control. Its invariant-failure branches call panic without the adopted ordinary Core import. Preserve source return/give/break/continue owner identity, wrong-session/kind rejection and the final Mid consumer mapping; this source-only read neither executes those arms nor certifies the complete internal service API. This extends the representative set to25 named roots, not all source guards.

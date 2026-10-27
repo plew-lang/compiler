@@ -39,3 +39,7 @@ Batch0005 also read exactly tests/fixtures/partreject/imported_overload_ambiguit
 ## Explicit Generic Description Precision
 
 Batch0017 adds optional description-only cleanup for exactly reject/generic_field_on_typeparam.pw (traits do support field requirements; this particular T has no bound granting field access) and generic_recv_arg_width.pw (comment says U32 but actual typed argument is I32). Preserve both valid rejections and executable inputs. These are not missing trait-field capability or numeric-conversion feature requests.
+
+## Explicit Generic Capability Wording
+
+Batch0018 adds optional comment precision for reject/generic_unique_arg.pw: the ordinary Box[T] parameter is copyable-only and correctly rejects File, but the comment's blanket claim that all generics are copyable-only is superseded by explicit unique/allowunique capability declarations. Preserve the useful ordinary-[T] negative and Ref-handle contrast without turning the old implementation limit into a new specification prohibition.

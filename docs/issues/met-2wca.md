@@ -53,3 +53,7 @@ Batch0017 adds exactly reject/generic_enum_payload_wrong_type.pw. It intends Boo
 ## Explicit Generic Enum-Inference Supplemental Producer
 
 Batch0017 adds run/generic_enum_field_inference.pw/.out. Root Some(v=...) constructors and v: payload patterns use current labels. Preserve inferred enum payload type/layout, forward context through block/match/array, owned String payload and all twelve outputs under the adopted value label. Panic fallback migration is com-bfvd's separately explicit exact root; no primary admission/outcome count is added.
+
+## Explicit Guard Supplemental Producer
+
+Batch0018 adds run/guard_stmt.pw/.out: three Some(v=...) constructors use the current label rather than adopted value. Preserve failure-branch return, successful binding escape, combined condition and all seven output lines under a coherent migration. Positional pattern binding is a separate contract, not automatically a mislabeled constructor. No execution or primary admission/outcome credit is added.
