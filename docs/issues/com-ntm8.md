@@ -43,3 +43,7 @@ intended rejection. Original intent and companion positive controls are recorded
 in meta/evidence/test-audit/scoped-reviews/part-tail-0087.json. These were source
 reads, not observed current-candidate reasons. Shared exit/internal-failure
 classification remains com-fsuq, and audit repair remains separate.
+
+## Explicit Part-Diamond Reason Control
+
+Source-admission batch0003 independently reads exactly `tests/fixtures/partreject/partdiamond/{Main,A,B,C}.pw` as the paired root/part control. Main imports print but calls `print(1)` without a numeric type context and has no Main.err. The loader currently rejects the repeated part parent first; if that check regresses, forward-only numeric inference can still reject the bare literal, so generic rejection is insufficient evidence of diamond detection. Isolate the diamond reason and keep the single-parent positive. This adds one exact control to the existing finite diagnostic work, not the unread partreject corpus. No fixture was run or repaired.

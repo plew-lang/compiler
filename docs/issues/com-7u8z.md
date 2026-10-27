@@ -42,3 +42,7 @@ A bounded schema/admission disposition and owned concrete repair work; actual re
 - `tests/fixtures/part/transdep/Plew.toml`
 - `tests/fixtures/part/transdep/leaf/Plew.toml`
 - `tests/fixtures/part/transdep/mid/Plew.toml`
+
+## Explicit Two-Manifest Admission Extension
+
+Frontend source-admission batch0003 adds exactly `tests/fixtures/part/dirmodule/Plew.toml` and `tests/fixtures/part/importalias/Plew.toml`. Both contain only name, omitting the specified plew version; they exercise directory-root lookup and imported nominal aliases respectively. The finite scope is now fourteen manifests. Preserve those path/binding purposes while resolving the existing canonical schema question. This does not absorb unread package admission work or prove current fixture rejection.

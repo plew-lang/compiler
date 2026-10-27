@@ -89,3 +89,9 @@ dynamic control investigation; com-58zf owns two constructor operations/three
 representatives. No new source rule, arbitrary reject-or-panic PASS, fresh
 compiler execution, repair or whole-frontend closure is implied. The independent
 review found no remaining required audit correction.
+
+## Remaining Panic Source Admissions
+
+The tail12 source-admission units and independent review are saved in meta/evidence/test-audit/scoped-reviews/frontend-panic-admission-tail.json and review-frontend-panic-tail.json. Together with batch0002, all50 panic source-admissions are reconciled separately from their50 outcome units; exact IDs and parent disposition are in source-admission-reconciliation.json. This task has54 inspected primary units (four outcomes plus50 admissions), remains in_progress, and closes no additional whole batch.
+
+The explicit com-jbau extension adds eight ambient roots to the original nine, preserving the static-rejection versus current dynamic-tier distinction. Existing source migration, internal guard APIs, actual-signal and destructor-attribution owners remain separate. Review found no required correction. No Plew compiler/program execution or repair occurred.
