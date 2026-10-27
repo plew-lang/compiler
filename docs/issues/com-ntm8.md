@@ -111,3 +111,7 @@ Batch0020 adds reject/match_unknown_variant.pw and match_pattern_dup_field.pw. T
 ## Explicit Type-View Rejection Isolation
 
 Batch0021 adds reject/multiple_trait_type_view.pw. It writes both an illegal Sample#A#B annotation and the same illegal sample#A#B value. Current checkTypeViewSources and checkResolvedViewValid enforce these through separate type/value readers; losing the type-only gate can still reject at the RHS. Preserve the single-trait selector contract with a genuinely type-only input or type-specific diagnostic. The existing multiple_trait_value_view is the separate value-only contrast. This is a selected finite detection gap, not a reproduced compiler bug or a general demand for duplicated tests.
+
+## Explicit Or-Pattern Legacy Setup Reclassification
+
+Batch0022 adds reject/or_pattern_bind_mismatch.pw for optional purpose/setup disposition. Legacy enum payload braces can reject before the intended unequal-binding names. The same batch's canonical or_pattern_binding_names.pw/.err already isolates that rule with typed constant body and specific diagnostic. Recover original a4ef7a08 intent before retaining/migrating/reclassifying/removing the redundant old root; do not require another duplicate mandatory test or treat the stale brace form as adopted.

@@ -24,3 +24,7 @@ Check original creation intent (including 484b4a3f and pre-layout history): prev
 Repair requires task-start TDD, fixed candidate/input identity, relevant actual consumer checks, scoped independent review and applicable gates. This is a separately owned follow-up, not a child or dependency of com-jno0 or its audits. No phase-three certification implied.
 
 
+
+## Explicit Heterogeneous Operator-RHS Overflow
+
+Batch0022 adds reject/operator_hetero_nested_range.pw/.err as the fourth exact arithmetic-result oracle. Original7d064ca2 guarded witness Rhs=I8 contextual typing and silent truncation of100*3. Both literals fit I8; multiplication overflow is adopted runtime panic, unlike operator_hetero_rhs_range's single out-of-range literal200. Preserve selected Rhs/Output independence and overflow behavior when reconciling the compile-reject oracle. This is the same finite result-overflow issue, not a new operator typing rule.

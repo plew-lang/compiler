@@ -88,3 +88,7 @@ Batch0020 adds run/mid_source_owner_admission.pw/.out. Its invariant-failure arm
 ## Explicit Return-Path Supplemental Control
 
 Batch0021 adds run/return_paths.pw/.out. The C arm of classify uses a legacy unimported panic statement. Preserve source-return coverage for exhaustive match, if/else and the noncompleting while form, all five normal outputs and abort behavior under ordinary imported panic migration. This28th representative root is a supplemental source read, not proof the panic arm ran or a complete control-flow API audit.
+
+## Explicit Diverging Operator-Witness Negative
+
+Batch0022 adds reject/operator_diverging_witness.pw/.err. Its assoc diverge fn Neg witness uses a legacy unimported panic statement. Preserve normal-versus-diverge requirement contract mismatch and the specific incomplete-conformance diagnostic under ordinary panic migration. This29th representative input is not evidence the operator was invoked; no new conformance exception or primary control execution is claimed.

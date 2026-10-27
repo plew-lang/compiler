@@ -47,3 +47,7 @@ Batch0018 adds optional comment precision for reject/generic_unique_arg.pw: the 
 ## Explicit Match/Method Historical Backend Comments
 
 Batch0020 adds only reject/match_unknown_field.pw and method_value.pw as optional comment precision. Historical emitted-C/clang descriptions explain original failures but are not the current LLVM mechanism or oracle. Preserve unknown-field/method-nonvalue rejection. No source repair or new semantic requirement is implied.
+
+## Explicit Generic Overload Rule Comments
+
+Batch0022 adds reject/overload_generic_concrete.pw and overload_generic_nonoverlap_cycle.pw/.err as optional comment precision. The former is invalid because T and I32 can coincide, not because every generic/concrete pair is forbidden. The latter requires a discriminator at an individual argument position; its comment claiming cross-position joint unification must keep the declarations distinct contradicts the adopted rule and reject oracle. Preserve those rejections; no general solver or inference expansion is implied.

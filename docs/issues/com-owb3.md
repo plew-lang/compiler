@@ -76,3 +76,7 @@ Batch0017 adds the fully read supplemental run/generic_recv_arg_valid.pw/.out an
 ## Explicit Generic Index-Call Supplemental Control
 
 Batch0017 adds run/generic_index_call_template.pw/.out, whose bare pub impl Shelf {factory} has the same unresolved generic publication shape. Preserve actual selected Index[U64].Output=T substitution and final subscript use through generic shelf with String/I64 results. No new primary audit credit or implicit structural Index conformance is claimed.
+
+## Explicit Receiver-Overlap Negative Setup
+
+Batch0022 adds reject/overload_generic_concrete_receiver_overlap.pw, whose pub impl Box { factory } is the same unresolved generic memberwise-publication shape. Preserve the definite Box[T]/Box[I64] receiver-domain overlap rejection while resolving this setup; do not infer bare publication legality from current acceptance or call its rejection a confirmed competing failure while that source rule remains unsettled. This is one exact root, not every generic overload declaration.
