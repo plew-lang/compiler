@@ -96,3 +96,7 @@ Batch0022 adds reject/operator_diverging_witness.pw/.err. Its assoc diverge fn N
 ## Explicit Call-Storage Publication Supplemental Control
 
 Batch0024 adds run/source_call_storage_publication.pw/.out. Its invariant guards call panic without the ordinary Core import. Preserve final storage-demand summaries, immutable publication/reopen rejection and closure stability through coherent panic migration. This30th representative root is a supplemental source/oracle read, not execution of failure branches or certification of the full call-fact service.
+
+## Explicit Closure-Publication Supplemental Control
+
+Batch0025 adds run/source_closure_publication.pw/.out. Its invariant-failure arms call panic without the ordinary Core import. Preserve construction-versus-preparation state, failed-owner nonpublication, immutable completed closure facts and final Mid canonical-consumer checks under coherent panic migration. This31st representative root is a qualified supplemental read, not executed invariant-failure coverage or certification of every closure/source service. source_call_storage_publication was already the exact30th root in batch0024 and is reused by unchanged source identity.

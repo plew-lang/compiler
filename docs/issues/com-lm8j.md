@@ -55,3 +55,7 @@ Batch0022 adds reject/overload_generic_concrete.pw and overload_generic_nonoverl
 ## Explicit Range/Provided-Method Control Comments
 
 Batch0023 adds supplemental run/range_value.pw/.out and provided_method_valid.pw/.out only for optional comment precision. arr.count() is U64, despite an I64 comment; total returns first() rather than combining both requirements, while the golden3/4 is correct. Preserve the actual output and purpose instead of inventing a missing sum assertion. No primary source-admission/outcome credit is added.
+
+## Explicit All-Diverging Match Negative Comments
+
+Batch0025 adds exactly reject/source_divergent_mid_value_match_all_diverge_{choose,throughAggregate,throughCall}.pw and their .err contexts as optional comment precision. Historical comments describe producing a match result type or emitting Mid around wholly diverging value use, while current spec11 and these specific rejection oracles forbid such value use. Preserve those negatives and the partial-divergence normal control; do not reintroduce a bottom coercion or claim these compile-reject tests exercise runtime cleanup/CFG emission.
