@@ -84,3 +84,7 @@ Batch0019 adds run/import_origin_provenance.pw/.out. Internal provenance-table a
 ## Explicit Mid Source-Owner Supplemental Control
 
 Batch0020 adds run/mid_source_owner_admission.pw/.out. Its invariant-failure arms use panic without the ordinary Core import. Preserve valid prepared source acceptance, wrong-owner statements/facts, absent admission and foreign-session rejection through coherent panic migration. This27th representative root is a qualified supplemental read; it neither ran the failure branches nor certifies all Mid/source fact APIs.
+
+## Explicit Return-Path Supplemental Control
+
+Batch0021 adds run/return_paths.pw/.out. The C arm of classify uses a legacy unimported panic statement. Preserve source-return coverage for exhaustive match, if/else and the noncompleting while form, all five normal outputs and abort behavior under ordinary imported panic migration. This28th representative root is a supplemental source read, not proof the panic arm ran or a complete control-flow API audit.

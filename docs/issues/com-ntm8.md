@@ -107,3 +107,7 @@ Batch0019 adds reject/inline_trait_constraint.pw. Its original f81f8480 selected
 ## Explicit Match Identity and Duplicate-Field Isolation
 
 Batch0020 adds reject/match_unknown_variant.pw and match_pattern_dup_field.pw. The former constructs current Some(v=...), so an adopted-label error can reject even if unknown variant Other is accepted; keep the unknown-variant oracle distinct during met-2wca migration. The latter repeats field a and omits b: current checkDestructureComplete separately rejects duplicates and then missing fields. Removing duplicate detection alone still rejects for missing b. Preserve the original8978934c exactly-once regression, using a duplicate-specific assertion or a form covering all real fields as well as duplicating one. This does not require every pattern error to be independently diagnosed after the first failure.
+
+## Explicit Type-View Rejection Isolation
+
+Batch0021 adds reject/multiple_trait_type_view.pw. It writes both an illegal Sample#A#B annotation and the same illegal sample#A#B value. Current checkTypeViewSources and checkResolvedViewValid enforce these through separate type/value readers; losing the type-only gate can still reject at the RHS. Preserve the single-trait selector contract with a genuinely type-only input or type-specific diagnostic. The existing multiple_trait_value_view is the separate value-only contrast. This is a selected finite detection gap, not a reproduced compiler bug or a general demand for duplicated tests.

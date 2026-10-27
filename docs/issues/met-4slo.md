@@ -9,7 +9,7 @@ priority: 2
 assignee: Koji Murata
 tags: [frontend, verification]
 ---
-# Clarify repeated memberwise factory publication in two module fixtures
+# Clarify repeated memberwise factory publication in selected fixtures
 
 
 ## Finite Question
@@ -25,3 +25,7 @@ com-owb3 owns generic impl binder shapes, not these nongeneric repeated markers.
 ## Completion
 
 Finite source-admission disposition with canonical grounds or explicit unresolved decision and owned correction. No test repair or source rule is adopted by the audit; subsequent repairs require TDD and scoped review. Evidence: meta/evidence/test-audit/scoped-reviews/frontend-part-0003.json and prior part-batch-0085.json.
+
+## Explicit Newtype Factory-Inheritance Control
+
+Batch0021 adds exactly run/newtype_factory_inherit.pw/.out: two pub impl Rgb blocks both contain bare factory publication markers. Preserve five memberwise/named/fallible inherited-factory outputs and Self re-tagging while resolving the same repeated-publication question. The control is qualified, not evidence of adopted idempotence or a primary source-admission completion. No new generic-publication scope is transferred here.
