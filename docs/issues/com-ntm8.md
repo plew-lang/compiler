@@ -23,4 +23,23 @@ For exactly F2 nine inputs, F3 construction/annotation pair and F4 two generated
 
 Repair requires task-start TDD, fixed candidate/input identity, relevant actual consumer checks, scoped independent review and applicable gates. This is a separately owned follow-up, not a child or dependency of com-jno0 or its audits. No phase-three certification implied.
 
+## Explicit Part/Identity Control Extension
 
+The later part outcome audit independently read four additional rejection
+controls that have no diagnostic companion:
+
+- `tests/fixtures/partreject/trait_view_unimported/Main.pw`
+- `tests/fixtures/partreject/trait_owner_required_identity/Main.pw`
+- `tests/fixtures/partreject/phantomdep/Main.pw`
+- `tests/fixtures/reject/trait_subject_cycle_generic_edge_reuse.pw`
+
+Include these exact four reason assertions alongside the original nine, not
+the entire absent-.err corpus. They must distinguish missing explicit selector
+binding, the actually selected trait's missing requirement, missing direct
+dependency, and exact-instance cycle respectively. `phantomdep` also has legacy
+manifest setup; com-7u8z must resolve the relevant canonical schema before using
+that setup as a diagnostic oracle. A manifest parse/version failure is not its
+intended rejection. Original intent and companion positive controls are recorded
+in meta/evidence/test-audit/scoped-reviews/part-tail-0087.json. These were source
+reads, not observed current-candidate reasons. Shared exit/internal-failure
+classification remains com-fsuq, and audit repair remains separate.

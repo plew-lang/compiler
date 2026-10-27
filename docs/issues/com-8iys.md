@@ -55,15 +55,22 @@ all future features implemented or all resulting defects already fixed.
 ## Reconciled Outcome Subset
 
 [Cross-owner outcome reconciliation](../../../evidence/test-audit/scoped-reviews/outcome-reconciliation.json)
-now covers 80 exact primary outcome units here (all43 runtime-owned panic outcomes and37 part outcome units). Normative conditions,
-original intent, complete selected inputs and shared runner predicates were read
-independently and by the parent. This is source-level audit, not executed compiler
-or program correctness and not the separate source-admission units. Existing
-finite findings and migration owners are retained; no repair or domain closure.
-All other plan units remain this audit's work, with shared reports reused only
-within exact matching scopes.
+now covers160 exact primary outcome units here: all43 runtime-owned panic,
+all93 part and first24 run outcomes. Four complete outcome batches0084–0087
+and seven scattered internal outcomes across owners are source/oracle/runner
+reviews, not actual compiler/program execution or source-admission certification.
+All selected project inputs were read; part output arithmetic matches authored
+goldens, conditional on explicitly recorded admission qualifications.
 
-Independent reconciliation review review_audit_inventory_partition matched exact
-IDs/owners/hash identities and scoped calculations, found no required correction,
-and accepted these source-audit records only. No compiler/candidate/domain
-certification, unread-work transfer or fixture/runner repair is implied.
+Six new finite follow-ups distinguish five historical existential success
+admissions (com-vp0o), Dictionary replacement observability (com-9hyu), explicit
+versus bare impl binders (com-owb3), unresolved omitted trait inputs (com-yhap),
+constructor sibling inference (com-pxja), and selected manifest schema consistency
+(com-7u8z). Original useful coverage is retained in the required repair contracts;
+no test or runner was repaired. com-ntm8 explicitly extends four named reason
+controls. Other plan units remain audit work, not transferred as vague findings.
+
+The earlier87-unit independent acceptance retains its exact scope. Added80-unit
+independent reconciliation review accepted exact scope, hashes, oracles and
+finite finding owners with no required audit correction. This task remains
+in_progress; batch0088 is now being inspected.

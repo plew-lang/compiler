@@ -67,3 +67,8 @@ Independent reconciliation review review_audit_inventory_partition matched exact
 IDs/owners/hash identities and scoped calculations, found no required correction,
 and accepted these source-audit records only. No compiler/candidate/domain
 certification, unread-work transfer or fixture/runner repair is implied.
+
+The shared reconciliation also records80 additional runtime-primary outcomes;
+these do not increase this task's audited primary count. The six finite new
+follow-ups preserve explicit source-admission/package boundaries. Other assigned
+units here remain audit work.

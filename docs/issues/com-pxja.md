@@ -1,0 +1,25 @@
+---
+id: com-pxja
+status: open
+deps: []
+links: []
+created: 2026-10-27T19:59:55Z
+type: task
+priority: 2
+assignee: Koji Murata
+tags: [frontend, generics, verification]
+---
+# Clarify constructor sibling inference under forward type resolution
+
+## Finite Question and Original Intent
+
+Source-only test audit at compiler9665094d/spec5bd65a5. `tests/fixtures/run/aggregate_infer_recorded_fields.pw` uses `<Measurement low=0 high=values.count() />` and reversed attribute order. Golden0/3/1/3 is arithmetically correct if admitted. spec02:47 resolves types forward from already available information; body-checking permits provisional inference but does not expressly establish this later-sibling rule. Do not label either backward inference or rejection as adopted merely from current source success.
+
+Original f752b89f91341fe1511b561100005657b293441f added exactly this positive and `tests/fixtures/reject/aggregate_infer_literal_range.pw` with low256 preceding high=limit()->U8, plus a range-error companion. Both intentionally use all recorded field terms, so a future migration must preserve legitimate field mapping/range coverage without treating a different type mismatch as the same rejection. The original commit predates the current explicit forward-resolution contract.
+
+## Deliverable and Guarantees
+
+Derive whether a selected constructor signature may defer an earlier unresolved literal while collecting later sibling argument types. Distinguish available expected type/explicit Measurement[U64], later concrete count input, and ambiguous overload rescue. Determine same rule for ordinary calls and factory attributes; do not invent a block- or constructor-only exception. If current spec/design do not decide this source acceptance, obtain user judgment before changing it. Preserve source-order evaluation and one-time effects regardless of typing strategy.
+
+Exact positive and paired rejection above only; bare generic-owner factory shorthand is separately com-owb3 and must not obscure the inference question. Produce agreed positive/reject scenarios and finite repair ownership, then TDD/independent review for actual implementation. Evidence: meta/evidence/test-audit/scoped-reviews/run-head-0087.json. No source/test edits or actual compiler execution occurred in audit; other source-admission units remain audit work.
+
