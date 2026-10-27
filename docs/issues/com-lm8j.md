@@ -83,3 +83,7 @@ Batch0034 adds run/any_box_value_semantics.pw/.out for optional comment precisio
 ## Explicit Ordinary-Function Enum-Copy Comment
 
 Batch0035 adds run/array_enum_payload_function_copy.pw/.out for optional pipeline-description precision. Its ordinary function argument/append/enum-payload regression remains useful, but its comment describes ordinary LLVM lowering versus Mid as competing function paths. The adopted backend consumes canonical Mid for ordinary functions too. Preserve the non-main ownership/source path without claiming an AST backend or duplicating an obsolete pipeline authority. This source-admission audit does not newly certify its runtime/memory outcome.
+
+## Explicit Same-Named Assignment Identity Comment
+
+Batch0036 adds run/assign_same_named_type.pw/.out for optional explanation precision. Its same declaration and same complete Optional/Result instances should reassign, but the comment same head name implies same id is not the general identity rule. Nominal owner and all type arguments remain part of identity. Preserve the exact contextual reassignment regression without endorsing head-only type compatibility.

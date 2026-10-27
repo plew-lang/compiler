@@ -89,3 +89,7 @@ Batch0034 adds exactly run/{ambient_core,any_direct_optional_match,any_for_gener
 ## Explicit Optional Existential and Sendability Admission Producers
 
 Batch0035 adds exactly run/{any_optional_covariant_erasure,any_optional_self_member_return,any_sendable_erasure,any_single_letter_trait_optional_self}.pw/.out. Some(v=...) producers and named v patterns differ from adopted value. Preserve direct existential guarantee erasure, direct Self dispatch and legal element/variant boxing contrasts under coherent label migration. All four roots already have separate forbidden container/nominal Self-result behavior in com-vp0o, so fixing labels alone does not certify admission. No new covariance or sendability-container lift is adopted.
+
+## Explicit Forward Array and Reassignment Admission Producers
+
+Batch0036 adds exactly run/{array_forward_element_context,assign_same_named_type}.pw/.out. Some(v=...) and named v patterns use current rather than adopted value payload label. Preserve already-grounded first-element context into later None, wrapped/branch/match/empty child arrays and contextual generic reassignment. The former root is already exact com-bfvd panic setup scope; coherent label migration alone does not establish all adopted source admission. No later-sibling backward inference is adopted.
