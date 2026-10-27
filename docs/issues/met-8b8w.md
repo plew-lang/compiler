@@ -35,3 +35,13 @@ Remove argument-count-only form selection, compiler-owned AST decoding on migrat
 Use valid bare/configured/empty-parenthesized current providers, original spans, incidental print, compatible-unit state, incompatible Syntax graphs, invocation order, partial failure/no publication and fresh/stale/missing receipt controls. Exercise gen then ordinary check/build/run admission, with standard gen/dependency/normal/sanitizer/fixed-point/performance gates as applicable at milestones. Formal self-compilation target remains below 7 seconds.
 
 No compiler/test/performance execution was performed while splitting this scope. Close only with actual revision/scope, final-consumer evidence and replaced-path removal. Retain new macro public-form work in the parent; a current-form receipt/handoff is not proof of that future declaration/role implementation.
+
+## Test Audit Evidence
+
+Scoped audit at compiler test/source baseline `9665094d` is saved in
+[review dispositions](../../../evidence/test-audit/scoped-reviews/disposition.json).
+Driver findings 4/6 identify invalid legacy provider shape in privatefield and
+missing same-provider state / bare-versus-empty-parenthesized controls. These
+are evidence for this existing scope, not new macro-role syntax or audit closure
+prerequisites. Recover original private-access intent under ordinary factory
+visibility; do not preserve obsolete blanket private-field rejection by accident.

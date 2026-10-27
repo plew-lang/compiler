@@ -1,6 +1,6 @@
 ---
 id: com-e713
-status: open
+status: in_progress
 deps: [com-5by1, com-ouh2]
 links: []
 created: 2026-10-26T12:48:12Z
@@ -49,3 +49,16 @@ repairs. Required follow-ups stay open under their responsible area. Save exact
 inventory revision, assertion dispositions, grounds and scoped independent review.
 Completion means the assigned finite audit is reconciled, not zero unknown bugs,
 all future features implemented or all resulting defects already fixed.
+
+## Scoped Audit Checkpoint
+
+Discovery/routing com-ouh2 is complete at source/test baseline `9665094d`.
+The [finite plan](../../../evidence/test-audit/audit-plan.json) assigns exact
+obligation IDs and batches; every assigned bundle still requires reconciliation.
+[Independent partial review](../../../evidence/test-audit/scoped-reviews/review-frontend.json)
+names inspected scopes, normative grounds and unconfirmed boundaries.
+[Finding dispositions](../../../evidence/test-audit/scoped-reviews/disposition.json)
+route finite repairs separately. No compiler, expectation, test or runner changed;
+no real compiler/full suite was executed. This is not a full batch/domain closure.
+Reuse only the named assertions with matching hashes; uninspected inputs remain
+in this audit rather than being converted to an external coverage task.

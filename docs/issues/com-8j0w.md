@@ -24,3 +24,12 @@ Record current support and source requirements for each entry/storage case, clos
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Mixed: split current subset**.
 
 Currently admitted process/main/exit and non-generic storage controls are com-cgdk; initializer ordering is com-fkxl. Absent new Process/ExitCode API forms and generic stored assoc are not added; specified generic stored-assoc rejection remains.
+
+## Test Audit Evidence
+
+Scoped audit at compiler test/source baseline `9665094d` is saved in
+[review dispositions](../../../evidence/test-audit/scoped-reviews/disposition.json).
+Frontend F6 classifies argCount/argAt argument tests as old admitted-subset
+regressions, not current Process.args/ExitCode API conformance. New API migration
+remains in this parent; it is not a fixture-only expectation correction or an
+extra requirement for the admitted-subset child com-cgdk.
