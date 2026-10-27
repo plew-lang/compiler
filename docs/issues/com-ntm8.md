@@ -135,3 +135,11 @@ return_unreachable_type.pw now violates the source-after-return rule before its 
 Batch0027 adds exactly reject/tc_generic_arg_mismatch.pw and tc_generic_payload_value.pw. Both use Some(v=...) while adopted Optional declares value. Status-only rejection can survive a lost generic-instance/payload-type gate through unrelated wrong-label rejection. Original6541be59/cf3e07e4 intent is generic argument identity versus expected payload substitution, respectively. Isolate both under coherent met-2wca migration with positive grounded payload controls.
 
 struct_pattern_type_mismatch.pw uses undeclared P, but original539c37a8 deliberately covers unknown/nonstruct pattern crash-to-clean rejection. Keep that original guarantee; a known-struct/wrong-subject contrast or precise reason is optional coverage, not a newly proved mandatory mask merely because P is absent.
+
+## Explicit Optional-Try Rejection and Dead-Operator Purposes
+
+Batch0030 adds exactly reject/try_on_optional.pw. Some(v=...) can reject for an unrelated adopted payload-label failure if the intended Result-only try gate regresses; preserve actual Optional versus Result early-return semantics through met-2wca migration and selected reason.
+
+The exact type_operator_reject_dead_{block_59,if_68,match_77}.pw and type_operator_return_dead_invalid_add.pw originally799bc300 check bad operators after a transfer. Adopted spec11 now forbids every such source suffix. Reclassify/retain/delete their optional old purpose without demanding additional operator diagnostics after the decisive transfer error. Live-invalid operator control stays meaningful.
+
+The fully read supplemental run/source_operator_literal_context.pw/.out has two bare for operation loops without an existing mutable binding (spec11). Preserve closed first-source operator selection, contextual operands, refusal to repair missing frozen selection and comparison Bool projection through valid loop bindings. This is one exact positive setup pair, not an all-for migration; no fixture was executed or edited.

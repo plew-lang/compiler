@@ -108,3 +108,7 @@ Batch0026 adds exactly run/source_typing_context_closure.pw/.out and source_valu
 ## Explicit Required-Field Negative and Supertrait-Proof Control
 
 Batch0027 adds exactly reject/struct_required_array_field.pw/.err and supplemental run/declaration_supertrait_proof.pw/.out. Both use legacy unimported ordinary panic. Preserve the missing required Array field reason in the first; preserve inherited/conferred path owners, distinct trait instances, freeze/thaw proof equality and absence of execution preparation/destruction in the second. These are representative roots34/35, not executed guards, full source-service certification or an all-internal migration.
+
+## Explicit Type-Declaration and Operator-Source Controls
+
+Batch0030 adds exactly supplemental run/{type_declaration_publication,type_term_closedness,source_operator_literal_context}.pw/.out, whose guards use ordinary panic without its explicit Core import. Preserve atomic declaration publication/failure isolation, later-writer closure and Arena branch independence; recursive type closedness including unknown future children and snapshot stability; closed source operator selection and refusal to repair removed selections. These are representative roots36/37/38 only, not executed guards or complete source-service certification. The operator control also needs its exact loop-binding setup disposition in com-ntm8.

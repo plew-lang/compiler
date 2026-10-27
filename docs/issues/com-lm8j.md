@@ -67,3 +67,7 @@ Batch0027 adds reject/tc_dict_key_type.pw for optional comment precision. Its .a
 ## Explicit Eager Cycle Purpose Comment
 
 Batch0029 adds reject/trait_subject_cycle_generic_active_view.pw as optional purpose/comment reclassification. Bare A→B plus bundle E B→A is already rejected eagerly at declaration consistency, before the generic view body matters (spec09). Preserve the rejection but do not credit it as evidence that the generic body was visited. Neighboring source-set-only cycle tests supply the distinct late view obligation; no duplicate mandatory fixture or first-error recovery rule is required.
+
+## Explicit Try Primitive Conversion Comment
+
+Batch0030 adds reject/try_error_type.pw for optional comment precision. The valid rejection is absence of From[String] on the I64 target, not absence of all from factories merely because I64 is primitive. Preserve the same error-type conversion negative and avoid introducing a primitive-only exception.

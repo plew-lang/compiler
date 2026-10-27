@@ -77,3 +77,7 @@ Batch0028 adds exactly supplemental run/trait_method_result_context.pw/.out. abs
 ## Explicit Shared-Witness Optional and Protocol Negatives
 
 Batch0029 adds exactly reject/trait_subject_chain_conflict_{existential_enum,protocol,protocol_bound}.pw/.err. Their Some(v=...) producers differ from adopted value. Preserve ambiguity inside shared witness bodies through generic erasure and direct/generic iteration protocol calls; the specific ambiguity companions must not pass on wrong-label rejection. The enum whole-container conversion has its separate com-vp0o setup disposition. No implicit label alias or new primary positive credit is adopted.
+
+## Explicit Optional-Try Negative and Mapping Controls
+
+Batch0030 adds exactly reject/try_on_optional.pw and supplemental run/{iter_map_retype,iter_for_map}.pw/.out. Their Some(v=...) producers need coherent adopted value-label migration. Preserve Result-only try rejection and generic Iterator map output-type retyping (five Bool outputs versus three mapped I64 outputs). com-ntm8 owns selected rejection isolation; no unread mapper corpus or new primary admission/outcome credit is included.

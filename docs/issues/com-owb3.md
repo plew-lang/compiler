@@ -88,3 +88,7 @@ Batch0024 adds run/ref_arrow_method.pw/.out, whose Box[T] generic has a bare pub
 ## Explicit Struct-Pattern and Generic-Payload Controls
 
 Batch0027 adds supplemental run/{struct_destructure_stmt,struct_pattern,generic_enum_payload_context}.pw/.out. Each uses the same unresolved bare generic pub impl Box { factory } publication marker. Preserve statement punning/rename/assignment/discard and grounded generic fields, struct match payload/value results, and contextual Optional/Box literal inference through the eventual canonical publication ruling. The last pair also has current Some(v=...) producers/patterns, owned by met-2wca. These are qualified source controls, not adopted-clean proofs or completed primary outcome/admission units.
+
+## Explicit Try-From Generic Argument Control
+
+Batch0030 adds supplemental run/try_from_generic_arg_match.pw/.out. Its pub impl Box {factory} repeats the unresolved bare generic publication shape. Preserve correctly matched Box[String] From factory conversion and error55 alongside the mismatch negative through the eventual canonical publication ruling; no adopted shorthand is inferred from historical acceptance.
