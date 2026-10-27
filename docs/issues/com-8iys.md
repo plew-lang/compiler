@@ -55,8 +55,8 @@ all future features implemented or all resulting defects already fixed.
 ## Reconciled Outcome Subset
 
 [Cross-owner outcome reconciliation](../../../evidence/test-audit/scoped-reviews/outcome-reconciliation.json)
-now covers195 exact primary outcome units here: all43 runtime-owned panic,
-all93 part and first59 run outcomes. Five complete outcome batches0084–0088
+now covers235 exact primary outcome units here: all43 runtime-owned panic,
+all93 part and first99 run outcomes. Six complete outcome batches0084–0089
 and seven scattered internal outcomes across owners are source/oracle/runner
 reviews, not actual compiler/program execution or source-admission certification.
 All selected project inputs were read; part output arithmetic matches authored
@@ -75,5 +75,15 @@ independent reconciliation review accepted exact scope, hashes, oracles and
 finite finding owners with no required audit correction. This task remains
 in_progress; added35 independent reconciliation accepted the limited source
 audit (initial partial report exposure explicitly retained) and batch0089 is
-being inspected. Batch0088 explicitly extends com-vp0o to nine roots and
+independently reconciled with no substantive required audit correction. Batch0088 explicitly extends com-vp0o to nine roots and
 com-bfvd to seven representatives, with no repair/execution claim.
+
+Batch0089 assigns com-z4ns external Array implementation placement, com-4vr8
+owned-String retirement detection, com-lm8j finite stale descriptions and
+com-j0a9 Array/Buffer swap-removal surface reconciliation. It explicitly adds
+one panic root and three bare-factory roots to their existing intake scopes;
+all other source-admission units remain audit work. No repair is inferred.
+
+Batch0089 independent review confirms the limited40 source-audit scope and
+finite findings; one administrative historical-owner count typo was corrected
+from the actual nine rows. This task and whole audit remain in_progress.

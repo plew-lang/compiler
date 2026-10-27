@@ -9,7 +9,7 @@ priority: 2
 assignee: Koji Murata
 tags: [frontend, runtime, verification]
 ---
-# Reconcile ordinary panic function admission in seven representative fixtures
+# Reconcile ordinary panic function admission in eight representative fixtures
 
 ## Contract, Evidence and Scope
 
@@ -42,3 +42,11 @@ ran or trapped. Its nominal-Self/container conversion reconciliation is com-vp0o
 not part of implementing panic. Seven representative roots do not constitute an
 all-source migration inventory; imported guards still require the bounded
 handoff investigation above.
+
+## Explicit Eighth Representative Root
+
+Batch0089 adds `tests/fixtures/run/array_forward_element_context.pw`: three
+positive-control fallback calls use panic without importing the ordinary Core
+function. Preserve array forward context, generic String payload and nested
+empty-array checks; no failure branch was executed by this audit. This expands
+only the named representative input set, not the complete compiler migration.

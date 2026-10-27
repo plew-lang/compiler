@@ -1,0 +1,29 @@
+---
+id: com-lm8j
+status: open
+deps: []
+links: []
+created: 2026-10-27T20:14:26Z
+type: chore
+priority: 3
+assignee: Koji Murata
+tags: [verification, tooling]
+---
+# Align inspected fixture descriptions with current execution contracts
+
+## Finite Documentation Correction
+
+Selected source-audit descriptions assert mechanisms no longer owned by their current tests. Correct only the named comments/claim boundaries while retaining input behavior and meaningful assertions:
+
+- run/assoc_val.pw: stored eager associated value, not a zeroarg function reevaluated per access; original fee81cae explains historical intent. Constants/read/composition output remains valid, not a startup-effect test.
+- run/array_enum_payload_function_copy.pw: non-main call remains useful; no retired separate direct-LLVM path is claimed when bodies all require Mid.
+- run/ambient_core.pw: fixed language-item names/syntax operations are ambient, not all of Core.
+- run/any_box_value_semantics.pw, any_basic.pw, any_generic_param.pw, any_array_covariant_erasure.pw: logical value independence, not mandatory immediate deep copies or fixed8/16-byte physical layouts.
+- run/any_for_iterator.pw: iterator() produces the protocol iterator copy; do not assert original binding state from loop output alone.
+- part/trait_owner_reexport_generic/Main.pw: current signature has no associated projection; part/trait_owner_reexport_type is the separate concrete projection control.
+- part/reexport/Barrel.pw: pub use supplies the local binding as well as forwarding; the consumer does not observe local binding in this fixture.
+
+## Completion and Limits
+
+Use spec/design as authority, preserve original limited regression purposes and links to separate stronger controls. Accurate descriptions of a deliberately tested internal representation need not be erased; remove only false current-path claims and wording that promotes an incidental mechanism to a semantic requirement. Actual fixture comment edits belong to repair after audit, no requirement to add every stronger interaction or rewrite outputs. any_array_covariant_erasure admission migration remains com-vp0o; coordinate rather than retain contradicted commentary. Do not add broad startup/ARC requirements to this chore. Verify comment-only diff/unchanged executable inputs, references and independent review; no fabricated TDD RED for prose. Evidence run-head-0087.json, part-tail-0087.json, runtime-batch-0088.json and runtime-batch-0089.json under meta/evidence/test-audit/scoped-reviews. This issue is separate from audit completion.
+

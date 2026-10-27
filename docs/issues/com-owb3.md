@@ -23,9 +23,20 @@ Derive each admission ruling from canonical rules, preserving default memberwise
 
 ## Completion
 
-Three exact rulings, preserved original coverage, finite owned implementation gap if found, relevant RED/GREEN and independent review. Not a whole-corpus generic rewrite. The rest of source-admission audit remains its original work.
+Rulings for all selected forms and exact extended roots, preserved original coverage, finite owned implementation gap if found, relevant RED/GREEN and independent review. Not a whole-corpus generic rewrite. The rest of source-admission audit remains its original work.
 
 
 ## Paired Rejection Setup
 
 `tests/fixtures/partreject/namespace_type_argument/Models.pw` repeats the undeclared `Box[T]` form. Read its Main.pw/Main.err and preserve the intended rejection of type arguments on a namespace; setup migration must not silently replace that reason with an unbound-binder rejection. This exact auxiliary scope accompanies the Box positive, not an audit of all partreject inputs.
+
+## Explicit Three-Root Same-Form Intake Extension
+
+Batch0089 adds bare generic-owner factory markers in exactly
+`tests/fixtures/run/array_generic_field.pw` (Holder),
+`tests/fixtures/run/array_literal_inferred_element.pw` (Box), and
+`tests/fixtures/run/associated_callable_invocation.pw` (Projected). Apply the
+same eventual bare-publication ruling, without conflating them with the
+undeclared Box[T] binder. Preserve their respective generic field, inferred
+array element and associated callable result/control coverage. The rule is
+undecided; no fixture change is authorized merely by current parser behavior.
