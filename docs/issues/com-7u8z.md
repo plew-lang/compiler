@@ -46,3 +46,7 @@ A bounded schema/admission disposition and owned concrete repair work; actual re
 ## Explicit Two-Manifest Admission Extension
 
 Frontend source-admission batch0003 adds exactly `tests/fixtures/part/dirmodule/Plew.toml` and `tests/fixtures/part/importalias/Plew.toml`. Both contain only name, omitting the specified plew version; they exercise directory-root lookup and imported nominal aliases respectively. The finite scope is now fourteen manifests. Preserve those path/binding purposes while resolving the existing canonical schema question. This does not absorb unread package admission work or prove current fixture rejection.
+
+## Explicit Partial-Pattern Rejection Manifest
+
+Batch0005 adds exactly `tests/fixtures/partreject/enumaliaspartial/Plew.toml` (name only), bringing the selected scope to fifteen manifests. Preserve Main.err's incomplete variant-field decomposition reason and imported enum alias positive; a package-version/schema setup failure is not that rejection. Source/expectation files are read as context, not transferred unread to this investigation.

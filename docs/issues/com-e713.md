@@ -101,3 +101,11 @@ The explicit com-jbau extension adds eight ambient roots to the original nine, p
 frontend-part-0003.json and review-frontend-part-0003.json add36 source-admission units (128 full project inputs/785 lines), with31 ordinary source-shape grounds and5 qualified current/historical roots. Optional.Some(v=...) versus adopted Some(value:T) was found during parent reconciliation, independently confirmed and assigned finite met-2wca; no whole-Std or capability migration was silently transferred. Repeated publication and two manifests retain explicit met-4slo/com-7u8z scopes, old deinit met-2t3l, supplemental partdiamond reason com-ntm8. Reviewer-required qualification wording was corrected and accepted.
 
 Primary inspected count is90 (four outcomes plus86 admissions). Reconciliation of the36 plus three previously audited panic admissions and one span outcome completes exact batch0003. There are eight complete source-audit batches across owners; no new outcome count, execution, repair or frontend closure. Unread assigned units remain audit work.
+
+## Remaining Part Admissions and First Rejection Batch
+
+frontend-part-0004.json / review-frontend-part-0004.json reconcile40 more admissions (153 files/538 lines); frontend-batch-0005.json / review-frontend-batch-0005.json add17 admissions and23 source-rejection units (149 files/674 lines). These complete source-only admission inspection of all93 part fixtures, separate from their93 prior outcome units. Manifest setup and exact generic binder/omitted-bound questions retain finite owners.
+
+New finite source-oracle questions are met-l1u5 (one internal-module versus package-public API closure rejection) and met-bejv (two extension identity/binding assumptions); two bad outer-print reason controls extend com-ntm8 and one enumaliaspartial manifest extends com-7u8z to15. Root-authored API checks do not certify all imported Std internals. Final independent review accepted both finite reports with no required correction. Contextual keyword reference is spec01-overview25, refining a broad report reference to spec04.
+
+This task has170 inspected primary units:4 outcomes,143 admissions and23 rejections. Cross-owner total408/ten complete plan batches. No compiler execution, source repair, whole-frontend or final corpus closure. Remaining negative/batch units remain this audit's work.

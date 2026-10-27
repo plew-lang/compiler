@@ -47,3 +47,7 @@ classification remains com-fsuq, and audit repair remains separate.
 ## Explicit Part-Diamond Reason Control
 
 Source-admission batch0003 independently reads exactly `tests/fixtures/partreject/partdiamond/{Main,A,B,C}.pw` as the paired root/part control. Main imports print but calls `print(1)` without a numeric type context and has no Main.err. The loader currently rejects the repeated part parent first; if that check regresses, forward-only numeric inference can still reject the bare literal, so generic rejection is insufficient evidence of diamond detection. Isolate the diamond reason and keep the single-parent positive. This adds one exact control to the existing finite diagnostic work, not the unread partreject corpus. No fixture was run or repaired.
+
+## Explicit Two Visibility-Reason Controls
+
+Batch0005 adds exactly `tests/fixtures/partreject/crossmoduleprivate/{Main,Pub,Priv}.pw` and `tests/fixtures/partreject/crossmoduleprivateglobal/{Main,Gl}.pw`. Both Main files use `print(value: ...)` while the selected Std print has an unlabeled parameter. Neither has Main.err. Even if visibility protection regresses, unrelated outer-call label rejection can still satisfy the generic rejection worker. Recover and preserve the original cross-module private callable/global isolation, isolate intended diagnostics, and use valid outer contexts with reachable public positives. No actual candidate or controlled execution is claimed. This exact five-file extension is separate from common failure classification and the unread no-reason corpus.
