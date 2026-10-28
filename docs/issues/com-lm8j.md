@@ -223,3 +223,23 @@ Batch0079 optionally qualifies exactly run/{type_arena_push,u64_literal,unique_r
 ## Weak Reference Cycle and Safety Claim Precision
 
 Batch0081 optionally qualifies exactly run/weakref_arc.pw: early prose says Child-before-Parent, while later explanation/current golden70→80 is Parent-before-Child after selected949e7b4 change. Normal deinit markers observe selected owner release/count/order; they do not alone prove absence of all UAF/leaks or fixed RC decrement implementation. Historical ASan-clean comment is not fresh execution. Preserve fixture/golden and weak ownership purpose, with separate sanitizer boundaries; no mandatory new safety matrix.
+
+## Collection Safety and Value Receiver Header Precision
+
+Batch0080 optionally qualifies exactly run/{user_collection,value_branch_receiver}.pw. Historical ASan/leaked-safe and concrete RC/commit mechanism prose is not fresh verification or proved by functional stdout. Current checked source facts and retained selection own branch-result receiver type/dispatch; backend re-solving is historical, not adopted authority. Preserve all output/assertion purposes without a new mandatory lifecycle/dispatch matrix.
+
+## Generated Provider Comment Precision
+
+Batch0001 remaining gen optionally qualifies directiveargs/directivealias project comments (App/Left/Right): public configured factories do not require every field public. enumeqtag module-0 collision and structdictkey old backend Eq/layout prose describe history/implementation, not adopted restrictions or fresh architecture proof. Preserve current consumer-root Hasher binding and current valid provider lanes; no new mandatory coverage matrix.
+
+## Buffer Observable Guarantees and Mechanism Prose
+
+Batch0091 optionally qualifies exactly run/{buffer_cow_field,buffer_insert,buffer_nested,buffer_removal,buffer_string,buffer_struct_field}.pw/.out. Preserve values, sizes, alias independence and actually owned lifetime purposes. Normal stdout is not proof of all retain/drop counts, leaked/freed memory, exact header/growth/memmove mechanisms or a fresh ASan result. A returned removeLast String is owned by caller, so buffer_string prose must not imply immediate destruction of the returned element. Existing0039 buffer_floor/buffer_index/c_reserved_idents descriptions are exact reuse, not three further intakes. Literal-element retirement detection is separately mandatory com-4vr8; do not reduce that repair to wording.
+
+## Async Teardown Source and Completion Responsibilities
+
+Batch0090 optionally qualifies exactly run/async_arc_teardown.pw/.out. Its header attributes all source-local release to final resolve, while the current MidAsync completion tail runs after source Drop and only releases its activation Promise/frame responsibility. Preserve the four output lines and copied String/temporary/named Promise lifetime purpose. Normal stdout is not a fresh LSan result or exact retain-count proof; do not remove a legitimate memory-check goal or substitute prose for detection. No new mandatory case matrix or production repair in this audit.
+
+## Closure Parameter Cleanup Description
+
+Batch0092 optionally qualifies exactly run/closure_param_borrow_arc.pw/.out. Lengths15/5/3 after repeated closure parameter/fallthrough calls preserve the value/retention regression, but do not count exact +0/per-activation retain/unwind operations or prove all memory safety. Align any mechanism prose with current source-owned call/environment cleanup rather than deleting legitimate historical context. cast is existing0039 exact reuse. closure_array_for_arc two-word historical payload context and two concrete release markers are retained: the preliminary universal-layout concern was withdrawn, with no new intake or mandatory matrix.

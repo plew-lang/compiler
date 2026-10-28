@@ -231,3 +231,7 @@ Batch0076 adds exactly run/{temp_match_scrutinee_deinit,temp_optchain_deinit}.pw
 ## Explicit Weak Upgrade and While Binding Optional Labels
 
 Batch0081 adds exactly run/{weakref_arc,weakref_dance_deferred,weakref_match_temp,weakref_upgrade_match,while_let}.pw/.out. Migrate standard Some producers/named v patterns and while_let Some(val v) punning to explicit value label while retaining local v and custom Cell.v/Node.x/Counter.n fields. Preserve alive/dead upgraded owner, deferred last strong release, direct temporary match and per-iteration condition binding purposes; reference/deinit API migration is separately owned.
+
+## Explicit Unused Generic Optional Constructor Label
+
+Batch0080 adds exactly run/unused_generic_enum_context.pw/.out. Standard Optional.Some v producer migrates to value, preserving unused generic T under explicit Optional[T] context and whole-target declaration checking. Empty stdout is deliberate source checking, not lazy-run body-demand or runtime payload proof.

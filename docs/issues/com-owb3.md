@@ -196,3 +196,7 @@ Batch0072 adds exactly run/struct_generic_struct_field.pw/.out: bare pub impl Bo
 ## Explicit Same-Head Error Conversion Factory Publication
 
 Batch0078 adds exactly run/{try_from_generic_convert,try_from_receiver_identity}.pw/.out with bare pub impl Dist factory publication. Same unresolved generic-owner marker ruling as existing bare cases, not the confirmed unbound explicit Box[T] form. Preserve Dist[Meters] to Dist[Feet] conversion and earlier same-source Dist[Yards] receiver contrast, with selected full semantic instance/witness retained to final use. try_from_generic_arg_match Box is already exact0030 reuse, not a third new root. Do not settle shorthand from current acceptance or auto rewrite during audit.
+
+## Explicit User Collection and Generic Value Copy Factory Publication
+
+Batch0080 adds exactly run/{user_collection,value_semantics_generic}.pw/.out. Bare generic owner pub impl Stack/Box factory marker shares the existing unresolved publication shorthand question; neither is undeclared explicit T in impl Box[T]. Preserve floor-only Stack operations and copied Box[Array[I32]] mutation independence. No shorthand validity chosen from current acceptance.

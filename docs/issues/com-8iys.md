@@ -52,38 +52,12 @@ inventory revision, assertion dispositions, grounds and scoped independent revie
 Completion means the assigned finite audit is reconciled, not zero unknown bugs,
 all future features implemented or all resulting defects already fixed.
 
-## Reconciled Outcome Subset
+## Current Reconciled Subset
 
-[Cross-owner outcome reconciliation](../../../evidence/test-audit/scoped-reviews/outcome-reconciliation.json)
-now covers235 exact primary outcome units here: all43 runtime-owned panic,
-all93 part and first99 run outcomes. Six complete outcome batches0084–0089
-and seven scattered internal outcomes across owners are source/oracle/runner
-reviews, not actual compiler/program execution or source-admission certification.
-All selected project inputs were read; part output arithmetic matches authored
-goldens, conditional on explicitly recorded admission qualifications.
+Primary audit count:355 of1529 assigned obligations, by exact role{'observed-behavior': 352, 'llvm-literal': 3}. Exact role IDs, report/receipt hashes and all finite qualifications are indexed by meta/evidence/test-audit/scoped-reviews/{outcome-reconciliation,support-reconciliation}.json. Source-admission/rejection work has its separate frontend owner and is not counted here.
 
-Six new finite follow-ups distinguish five historical existential success
-admissions (com-vp0o), Dictionary replacement observability (com-9hyu), explicit
-versus bare impl binders (com-owb3), unresolved omitted trait inputs (com-yhap),
-constructor sibling inference (com-pxja), and selected manifest schema consistency
-(com-7u8z). Original useful coverage is retained in the required repair contracts;
-no test or runner was repaired. com-ntm8 explicitly extends four named reason
-controls. Other plan units remain audit work, not transferred as vague findings.
+Completed batches0084–0092 and scattered prior internal outcomes retain their finite source/contract scope. Every selected input/companion, original purpose, canonical oracle, real runner mode and finite detection boundary was inspected. No actual compiler, generated program, native sanitizer or performance execution occurred; accepted static evidence does not certify runtime repair or all memory safety.
 
-The earlier87-unit independent acceptance retains its exact scope. Added80-unit
-independent reconciliation review accepted exact scope, hashes, oracles and
-finite finding owners with no required audit correction. This task remains
-in_progress; added35 independent reconciliation accepted the limited source
-audit (initial partial report exposure explicitly retained) and batch0089 is
-independently reconciled with no substantive required audit correction. Batch0088 explicitly extends com-vp0o to nine roots and
-com-bfvd to seven representatives, with no repair/execution claim.
+Source/API migrations remain qualified under their existing exact/broad owners. Fixed module-wide LLVM predicates reuse com-pshx; they are not target-specific lowering certificates. Existing com-4vr8 now owns exact buffer_cow_field/buffer_removal String retirement detection in addition to its original array regression. New met-6zp3 owns indistinguishable explicit destruction/result markers in one via-lifetime fixture's direct/via/generic paths. Useful value/size/CoW/default-order checks remain preserved; neither source-backed gap is a reproduced compiler memory fault. Other finite owners are canonical in disposition.json, not a second manual progress list.
 
-Batch0089 assigns com-z4ns external Array implementation placement, com-4vr8
-owned-String retirement detection, com-lm8j finite stale descriptions and
-com-j0a9 Array/Buffer swap-removal surface reconciliation. It explicitly adds
-one panic root and three bare-factory roots to their existing intake scopes;
-all other source-admission units remain audit work. No repair is inferred.
-
-Batch0089 independent review confirms the limited40 source-audit scope and
-finite findings; one administrative historical-owner count typo was corrected
-from the actual nine rows. This task and whole audit remain in_progress.
+All remaining assigned units stay this audit's work. Next is batch0093 onward, followed by area/final reconciliation; this task remains in_progress. No repair, phase-three completion, main/seed or whole-corpus certification follows from these checkpoints.

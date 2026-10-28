@@ -284,3 +284,15 @@ Batch0079 adds exactly run/{type_collection_environment,type_parameter_name_inde
 ## Explicit Projection Normalization Evidence Guard
 
 Batch0081 adds exactly run/witness_projection_normalization_evidence.pw/.out, new run representative root252 after0079. Ordinary unimported panic fallback must become explicit imported Core function without weakening six-mode valid/missing/foreign/incorrect source/proof/output normalization evidence and witness identity assertions. One root with two distinct source/observed obligations, not two new roots or actual execution.
+
+## Explicit Value Context and Recorded Selection Guards
+
+Batch0080 adds exactly run/{value_control_binding_context,value_control_context_authority,verify_call_selected_authority}.pw/.out, three new representative run roots253–255 after0081 root252. Preserve source construction/binding commitment, repeated-context stability and before/after fork independence, recorded selected-call identity/visibility and no-reconstruction corruption checks through coherent explicit Core panic import. Six source/observed roles do not double-count the three roots; no execution or broader area certification.
+
+## Explicit Diagnostic Checker and Helper Panic Guards
+
+Batch0082 adds exactly the generated panic case in tests/tooling/test-unreachable-diagnostics.py and manual tests/compiler/frontend/{FrontendInputs,InvariantDiagnostics,StringLiteralValues}.pw (with their actual companion outputs where present). These four helper/generated scopes are not new registered run roots. Import ordinary Core panic explicitly, including the legacy statement in StringLiteralValues, while preserving explicit-transfer suffix error discrimination, returning failed-preparation/invariant guards and decoded literal/NUL assertions. No audit-time repair or unrelated name-resolution failure as RED.
+
+## Explicit Generated Raw String Provider Guards
+
+Batch0001 remaining gen intake adds exactly tests/fixtures/gen/stringbraces/App.pw, including its inline Inspect provider. Two fallback legacy unimported panic statements in that provider require explicit ordinary Core panic import/function calls. Preserve raw annotated quoted/escaped brace source slices and provider failure discrimination; no new run representative ordinal or audit-time generation/execution.

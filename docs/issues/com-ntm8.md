@@ -289,3 +289,11 @@ Batch0076 adds exactly run/temp_for_iterable_deinit.pw/.out. Bare for b has no p
 ## Explicit Trait Member Owner Loop Binding
 
 Batch0077 adds exactly run/trait_member_owner_identity.pw/.out, bare for name without an earlier mutable name destination. Use explicit new binding while retaining separate secondHidden/foreignHidden requested-body refusal and no-successful-fact publication assertions. No general scope/iteration rewrite or audit-time fixture change.
+
+## Explicit Value Context Loop Bindings
+
+Batch0080 adds exactly run/{value_control_binding_context,value_control_context_authority}.pw/.out, four bare for sites: conversion/entry and entry/mode respectively, none having prior mutable destinations. Preserve 2entry×2binding / 2entry×4mode context contrasts and saved conversion evidence while making new loop bindings explicit. No audit-time fixture change or implicit namespace/inference permission.
+
+## Explicit Literal Helper Iteration Bindings
+
+Batch0082 adds exactly tests/compiler/frontend/StringLiteralValues.pw inspect bare byte loop and expect bare index loop, neither having an earlier mutable destination. Preserve decoded byte counts, escapes/NUL and later successful decode observations while making intended new bindings explicit. This is one manual support helper, not a new registered fixture or a whole-loop migration.

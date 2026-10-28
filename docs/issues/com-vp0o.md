@@ -83,3 +83,7 @@ Batch0061 adds exactly run/mid_storage_optional_conversion.pw/.out. Whole existi
 ## Explicit Structural Conversion Owner Oracle
 
 Batch0071 adds exactly run/source_structural_owner_evidence.pw/.out. Its constructed Array/Wrap conversion plans expect nominal existential lift success, contrary to spec06 invariance. Internal fake Array/Lang module setup is not itself an ordinary source covariance rule. Preserve record-element conversion, retained proof children, corrupt/missing-plan rejection and no runtime-finalization purpose in a reconciled permitted context; direct boxing/structural records differ from forbidden nominal lift. No automatic golden edit, semantic exception or compiler/test repair during audit.
+
+## Explicit Committed Array Binding Internal Conversion Oracle
+
+Batch0080 adds exactly run/value_control_binding_context.pw/.out. Retaining committed source Array[Square] is useful, but tcCheckValue/callArgumentConversion and saved ArrayRepack success to Array[any Shape] for the committed container conflict with adopted generic invariance. Separate provisional literal element context from conversion of an already-bound container; preserve source commitment, fork/entry comparisons and evidence-source boundary while reconciling the obsolete internal success oracle. Not all helper assertions are wrong, and this is no ordinary covariance permission or audit-time golden rewrite.
