@@ -1,6 +1,6 @@
 ---
 id: com-am6u
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-27T02:15:37Z
@@ -37,3 +37,42 @@ one semantic subsystem or an existing implementation project.
 A reproducible API/constructor inventory, explicit coverage/exclusions and sized
 batches have independent review. This task is discovery/planning, not a compiler
 repair, conformance certificate or implementation-milestone prerequisite.
+
+## Discovery Candidate and Scenarios
+
+At compiler ac0ac083 / meta52d02657, the source-only
+[inventory candidate](../../../evidence/compiler-api-audit/README.md) classifies
+all6327 tracked paths and assigns199 production/source-support files /82074lines
+to273 finite source-family ranges. Every included line is assigned once;
+API markers and lexical reference locators are not a resolved call graph or
+completed capability judgment. Hidden zero-API stub, memberwise/default factories,
+native RAII/captures, generated C runtime and generated resource API obligations
+are explicit. The snapshot is pending independent coverage/applicability review.
+
+Discovery scenarios: exact tracked-file classification; hidden/zero API files;
+Plew fn/factory/record/default/extern contexts; C++ headers/private RAII/lambdas;
+Python functions/classes/lambdas and shell ambient environment; runtime/resource
+source templates; resolver/product CLI/build-support entries; third-party,
+standard-library and generated artifacts; actual caller/indirect-state traversal
+and finite splitting when primary line bounds understate the work. Any missing
+actual caller/required-input evidence remains pending, not silently completed by
+locator counts. No compiler/source/test/expectation/runtime/binary modifications
+or product execution. Current dirty binary and caches are preserved.
+
+## Independent Inventory Review and Required Continuation
+
+[Contract-first scope review](../../../evidence/compiler-api-audit/review-inventory-scope.json)
+accepts the exact tracked-file classification, target source hashes, hidden stub,
+generated templates, exclusion grounds and complete line routing. It does not
+accept inventory closure. Parent adopts both evidenced omissions:
+
+- SCOPE-1:600-line chunks are coverage segments, not semantic API families.
+  Replace placeholder responsibility/caller/value/capability/required-input
+  instructions with thin factual records for each real API family; preserve
+  individual unresolved caller identities rather than claim a resolved graph.
+- SCOPE-2:record rough caller/context traversal size per family, not merely
+  primary line counts, and split oversize work before audit execution.
+
+These are remaining inventory work under this task, not compiler repair tasks
+or reasons to defer unread APIs as findings. No task scope, stopping rule or
+specification changed. Inventory is in_progress; com-mmk9 is not yet started.
