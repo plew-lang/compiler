@@ -48,3 +48,7 @@ finite contract/oracle question, not a confirmed compiler bug or an all-cast
 rewrite. The other three named numeric-context controls remain unchanged.
 
 Correction evidence: meta/evidence/test-audit/scoped-reviews/frontend-batch-0032-cast-context-correction.json and its independent receipt preserve the original batch/receipt hashes and replace only this verdict. No source, expected output or runner was changed or executed.
+
+## Explicit Float Lexical and Generic Context Roots
+
+Batch0047 adds exactly run/{float_exponent,float_generic_witness,float_int_literal_ctx,float_literal}.pw/.out. Exponent/generic witness/plain literal roots lack unique F32/F64 context under generic print or generic numeric calls; preserve lexical and witness purposes with explicit context. float_int_literal_ctx separately claims ordinary integer literal becomes F64 in binding/argument/Array/operand/result contexts; spec02 names only integer-family targets, while frontend-handoffs72–74 retains direct-literal cast context only. Recover exact canonical decision before accepting or mechanically rewriting those ordinary contexts; add no implicit numeric conversion/default. Its print(1.5+2) is independently nonunique. Existing float_arith/float_f32 and corrected float_cast intake reused; do not retract permitted direct7 as F32/-7 as F64 controls or replace the pending cast decision with current acceptance.

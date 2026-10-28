@@ -119,3 +119,15 @@ Batch0043 adds exactly run/{declaration_identity_index,default_argument_bindings
 ## Explicit Default Projection and Dictionary Optional Punning
 
 Batch0044 adds exactly run/{default_generator_shared_owner,dict_get,dict_str_value}.pw/.out. Some(val v) is named v-field punning, not positional payload matching. Migrate to Some(value:val v), retaining lexical generator projection, safe dictionary lookup/fallback and String results. Do not change custom field v of unrelated types.
+
+## Explicit Dynamic and Existential Optional Labels
+
+Batch0045 adds exactly run/{dynamic_closure_descriptor_identity,enum_generic_inst_payload,existential_declaration_plan,existential_payload,existential_rebox_evidence}.pw/.out. Current Optional.Some(v=...)/v: patterns and Some(val v) punning migrate to adopted value while local binding names remain. Already exact enum_payload_destructure is reused. Custom Tree.Leaf(v), Holder.Wrap(v), Opt.Some(v) are unrelated authored fields and stay v.
+
+## Explicit Fallible Factory Optional Labels
+
+Batch0046 adds exactly run/{factory_fallible,factory_requirement_fallible}.pw/.out. Optional Some(v=...)/v: patterns migrate adopted value label while custom Pct.v and Result.Ok(value)/Err(error) fields stay. Preserve optional/result success/failure and generic requirement behavior.
+
+## Explicit Final Call Argument Store Optional Producer
+
+Batch0047 adds exactly run/final_call_store_publication.pw/.out. Optional.Some(v=inputs) used by final argument publication needs adopted value label; preserve row-owned ranges, duplicate write rejection and snapshot isolation.

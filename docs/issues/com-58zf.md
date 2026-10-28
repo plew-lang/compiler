@@ -29,3 +29,7 @@ Batch0038 adds exactly run/{buffer_capacity_cow,buffer_cow_field}.pw/.out. Curre
 ## Explicit Eight Buffer Surface Admission Roots
 
 Batch0039 adds exactly run/{buffer_floor,buffer_index,buffer_insert,buffer_metadata,buffer_nested,buffer_removal,buffer_string,buffer_struct_field}.pw/.out. Current Buffer.new associated construction is real public API but differs from adopted named factory. Preserve empty/capacity/growth, scalar/String/nested/struct-field elements, indexing, reserve/insert/remove and logical copy independence through the canonical construction migration. This source-role intake does not certify exact memory layout, element-retirement/sanitizer outcome or all collection performance paths.
+
+## Explicit Final Callable Buffer Field Methods
+
+Batch0047 adds exactly run/{final_callable_generic_field_method,final_callable_trait_field_method}.pw/.out. Buffer.new is a real current public associated API differing from adopted named construction; method/inout/IndexSet receiver T propagation remains meaningful. Reconcile construction through existing finite migration without special-case Buffer type inference or declaring ordinary call syntax illegal.

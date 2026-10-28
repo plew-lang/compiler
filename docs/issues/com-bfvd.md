@@ -152,3 +152,15 @@ Batch0043 adds exactly run/{declaration_codegen_limit_boundary,declaration_conve
 ## Explicit Default Environment and Direct Evidence Guards
 
 Batch0044 adds exactly run/{default_generator_environment,default_generator_source_publication,direct_call_constraint_instantiation}.pw/.out as representative roots86–88. Reconcile ordinary panic admission while retaining lexical module/Self/proof transport, independently published default facts, retained call/conditional/bodyless constraint evidence and missing-proof failures. The three already exact diverging_call_flow/diverging_callable_declarations/diverging_callable_storage roots are reused, not new representatives. Source-only default publication gains no observed-role credit.
+
+## Explicit Dynamic Descriptor and Existential Guards
+
+Batch0045 adds exactly run/{dynamic_closure_descriptor_identity,empty_call_constraint_plan,enum_name_index,existential_callable_result,existential_declaration_plan,existential_implementation_evidence,existential_rebox_evidence}.pw/.out as representative roots89–95. Ordinary panic admission migration preserves independent identity/index/empty-plan/Promise signature/selected witness and proof reuse checks. Dynamic descriptor role is source-only; internally historical existential plan/rebox expectations require separate com-vp0o reconciliation, not mere panic repair.
+
+## Explicit Retag, Symbolic Result and Factory Guards
+
+Batch0046 adds exactly run/{existential_retag_proof,existential_symbolic_result,factory_requirement_fallible,factory_source_declaration_identity}.pw/.out as representative roots96–99. Reconcile ordinary panic while preserving forged retag negative checks, ambient-substitution noninterference, fallible requirement branches and exact factory nominal/foreign-owner assertions. Retag and requirement roots source-only here; no new unassigned outcome certification.
+
+## Explicit Final Call, Body and Publication Guards
+
+Batch0047 adds exactly run/{final_body_demand,final_call_requires_record,final_call_signature_readiness,final_call_store_publication,final_closure_demand,final_dependency_demand,final_for_index,final_witness_demand,finalization_publication}.pw/.out as representative roots100–108. Ordinary panic migration preserves independent missing-record/signature/publication, lazy request/context/terminal-failure and body/stmt index invariants; await index already uses imported assert and is not a panic intake. No guard executed.

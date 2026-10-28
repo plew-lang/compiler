@@ -124,3 +124,15 @@ Batch0041 adds exactly run/conformance_self_projection.pw/.out. Bare pub impl Bo
 ## Explicit Generic Method Ordering Control
 
 Batch0043 adds only supplementary run/default_eval_order_generic_method.pw/.out: bare pub impl Box factory repeats the unresolved generic publication shorthand. Preserve middle omission and explicit-first evaluation purpose when reconciling source. No primary obligation credit or blanket Box[T] undeclared binder rewrite.
+
+## Explicit Dynamic Transform and Existential Wrapper Publication
+
+Batch0045 adds exactly run/{dynamic_call_template_generic_instances,existential_payload}.pw/.out. Bare pub impl Transform/Wrapper factory repeat unresolved generic publication shorthand; keep generic closure signature and existential payload intents separate from this finite source question.
+
+## Explicit Unit-Indexed Factory Publication
+
+Batch0046 adds exactly run/factory_receiver_identity.pw/.out. Bare pub impl Dist factory repeats unresolved generic publication shorthand. Preserve full destination Dist[Feet] versus Dist[Yards] identity and common Dist[Meters] input; do not change into an assumed undeclared Box[T]-binder error.
+
+## Explicit Field and Pattern-Bound Generic Publication
+
+Batch0047 adds exactly run/{field_init_place_arc,final_callable_receiver_pattern_bound}.pw/.out. Bare pub impl Box/Packed factory repeats unresolved shorthand; field_defaults_generic is already exact owned and reused. Preserve field ownership and Packed[Array[T]] binder identity, not an assumed explicit undeclared-binder fix.

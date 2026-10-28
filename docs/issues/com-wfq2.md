@@ -25,3 +25,7 @@ The positive additionally uses foreign I64 as Required; com-z4ns explicitly owns
 ## Explicit Declaration Trait-Assumption Conditional Edge
 
 Batch0043 adds exactly run/declaration_trait_assumptions.pw/.out. Source[Arg] declares no Arg:Required constraint, but impl[P] Source[P] as Middle[P] where P:Required limits an edge to selected instances. Spec08 full-source-range rule forbids this distinct conditional trait-edge feature. The Wrong[Other] Missing oracle exercises that current lane, so preserve legitimate explicit bound/associated output/unconditional path and shrinking repeated-edge purposes while reconciling adopted-valid setup/oracles from original intent. This is not a ban on nominal Box[T]:Source[T] where T:Required or unconditional Middle[Q]:Target[Q] and Cycle edges. No semantic relaxation or automatic deletion is authorized; no compiler/test change or real execution during audit.
+
+## Explicit Mixed Existential Method Condition Edge
+
+Batch0045 adds exactly run/existential_method_condition_mixed_path.pw/.out. Base[T] itself has no T:Marker premise, but impl[T] Base[T] as Derived where T:Marker restricts the edge to selected source instances, prohibited by spec08 full-source-range rule. Preserve mixed hidden associated/caller generic condition proof purpose via legitimate nominal/unconditional paths or explicitly bounded implementation lane. Ordinary nominal Wrapper conditional tests are not this violation.

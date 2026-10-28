@@ -99,3 +99,11 @@ Batch0041 adds run/{closure_shadow_capture,closure_temp_arg_arc}.pw/.out for opt
 ## Optional Dictionary Lowering Comment Precision
 
 Batch0044 records optional comment precision only for run/{dict_compound_assign,dict_str_value,dictionary_subscript}.pw/.out. Literal-key compound assignment is valid; shorthand d[k]=d[k]OPv must not imply reevaluating a nonliteral place/key. Old at/insert lowering descriptions are not authored calls in these fixtures; use selected Index/IndexSet contracts when refreshing prose. No mandatory new behavior test or source change follows from this comment-only observation.
+
+## Optional Enum Migration Comment Precision
+
+Batch0045 adds optional prose-only run/enum_record_form.pw/.out. Its custom Opt.Some(v:T) source is valid, but old brace-form accepted-during-migration comment is not the adopted record-variant syntax contract. Refresh commentary without renaming authored custom v or requiring new behavior coverage.
+
+## Optional Factory and View Resolution Comments
+
+Batch0046 adds optional prose-only run/{factory_gate_valid,extension_overload_view}.pw/.out. Module-private factory is usable from same-module free functions, not only anonymous impl; view overload meaning is decided/retained before backend consumption, not repaired from local spelling there. Current test inputs are legitimate, comments not source rules.

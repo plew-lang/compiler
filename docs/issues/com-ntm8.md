@@ -191,3 +191,15 @@ Batch0043 adds exactly run/{declaration_effect_demand,default_argument_call_temp
 ## Explicit Final Direct Constraint Loop Setup
 
 Batch0044 adds exactly run/direct_call_constraint_instantiation.pw/.out. Bare for template has no previous mutable binding. Preserve prepared snapshot immutability, final-body evidence retention, child condition proof forwarding and missing/bodyless checks using an explicit binding declaration.
+
+## Explicit Dynamic Descriptor Clone Loop Setup
+
+Batch0045 adds exactly run/dynamic_closure_descriptor_identity.pw/.out. Bare term/recipe/result/proof/index/row/other loops have no earlier mutable targets. Preserve valid full-instance clone and exact target-only mutations/cross-instance rejection using explicit loop declarations; no observed role is assigned here.
+
+## Explicit Factory Source Identity Loop Setup
+
+Batch0046 adds exactly run/factory_source_declaration_identity.pw/.out. Bare for name over direct/block/branch has no prior mutable target. Preserve exact selected factory counts, declaration identity/backfill, explicit receiver retention and foreign same-name rejection using explicit loop binding.
+
+## Explicit Final Closure Demand Loop Setup
+
+Batch0047 adds exactly run/final_closure_demand.pw/.out. Bare for bodyId has no earlier mutable target, unlike its two valid for val callIndex loops. Preserve closure signature-before-body, generic captured type, later descriptor request and context/idempotence using explicit binding.
