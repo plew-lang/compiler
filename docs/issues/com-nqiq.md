@@ -24,3 +24,7 @@ Add independent expected content identities for identical input stability and ch
 Repair requires task-start TDD, fixed candidate/input identity, relevant actual consumer checks, scoped independent review and applicable gates. This is a separately owned follow-up, not a child or dependency of com-jno0 or its audits. No phase-three certification implied.
 
 
+
+## Selected Observational Input Clarification
+
+Batch0132 independently reconfirms the exact fingerprint checker gap. SOURCE selects the temporary src/_.pw, but measure-self-compile.sh cd selects compiler-cwd Plew.toml/Plew.lock, not the checker-created temporary package stubs. Derive expected content identities from the actual selected closure and one bounded changed-content contrast; retain sampling handshake and status/artifact checks. Source_tree64hex/name presence alone is not a content oracle. This is existing exact ownership, not a new task or demonstrated production-hashing defect.

@@ -235,3 +235,7 @@ Batch0081 adds exactly run/{weakref_arc,weakref_dance_deferred,weakref_match_tem
 ## Explicit Unused Generic Optional Constructor Label
 
 Batch0080 adds exactly run/unused_generic_enum_context.pw/.out. Standard Optional.Some v producer migrates to value, preserving unused generic T under explicit Optional[T] context and whole-target declaration checking. Empty stdout is deliberate source checking, not lazy-run body-demand or runtime payload proof.
+
+## Manual Global-Module Optional Reader
+
+Batch0129 adds exactly tests/compiler/codegen/GlobalModules.pw Optional.Some(v: _) completion reader. Migrate only standard payload label to adopted value while preserving listed body IDs and emission purposes. Custom CompilerSessionResult and LlvmLoweringResult payload labels stay unchanged. Manual helper context, not a new primary source obligation or executed failure.

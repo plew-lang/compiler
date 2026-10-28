@@ -24,3 +24,7 @@ Trace producer events through process_watch and outer run_gate. Decide stale pha
 Repair requires task-start TDD, fixed candidate/input identity, relevant actual consumer checks, scoped independent review and applicable gates. This is a separately owned follow-up, not a child or dependency of com-jno0 or its audits. No phase-three certification implied.
 
 
+
+## Observational Measurement Progress Consumer
+
+Batch0132 adds scripts/diagnostics/measure-self-compile.sh record_line as a distinct finite consumer reached by test-measure-self-compile-input-fingerprint.sh and test-measure-self-compile-sampling.py. Every [trace-phase] line, even an identical stale line, resets last_progress and increments event_count. This conflicts with agents/codex-execution.md semantic-progress contract (source-backed; no real 60second stall executed). Reconcile duplicate/stale phase against actual advancing phase/counter and completion while retaining logs, exact exit, sampler draining/reaping and the unchanged60second deadline. Existing process_watch/outer run_gate controls remain complementary, not proof of this consumer; no all-watchdog matrix or compiler trace-policy change.

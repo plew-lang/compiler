@@ -9,7 +9,7 @@ priority: 2
 assignee: Koji Murata
 tags: [frontend, verification, tooling]
 ---
-# Reject unavailable inputs in loader architecture guard
+# Reject unavailable inputs in scoped negative architecture guards
 
 
 ## Contract and Confirmed Counterexample
@@ -20,10 +20,14 @@ Each negative `rg -q` runs inside an `if`, so `set -e` does not distinguish nonm
 
 ## Guarantee, Scope and Scenarios
 
-Own this one guard's input/search-result boundary, not parser implementation or all architecture tests. Preserve the current forbidden value-AST entry/traversal patterns and valid-source success. Missing/unreadable source and unavailable/failing search must never become a successful absence claim. The latter cases are required repair controls, not all measured by the audit probe. Keep nonmatch1 distinct from errors without merely silencing stderr.
+Own the Loader guard input/search-result boundary and the exact trace-guard extension below, not parser implementation or all architecture tests. Preserve the current forbidden value-AST entry/traversal patterns and valid-source success. Missing/unreadable source and unavailable/failing search must never become a successful absence claim. The latter cases are required repair controls, not all measured by the audit probe. Keep nonmatch1 distinct from errors without merely silencing stderr.
 
 Use the existing fixed script for RED, including a valid source, each forbidden form and unavailable input; exercise the actual production checker in an isolated repository rather than duplicating its predicate in a separate passing test. After repair, require the corresponding GREEN and verify the standard registration still calls this guard. Do not change compiler acceptance, forbidden patterns, fixtures, goldens, other gates or supervision policy.
 
 ## Completion and Limits
 
 Independent review must reconcile actual exits/markers, negative search errors, the preserved clean/forbidden controls and final dispatcher use. Retain exact revision/command/input evidence. This is a finite runner repair outside test audit closure; it is not an audit prerequisite or evidence that the parser itself is wrong.
+
+## Negative-Only Trace Guard Input Extension
+
+Batch0132 extends the finite input/search-error boundary to tests/tooling/test-trace-phase-progress.sh, exactly its two negative grep predicates over src/Codegen/Mono/Call.pw. Missing/unreadable input or failed search can become absence and reach PASS while other positive source checks succeed (static source counterexample; no copied execution here). Preserve valid input and both forbidden-pattern rejections, distinguish nonmatch from search error, and retain the existing Loader controls. These two named checkers only; not every architecture grep or compiler trace implementation.

@@ -300,3 +300,7 @@ Batch0001 remaining gen intake adds exactly tests/fixtures/gen/stringbraces/App.
 ## Manual Declaration Probe Guards
 
 Batch0127 adds exactly tests/compiler/mid/{ParametricBodyCoverage,DeclarationAccess}.pw as manual source contexts for unimported legacy panic guards. Preserve canonical-cache/ownership invariants and selection-error guard intent through ordinary imported panic migration. These are manual helper scopes, not new registered run roots, executed failures or mandatory automatic registration. No repair performed.
+
+## Manual Compiler Callback and Global-Module Guards
+
+Batch0129 adds exactly tests/compiler/codegen/CompilerCallback.pw (three legacy guards), GlobalModules.pw (two guards), and test-global-modules.py generated --exposed Requested.pw (one guard). Migrate to explicitly imported ordinary Core panic while preserving callback/open/lowering refusal, global module failures and C41->42 wrapper/callee sentinel. These are three helper/generated contexts, not new registered run roots or execution proof.

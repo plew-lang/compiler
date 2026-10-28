@@ -301,3 +301,11 @@ Batch0082 adds exactly tests/compiler/frontend/StringLiteralValues.pw inspect ba
 ## Conditional Unique Return Source Setup
 
 Batch0121 adds exactly run/unique_cond_return.pw/.out. Its two bare local returns a/b rely on old implicit transfer, while adopted spec03 requires explicit unique access modes and spec04 return completion grants no exception. Preserve both selected-owner transfer and unreturned-sibling destruction sequences through adopted explicit transfer and coherent impl-only deinit migration. Supplemental unique_move is the existing0031 exact scope, not a second intake. This is source setup qualification, not a new implicit-move rule, executed current failure or demand for every return combination.
+
+## Manual Requested Body-ID Loop Binding
+
+Batch0129 adds exactly tests/compiler/codegen/GlobalModules.pw bare for byte in argAt(4I64).bytes(). No earlier mutable byte destination exists; express a new binding while preserving decimal requested-body parsing and per-body emission. No general loop syntax rewrite, new run root or audit-time source repair.
+
+## Lazy CLI Type-Import Reason Isolation
+
+Batch0132 adds exactly the generated type-import family in tests/tooling/test-lazy-cli.py. Types.pw publishes struct Hidden but no public memberwise factory; the unimported Hidden annotation and external <Types.Hidden value=1I64 /> therefore contain independent failures. Erroneously admitting the annotation could still reject construction and satisfy status1/entry timing. Isolate that exact intended name-visibility reason or publish valid construction; preserve unused-run success, whole check/build, late demand and untaken-main-branch distinctions. Existing memberwisemodule and moduleprivatefactory controls are complementary. No compiler execution, all-negative reason mandate or new semantic ruling.

@@ -52,23 +52,16 @@ inventory revision, assertion dispositions, grounds and scoped independent revie
 Completion means the assigned finite audit is reconciled, not zero unknown bugs,
 all future features implemented or all resulting defects already fixed.
 
-## Reconciled Outcome Subset
+## Reconciled Audit Subset
 
-[Cross-owner outcome reconciliation](../../../evidence/test-audit/scoped-reviews/outcome-reconciliation.json)
-now covers 3 exact primary outcome units here (three internal source-file-range fail-fast outcome units). Normative conditions,
-original intent, complete selected inputs and shared runner predicates were read
-independently and by the parent. This is source-level audit, not executed compiler
-or program correctness and not the separate source-admission units. Existing
-finite findings and migration owners are retained; no repair or domain closure.
-All other plan units remain this audit's work, with shared reports reused only
-within exact matching scopes.
+The four [canonical reconciliation indices](../../../evidence/test-audit/scoped-reviews/README.md#canonical-reconciliation)
+contain exactly40 of404 driver-primary obligations:7observed outcomes,
+25generation contracts,5checker contracts and3meta operational roles. Shared runtime-primary
+roles do not increase this task's count. Exact ID/role/owner partition is canonical
+in those indices, not inferred from report count or execution results.
 
-Independent reconciliation review review_audit_inventory_partition matched exact
-IDs/owners/hash identities and scoped calculations, found no required correction,
-and accepted these source-audit records only. No compiler/candidate/domain
-certification, unread-work transfer or fixture/runner repair is implied.
-
-The shared reconciliation also records80 additional runtime-primary outcomes;
-these do not increase this task's audited primary count. The six finite new
-follow-ups preserve explicit source-admission/package boundaries. Other assigned
-units here remain audit work.
+Batches0128/0129 independently reconcile actual generation/provider and manual
+callback/global/ORC paths, helper source setup, exact prior range reuse,
+and synthetic meta supervision controls. Existing finite owners preserve scope;
+no real compiler/program/sanitizer execution or production repair. Remaining
+checker/diagnostic/intake obligations and area closure remain this audit's work.
