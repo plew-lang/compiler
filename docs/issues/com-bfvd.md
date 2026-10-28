@@ -312,3 +312,7 @@ Batch0130 adds exactly tests/compiler/codegen/SessionJit.pw ten outer legacy uni
 ## Whole-Check No-Execution Panic Input
 
 Batch0131 adds exactly tests/tooling/test-check-command.py generated not-executed positive, which uses a legacy unimported panic statement. Reconcile ordinary imported Core panic without executing the body or weakening whole-check status0, no backend/finalize markers/artifacts and empty stdout. This generated context is not a new run root, proof of source execution or full check semantics migration.
+
+## Manual Returning and Partial Session Module Inputs
+
+Batch0136 adds exactly tests/compiler/codegen/ReturningModule.pw and SessionModule.pw outer manual helper guards, using ordinary unimported panic calls and legacy statements respectively. Reconcile explicit Core import/calls while preserving structured-return on valid/bad/fresh/no-main/unfinished-contract inputs, partial-main lowering and unchanged terminal diagnostic after invalid unused request. ReturningModule.out is manual oracle data; no automatic current consumer/invocation was found. Do not invent automatic registration, new run ordinals or successful execution; retain original manual intent and source qualifications.

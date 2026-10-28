@@ -55,8 +55,8 @@ all future features implemented or all resulting defects already fixed.
 ## Reconciled Audit Subset
 
 The four [canonical reconciliation indices](../../../evidence/test-audit/scoped-reviews/README.md#canonical-reconciliation)
-contain exactly142 of404 driver-primary obligations, by exact role
-{'observed-behavior': 7, 'generation': 25, 'meta-operational-control': 3, 'checker-contract': 29, 'diagnostic-role': 9, 'role-intake': 69}. Shared runtime-primary
+contain exactly404 of404 driver-primary obligations, by exact role
+{'observed-behavior': 7, 'generation': 25, 'meta-operational-control': 3, 'checker-contract': 29, 'diagnostic-role': 31, 'role-intake': 309}. Shared runtime-primary
 roles do not increase this task's count. Exact ID/role/owner partition is canonical
 in those indices, not inferred from report count or execution results.
 

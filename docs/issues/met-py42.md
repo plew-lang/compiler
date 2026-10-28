@@ -1,8 +1,8 @@
 ---
 id: met-py42
-status: open
+status: closed
 deps: []
-links: []
+links: [com-mt7l]
 created: 2026-10-28T10:09:57Z
 type: bug
 priority: 2
@@ -10,6 +10,10 @@ assignee: Koji Murata
 tags: [driver, tooling, verification]
 ---
 # Reject missing required project output goldens
+
+## Disposition
+
+Closed as duplicate of [com-mt7l](com-mt7l.md), which already owns both exact predicates from initial driver-review2. Parent and reviewer overlooked that existing owner during batch0131. All repair authority stays with com-mt7l; no implementation was performed. The scoped description below is retained as the duplicate record. Meta runtime-batch-0131-golden-owner-correction.json and its independent receipt supersede the new-owner attribution while preserving the original audit snapshots.
 
 ## Contract and Evidence
 

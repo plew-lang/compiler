@@ -291,3 +291,7 @@ Batch0121 optionally qualifies exactly run/{unique_deinit,unique_enum_arc}.pw/.o
 ## Weak Upgrade Temporary Cleanup Description
 
 Batch0122 optionally qualifies exactly run/weakref_match_temp.pw/.out. Its original949e7b4 returning-arm comment names dropScope, a retired mechanism absent from current compiler/src; canonical Mid cleanup owns the current edge. Preserve5/100/9, direct upgrade temporary and return/fall-through strong-owner release intent. This is comment precision only, not new mandatory tests, changed expected output, source repair or executed memory-safety proof. weakref_arc is existing0081 exact prose scope; weakref_upgrade_match explicitly labels its old helpers Before the fix and is not another intake.
+
+## Manual Leak Survey Profile Prose
+
+Batch0133 adds the optional scripts/diagnostics/leak-survey.sh header reference to the permanent generated-program leak gate as levelD; current permanent generated-app leak gate is C. Preserve survey meaning: CLEAN reports only absence of its LSan marker, not successful application execution, ASan cleanliness or golden equality. Prose clarification only, no runner/assertion or gate-strength change required by this optional item.

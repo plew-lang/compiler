@@ -1,6 +1,6 @@
 ---
 id: com-e713
-status: in_progress
+status: closed
 deps: [com-5by1, com-ouh2]
 links: []
 created: 2026-10-26T12:48:12Z
@@ -50,15 +50,27 @@ inventory revision, assertion dispositions, grounds and scoped independent revie
 Completion means the assigned finite audit is reconciled, not zero unknown bugs,
 all future features implemented or all resulting defects already fixed.
 
-## Current Reconciled Subset
+## Outcome
 
-Primary source-audit count:3132 of the assigned3132 obligations, comprising{'observed-behavior': 251, 'source-admission': 1707, 'source-rejection': 1157, 'checker-contract': 9, 'role-intake': 8} by exact role. Cross-owner total4803 obligations/135 complete plan batches. Counts are inspected contract bundles, not executed assertions or whole-domain completion.
+Investigated: all3132 assigned obligations are reconciled, comprising1707
+source admissions,1157 source rejections,251 observed outcomes,9checker
+contracts and8role intakes. Exact IDs, immutable inputs, reports/receipts,
+accepted corrections and finite finding owners are canonical in the four
+[reconciliation indices](../../../evidence/test-audit/scoped-reviews/README.md#canonical-reconciliation).
 
-Exact IDs, input identity, independent receipts, accepted corrections and limits are canonical in meta/evidence/test-audit/scoped-reviews/{outcome-reconciliation,source-admission-reconciliation,frontend-rejection-reconciliation,support-reconciliation}.json and linked producer reports. Parent and contract-first reviewers read selected complete inputs, relevant positive/negative controls and source/runner contracts. All assigned unread units remain this audit's work.
+Independent [frontend area closure](../../../evidence/test-audit/scoped-reviews/review-frontend-area-closure.json)
+SHA74ad3328b4ae59f4567ff92619779ce98f7bc5d2dba6cba371111b5bd05bb56b
+accepts this finite audit after contract-first partition, scoped evidence,
+original-intent and consumer/control reconciliation. Four internal fail-fast
+inputs received additional finite source/history/positive-control review;
+metadata corrections and temporal snapshots are retained rather than rewritten.
+No assigned unread obligations or unowned required audit findings remain here.
 
-Confirmed competing-failure setups, source/API migrations, current implementation lanes and unresolved source rules have explicit finite owners in disposition.json; the55 new follow-ups are separate from the audit epic. In particular, old deinit/reference/panic/Std labels do not certify adopted admission; package-public reachability and extension identity are not chosen from implementation behavior. Missing diagnostic companions alone are optional coverage unless concrete unintended failure can mask the intended rejection.
-
-Reviewer corrections included false projection attribution, optional-versus-required reason scope, Optional label qualification, qualified valid-source wording and same-content Git-history misattribution. Original purpose needs selected root content and path-fixed history; --follow locators alone are not proof. Prior snapshot hashes are retained rather than rewritten as if reviewers saw later changes. Evidence records limited report/issue-text exposure honestly.
-
-No real Plew compiler, generated program, native sanitizer or performance run was executed; compiler/std/tests/expectations/runners remain at source baseline9665094d. Existing binary/cache dirt is excluded. Finite audit acceptance is neither repair acceptance nor whole frontend/phase-three/main/seed readiness. Next work is batch0083 role-intake final reconciliation and the remaining assigned obligations.
-
+Source/API migrations, concrete rejection masks, weak oracles, unsupported
+features and unresolved language rules remain distinguished under their finite
+owners. Missing .err alone is not a mandatory defect; current compiler behavior
+cannot settle adopted semantics. Investigation closure does not close repairs
+or decide those questions. No real compiler/program/sanitizer/performance run,
+production input change, frontend implementation acceptance, phase-three
+completion or main/seed readiness is certified. Source baseline9665094d,
+spec5bd65a5 and exact Syntax8c892042 remain unchanged.
