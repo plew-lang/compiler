@@ -107,3 +107,7 @@ Batch0045 adds optional prose-only run/enum_record_form.pw/.out. Its custom Opt.
 ## Optional Factory and View Resolution Comments
 
 Batch0046 adds optional prose-only run/{factory_gate_valid,extension_overload_view}.pw/.out. Module-private factory is usable from same-module free functions, not only anonymous impl; view overload meaning is decided/retained before backend consumption, not repaired from local spelling there. Current test inputs are legitimate, comments not source rules.
+
+## Optional Conversion and Callable Completion Comments
+
+Batch0048 adds optional prose-only run/{from_conversion,function_completion_type_identity}.pw/.out. Numeric as uses primitive From factories too; they are not exempt from that adopted contract. Diverge surface is connected, so the completion identity test should describe its finite metadata guarantee without future-only surface wording. Synthetic () name is not a new source Unit representation requirement; current typed source/results stay unchanged.

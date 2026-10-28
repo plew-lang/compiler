@@ -203,3 +203,17 @@ Batch0046 adds exactly run/factory_source_declaration_identity.pw/.out. Bare for
 ## Explicit Final Closure Demand Loop Setup
 
 Batch0047 adds exactly run/final_closure_demand.pw/.out. Bare for bodyId has no earlier mutable target, unlike its two valid for val callIndex loops. Preserve closure signature-before-body, generic captured type, later descriptor request and context/idempotence using explicit binding.
+
+## Explicit Iteration Source Bindings
+
+Batch0048 adds exactly run/{for_call_ref_array,for_iter_return_arc,for_range_bound_temp_arc,forwarded_source_admission}.pw/.out. Bare c, three t loops, i and tail have no prior mutable target; use explicit val/mut val new binding preserving fresh iterable cleanup, early return/break/full walk, call-result range bound lifetime and forwarded source ambiguity cases. The valid for val/pattern cases elsewhere are not rewritten.
+
+## Explicit Five Missing-Entry Competing Failures
+
+The immutable frontend-missing-main-correction record adds exactly reject/{default_arg_await,default_arg_await_match_expr,field_default_await,field_default_await_match_expr,try_from_no_matching_arg}.pw. These were primary obligations in batches0012/0015/0030, not new coverage credits. Each lacks main and .err. If the intended default-suspension or From source-type gate is lost, normal CLI whole-program LLVM lowering independently returns Failure for missing main and exits1; the status-only reject worker still accepts that unrelated failure. The normal path is Compiler.compileSource -> prepareCheckedProgram -> lowerPreparedLlvm(Whole) -> Backend missing-main Failure -> Compiler exit1, not the distinct ORC registerProgramRoots path.
+
+Preserve direct and nested parameter/field default no-suspend rules and MyErr:From[I32] versus String error identity. Isolate each intended reason with admitted entry setup and/or a discriminating diagnostic and positive contrast in the eventual repair. Default later()->Promise[I64] agrees with current sleep; no unrelated Promise return mismatch is asserted. main-bearing try_error_type is useful neighboring coverage but does not discharge this exact masking setup. Earlier optional/unproved normal-emission judgments are superseded by the immutable correction; original reports/receipts and all primary totals remain unchanged. This is a source-backed competing-failure argument, not an executed compiler regression or audit-time fixture repair.
+
+## Explicit Empty Generic Array Loop Binding
+
+Batch0049 adds exactly run/generic_empty_array_arg.pw/.out: bare for x has no prior mutable target. Preserve sum seed and contextual Array[T] intent using an admitted new binding, after separately settling com-pxja sibling inference and com-s922 numeric context.

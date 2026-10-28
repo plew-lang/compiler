@@ -23,3 +23,7 @@ Derive whether a selected constructor signature may defer an earlier unresolved 
 
 Exact positive and paired rejection above only; bare generic-owner factory shorthand is separately com-owb3 and must not obscure the inference question. Produce agreed positive/reject scenarios and finite repair ownership, then TDD/independent review for actual implementation. Evidence: meta/evidence/test-audit/scoped-reviews/run-head-0087.json. No source/test edits or actual compiler execution occurred in audit; other source-admission units remain audit work.
 
+
+## Explicit Ordinary Call Later-Sibling Empty Array Context
+
+Batch0049 adds exactly run/generic_empty_array_arg.pw/.out to the existing same-rule ordinary-call/factory-attribute question. Original515a625f intentionally lets later seed determine an earlier xs:[] T. Forward available expectations and provisional body terms do not by themselves establish this acceptance. Derive or request the canonical same-call inference rule; preserve source-order evaluation and no overload rescue. Bare loop and nonunique float contexts remain separate exact owners; suffixing seed does not discharge this question.

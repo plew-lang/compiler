@@ -164,3 +164,11 @@ Batch0046 adds exactly run/{existential_retag_proof,existential_symbolic_result,
 ## Explicit Final Call, Body and Publication Guards
 
 Batch0047 adds exactly run/{final_body_demand,final_call_requires_record,final_call_signature_readiness,final_call_store_publication,final_closure_demand,final_dependency_demand,final_for_index,final_witness_demand,finalization_publication}.pw/.out as representative roots100–108. Ordinary panic migration preserves independent missing-record/signature/publication, lazy request/context/terminal-failure and body/stmt index invariants; await index already uses imported assert and is not a panic intake. No guard executed.
+
+## Explicit Iteration, Source Admission and Function Index Guards
+
+Batch0048 adds exactly run/{for_type_recipe_index,forwarded_source_admission,frontend_body_demand,function_bound_arena,function_name_index}.pw/.out as representative roots109–113. Ordinary panic migration preserves first-write immutable recipe/index, concrete source forwarding admission, partial body-request caching and function-bound/candidate order/copy checks. FunctionBoundArena is only source role here; no new outcome or blanket all guards claim.
+
+## Explicit Selected Generic Call Authority Guard
+
+Batch0049 adds exactly run/generic_call_selected_authority.pw/.out as representative root114. Preserve selected source declaration, stable semantic site despite AST name poisoning, no reconstruction after Pending and no extra operation recording. This building-owner test is not a successful owner closure/global publication proof.

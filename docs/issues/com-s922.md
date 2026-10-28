@@ -52,3 +52,7 @@ Correction evidence: meta/evidence/test-audit/scoped-reviews/frontend-batch-0032
 ## Explicit Float Lexical and Generic Context Roots
 
 Batch0047 adds exactly run/{float_exponent,float_generic_witness,float_int_literal_ctx,float_literal}.pw/.out. Exponent/generic witness/plain literal roots lack unique F32/F64 context under generic print or generic numeric calls; preserve lexical and witness purposes with explicit context. float_int_literal_ctx separately claims ordinary integer literal becomes F64 in binding/argument/Array/operand/result contexts; spec02 names only integer-family targets, while frontend-handoffs72–74 retains direct-literal cast context only. Recover exact canonical decision before accepting or mechanically rewriting those ordinary contexts; add no implicit numeric conversion/default. Its print(1.5+2) is independently nonunique. Existing float_arith/float_f32 and corrected float_cast intake reused; do not retract permitted direct7 as F32/-7 as F64 controls or replace the pending cast decision with current acceptance.
+
+## Explicit Empty Generic Array Float Context
+
+Batch0049 adds exactly run/generic_empty_array_arg.pw/.out. Generic Add plus generic print does not uniquely select F32/F64 for unsuffixed seed1.5. Retain empty-array/seed and nonempty summation purpose with explicit available context in eventual repair; suffix alone does not settle the later-sibling inference contract owned by com-pxja.

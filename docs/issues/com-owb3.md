@@ -136,3 +136,11 @@ Batch0046 adds exactly run/factory_receiver_identity.pw/.out. Bare pub impl Dist
 ## Explicit Field and Pattern-Bound Generic Publication
 
 Batch0047 adds exactly run/{field_init_place_arc,final_callable_receiver_pattern_bound}.pw/.out. Bare pub impl Box/Packed factory repeats unresolved shorthand; field_defaults_generic is already exact owned and reused. Preserve field ownership and Packed[Array[T]] binder identity, not an assumed explicit undeclared-binder fix.
+
+## Explicit Generic Array Field Publication and Missing Binder
+
+Batch0048 adds exactly run/{generic_array_box_field,generic_array_compound_field,generic_array_field,generic_array_field_deinit}.pw/.out. First three have bare generic pub impl Box/Holder, Entry/Map, or Box factory markers, held for existing shorthand ruling. Last instead explicitly names Container[T] without declaring impl[T], a confirmed undeclared binder shape: migrate that distinct setup while retaining nested Array/ref/deinit copy purpose. Do not treat all four as the same ambiguous source form.
+
+## Explicit Generic Binding, Constructor and Enum Publication
+
+Batch0049 adds exactly run/{generic_array_field_instance_isolation,generic_assoc_fn,generic_associated_bound_grounding,generic_box_ref_payload_arc,generic_constructor_value_shape,generic_enum_array,generic_enum_chain_match_print}.pw/.out with bare generic pub impl markers; generic_array_ret_infer/generic_constructor_nested_constraints/generic_ctor_bottomup/generic_ctor_infer reuse existing exact intakes. Preserve nominal declaration/impl binder separation, nested Array/constructor shape, associated witness grounding and Optional chain layout. Do not declare bare shorthand an explicit unbound T defect.

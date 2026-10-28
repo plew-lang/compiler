@@ -131,3 +131,11 @@ Batch0046 adds exactly run/{factory_fallible,factory_requirement_fallible}.pw/.o
 ## Explicit Final Call Argument Store Optional Producer
 
 Batch0047 adds exactly run/final_call_store_publication.pw/.out. Optional.Some(v=inputs) used by final argument publication needs adopted value label; preserve row-owned ranges, duplicate write rejection and snapshot isolation.
+
+## Explicit Iteration Recipe Optional Pattern
+
+Batch0048 adds exactly run/for_type_recipe_index.pw/.out. Optional.Some(v:_) patterns migrate to adopted value label, preserving absent/no fabricated recipe and copy-isolated high-ID checks.
+
+## Explicit Generic Provided Members and Enum Payload Labels
+
+Batch0049 adds exactly run/{generic_bound_provided_collect,generic_bound_provided_member,generic_enum_array,generic_enum_chain_match_print,generic_enum_ctor_arg}.pw/.out; generic_associated_self reuses existing exact intake. Migrate Some(v=...), v: and named valv punning coherently to adopted value while retaining provided Iterator proof and direct/array/chain enum payload contexts. Local custom v fields remain unchanged.
