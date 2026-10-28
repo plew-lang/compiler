@@ -80,15 +80,21 @@ specification changed. Inventory is in_progress; com-mmk9 is not yet started.
 ## Factual Inventory Progress
 
 The [family reconciliation](../../../evidence/compiler-api-audit/family-reconciliation.json)
-contains13 independently accepted thin factual families: nine entry/registry/C
-adapter families and four source/resource/completion/diagnostic families. Actual
+contains28 independently accepted thin factual families: nine entry/registry/C
+adapter families, four source/resource/completion/diagnostic families and six
+operator/package-value/decoder/index/opaque-handle families, plus three partial
+backend/observation/owned-handle families and six package/parser/lock/process/
+resolver families. Actual
 foreign declarations, constructors/defaults/cleanup callers and public edge/enum
 consumers were added after finite independent feedback. Original candidate
 snapshots remain in meta028dcaa1; amended review receipts bind the final current
 facts and retain prior comparison fields. No source acceptance, flow-algorithm,
 worker/lifetime implementation or capability-mismatch verdict follows.
 
-Six additional common-leaf candidates are under review. All other targets remain
+Three native/shell/resource candidates are under review and three retained-context/
+loader candidates await review. The index
+preserves exact primary ranges; listing a source never certifies the whole file.
+All other targets remain
 uncompleted inventory work. The full199-file/273-segment routing still applies;
 accepted family counts are not a denominator for API/algorithm correctness.
 SCOPE-1/2 now have a locally validated factual-record method but are not globally
