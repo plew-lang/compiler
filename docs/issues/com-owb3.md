@@ -192,3 +192,7 @@ Batch0069 adds exactly run/sendability_surface.pw/.out: bare pub impl Box {facto
 ## Explicit Generic Nominal Field Factory Context
 
 Batch0072 adds exactly run/struct_generic_struct_field.pw/.out: bare pub impl Box {factory} repeats unresolved generic publication shorthand. struct_destructure_stmt and struct_pattern already exact0027 are reused without new root intake. Preserve generic field/value-return/destructure purposes; do not classify bare marker as explicit unbound Box[T] or silently choose a shorthand rule.
+
+## Explicit Same-Head Error Conversion Factory Publication
+
+Batch0078 adds exactly run/{try_from_generic_convert,try_from_receiver_identity}.pw/.out with bare pub impl Dist factory publication. Same unresolved generic-owner marker ruling as existing bare cases, not the confirmed unbound explicit Box[T] form. Preserve Dist[Meters] to Dist[Feet] conversion and earlier same-source Dist[Yards] receiver contrast, with selected full semantic instance/witness retained to final use. try_from_generic_arg_match Box is already exact0030 reuse, not a third new root. Do not settle shorthand from current acceptance or auto rewrite during audit.

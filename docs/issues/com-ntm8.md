@@ -281,3 +281,11 @@ Batch0070 adds exactly run/source_conversion_endpoint_scope.pw/.out: one bare fo
 ## Explicit Static Signature and Trait Evidence Loop Bindings
 
 Batch0071 adds exactly run/{source_static_signature_evidence,source_trait_self_evidence,static_method_recorded_arguments}.pw/.out. Bare for provided/proof/template have no existing mutable target; three sites require explicit new bindings without weakening signature, justified interface-Self or recorded substitution checks. static_method observed role here does not add primary source-admission credit.
+
+## Explicit Temporary Iterable Loop Binding
+
+Batch0076 adds exactly run/temp_for_iterable_deinit.pw/.out. Bare for b has no prior mutable target and needs explicit new binding, preserving iterable lifetime and guard/body observations. Current reference/deinit migrations have separate owners; this is not a reproduced loop compiler failure.
+
+## Explicit Trait Member Owner Loop Binding
+
+Batch0077 adds exactly run/trait_member_owner_identity.pw/.out, bare for name without an earlier mutable name destination. Use explicit new binding while retaining separate secondHidden/foreignHidden requested-body refusal and no-successful-fact publication assertions. No general scope/iteration rewrite or audit-time fixture change.

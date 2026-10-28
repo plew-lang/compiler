@@ -219,3 +219,15 @@ Batch0071 adds exactly run/source_typing_owner_requests.pw/.out: the current com
 ## Explicit Generic Field and Supertrait Optional Labels
 
 Batch0072 adds exactly run/{struct_generic_inst_field,struct_generic_inst_field_mutate,supertrait_projection_witness}.pw/.out. Migrate standard Some v constructor/pattern labels to value while preserving nested nominal field substitution, mutation/None and selected inherited projection. User-defined Box.v and other custom payload names are unchanged.
+
+## Explicit Lowered For Type-Use Optional Reader
+
+Batch0074 adds exactly run/syntax_lower_for_type_uses.pw/.out. Host blockTypeUses reader pattern Some(v:uses) migrates to adopted standard value label, preserving record-pattern and typed-loop rebuilt-body type-use retention. User-defined Choice.Some in aggregate lowering is not this standard label. No exact type-use content/count or full semantic admission is claimed from two >0 outputs.
+
+## Explicit Temporary Scrutinee Optional Labels
+
+Batch0076 adds exactly run/{temp_match_scrutinee_deinit,temp_optchain_deinit}.pw/.out. Standard Some v construction/pattern labels migrate to value; Cell.v and Result value/error labels stay. Preserve temporary lifetime, scrutinee/optchain single evaluation and alias lifetime oracle without changing expected output during this audit.
+
+## Explicit Weak Upgrade and While Binding Optional Labels
+
+Batch0081 adds exactly run/{weakref_arc,weakref_dance_deferred,weakref_match_temp,weakref_upgrade_match,while_let}.pw/.out. Migrate standard Some producers/named v patterns and while_let Some(val v) punning to explicit value label while retaining local v and custom Cell.v/Node.x/Counter.n fields. Preserve alive/dead upgraded owner, deferred last strong release, direct temporary match and per-iteration condition binding purposes; reference/deinit API migration is separately owned.

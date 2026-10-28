@@ -41,3 +41,7 @@ Batch0050 adds exactly run/generic_method_bound_inout.pw/.out. pub impl U64 as l
 ## Explicit Inherited Newtype Custom Trait Setup
 
 Batch0063 adds exactly run/newtype_conformance_inherit.pw/.out. pub impl String as local Loud is foreign unnamed impl under spec07/09. Preserve inherited standard String/I64 formatting and custom witness dispatch using owner-authorized setup, not a local-trait exception. No current compiler bug reproduced.
+
+## Explicit Trait Method Result Context Foreign Primitive Setup
+
+Batch0077 adds exactly run/trait_method_result_context.pw/.out. Its unqualified impl I64 as locally owned Marker violates spec07:5/spec09:293–295 type-owner placement; owning Marker does not authorize foreign I64 impl. Preserve required/provided/default/result-only generic method expected I64 contexts, associated outputs, block/if/record consumers and bound discharge via an authorized setup. Optional Some label is separate existing met-2wca0028 scope. This finding was parent-discovered after independent initial0649e878, not an initial reviewer discovery. No new placement semantics or audit-time repair.

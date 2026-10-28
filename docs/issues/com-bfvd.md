@@ -268,3 +268,19 @@ Batch0072 adds exactly run/{struct_name_index,supertrait_projection_witness}.pw/
 ## Explicit Shared Syntax Associated-Bound Guard
 
 Batch0073 adds exactly run/syntax_associated_type_bounds.pw/.out, representative root239 after0072. Its host fallback still uses legacy unimported panic. Preserve zero/two associated bounds, Item equality/base17 spans, direct/value/freeze/repeated-freeze and both malformed-bound parser errors through coherent ordinary imported Core panic migration. This is one finite host, not all Syntax/compiler source; no guard or compiler execution.
+
+## Explicit Shared Syntax, Dependency Index and Trait Graph Guards
+
+Batch0076 adds exactly run/{syntax_use_only_grammar,template_dependency_index,trait_cycle_graph}.pw/.out, three new representative roots240–242 after0073. Preserve direct/value grammar rejection, complete semantic dependency-key collision/body/namespace separation and graph/SCC snapshot purposes while migrating ordinary/legacy unimported panic coherently to explicit imported Core function. Supplemental tests/compiler/frontend/TemplateDependencyUnfinalized.pw/.err/.out also uses an unimported ordinary panic fallback: reconcile this exact manual setup, not a fourth registered primary root or executed missing-slot guarantee. Its README contradicts exit0 prose/exit1 procedure; existing com-fkzm owns that exact manual returning-diagnostic procedure repair, separate from this panic-source migration. It is outside test.sh and no mandatory new coverage task is inferred from that alone.
+
+## Explicit Trait Declaration and Owner Index Guards
+
+Batch0077 adds exactly run/{trait_member_owner_identity,trait_name_index,trait_name_registration,trait_owner_index,trait_owner_queries}.pw/.out, five new representative roots243–247 after0076. Migrate legacy/ordinary unimported panic guards to explicit Core function without weakening full owned-member requests, lexical declaration registration, linear raw owner index contrasts, snapshot independence or foreign-module/sentinel refusals. No execution/current compiler failure or whole resolver certification.
+
+## Explicit Type Environment and Structural Helper Guards
+
+Batch0079 adds exactly run/{type_collection_environment,type_parameter_name_index,type_projection_presence,unify_type_term}.pw/.out, four new run representative roots248–251 after0077. type_declaration_publication/type_term_closedness already exact0030 representatives36/37 are reused, not new roots. Preserve lexical binder/environment restoration on success and depth-limit failure, name-index differential/CoW isolation, unknown future projection refresh and structural matching side/ParamId/occurs-check provenance while coherently importing ordinary Core panic. Internal helpers accepting identical invalid raw IDs or unstamped-name patterns are not canonical source compatibility proofs; migration must not rewrite those intentional helper oracles.
+
+## Explicit Projection Normalization Evidence Guard
+
+Batch0081 adds exactly run/witness_projection_normalization_evidence.pw/.out, new run representative root252 after0079. Ordinary unimported panic fallback must become explicit imported Core function without weakening six-mode valid/missing/foreign/incorrect source/proof/output normalization evidence and witness identity assertions. One root with two distinct source/observed obligations, not two new roots or actual execution.

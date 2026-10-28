@@ -199,3 +199,27 @@ Batch0072 optional prose-only run/{string_bytes_count,string_methods}.pw/.out. C
 ## Optional Direct Syntax Mechanism Claim Precision
 
 Batch0073 optional prose-only run/{syntax_direct_entry_cast,syntax_file_direct_top_level_forms}.pw/.out. Goldens show Cast/U64 shape or selected13members/top-level kinds/mode fields; they do not alone prove every grammar form or absence of an internal value-AST/freezer bridge. Shared pinned Syntax entry and registered source architecture gates are separate evidence. Preserve fixtures/goldens and useful direct-shape regression; no mandatory new matrix or renaming merely because historical filenames contain freeze.
+
+## Lowered Call and Method Header Precision
+
+Batch0075 optionally reconciles run/syntax_lower_method_exprs.pw and supplemental syntax_lower_call_expr.pw headers: argument-context selection/lookup is not asserted by their Lower-only receiver/name/label/expression metadata outputs. Preserve all fixtures/goldens; neither current argument-context selection correctness nor a new mandatory matrix is certified. The supplemental free-call source/out was fully read in0074 and rechecked unchanged here; only method primary roles receive0075 credit.
+
+## Temporary Lifetime and Trait Namespace Comment Precision
+
+Batch0076 optionally updates exactly run/temp_stmt_end_deinit.pw header: call-owned temporary ends at call completion, not a blanket every-temporary statement-end rule. Its next-statement output does not discriminate the two timings. Also qualify run/trait_assoc_fn.pw old Hash.derive analogy: it exercises ordinary trait-associated namespace calls, not adopted macrointerface generation. Preserve fixtures/goldens; no new mandatory lifetime or macro matrix.
+
+## Checked Conversion and Selected Witness Header Precision
+
+Batch0078 optionally qualifies exactly run/{try_from_generic_convert,tryfrom_float_unsigned,tryfrom_narrowing}.pw headers. Selection belongs to checker/prepared/mono facts, not backend convert-or-not name matching. Obsolete convert(from:) fragments should describe checked(source:) API without changing assertions. float unsigned selected negative is -1.0: current Core source<0 gate differs from adopted integer-part range wording for unselected (-1,0), so do not call all negative floats a proven universal source rule or claim that unselected boundary was audited. No new mandatory conversion matrix or automatic golden rewrite.
+
+## Trait Declaration Identity and Source Wrapper Header Precision
+
+Batch0077 optionally qualifies exactly run/{trait_name_collision,trait_name_collision_provided,trait_source_select}.pw. Lexical declaration ownership/full trait instance, not merely requirement shape or name+arity, separates local trait spellings and canonical operator identities. srcTraitId/findExtMethod remain actual current names; the shared wrapper must preserve semantic source kind/owner, so do not call these removed APIs. Retain inputs/goldens, not a new mandatory matrix.
+
+## Type Arena and Unique Ownership Header Precision
+
+Batch0079 optionally qualifies exactly run/{type_arena_push,u64_literal,unique_ref,unique_reassign}.pw. pushType tested plain/helper/Box/binder shapes do not establish universal one-row allocation when projection receiver publication may precede the main row. U64 uses LLVM backend, not emitted-C ULL. unique_ref old blanket unique-generic prohibition is obsolete under adopted capability work. unique_reassign observes old release before next statement, not RHS-acquisition/commit/drop order by itself; do not infer a new assignment rule. Preserve fixtures/goldens and finite purpose; no mandatory new matrix.
+
+## Weak Reference Cycle and Safety Claim Precision
+
+Batch0081 optionally qualifies exactly run/weakref_arc.pw: early prose says Child-before-Parent, while later explanation/current golden70→80 is Parent-before-Child after selected949e7b4 change. Normal deinit markers observe selected owner release/count/order; they do not alone prove absence of all UAF/leaks or fixed RC decrement implementation. Historical ASan-clean comment is not fresh execution. Preserve fixture/golden and weak ownership purpose, with separate sanitizer boundaries; no mandatory new safety matrix.

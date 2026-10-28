@@ -49,3 +49,7 @@ the old parser form before bootstrap/source compatibility has a concrete plan.
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
 
 Ordinary deinit already has an inherent-impl implementation; rejecting its prohibited struct-body location is an existing-feature correction. Migrate current compiler/std/tests with an explicit current-carrier/add-before-use pin/bootstrap sequence before removing the old parse lane. No conditional unique-generic deinit or new bootstrap strategy.
+
+## Explicit Aggregate Lowering Struct-Body Deinit Lane
+
+Batch0074 adds exactly run/syntax_lower_decl_aggregates.pw/.out. Embedded ordinary Box[T] contains struct-body deinit; current direct Lower registers destructor function/deinit row1. Adopted deinit requires unique Self and defining-module inherent impl, so this intermediate registration oracle is current internal lane only. Preserve generic field/binder and Choice variant registration when reconciling valid impl deinit versus malformed-source checks; do not claim old counts certify adopted source or destructor runtime, or automatically rewrite the golden. Existing generic_deinit_on_struct pins unique-only rejection but combines capability and placement; no new language decision or audit-time repair.
