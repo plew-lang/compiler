@@ -68,3 +68,7 @@ Batch0058 adds exactly run/mid_float_operand_context.pw/.out for final value:F32
 ## Explicit Mid Immediate Newtype Float Literal Question
 
 Batch0059 adds exactly run/mid_newtype_literal_context.pw/.out for direct7 asRatio where Ratio=F32. Retain existing direct-literal/immediate-newtype contract reconciliation rather than blanket rejection or automatic suffix fix. Other integer extremes, suffixed operand, decimal and nested-wrapper controls remain distinct valid purposes.
+
+## Explicit Nested Operator Literal Context Questions
+
+Batch0063 adds exactly run/operator_literal_nested.pw/.out: ordinary integer arithmetic assigned F64 and if/match value operands next to bare arithmetic need existing finite canonical reconciliation. Spec02 integer-family-only and spec12 local literal sharing versus body-checking independent Output/operand rules must be reconciled before permission/rejection or mechanical suffix changes. Preserve eleven outputs, precedence, unsigned division/range and typed controls; no new inference rule adopted.

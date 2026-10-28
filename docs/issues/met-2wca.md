@@ -183,3 +183,7 @@ Batch0061 adds exactly run/mid_storage_optional_conversion.pw/.out. Coherently m
 ## Explicit Mid Value Context and Module Lookup Optional Labels
 
 Batch0062 adds exactly run/{mid_value_block_context,module_source_attributes}.pw/.out. Standard Some constructors/patterns migrate v to value. The raw registered Optional(v) carrier inside mid_type_recipe_instances is deliberately synthetic and is excluded: its explicit owner/payload recipe test is not a Std declaration migration.
+
+## Explicit Nested Enum and Newtype Boundary Optional Labels
+
+Batch0063 adds exactly run/{nested_generic_enum,newtype_adapter_boundary}.pw/.out. Standard Some constructor/pattern v migrates to value, preserving inner versus outer generic instance identity and inherited Self adapter behavior. Array[Self]/Optional[Self] adaptation is explicitly allowed at spec10 newtype inheritance boundary; this is not generic nominal covariance.

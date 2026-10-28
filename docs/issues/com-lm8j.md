@@ -163,3 +163,7 @@ Batch0061 adds optional prose-only run/mid_short_circuit_cfg_lowering.pw/.out: g
 ## Optional Mid While Legacy Description
 
 Batch0062 adds optional prose-only run/mid_while_cfg_lowering.pw/.out/.ll.expect: global anchor no longer keeps main on legacy lowering, and module-wide mid marker does not uniquely locate loopNoop. Preserve while backedge/fallthrough purpose without introducing mandatory new modes solely for wording.
+
+## Optional Nested Newtype and Ambient Description Precision
+
+Batch0063 optional prose-only run/{nested_aggregate_owner_return,no_import_main,newtype_string_inherit,newtype_struct_inherit}.pw/.out. Mandatory verified Mid supersedes legacy while comment; Lang transitively uses Core; bytes() is method not field; trait mark does not also prove separate inherent method. No new matrix, source or golden change required solely for wording.

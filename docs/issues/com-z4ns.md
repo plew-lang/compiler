@@ -37,3 +37,7 @@ Batch0044 adds exactly run/dictionary_selected_method_signature.pw/.out. Unnamed
 ## Explicit Primitive Generic Method-Inout Source
 
 Batch0050 adds exactly run/generic_method_bound_inout.pw/.out. pub impl U64 as locally owned Absorb is a foreign unnamed implementation; spec07/09/15 require type-owning module regardless trait ownership. Preserve actual8085b90e primitive/String transitive method-instance and nested inout source purpose via an authorized named extension or defining-module form. Do not merely delete primitive coverage or create a local-trait exception. No current compiler behavior was tested.
+
+## Explicit Inherited Newtype Custom Trait Setup
+
+Batch0063 adds exactly run/newtype_conformance_inherit.pw/.out. pub impl String as local Loud is foreign unnamed impl under spec07/09. Preserve inherited standard String/I64 formatting and custom witness dispatch using owner-authorized setup, not a local-trait exception. No current compiler bug reproduced.

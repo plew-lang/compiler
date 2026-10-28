@@ -224,3 +224,7 @@ Batch0061 adds exactly run/{mid_source_fact_presence,mid_source_value_states,mid
 ## Explicit Mid Recipe Module Role and Construction Guards
 
 Batch0062 adds exactly run/{mid_type_recipe_instances,module_source_attributes,named_construction_producer_identity}.pw/.out, representative roots156–158 after batch0061. Ordinary panic calls and legacy statement guards require coherent adopted diverge function migration, retaining missing/foreign call recipes, explicit source-module role registration/copy independence and named-construction producer absence/frozen-result checks. Dual observed/source roots count once per distinct root, not twice.
+
+## Explicit Invalid Operator Operand Range Guards
+
+Batch0063 adds exactly run/operator_invalid_operand_range.pw/.out, representative root159 after batch0062. Ordinary panic guards need adopted explicit Core function use, preserving exact invalid-range Err.message for maxU64 start/length, rejection of Ok/wrong error and Building replacement integrity. Source and observed roles count once per root; no execution.
