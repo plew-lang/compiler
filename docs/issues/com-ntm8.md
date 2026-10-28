@@ -277,3 +277,7 @@ Batch0069 adds exactly run/source_call_result_site_authority.pw/.out. Bare for t
 ## Explicit Conversion Endpoint Loop Binding
 
 Batch0070 adds exactly run/source_conversion_endpoint_scope.pw/.out: one bare for array loop has no existing mutable target. Preserve own/foreign endpoint and identity/array evidence checks using explicit new binding. source_operator_literal_context two bare operation sites already exact0030 are reused, not new intake.
+
+## Explicit Static Signature and Trait Evidence Loop Bindings
+
+Batch0071 adds exactly run/{source_static_signature_evidence,source_trait_self_evidence,static_method_recorded_arguments}.pw/.out. Bare for provided/proof/template have no existing mutable target; three sites require explicit new bindings without weakening signature, justified interface-Self or recorded substitution checks. static_method observed role here does not add primary source-admission credit.

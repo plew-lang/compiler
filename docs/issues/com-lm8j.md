@@ -187,3 +187,15 @@ Batch0068 optional prose-only run/{runtime_intrinsic_process_smoke,self_param_co
 ## Optional Shadowing Backend Description
 
 Batch0069 optional prose-only run/shadowing.pw/.out: same-block rebindings must retain lexical identity through the current Mid/LLVM pipeline, not generated C. Preserve scalar/type/Array binding behavior; no new mode matrix solely for wording.
+
+## Optional Path-Root and Witness Evidence Headers
+
+Batch0071 optional prose-only run/{source_path_root_owner_evidence,source_selected_witness_owner_evidence}.pw/.out: copied box-target header is broader than actual all-any-P subject/binder/root/witness compatibility contrasts. Actual current-path births778263f8/ba295008 differ from --follow box ancestor38d7121c. Preserve meaningful evidence predicates, without inventing a new target-mismatch matrix solely for wording.
+
+## Optional String Byte API Descriptions
+
+Batch0072 optional prose-only run/{string_bytes_count,string_methods}.pw/.out. Clarify bytes() returns a logical CoW Array rather than a borrowed Slice, and avoid suggesting public backing-field access. Preserve source/outputs; no required new runtime matrix or API expansion solely for wording.
+
+## Optional Direct Syntax Mechanism Claim Precision
+
+Batch0073 optional prose-only run/{syntax_direct_entry_cast,syntax_file_direct_top_level_forms}.pw/.out. Goldens show Cast/U64 shape or selected13members/top-level kinds/mode fields; they do not alone prove every grammar form or absence of an internal value-AST/freezer bridge. Shared pinned Syntax entry and registered source architecture gates are separate evidence. Preserve fixtures/goldens and useful direct-shape regression; no mandatory new matrix or renaming merely because historical filenames contain freeze.

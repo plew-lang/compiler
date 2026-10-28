@@ -188,3 +188,7 @@ Batch0067 adds exactly run/{recursive_generic,recursive_generic_multi_instance,r
 ## Explicit Sendability Surface Bare Publication Context
 
 Batch0069 adds exactly run/sendability_surface.pw/.out: bare pub impl Box {factory} repeats unresolved generic publication shorthand, not explicit undeclared Box[T]. Preserve the sendable/nonsendable declaration and signature surfaces and I64 generic instantiation. This fixture does not exercise worker transfer, sendable closure formation or existential boxing and cannot certify their implementation.
+
+## Explicit Generic Nominal Field Factory Context
+
+Batch0072 adds exactly run/struct_generic_struct_field.pw/.out: bare pub impl Box {factory} repeats unresolved generic publication shorthand. struct_destructure_stmt and struct_pattern already exact0027 are reused without new root intake. Preserve generic field/value-return/destructure purposes; do not classify bare marker as explicit unbound Box[T] or silently choose a shorthand rule.

@@ -37,3 +37,7 @@ Batch0067 adds exactly run/ref_pointee_from_place_arc.pw/.out: repeated pub impl
 ## Explicit Returned Shared Holder Publication Markers
 
 Batch0068 adds exactly run/return_owned_local_move_arc.pw/.out: two bare public Holder factory publication markers. Actual2aee8ff4 added standalone marker while original e5c30d0b existing marker remained. Same finite publication-idempotence question, not two custom callable bodies or automatic source ban. Preserve bound/21 shared owner return and caller lifetime purpose.
+
+## Explicit Nested Place Store Repeated Publication Marker
+
+Batch0072 adds exactly run/store_to_place_arc.pw/.out. Original5406437d has one Slot bare factory marker;2aee8ff4 adds a standalone marker leaving the first. Apply the existing finite canonical idempotence/publication question, not duplicate custom-function-body error. Preserve enum reassignment/nested Array reference displacement and cleanup11/12/13 order; no immediate removal chosen during audit.

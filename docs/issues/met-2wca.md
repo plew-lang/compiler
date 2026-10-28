@@ -211,3 +211,11 @@ Batch0068 adds exactly run/{self_inherited_iterator_runtime,semantic_checked_com
 ## Explicit Source Range and Operation Optional Labels
 
 Batch0070 adds exactly run/{source_file_ranges,source_iteration_authority,source_operation_head_projection}.pw/.out. Some v patterns in reader/file handles and the supplied minimal canonical Lang Some(v:T) declaration migrate to adopted value label; the supplied standard resource is not an unrelated custom nominal enum. Preserve multi-file identity, selected next-result authority and scalar operation-head field correspondence.
+
+## Explicit Typing Owner Completion Optional Label
+
+Batch0071 adds exactly run/source_typing_owner_requests.pw/.out: the current completion-result Some(v:...) reader uses adopted standard payload label value instead. Preserve request-local failure, cursor restoration, retry counts and deferred closure preparation distinctions.
+
+## Explicit Generic Field and Supertrait Optional Labels
+
+Batch0072 adds exactly run/{struct_generic_inst_field,struct_generic_inst_field_mutate,supertrait_projection_witness}.pw/.out. Migrate standard Some v constructor/pattern labels to value while preserving nested nominal field substitution, mutation/None and selected inherited projection. User-defined Box.v and other custom payload names are unchanged.

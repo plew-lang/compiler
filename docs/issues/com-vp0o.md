@@ -79,3 +79,7 @@ Batch0060 adds exactly run/{mid_owned_array_call_copy,mid_owned_array_copy,mid_o
 ## Explicit Mid Local Optional Storage Conversion Oracle
 
 Batch0061 adds exactly run/mid_storage_optional_conversion.pw/.out. Whole existing Optional[Person] call result/None/local replacement cannot become Optional[anyNamed] under invariance. Preserve saved storage conversion/None/returned ownership purposes in admitted source or finite internal/reject lane; do not retain obsolete covariant nominal exception from header or history.
+
+## Explicit Structural Conversion Owner Oracle
+
+Batch0071 adds exactly run/source_structural_owner_evidence.pw/.out. Its constructed Array/Wrap conversion plans expect nominal existential lift success, contrary to spec06 invariance. Internal fake Array/Lang module setup is not itself an ordinary source covariance rule. Preserve record-element conversion, retained proof children, corrupt/missing-plan rejection and no runtime-finalization purpose in a reconciled permitted context; direct boxing/structural records differ from forbidden nominal lift. No automatic golden edit, semantic exception or compiler/test repair during audit.

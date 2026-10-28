@@ -52,7 +52,7 @@ all future features implemented or all resulting defects already fixed.
 
 ## Current Reconciled Subset
 
-Primary source-audit count:2675 of the assigned3132 obligations, comprising184 internal outcomes,1339 source-admissions (all50 panic,93 part and1196 run), and1152 source-rejections (all84 partreject plus1068 standalone). Cross-owner total2913 obligations/75 complete plan batches. Counts are inspected contract bundles, not executed assertions or whole-domain completion.
+Primary source-audit count:2795 of the assigned3132 obligations, comprising201 internal outcomes,1442 source-admissions (all50 panic,93 part and1299 run), and1152 source-rejections (all84 partreject plus1068 standalone). Cross-owner total3033 obligations/78 complete plan batches. Counts are inspected contract bundles, not executed assertions or whole-domain completion.
 
 Exact IDs, input identity, independent receipts, accepted corrections and limits are canonical in meta/evidence/test-audit/scoped-reviews/{outcome-reconciliation,source-admission-reconciliation,frontend-rejection-reconciliation}.json and linked producer reports. Parent and contract-first reviewers read selected complete inputs, relevant positive/negative controls and source/runner contracts. All assigned unread units remain this audit's work.
 
@@ -60,5 +60,5 @@ Confirmed competing-failure setups, source/API migrations, current implementatio
 
 Reviewer corrections included false projection attribution, optional-versus-required reason scope, Optional label qualification, qualified valid-source wording and same-content Git-history misattribution. Original purpose needs selected root content and path-fixed history; --follow locators alone are not proof. Prior snapshot hashes are retained rather than rewritten as if reviewers saw later changes. Evidence records limited report/issue-text exposure honestly.
 
-No real Plew compiler, generated program, native sanitizer or performance run was executed; compiler/std/tests/expectations/runners remain at source baseline9665094d. Existing binary/cache dirt is excluded. Finite audit acceptance is neither repair acceptance nor whole frontend/phase-three/main/seed readiness. Next work is batch0071 onward and the remaining assigned obligations.
+No real Plew compiler, generated program, native sanitizer or performance run was executed; compiler/std/tests/expectations/runners remain at source baseline9665094d. Existing binary/cache dirt is excluded. Finite audit acceptance is neither repair acceptance nor whole frontend/phase-three/main/seed readiness. Next work is batch0074 onward and the remaining assigned obligations.
 
