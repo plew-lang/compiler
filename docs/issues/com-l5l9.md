@@ -44,3 +44,9 @@ requires meaningful RED/GREEN and scoped independent review, outside the audit.
 Evidence: meta/evidence/test-audit/scoped-reviews/frontend-batch-0066.json and
 its independent receipt. No compiler/std/test/golden/runner changes or real
 compiler/native/ASan execution during the audit.
+
+## Named Destructure Binding Drop Order
+
+Batch0094 adds exactly run/destructure_two_arc.pw/.out. Independent Cell roots become named x=1,y=2 then p=3,q=4. Spec03:114 ends hidden non-call record temporary holding at full-statement end;120 named locals then drop in reverse declaration order. The resulting q,p,y,x tail is4,3,2,1, while the current golden pins3,4,1,2. Original8ff2a2e expressly retained hidden __dtN record owners until scope and pinned grouped field order; that historical implementation does not override the adopted owner boundary. This is a source-backed oracle mismatch, not a fresh executed compiler failure.
+
+Reconcile this exact named-field case alongside the original discarded-field case, tracing temporary creation, field copies/ownership transfer, aliases and cleanup to the final observer. Preserve two independent destructures, explicit renames/temp hygiene and exactly-once cleanup; do not fix only stdout or introduce a record-specific lifetime exception. Single-cell destructure_ref_bind_arc, independently retained destructure_assign_mixed and Dictionary unspecified current-layout order must not be mechanically reversed. Existing source ref/deinit migration stays separate and no audit-time fixture/expectation/compiler repair was made.

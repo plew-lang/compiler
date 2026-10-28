@@ -9,7 +9,7 @@ priority: 2
 assignee: Koji Murata
 tags: [ownership, verification]
 ---
-# Distinguish explicit argument retirement from via call results
+# Distinguish argument destruction from nested call results
 
 
 ## Contract and Evidence
@@ -27,3 +27,9 @@ Limit work to this fixture's direct/via/generic bridge with actually owned value
 ## Completion
 
 Use task-start TDD on fixed inputs and selected carrier. Show that the resulting oracle rejects the specific late-explicit-release order and accepts the specified call-completion order on the real relevant path; retain result validity, default order and worker cleanup checks. Independently review expected markers, actual producer-to-final-observer path and relevant controls/gates. Do not claim ordinary stdout proves all ARC safety. This repair is outside test-audit closure and is not its prerequisite; the audit executed no actual compiler/program/sanitizer and changed no fixture.
+
+## Closure Callable Temporary Boundary
+
+Batch0093 explicitly extends scope by exactly run/closure_temp_arg_arc.pw/.out, one additional fixture alongside the original via-lifetime pair. Nested g(c: temporary Cell v=2) returns I64=2 while that Cell deinit also prints2, so correct call-end release and faulty release after enclosing print both yield2/2/after-temp. The returned scalar owns no Cell; spec03:113 includes closure calls before the outer expression resumes. Original10b686d8 targeted anonymous temporary ownership homes and place arguments; preserve that leak regression, String temporary and retained keep/end/9 observations.
+
+Use distinct destructor/result markers and meaningful correct/late-release controls for this closure callable path, preserving the original three direct/via/generic routes. Existing ordinary borrow/default tests do not cover the same closure entry; closure_param_borrow_arc has no destruction marker. No general closure rewrite, argument matrix, source semantic change, actual compiler fault or audit-time repair is asserted. Existing reference/deinit migrations and optional old statement-end prose remain separate. The second exact pair extends the finite scope; other exclusions and audit-nondependency remain unchanged.

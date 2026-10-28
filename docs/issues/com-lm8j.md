@@ -243,3 +243,19 @@ Batch0090 optionally qualifies exactly run/async_arc_teardown.pw/.out. Its heade
 ## Closure Parameter Cleanup Description
 
 Batch0092 optionally qualifies exactly run/closure_param_borrow_arc.pw/.out. Lengths15/5/3 after repeated closure parameter/fallthrough calls preserve the value/retention regression, but do not count exact +0/per-activation retain/unwind operations or prove all memory safety. Align any mechanism prose with current source-owned call/environment cleanup rather than deleting legitimate historical context. cast is existing0039 exact reuse. closure_array_for_arc two-word historical payload context and two concrete release markers are retained: the preliminary universal-layout concern was withdrawn, with no new intake or mandatory matrix.
+
+## CoW Observable Independence and Historical Gateways
+
+Batch0094 optionally qualifies exactly run/{cow_construct_share,cow_enum_share_mut,cow_gw_elem_field_array,cow_string_elem}.pw/.out. Preserve independent values and genuine heap-backed String coverage. Outputs do not require physical RC sharing instead of eager copying or prove fresh ASan cleanliness; old consumeIntoOwned/placePtrOfWrite/sole-gateway wording must not designate a competing current authority after canonical Mid ownership. Keep accurate finite historical internal context rather than erasing every mechanism description. dict_compound_assign is existing0044 exact reuse. No mandatory universal cost/safety matrix or audit-time source repair.
+
+## Compound Place Mechanism and Construction Examples
+
+Batch0093 optionally qualifies exactly run/{compound_assign_place_once,construct_field_literal}.pw/.out. Preserve one evaluation of the side-effecting place key and contextual record/Dictionary field values. A retired named-Lower implementation explanation must not become a second current authority; Unit is not an actual selected field example in construct_field_literal and needs no mandatory new test solely to satisfy prose. closure_shadow_capture and closure_temp_arg_arc are existing exact descriptions, not two new intakes; the latter lifetime detector gap is independently mandatory under met-6zp3.
+
+## Floating Print and Compound Assignment Descriptions
+
+Batch0097 optionally qualifies exactly run/{float_compound_assign,float_literal}.pw/.out: the old local-kind explanation is historical, and current generic Io.print constructs String through Format rather than directly calling plew_print_f64 for those expressions. Preserve the finite numeric results and genuine historical context; no numerical representation redesign or added universal precision matrix is required. from_conversion is existing0048 exact prose reuse; float_f32 physical-double comment is already within com-s922 finite source/precision qualification. Audit makes no fixture/compiler repair or execution.
+
+## Division Helper Description
+
+Batch0095 optionally qualifies exactly run/div_mod.pw/.out: historical plew_div/plew_mod names no longer designate the current checked LLVM width-helper path. Preserve selected signed truncation/remainder outputs and true historical purpose; no numerical redesign. dict_str_value/dictionary_subscript/enum_record_form are prior0044/0045 exact prose reuse. No audit-time source repair or execution.
