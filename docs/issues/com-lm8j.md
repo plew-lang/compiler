@@ -259,3 +259,15 @@ Batch0097 optionally qualifies exactly run/{float_compound_assign,float_literal}
 ## Division Helper Description
 
 Batch0095 optionally qualifies exactly run/div_mod.pw/.out: historical plew_div/plew_mod names no longer designate the current checked LLVM width-helper path. Preserve selected signed truncation/remainder outputs and true historical purpose; no numerical redesign. dict_str_value/dictionary_subscript/enum_record_form are prior0044/0045 exact prose reuse. No audit-time source repair or execution.
+
+## Generic Enum Result and Dispatch Descriptions
+
+Batch0099 optionally qualifies exactly run/{generic_enum_array,generic_enum_dispatch}.pw/.out. Preserve genuine historical8/16byte stride failures and inline enum argument purposes. Old exprLlvmType/llvmArgTypeRef or backend resolver explanations are historical rather than current semantic selection authorities; prepared result readers consume saved facts rather than construction-time grounding. generic_free_fn is prior exact prose reuse; checking is command/demand-sensitive, not proved eager by the output. Preserve current finite values, no source repair, numerical redesign or all-mechanism comment sweep.
+
+## Mutual Generic Body Description
+
+Batch0100 optionally qualifies exactly run/generic_mutual_recursion_body_instances.pw/.out: left/right are two distinct generic declarations, each body shared across its own I64/String instances. The header singular shared-AST wording should not imply both declarations have one body identity. Preserve mutual recursion/instance outputs7/tea; no added test or compiler repair. generic_transitive/hash_siphasher reuse existing exact command-sensitive checking/process-seed descriptions, without demanding collision freedom for all hash seeds.
+
+## Generic Associated Call and Inference Examples
+
+Batch0098 optionally qualifies exactly run/{generic_assoc_fn,generic_ctor_infer}.pw/.out. Pair.of/Box.make/dup are associated functions rather than multi-parameter factories; the inference header Map example is actually Pair[U64,U64] in source. Preserve six transitive associated-call and four top-down/multi-parameter inference outputs. The separate generic publication identity question stays with com-owb3. No source repair, added universal matrix or erasure of legitimate old representation failure context.

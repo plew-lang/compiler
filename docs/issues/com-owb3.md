@@ -200,3 +200,7 @@ Batch0078 adds exactly run/{try_from_generic_convert,try_from_receiver_identity}
 ## Explicit User Collection and Generic Value Copy Factory Publication
 
 Batch0080 adds exactly run/{user_collection,value_semantics_generic}.pw/.out. Bare generic owner pub impl Stack/Box factory marker shares the existing unresolved publication shorthand question; neither is undeclared explicit T in impl Box[T]. Preserve floor-only Stack operations and copied Box[Array[I32]] mutation independence. No shorthand validity chosen from current acceptance.
+
+## Generic Publication Marker Site Relationship
+
+Batch0098 refines the already exact run/generic_assoc_fn.pw/.out intake, without a new root or source credit. Original47ede4e9 bound impl Pair[A,B]/Box[T] each has a factory publication marker; actual2aee8ff4 added standalone bare Pair/Box markers without removing the bound markers. Resolve the existing bare generic publication identity question here, then reconcile repeated exposure of the same synthesized memberwise factory with the finite question in [met-4slo](met-4slo.md). That owner retains nongeneric marker identity; no generic binder migration is transferred. Do not decide idempotence/rejection from current acceptance or treat markers as duplicate custom factory bodies. Preserve six associated-call/transitive instance outputs. Audit changes no source rule, fixture, expectation or compiler.
