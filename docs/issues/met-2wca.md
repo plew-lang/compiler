@@ -179,3 +179,7 @@ Batch0060 adds exactly run/{mid_owned_conversion_boundaries,mid_owned_enum_call_
 ## Explicit Mid Optional Storage Payload Labels
 
 Batch0061 adds exactly run/mid_storage_optional_conversion.pw/.out. Coherently migrate standard Some v construction and patterns to value while preserving local names/None controls; whole nominal covariance remains independently com-vp0o.
+
+## Explicit Mid Value Context and Module Lookup Optional Labels
+
+Batch0062 adds exactly run/{mid_value_block_context,module_source_attributes}.pw/.out. Standard Some constructors/patterns migrate v to value. The raw registered Optional(v) carrier inside mid_type_recipe_instances is deliberately synthetic and is excluded: its explicit owner/payload recipe test is not a Std declaration migration.

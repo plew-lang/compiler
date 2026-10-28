@@ -220,3 +220,7 @@ Batch0060 adds exactly run/{mid_ownership_reachability,mid_panic,mid_record_arra
 ## Explicit Mid Fact and View Guard Contexts
 
 Batch0061 adds exactly run/{mid_source_fact_presence,mid_source_value_states,mid_static_view_boundary}.pw/.out, representative roots153–155 after batch0060. Host and isolated embedded legacy/ordinary panic calls require coherent adopted ordinary diverge declaration/use setup, not an ambient panic spelling privilege. Preserve knownUnit/nonvalue/generic states and missing/foreign fact/view controls. mid_source_owner_admission was already exact in Batch0020 (representative27) and is reused without new-root inflation.
+
+## Explicit Mid Recipe Module Role and Construction Guards
+
+Batch0062 adds exactly run/{mid_type_recipe_instances,module_source_attributes,named_construction_producer_identity}.pw/.out, representative roots156–158 after batch0061. Ordinary panic calls and legacy statement guards require coherent adopted diverge function migration, retaining missing/foreign call recipes, explicit source-module role registration/copy independence and named-construction producer absence/frozen-result checks. Dual observed/source roots count once per distinct root, not twice.

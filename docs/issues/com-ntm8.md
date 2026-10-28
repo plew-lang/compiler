@@ -249,3 +249,7 @@ Batch0059 adds exactly run/mid_instance_demand.pw/.out: bare for body enumerates
 ## Explicit Mid Structural Traversal Loop Bindings
 
 Batch0061 adds exactly run/mid_structural_traversal.pw/.out. Three for tag sites at17/27/34 lack earlier mutable targets; preserve duplicate successors, pool-relative captures/aggregate children, repeated operands and phase classifications with explicit new binding. Initial reviewer four-site locator count corrected to three before producer.
+
+## Explicit Mid Recipe Wrong-Site Loop Binding
+
+Batch0062 adds exactly run/mid_type_recipe_instances.pw/.out: bare for wrongSite lacks earlier mutable target. Preserve wrong owner/slot call-site rejection, knownUnit versus forged/missing result and instance separation with explicit new binding.

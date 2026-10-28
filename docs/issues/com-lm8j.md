@@ -159,3 +159,7 @@ Batch0060 adds optional prose-only run/{mid_operand_build_error_propagation,mid_
 ## Optional Mid Short Circuit Legacy Description
 
 Batch0061 adds optional prose-only run/mid_short_circuit_cfg_lowering.pw/.out: global anchor does not keep main legacy under verified-Mid-only entry. Preserve short-circuit effect/loop/argument/negation outputs, no mandatory new coverage matrix solely for wording.
+
+## Optional Mid While Legacy Description
+
+Batch0062 adds optional prose-only run/mid_while_cfg_lowering.pw/.out/.ll.expect: global anchor no longer keeps main on legacy lowering, and module-wide mid marker does not uniquely locate loopNoop. Preserve while backedge/fallthrough purpose without introducing mandatory new modes solely for wording.
