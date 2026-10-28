@@ -304,3 +304,11 @@ Batch0127 adds exactly tests/compiler/mid/{ParametricBodyCoverage,DeclarationAcc
 ## Manual Compiler Callback and Global-Module Guards
 
 Batch0129 adds exactly tests/compiler/codegen/CompilerCallback.pw (three legacy guards), GlobalModules.pw (two guards), and test-global-modules.py generated --exposed Requested.pw (one guard). Migrate to explicitly imported ordinary Core panic while preserving callback/open/lowering refusal, global module failures and C41->42 wrapper/callee sentinel. These are three helper/generated contexts, not new registered run roots or execution proof.
+
+## Manual Session JIT Panic Guards
+
+Batch0130 adds exactly tests/compiler/codegen/SessionJit.pw ten outer legacy unimported panic guard sites. Migrate to explicitly imported ordinary Core panic while preserving partial-main preparation with unused invalid body, owned module/context transfer, host argument address and terminal failed-JIT refusal. This manual helper is not a new run representative, automatic-registration requirement or full ORC/source API migration. No compiler execution or source repair.
+
+## Whole-Check No-Execution Panic Input
+
+Batch0131 adds exactly tests/tooling/test-check-command.py generated not-executed positive, which uses a legacy unimported panic statement. Reconcile ordinary imported Core panic without executing the body or weakening whole-check status0, no backend/finalize markers/artifacts and empty stdout. This generated context is not a new run root, proof of source execution or full check semantics migration.

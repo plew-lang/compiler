@@ -208,3 +208,7 @@ Batch0098 refines the already exact run/generic_assoc_fn.pw/.out intake, without
 ## Generated Declaration Access Owner
 
 Batch0127 adds exactly tests/compiler/mid/test-declaration-access.py generic-owner variant and its DeclarationAccessInput.pw template. The driver changes Observer to Observer[T] and emits pub impl Observer[T] without introducing impl[T]. This is an explicit unbound binder setup mismatch, distinct from unresolved bare generic publication. Preserve the generic destruction/global-effect conflict contrast using the canonical binder declaration; other generated cases, base struct-body deinit and legacy panic migrations are separate. Read-only reconstruction hash ccb3c66b12fb4c067d98d3b7a04aa4a0821c28152b42b824f4f6180056332127; no case compiled or repaired in audit.
+
+## Manual Restart Generic Variant Binder
+
+Batch0135 adds exactly scripts/diagnostics/orc-restart/source_variants.py generic branch, Region.pw template and restart-check.py --scenario mixed consumer. The emitted pub impl Revision[T] { factory } uses T without impl[T] introducing it; actual aeaa19dd origin has the same form. Reconcile this explicit-binder setup while preserving deterministic revision/layout/generic-instance and independent AOT/manual-host comparisons. This is not the unresolved bare generic publication form, a current ORC fault, a reusable product Hot Restart requirement or executed rejection. No source repair performed.

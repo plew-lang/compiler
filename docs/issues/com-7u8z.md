@@ -66,3 +66,7 @@ Batches0006/0007 add exactly these nine paths, bringing the selected scope to tw
 - tests/fixtures/partreject/publicapiclosure_trait_alias/Plew.toml
 
 All omit the specified target plew version; same_name also uses the old dependency table. Preserve intended phantom dependency versus genuinely package-root-public hidden type/trait rejection, alias/global/namespace/newtype identity and same-spelling external type contrasts. Specific Main.err substring checks can fail during invalid setup and do not certify these manifests. Canonical schema reconciliation remains bounded; there is no arbitrary extension to all packages.
+
+## Generated Dependency Harness Manifest Contexts
+
+Batch0130 adds exactly tests/harness/test-deps.sh nine generated Plew.toml instances: leaf, mid, app1, app2, app3, leaf2, mida, midb and app4 (mkmid template invoked twice). All omit plew; seven contain dependency keyed tables and two have no dependency table. Apply the existing unresolved canonical schema ruling, without deciding it from current table-parser acceptance. Preserve newest/explicit/transitive/two-major lock, CLI/cache and runtime-value checks. These are generated setup contexts, not new primary source roles or a wholesale resolver feature request.

@@ -55,12 +55,12 @@ all future features implemented or all resulting defects already fixed.
 ## Reconciled Audit Subset
 
 The four [canonical reconciliation indices](../../../evidence/test-audit/scoped-reviews/README.md#canonical-reconciliation)
-contain exactly40 of404 driver-primary obligations:7observed outcomes,
-25generation contracts,5checker contracts and3meta operational roles. Shared runtime-primary
+contain exactly142 of404 driver-primary obligations, by exact role
+{'observed-behavior': 7, 'generation': 25, 'meta-operational-control': 3, 'checker-contract': 29, 'diagnostic-role': 9, 'role-intake': 69}. Shared runtime-primary
 roles do not increase this task's count. Exact ID/role/owner partition is canonical
 in those indices, not inferred from report count or execution results.
 
-Batches0128/0129 independently reconcile actual generation/provider and manual
+Batches0128/0129/0132 independently reconcile actual generation/provider and manual
 callback/global/ORC paths, helper source setup, exact prior range reuse,
 and synthetic meta supervision controls. Existing finite owners preserve scope;
 no real compiler/program/sanitizer execution or production repair. Remaining
