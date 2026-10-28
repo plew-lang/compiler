@@ -52,7 +52,7 @@ all future features implemented or all resulting defects already fixed.
 
 ## Current Reconciled Subset
 
-Primary source-audit count:3132 of the assigned3132 obligations, comprising{'observed-behavior': 251, 'source-admission': 1707, 'source-rejection': 1157, 'checker-contract': 9, 'role-intake': 8} by exact role. Cross-owner total4214 obligations/111 complete plan batches. Counts are inspected contract bundles, not executed assertions or whole-domain completion.
+Primary source-audit count:3132 of the assigned3132 obligations, comprising{'observed-behavior': 251, 'source-admission': 1707, 'source-rejection': 1157, 'checker-contract': 9, 'role-intake': 8} by exact role. Cross-owner total4332 obligations/114 complete plan batches. Counts are inspected contract bundles, not executed assertions or whole-domain completion.
 
 Exact IDs, input identity, independent receipts, accepted corrections and limits are canonical in meta/evidence/test-audit/scoped-reviews/{outcome-reconciliation,source-admission-reconciliation,frontend-rejection-reconciliation,support-reconciliation}.json and linked producer reports. Parent and contract-first reviewers read selected complete inputs, relevant positive/negative controls and source/runner contracts. All assigned unread units remain this audit's work.
 
