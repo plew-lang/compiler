@@ -253,3 +253,7 @@ Batch0061 adds exactly run/mid_structural_traversal.pw/.out. Three for tag sites
 ## Explicit Mid Recipe Wrong-Site Loop Binding
 
 Batch0062 adds exactly run/mid_type_recipe_instances.pw/.out: bare for wrongSite lacks earlier mutable target. Preserve wrong owner/slot call-site rejection, knownUnit versus forged/missing result and instance separation with explicit new binding.
+
+## Explicit Prepared Body Block and Shape Loop Bindings
+
+Batch0065 adds exactly run/{prepared_call_expression_source,prepared_value_block_source_owner,projected_destruction_shape}.pw/.out. Six sites bare body/block/global/field/child/term have no earlier mutable target. Adopt explicit new val/mut val binding while preserving all-body preparation, block source isolation and shape query no-body/layout side effects. No unread loop corpus transfer.

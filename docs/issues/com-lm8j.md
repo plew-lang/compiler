@@ -167,3 +167,11 @@ Batch0062 adds optional prose-only run/mid_while_cfg_lowering.pw/.out/.ll.expect
 ## Optional Nested Newtype and Ambient Description Precision
 
 Batch0063 optional prose-only run/{nested_aggregate_owner_return,no_import_main,newtype_string_inherit,newtype_struct_inherit}.pw/.out. Mandatory verified Mid supersedes legacy while comment; Lang transitively uses Core; bytes() is method not field; trait mark does not also prove separate inherent method. No new matrix, source or golden change required solely for wording.
+
+## Optional Overload Selector and Direct Finalizer Description
+
+Batch0064 optional prose-only run/{overload,p2_finalizer_direct_call}.pw/.out. Selector is name+labels, argument types distinguish its overloads; finalizer no longer flows through legacy emitter. Empty outputs do not mandate an extra outcome matrix solely to correct wording.
+
+## Optional Array Receiver and Primitive Format Description
+
+Batch0065 adds optional prose-only run/{prelude_array,print_format}.pw/.out. Receiver get/set resolution needs no method import but these are not ambient free names; selected I8/U8/I32/I64/U64+Bool sample is not all integer widths. Existing provided_method_valid0023 (total returns first) and pub_get_field0055 (module-private versus impl-only) exact comments reused, no duplicate intake or mandatory new width/mode matrix.

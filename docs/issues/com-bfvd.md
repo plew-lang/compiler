@@ -228,3 +228,11 @@ Batch0062 adds exactly run/{mid_type_recipe_instances,module_source_attributes,n
 ## Explicit Invalid Operator Operand Range Guards
 
 Batch0063 adds exactly run/operator_invalid_operand_range.pw/.out, representative root159 after batch0062. Ordinary panic guards need adopted explicit Core function use, preserving exact invalid-range Err.message for maxU64 start/length, rejection of Ok/wrong error and Building replacement integrity. Source and observed roles count once per root; no execution.
+
+## Explicit Panic Pattern-Storage and Pending Conversion Guards
+
+Batch0064 adds exactly run/{panic,pattern_input_storage,pending_source_conversion_completion}.pw/.out, representative roots160–162 after0063. Legacy statement and ordinary guard forms both migrate coherently to explicit imported Core diverge fn. Preserve inactive diverging source branches, all12 storage combinations with occurs rejection, and pending conversion refusal/refinement/closed-owner refusal; dual roles count once per root.
+
+## Explicit Prepared Owner and Protocol Guards
+
+Batch0065 adds exactly run/{prepared_access_source_owner,prepared_aggregate_source_owner,prepared_binding_source_owner,prepared_body_expression_owner,prepared_call_expression_source,prepared_match_source_owner,prepared_try_source_owner,prepared_value_block_source_owner,protocol_selected_result_authority}.pw/.out, representative roots163–171 after0064. Preserve unprepared/foreign/missing/failed/sealed source-owner refusals, stable saved reader facts, session preparation and protocol result/slot identity while migrating ordinary and legacy panic guards coherently to explicit imported Core function. Source and observed roles count once per distinct root; no execution.

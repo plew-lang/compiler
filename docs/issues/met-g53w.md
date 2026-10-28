@@ -305,3 +305,7 @@ checks genuine error versus optional hints, and produces finite follow-up tasks.
 Removing a hint is permitted; removing legitimate visibility enforcement is not.
 The unrelated generic-requirement boxing observation remains unclassified here,
 and was not bundled into the newly requested lexical/visibility task.
+
+## Explicit Existential Capability Overload Oracle
+
+Batch0064 adds exactly run/overload_existential_capability_distinct.pw/.out for finite source-oracle reconciliation. Spec08:375 allows any sendable P to erase guarantee to any P; spec07:109 separates valid declaration pair from call uniqueness and adds no specialization. plain call only fits ordinary parameter, safe call fits both unless an already adopted selection rule resolves it. Recover canonical grounds before preserving expected2 or changing test; current exact-before-erasure implementation is not normative evidence and no compiler bug was reproduced. Preserve declared capability distinction, directional erasure and ordinary unambiguous call. Existing overload_shared_declaration_admission unused generic requirement box formation remains explicitly unclassified above, not blanket future unsupported invocation scope.

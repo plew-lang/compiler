@@ -187,3 +187,11 @@ Batch0062 adds exactly run/{mid_value_block_context,module_source_attributes}.pw
 ## Explicit Nested Enum and Newtype Boundary Optional Labels
 
 Batch0063 adds exactly run/{nested_generic_enum,newtype_adapter_boundary}.pw/.out. Standard Some constructor/pattern v migrates to value, preserving inner versus outer generic instance identity and inherited Self adapter behavior. Array[Self]/Optional[Self] adaptation is explicitly allowed at spec10 newtype inheritance boundary; this is not generic nominal covariance.
+
+## Explicit Chain and Unsigned Optional Label Controls
+
+Batch0064 adds exactly run/{optchain_generic_method,optchain_multiparam_chain,optchain_place_arc,optchain_projected_result,optchain_propagate,optchain_propagate_ref,optional_chain,optional_unsigned_elem}.pw/.out, eight new pairs. Existing overload_receiver_structural_identity pair already exact Batch0022 is reused, not ninth new root. Standard Some v migrates to value; custom Slot.Full(v) and Cell.v remain. Preserve parametric/projection/multiparam/short-circuit/shared-handle and unsigned element purposes.
+
+## Explicit Prepared Owner and Minimal Std Optional Labels
+
+Batch0065 adds exactly run/{prepared_aggregate_source_owner,prepared_binding_source_owner,prepared_body_expression_owner,prepared_call_expression_source,prepared_match_source_owner,protocol_selected_result_authority}.pw/.out. First five host roots use standard Some v producers/patterns; protocol_selected_result_authority supplies parsed plew:std/Lang Optional(v), like existing0052 Std replacement. Both require adopted value label reconciliation. This differs from manually registered raw0062 custom carrier; do not rewrite arbitrary custom payload names. Preserve owner/global target/closure and exact Iterator selected result identity.

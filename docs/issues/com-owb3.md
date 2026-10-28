@@ -172,3 +172,7 @@ Batch0060 adds exactly run/mid_receiver_pattern_layout.pw/.out: bare pub impl Pa
 ## Explicit Mid Generic Struct Pattern Publication
 
 Batch0061 adds exactly run/mid_struct_pattern_lifetime.pw/.out: bare pub impl Package factory repeats existing unresolved generic publication, not explicit undeclared Package[T]. Preserve generic copies, String closure capture, pattern punning/rename, once-evaluated temporary and owner lifetime through canonical reconciliation.
+
+## Explicit Chain and Nominal Overload Factory Contexts
+
+Batch0064 adds exactly run/{optchain_generic_method,overload_generic_instance}.pw/.out. Bare pub impl Box {factory} remains finite unresolved shorthand question, not explicit unbound Box[T] defect. Preserve generic payload chain instance and full Box[I64]/Box[String] overload comparison.
