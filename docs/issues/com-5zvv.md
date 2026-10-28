@@ -1,6 +1,6 @@
 ---
 id: com-5zvv
-status: in_progress
+status: closed
 deps: [com-5by1, com-ouh2]
 links: []
 created: 2026-10-26T12:48:12Z
@@ -52,16 +52,27 @@ inventory revision, assertion dispositions, grounds and scoped independent revie
 Completion means the assigned finite audit is reconciled, not zero unknown bugs,
 all future features implemented or all resulting defects already fixed.
 
-## Reconciled Audit Subset
+## Outcome
 
-The four [canonical reconciliation indices](../../../evidence/test-audit/scoped-reviews/README.md#canonical-reconciliation)
-contain exactly404 of404 driver-primary obligations, by exact role
-{'observed-behavior': 7, 'generation': 25, 'meta-operational-control': 3, 'checker-contract': 29, 'diagnostic-role': 31, 'role-intake': 309}. Shared runtime-primary
-roles do not increase this task's count. Exact ID/role/owner partition is canonical
-in those indices, not inferred from report count or execution results.
+Investigated: all 404 assigned obligations: seven observed outcomes, 25 generation contracts, three meta operational controls, 29 checker contracts, 31 diagnostic roles and 309 role intakes are reconciled. Exact IDs, inputs,
+reports, independent receipts, accepted corrections and finite finding owners
+are canonical in the four
+[reconciliation indices](../../../evidence/test-audit/scoped-reviews/README.md#canonical-reconciliation).
+No assigned unread obligations or unowned required audit findings remain here.
 
-Batches0128/0129/0132 independently reconcile actual generation/provider and manual
-callback/global/ORC paths, helper source setup, exact prior range reuse,
-and synthetic meta supervision controls. Existing finite owners preserve scope;
-no real compiler/program/sanitizer execution or production repair. Remaining
-checker/diagnostic/intake obligations and area closure remain this audit's work.
+Independent [area closure](../../../evidence/test-audit/scoped-reviews/review-driver-area-closure.json)
+SHA 1c63111ad7c67862387e39cdbcde39cb4fb74464a9350716024c29e1d61b8bfe accepts this finite audit after
+contract-first partition and scoped intent/oracle/path/control/owner review.
+Prior input-matched evidence reuse and reviewer exposure remain disclosed;
+counts and review receipts alone are not a semantic correctness proof.
+
+Generated, manual, native/ORC and standard-dispatch inputs retain their actual request and registration boundaries. Batch131 preserves its original snapshots and redirects the missing-golden finding to existing com-mt7l; met-py42 is a closed duplicate. Source acceptance and shared runtime obligations are not counted twice.
+
+Source/API migration, concrete masking errors, weak oracles, unsupported lanes
+and unresolved semantics remain distinct under finite responsible owners.
+This investigation does not repair or decide those items. No actual Plew
+compiler, generated/native/JIT program, sanitizer or performance run occurred;
+controlled checker/reader/worker observations remain narrow evidence only.
+Production source baseline 9665094d, spec 5bd65a5 and exact Syntax 8c892042 are
+unchanged. No implementation, phase-three, main/seed or carrier acceptance
+follows. Whole-corpus closure belongs separately to com-tqzw.

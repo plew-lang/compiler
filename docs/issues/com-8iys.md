@@ -1,6 +1,6 @@
 ---
 id: com-8iys
-status: in_progress
+status: closed
 deps: [com-5by1, com-ouh2]
 links: []
 created: 2026-10-26T12:48:12Z
@@ -52,12 +52,27 @@ inventory revision, assertion dispositions, grounds and scoped independent revie
 Completion means the assigned finite audit is reconciled, not zero unknown bugs,
 all future features implemented or all resulting defects already fixed.
 
-## Current Reconciled Subset
+## Outcome
 
-Primary audit count:1529 of1529 assigned obligations, by exact role{'observed-behavior': 1424, 'llvm-literal': 66, 'role-intake': 2, 'instrumentation-contract': 5, 'checker-contract': 32}. Exact role IDs, report/receipt hashes and all finite qualifications are indexed by meta/evidence/test-audit/scoped-reviews/{outcome-reconciliation,support-reconciliation}.json. Source-admission/rejection work has its separate frontend owner and is not counted here.
+Investigated: all 1,529 assigned obligations: 1,424 observed outcomes, 66 LLVM predicates, 32 checker contracts, five instrumentation contracts and two role intakes are reconciled. Exact IDs, inputs,
+reports, independent receipts, accepted corrections and finite finding owners
+are canonical in the four
+[reconciliation indices](../../../evidence/test-audit/scoped-reviews/README.md#canonical-reconciliation).
+No assigned unread obligations or unowned required audit findings remain here.
 
-Reconciled units and exact completed batch membership are recorded in the canonical reconciliation files above; each retains its finite source/contract scope. Every selected input/companion, original purpose, canonical oracle, real runner mode and finite detection boundary was inspected. No actual compiler, generated program, native sanitizer or performance execution occurred; accepted static evidence does not certify runtime repair or all memory safety.
+Independent [area closure](../../../evidence/test-audit/scoped-reviews/review-runtime-area.json)
+SHA 4f57dde70d07c0337cfd91924db179fe1459b3ecbf5636da1d354e1646ce96c0 accepts this finite audit after
+contract-first partition and scoped intent/oracle/path/control/owner review.
+Prior input-matched evidence reuse and reviewer exposure remain disclosed;
+counts and review receipts alone are not a semantic correctness proof.
 
-Source/API migrations remain qualified under their existing exact/broad owners. Fixed module-wide LLVM predicates reuse com-pshx; they are not target-specific lowering certificates. Existing com-4vr8 owns the exact array/Buffer/Dictionary and discarded-place immortal-String assertion gaps; met-6zp3 owns indistinguishable argument-destruction/result markers in the exact via and closure temporary cases. com-l5l9 retains the named destructure golden mismatch; met-k62r owns the bounded missing-key Dictionary Index trap control. Useful value/size/CoW/default-order checks remain preserved; neither source-backed gap is a reproduced compiler memory fault. Other finite owners are canonical in disposition.json, not a second manual progress list.
+The actual registered borrowed-receiver retain checker is acknowledged by the indexed batch104 correction; its earlier absence premise is withdrawn. Module-wide IR spelling checks, immortal payloads, raw compiler versus generated-program instrumentation and nested JIT exclusions retain their precise limits.
 
-All remaining assigned units stay this audit's work. Next is batch0144 onward, followed by area/final reconciliation; this task remains in_progress. No repair, phase-three completion, main/seed or whole-corpus certification follows from these checkpoints.
+Source/API migration, concrete masking errors, weak oracles, unsupported lanes
+and unresolved semantics remain distinct under finite responsible owners.
+This investigation does not repair or decide those items. No actual Plew
+compiler, generated/native/JIT program, sanitizer or performance run occurred;
+controlled checker/reader/worker observations remain narrow evidence only.
+Production source baseline 9665094d, spec 5bd65a5 and exact Syntax 8c892042 are
+unchanged. No implementation, phase-three, main/seed or carrier acceptance
+follows. Whole-corpus closure belongs separately to com-tqzw.
