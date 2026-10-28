@@ -236,3 +236,11 @@ Batch0064 adds exactly run/{panic,pattern_input_storage,pending_source_conversio
 ## Explicit Prepared Owner and Protocol Guards
 
 Batch0065 adds exactly run/{prepared_access_source_owner,prepared_aggregate_source_owner,prepared_binding_source_owner,prepared_body_expression_owner,prepared_call_expression_source,prepared_match_source_owner,prepared_try_source_owner,prepared_value_block_source_owner,protocol_selected_result_authority}.pw/.out, representative roots163–171 after0064. Preserve unprepared/foreign/missing/failed/sealed source-owner refusals, stable saved reader facts, session preparation and protocol result/slot identity while migrating ordinary and legacy panic guards coherently to explicit imported Core function. Source and observed roles count once per distinct root; no execution.
+
+## Explicit Record and Recorded-Value Guards
+
+Batch0066 adds exactly run/{record_layout_collection,recorded_array_value_compatibility,recorded_binding_value_compatibility,recorded_conversion_consumption,recorded_literal_value_compatibility}.pw/.out, representative roots172–176 after0065. Preserve pure-layout registration boundaries, saved binding/array/literal type compatibility and exact source/target/site conversion refusal while migrating legacy guards to adopted ordinary Core panic. recorded_literal_value_compatibility is observed-only in0066; no source-admission credit or root duplication when its source role arrives later.
+
+## Explicit Recorded Value and Retained Constraint Guards
+
+Batch0067 adds exactly run/{recorded_method_result_authority,recorded_nominal_construction_compatibility,recorded_record_return_conversion,recorded_record_value_compatibility,recorded_unit_result_compatibility,retained_associated_constraint,retained_associated_constraint_evidence,retained_provided_body_constraints,retained_provided_call_constraints,retained_requirement_body_constraints,retained_requirement_call_constraints}.pw/.out, eleven new representative roots177–187 after0066. Existing recorded_literal_value_compatibility root176 from observed-only0066 is reused for current source role, not twelfth new root. Preserve selected result/receiver, phantom nominal/record/Unit compatibility and retained bound/evidence paths while migrating ordinary/legacy panic guards coherently to explicit imported Core function.

@@ -29,3 +29,7 @@ Finite source-admission disposition with canonical grounds or explicit unresolve
 ## Explicit Newtype Factory-Inheritance Control
 
 Batch0021 adds exactly run/newtype_factory_inherit.pw/.out: two pub impl Rgb blocks both contain bare factory publication markers. Preserve five memberwise/named/fallible inherited-factory outputs and Self re-tagging while resolving the same repeated-publication question. The control is qualified, not evidence of adopted idempotence or a primary source-admission completion. No new generic-publication scope is transferred here.
+
+## Explicit Shared-Pointee From-Place Publication Markers
+
+Batch0067 adds exactly run/ref_pointee_from_place_arc.pw/.out: repeated pub impl Holder {factory} markers, not duplicate custom bodies. Preserve shared copyable Holder/inner-cell ownership and made/31/done sequence through existing canonical publication question; no idempotence decision made.

@@ -257,3 +257,11 @@ Batch0062 adds exactly run/mid_type_recipe_instances.pw/.out: bare for wrongSite
 ## Explicit Prepared Body Block and Shape Loop Bindings
 
 Batch0065 adds exactly run/{prepared_call_expression_source,prepared_value_block_source_owner,projected_destruction_shape}.pw/.out. Six sites bare body/block/global/field/child/term have no earlier mutable target. Adopt explicit new val/mut val binding while preserving all-body preparation, block source isolation and shape query no-body/layout side effects. No unread loop corpus transfer.
+
+## Explicit Custom and Control Range Loop Bindings
+
+Batch0066 adds exactly run/{range_custom_step_arc,range_for_control}.pw/.out, six sites1+5 lacking prior mutable target. Existing range_iterator_values exact0023 pair with five loops is reused, not a third new root. Preserve range bound evaluation, closed maxima/empty ranges, continue/break/return and custom heap Step progression through explicit new bindings.
+
+## Explicit Retained Requirement Clause Loop Binding
+
+Batch0067 adds exactly run/retained_requirement_body_constraints.pw/.out. for source in plan.requirements meets existing immutable parameter source:String, not a prior mutable destination; explicit for val source introduces intended shadow binding. Preserve four source cases/public counts2/1/0/1, missing derivation/public evidence refusals, immutable plans and clause storage. One exact site, no new inference rule.

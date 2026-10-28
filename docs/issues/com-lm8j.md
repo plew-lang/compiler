@@ -175,3 +175,7 @@ Batch0064 optional prose-only run/{overload,p2_finalizer_direct_call}.pw/.out. S
 ## Optional Array Receiver and Primitive Format Description
 
 Batch0065 adds optional prose-only run/{prelude_array,print_format}.pw/.out. Receiver get/set resolution needs no method import but these are not ambient free names; selected I8/U8/I32/I64/U64+Bool sample is not all integer widths. Existing provided_method_valid0023 (total returns first) and pub_get_field0055 (module-private versus impl-only) exact comments reused, no duplicate intake or mandatory new width/mode matrix.
+
+## Optional Shared-Reference and Enum Pattern Descriptions
+
+Batch0067 optional prose-only run/{ref_arc_deinit,ref_arrow_method,ref_scalar_literal,rename_bind}.pw/.out. peek comment mentions nonexistent make/returned Ref; read-only Ref dereference is not MutableRef-only, scalar whole-pointee access is not an adopted unsupported rule, enum rename/discard uses parentheses not braces. No extra runtime assertions required solely for wording. Repeated Holder publication separately stays met-4slo finite question, not a proven duplicate custom body.

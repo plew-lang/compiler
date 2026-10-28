@@ -72,3 +72,7 @@ Batch0059 adds exactly run/mid_newtype_literal_context.pw/.out for direct7 asRat
 ## Explicit Nested Operator Literal Context Questions
 
 Batch0063 adds exactly run/operator_literal_nested.pw/.out: ordinary integer arithmetic assigned F64 and if/match value operands next to bare arithmetic need existing finite canonical reconciliation. Spec02 integer-family-only and spec12 local literal sharing versus body-checking independent Output/operand rules must be reconciled before permission/rejection or mechanical suffix changes. Preserve eleven outputs, precedence, unsigned division/range and typed controls; no new inference rule adopted.
+
+## Explicit Synthetic Literal Warmup Dependency
+
+Batch0066 adds exactly run/recorded_literal_value_compatibility.pw/.out for its first unrecorded raw Expr.Int checked under F64. This current helper setup does not establish ordinary integer-to-float source permission; existing finite canonical literal-context reconciliation covers it. Preserve distinct successful I64 recorded fact and refusal to reinterpret that committed fact as F64. This batch assigns observed behavior only, not a new normal-source admission. No automatic suffix, removal or expanded float rule.

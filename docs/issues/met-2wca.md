@@ -195,3 +195,11 @@ Batch0064 adds exactly run/{optchain_generic_method,optchain_multiparam_chain,op
 ## Explicit Prepared Owner and Minimal Std Optional Labels
 
 Batch0065 adds exactly run/{prepared_aggregate_source_owner,prepared_binding_source_owner,prepared_body_expression_owner,prepared_call_expression_source,prepared_match_source_owner,protocol_selected_result_authority}.pw/.out. First five host roots use standard Some v producers/patterns; protocol_selected_result_authority supplies parsed plew:std/Lang Optional(v), like existing0052 Std replacement. Both require adopted value label reconciliation. This differs from manually registered raw0062 custom carrier; do not rewrite arbitrary custom payload names. Preserve owner/global target/closure and exact Iterator selected result identity.
+
+## Explicit Range and Recursive Record Optional Labels
+
+Batch0066 adds exactly run/{range_custom_step_arc,rec_boxed_inout,rec_mutual,rec_struct_optional,rec_value_semantics,record_generic_method_arg,record_in_optional,record_nested_depth2}.pw/.out. Standard Some v producers/patterns migrate to adopted value; custom List/Tree fields and Cell.v remain. Preserve custom Step continuation, recursive CoW independence, grounded record method/payload and depth-two type identity.
+
+## Explicit Recursive Instances and Shared Optional Labels
+
+Batch0067 adds exactly run/{recursive_generic,recursive_generic_multi_instance,ref_arc_deinit}.pw/.out. Standard Some v producers/patterns migrate to value while custom Tree.Leaf(v)/Ping.v stay unchanged; preserve multiple recursive generic instances and shared Optional ownership timing.

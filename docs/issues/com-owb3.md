@@ -176,3 +176,11 @@ Batch0061 adds exactly run/mid_struct_pattern_lifetime.pw/.out: bare pub impl Pa
 ## Explicit Chain and Nominal Overload Factory Contexts
 
 Batch0064 adds exactly run/{optchain_generic_method,overload_generic_instance}.pw/.out. Bare pub impl Box {factory} remains finite unresolved shorthand question, not explicit unbound Box[T] defect. Preserve generic payload chain instance and full Box[I64]/Box[String] overload comparison.
+
+## Explicit Recursive Wrapper and Record Factory Contexts
+
+Batch0066 adds exactly run/{rec_type_generic_wrapper,record_generic_struct_field,record_in_optional}.pw/.out. Bare Box/Holder/Wrap factory publication repeats existing unresolved shorthand, not explicit unbound impl Box[T]. Preserve generic-cycle reachability and complete record-field/payload grounding through eventual canonical ruling.
+
+## Explicit Recursive and Shared-Pointee Bare Factory Contexts
+
+Batch0067 adds exactly run/{recursive_generic,recursive_generic_multi_instance,ref_pointee_destroy_arc}.pw/.out as three new roots; ref_arrow_method already exact0024 is reused. Bare generic Node/Ping/Pong/Chain/Box factory publication has existing unresolved shorthand meaning. Preserve recursive and generic pointee substitution rather than treating each as explicit undeclared Box[T].
