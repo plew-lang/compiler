@@ -76,3 +76,21 @@ accept inventory closure. Parent adopts both evidenced omissions:
 These are remaining inventory work under this task, not compiler repair tasks
 or reasons to defer unread APIs as findings. No task scope, stopping rule or
 specification changed. Inventory is in_progress; com-mmk9 is not yet started.
+
+## Factual Inventory Progress
+
+The [family reconciliation](../../../evidence/compiler-api-audit/family-reconciliation.json)
+contains13 independently accepted thin factual families: nine entry/registry/C
+adapter families and four source/resource/completion/diagnostic families. Actual
+foreign declarations, constructors/defaults/cleanup callers and public edge/enum
+consumers were added after finite independent feedback. Original candidate
+snapshots remain in meta028dcaa1; amended review receipts bind the final current
+facts and retain prior comparison fields. No source acceptance, flow-algorithm,
+worker/lifetime implementation or capability-mismatch verdict follows.
+
+Six additional common-leaf candidates are under review. All other targets remain
+uncompleted inventory work. The full199-file/273-segment routing still applies;
+accepted family counts are not a denominator for API/algorithm correctness.
+SCOPE-1/2 now have a locally validated factual-record method but are not globally
+resolved until every target family/input is reconciled. This task stays open to
+complete the actual inventory before com-mmk9 capability judgments.
