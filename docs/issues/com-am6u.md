@@ -80,83 +80,25 @@ specification changed. Inventory is in_progress; com-mmk9 is not yet started.
 ## Factual Inventory Progress
 
 The [family reconciliation](../../../evidence/compiler-api-audit/family-reconciliation.json)
-contains160 independently accepted thin factual families across entry, source,
-package, host, context/loader and common auxiliary boundaries. Exact primary
-ranges and any paired header/construction ranges are retained; a listed file
-never certifies the whole file. Declared/default/implicit constructors, real
-callers and forwarded state are included. In particular, Comp construction's
-nested session-ID allocator reads/writes a module global and can panic on ID
-exhaustion; the factual record retains this hidden input/effect without labeling
-identity allocation a compiler defect.
+contains168 independently accepted thin factual families. It owns exact primary
+ranges, source hashes, facts/review hashes and acceptance limits. A listed source
+path does not certify its whole file; metadata construction, successful admission
+and execution publication are distinct. The [evidence guide](../../../evidence/compiler-api-audit/README.md)
+links the accepted source/caller/input records. All199 target source/support
+hashes remain unchanged from the inventory baseline; product execution/repair
+has not been performed.
 
-Eight small LLVM helper records are independently accepted, including distinct
-entry/runtime/helper/type/capture/C-ABI/numeric-sign/resume input categories.
-Readonly receiver access, inout record updates and raw-handle pointee operations
-are distinct capabilities. Repeated member-call locators supplement actual typed
-category contexts; they are not a resolved binding graph.
+Accepted facts retain actual typed callers, supplied/default/forwarded values,
+full receiver grants versus fields/delegates used, captured/retained references,
+nonlocal host inputs and required inputs. Important distinctions include the
+Comp default's module-global session allocator, Ref-backed prepared payloads,
+owner-provenance versus current cursor selection, private/public construction,
+and file-loading package/lock/shell observations outside SourceAccess.
+Missing caller shapes, direct effects and imprecise wording found in independent
+reviews were corrected and reaccepted at exact candidate hashes.
 
-Six native LLVM and one module-path family are independently accepted.
-Native lookup preserves first-execution source preparation; nullable failure
-latches and production global LLVM-option inputs have actual callers recorded.
-The build-support/owner records add11 accepted families; with the resource
-emitter, all17 production-support files have exact factual input records.
-Nine routing-only source texts add one zero-owned-API family; their child APIs
-remain separate targets. Distinct standard-runner IO/control consumers of the
-process supervisor are included without certifying fixture/monitor algorithms.
-Three frontend adapter families and one Mid ownership-request family are also
-independently accepted. The facts retain source-owner literal contexts, keyword
-cache writes, syntax/origin allocation and the distinction between full Comp
-verification authority and Mid-only drop construction.
-Nine Ir declaration/index/evidence/input families are independently accepted
-with eight complete part sources and exact paired nominal ranges. Key/default
-construction, array versus owner-pool inputs, prepared bindings and worklist
-provenance have real caller categories. Full Arena/Decls grants remain distinct
-from the few collections actually used; no final capability verdict is implied.
-Five additional Ir publication/serialization/module families are independently
-accepted, including actual source-public/reexport consumers and the distinct
-zero-based method bucket versus one-based associated/supertrait row selectors.
-Eight type/body/final-call/name-store families are also independently accepted;
-actual phase readers, bodyless signature defaults, scalar recipe keys, numeric
-builder bounds and authored/default/provided/extern row constructors are retained.
-Three small nominal/LLVM adapter families are also independently accepted,
-including direct/generated name spans, indirect declaration-cache/emission
-metadata writes and local/access-token storage construction.
-Five primitive/cache/interner-value/service families are independently accepted.
-Ir versus Toml bindings, forwarded inout arrays, Comp member defaults and the
-full Comp grant versus bytes/interner-only accesses are explicit; same-shape
-caller domains do not require algorithm-by-algorithm certification.
-Thirteen type/local, semantic-descriptor and storage-root families are also
-independently accepted. Actual partial clones and field defaults remain explicit;
-Arena zero-argument versus Decls public memberwise construction is distinguished.
-Bound-store receivers, row producers and nested data defaults are recorded without
-converting data presence into semantic success.
-Eleven cursor/environment, source-node and declaration descriptor families are
-also independently accepted. Cursor registry selectors, metadata-only closure
-inputs, partial environment constraint forwarding, origin predicates, child
-ranges and default-generator identities are explicit. A one-line caller extent
-omission was corrected and independently reaccepted; no product change occurred.
-Five trait/proof/conversion value families are also independently accepted.
-Table-domain identity, substitutions, recursive proof values and partial witness
-construction defaults are explicit. A missing partial-constructor caller was
-added and independently reaccepted; data construction is not proof admission.
-Eight frontend pool/type/navigation/view families are independently accepted.
-Actual child-store/counter/name/type effects are separated from full Comp grants;
-pure metadata helpers and Mid external-module forwarding remain explicit.
-Caller/delegate citations were corrected and independently reaccepted.
-Seven import/diagnostic/trace/leaf and preparation-value families are also
-independently accepted. Exact effects, construction visibility/defaults and
-private snapshot readers are retained without claiming successful publication.
-Two syntax/owner/root/declaration-property query families are independently
-accepted; metadata observation does not imply semantic or session admission.
-Four private proof/interface metadata constructor families are independently
-accepted, including outer Ref-backed cell retention and explicit owner data.
-Twelve read-projection/head, owner-state/reader, row-store and directory routing
-families are independently accepted. Actual strong Ref retention, constructor
-default session allocation, full mutable receiver grants and owner provenance
-are explicit. Direct reader caller shapes and provenance wording were corrected
-and independently reaccepted.
-All other targets remain inventory work. The full199-file/273-segment routing
-still applies; accepted family counts are not a denominator for API/algorithm
-correctness. SCOPE-1/2 have a locally validated record method but remain globally
-open until every target family/input is reconciled. This task stays in_progress;
-com-mmk9 capability judgments and repair implementation are not completed.
+Other targets remain inventory work. The full199-file/273-segment routing still
+applies; accepted family counts are not a denominator for API/algorithm
+correctness. SCOPE-1/2 remain globally open until every target family/input is
+reconciled and independently reviewed. This task stays in_progress; com-mmk9
+capability judgments and repair implementation are not completed.
