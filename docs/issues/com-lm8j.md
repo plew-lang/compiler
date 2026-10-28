@@ -111,3 +111,15 @@ Batch0046 adds optional prose-only run/{factory_gate_valid,extension_overload_vi
 ## Optional Conversion and Callable Completion Comments
 
 Batch0048 adds optional prose-only run/{from_conversion,function_completion_type_identity}.pw/.out. Numeric as uses primitive From factories too; they are not exempt from that adopted contract. Diverge surface is connected, so the completion identity test should describe its finite metadata guarantee without future-only surface wording. Synthetic () name is not a new source Unit representation requirement; current typed source/results stay unchanged.
+
+## Optional Generic-Free Function Mode Comment
+
+Batch0050 adds optional prose-only run/generic_free_fn.pw/.out: qualify eagerly checked bodies by check/build versus demanded run behavior. Its declared Getter bound and concrete outputs remain meaningful; no mandatory eager-run test or new source failure is asserted.
+
+## Optional Transitive Generic Mode Wording
+
+Batch0051 adds optional prose-only run/generic_transitive.pw/.out: eager abstract bound checking describes check/build, while run may defer unneeded source bodies. Preserve outer-to-inner declared Getter proof forwarding and outputs; no mandatory eager-run execution is introduced.
+
+## Optional Hash Seed Contract Wording
+
+Batch0052 adds optional prose-only run/hash_siphasher.pw/.out. Current SipHasher.new uses per-process random key, so fixedseed wording should state equal-input same-process behavior. Selected differing key samples are useful regressions, not a universal no-collision contract. Do not freeze magic digest values or change current golden based only on cross-process key variability.

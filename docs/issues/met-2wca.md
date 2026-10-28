@@ -139,3 +139,15 @@ Batch0048 adds exactly run/for_type_recipe_index.pw/.out. Optional.Some(v:_) pat
 ## Explicit Generic Provided Members and Enum Payload Labels
 
 Batch0049 adds exactly run/{generic_bound_provided_collect,generic_bound_provided_member,generic_enum_array,generic_enum_chain_match_print,generic_enum_ctor_arg}.pw/.out; generic_associated_self reuses existing exact intake. Migrate Some(v=...), v: and named valv punning coherently to adopted value while retaining provided Iterator proof and direct/array/chain enum payload contexts. Local custom v fields remain unchanged.
+
+## Explicit Generic Enum Direct, Loop and Multi-Instance Labels
+
+Batch0050 adds exactly run/{generic_enum_loop_constant_print,generic_enum_loop_i64_constant_print,generic_enum_match_print,generic_enum_multi_instance_print,generic_enum_multi_instance_print_annotated,generic_enum_string_match_print,generic_enum_two_match_print}.pw/.out; generic_enum_field_inference/generic_enum_payload_context reuse earlier exact intakes. Preserve direct/annotated/unannotated numeric/String arrays, loops, sequential matches and payload extraction; constant-body loop roots test admission/tag paths, not payload value output. User Maybe.v and Either.value/error are legitimate local names, not migration targets.
+
+## Explicit Global Owner Optional Patterns
+
+Batch0051 adds exactly run/{global_address_identity,global_call_constraint_evidence,global_initializer_requests}.pw/.out. Adopt coherent Optional.Some value label for sealed address, cursor and global request result patterns/construction; preserve negative absent/nonpublished owner facts.
+
+## Explicit Guard, Newtype and Minimal-Std Optional Shapes
+
+Batch0052 adds exactly run/{guard_completion_expression,i64_newtype_self,if_let,implicit_call_constraint_handoff}.pw/.out; guard_stmt already exact via earlier audit/correction. Guard/newtype/if-let constructors/patterns migrate coherently to Some(value:T). implicit_call_constraint_handoff embeds minimal plew:std/Lang.pw Optional(v:T), a standard API substitute needing coherent shape, not an arbitrary local custom enum v rename or all generic-capability implementation. Preserve retained implicit Add/Iterator evidence, not merely host source admission.

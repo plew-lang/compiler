@@ -47,3 +47,7 @@ Evidence: meta/evidence/test-audit/scoped-reviews/frontend-batch-0029.json and i
 independent receipt. Source/output/runner were not edited or executed. This is a
 separate finite investigation, not a prerequisite of audit completion or a claim
 phase3 is complete; unread cycle and projection obligations remain in the audit.
+
+## Explicit Inherited Projection Signature Evidence
+
+Batch0052 adds exactly run/inherited_projection_identity.pw/.out. Embedded Diamond inherits Parent[I64] and Parent[Bool] but declares missing()->Self#Parent[String].Item without that premise. analyzeFrontendDeclarations normal route completes declarations, so its successful unwrap is more than raw parse/registration. Recover canonical ordinary-signature projection justification separately from the valid helper unresolved/no-fabricated-equality assertion. Preserve diamond inherited equalities, foreign receiver distinction, Conflict versus known term0, and no executable body discovery. Do not assert whole oracle invalid or invent implicit Parent[String] evidence from current success; reuse the finite ordinary-signature/impl-head evidence investigation.

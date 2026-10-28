@@ -172,3 +172,15 @@ Batch0048 adds exactly run/{for_type_recipe_index,forwarded_source_admission,fro
 ## Explicit Selected Generic Call Authority Guard
 
 Batch0049 adds exactly run/generic_call_selected_authority.pw/.out as representative root114. Preserve selected source declaration, stable semantic site despite AST name poisoning, no reconstruction after Pending and no extra operation recording. This building-owner test is not a successful owner closure/global publication proof.
+
+## Explicit Lexical Inference Legacy Panic Statements
+
+Batch0050 adds exactly run/generic_inference_lexical_term.pw/.out as representative root115. Its panic message statement form is part of the same adopted ordinary diverge-function migration, not source-clean merely because no ordinary call name is written. Preserve lexical ParamId versus concrete body-environment isolation and pending suffixed literal declaration type; no inference implementation defect or executed failure arm is asserted.
+
+## Explicit Global Owner and Grounding Guard Sources
+
+Batch0051 adds exactly run/{global_address_identity,global_call_constraint_evidence,global_closure_call_constraints,global_initializer_requests,ground_environment_views}.pw/.out as representative roots116–120. Four roots use ordinary panic calls without explicit import; ground_environment_views uses legacy panic statements, also within the same ordinary diverge-function migration. Preserve sealed global identity, independent source requests/closure call evidence, cached failure and simultaneous substitution assertions; not merely an import edit before API support.
+
+## Explicit Ground, Import and Projection Guard Sources
+
+Batch0052 adds exactly run/{ground_nominal_identity,implicit_call_constraint_handoff,import_origin_provenance,inference_literal_record_authority,inherited_projection_identity}.pw/.out as representative roots121–125. Legacy panic statements and unimported ordinary panic calls both require adopted ordinary diverge-function boundary; preserve nominal identity, implicit selected-call evidence, import provenance, Record literal authority and projection equality guards. Statement syntax is not an exemption or import-only edit.

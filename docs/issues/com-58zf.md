@@ -33,3 +33,7 @@ Batch0039 adds exactly run/{buffer_floor,buffer_index,buffer_insert,buffer_metad
 ## Explicit Final Callable Buffer Field Methods
 
 Batch0047 adds exactly run/{final_callable_generic_field_method,final_callable_trait_field_method}.pw/.out. Buffer.new is a real current public associated API differing from adopted named construction; method/inout/IndexSet receiver T propagation remains meaningful. Reconcile construction through existing finite migration without special-case Buffer type inference or declaring ordinary call syntax illegal.
+
+## Explicit Generic Receiver Buffer Creation
+
+Batch0051 adds exactly run/generic_receiver_indexed_eq.pw/.out. Current Buffer.new API is not intrinsically forbidden; reconcile adopted factory-based Buffer creation while preserving receiver binder substitution, nested generic Hash/Index/Eq and I64/String instances. Hash digest equality here does not prove all keys collision-free.

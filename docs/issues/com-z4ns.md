@@ -33,3 +33,7 @@ Specific missing-bound companions do not treat an earlier foreign-owner error as
 ## Explicit Dictionary Selected Signature Source
 
 Batch0044 adds exactly run/dictionary_selected_method_signature.pw/.out. Unnamed impl[Key,Value] Dictionary[Key,Value] as locally owned NumberKey is still a foreign-type implementation under spec07. Preserve distinct method key:I64 versus receiver Key=String signature selection using an owner-authorized type or named extension; no compiler special case based on dictionary spelling.
+
+## Explicit Primitive Generic Method-Inout Source
+
+Batch0050 adds exactly run/generic_method_bound_inout.pw/.out. pub impl U64 as locally owned Absorb is a foreign unnamed implementation; spec07/09/15 require type-owning module regardless trait ownership. Preserve actual8085b90e primitive/String transitive method-instance and nested inout source purpose via an authorized named extension or defining-module form. Do not merely delete primitive coverage or create a local-trait exception. No current compiler behavior was tested.

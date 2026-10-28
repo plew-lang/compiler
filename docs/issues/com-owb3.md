@@ -144,3 +144,11 @@ Batch0048 adds exactly run/{generic_array_box_field,generic_array_compound_field
 ## Explicit Generic Binding, Constructor and Enum Publication
 
 Batch0049 adds exactly run/{generic_array_field_instance_isolation,generic_assoc_fn,generic_associated_bound_grounding,generic_box_ref_payload_arc,generic_constructor_value_shape,generic_enum_array,generic_enum_chain_match_print}.pw/.out with bare generic pub impl markers; generic_array_ret_infer/generic_constructor_nested_constraints/generic_ctor_bottomup/generic_ctor_infer reuse existing exact intakes. Preserve nominal declaration/impl binder separation, nested Array/constructor shape, associated witness grounding and Optional chain layout. Do not declare bare shorthand an explicit unbound T defect.
+
+## Explicit Generic Result Binder and Method Publication
+
+Batch0050 adds exactly run/{generic_if_result_instance_isolation,generic_inst_param_fn,generic_match_result_payload_term,generic_method_struct,generic_method_transitive_hash}.pw/.out; enum_payload_context/index_call_template/method_where reuse existing generic-prefixed exact intakes. generic_if_result_instance_isolation and generic_match_result_payload_term explicitly write pub impl Box[T] without impl[T], confirmed missing binder. generic_inst_param_fn/generic_method_struct/generic_method_transitive_hash use bare Box/Hasher1 publication, kept as existing unresolved shorthand question. Preserve if/match semantic producer, nominal parameter/method return and nested transitive Hash purposes without conflating the forms.
+
+## Explicit Generic Struct and Global Publication
+
+Batch0051 adds exactly run/{generic_struct,generic_struct_fn,generic_struct_local_drop_arc,generic_struct_multi,global_generic_init}.pw/.out; generic_recv_arg_valid reuses its earlier exact intake. Preserve multiple nominal fields, nongeneric function parameters/results, local/shared generic payload ownership and global generic rooting. These bare pub impl Box/Pair markers remain the existing shorthand ruling, not explicitly undeclared T.

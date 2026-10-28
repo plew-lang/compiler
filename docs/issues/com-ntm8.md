@@ -217,3 +217,7 @@ Preserve direct and nested parameter/field default no-suspend rules and MyErr:Fr
 ## Explicit Empty Generic Array Loop Binding
 
 Batch0049 adds exactly run/generic_empty_array_arg.pw/.out: bare for x has no prior mutable target. Preserve sum seed and contextual Array[T] intent using an admitted new binding, after separately settling com-pxja sibling inference and com-s922 numeric context.
+
+## Explicit Implicit-Call and Enum-Owner Loop Bindings
+
+Batch0052 adds exactly run/{implicit_call_constraint_handoff,inferred_enum_argument_source_owner}.pw/.out. Bare template/index loop variables do not have earlier mutable targets. Preserve bodyless callable evidence and enum construction source-owner assertions with admitted val/mut val new bindings. The enum conversion loop can legitimately contain zero rows; central preparation/facts success remains the finite oracle, not a newly required nonempty count.
