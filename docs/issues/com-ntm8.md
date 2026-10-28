@@ -179,3 +179,11 @@ Batch0040 adds exactly run/{chain_source_type_identity,closure_array_for_arc,clo
 ## Explicit Session and Proof Loop Setup
 
 Batch0041 adds exactly run/{compiler_session_body_requests,compiler_session_mid_requests,conformance_proof_demands,conformance_proof_outputs}.pw/.out. Their bare loops (3,1,1,3 sites respectively) have no earlier mutable target. Preserve selected body/declaration request, prepared Mid reuse, explicit proof source paths and output/premise query controls using val/mut val declarations. No all-session rewrite or additional outcome credit follows from this source setup intake.
+
+## Explicit Conversion Codec Loop Setup
+
+Batch0042 adds exactly run/conversion_proof_freeze_roundtrip.pw/.out. Bare for payload has no previous mutable target. Use an explicit binding declaration while preserving nested argumentProofs/payloads, nonempty pool prefix and repeated freeze/thaw comparisons. Printed describe omits argumentProofs but existing recursive comparator assertions do check them; do not replace this with a presumed missing oracle.
+
+## Explicit Effect Graph and Default Template Loop Setup
+
+Batch0043 adds exactly run/{declaration_effect_demand,default_argument_call_templates}.pw/.out. Bare for node and two for capacity sites have no earlier mutable target. Preserve root graph dedup/reachability and owner-scoped default completion, protocol pending and colliding call keys using explicit new bindings.

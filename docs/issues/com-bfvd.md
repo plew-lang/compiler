@@ -140,3 +140,11 @@ Batch0040 adds exactly run/{chain_source_type_identity,checked_division_widths,c
 ## Explicit Session and Conformance-Proof Guards
 
 Batch0041 adds exactly run/{compiler_session_body_requests,compiler_session_demand,compiler_session_finalization,compiler_session_initializers,compiler_session_mid_requests,compiler_session_registry,conformance_proof_demands,conformance_proof_outputs}.pw/.out as representative roots61–68. Reconcile ordinary panic admission while preserving selected request/failure/snapshot/initializer/registry source purposes and exact proof-demand/output assertions. Session roots are source-only roles here; no additional session runtime/outcome or complete lazy-execution result is certified.
+
+## Explicit Declaration Evidence and Capture Guards
+
+Batch0042 adds exactly run/{declaration_associated_evidence,declaration_body_demand,declaration_bound_proof,declaration_capture_facts}.pw/.out as representative roots69–72. Reconcile unimported ordinary panic admission without weakening projection prerequisite/interning/stack cleanup, per-owner request/cache/local-access errors, bound ownership/codec corruption or declaration capture-mode assertions. Capture has only its observed-behavior role here; body-demand only source-admission. No guard was executed.
+
+## Explicit Declaration Obligation and Default Guards
+
+Batch0043 adds exactly run/{declaration_codegen_limit_boundary,declaration_conversion_closure,declaration_conversion_evidence,declaration_effect_demand,declaration_identity_index,declaration_identity_precedence,declaration_method_receiver_proof,declaration_obligation_scope,declaration_obligation_states,declaration_program_boundary,declaration_trait_assumptions,default_argument_call_templates,default_body_demand}.pw/.out as representative roots73–85. Reconcile ordinary panic admission while retaining exact conversion/binder/receiver/state/default/cache/effect guard purposes. Reuse declaration_supertrait_proof representative35 and declaration_capture_facts representative72, not two more roots. Internal synthetic malformed rows and embedded invalid input are deliberate probes; no guard was executed.

@@ -107,3 +107,11 @@ The same clarification applies to already exact owned run/{ambient_core,any_iter
 ## Explicit Conditional Binding and Session Optional Patterns
 
 Batch0041 adds exactly run/{cond_chain_bool_first,cond_chain_multibind,compiler_session_initializers,compiler_session_mid_requests,compiler_session_registry}.pw/.out. Some(v=...) producers and v: patterns use current Optional labels instead of adopted value. Preserve left-to-right condition binding scope/short-circuit, missing initializer/body lookup, prepared Mid reuse and session weak-handle lookup through coherent migration. Typed weak/reference API changes are independently met-op15. No ordinary Result labels or authored custom enum fields are mechanically renamed.
+
+## Explicit Core Optional Producer
+
+Batch0042 adds exactly run/core_lib.pw/.out. Some(v=7) uses the current Std API instead of adopted value label. Preserve predicates/unwrap and Result cases through coherent Optional producer migration; no blanket custom-v-field or Result rename.
+
+## Explicit Declaration Index and Default Optional Patterns
+
+Batch0043 adds exactly run/{declaration_identity_index,default_argument_bindings,default_argument_call_templates,default_body_demand}.pw/.out. Optional.Some(v:) patterns require adopted value label; retain authored local names and custom Explicit(argumentIndex)/Default(generator) fields unchanged.

@@ -120,3 +120,7 @@ Batch0040 adds exactly run/{chain_generic,closure_field}.pw/.out. BoxG/Pair and 
 ## Explicit Self-Projection Conformance Context
 
 Batch0041 adds exactly run/conformance_self_projection.pw/.out. Bare pub impl Box {factory} repeats the unresolved generic-owner publication shorthand. Preserve Self as the complete Box[T] trait positional input and T as the associated output across I64/String generic read calls through the common eventual ruling. This is not undeclared Box[T] or permission to infer bounds from concrete instances.
+
+## Explicit Generic Method Ordering Control
+
+Batch0043 adds only supplementary run/default_eval_order_generic_method.pw/.out: bare pub impl Box factory repeats the unresolved generic publication shorthand. Preserve middle omission and explicit-first evaluation purpose when reconciling source. No primary obligation credit or blanket Box[T] undeclared binder rewrite.
