@@ -279,3 +279,7 @@ Batch0103 optionally qualifies exactly run/method_result_bind.pw/.out. The origi
 ## Iterator Prefix and Loop Cleanup Descriptions
 
 Batch0102 optionally qualifies exactly run/{iter_take_skip,loop_arc,loop_shortcircuit_elem_arc}.pw/.out. Preserve the original lazy prefix/skip and loop/conditional temporary cleanup purposes and finite values. adapterCallResultInst, drainStmtTemps and backend loop-frame explanations are historical rather than current semantic authorities; no new ASan execution is established by an ASan-clean comment. iter_terminals/let_infer_string/make_literal_arg_arc reuse earlier exact descriptions. Do not erase genuine prior validation history, add a broad mechanism sweep or require new runtime cases solely for prose.
+
+## Manual Declaration Selection Description
+
+Batch0127 optionally qualifies tests/compiler/mid/README.md final corruption paragraph. Since ce6e87fd, DeclarationAccess accepts either sealed-writer refusal or, only if Pending mutation succeeds, the exact CallSelection analysis failure. Describe both defenses rather than claiming every run corrupts a reachable template and queries that diagnostic. Preserve sealed publication; no new mandatory detector/mode, source repair or execution.

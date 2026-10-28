@@ -296,3 +296,7 @@ Batch0082 adds exactly the generated panic case in tests/tooling/test-unreachabl
 ## Explicit Generated Raw String Provider Guards
 
 Batch0001 remaining gen intake adds exactly tests/fixtures/gen/stringbraces/App.pw, including its inline Inspect provider. Two fallback legacy unimported panic statements in that provider require explicit ordinary Core panic import/function calls. Preserve raw annotated quoted/escaped brace source slices and provider failure discrimination; no new run representative ordinal or audit-time generation/execution.
+
+## Manual Declaration Probe Guards
+
+Batch0127 adds exactly tests/compiler/mid/{ParametricBodyCoverage,DeclarationAccess}.pw as manual source contexts for unimported legacy panic guards. Preserve canonical-cache/ownership invariants and selection-error guard intent through ordinary imported panic migration. These are manual helper scopes, not new registered run roots, executed failures or mandatory automatic registration. No repair performed.
