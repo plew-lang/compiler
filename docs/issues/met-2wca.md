@@ -203,3 +203,7 @@ Batch0066 adds exactly run/{range_custom_step_arc,rec_boxed_inout,rec_mutual,rec
 ## Explicit Recursive Instances and Shared Optional Labels
 
 Batch0067 adds exactly run/{recursive_generic,recursive_generic_multi_instance,ref_arc_deinit}.pw/.out. Standard Some v producers/patterns migrate to value while custom Tree.Leaf(v)/Ping.v stay unchanged; preserve multiple recursive generic instances and shared Optional ownership timing.
+
+## Explicit Inherited Iterator and Global Completion Optional Labels
+
+Batch0068 adds exactly run/{self_inherited_iterator_runtime,semantic_checked_completion}.pw/.out. Std Some v in iterator result and globalInitializerTarget handle migrates to value, preserving selected iteration and refusal of unowned/completed global operation appends.

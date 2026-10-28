@@ -265,3 +265,7 @@ Batch0066 adds exactly run/{range_custom_step_arc,range_for_control}.pw/.out, si
 ## Explicit Retained Requirement Clause Loop Binding
 
 Batch0067 adds exactly run/retained_requirement_body_constraints.pw/.out. for source in plan.requirements meets existing immutable parameter source:String, not a prior mutable destination; explicit for val source introduces intended shadow binding. Preserve four source cases/public counts2/1/0/1, missing derivation/public evidence refusals, immutable plans and clause storage. One exact site, no new inference rule.
+
+## Explicit Retained and Selected-Receiver Loop Bindings
+
+Batch0068 adds exactly run/{retained_supertrait_evidence,retained_trait_self_evidence,selected_copy_receiver_identity}.pw/.out. Bare template/assumption/previous loops lack prior mutable targets; three sites use explicit new binding without losing missing/foreign proof and full receiver/body-instance comparisons.

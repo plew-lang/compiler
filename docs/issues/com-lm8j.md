@@ -179,3 +179,7 @@ Batch0065 adds optional prose-only run/{prelude_array,print_format}.pw/.out. Rec
 ## Optional Shared-Reference and Enum Pattern Descriptions
 
 Batch0067 optional prose-only run/{ref_arc_deinit,ref_arrow_method,ref_scalar_literal,rename_bind}.pw/.out. peek comment mentions nonexistent make/returned Ref; read-only Ref dereference is not MutableRef-only, scalar whole-pointee access is not an adopted unsupported rule, enum rename/discard uses parentheses not braces. No extra runtime assertions required solely for wording. Repeated Holder publication separately stays met-4slo finite question, not a proven duplicate custom body.
+
+## Optional Runtime Smoke and Self-Resolution Descriptions
+
+Batch0068 optional prose-only run/{runtime_intrinsic_process_smoke,self_param_conformance,self_param_conformance_enum,self_return}.pw/.out. Smoke calls bundled Process.argCount rather than ordinary lookalike extern; numeric/entropy identity tests separately cover ordinary symbols. Self typing/grounding belongs before final backend consumption, rather than historical backend cursor. No extra runtime matrix solely for wording.

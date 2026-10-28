@@ -33,3 +33,7 @@ Batch0021 adds exactly run/newtype_factory_inherit.pw/.out: two pub impl Rgb blo
 ## Explicit Shared-Pointee From-Place Publication Markers
 
 Batch0067 adds exactly run/ref_pointee_from_place_arc.pw/.out: repeated pub impl Holder {factory} markers, not duplicate custom bodies. Preserve shared copyable Holder/inner-cell ownership and made/31/done sequence through existing canonical publication question; no idempotence decision made.
+
+## Explicit Returned Shared Holder Publication Markers
+
+Batch0068 adds exactly run/return_owned_local_move_arc.pw/.out: two bare public Holder factory publication markers. Actual2aee8ff4 added standalone marker while original e5c30d0b existing marker remained. Same finite publication-idempotence question, not two custom callable bodies or automatic source ban. Preserve bound/21 shared owner return and caller lifetime purpose.
