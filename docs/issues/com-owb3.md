@@ -152,3 +152,7 @@ Batch0050 adds exactly run/{generic_if_result_instance_isolation,generic_inst_pa
 ## Explicit Generic Struct and Global Publication
 
 Batch0051 adds exactly run/{generic_struct,generic_struct_fn,generic_struct_local_drop_arc,generic_struct_multi,global_generic_init}.pw/.out; generic_recv_arg_valid reuses its earlier exact intake. Preserve multiple nominal fields, nongeneric function parameters/results, local/shared generic payload ownership and global generic rooting. These bare pub impl Box/Pair markers remain the existing shorthand ruling, not explicitly undeclared T.
+
+## Explicit Generic Iterable Publication
+
+Batch0053 adds exactly run/iter_generic.pw/.out with bare pub impl BoxIter/Box factory markers. Preserve generic Array[T] storage, Item=T next/result and Iterable.Iter substitution while settling the existing shorthand question. No explicit undeclared-T or structural conformance exception is inferred.

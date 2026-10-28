@@ -123,3 +123,7 @@ Batch0051 adds optional prose-only run/generic_transitive.pw/.out: eager abstrac
 ## Optional Hash Seed Contract Wording
 
 Batch0052 adds optional prose-only run/hash_siphasher.pw/.out. Current SipHasher.new uses per-process random key, so fixedseed wording should state equal-input same-process behavior. Selected differing key samples are useful regressions, not a universal no-collision contract. Do not freeze magic digest values or change current golden based only on cross-process key variability.
+
+## Optional Iterator Terminal and Binder Explanations
+
+Batch0053 adds optional prose-only run/{iter_adapter_terminal,iter_fold_adapter,iter_terminals}.pw/.out. Adapter fold and terminal support is exercised by neighboring roots, so old future-gap wording is stale. Method-owned and receiver binders use distinct identities rather than last-name-match shadowing. any/all short-circuit per current public API instead of necessarily exhausting iterator; retain current finite result checks and avoid inventing a new exhaustive-consumption requirement.

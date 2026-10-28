@@ -151,3 +151,7 @@ Batch0051 adds exactly run/{global_address_identity,global_call_constraint_evide
 ## Explicit Guard, Newtype and Minimal-Std Optional Shapes
 
 Batch0052 adds exactly run/{guard_completion_expression,i64_newtype_self,if_let,implicit_call_constraint_handoff}.pw/.out; guard_stmt already exact via earlier audit/correction. Guard/newtype/if-let constructors/patterns migrate coherently to Some(value:T). implicit_call_constraint_handoff embeds minimal plew:std/Lang.pw Optional(v:T), a standard API substitute needing coherent shape, not an arbitrary local custom enum v rename or all generic-capability implementation. Preserve retained implicit Add/Iterator evidence, not merely host source admission.
+
+## Explicit Iterator Adapter and Interface Optional Shapes
+
+Batch0053 adds exactly run/{interface_final_evidence,iter_adapter_terminal,iter_chain,iter_chain3,iter_chain_mapmap,iter_chain_multiline,iter_collect,iter_custom,iter_enumerate,iter_enumerate_heap,iter_enumerate_i32,iter_first_reduce,iter_fold_adapter,iter_fold_string_acc,iter_for_bare,iter_for_filter,iter_generic,iter_take_skip,iter_terminals}.pw/.out; iter_for_map/iter_map_retype reuse earlier exact supplemental intakes. Migrate StdSome v constructors, explicit v patterns and valv named punning coherently, retaining map/filter/take/skip/collect/fold/first/reduce/enumerate generic result and interface constraint evidence contexts. Local record value field remains unchanged.

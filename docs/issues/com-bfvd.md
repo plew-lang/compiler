@@ -184,3 +184,7 @@ Batch0051 adds exactly run/{global_address_identity,global_call_constraint_evide
 ## Explicit Ground, Import and Projection Guard Sources
 
 Batch0052 adds exactly run/{ground_nominal_identity,implicit_call_constraint_handoff,import_origin_provenance,inference_literal_record_authority,inherited_projection_identity}.pw/.out as representative roots121–125. Legacy panic statements and unimported ordinary panic calls both require adopted ordinary diverge-function boundary; preserve nominal identity, implicit selected-call evidence, import provenance, Record literal authority and projection equality guards. Statement syntax is not an exemption or import-only edit.
+
+## Explicit Interface and Missing-Nominal Guard Sources
+
+Batch0053 adds exactly run/{interface_boxing_conditions,interface_declared_guarantees,interface_final_evidence,interface_nominal_hidden_readiness,interface_source_scope,late_nominal_missing_identity}.pw/.out as representative roots126–131. Adopt ordinary imported diverge panic while preserving exact interface declared guarantees, scoped hidden subjects, final evidence/boxing and no-fabricated ambient identity assertions. Source-only boxing/final tests are not newly counted internal outcome roles.
