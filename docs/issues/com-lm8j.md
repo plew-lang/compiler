@@ -155,3 +155,7 @@ Batch0059 adds optional prose-only run/{mid_local_assign_cfg_lowering,mid_loop_e
 ## Optional Mid Wide Operand and Operator Legacy Descriptions
 
 Batch0060 adds optional prose-only run/{mid_operand_build_error_propagation,mid_operator_call_cfg_lowering}.pw/.out/.ll.expect. Producer-outside-minimal-Mid/main-legacy assumptions are obsolete under shared verified Mid. Operand golden correctly distinguishes UnsupportedCall42 from None0; do not assign the distinct batch0056 identical-arm detector defect to this input. Preserve typed operator and wide-tail enum semantics, no mandatory new modes solely for comments.
+
+## Optional Mid Short Circuit Legacy Description
+
+Batch0061 adds optional prose-only run/mid_short_circuit_cfg_lowering.pw/.out: global anchor does not keep main legacy under verified-Mid-only entry. Preserve short-circuit effect/loop/argument/negation outputs, no mandatory new coverage matrix solely for wording.

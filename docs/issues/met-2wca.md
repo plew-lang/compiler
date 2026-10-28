@@ -175,3 +175,7 @@ Batch0059 adds exactly run/{mid_global_storage_conversion,mid_match_owned_payloa
 ## Explicit Mid Owned Optional and Readonly Weak Labels
 
 Batch0060 adds exactly run/{mid_owned_conversion_boundaries,mid_owned_enum_call_copy,mid_owned_enum_copy,mid_readonly_weak_cell}.pw/.out. Coherently migrate standard Some v construction/patterns to value, preserving local names, None controls and weak live/dead transitions; nominal covariance and exact weak-handle API migration remain separate owners.
+
+## Explicit Mid Optional Storage Payload Labels
+
+Batch0061 adds exactly run/mid_storage_optional_conversion.pw/.out. Coherently migrate standard Some v construction and patterns to value while preserving local names/None controls; whole nominal covariance remains independently com-vp0o.

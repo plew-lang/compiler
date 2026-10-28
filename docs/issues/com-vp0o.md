@@ -75,3 +75,7 @@ Batch0059 adds exactly run/mid_global_storage_conversion.pw/.out. Optional[Perso
 ## Explicit Mid Owned Container Copy Conversion Oracles
 
 Batch0060 adds exactly run/{mid_owned_array_call_copy,mid_owned_array_copy,mid_owned_conversion_boundaries,mid_owned_enum_call_copy,mid_owned_enum_copy}.pw/.out. Existing Array[Payload/Item] and Optional[Payload/Item] cannot implicitly become nominal containers of anyNamed at calls/returns. Preserve useful heap-backed Copy/owner-transfer, None and original-owner usability through admitted shapes or finite internal/reject contracts. Aggregate/direct existential copies remain valid contrasts; retain these purposes rather than deleting all ownership tests or licensing covariance.
+
+## Explicit Mid Local Optional Storage Conversion Oracle
+
+Batch0061 adds exactly run/mid_storage_optional_conversion.pw/.out. Whole existing Optional[Person] call result/None/local replacement cannot become Optional[anyNamed] under invariance. Preserve saved storage conversion/None/returned ownership purposes in admitted source or finite internal/reject lane; do not retain obsolete covariant nominal exception from header or history.

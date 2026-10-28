@@ -216,3 +216,7 @@ Batch0059 adds exactly run/{mid_if_cfg,mid_index_place_cfg,mid_instance_demand,m
 ## Explicit Mid Reachability Panic and Array Recording Guards
 
 Batch0060 adds exactly run/{mid_ownership_reachability,mid_panic,mid_record_array_storage}.pw/.out, representative roots150–152 after batch0059. Ordinary panic calls/legacy statement migrate through adopted ordinary diverge API. Keep reachable/dead CFG controls and invalid-body sentinel, untaken source panic purpose, and parent source-array type recording; record_array_storage dual roles count one root, no fake abort execution.
+
+## Explicit Mid Fact and View Guard Contexts
+
+Batch0061 adds exactly run/{mid_source_fact_presence,mid_source_value_states,mid_static_view_boundary}.pw/.out, representative roots153–155 after batch0060. Host and isolated embedded legacy/ordinary panic calls require coherent adopted ordinary diverge declaration/use setup, not an ambient panic spelling privilege. Preserve knownUnit/nonvalue/generic states and missing/foreign fact/view controls. mid_source_owner_admission was already exact in Batch0020 (representative27) and is reused without new-root inflation.

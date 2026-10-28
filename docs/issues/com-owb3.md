@@ -168,3 +168,7 @@ Batch0058 adds exactly run/mid_global_init_cfg_lowering.pw/.out. Bare pub impl B
 ## Explicit Patterned Receiver Factory Publication
 
 Batch0060 adds exactly run/mid_receiver_pattern_layout.pw/.out: bare pub impl Packed factory repeats existing unresolved generic publication, separate from impl[T] Packed[Array[T]] valid binder. Preserve selected receiver pattern substitution, bound and field layout through canonical ruling; no bare shorthand invented.
+
+## Explicit Mid Generic Struct Pattern Publication
+
+Batch0061 adds exactly run/mid_struct_pattern_lifetime.pw/.out: bare pub impl Package factory repeats existing unresolved generic publication, not explicit undeclared Package[T]. Preserve generic copies, String closure capture, pattern punning/rename, once-evaluated temporary and owner lifetime through canonical reconciliation.

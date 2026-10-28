@@ -245,3 +245,7 @@ Batch0058 adds exactly run/mid_global_access_demand.pw/.out: bare for body in pa
 ## Explicit Mid Instance Request Enumeration Binding
 
 Batch0059 adds exactly run/mid_instance_demand.pw/.out: bare for body enumerates compiler.mid.bodies without earlier mutable target. Preserve selected-only body request, signature readiness and stable repeated failure under explicit adopted new binding.
+
+## Explicit Mid Structural Traversal Loop Bindings
+
+Batch0061 adds exactly run/mid_structural_traversal.pw/.out. Three for tag sites at17/27/34 lack earlier mutable targets; preserve duplicate successors, pool-relative captures/aggregate children, repeated operands and phase classifications with explicit new binding. Initial reviewer four-site locator count corrected to three before producer.
