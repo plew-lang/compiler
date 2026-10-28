@@ -80,23 +80,26 @@ specification changed. Inventory is in_progress; com-mmk9 is not yet started.
 ## Factual Inventory Progress
 
 The [family reconciliation](../../../evidence/compiler-api-audit/family-reconciliation.json)
-contains28 independently accepted thin factual families: nine entry/registry/C
-adapter families, four source/resource/completion/diagnostic families and six
-operator/package-value/decoder/index/opaque-handle families, plus three partial
-backend/observation/owned-handle families and six package/parser/lock/process/
-resolver families. Actual
-foreign declarations, constructors/defaults/cleanup callers and public edge/enum
-consumers were added after finite independent feedback. Original candidate
-snapshots remain in meta028dcaa1; amended review receipts bind the final current
-facts and retain prior comparison fields. No source acceptance, flow-algorithm,
-worker/lifetime implementation or capability-mismatch verdict follows.
+contains52 independently accepted thin factual families across entry, source,
+package, host, context/loader and common auxiliary boundaries. Exact primary
+ranges and any paired header/construction ranges are retained; a listed file
+never certifies the whole file. Declared/default/implicit constructors, real
+callers and forwarded state are included. In particular, Comp construction's
+nested session-ID allocator reads/writes a module global and can panic on ID
+exhaustion; the factual record retains this hidden input/effect without labeling
+identity allocation a compiler defect.
 
-Three native/shell/resource candidates are under review and three retained-context/
-loader candidates await review. The index
-preserves exact primary ranges; listing a source never certifies the whole file.
-All other targets remain
-uncompleted inventory work. The full199-file/273-segment routing still applies;
-accepted family counts are not a denominator for API/algorithm correctness.
-SCOPE-1/2 now have a locally validated factual-record method but are not globally
-resolved until every target family/input is reconciled. This task stays open to
-complete the actual inventory before com-mmk9 capability judgments.
+Eight small LLVM helper records are independently accepted, including distinct
+entry/runtime/helper/type/capture/C-ABI/numeric-sign/resume input categories.
+Readonly receiver access, inout record updates and raw-handle pointee operations
+are distinct capabilities. Repeated member-call locators supplement actual typed
+category contexts; they are not a resolved binding graph.
+
+Six native LLVM and one module-path family are independently accepted.
+Native lookup preserves first-execution source preparation; nullable failure
+latches and production global LLVM-option inputs have actual callers recorded.
+All other targets remain inventory work. The full199-file/273-segment routing
+still applies; accepted family counts are not a denominator for API/algorithm
+correctness. SCOPE-1/2 have a locally validated record method but remain globally
+open until every target family/input is reconciled. This task stays in_progress;
+com-mmk9 capability judgments and repair implementation are not completed.
