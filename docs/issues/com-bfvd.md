@@ -188,3 +188,7 @@ Batch0052 adds exactly run/{ground_nominal_identity,implicit_call_constraint_han
 ## Explicit Interface and Missing-Nominal Guard Sources
 
 Batch0053 adds exactly run/{interface_boxing_conditions,interface_declared_guarantees,interface_final_evidence,interface_nominal_hidden_readiness,interface_source_scope,late_nominal_missing_identity}.pw/.out as representative roots126–131. Adopt ordinary imported diverge panic while preserving exact interface declared guarantees, scoped hidden subjects, final evidence/boxing and no-fabricated ambient identity assertions. Source-only boxing/final tests are not newly counted internal outcome roles.
+
+## Explicit Nominal Request, Match and Relevance Guards
+
+Batch0054 adds exactly run/{late_nominal_type_identity,lexical_body_requests,match_expr_diverge,member_obligation_relevance_worklist}.pw/.out as representative roots132–135. Ordinary calls need explicit Core import; match_expr_diverge legacy panic statements also require ordinary function migration. Preserve nominal ambient identity, failed/successful source request caching, branch divergence and graph relevance/error-order contracts, not an all-guard rewrite.

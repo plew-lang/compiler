@@ -127,3 +127,7 @@ Batch0052 adds optional prose-only run/hash_siphasher.pw/.out. Current SipHasher
 ## Optional Iterator Terminal and Binder Explanations
 
 Batch0053 adds optional prose-only run/{iter_adapter_terminal,iter_fold_adapter,iter_terminals}.pw/.out. Adapter fold and terminal support is exercised by neighboring roots, so old future-gap wording is stale. Method-owned and receiver binders use distinct identities rather than last-name-match shadowing. any/all short-circuit per current public API instead of necessarily exhausting iterator; retain current finite result checks and avoid inventing a new exhaustive-consumption requirement.
+
+## Optional String Identity and Temporary Ownership Wording
+
+Batch0054 adds optional prose-only run/{let_infer_string,make_literal_arg_arc}.pw/.out. Arbitrary source String spelling is not semantic type authority; use resolved ambient declaration/recorded term description. A call-owned temporary ends retention at its target call completion, not generally full statement end; preserve legitimate result ownership and separate IndexSet evaluation. Current goldens do not assert wrong deinit timing or prove ASan was executed by this audit.

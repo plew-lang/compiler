@@ -56,3 +56,7 @@ Batch0047 adds exactly run/{float_exponent,float_generic_witness,float_int_liter
 ## Explicit Empty Generic Array Float Context
 
 Batch0049 adds exactly run/generic_empty_array_arg.pw/.out. Generic Add plus generic print does not uniquely select F32/F64 for unsuffixed seed1.5. Retain empty-array/seed and nonempty summation purpose with explicit available context in eventual repair; suffix alone does not settle the later-sibling inference contract owned by com-pxja.
+
+## Explicit Numeric Match-Operand Context Question
+
+Batch0054 adds exactly run/{match_expr,match_literal}.pw/.out for the annotated match-result-plus-unsuffixed1 subexpressions (match_expr38 and match_literal49). spec12 permits expected-result sharing for both bare numeric literals; body-checking forbids generic Output-to-operand propagation. Determine whether a not-yet-typed numeric match operand falls within the same permitted local expectation while preserving transparent block/if/match behavior and independent Self/Rhs/Output witnesses. Current success does not decide this source contract. Retain finite inference question rather than automatically suffixing/rejecting it or extending general backward inference; obtain judgment only if canonical rules remain insufficient.

@@ -225,3 +225,7 @@ Batch0052 adds exactly run/{implicit_call_constraint_handoff,inferred_enum_argum
 ## Explicit Interface and Enumeration Loop Bindings
 
 Batch0053 adds exactly run/{interface_boxing_conditions,interface_final_evidence,interface_nominal_hidden_readiness,interface_source_scope,iter_enumerate,iter_enumerate_i32,late_nominal_missing_identity}.pw/.out. Bare resolution/member/index/source/template/first/second/p/configured loop variables have no prior mutable target as appropriate per input; preserve nonempty final evidence, condition binding/adapter/table checks, enumerate record and missing-identity controls with admitted explicit new bindings. Do not rewrite already valid val loops.
+
+## Explicit Nominal, Request and Relevance Loop Bindings
+
+Batch0054 adds exactly run/{late_nominal_type_identity,lexical_body_requests,loop_arc,member_obligation_relevance_worklist}.pw/.out: six bare sites name/completedOwner/attempt/r and two relevance name loops lack prior mutable targets. Preserve normal/break/continue ownership purpose and source-owner/graph queries using adopted new bindings. Existing val/destructuring loops remain.

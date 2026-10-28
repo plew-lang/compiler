@@ -155,3 +155,7 @@ Batch0052 adds exactly run/{guard_completion_expression,i64_newtype_self,if_let,
 ## Explicit Iterator Adapter and Interface Optional Shapes
 
 Batch0053 adds exactly run/{interface_final_evidence,iter_adapter_terminal,iter_chain,iter_chain3,iter_chain_mapmap,iter_chain_multiline,iter_collect,iter_custom,iter_enumerate,iter_enumerate_heap,iter_enumerate_i32,iter_first_reduce,iter_fold_adapter,iter_fold_string_acc,iter_for_bare,iter_for_filter,iter_generic,iter_take_skip,iter_terminals}.pw/.out; iter_for_map/iter_map_retype reuse earlier exact supplemental intakes. Migrate StdSome v constructors, explicit v patterns and valv named punning coherently, retaining map/filter/take/skip/collect/fold/first/reduce/enumerate generic result and interface constraint evidence contexts. Local record value field remains unchanged.
+
+## Explicit Match-Scrutinee Optional Shapes
+
+Batch0054 adds exactly run/{match_expr_scrutinee_temp_arc,match_subexpr_scrutinee_arc}.pw/.out. Migrate StdSome v producer/pattern labels coherently, preserving selected held payload lifetime versus unretained scrutinee destruction and match-before-parent-call order. Custom Opt.v and ResultFile.file are not migration targets.
