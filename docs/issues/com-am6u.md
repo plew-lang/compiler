@@ -80,7 +80,7 @@ specification changed. Inventory is in_progress; com-mmk9 is not yet started.
 ## Factual Inventory Progress
 
 The [family reconciliation](../../../evidence/compiler-api-audit/family-reconciliation.json)
-contains111 independently accepted thin factual families across entry, source,
+contains122 independently accepted thin factual families across entry, source,
 package, host, context/loader and common auxiliary boundaries. Exact primary
 ranges and any paired header/construction ranges are retained; a listed file
 never certifies the whole file. Declared/default/implicit constructors, real
@@ -130,6 +130,11 @@ independently accepted. Actual partial clones and field defaults remain explicit
 Arena zero-argument versus Decls public memberwise construction is distinguished.
 Bound-store receivers, row producers and nested data defaults are recorded without
 converting data presence into semantic success.
+Eleven cursor/environment, source-node and declaration descriptor families are
+also independently accepted. Cursor registry selectors, metadata-only closure
+inputs, partial environment constraint forwarding, origin predicates, child
+ranges and default-generator identities are explicit. A one-line caller extent
+omission was corrected and independently reaccepted; no product change occurred.
 All other targets remain inventory work. The full199-file/273-segment routing
 still applies; accepted family counts are not a denominator for API/algorithm
 correctness. SCOPE-1/2 have a locally validated record method but remain globally
