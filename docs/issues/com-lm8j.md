@@ -135,3 +135,11 @@ Batch0054 adds optional prose-only run/{let_infer_string,make_literal_arg_arc}.p
 ## Optional Receiver and Entry-Path Descriptions
 
 Batch0055 adds optional prose-only run/{methods,mid_access_inout_argument_cfg_lowering,mid_access_nested_argument_cfg_lowering,mid_access_nested_return_cfg_lowering,mid_access_receiver_cfg_lowering}.pw/.out, plus already-read supplemental pub_get_field.pw/.out. Plain fn self is a read borrow, not a by-value snapshot; four main-legacy comments predate verified-Mid-only entry path. Supplemental pub(get)/private access is module-scoped, not restricted to anonymous impl. Preserve existing finite source/output/IR purposes; do not claim module-wide mid marker proves one body or require new modes just for prose.
+
+## Optional Mid Lifetime and Legacy-Path Descriptions
+
+Batch0057 adds optional prose-only run/{mid_conditional_unique_move_cfg_lowering,mid_default_enum_owner_return,mid_default_field_fallback,mid_direct_call_cfg_lowering,mid_enum_aggregate_construction}.pw/.out and IR companions where present. Four comments retain obsolete AST/legacy body staging; current main and ordinary functions require verified Mid. conditional_unique_move describes retained ownership as lasting to enclosing scope, but actual accessibility-cliff cleanup is at the join, immediately followed by scope exit here. Preserve meaningful exactly-once behavior without treating this stdout as proof of scope extension; no mandatory new mode or code repair solely for wording.
+
+## Optional Mid Buffer and Aggregate Entry Descriptions
+
+Batch0056 adds optional prose-only run/{mid_body_build_return_error_match,mid_buffer_append_cfg_lowering,mid_buffer_clear_cfg_lowering,mid_buffer_eq_cfg_lowering,mid_buffer_remove_last_cfg_lowering,mid_buffer_reserve_cfg_lowering,mid_buffer_set_cfg_lowering}.pw/.out and registered IR companions. Six legacy/main/body comments predate verified-Mid-only ordinary/helper/entry emission. clear capacity equality describes current implementation rather than unspecified adopted clear capacity; truncate equality analogous current observation, not a new source ban. Preserve finite assertions and source purposes, no mandatory new mode solely for wording.

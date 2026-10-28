@@ -196,3 +196,11 @@ Batch0054 adds exactly run/{late_nominal_type_identity,lexical_body_requests,mat
 ## Explicit Ambient-Effect and Async-Body Guards
 
 Batch0055 adds exactly run/{mid_ambient_effect_snapshot,mid_async_body_contract}.pw/.out as representative roots136–137. Legacy panic statements and unimported ordinary calls require adopted ordinary diverge-function migration. Preserve partial snapshot conservative effects and async logical/body signature readiness controls; failure branches were not executed.
+
+## Explicit Mid Dataflow and Declaration Guard Roots
+
+Batch0057 adds exactly run/{mid_dataflow_states,mid_declaration_ownership,mid_drop_sparse_cliffs}.pw/.out, representative roots142–144 after batch0056. Ordinary panic calls and legacy statement guards require adopted ordinary diverge-function migration. Preserve lattice joins, declaration/executable stage separation, cached stable failures and sparse-cliff assertions; no guard execution claimed.
+
+## Explicit Mid Binding and Call Completion Guards
+
+Batch0056 adds exactly run/{mid_binding_identity,mid_body_type_results,mid_call_reached_completion,mid_call_template_cfg}.pw/.out, representative roots138–141 after batch0055. Ordinary panic calls and legacy statement guards require adopted ordinary diverge-function migration, retaining binding identity, owner-local result absence, emitted-call completion and frozen call template controls.

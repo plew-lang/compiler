@@ -233,3 +233,7 @@ Batch0054 adds exactly run/{late_nominal_type_identity,lexical_body_requests,loo
 ## Explicit Ambient Snapshot Loop Binding
 
 Batch0055 adds exactly run/mid_ambient_effect_snapshot.pw/.out: bare for term has no earlier mutable target. Preserve partial request snapshot versus later body/destruction-index separation, unknown effect conservatism and known pure/effected controls with adopted explicit new binding.
+
+## Explicit Mid Lattice and Declaration Loop Bindings
+
+Batch0057 adds exactly run/{mid_dataflow_states,mid_declaration_ownership}.pw/.out: five lattice-loop sites and two variant/marker sites have no prior mutable target. Retain finite lattice/product controls and declaration ownership cases through explicit adopted new binding.
