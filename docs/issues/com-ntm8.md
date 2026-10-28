@@ -297,3 +297,7 @@ Batch0080 adds exactly run/{value_control_binding_context,value_control_context_
 ## Explicit Literal Helper Iteration Bindings
 
 Batch0082 adds exactly tests/compiler/frontend/StringLiteralValues.pw inspect bare byte loop and expect bare index loop, neither having an earlier mutable destination. Preserve decoded byte counts, escapes/NUL and later successful decode observations while making intended new bindings explicit. This is one manual support helper, not a new registered fixture or a whole-loop migration.
+
+## Conditional Unique Return Source Setup
+
+Batch0121 adds exactly run/unique_cond_return.pw/.out. Its two bare local returns a/b rely on old implicit transfer, while adopted spec03 requires explicit unique access modes and spec04 return completion grants no exception. Preserve both selected-owner transfer and unreturned-sibling destruction sequences through adopted explicit transfer and coherent impl-only deinit migration. Supplemental unique_move is the existing0031 exact scope, not a second intake. This is source setup qualification, not a new implicit-move rule, executed current failure or demand for every return combination.

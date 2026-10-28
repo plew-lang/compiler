@@ -283,3 +283,11 @@ Batch0102 optionally qualifies exactly run/{iter_take_skip,loop_arc,loop_shortci
 ## Manual Declaration Selection Description
 
 Batch0127 optionally qualifies tests/compiler/mid/README.md final corruption paragraph. Since ce6e87fd, DeclarationAccess accepts either sealed-writer refusal or, only if Pending mutation succeeds, the exact CallSelection analysis failure. Describe both defenses rather than claiming every run corrupts a reachable template and queries that diagnostic. Preserve sealed publication; no new mandatory detector/mode, source repair or execution.
+
+## Unique Cleanup Description Precision
+
+Batch0121 optionally qualifies exactly run/{unique_deinit,unique_enum_arc}.pw/.out. Deinit is impl-only under the adopted contract, so may also be declared in impl must not imply valid struct-body alternatives. Actual5a5bb168 changed unique_enum_arc to consuming match and moved Cell9 destruction before consumed; the current callee-end header does not describe that selected cleanup edge. Preserve both roots’ useful order/value observations and existing source migration ownership; no additional mandatory path/mode matrix or audit-time fixture edits.
+
+## Weak Upgrade Temporary Cleanup Description
+
+Batch0122 optionally qualifies exactly run/weakref_match_temp.pw/.out. Its original949e7b4 returning-arm comment names dropScope, a retired mechanism absent from current compiler/src; canonical Mid cleanup owns the current edge. Preserve5/100/9, direct upgrade temporary and return/fall-through strong-owner release intent. This is comment precision only, not new mandatory tests, changed expected output, source repair or executed memory-safety proof. weakref_arc is existing0081 exact prose scope; weakref_upgrade_match explicitly labels its old helpers Before the fix and is not another intake.
