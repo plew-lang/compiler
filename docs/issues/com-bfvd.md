@@ -204,3 +204,11 @@ Batch0057 adds exactly run/{mid_dataflow_states,mid_declaration_ownership,mid_dr
 ## Explicit Mid Binding and Call Completion Guards
 
 Batch0056 adds exactly run/{mid_binding_identity,mid_body_type_results,mid_call_reached_completion,mid_call_template_cfg}.pw/.out, representative roots138–141 after batch0055. Ordinary panic calls and legacy statement guards require adopted ordinary diverge-function migration, retaining binding identity, owner-local result absence, emitted-call completion and frozen call template controls.
+
+## Explicit Mid Global Access Demand Guards
+
+Batch0058 adds exactly run/mid_global_access_demand.pw/.out, representative root145 after batches0056/0057. Migrate legacy panic guards through adopted ordinary diverge-function contract; preserve SCC reachability, partial body/destructor request closure, deduplication and analysis-not-code-generation predicates.
+
+## Explicit Mid Instance and Projection Guards
+
+Batch0059 adds exactly run/{mid_if_cfg,mid_index_place_cfg,mid_instance_demand,mid_instantiated_local_result_index}.pw/.out, representative roots146–149 after batch0058. Ordinary panic calls/legacy statements require adopted ordinary diverge-function migration. Include isolated Index helper string consistently rather than skipping declaration-owned setup; preserve source owner/grounding, projection, instance-demand stable failure and synthetic result-table predicates.

@@ -67,3 +67,7 @@ Batch0045 adds exactly run/{existential_declaration_plan,existential_rebox_evide
 ## Explicit Mid Call-Boundary Nominal Container Conversion Oracles
 
 Batch0055 adds exactly run/{mid_any_array_call_repack,mid_any_nested_optional_call_repack,mid_any_optional_array_call_repack,mid_any_optional_call_repack}.pw/.out/.ll.expect. Existing Array[Sq] or nested Optional/Array/Optional[Item] values cannot implicitly become corresponding containers of existential elements under invariant generics. Retain source-selected evidence/physical payload/none-tag regression purposes in permitted structural/internal contexts or intentional source-rejection tests; do not license nominal covariance merely because Mid implements repacking. mid_any_array_literal_context is distinct valid per-element expected-type boxing contrast. No audit-time source or golden changes.
+
+## Explicit Mid Global Storage Nominal Conversion Oracle
+
+Batch0059 adds exactly run/mid_global_storage_conversion.pw/.out. Optional[Person] values cannot become Optional[anyNamed] wholesale at call-result/global binding/assignment boundaries under invariance. Preserve saved storage-conversion, original-owner usability, None and direct anyNamed initializer purpose in admitted shapes; do not grant a global-only covariance exception.

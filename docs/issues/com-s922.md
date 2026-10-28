@@ -60,3 +60,11 @@ Batch0049 adds exactly run/generic_empty_array_arg.pw/.out. Generic Add plus gen
 ## Explicit Numeric Match-Operand Context Question
 
 Batch0054 adds exactly run/{match_expr,match_literal}.pw/.out for the annotated match-result-plus-unsuffixed1 subexpressions (match_expr38 and match_literal49). spec12 permits expected-result sharing for both bare numeric literals; body-checking forbids generic Output-to-operand propagation. Determine whether a not-yet-typed numeric match operand falls within the same permitted local expectation while preserving transparent block/if/match behavior and independent Self/Rhs/Output witnesses. Current success does not decide this source contract. Retain finite inference question rather than automatically suffixing/rejecting it or extending general backward inference; obtain judgment only if canonical rules remain insufficient.
+
+## Explicit Mid Float Operand Integer Context Question
+
+Batch0058 adds exactly run/mid_float_operand_context.pw/.out for final value:F32 * 2. Existing finite ordinary integer-to-float question covers spec02 integer-family-only literals versus known operand context. Preserve five decimal F32 controls and sixth multiplication purpose; do not settle the source rule by current success, rewrite automatically or conflate with permitted direct-literal cast.
+
+## Explicit Mid Immediate Newtype Float Literal Question
+
+Batch0059 adds exactly run/mid_newtype_literal_context.pw/.out for direct7 asRatio where Ratio=F32. Retain existing direct-literal/immediate-newtype contract reconciliation rather than blanket rejection or automatic suffix fix. Other integer extremes, suffixed operand, decimal and nested-wrapper controls remain distinct valid purposes.

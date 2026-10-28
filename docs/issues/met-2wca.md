@@ -163,3 +163,11 @@ Batch0054 adds exactly run/{match_expr_scrutinee_temp_arc,match_subexpr_scrutine
 ## Explicit Method Result and Mid Repack Optional Labels
 
 Batch0055 adds exactly run/{method_result_bind,mid_ambient_effect_snapshot,mid_any_nested_optional_call_repack,mid_any_optional_array_call_repack,mid_any_optional_call_repack}.pw/.out. Some(val v) in method_result_bind is named v-field punning (spec11:136), not a positional exception. Coherently migrate standard constructors/patterns for Dictionary result, effect snapshot and nested Optional payloads; whole-container conversion source mismatch remains separately com-vp0o.
+
+## Explicit Mid Generic Optional Construction
+
+Batch0058 adds exactly run/mid_generic_enum_aggregate_construction.pw/.out/.ll.expect: standard Some v construction and pattern migrate coherently to value, retaining generic T grounding and selected enum/variant identity; unrelated custom payload names remain unchanged.
+
+## Explicit Mid Global and Match Optional Labels
+
+Batch0059 adds exactly run/{mid_global_storage_conversion,mid_match_owned_payload,mid_match_rvalue_scrutinee}.pw/.out. Standard Some v constructor/pattern labels migrate coherently to value, preserving local binding names and Some/None result behavior; nominal whole-container conversion separately com-vp0o.

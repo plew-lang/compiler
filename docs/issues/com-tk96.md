@@ -25,3 +25,7 @@ Recover the original introducing test/helper intent and relevant canonical decis
 ## Completion
 
 Record exact source/contract differences, original intent, justified finite disposition, independent review and owned follow-ups. This investigation may close without implementing UTF-8 validation or changing tests. Any subsequent repair follows TDD and its applicable gates. Audit makes no compiler/std/test/runner change and runs no real compiler/native/sanitizer program. Evidence: meta/evidence/test-audit/scoped-reviews/frontend-batch-0046.json and its independent receipt (on completion of that finite batch); this issue is not a prerequisite for audit completion.
+
+## Explicit Mid FFI String Conversion Control
+
+Batch0058 adds exactly run/mid_ffi_intrinsic_calls.pw/.out. Current stringFromCString returns String and copies valid ASCII before raw cFree; adopted fallible String.fromCString API differs. Retain finite declaration-selected FFI call/ownership/link purpose, not invalid-UTF8 or arbitrary C pointer safety coverage; empty golden alone does not inspect copied content.

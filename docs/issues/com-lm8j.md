@@ -143,3 +143,11 @@ Batch0057 adds optional prose-only run/{mid_conditional_unique_move_cfg_lowering
 ## Optional Mid Buffer and Aggregate Entry Descriptions
 
 Batch0056 adds optional prose-only run/{mid_body_build_return_error_match,mid_buffer_append_cfg_lowering,mid_buffer_clear_cfg_lowering,mid_buffer_eq_cfg_lowering,mid_buffer_remove_last_cfg_lowering,mid_buffer_reserve_cfg_lowering,mid_buffer_set_cfg_lowering}.pw/.out and registered IR companions. Six legacy/main/body comments predate verified-Mid-only ordinary/helper/entry emission. clear capacity equality describes current implementation rather than unspecified adopted clear capacity; truncate equality analogous current observation, not a new source ban. Preserve finite assertions and source purposes, no mandatory new mode solely for wording.
+
+## Optional Mid Free Function and Field Replacement Descriptions
+
+Batch0058 adds optional prose-only run/{mid_field_overwrite,mid_free_function_copy_return_cfg_lowering,mid_free_function_direct_call_cfg_lowering,mid_free_function_move_return_cfg_lowering,mid_free_function_parameter_cfg_lowering,mid_free_function_return_cfg_lowering}.pw/.out and registered IR companions. Five global-anchor/main-legacy claims and field-overwrite legacy-emitter staging predate verified-Mid-only entry/helper emission. A module-wide mid marker does not itself locate one helper. Keep finite call/parameter/result/field purposes; no runtime/compiler change or mandatory new matrix solely for prose.
+
+## Optional Mid Local Loop and Receiver Descriptions
+
+Batch0059 adds optional prose-only run/{mid_local_assign_cfg_lowering,mid_loop_exit_cfg_lowering,mid_method_call_cfg_lowering,mid_method_receiver_field_cfg_lowering}.pw/.out and registered IR companions. Legacy main/callee subset assumptions and by-value-self wording predate shared verified Mid and read borrowing. Preserve local/loop/receiver projection purposes; module-wide marker is not a unique helper proof and no new execution matrix is imposed solely for prose.

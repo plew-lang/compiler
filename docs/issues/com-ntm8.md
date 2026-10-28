@@ -237,3 +237,11 @@ Batch0055 adds exactly run/mid_ambient_effect_snapshot.pw/.out: bare for term ha
 ## Explicit Mid Lattice and Declaration Loop Bindings
 
 Batch0057 adds exactly run/{mid_dataflow_states,mid_declaration_ownership}.pw/.out: five lattice-loop sites and two variant/marker sites have no prior mutable target. Retain finite lattice/product controls and declaration ownership cases through explicit adopted new binding.
+
+## Explicit Mid Global Access Dependency Loop Binding
+
+Batch0058 adds exactly run/mid_global_access_demand.pw/.out: bare for body in partial.requiredBodies has no earlier mutable target. Preserve finite demand/readiness closure while adopting explicit new binding.
+
+## Explicit Mid Instance Request Enumeration Binding
+
+Batch0059 adds exactly run/mid_instance_demand.pw/.out: bare for body enumerates compiler.mid.bodies without earlier mutable target. Preserve selected-only body request, signature readiness and stable repeated failure under explicit adopted new binding.

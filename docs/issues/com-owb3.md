@@ -160,3 +160,7 @@ Batch0053 adds exactly run/iter_generic.pw/.out with bare pub impl BoxIter/Box f
 ## Explicit Mid Associated Item Publication
 
 Batch0055 adds exactly run/mid_associated_item_identity.pw/.out. Bare pub impl Box factory repeats existing unresolved shorthand, not explicit undeclared T. Preserve trait Item versus method Item lexical binder independence and concrete Array results through the eventual canonical ruling.
+
+## Explicit Mid Global Initializer Publication
+
+Batch0058 adds exactly run/mid_global_init_cfg_lowering.pw/.out. Bare pub impl Box factory repeats existing finite unresolved generic publication form, not explicit undeclared T. Preserve earlier-root dependency, generic initializer call and storage type evidence through canonical reconciliation.
