@@ -29,3 +29,11 @@ Batch0043 adds exactly run/declaration_trait_assumptions.pw/.out. Source[Arg] de
 ## Explicit Mixed Existential Method Condition Edge
 
 Batch0045 adds exactly run/existential_method_condition_mixed_path.pw/.out. Base[T] itself has no T:Marker premise, but impl[T] Base[T] as Derived where T:Marker restricts the edge to selected source instances, prohibited by spec08 full-source-range rule. Preserve mixed hidden associated/caller generic condition proof purpose via legitimate nominal/unconditional paths or explicitly bounded implementation lane. Ordinary nominal Wrapper conditional tests are not this violation.
+
+## Explicit Synthetic Call-Evidence Conditional Edge Setups
+
+Batch0069 adds exactly run/{source_call_proof_boundary,source_call_proof_evidence}.pw/.out. Both embedded sources declare unconstrained trait B[V], then impl[V] B[V] as P where V:Q, narrowing the declared source range contrary to spec08. Original adding1a83e292/93d44d1e contains this setup. Preserve four-family receiver/declaration/condition/cycle evidence checks and StaticMethod selection closure through valid nominal/unconditional setup or an explicitly bounded current implementation lane; do not bless ordinary conditional trait-to-trait conformance. Synthetic empty Operator/Protocol operands isolate evidence, not general signature/source admission.
+
+## Explicit Static Member Condition Producer Setup
+
+Batch0070 adds exactly run/source_member_condition_evidence.pw/.out. Embedded unconstrained trait B[V] is restricted by impl[V] B[V] as P where V:Q, contrary to spec08 full-source-range rule. Original cac8b92f establishes this condition-proof producer intent. Preserve nonzero selected child conditions and missing/wrong proof-variant guards using legitimate nominal/unconditional setup or an explicitly bounded current implementation lane. Do not infer permission from current producer success or silently delete the finite evidence regression.

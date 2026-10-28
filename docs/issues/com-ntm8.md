@@ -269,3 +269,11 @@ Batch0067 adds exactly run/retained_requirement_body_constraints.pw/.out. for so
 ## Explicit Retained and Selected-Receiver Loop Bindings
 
 Batch0068 adds exactly run/{retained_supertrait_evidence,retained_trait_self_evidence,selected_copy_receiver_identity}.pw/.out. Bare template/assumption/previous loops lack prior mutable targets; three sites use explicit new binding without losing missing/foreign proof and full receiver/body-instance comparisons.
+
+## Explicit Saved Call-Site Loop Binding
+
+Batch0069 adds exactly run/source_call_result_site_authority.pw/.out. Bare for template has no existing mutable destination; retain saved-site-versus-diagnostic-expression assertions with an explicit new loop binding. Missing site cannot fall back to a different expression term. One exact setup site, not a new general lookup or inference rule.
+
+## Explicit Conversion Endpoint Loop Binding
+
+Batch0070 adds exactly run/source_conversion_endpoint_scope.pw/.out: one bare for array loop has no existing mutable target. Preserve own/foreign endpoint and identity/array evidence checks using explicit new binding. source_operator_literal_context two bare operation sites already exact0030 are reused, not new intake.

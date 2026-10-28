@@ -183,3 +183,7 @@ Batch0067 optional prose-only run/{ref_arc_deinit,ref_arrow_method,ref_scalar_li
 ## Optional Runtime Smoke and Self-Resolution Descriptions
 
 Batch0068 optional prose-only run/{runtime_intrinsic_process_smoke,self_param_conformance,self_param_conformance_enum,self_return}.pw/.out. Smoke calls bundled Process.argCount rather than ordinary lookalike extern; numeric/entropy identity tests separately cover ordinary symbols. Self typing/grounding belongs before final backend consumption, rather than historical backend cursor. No extra runtime matrix solely for wording.
+
+## Optional Shadowing Backend Description
+
+Batch0069 optional prose-only run/shadowing.pw/.out: same-block rebindings must retain lexical identity through the current Mid/LLVM pipeline, not generated C. Preserve scalar/type/Array binding behavior; no new mode matrix solely for wording.

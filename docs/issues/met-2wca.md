@@ -207,3 +207,7 @@ Batch0067 adds exactly run/{recursive_generic,recursive_generic_multi_instance,r
 ## Explicit Inherited Iterator and Global Completion Optional Labels
 
 Batch0068 adds exactly run/{self_inherited_iterator_runtime,semantic_checked_completion}.pw/.out. Std Some v in iterator result and globalInitializerTarget handle migrates to value, preserving selected iteration and refusal of unowned/completed global operation appends.
+
+## Explicit Source Range and Operation Optional Labels
+
+Batch0070 adds exactly run/{source_file_ranges,source_iteration_authority,source_operation_head_projection}.pw/.out. Some v patterns in reader/file handles and the supplied minimal canonical Lang Some(v:T) declaration migrate to adopted value label; the supplied standard resource is not an unrelated custom nominal enum. Preserve multi-file identity, selected next-result authority and scalar operation-head field correspondence.

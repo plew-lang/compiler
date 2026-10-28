@@ -184,3 +184,7 @@ Batch0066 adds exactly run/{rec_type_generic_wrapper,record_generic_struct_field
 ## Explicit Recursive and Shared-Pointee Bare Factory Contexts
 
 Batch0067 adds exactly run/{recursive_generic,recursive_generic_multi_instance,ref_pointee_destroy_arc}.pw/.out as three new roots; ref_arrow_method already exact0024 is reused. Bare generic Node/Ping/Pong/Chain/Box factory publication has existing unresolved shorthand meaning. Preserve recursive and generic pointee substitution rather than treating each as explicit undeclared Box[T].
+
+## Explicit Sendability Surface Bare Publication Context
+
+Batch0069 adds exactly run/sendability_surface.pw/.out: bare pub impl Box {factory} repeats unresolved generic publication shorthand, not explicit undeclared Box[T]. Preserve the sendable/nonsendable declaration and signature surfaces and I64 generic instantiation. This fixture does not exercise worker transfer, sendable closure formation or existential boxing and cannot certify their implementation.
