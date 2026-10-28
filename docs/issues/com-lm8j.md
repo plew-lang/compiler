@@ -151,3 +151,7 @@ Batch0058 adds optional prose-only run/{mid_field_overwrite,mid_free_function_co
 ## Optional Mid Local Loop and Receiver Descriptions
 
 Batch0059 adds optional prose-only run/{mid_local_assign_cfg_lowering,mid_loop_exit_cfg_lowering,mid_method_call_cfg_lowering,mid_method_receiver_field_cfg_lowering}.pw/.out and registered IR companions. Legacy main/callee subset assumptions and by-value-self wording predate shared verified Mid and read borrowing. Preserve local/loop/receiver projection purposes; module-wide marker is not a unique helper proof and no new execution matrix is imposed solely for prose.
+
+## Optional Mid Wide Operand and Operator Legacy Descriptions
+
+Batch0060 adds optional prose-only run/{mid_operand_build_error_propagation,mid_operator_call_cfg_lowering}.pw/.out/.ll.expect. Producer-outside-minimal-Mid/main-legacy assumptions are obsolete under shared verified Mid. Operand golden correctly distinguishes UnsupportedCall42 from None0; do not assign the distinct batch0056 identical-arm detector defect to this input. Preserve typed operator and wide-tail enum semantics, no mandatory new modes solely for comments.

@@ -212,3 +212,7 @@ Batch0058 adds exactly run/mid_global_access_demand.pw/.out, representative root
 ## Explicit Mid Instance and Projection Guards
 
 Batch0059 adds exactly run/{mid_if_cfg,mid_index_place_cfg,mid_instance_demand,mid_instantiated_local_result_index}.pw/.out, representative roots146–149 after batch0058. Ordinary panic calls/legacy statements require adopted ordinary diverge-function migration. Include isolated Index helper string consistently rather than skipping declaration-owned setup; preserve source owner/grounding, projection, instance-demand stable failure and synthetic result-table predicates.
+
+## Explicit Mid Reachability Panic and Array Recording Guards
+
+Batch0060 adds exactly run/{mid_ownership_reachability,mid_panic,mid_record_array_storage}.pw/.out, representative roots150–152 after batch0059. Ordinary panic calls/legacy statement migrate through adopted ordinary diverge API. Keep reachable/dead CFG controls and invalid-body sentinel, untaken source panic purpose, and parent source-array type recording; record_array_storage dual roles count one root, no fake abort execution.

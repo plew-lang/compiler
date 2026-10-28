@@ -164,3 +164,7 @@ Batch0055 adds exactly run/mid_associated_item_identity.pw/.out. Bare pub impl B
 ## Explicit Mid Global Initializer Publication
 
 Batch0058 adds exactly run/mid_global_init_cfg_lowering.pw/.out. Bare pub impl Box factory repeats existing finite unresolved generic publication form, not explicit undeclared T. Preserve earlier-root dependency, generic initializer call and storage type evidence through canonical reconciliation.
+
+## Explicit Patterned Receiver Factory Publication
+
+Batch0060 adds exactly run/mid_receiver_pattern_layout.pw/.out: bare pub impl Packed factory repeats existing unresolved generic publication, separate from impl[T] Packed[Array[T]] valid binder. Preserve selected receiver pattern substitution, bound and field layout through canonical ruling; no bare shorthand invented.

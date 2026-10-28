@@ -171,3 +171,7 @@ Batch0058 adds exactly run/mid_generic_enum_aggregate_construction.pw/.out/.ll.e
 ## Explicit Mid Global and Match Optional Labels
 
 Batch0059 adds exactly run/{mid_global_storage_conversion,mid_match_owned_payload,mid_match_rvalue_scrutinee}.pw/.out. Standard Some v constructor/pattern labels migrate coherently to value, preserving local binding names and Some/None result behavior; nominal whole-container conversion separately com-vp0o.
+
+## Explicit Mid Owned Optional and Readonly Weak Labels
+
+Batch0060 adds exactly run/{mid_owned_conversion_boundaries,mid_owned_enum_call_copy,mid_owned_enum_copy,mid_readonly_weak_cell}.pw/.out. Coherently migrate standard Some v construction/patterns to value, preserving local names, None controls and weak live/dead transitions; nominal covariance and exact weak-handle API migration remain separate owners.

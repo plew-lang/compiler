@@ -71,3 +71,7 @@ Batch0055 adds exactly run/{mid_any_array_call_repack,mid_any_nested_optional_ca
 ## Explicit Mid Global Storage Nominal Conversion Oracle
 
 Batch0059 adds exactly run/mid_global_storage_conversion.pw/.out. Optional[Person] values cannot become Optional[anyNamed] wholesale at call-result/global binding/assignment boundaries under invariance. Preserve saved storage-conversion, original-owner usability, None and direct anyNamed initializer purpose in admitted shapes; do not grant a global-only covariance exception.
+
+## Explicit Mid Owned Container Copy Conversion Oracles
+
+Batch0060 adds exactly run/{mid_owned_array_call_copy,mid_owned_array_copy,mid_owned_conversion_boundaries,mid_owned_enum_call_copy,mid_owned_enum_copy}.pw/.out. Existing Array[Payload/Item] and Optional[Payload/Item] cannot implicitly become nominal containers of anyNamed at calls/returns. Preserve useful heap-backed Copy/owner-transfer, None and original-owner usability through admitted shapes or finite internal/reject contracts. Aggregate/direct existential copies remain valid contrasts; retain these purposes rather than deleting all ownership tests or licensing covariance.
