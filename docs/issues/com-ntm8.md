@@ -229,3 +229,7 @@ Batch0053 adds exactly run/{interface_boxing_conditions,interface_final_evidence
 ## Explicit Nominal, Request and Relevance Loop Bindings
 
 Batch0054 adds exactly run/{late_nominal_type_identity,lexical_body_requests,loop_arc,member_obligation_relevance_worklist}.pw/.out: six bare sites name/completedOwner/attempt/r and two relevance name loops lack prior mutable targets. Preserve normal/break/continue ownership purpose and source-owner/graph queries using adopted new bindings. Existing val/destructuring loops remain.
+
+## Explicit Ambient Snapshot Loop Binding
+
+Batch0055 adds exactly run/mid_ambient_effect_snapshot.pw/.out: bare for term has no earlier mutable target. Preserve partial request snapshot versus later body/destruction-index separation, unknown effect conservatism and known pure/effected controls with adopted explicit new binding.

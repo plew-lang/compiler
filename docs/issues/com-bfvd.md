@@ -192,3 +192,7 @@ Batch0053 adds exactly run/{interface_boxing_conditions,interface_declared_guara
 ## Explicit Nominal Request, Match and Relevance Guards
 
 Batch0054 adds exactly run/{late_nominal_type_identity,lexical_body_requests,match_expr_diverge,member_obligation_relevance_worklist}.pw/.out as representative roots132–135. Ordinary calls need explicit Core import; match_expr_diverge legacy panic statements also require ordinary function migration. Preserve nominal ambient identity, failed/successful source request caching, branch divergence and graph relevance/error-order contracts, not an all-guard rewrite.
+
+## Explicit Ambient-Effect and Async-Body Guards
+
+Batch0055 adds exactly run/{mid_ambient_effect_snapshot,mid_async_body_contract}.pw/.out as representative roots136–137. Legacy panic statements and unimported ordinary calls require adopted ordinary diverge-function migration. Preserve partial snapshot conservative effects and async logical/body signature readiness controls; failure branches were not executed.

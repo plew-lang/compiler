@@ -159,3 +159,7 @@ Batch0053 adds exactly run/{interface_final_evidence,iter_adapter_terminal,iter_
 ## Explicit Match-Scrutinee Optional Shapes
 
 Batch0054 adds exactly run/{match_expr_scrutinee_temp_arc,match_subexpr_scrutinee_arc}.pw/.out. Migrate StdSome v producer/pattern labels coherently, preserving selected held payload lifetime versus unretained scrutinee destruction and match-before-parent-call order. Custom Opt.v and ResultFile.file are not migration targets.
+
+## Explicit Method Result and Mid Repack Optional Labels
+
+Batch0055 adds exactly run/{method_result_bind,mid_ambient_effect_snapshot,mid_any_nested_optional_call_repack,mid_any_optional_array_call_repack,mid_any_optional_call_repack}.pw/.out. Some(val v) in method_result_bind is named v-field punning (spec11:136), not a positional exception. Coherently migrate standard constructors/patterns for Dictionary result, effect snapshot and nested Optional payloads; whole-container conversion source mismatch remains separately com-vp0o.

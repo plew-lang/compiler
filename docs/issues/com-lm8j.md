@@ -131,3 +131,7 @@ Batch0053 adds optional prose-only run/{iter_adapter_terminal,iter_fold_adapter,
 ## Optional String Identity and Temporary Ownership Wording
 
 Batch0054 adds optional prose-only run/{let_infer_string,make_literal_arg_arc}.pw/.out. Arbitrary source String spelling is not semantic type authority; use resolved ambient declaration/recorded term description. A call-owned temporary ends retention at its target call completion, not generally full statement end; preserve legitimate result ownership and separate IndexSet evaluation. Current goldens do not assert wrong deinit timing or prove ASan was executed by this audit.
+
+## Optional Receiver and Entry-Path Descriptions
+
+Batch0055 adds optional prose-only run/{methods,mid_access_inout_argument_cfg_lowering,mid_access_nested_argument_cfg_lowering,mid_access_nested_return_cfg_lowering,mid_access_receiver_cfg_lowering}.pw/.out, plus already-read supplemental pub_get_field.pw/.out. Plain fn self is a read borrow, not a by-value snapshot; four main-legacy comments predate verified-Mid-only entry path. Supplemental pub(get)/private access is module-scoped, not restricted to anonymous impl. Preserve existing finite source/output/IR purposes; do not claim module-wide mid marker proves one body or require new modes just for prose.

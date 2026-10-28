@@ -156,3 +156,7 @@ Batch0051 adds exactly run/{generic_struct,generic_struct_fn,generic_struct_loca
 ## Explicit Generic Iterable Publication
 
 Batch0053 adds exactly run/iter_generic.pw/.out with bare pub impl BoxIter/Box factory markers. Preserve generic Array[T] storage, Item=T next/result and Iterable.Iter substitution while settling the existing shorthand question. No explicit undeclared-T or structural conformance exception is inferred.
+
+## Explicit Mid Associated Item Publication
+
+Batch0055 adds exactly run/mid_associated_item_identity.pw/.out. Bare pub impl Box factory repeats existing unresolved shorthand, not explicit undeclared T. Preserve trait Item versus method Item lexical binder independence and concrete Array results through the eventual canonical ruling.
