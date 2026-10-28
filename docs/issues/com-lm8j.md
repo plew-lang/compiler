@@ -95,3 +95,7 @@ Batch0039 adds run/{buffer_floor,buffer_index,c_reserved_idents,cast}.pw/.out fo
 ## Explicit Closure Capture and Temporary-Lifetime Comments
 
 Batch0041 adds run/{closure_shadow_capture,closure_temp_arg_arc}.pw/.out for optional explanation precision. Capture identity is lexical independently of the retired generated-C suffix mechanism, and the first shadowed x is actually mut. Call-argument temporary retention ends at the called closure completion before the outer expression resumes (spec03:113), not generally at outer statement end. Keep source/ownership regressions; this admission audit does not certify output discrimination of cleanup timing or add unread outcome work to this comment task.
+
+## Optional Dictionary Lowering Comment Precision
+
+Batch0044 records optional comment precision only for run/{dict_compound_assign,dict_str_value,dictionary_subscript}.pw/.out. Literal-key compound assignment is valid; shorthand d[k]=d[k]OPv must not imply reevaluating a nonliteral place/key. Old at/insert lowering descriptions are not authored calls in these fixtures; use selected Index/IndexSet contracts when refreshing prose. No mandatory new behavior test or source change follows from this comment-only observation.

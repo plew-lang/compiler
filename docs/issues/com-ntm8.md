@@ -187,3 +187,7 @@ Batch0042 adds exactly run/conversion_proof_freeze_roundtrip.pw/.out. Bare for p
 ## Explicit Effect Graph and Default Template Loop Setup
 
 Batch0043 adds exactly run/{declaration_effect_demand,default_argument_call_templates}.pw/.out. Bare for node and two for capacity sites have no earlier mutable target. Preserve root graph dedup/reachability and owner-scoped default completion, protocol pending and colliding call keys using explicit new bindings.
+
+## Explicit Final Direct Constraint Loop Setup
+
+Batch0044 adds exactly run/direct_call_constraint_instantiation.pw/.out. Bare for template has no previous mutable binding. Preserve prepared snapshot immutability, final-body evidence retention, child condition proof forwarding and missing/bodyless checks using an explicit binding declaration.

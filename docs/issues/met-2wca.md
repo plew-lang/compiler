@@ -115,3 +115,7 @@ Batch0042 adds exactly run/core_lib.pw/.out. Some(v=7) uses the current Std API 
 ## Explicit Declaration Index and Default Optional Patterns
 
 Batch0043 adds exactly run/{declaration_identity_index,default_argument_bindings,default_argument_call_templates,default_body_demand}.pw/.out. Optional.Some(v:) patterns require adopted value label; retain authored local names and custom Explicit(argumentIndex)/Default(generator) fields unchanged.
+
+## Explicit Default Projection and Dictionary Optional Punning
+
+Batch0044 adds exactly run/{default_generator_shared_owner,dict_get,dict_str_value}.pw/.out. Some(val v) is named v-field punning, not positional payload matching. Migrate to Some(value:val v), retaining lexical generator projection, safe dictionary lookup/fallback and String results. Do not change custom field v of unrelated types.
