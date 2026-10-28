@@ -80,7 +80,7 @@ specification changed. Inventory is in_progress; com-mmk9 is not yet started.
 ## Factual Inventory Progress
 
 The [family reconciliation](../../../evidence/compiler-api-audit/family-reconciliation.json)
-contains52 independently accepted thin factual families across entry, source,
+contains64 independently accepted thin factual families across entry, source,
 package, host, context/loader and common auxiliary boundaries. Exact primary
 ranges and any paired header/construction ranges are retained; a listed file
 never certifies the whole file. Declared/default/implicit constructors, real
@@ -98,6 +98,11 @@ category contexts; they are not a resolved binding graph.
 Six native LLVM and one module-path family are independently accepted.
 Native lookup preserves first-execution source preparation; nullable failure
 latches and production global LLVM-option inputs have actual callers recorded.
+The build-support/owner records add11 accepted families; with the resource
+emitter, all17 production-support files have exact factual input records.
+Nine routing-only source texts add one zero-owned-API family; their child APIs
+remain separate targets. Distinct standard-runner IO/control consumers of the
+process supervisor are included without certifying fixture/monitor algorithms.
 All other targets remain inventory work. The full199-file/273-segment routing
 still applies; accepted family counts are not a denominator for API/algorithm
 correctness. SCOPE-1/2 have a locally validated record method but remain globally
