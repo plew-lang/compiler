@@ -271,3 +271,11 @@ Batch0100 optionally qualifies exactly run/generic_mutual_recursion_body_instanc
 ## Generic Associated Call and Inference Examples
 
 Batch0098 optionally qualifies exactly run/{generic_assoc_fn,generic_ctor_infer}.pw/.out. Pair.of/Box.make/dup are associated functions rather than multi-parameter factories; the inference header Map example is actually Pair[U64,U64] in source. Preserve six transitive associated-call and four top-down/multi-parameter inference outputs. The separate generic publication identity question stays with com-owb3. No source repair, added universal matrix or erasure of legitimate old representation failure context.
+
+## Grounded Method-Result Description
+
+Batch0103 optionally qualifies exactly run/method_result_bind.pw/.out. The original22d54d8e exprResultRef helper explanation is legitimate history but no longer a current semantic authority; preserve unannotated grounded Optional method-result binding, Some extraction and missing-key fallback2/99. This is one optional comment pair, without new tests or runtime repair. methods and four Access main-legacy descriptions reuse Batch0055 scope; old staging explains the original regression without claiming current alternate emission.
+
+## Iterator Prefix and Loop Cleanup Descriptions
+
+Batch0102 optionally qualifies exactly run/{iter_take_skip,loop_arc,loop_shortcircuit_elem_arc}.pw/.out. Preserve the original lazy prefix/skip and loop/conditional temporary cleanup purposes and finite values. adapterCallResultInst, drainStmtTemps and backend loop-frame explanations are historical rather than current semantic authorities; no new ASan execution is established by an ASan-clean comment. iter_terminals/let_infer_string/make_literal_arg_arc reuse earlier exact descriptions. Do not erase genuine prior validation history, add a broad mechanism sweep or require new runtime cases solely for prose.
