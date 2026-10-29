@@ -2,7 +2,7 @@
 id: com-mmk9
 status: in_progress
 deps: [com-am6u]
-links: [com-kss7, com-ktyj, com-50me]
+links: [com-kss7, com-ktyj, com-50me, com-qt11]
 created: 2026-10-27T02:15:37Z
 type: task
 priority: 1
@@ -65,12 +65,11 @@ no-production/recursive/fixture-only callers; failure-prefix and restore ownersh
 Each adopted row needs independent review and exact input-fact references. Missing
 or unread rows stay pending; local disposition counts cannot close the whole audit.
 
-The first finite candidate covers 22 entry/source/leaf/observation families in
-[boundary-values-and-observation](../../../evidence/compiler-api-audit/capabilities/boundary-values-and-observation.json).
-Its independent review is accepted: 17 justified inputs, four confirmed
-excess-authority cases and one unresolved converter question.
 [Capability reconciliation](../../../evidence/compiler-api-audit/capability-reconciliation.json)
-owns exact adopted hashes and follow-up assignment. com-kss7/com-ktyj own the
-two finite narrowing scopes; com-50me owns the converter input investigation.
-Remaining 1,482 inventory families have not received capability verdicts. No compiler/source/test/binary repair or product
-execution has been performed.
+owns exact adopted decision/review hashes and finite follow-up assignment.
+Currently 37 families are independently accepted: 30 justified inputs, five
+confirmed excess-authority cases, one unresolved converter question and one
+optional immutable-metadata simplification. com-kss7/com-ktyj/com-qt11 own the
+finite narrowing scopes; com-50me owns the converter input investigation.
+Remaining 1,467 inventory families have not received capability verdicts.
+No compiler/source/test/binary repair or product execution has been performed.
