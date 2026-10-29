@@ -1,6 +1,6 @@
 ---
 id: com-mmk9
-status: open
+status: in_progress
 deps: [com-am6u]
 links: []
 created: 2026-10-27T02:15:37Z
@@ -39,3 +39,34 @@ owners. Obtain independent review of coverage and grounds. Repairs are separatel
 owned work, and this epic closes on its audits/operational rules rather than on
 those repairs or any implementation project's final gates. No compiler source or
 expectation changes are performed within this audit.
+
+## Audit Basis and Scenarios
+
+The dependency com-am6u is closed as factual discovery. Its
+[acceptance](../../../evidence/compiler-api-audit/inventory-acceptance.json)
+pins all 1,504 source/API families and their individual evidence/review limits.
+Use each family responsibility, actual typed calls and supplied/default values,
+full reachable authority and legitimate inputs together. A broad owner receiver
+is not wrong merely because it owns several fields; direct reads alone also
+cannot hide capabilities reached through delegates, globals or retained handles.
+
+For every family, retain justified inputs and explicitly identify the affected
+API subset for mixed findings. Classify justified inputs, confirmed unnecessary
+authority, unresolved questions or optional simplifications. A confirmed excess
+requires concrete unrelated authority and a narrower input that preserves the
+responsibility, error provenance, lifetime and required effects. Test algorithm
+correctness, speculative performance claims and repairs remain excluded.
+
+Scenarios: explicit scalars/byte ranges; owned domain state; orchestration owners;
+whole Comp versus actual domain services; indirect state/capture/global access;
+constructor/default/native ownership; observer/diagnostic IO and latches; cached
+reader/session identity; source-versus-instantiation-versus-execution handoffs;
+no-production/recursive/fixture-only callers; failure-prefix and restore ownership.
+Each adopted row needs independent review and exact input-fact references. Missing
+or unread rows stay pending; local disposition counts cannot close the whole audit.
+
+The first finite candidate covers 22 entry/source/leaf/observation families in
+[boundary-values-and-observation](../../../evidence/compiler-api-audit/capabilities/boundary-values-and-observation.json).
+It is pending independent review. Its possible follow-ups are not yet accepted
+findings or created repair tasks. No compiler/source/test/binary repair or product
+execution has been performed.

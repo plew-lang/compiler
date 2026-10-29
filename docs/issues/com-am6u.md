@@ -1,6 +1,6 @@
 ---
 id: com-am6u
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-27T02:15:37Z
@@ -73,32 +73,32 @@ accept inventory closure. Parent adopts both evidenced omissions:
 - SCOPE-2:record rough caller/context traversal size per family, not merely
   primary line counts, and split oversize work before audit execution.
 
-These are remaining inventory work under this task, not compiler repair tasks
-or reasons to defer unread APIs as findings. No task scope, stopping rule or
-specification changed. Inventory is in_progress; com-mmk9 is not yet started.
+These requirements are now fulfilled for the pinned inventory, as recorded below.
+No compiler repair or product execution was part of this task.
 
-## Factual Inventory Progress
+## Outcome and Next Boundary
+
+Closed as investigated. [Inventory acceptance](../../../evidence/compiler-api-audit/inventory-acceptance.json)
+adopts the exact final reconciliation and independent full review: 199 unchanged
+source/support files, 82,074 primary lines assigned once, 1,504 factual families,
+185 individually adopted reviews, 17,522 source contexts and 1,195 exact reused
+delegate snapshots. All 5,570 routing locator occurrences have an owned primary
+range; locators are not a resolved semantic call graph.
+
+SCOPE-1/2 are closed for factual discovery, including typed caller/supplied/default
+inputs, receiver/capture/global reach, required inputs, constructor/generated API
+boundaries and finite traversal estimates. The final review supplements three
+recursive/fixture-only routes whose caller arrays must not be interpreted alone.
+The resource provider rough-line counter has a documented nonblocking emitter/header
+distinction; exact ownership includes both. Required corrections remaining: zero.
 
 The [family reconciliation](../../../evidence/compiler-api-audit/family-reconciliation.json)
-contains1504 independently accepted thin factual families. It owns exact primary
-ranges, source hashes, facts/review hashes and acceptance limits. A listed source
-path does not certify its whole file; metadata construction, successful admission
-and execution publication are distinct. The [evidence guide](../../../evidence/compiler-api-audit/README.md)
-links the accepted source/caller/input records. All199 target source/support
-hashes remain unchanged from the inventory baseline; product execution/repair
-has not been performed.
+and [guide](../../../evidence/compiler-api-audit/README.md) own exact source,
+facts/review hashes and local limits. Baseline compiler source is 9665094dcec8aa63ed20573b1306a0015058f595;
+all 199 source/support bytes remain unchanged. Existing dirty compiler binary and
+caches were preserved. No product build/test/native/JIT/runtime/performance execution
+or source/expectation repair was performed.
 
-Accepted facts retain actual typed callers, supplied/default/forwarded values,
-full receiver grants versus fields/delegates used, captured/retained references,
-nonlocal host inputs and required inputs. Important distinctions include the
-Comp default's module-global session allocator, Ref-backed prepared payloads,
-owner-provenance versus current cursor selection, private/public construction,
-and file-loading package/lock/shell observations outside SourceAccess.
-Missing caller shapes, direct effects and imprecise wording found in independent
-reviews were corrected and reaccepted at exact candidate hashes.
-
-Other targets remain inventory work. The full199-file/273-segment routing still
-applies; accepted family counts are not a denominator for API/algorithm
-correctness. SCOPE-1/2 remain globally open until every target family/input is
-reconciled and independently reviewed. This task stays in_progress; com-mmk9
-capability judgments and repair implementation are not completed.
+[com-mmk9](com-mmk9.md) consumes these records for capability judgments and finite
+follow-up ownership. This closure is not capability sufficiency, compiler algorithm
+correctness, repair completion, GREEN, or an implementation milestone.
