@@ -2,7 +2,7 @@
 id: com-mmk9
 status: in_progress
 deps: [com-am6u]
-links: []
+links: [com-kss7, com-ktyj, com-50me]
 created: 2026-10-27T02:15:37Z
 type: task
 priority: 1
@@ -67,6 +67,10 @@ or unread rows stay pending; local disposition counts cannot close the whole aud
 
 The first finite candidate covers 22 entry/source/leaf/observation families in
 [boundary-values-and-observation](../../../evidence/compiler-api-audit/capabilities/boundary-values-and-observation.json).
-It is pending independent review. Its possible follow-ups are not yet accepted
-findings or created repair tasks. No compiler/source/test/binary repair or product
+Its independent review is accepted: 17 justified inputs, four confirmed
+excess-authority cases and one unresolved converter question.
+[Capability reconciliation](../../../evidence/compiler-api-audit/capability-reconciliation.json)
+owns exact adopted hashes and follow-up assignment. com-kss7/com-ktyj own the
+two finite narrowing scopes; com-50me owns the converter input investigation.
+Remaining 1,482 inventory families have not received capability verdicts. No compiler/source/test/binary repair or product
 execution has been performed.
