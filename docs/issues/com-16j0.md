@@ -19,7 +19,7 @@ For only the exact unresolved APIs/components listed by these rows, map every di
 Exact affected API subsets and preserved required data are owned by the linked decision rows:
 - codegen-static-trait-self-and-instance-term-substitution: ['inout fn staticRequirementType(ref: U64, traitDef: TraitDef, receiverRef: U64, traitArgs: Array[U64]) -> U64 {']
 - codegen-bound-owned-trait-term-and-constraint-reification: ['inout fn traitBoundTypeTerm(ref: U64, bound: TraitBound, traitIndex: U64, includeInherited: Bool = true) -> U64 {', 'inout fn traitConstraintInBound(constraint: TraitConstraint, bound: TraitBound, traitIndex: U64, includeInherited: Bool = true) -> TraitConstraint {']
-- codegen-missing-and-supertrait-bound-value-projection: missingTraitBound only
+- codegen-missing-and-supertrait-bound-value-projection: ['assumedSupertraitBound']
 - codegen-conformance-owned-bound-and-assumption-projection: ['inout fn conformanceTraitBound(conformance: Conform) -> TraitBound {', 'inout fn conformanceDeclarationAssumptions(conformIndex: U64) -> Array[DeclarationBoundRef] {']
 - codegen-static-proof-selected-trait-bound-projection: ['inout fn staticProofBound(proof: StaticConformanceProof, traitIdx: U64) -> Result[TraitBound, CompileDiagnostic] {']
 - codegen-authored-trait-associated-equality-traversal: ['inout fn traitProjectionEquality(bound: TraitBound, receiver: U64, owner: U64, arguments: Array[U64], member: U64, context: TraitBound, projectionPath: Array[U64], path: Array[U64] = []) -> TraitProjectionEquality {']

@@ -20,7 +20,7 @@ Exact affected API subsets and preserved required data are owned by the linked d
 - frontend-index-recognition-and-call-synthesis: ['isDictionaryType', 'isBufferType', 'typeHasMethodNamed', 'synthMethodCall']
 
 ## Actions and Completion
-対象APIと全typed consumersで必要入力/indirect grantを照合し、source/session/diagnostic/cache/restoreを失わない境界案を独立レビューする。修正時のTDD/構造検証は別task。
+対象APIと全typed consumersで必要入力/indirect grantを照合し、source/session/diagnostic/cache/restoreを失わない境界案を独立レビューする。
 
 For an unresolved input question, first produce an exact direct/delegated reader/writer, identity, error and caller map for this finite scope and independently review the resulting justified/excess/unresolved disposition; assign finite repairs if necessary. For a confirmed narrowing, apply task-start TDD/refactor rules, preserve behavior with relevant controls, change real signatures and final consumers, and prove full unrelated authority is not retained through a wrapper/capture. Preserve cache/interner effects, source/session/owner lineage, diagnostics, restoration, lifetime and ordering. Readonly grants are not mutable grants. Enumerate actual callers rather than assuming representative examples or helper counts equal all call expressions. Review independently and run gates appropriate to the eventual change. Investigation completion must not claim repair/GREEN.
 

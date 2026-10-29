@@ -17,7 +17,7 @@ Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilitie
 Close newtypeUnderRef/newtypeUnderName/arrayElemNameForRef lexical/module/type-grounding/mangle dependencies and effects. Preserve source identity, active environment, selected declaration and no stale fallback; deliver finite verdict or remaining question.
 
 Exact affected API subsets and preserved required data are owned by the linked decision rows:
-- codegen-array-element-name-navigation: arrayElemRef only; arrayElemNameForRef remains unresolved component
+- codegen-array-element-name-navigation: ['arrayElemNameForRef']
 - codegen-lexical-newtype-name-navigation: newtypeUnderRef/newtypeUnderName
 
 ## Actions and Completion

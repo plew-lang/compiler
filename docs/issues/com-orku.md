@@ -17,18 +17,18 @@ Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilitie
 only unresolved components in Instantiate.pw rows, not Mid builders or whole compiler type checker
 
 Exact affected API subsets and preserved required data are owned by the linked decision rows:
-- mid-instantiation-rvalue-statement-dispatch-and-failure-trace: ['instantiateCanonicalStatement.locals', 'traceMidInstantiationRvalue']
+- mid-instantiation-rvalue-statement-dispatch-and-failure-trace: ['instantiateCanonicalRvalue', 'instantiateCanonicalStatement remaining semantic inputs']
 - mid-instantiation-noncall-control-and-remapped-protocol-branches: ['instantiateCanonicalNonCallTerminator', 'instantiateCanonicalNonCallTerminatorRemapped']
-- mid-instantiation-selected-call-resolution-target-and-receiver: ['instantiateCanonicalCallTarget']
+- mid-instantiation-selected-call-resolution-target-and-receiver: ['instantiateCanonicalCallReceiver']
 - mid-instantiation-grounded-local-row-publication: ['appendCanonicalInstantiatedLocals']
 - mid-instantiation-public-selected-call-materialization: ['materializeCanonicalMidCall']
-- mid-instantiation-selected-signature-and-passing-readers: ['midSignatureArgumentMatches']
+- mid-instantiation-selected-signature-and-passing-readers: ['midSelectedSignature']
 - mid-instantiation-explicit-type-term-and-recipe-grounding: ['instantiateMidTerm', 'instantiateMidType']
 - mid-instantiation-canonical-place-operand-and-closed-rvalue-cloning: ['instantiateCanonicalPlace', 'instantiateCanonicalOperand', 'instantiateCanonicalClosedRvalue']
-- mid-instantiation-storage-and-return-boundary-application: ['traceMidReturnBoundary']
+- mid-instantiation-storage-and-return-boundary-application: ['instantiateCanonicalStorageBoundary', 'instantiateCanonicalReturnBoundary']
 - mid-instantiation-selected-aggregate-application: ['instantiateCanonicalAggregate']
 - mid-instantiation-view-newtype-and-numeric-cast-adaptation: ['instantiateCanonicalViewBoundary', 'instantiateCanonicalCastBoundary']
-- mid-instantiation-selected-enum-match-and-destructure: ['midFinalMatchShapeMatches', 'midFinalMatchPayloadMatches']
+- mid-instantiation-selected-enum-match-and-destructure: ['instantiateCanonicalEnumMatchRvalue', 'instantiateCanonicalEnumDestructure']
 - mid-instantiation-selected-for-and-try-values: ['instantiateCanonicalForRvalue', 'instantiateCanonicalTryRvalue']
 - mid-instantiation-closure-signature-and-capture-application: ['instantiateCanonicalMakeClosure']
 

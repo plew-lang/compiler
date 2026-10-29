@@ -17,18 +17,18 @@ Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilitie
 Only listed Mid support/preflight/runtime-call components. Close canonical/global/type/newtype/reference/native layout/target C/diagnostic/cache dependencies including allowDeref and Read/Copy/Move/Inout lanes. Decide pure reader vs limited memo/native writer explicitly; do not remove effects based on Bool result.
 
 Exact affected API subsets and preserved required data are owned by the linked decision rows:
-- llvm-mid-buffer-inout-and-owned-destination-queries: ['midCanonicalOperandNeedsOwnedDestination']
+- llvm-mid-buffer-inout-and-owned-destination-queries: ['midCanonicalBufferInoutOperandSupported']
 - llvm-mid-runtime-buffer-call-admission: None
 - llvm-mid-strong-weak-cell-control-admission-and-emission: ['midCanonicalCellControlPreflight', 'midCanonicalEmitCellControl']
 - llvm-mid-strong-cell-new-move-admission-and-emission: ['midCanonicalStrongCellPreflight', 'midCanonicalEmitStrongCell']
 - llvm-mid-direct-call-physical-admission: None
-- llvm-mid-canonical-call-argument-and-read-admission: ['midCanonicalCallArgumentAt']
+- llvm-mid-canonical-call-argument-and-read-admission: ['midCanonicalReadOperandSupported']
 - llvm-mid-runtime-system-call-admission-and-emission: ['midCanonicalRuntimeSystemPreflight', 'midCanonicalEmitRuntimeSystemCall']
 - llvm-mid-runtime-core-string-and-ffi-admission-and-emission: ['midCanonicalRuntimeCoreStringFfiPreflight', 'midCanonicalEmitRuntimeCoreStringFfiCall']
 - llvm-mid-runtime-numeric-admission-and-emission: ['midCanonicalRuntimeNumericPreflight', 'midCanonicalEmitRuntimeNumericCall']
 - llvm-mid-place-and-operand-physical-admission: None
 - llvm-mid-initial-rvalue-physical-admission: None
-- llvm-mid-inout-storage-and-owned-home-admission: ['midCanonicalInoutStorage', 'midCanonicalInoutIsShared']
+- llvm-mid-inout-storage-and-owned-home-admission: ['midCanonicalInoutPlaceSupported', 'midCanonicalInoutOperandSupported']
 - llvm-mid-receiver-mode-physical-admission: None
 
 ## Actions and Completion

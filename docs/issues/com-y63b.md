@@ -20,7 +20,7 @@ Exact affected API subsets and preserved required data are owned by the linked d
 - llvm-typed-value-cell-cow-and-final-strong-release: None
 - llvm-array-writable-capacity-and-owner-retain-gate: None
 - llvm-finalized-value-arc-dispatch: None
-- llvm-concrete-struct-retain-witnesses: ['structRetainWitness: unused c']
+- llvm-concrete-struct-retain-witnesses: ['emitStructRetain', 'emitRetainWitnessWalk', 'emitRetainWitnessBodies']
 - llvm-array-final-owner-and-element-range-arc: None
 - llvm-existential-copy-and-drop-thunk-generation: None
 - llvm-finalized-existential-vtable-and-box-construction: None
@@ -29,15 +29,15 @@ Exact affected API subsets and preserved required data are owned by the linked d
 - llvm-mid-canonical-aggregate-elements-and-construction: None
 - llvm-mid-enum-cell-take-and-destructuring-emission: None
 - llvm-mid-canonical-place-materialization: None
-- llvm-mid-canonical-operand-value-and-type-readers: ['midCanonicalOperandTypeTerm: whole Comp/unused body/unused self']
+- llvm-mid-canonical-operand-value-and-type-readers: ['midCanonicalEmitOperand']
 - llvm-mid-frozen-value-and-borrowed-conversion-emission: None
 - llvm-mid-frozen-array-repack-emitter: None
 - llvm-mid-frozen-enum-repack-emitter: None
-- llvm-struct-drop-witness-registration-and-invocation: ['structDropWitness: unused c']
+- llvm-struct-drop-witness-registration-and-invocation: ['emitDeinitValue']
 - llvm-finalized-struct-destruction-expansion: None
 - llvm-typed-ownership-witness-queue-drain: None
-- llvm-enum-active-payload-ownership-expansion: ['emitEnumOwnership.eid', 'emitEnumRelease.eid', 'emitEnumRetain.eid']
-- llvm-concrete-enum-ownership-witness-registration-and-drain: ['enumReleaseWitness: unused c', 'enumRetainWitness: unused c']
+- llvm-enum-active-payload-ownership-expansion: ['remaining enumNeedsDeinit/ownership physical services']
+- llvm-concrete-enum-ownership-witness-registration-and-drain: ['emitEnumReleaseWitnessBodies', 'emitEnumRetainWitnessBodies', 'emitEnumRetainRef']
 
 ## Actions and Completion
 Finite investigation: map the listed APIs and actual delegated service closure, retain exact owner/provenance/write/error contracts, and independently determine a supported justified/excess/unresolved disposition. Assign bounded repairs if needed, without claiming they passed.

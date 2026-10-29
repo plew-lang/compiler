@@ -2,7 +2,7 @@
 id: com-mmk9
 status: in_progress
 deps: [com-am6u]
-links: [com-kss7, com-ktyj, com-50me, com-qt11, com-u6h0, com-pmwi, com-debo, com-g127, com-4ccf, com-rgml, com-oftp, com-q6pv, com-6u4o, com-0lz8, com-17ha, com-zcwf, com-uk6c, com-9aap, com-l8kt, com-aii4, com-8vut, com-yeea, com-r2sw, com-geem, com-0t9x, com-egv2, com-m4kt, com-l0mr, com-u09r, com-vyk7, com-j3l9, com-orku, com-805m, com-8b4d, com-3bnf, com-bz23, com-zq25, com-pu7h, com-sk71, com-7aaj, com-wfpt, com-0fk5, com-fcmw, com-h4cm, com-iq17, com-6h5i, com-7cpj, com-g5lm, com-4wxu, com-zbas, com-ru19, com-fppu, com-iflh, com-8tqu, com-3njd, com-zm8w, com-0f8m, com-djoz, com-9h5s, com-e1ea, com-6u0t, com-5m8j, com-y63b, com-cmrh, com-lgu1, com-o1fh, com-gv0c, com-sj16, com-9ovy, com-vbvu, com-uvys, com-lzm2, com-id5r, com-2qxd, com-ktrb, com-sxzv, com-v7fu, com-gewn, com-ge01, com-n5lu, com-dsfy, com-xc6h, com-i86w, com-9sa5, com-g49i, com-e2dp, com-eu8i, com-tfz7, com-fpmj, com-if6u, com-xh2h, com-q40o, com-muiu, com-3i84, com-g8kd, com-3fb5, com-o312, com-g70q, com-jc6v, com-wv5l, com-9508, com-tqwa, com-16j0, com-og6p, com-9uw1, com-yr4c, com-a1qy, com-igex, com-tpxd, com-u1tx, com-crym, com-t4gm]
+links: [com-kss7, com-ktyj, com-50me, com-qt11, com-u6h0, com-pmwi, com-debo, com-g127, com-4ccf, com-rgml, com-oftp, com-q6pv, com-6u4o, com-0lz8, com-17ha, com-zcwf, com-uk6c, com-9aap, com-l8kt, com-aii4, com-8vut, com-yeea, com-r2sw, com-geem, com-0t9x, com-egv2, com-m4kt, com-l0mr, com-u09r, com-vyk7, com-j3l9, com-orku, com-805m, com-8b4d, com-3bnf, com-bz23, com-zq25, com-pu7h, com-sk71, com-7aaj, com-wfpt, com-0fk5, com-fcmw, com-h4cm, com-iq17, com-6h5i, com-7cpj, com-g5lm, com-4wxu, com-zbas, com-ru19, com-fppu, com-iflh, com-8tqu, com-3njd, com-zm8w, com-0f8m, com-djoz, com-9h5s, com-e1ea, com-6u0t, com-5m8j, com-y63b, com-cmrh, com-lgu1, com-o1fh, com-gv0c, com-sj16, com-9ovy, com-vbvu, com-uvys, com-lzm2, com-id5r, com-2qxd, com-ktrb, com-sxzv, com-v7fu, com-gewn, com-ge01, com-n5lu, com-dsfy, com-xc6h, com-i86w, com-9sa5, com-g49i, com-e2dp, com-eu8i, com-tfz7, com-fpmj, com-if6u, com-xh2h, com-q40o, com-muiu, com-3i84, com-g8kd, com-3fb5, com-o312, com-g70q, com-jc6v, com-wv5l, com-9508, com-tqwa, com-16j0, com-og6p, com-9uw1, com-yr4c, com-a1qy, com-igex, com-tpxd, com-u1tx, com-crym, com-t4gm, com-ma6z, com-wmr0, com-fsxx, com-ough, com-dxgh, com-nq9x, com-zefb, com-5d3q, com-jwzi, com-ui4c, com-62pl, com-1bh1, com-90e7, com-dgbf, com-0cfk, com-s0zb, com-y1h9, com-jyy5, com-307g, com-4auy, com-zfr6, com-x48z, com-ia8o, com-vh0x, com-euq7, com-0huw, com-fboq, com-r3od, com-hd9n, com-j2oe, com-8egj, com-nd29, com-404b, com-6vcb, com-togc, com-efhz, com-zhn0, com-lawd, com-0vbn, com-0od6, com-p1mt, com-4sw4, com-p8xt, com-61ji, com-j84i, com-rs2x, com-f4oz, com-74ky, com-oihh, com-nzei, com-v9md, com-ynz6, com-esbb, com-1fbr, com-jm7l, com-tqeu, com-3mcv, com-f87d, com-mrab, com-zftv, com-ctor, com-j2i7, com-5bmt, com-e6zm, com-iaqs, com-xp8r, com-qadp, com-n8nh, com-ozkj, com-n2fv, com-a5os, com-mxo0, com-j3cp, com-cvnk, com-8r3r, com-j7nu, com-pn1y]
 created: 2026-10-27T02:15:37Z
 type: task
 priority: 1
@@ -67,9 +67,9 @@ or unread rows stay pending; local disposition counts cannot close the whole aud
 
 [Capability reconciliation](../../../evidence/compiler-api-audit/capability-reconciliation.json)
 owns exact adopted decision/review hashes and finite follow-up assignment.
-Currently 802 families are independently accepted: 300 justified inputs,
-286 confirmed excess-authority cases, 205 unresolved questions and
-11 optional simplifications. Required findings have 112 finite follow-up owners;
+Currently 1,504 families are independently accepted: 447 justified inputs,
+625 confirmed excess-authority cases, 419 unresolved questions and
+13 optional simplifications. Required findings have 189 finite follow-up owners;
 repairs are not completion prerequisites of this audit.
-Remaining 702 inventory families have not received capability verdicts.
+Remaining 0 inventory families have not received capability verdicts.
 No compiler/source/test/binary repair or product execution has been performed.

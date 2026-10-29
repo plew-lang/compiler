@@ -23,12 +23,12 @@ Exact affected API subsets and preserved required data are owned by the linked d
 - llvm-mid-canonical-non-call-terminator-emission: None
 - llvm-mid-verified-body-llvm-capability-preflight: None
 - llvm-mid-prepared-canonical-body-emission: None
-- llvm-mid-executable-program-read-and-backend-ready-provider: ['prepareMidExecutable']
+- llvm-mid-executable-program-read-and-backend-ready-provider: ['prepareSyntheticMidBody', 'prepareCanonicalForLlvm']
 - llvm-mid-canonical-call-category-routing: None
 - llvm-mid-direct-call-emission: None
 - llvm-mid-enum-layout-and-try-error-result-emission: None
 - llvm-canonical-global-initializer-emission-and-call: None
-- llvm-main-entry-signature-startup-and-prepared-emission: ['initializeProgramArguments']
+- llvm-main-entry-signature-startup-and-prepared-emission: ['declareProgramEntries', 'genLlvmMain']
 - llvm-frozen-free-body-registration-and-emission-dispatch: None
 - llvm-callable-declaration-pipeline-and-requested-synthetic-root: None
 

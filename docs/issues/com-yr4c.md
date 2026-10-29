@@ -19,7 +19,7 @@ For only the exact unresolved APIs/components listed by these rows, map every di
 Exact affected API subsets and preserved required data are owned by the linked decision rows:
 - codegen-pending-source-conversion-completion: ['inout fn completePendingSourceConversion(index: U64) -> Result[(), CompileDiagnostic] {', 'inout fn completeSourceConversions(owner: SemanticCompletionOwner) -> Result[(), CompileDiagnostic] {']
 - codegen-declaration-conversion-evidence-admission: ['inout fn checkDeclarationConversionEvidence(conversion: DeclarationConversion) -> Result[(), CompileDiagnostic] {']
-- codegen-conversion-endpoint-boundary-validation: checkConversionProofBoundary only; checkConversionProofAtBoundary remains unresolved
+- codegen-conversion-endpoint-boundary-validation: ['checkConversionProofAtBoundary']
 - codegen-retained-conversion-proof-recursive-validation: ['inout fn checkConversionProofEvidence(proof: ValueConversionProof, offset: U64) -> Result[(), CompileDiagnostic] {']
 - codegen-static-conformance-proof-integrity-admission: ['inout fn checkStaticProofEvidence(proof: StaticConformanceProof, offset: U64) -> Result[(), CompileDiagnostic] {']
 - codegen-retained-static-path-predecessor-validation: ['inout fn checkStaticPathEvidence(edges: Array[WitnessMatch], root: TraitBound, offset: U64) -> Result[(), CompileDiagnostic] {']

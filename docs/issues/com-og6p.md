@@ -17,11 +17,11 @@ Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilitie
 For only the exact unresolved APIs/components listed by these rows, map every direct/delegated reader, writer, retained callback/owner, query-local guard, same-session/type/binder/proof/source identity, cache/interner effect, diagnostic and success/error restoration. Close the named dependency edges without requiring all compiler algorithms; then independently decide justified versus excess, or retain a smaller finite question with explicit owner.
 
 Exact affected API subsets and preserved required data are owned by the linked decision rows:
-- codegen-viewed-trait-query-explicit-demand-adapters: conformanceQueryFound only
+- codegen-viewed-trait-query-explicit-demand-adapters: ['viewedTypeConforms', 'queryViewedTraitProof']
 - codegen-legacy-conformance-associated-span-and-head-substitution: ['inout fn conformAssocBindingSpan(cf: Conform, nameStart: U64, nameLen: U64) -> Bind {', 'inout fn substReqParamHeadId(cf: Conform, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64], prStart: U64, prLen: U64) -> U64 {', 'inout fn substReqParamArrayElemRef(tps: Array[Bind], targs: Array[U64], prStart: U64, prLen: U64) -> U64 {']
 - codegen-conformance-requirement-parameter-alpha-comparison: ['inout fn conformanceParameterTypesMatch(cf: Conform, witness: Func, requirement: Func, parameters: FuncParamRange) -> Bool {']
-- codegen-conformance-witness-completeness-and-legacy-result-check: witnessedHas tps/targs unused operands only
-- codegen-existential-formation-bound-completeness-check: anyHasNamedBinding only
+- codegen-conformance-witness-completeness-and-legacy-result-check: ['reqReturnMismatch', 'witnessedHas remaining parameter/result services', 'confWitnessesAll']
+- codegen-existential-formation-bound-completeness-check: ['checkAnyFormation', 'checkAnyTypeFormation']
 - codegen-via-target-common-callable-signature-validation: ['inout fn viaSignatureMatches(witness: Func, target: Func) -> Bool {', 'inout fn checkViaTargets() -> Result[(), CompileDiagnostic] {']
 - codegen-legacy-nominal-conformance-and-witness-name-queries: ['inout fn typeConformsTo(typeStart: U64, typeLen: U64, traitStart: U64, traitLen: U64) -> Bool {', 'inout fn witnessFnFor(typeStart: U64, typeLen: U64, nameStart: U64, nameLen: U64) -> U64 {']
 - codegen-conformance-instance-bool-and-legacy-trait-spelling-adapters: ['inout fn conformsInstance(demand: ConformanceProofDemand, ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = []) -> Result[Bool, CompileDiagnostic] {', 'inout fn typeConformsToName(typeStart: U64, typeLen: U64, traitName: String) -> Bool {']

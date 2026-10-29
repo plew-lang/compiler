@@ -17,13 +17,13 @@ Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilitie
 Only listed closure/interface/erased-witness components. Trace requirePreparedClosureInstance/preparedSemanticClosureAt/checkFinalClosureCallEvidence/checkFinalInterfaceEvidence and queued prepared-body handoffs to exact owner/session/reader/cached cursor/proof/type/result/measurement/diagnostic effects. Preserve origin/failure/lifetime; no source re-selection.
 
 Exact affected API subsets and preserved required data are owned by the linked decision rows:
-- llvm-closure-environment-drop-registration-and-release: ['emitClosureRelease']
+- llvm-closure-environment-drop-registration-and-release: ['declareClosureEnvironmentDrop', 'emitClosureEnvironmentDrops']
 - llvm-frozen-closure-instance-registration: None
 - llvm-prepared-closure-body-and-capture-binding: None
 - llvm-erased-witness-registration-and-prepared-emission: None
 - llvm-mid-closure-call-admission-and-emission: None
 - llvm-mid-existential-call-admission-and-emission: None
-- llvm-mid-closure-capture-admission-and-emission: ['midCanonicalClosureCaptures']
+- llvm-mid-closure-capture-admission-and-emission: ['midCanonicalMakeClosureSupported', 'midCanonicalEmitMakeClosure']
 
 ## Actions and Completion
 Finite investigation: map the listed APIs and actual delegated service closure, retain exact owner/provenance/write/error contracts, and independently determine a supported justified/excess/unresolved disposition. Assign bounded repairs if needed, without claiming they passed.

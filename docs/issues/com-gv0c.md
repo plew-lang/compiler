@@ -18,9 +18,9 @@ Only listed async entry/frame/resume/suspend components. Close program lookup/li
 
 Exact affected API subsets and preserved required data are owned by the linked decision rows:
 - llvm-finalized-async-callable-registry: ['declareAsyncFns']
-- llvm-async-entry-and-runtime-call-emission: ['asyncFreeFrame', 'asyncPromiseNew', 'asyncFrameAlloc', 'asyncLoopRun']
+- llvm-async-entry-and-runtime-call-emission: ['genLlvmAsyncFunc', 'emitAsyncFns']
 - llvm-async-canonical-frame-preparation: None
-- llvm-async-resume-suspend-and-completion-emission: ['midAsyncComplete']
+- llvm-async-resume-suspend-and-completion-emission: ['midAsyncSuspend', 'genLlvmMidAsyncResume']
 
 ## Actions and Completion
 Finite investigation: map the listed APIs and actual delegated service closure, retain exact owner/provenance/write/error contracts, and independently determine a supported justified/excess/unresolved disposition. Assign bounded repairs if needed, without claiming they passed.

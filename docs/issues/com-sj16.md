@@ -17,7 +17,7 @@ Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilitie
 Only Ambient physical methods other than fixed runtime gateway. Preserve prepared effect snapshot/paths/global identity/entry record storage/permit group and normal/error restore; include actual dynamic-call source-evidence dependencies without changing access meaning.
 
 Exact affected API subsets and preserved required data are owned by the linked decision rows:
-- llvm-normalized-access-physical-emission: ['ambientRuntimeCall']
+- llvm-normalized-access-physical-emission: ['ambientStorageValues', 'midAmbientCheck', 'midAmbientBeginOperand', 'midAmbientBeginCall', 'midAmbientAllocateScopes', 'midAmbientEnd', 'midCanonicalEmitCall']
 - llvm-mid-inout-pair-runtime-check-emission: ['midCanonicalEmitInoutPair', 'midCanonicalEmitInoutChecks']
 
 ## Actions and Completion

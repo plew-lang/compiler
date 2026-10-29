@@ -18,7 +18,7 @@ State.scanBody and source-bound saved-call access in checkDeclarationBodyAccess;
 
 Exact affected API subsets and preserved required data are owned by the linked decision rows:
 - mid-declaration-effect-body-and-selected-operation-collection: ['DeclarationAccessState.scanBody']
-- mid-declaration-local-call-access-entry-and-storage-filter: ['declarationCallHasStorageArguments']
+- mid-declaration-local-call-access-entry-and-storage-filter: ['checkDeclarationBodyAccess']
 
 ## Actions and Completion
 same-session owner-bound saved operation reader/failure state and canonical/closedness views; preserve cached reader owner key/fallback/missing-row panic; no source reconstruction or ambient cursor source selection

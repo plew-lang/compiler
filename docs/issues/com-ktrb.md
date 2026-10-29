@@ -17,7 +17,7 @@ Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilitie
 Close existentialRequirementIsDispatchable/checkExistentialRequirementCall normalization/type/proof/conversion/source-context/diagnostic services and callsites; separate pure constructor from normalized admission; deliver finite verdict or remaining question.
 
 Exact affected API subsets and preserved required data are owned by the linked decision rows:
-- codegen-existential-self-term-and-dispatchability-construction: existentialSelfTerm only; dispatchability remains unresolved component
+- codegen-existential-self-term-and-dispatchability-construction: ['existentialRequirementIsDispatchable']
 - codegen-existential-call-input-and-result-admission: checkExistentialRequirementCall
 
 ## Actions and Completion
