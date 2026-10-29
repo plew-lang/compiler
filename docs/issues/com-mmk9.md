@@ -2,7 +2,7 @@
 id: com-mmk9
 status: in_progress
 deps: [com-am6u]
-links: [com-kss7, com-ktyj, com-50me, com-qt11, com-u6h0, com-pmwi, com-debo, com-g127, com-4ccf, com-rgml, com-oftp, com-q6pv, com-6u4o, com-0lz8, com-17ha, com-zcwf, com-uk6c, com-9aap, com-l8kt, com-aii4, com-8vut, com-yeea, com-r2sw, com-geem]
+links: [com-kss7, com-ktyj, com-50me, com-qt11, com-u6h0, com-pmwi, com-debo, com-g127, com-4ccf, com-rgml, com-oftp, com-q6pv, com-6u4o, com-0lz8, com-17ha, com-zcwf, com-uk6c, com-9aap, com-l8kt, com-aii4, com-8vut, com-yeea, com-r2sw, com-geem, com-0t9x, com-egv2, com-m4kt, com-l0mr, com-u09r, com-vyk7, com-j3l9, com-orku, com-805m, com-8b4d, com-3bnf, com-bz23]
 created: 2026-10-27T02:15:37Z
 type: task
 priority: 1
@@ -67,9 +67,9 @@ or unread rows stay pending; local disposition counts cannot close the whole aud
 
 [Capability reconciliation](../../../evidence/compiler-api-audit/capability-reconciliation.json)
 owns exact adopted decision/review hashes and finite follow-up assignment.
-Currently 219 families are independently accepted: 164 justified inputs,
-44 confirmed excess-authority cases, 4 unresolved questions and
-7 optional simplifications. Required findings have 24 finite follow-up owners;
+Currently 332 families are independently accepted: 225 justified inputs,
+81 confirmed excess-authority cases, 18 unresolved questions and
+8 optional simplifications. Required findings have 36 finite follow-up owners;
 repairs are not completion prerequisites of this audit.
-Remaining 1,285 inventory families have not received capability verdicts.
+Remaining 1,172 inventory families have not received capability verdicts.
 No compiler/source/test/binary repair or product execution has been performed.
