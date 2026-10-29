@@ -80,7 +80,7 @@ specification changed. Inventory is in_progress; com-mmk9 is not yet started.
 ## Factual Inventory Progress
 
 The [family reconciliation](../../../evidence/compiler-api-audit/family-reconciliation.json)
-contains1331 independently accepted thin factual families. It owns exact primary
+contains1384 independently accepted thin factual families. It owns exact primary
 ranges, source hashes, facts/review hashes and acceptance limits. A listed source
 path does not certify its whole file; metadata construction, successful admission
 and execution publication are distinct. The [evidence guide](../../../evidence/compiler-api-audit/README.md)
