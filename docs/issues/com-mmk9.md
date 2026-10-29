@@ -2,7 +2,7 @@
 id: com-mmk9
 status: in_progress
 deps: [com-am6u]
-links: [com-kss7, com-ktyj, com-50me, com-qt11]
+links: [com-kss7, com-ktyj, com-50me, com-qt11, com-u6h0, com-pmwi]
 created: 2026-10-27T02:15:37Z
 type: task
 priority: 1
@@ -67,9 +67,9 @@ or unread rows stay pending; local disposition counts cannot close the whole aud
 
 [Capability reconciliation](../../../evidence/compiler-api-audit/capability-reconciliation.json)
 owns exact adopted decision/review hashes and finite follow-up assignment.
-Currently 37 families are independently accepted: 30 justified inputs, five
-confirmed excess-authority cases, one unresolved converter question and one
-optional immutable-metadata simplification. com-kss7/com-ktyj/com-qt11 own the
-finite narrowing scopes; com-50me owns the converter input investigation.
-Remaining 1,467 inventory families have not received capability verdicts.
+Currently 52 families are independently accepted: 36 justified inputs,
+13 confirmed excess-authority cases, 1 unresolved questions and
+2 optional simplifications. Required findings have 6 finite follow-up owners;
+repairs are not completion prerequisites of this audit.
+Remaining 1,452 inventory families have not received capability verdicts.
 No compiler/source/test/binary repair or product execution has been performed.
