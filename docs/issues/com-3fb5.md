@@ -1,6 +1,6 @@
 ---
 id: com-3fb5
-status: open
+status: closed
 deps: []
 links: [com-mmk9]
 created: 2026-10-29T18:38:28Z
@@ -33,3 +33,16 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other domains, language acceptance/algorithm/ABI changes, unsupported feature work, product edits/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Input Investigation Outcome
+
+The original required input/delegate-authority questions are answered, not merely
+assigned elsewhere. [Exact answer](../../../evidence/compiler-api-audit/resolutions/field-layout-inputs.json)
+and [independent review](../../../evidence/compiler-api-audit/review-resolution-field-layout-inputs.json)
+record the complete named scope, necessary inputs/effects, actual caller contexts,
+source identity and supported C conclusion. Required input questions remaining
+in this scope: none. Product repairs remain unimplemented and unverified.
+
+Repair ownership: [com-9ib0](com-9ib0.md), [com-zfj5](com-zfj5.md), [com-vkvv](com-vkvv.md), [com-tmfg](com-tmfg.md), [com-jsbj](com-jsbj.md), [com-lpof](com-lpof.md). These repair issues are not evidence of the conclusion; the linked
+source closure and independent review are. This closes only this finite
+investigation, not com-mmk9 or any product implementation milestone.

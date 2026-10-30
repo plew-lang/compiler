@@ -1,6 +1,6 @@
 ---
 id: com-g70q
-status: in_progress
+status: closed
 deps: []
 links: [com-mmk9]
 created: 2026-10-29T18:38:29Z
@@ -35,3 +35,16 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other domains, language acceptance/algorithm/ABI changes, unsupported feature work, product edits/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Input Investigation Outcome
+
+The original required input/delegate-authority questions are answered, not merely
+assigned elsewhere. [Exact answer](../../../evidence/compiler-api-audit/resolutions/check-call-inputs.json)
+and [independent review](../../../evidence/compiler-api-audit/review-resolution-check-call-inputs.json)
+record the complete named scope, necessary inputs/effects, actual caller contexts,
+source identity and supported C conclusion. Required input questions remaining
+in this scope: none. Product repairs remain unimplemented and unverified.
+
+Repair ownership: [com-0y1t](com-0y1t.md), [com-0u0i](com-0u0i.md), [com-1eo5](com-1eo5.md), [com-ox3t](com-ox3t.md). These repair issues are not evidence of the conclusion; the linked
+source closure and independent review are. This closes only this finite
+investigation, not com-mmk9 or any product implementation milestone.
