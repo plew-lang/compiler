@@ -1,6 +1,6 @@
 ---
 id: com-zm8w
-status: open
+status: closed
 deps: []
 links: [com-mmk9]
 created: 2026-10-29T18:13:59Z
@@ -35,3 +35,16 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Source/algorithm redesign, unsupported-feature implementation, speculative cost claims, product execution and whole compiler audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Input Investigation Outcome
+
+The original required input/delegate-authority questions are answered, not merely
+assigned elsewhere. [Exact answer](../../../evidence/compiler-api-audit/resolutions/candidate-recovery-inputs.json)
+and [independent review](../../../evidence/compiler-api-audit/review-resolution-candidate-recovery-inputs.json)
+record the complete named scope, necessary inputs/effects, actual caller contexts,
+source identity and supported C conclusion. Required input questions remaining
+in this scope: none. Product repairs remain unimplemented and unverified.
+
+Repair ownership: [com-1fxn](com-1fxn.md), [com-cn5o](com-cn5o.md), [com-m13a](com-m13a.md), [com-k3cc](com-k3cc.md), [com-6z28](com-6z28.md), [com-kgom](com-kgom.md), [com-27h6](com-27h6.md), [com-lujr](com-lujr.md). These repair issues are not evidence of the conclusion; the linked
+source closure and independent review are. This closes only this finite
+investigation, not com-mmk9 or any product implementation milestone.

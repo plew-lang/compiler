@@ -1,6 +1,6 @@
 ---
 id: com-3bnf
-status: open
+status: in_progress
 deps: []
 links: [com-mmk9]
 created: 2026-10-29T17:56:18Z
