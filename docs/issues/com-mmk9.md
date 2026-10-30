@@ -1,6 +1,6 @@
 ---
 id: com-mmk9
-status: in_progress
+status: closed
 deps: [com-am6u]
 links: [com-kss7, com-ktyj, com-50me, com-qt11, com-u6h0, com-pmwi, com-debo, com-g127, com-4ccf, com-rgml, com-oftp, com-q6pv, com-6u4o, com-0lz8, com-17ha, com-zcwf, com-uk6c, com-9aap, com-l8kt, com-aii4, com-8vut, com-yeea, com-r2sw, com-geem, com-0t9x, com-egv2, com-m4kt, com-l0mr, com-u09r, com-vyk7, com-j3l9, com-orku, com-805m, com-8b4d, com-3bnf, com-bz23, com-zq25, com-pu7h, com-sk71, com-7aaj, com-wfpt, com-0fk5, com-fcmw, com-h4cm, com-iq17, com-6h5i, com-7cpj, com-g5lm, com-4wxu, com-zbas, com-ru19, com-fppu, com-iflh, com-8tqu, com-3njd, com-zm8w, com-0f8m, com-djoz, com-9h5s, com-e1ea, com-6u0t, com-5m8j, com-y63b, com-cmrh, com-lgu1, com-o1fh, com-gv0c, com-sj16, com-9ovy, com-vbvu, com-uvys, com-lzm2, com-id5r, com-2qxd, com-ktrb, com-sxzv, com-v7fu, com-gewn, com-ge01, com-n5lu, com-dsfy, com-xc6h, com-i86w, com-9sa5, com-g49i, com-e2dp, com-eu8i, com-tfz7, com-fpmj, com-if6u, com-xh2h, com-q40o, com-muiu, com-3i84, com-g8kd, com-3fb5, com-o312, com-g70q, com-jc6v, com-wv5l, com-9508, com-tqwa, com-16j0, com-og6p, com-9uw1, com-yr4c, com-a1qy, com-igex, com-tpxd, com-u1tx, com-crym, com-t4gm, com-ma6z, com-wmr0, com-fsxx, com-ough, com-dxgh, com-nq9x, com-zefb, com-5d3q, com-jwzi, com-ui4c, com-62pl, com-1bh1, com-90e7, com-dgbf, com-0cfk, com-s0zb, com-y1h9, com-jyy5, com-307g, com-4auy, com-zfr6, com-x48z, com-ia8o, com-vh0x, com-euq7, com-0huw, com-fboq, com-r3od, com-hd9n, com-j2oe, com-8egj, com-nd29, com-404b, com-6vcb, com-togc, com-efhz, com-zhn0, com-lawd, com-0vbn, com-0od6, com-p1mt, com-4sw4, com-p8xt, com-61ji, com-j84i, com-rs2x, com-f4oz, com-74ky, com-oihh, com-nzei, com-v9md, com-ynz6, com-esbb, com-1fbr, com-jm7l, com-tqeu, com-3mcv, com-f87d, com-mrab, com-zftv, com-ctor, com-j2i7, com-5bmt, com-e6zm, com-iaqs, com-xp8r, com-qadp, com-n8nh, com-ozkj, com-n2fv, com-a5os, com-mxo0, com-j3cp, com-cvnk, com-8r3r, com-j7nu, com-pn1y, com-mexd, com-p9rd, com-f17t, com-kb6f, com-d4m2, com-9nbx, com-nei5, com-ct0w, com-0htd, com-kt7y, com-eatt, com-yb1d, com-cuiw, com-08i0, com-qrmt, com-59sf, com-aqud, com-l50h, com-yyyl, com-ot44, com-pmiz, com-70tb, com-3j3n, com-sj9s, com-zigu, com-p5q2, com-4vvt, com-be0m, com-4oor, com-hnm8, com-xx65, com-vk09, com-bw8e, com-iri8, com-lwsd, com-z07h, com-pra8, com-88dq, com-gqtz, com-3gut, com-kpd0, com-9i94, com-nee8, com-ixfs, com-847f, com-hux9, com-lp4q, com-pf1a, com-nfj8, com-8by9, com-za40, com-hem0, com-t6gz, com-mq3s, com-oorl, com-vpqu, com-79k3, com-q8eb, com-13js, com-g3ex, com-tn1g, com-odg0, com-1dg3, com-zpe5, com-2t6w, com-opq3, com-cerv, com-bswq, com-majd, com-nhtx, com-9z44, com-pweb, com-nukp, com-8y74, com-dtc6, com-jr91, com-kwd5, com-3s8q, com-ceda, com-gms0, com-0pl3, com-t36o, com-fczr, com-svur, com-64w1, com-8ejz, com-bvfx, com-311i, com-d0th, com-9mqu, com-j0r9, com-33jc, com-00c4, com-zai9, com-tr3a, com-lr1d, com-cnvd, com-dt5y, com-xsw7, com-0y1t, com-0u0i, com-1eo5, com-ox3t, com-100o, com-9ib0, com-zfj5, com-vkvv, com-tmfg, com-jsbj, com-lpof, com-017t, com-7mjp, com-vdp1, com-ge39, com-n4ps, com-zsw5, com-k5i6, com-n4uz, com-ppr3, com-t63i, com-03ra, com-x197, com-hg3t, com-mvx1, com-3uai, com-duny, com-07tb, com-q400, com-2qi1, com-oir7, com-0pxa, com-dwp6, com-cx2r, com-jvmv, com-e681, com-y9r7, com-ckde, com-zcrx, com-r8gt, com-1fxn, com-cn5o, com-m13a, com-k3cc, com-6z28, com-kgom, com-27h6, com-lujr, com-2jwz, com-y0l9, com-4aon, com-gh9g, com-ukzt, com-edyb, com-4sot, com-z2gh, com-jix5, com-3vq7, com-5zvp, com-6gma, com-w1rq, com-s8fu, com-kl06, com-hra0, com-rib7, com-a414, com-oaaq, com-wjky, com-45jq, com-20zo, com-orol, com-zhs6, com-cjfn, com-37u0, com-m66h, com-6fnh, com-k3i6, com-jciu, com-q51y, com-ysl5, com-hfwv, com-r4a9, com-a3ph, com-h5be, com-282i, com-wsfk, com-rad4, com-hjrk, com-dc9e, com-iucg, com-f99l, com-zml3, com-4j5l, com-vjj4, com-k0zf, com-nz4n, com-4c9t, com-aaia, com-8yzi, com-s696, com-3y0f, com-ecm1, com-zpo1, com-v8mk, com-cwq1, com-sezm]
 created: 2026-10-27T02:15:37Z
@@ -96,36 +96,30 @@ no-production/recursive/fixture-only callers; failure-prefix and restore ownersh
 Each adopted row needs independent review and exact input-fact references. Missing
 or unread rows stay pending; local disposition counts cannot close the whole audit.
 
-## Current State and Next Action
+## Investigation Outcome and Next Boundary
 
-**Reopened; the whole API input audit is incomplete.** The prior closure treated
-classification and finite ownership as sufficient despite unanswered questions.
-That closure rule and whole-audit completion claim are withdrawn. The current
-[acceptance state](../../../evidence/compiler-api-audit/capability-acceptance.json)
-retains the previous checkpoint's exact hashes without accepting its completion
-claim under the corrected conditions.
+**Investigated and complete.** All1,504 inventory families and132 original mixed
+components have source-grounded input/authority conclusions. All419 original main
+questions and71 mixed required questions have substantive answers; none remains
+unanswered or is counted complete merely because it has a finite owner.
 
-The factual inventory remains complete:1,504 families /199 targets /82,074 primary
-lines. [Existing capability decisions](../../../evidence/compiler-api-audit/capability-reconciliation.json)
-provide a reviewed first-pass checkpoint:447 J /625 C /419 U /13 O, plus mixed
-components and189 finite repair/investigation owners. Zero unclassified families
-means classification coverage only, not zero unanswered investigations. Family
-counts are not independent bug counts.
+[Current acceptance](../../../evidence/compiler-api-audit/capability-acceptance.json)
+and [final reconciliation](../../../evidence/compiler-api-audit/whole-audit-reconciliation.json)
+adopt three fresh independent source reviews partitioning all1,504 families,
+covering all490 original required questions,52 individual answer batches and3
+explicit delta0 corrections. Source baseline9665094dcec8aa63ed20573b1306a0015058f595
+retains src tree7a03fae95f83d454d49d418cb8ca58146832b79a. Required corrections: zero.
 
-Next, use the existing U investigation scopes to resolve all419 main U families
-and every mixed U component, following their necessary delegated inputs/effects.
-Retain actual evidence and record new findings against exact family/API components;
-do not overwrite immutable earlier decisions or count reassignment as resolution.
-Existing J/C/O findings and factual/independent receipts remain reusable within
-their source identity and stated limits. No product repair or execution occurred.
-The completed inventory and useful scope-list corrections are not discarded.
+There are447 justified /1,044 confirmed-excess /13 optional main conclusions;
+these are family classifications, not independent bug counts. All320 unique
+finite product repair owners remain open. The75 investigation roles are answered:
+74 investigation-only issues are closed, while com-vyk7 keeps its separate product
+repair role open. Necessary delegate effects, caller/default evaluations, identity,
+lifetime, diagnostics and failure/restore distinctions remain with exact answers.
 
-[Substantive answer index](../../../evidence/compiler-api-audit/capability-resolution-index.json)
-tracks every original unresolved main/component separately and binds each accepted
-answer, independent review and repair owner. Historical first-pass counts above
-are not current unresolved totals. Use this index for current investigation state;
-closed repair/investigation issue counts alone never establish completion.
-
-[Independent reopening-contract review](../../../evidence/compiler-api-audit/review-reopen-contract.json)
-covers these corrected completion conditions and document consistency only; it
-does not answer the outstanding API investigations or close the audit.
+The prior closure rule allowing owned unanswered questions remains withdrawn.
+Immutable first-pass evidence/checkpoints are preserved in their actual scope;
+the new completion relies on substantive answers and fresh whole-audit review.
+No product repair/edit/execution, GREEN, performance, main integration or seed
+promotion is certified. The next independent epic boundary is com-3p7m; this
+investigation does not close com-jno0 or implementation-phase work.
