@@ -29,3 +29,14 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other compiler APIs/algorithms, source semantics, product repair/execution and speculative performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Component Input Investigation Answer
+
+[Exact answer](../../../evidence/compiler-api-audit/resolutions/declaration-access-inputs.json)
+and [independent review](../../../evidence/compiler-api-audit/review-resolution-declaration-access-inputs.json)
+answer the original checkDeclarationBodyAccess input-authority question, including
+saved operation identity, lifecycle fallback, required reads and error behavior.
+The main and other component classifications remain unchanged. Product repair in
+this issue remains open and unimplemented; this answer neither closes this issue
+nor completes com-mmk9. Preserve the required contract and failure distinctions
+when replacing the broad API boundary.
