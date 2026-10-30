@@ -1,6 +1,6 @@
 ---
 id: com-tpxd
-status: open
+status: closed
 deps: []
 links: [com-mmk9]
 created: 2026-10-29T18:40:58Z
@@ -37,3 +37,16 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other domains, language acceptance/solver/algorithm redesign, broad new verification requirements, product edits/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Input Investigation Outcome
+
+The original required input/delegate-authority questions are answered, not merely
+assigned elsewhere. [Exact answer](../../../evidence/compiler-api-audit/resolutions/scoped-admission-inputs.json)
+and [independent review](../../../evidence/compiler-api-audit/review-resolution-scoped-admission-inputs.json)
+record the complete named scope, necessary inputs/effects, actual caller contexts,
+source identity and supported C conclusion. Required input questions remaining
+in this scope: none. Product repairs remain unimplemented and unverified.
+
+Repair ownership: [com-fczr](com-fczr.md), [com-svur](com-svur.md), [com-64w1](com-64w1.md). These repair issues are not evidence of the conclusion; the linked
+source closure and independent review are. This closes only this finite
+investigation, not com-mmk9 or any product implementation milestone.
