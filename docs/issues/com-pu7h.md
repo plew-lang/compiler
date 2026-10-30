@@ -1,6 +1,6 @@
 ---
 id: com-pu7h
-status: open
+status: in_progress
 deps: []
 links: [com-mmk9]
 created: 2026-10-29T18:00:03Z
