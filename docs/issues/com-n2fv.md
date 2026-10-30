@@ -1,6 +1,6 @@
 ---
 id: com-n2fv
-status: in_progress
+status: closed
 deps: []
 links: [com-mmk9]
 created: 2026-10-29T19:04:13Z
@@ -46,3 +46,16 @@ For an unresolved input question, first produce an exact direct/delegated reader
 No product repair/execution in this audit; no whole solver/source-selection/equality/algorithm correctness certification, language change, runtime/native/macro execution, whole-compiler architectural redesign or speculative performance proof.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Input Investigation Outcome
+
+The original required input/delegate-authority questions are answered, not merely
+assigned elsewhere. [Exact answer](../../../evidence/compiler-api-audit/resolutions/conversion-control-inputs.json)
+and [independent review](../../../evidence/compiler-api-audit/review-resolution-conversion-control-inputs.json)
+record the complete named scope, necessary inputs/effects, actual caller contexts,
+source identity and supported C conclusion. Required input questions remaining
+in this scope: none. Product repairs remain unimplemented and unverified.
+
+Repair ownership: [com-847f](com-847f.md), [com-hux9](com-hux9.md), [com-lp4q](com-lp4q.md). These repair issues are not evidence of the conclusion; the linked
+source closure and independent review are. This closes only this finite
+investigation, not com-mmk9 or any product implementation milestone.
