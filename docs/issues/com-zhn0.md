@@ -1,6 +1,6 @@
 ---
 id: com-zhn0
-status: open
+status: in_progress
 deps: []
 links: [com-mmk9]
 created: 2026-10-29T18:53:37Z

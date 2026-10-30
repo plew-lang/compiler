@@ -1,6 +1,6 @@
 ---
 id: com-ktrb
-status: open
+status: in_progress
 deps: []
 links: [com-mmk9]
 created: 2026-10-29T18:26:08Z

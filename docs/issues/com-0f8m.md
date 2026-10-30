@@ -1,6 +1,6 @@
 ---
 id: com-0f8m
-status: open
+status: in_progress
 deps: []
 links: [com-mmk9]
 created: 2026-10-29T18:13:59Z

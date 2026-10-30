@@ -1,6 +1,6 @@
 ---
 id: com-pn1y
-status: open
+status: in_progress
 deps: []
 links: [com-mmk9]
 created: 2026-10-29T19:04:14Z
