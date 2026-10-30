@@ -1,6 +1,6 @@
 ---
 id: com-cvnk
-status: in_progress
+status: closed
 deps: []
 links: [com-mmk9]
 created: 2026-10-29T19:04:14Z
@@ -28,3 +28,16 @@ For an unresolved input question, first produce an exact direct/delegated reader
 No product repair/execution in this audit; no whole solver/source-selection/equality/algorithm correctness certification, language change, runtime/native/macro execution, whole-compiler architectural redesign or speculative performance proof.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+ ## Input Investigation Outcome
+
+ The original required input/delegate-authority questions are answered, not merely
+ assigned elsewhere. [Exact answer](../../../evidence/compiler-api-audit/resolutions/source-admission-descriptor-inputs.json)
+ and [independent review](../../../evidence/compiler-api-audit/review-resolution-source-admission-descriptor-inputs.json)
+ record the complete named scope, necessary inputs/effects, actual caller contexts,
+ source identity and supported C conclusion. Required input questions remaining
+ in this scope: none. Product repairs remain unimplemented and unverified.
+
+ Repair ownership: [com-aaia](com-aaia.md), [com-8yzi](com-8yzi.md), [com-s696](com-s696.md), [com-3y0f](com-3y0f.md), [com-ecm1](com-ecm1.md), [com-zpo1](com-zpo1.md), [com-v8mk](com-v8mk.md), [com-cwq1](com-cwq1.md), [com-sezm](com-sezm.md). These repair issues are not evidence of the conclusion; the linked
+ source closure and independent review are. This closes only this finite
+ investigation, not com-mmk9 or any product implementation milestone.

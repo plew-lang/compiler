@@ -1,6 +1,6 @@
 ---
 id: com-mrab
-status: in_progress
+status: closed
 deps: []
 links: [com-mmk9]
 created: 2026-10-29T19:03:38Z
@@ -28,3 +28,16 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other API components/domains, passive record field decomposition, language acceptance/algorithm/performance/ABI changes or whole compiler correctness/GREEN. No product repair/execution occurs within the originating audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+ ## Input Investigation Outcome
+
+ The original required input/delegate-authority questions are answered, not merely
+ assigned elsewhere. [Exact answer](../../../evidence/compiler-api-audit/resolutions/destruction-interface-inputs.json)
+ and [independent review](../../../evidence/compiler-api-audit/review-resolution-destruction-interface-inputs.json)
+ record the complete named scope, necessary inputs/effects, actual caller contexts,
+ source identity and supported C conclusion. Required input questions remaining
+ in this scope: none. Product repairs remain unimplemented and unverified.
+
+ Repair ownership: [com-hfwv](com-hfwv.md), [com-r4a9](com-r4a9.md), [com-a3ph](com-a3ph.md), [com-h5be](com-h5be.md), [com-282i](com-282i.md), [com-wsfk](com-wsfk.md), [com-rad4](com-rad4.md), [com-hjrk](com-hjrk.md), [com-dc9e](com-dc9e.md), [com-iucg](com-iucg.md), [com-f99l](com-f99l.md), [com-zml3](com-zml3.md), [com-4j5l](com-4j5l.md), [com-vjj4](com-vjj4.md), [com-k0zf](com-k0zf.md), [com-nz4n](com-nz4n.md), [com-4c9t](com-4c9t.md). These repair issues are not evidence of the conclusion; the linked
+ source closure and independent review are. This closes only this finite
+ investigation, not com-mmk9 or any product implementation milestone.
