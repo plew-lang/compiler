@@ -51,9 +51,12 @@ actual prerequisites. No separate mutable status index is kept here.
 ## Completion
 
 Required rules are installed and independently reviewed. Inventories and audits
-have complete scoped dispositions; confirmed findings and questions have finite
-owners. Audit completion does not mean the findings are repaired or that unknown
-bugs are absent. A fresh-context check confirms the rules are discoverable; it
+meet their substantive task-specific completion conditions; confirmed findings
+have finite repair owners. In particular, com-mmk9 must answer all required API
+input-authority questions, including mixed components. Assigning an unanswered
+question to another issue does not complete that audit or this epic. API repairs
+remain separate and are not prerequisites. Audit completion does not mean the
+findings are repaired or that unknown bugs are absent. A fresh-context check confirms the rules are discoverable; it
 cannot prove their future effectiveness. User per-task paperwork does not grow.
 
 No implementation-phase task is a child, dependency or linked issue of this epic.
