@@ -1,6 +1,6 @@
 ---
 id: com-yr4c
-status: open
+status: in_progress
 deps: []
 links: [com-mmk9]
 created: 2026-10-29T18:40:58Z
