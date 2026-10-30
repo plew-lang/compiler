@@ -27,3 +27,12 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Product repair/execution within this audit, whole grounding/proof algorithm correctness, language changes, new layout/body policy, arbitrary passive-record decomposition or performance claims.
 
 
+
+## Keyword Memo Authority Correction
+
+[Corrected input contract](../../../evidence/compiler-api-audit/resolutions/mid-destruction-keyword-cache-correction.json)
+and [independent review](../../../evidence/compiler-api-audit/review-resolution-mid-destruction-keyword-cache-correction.json)
+replace the original readonly keywordSpans description with its actual bounded
+lookup cache/counter writer and append-only source lineage. Original records stay
+immutable. Main/component C verdicts and repair ownership are unchanged; no new
+answered-question count or repaired/GREEN claim follows from this correction.

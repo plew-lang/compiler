@@ -41,3 +41,12 @@ in this scope: none. Product repairs remain unimplemented and unverified.
 Repair ownership: [com-f17t](com-f17t.md). These repair issues are not evidence of the conclusion; the linked
 source closure and independent review are. This closes only this finite
 investigation, not com-mmk9 or any product implementation milestone.
+
+## Keyword Memo Authority Correction
+
+[Corrected input contract](../../../evidence/compiler-api-audit/resolutions/mid-destruction-keyword-cache-correction.json)
+and [independent review](../../../evidence/compiler-api-audit/review-resolution-mid-destruction-keyword-cache-correction.json)
+replace the original readonly keywordSpans description with its actual bounded
+lookup cache/counter writer and append-only source lineage. Original records stay
+immutable. Main/component C verdicts and repair ownership are unchanged; no new
+answered-question count or repaired/GREEN claim follows from this correction.
