@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 No algorithm/source acceptance/ABI change, body/queue/native execution, global minimal service proof or product GREEN in this audit.
 
 
+
+## Adopted Implementation Intake
+
+[com-4sg9](com-4sg9.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-selected-instances.json) retains all main/mixed roles and normative grounds. Assumed trait-instance deduplication is an exact reifier/identity leaf used by source proof search. Keep actual canonical/name/assumption services, not the whole query/proof/layout domain.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

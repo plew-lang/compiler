@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Other original J/C/O/optional/API domains, source/solver/algorithm redesign, product execution/performance/GREEN.
 
 
+
+## Adopted Implementation Intake
+
+[com-7kzd](com-7kzd.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ia09, met-6e6k, met-ucze; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-recording.json) retains all main/mixed roles and normative grounds. Selected call parameter environments are saved-first explicit signature/evidence consumers. Preserve strict saved mismatch/no-retry and only legally unselected supplied-argument fallback with its bounded inference services, never preparation/publication or executable demand.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

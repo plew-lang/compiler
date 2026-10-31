@@ -1,7 +1,7 @@
 ---
 id: com-ough
 status: open
-deps: []
+deps: [com-fsxx]
 links: [com-mmk9]
 created: 2026-10-29T18:45:54Z
 type: task
@@ -33,3 +33,13 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other compiler domains, passive descriptor field minimization, source acceptance/algorithm/ABI change, unsupported feature work, product repair/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-7a5t](com-7a5t.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-604k, met-6e6k, met-acfl; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-construction.json) retains all main/mixed roles and normative grounds. Record layout and conditional/destructure/dictionary/newtype/global lowering construct current source input and canonical registration. Preserve semantic nominal/record identity and source owner provenance for downstream checked publication; no new source semantics.
+
+Required narrowed producer prerequisites: com-fsxx. Chosen shared signature replacement order: com-fsxx alone owns removal of the duplicated unused lowerDictLit.span formal; this task preserves its distinct Dictionary Expr pool writer/general Comp narrowing and actual consumers. Do not implement the same formal removal twice.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

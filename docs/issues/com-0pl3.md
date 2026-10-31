@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Other groups and existing unused-formal mainC/com-n8nh; source selection/solver/general proof/ABI/ownership redesign. No product changes/execution/performance or GREEN within this audit.
 
 
+
+## Adopted Implementation Intake
+
+[com-4sg9](com-4sg9.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ucze, met-ia09, met-6e6k; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-selected-instances.json) retains all main/mixed roles and normative grounds. Static method template finalization consumes selected proof/receiver/typeargs and saved expected result. Preserve exact body-identity initial registration and scoped argument/cache writes, not source reselection or readiness from interning.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

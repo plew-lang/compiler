@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 OriginalJ/C/O/optional/mainC and othercomponents/repair owners unchanged. No languageacceptance/default/dictionary/operator/containment/publicAPI/admission algorithm redesign orperformancecertification.
+
+## Adopted Implementation Intake
+
+[com-7kzd](com-7kzd.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-604k; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-recording.json) retains all main/mixed roles and normative grounds. Dictionary synthesis/value elaboration consumes an already selected context and constructs only AST, canonical/name/type spans, qualified Core namespace and synthetic origin. It is an independent current input-constructor boundary; the caller records source expression facts later. Preserve real builder effects without granting a source-fact writer or lexical owner authority.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

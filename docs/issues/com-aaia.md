@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 OriginalJ/C/O/optional/mainC and othercomponents/repair owners unchanged. No languageacceptance/default/dictionary/operator/containment/publicAPI/admission algorithm redesign orperformancecertification.
+
+## Adopted Implementation Intake
+
+[com-7kzd](com-7kzd.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ucze, met-acfl; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-recording.json) retains all main/mixed roles and normative grounds. Call argument source/direct-template arguments preserve written evaluation input, labels and exact selected site identity through recording. Retain actual bounded source/query/pool effects without arbitrary source or execution authority.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

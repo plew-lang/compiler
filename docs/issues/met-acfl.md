@@ -1,7 +1,7 @@
 ---
 id: met-acfl
 status: open
-deps: [com-kp3y, com-vkw3, com-wqa0, com-m3c6, com-gnj9, com-nr7y, com-6zph, com-r2sw, com-0lz8, com-4ccf, com-7cpj, com-h4cm, com-iq17, com-l8kt, com-q6pv, com-rgml, com-sk71, com-37u0, com-4wxu, com-ckde, com-r8gt, com-ru19, com-zcrx, com-8y74, com-fczr, com-t4gm, com-dsfy, com-ge01, com-v7fu, com-vyk7, com-0pxa, com-0u0i, com-1eo5, com-6fnh, com-8ejz, com-9sa5, com-bvfx, com-d0th, com-dc9e, com-dwp6, com-e2dp, com-g49i, com-k3i6, com-m66h, com-tmfg, com-tr3a, com-8by9, com-d4m2, com-euq7, com-hd9n, com-lwsd, com-mq3s, com-r3od, com-sezm, com-vh0x]
+deps: [com-kp3y, com-vkw3, com-wqa0, com-m3c6, com-gnj9, com-nr7y, com-6zph, com-0lz8, com-4ccf, com-7cpj, com-h4cm, com-iq17, com-l8kt, com-q6pv, com-rgml, com-sk71, com-37u0, com-4wxu, com-ckde, com-r8gt, com-ru19, com-zcrx, com-8y74, com-fczr, com-t4gm, com-dsfy, com-ge01, com-v7fu, com-vyk7, com-0pxa, com-0u0i, com-1eo5, com-6fnh, com-8ejz, com-9sa5, com-bvfx, com-d0th, com-dc9e, com-dwp6, com-e2dp, com-g49i, com-k3i6, com-m66h, com-tmfg, com-tr3a, com-8by9, com-d4m2, com-euq7, com-hd9n, com-lwsd, com-mq3s, com-r3od, com-sezm, com-vh0x, com-0vbn, com-1fbr, com-3vq7, com-4sot, com-74ky, com-aaia, com-duny, com-jm7l, com-rs2x, com-ynz6, com-5bmt, com-7mjp, com-aqud, com-ctor, com-e6zm, com-ge39, com-hux9, com-iaqs, com-j2i7, com-n4ps, com-qadp, com-qrmt, com-zftv, com-0cfk, com-dgbf, com-jciu, com-nq9x, com-orol, com-ough, com-pra8, com-q51y, com-ui4c, com-wmr0]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -120,3 +120,19 @@ The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake
 ## Scoped Audit Intake com-3z5o
 
 The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) assigns exact required input-authority repair subsets to this admission contract: com-8by9, com-d4m2, com-euq7, com-hd9n, com-lwsd, com-mq3s, com-r3od, com-sezm, com-vh0x. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-7kzd
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-recording.json) assigns exact required input-authority repair subsets to this admission contract: com-0vbn, com-1fbr, com-3vq7, com-4sot, com-74ky, com-aaia, com-duny, com-jm7l, com-rs2x, com-ynz6. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-4sg9
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-selected-instances.json) assigns exact required input-authority repair subsets to this admission contract: com-5bmt, com-7mjp, com-aqud, com-ctor, com-e6zm, com-ge39, com-hux9, com-iaqs, com-j2i7, com-n4ps, com-qadp, com-qrmt, com-zftv. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Pure Helper Scope Correction
+
+The [finite correction](../../../evidence/existing-feature-conformance/audit-intake/pure-formal-routing-correction.json) moves only com-r2sw pure readonly-receiver removal to mandatory phase-four integration. Its exact contract excludes publication/proof selection and is not a mutable writer. All actual source construction/publication/final-reader obligations and existing area prerequisites remain.
+
+## Scoped Audit Intake com-7a5t
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-construction.json) assigns exact required input-authority repair subsets to this admission contract: com-0cfk, com-dgbf, com-jciu, com-nq9x, com-orol, com-ough, com-pra8, com-q51y, com-ui4c, com-wmr0. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

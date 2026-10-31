@@ -1,7 +1,7 @@
 ---
 id: met-k7ks
 status: open
-deps: [com-bz23, com-ktyj, com-mexd, com-6h5i, com-g127, com-0t9x, com-id5r, com-u09r, com-9sa5, com-euq7]
+deps: [com-bz23, com-ktyj, com-mexd, com-6h5i, com-g127, com-0t9x, com-id5r, com-u09r, com-9sa5, com-euq7, com-ecm1, com-p8xt, com-zpo1, com-xp8r, com-jyy5, com-ysl5]
 links: []
 created: 2026-10-21T11:05:50Z
 type: task
@@ -73,3 +73,15 @@ The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake
 ## Scoped Audit Intake com-3z5o
 
 The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) assigns exact required input-authority repair subsets to this admission contract: com-euq7. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-7kzd
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-recording.json) assigns exact required input-authority repair subsets to this admission contract: com-ecm1, com-p8xt, com-zpo1. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-4sg9
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-selected-instances.json) assigns exact required input-authority repair subsets to this admission contract: com-xp8r. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-7a5t
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-construction.json) assigns exact required input-authority repair subsets to this admission contract: com-jyy5, com-ysl5. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

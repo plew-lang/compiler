@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 OriginalJ/C/O/optional/mainC and othercomponents/repair owners unchanged. No languageacceptance/default/dictionary/operator/containment/publicAPI/admission algorithm redesign orperformancecertification.
+
+## Adopted Implementation Intake
+
+[com-7kzd](com-7kzd.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): met-k7ks; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-recording.json) retains all main/mixed roles and normative grounds. The unresolved iteration failure-cause probe produces owned diagnostics but can perform exact canonical/name/keyword and proof/condition queries with legitimate error prefixes. Preserve those bounded semantic effects on the diagnostic route without granting source-success publication, general source checking or executable demand.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

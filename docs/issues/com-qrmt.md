@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 No product repair/GREEN within audit; no language/selection/proof/namespace algorithm redesign, source-ready policy relaxation, new global/closure execution, minimal service proof or whole-compiler rewrite.
 
 
+
+## Adopted Implementation Intake
+
+[com-4sg9](com-4sg9.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-ia09, met-acfl, com-fuo8; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-selected-instances.json) retains all main/mixed roles and normative grounds. Recorded value/type recipes, selected protocol/receiver/argument and for/local-declaration grounding apply exact source owner/body/site/environment to final results. Keep derived cache writers and required readers separate per API, without arbitrary compiler/source directory authority.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

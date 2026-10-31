@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 ExistingmainC/unused/optional/J/O and otheroriginalscopes, source/language/solver/ownership/pattern/coverage algorithm certification, productexecute/GREEN/ABI/native/performance.
+
+## Adopted Implementation Intake
+
+[com-7a5t](com-7a5t.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-acfl, met-6e6k, com-fuo8; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-construction.json) retains all main/mixed roles and normative grounds. For-pattern field type and bind construction connects selected iteration/struct type evidence to source local binding and completion. Preserve exact per-entry services, modes and scopes, without borrowing neighboring wide checker permissions.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

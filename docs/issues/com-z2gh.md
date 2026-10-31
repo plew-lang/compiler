@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Existing main C/old J/C/O/optional/API subsets and repair owners com-rs2x/com-v9md remain unchanged/open; no repair completion, language/algorithm/ABI/performance/GREEN claim.
+
+## Adopted Implementation Intake
+
+[com-7kzd](com-7kzd.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-recording.json) retains all main/mixed roles and normative grounds. Keep chainResultRef first-matching ChainSite.stageRef to groundTypeRef under its actual ambient legacy-cursor adapter separate from the four explicit saved-call/expression environment/Self/Item grounders. Preserve each exact canonical/proof/legacy context and conditional mutation without source reselection or unrelated authority.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

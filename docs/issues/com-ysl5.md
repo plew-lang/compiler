@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 ExistingmainC/unused/optional/J/O and otheroriginalscopes, source/language/solver/ownership/pattern/coverage algorithm certification, productexecute/GREEN/ABI/native/performance.
+
+## Adopted Implementation Intake
+
+[com-7a5t](com-7a5t.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): com-fuo8, met-k7ks; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-construction.json) retains all main/mixed roles and normative grounds. Match coverage consumes a saved semantic term and admitted arm inputs, invokes existing unreachable-arm analysis and decoded-literal cache operations, and writes exact warning/dedup outputs. Preserve semantic coverage and diagnostic publication without confusing these writes with source-body success publication.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

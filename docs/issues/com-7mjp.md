@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Other original J/C/O/optional/U scopes and existing chainSiteFor/com-qadp; language/source/type/proof/ownership/finalization general algorithm redesign, product execution/repair/performance/GREEN within source audit.
 
 
+
+## Adopted Implementation Intake
+
+[com-4sg9](com-4sg9.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-acfl; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-selected-instances.json) retains all main/mixed roles and normative grounds. Saved Chain site type/dependency registration consumes retained semantic terms into current collection. Preserve Optional args1, exact scan policy and site identity without arbitrary AST/site/FnInst publication or bare-name memo grants.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

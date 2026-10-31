@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Other original main C/J/O/optional/components and existing repair owners; algorithm correctness/solver/termination/GREEN/performance; unrelated source/body/executable/configuration writers.
+
+## Adopted Implementation Intake
+
+[com-7a5t](com-7a5t.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ucze, met-acfl; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-construction.json) retains all main/mixed roles and normative grounds. Lexical local binding/mutability/receiver-name queries supply exact current source scope, including actual pending-global Local slot installation. Retain that bounded local writer and explicit declaration/name readers, not a readonly facade that drops the real effect or a full compiler grant.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

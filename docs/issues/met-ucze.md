@@ -1,7 +1,7 @@
 ---
 id: met-ucze
 status: open
-deps: [com-qehq, com-qb05, com-17yh, com-4kti, com-fyxe, com-072n, com-3qne, com-o3vw, com-6cw6, com-ra96, com-zy6r, com-y8l4, met-g53w, met-tfbl, com-geem, com-0lz8, com-17ha, com-7cpj, com-9aap, com-kb6f, com-uk6c, com-1fxn, com-27h6, com-4wxu, com-6z28, com-ckde, com-cn5o, com-cx2r, com-e681, com-jvmv, com-k3cc, com-k5i6, com-kgom, com-m13a, com-y9r7, com-zcrx, com-00c4, com-03ra, com-2jwz, com-33jc, com-4aon, com-9mqu, com-9z44, com-bswq, com-edyb, com-fczr, com-hnm8, com-j0r9, com-majd, com-nukp, com-pweb, com-t63i, com-tn1g, com-u1tx, com-ukzt, com-zai9, com-a3ph, com-h5be, com-n5lu, com-wjky, com-0u0i, com-0y1t, com-1eo5, com-8ejz, com-bvfx, com-cnvd, com-fpmj, com-iucg, com-k3i6, com-lpof, com-tr3a, com-xsw7, com-0huw, com-13js, com-79k3, com-9i94, com-bw8e, com-cwq1, com-fboq, com-hd9n, com-mq3s, com-nee8, com-oorl, com-q8eb, com-r3od, com-sezm]
+deps: [com-qehq, com-qb05, com-17yh, com-4kti, com-fyxe, com-072n, com-3qne, com-o3vw, com-6cw6, com-ra96, com-zy6r, com-y8l4, met-g53w, met-tfbl, com-geem, com-0lz8, com-17ha, com-7cpj, com-9aap, com-kb6f, com-uk6c, com-1fxn, com-27h6, com-4wxu, com-6z28, com-ckde, com-cn5o, com-cx2r, com-e681, com-jvmv, com-k3cc, com-k5i6, com-kgom, com-m13a, com-y9r7, com-zcrx, com-00c4, com-03ra, com-2jwz, com-33jc, com-4aon, com-9mqu, com-9z44, com-bswq, com-edyb, com-fczr, com-hnm8, com-j0r9, com-majd, com-nukp, com-pweb, com-t63i, com-tn1g, com-u1tx, com-ukzt, com-zai9, com-a3ph, com-h5be, com-n5lu, com-wjky, com-0u0i, com-0y1t, com-1eo5, com-8ejz, com-bvfx, com-cnvd, com-fpmj, com-iucg, com-k3i6, com-lpof, com-tr3a, com-xsw7, com-0huw, com-13js, com-79k3, com-9i94, com-bw8e, com-cwq1, com-fboq, com-hd9n, com-mq3s, com-nee8, com-oorl, com-q8eb, com-r3od, com-sezm, com-07tb, com-1fbr, com-74ky, com-8yzi, com-aaia, com-esbb, com-jix5, com-jm7l, com-mvx1, com-p8xt, com-q400, com-s696, com-zpo1, com-0pl3, com-3s8q, com-4c9t, com-59sf, com-847f, com-eatt, com-k0zf, com-kwd5, com-ot44, com-qadp, com-yyyl, com-zftv, com-1bh1, com-5d3q, com-62pl, com-88dq, com-jwzi, com-nq9x, com-orol, com-s0zb, com-ui4c, com-zefb, com-zhs6]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -154,3 +154,15 @@ The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake
 ## Scoped Audit Intake com-3z5o
 
 The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) assigns exact required input-authority repair subsets to this admission contract: com-0huw, com-13js, com-79k3, com-9i94, com-bw8e, com-cwq1, com-fboq, com-hd9n, com-mq3s, com-nee8, com-oorl, com-q8eb, com-r3od, com-sezm. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-7kzd
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-recording.json) assigns exact required input-authority repair subsets to this admission contract: com-07tb, com-1fbr, com-74ky, com-8yzi, com-aaia, com-esbb, com-jix5, com-jm7l, com-mvx1, com-p8xt, com-q400, com-s696, com-zpo1. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-4sg9
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-selected-instances.json) assigns exact required input-authority repair subsets to this admission contract: com-0pl3, com-3s8q, com-4c9t, com-59sf, com-847f, com-eatt, com-k0zf, com-kwd5, com-ot44, com-qadp, com-yyyl, com-zftv. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-7a5t
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-construction.json) assigns exact required input-authority repair subsets to this admission contract: com-1bh1, com-5d3q, com-62pl, com-88dq, com-jwzi, com-nq9x, com-orol, com-s0zb, com-ui4c, com-zefb, com-zhs6. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

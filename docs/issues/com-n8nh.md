@@ -30,3 +30,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 No product repair/execution in this audit; no whole solver/source-selection/equality/algorithm correctness certification, language change, runtime/native/macro execution, whole-compiler architectural redesign or speculative performance proof.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-4sg9](com-4sg9.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-604k; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-selected-instances.json) retains all main/mixed roles and normative grounds. Remove only exact unused Try, selector and selected-supertrait formals at all real callers. This independent mandatory current-feature API cleanup does not narrow the remaining semantic authority, which stays with hux9/gms0/kt7y at their source areas. Preserve all caller computation/evaluation and nested witness Self/Item replay; no source acceptance change.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

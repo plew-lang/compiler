@@ -61,10 +61,17 @@ scope review](../../../evidence/existing-feature-conformance/audit-intake/api-se
 checks the concrete assignment and controls, not an implementation result.
 Adopt the exact source/contract/graph-backed conclusions with their limits.
 
-Both phase-three repairs reach G1 through their affected areas and are recorded
-as reusable inputs in the existing recovery inventory/audits/assignment tasks.
+The current com-geem selection/type repair reaches G1 through its affected areas.
+The [finite pure-helper correction](../../../evidence/existing-feature-conformance/audit-intake/pure-formal-routing-correction.json)
+supersedes only com-r2sw placement in the immutable original outcome; its mandatory
+phase-four integration remains open. Existing recovery tasks retain the correct
+source-versus-helper scope.
 Other current repairs block their actual phase-four/integration owners; the
 native area does not become an unrelated G1 prerequisite. All13 product repair
 tasks remain open, and closing this assignment cannot bypass them. Product
 source/tests/native/binaries/runners were not edited or executed; whole intake,
 repair/GREEN, performance and main/seed/carrier admission remain uncertified.
+
+## Finite Routing Correction
+
+Re-admit the [finite correction](../../../evidence/existing-feature-conformance/audit-intake/pure-formal-routing-correction.json) independently before status-only closure. Exact owner/role/optional membership is unchanged. The original outcome/review remains a historical snapshot; its r2sw edge is superseded without modifying the audit or product contract.

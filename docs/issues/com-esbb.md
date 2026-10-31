@@ -11,7 +11,7 @@ tags: [frontend, verification]
 ---
 # Narrow source canonical structural matchers inputs
 
-Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/source-expression-and-recording-inputs.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-source-expression-and-recording-inputs.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of com-jno0/phase 3; no product repair was performed by the audit.
+Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/source-expression-and-recording-inputs.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-source-expression-and-recording-inputs.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of audit closure; implementation admission is assigned below; no product repair was performed by the audit.
 
 ## Guarantee and Scope
 Selected binder structural term matching/local candidate transactions and conflict diagnostic; canonical TypeTermRef facets/children/view equality only. Replace real full Comp grants at all actual named API callers with the closed domain reader/writer proposed per row. Keep coherent stores/topology together and retain all legitimate side effects, identity/lifetime/default/error/invariant behavior.
@@ -30,3 +30,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other API components/domains, passive record field decomposition, language acceptance/algorithm/performance/ABI changes or whole compiler correctness/GREEN. No product repair/execution occurs within the originating audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-7kzd](com-7kzd.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ucze, met-6e6k, met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-recording.json) retains all main/mixed roles and normative grounds. Selected-binder type argument matching/completion uses canonical structural terms and local candidate transactions. Preserve rigid ParamId binding, conflict/discard and expected-result rules, without unrelated source proof/body authority.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

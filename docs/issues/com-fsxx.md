@@ -32,3 +32,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other compiler domains, passive descriptor field minimization, source acceptance/algorithm/ABI change, unsupported feature work, product repair/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-7a5t](com-7a5t.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-604k; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-construction.json) retains all main/mixed roles and normative grounds. Remove only exact unused scalar/span inputs and the unused Comp receiver of the raw appendLoweredArg value constructor. Existing semantic lookup/type/publication actor narrowing stays in separate phase-three owners. This independent current-feature API cleanup remains mandatory at integration, preserving all caller computation/grounding and retained descriptors. For lowerDictLit.span, this owner performs the one shared signature removal; com-ough retains its distinct dictionary Expr writer boundary and consumes that change.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

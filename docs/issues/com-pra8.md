@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 No product repair/execution/GREEN in this audit. Do not change language acceptance/async runtime/algorithm/ABI, remove zero-call APIs or recordTypeByLayout solely from reader absence, certify existing physical-name legacy caches as full semantic identity, or claim whole type/proof/worker soundness.
 
 
+
+## Adopted Implementation Intake
+
+[com-7a5t](com-7a5t.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-acfl; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-construction.json) retains all main/mixed roles and normative grounds. Record layout terms and publication preserve lexical labels and complete semantic child terms distinct from physical legacy names. Scope exact groundness/match/map/interner effects and remove unrelated compiler grants.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

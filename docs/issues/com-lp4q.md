@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Source-only audit does not implement product repairs/GREEN or prove whole conformance/ownership/type/CFG/ABI/key correctness, change language acceptance or existing algorithm policy, validate native execution, or decompose passive records solely by field count. Downstream physical LLVM/native owner is a distinct consumer, never an entry grant.
 
 
+
+## Adopted Implementation Intake
+
+[com-4sg9](com-4sg9.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-selected-instances.json) retains all main/mixed roles and normative grounds. Final source-result/body-environment/static-call completeness and resolution verification consume exact saved signature/instance evidence. Preserve legitimate receiver/grounding adapters but exclude final stores/queues and source preparation.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

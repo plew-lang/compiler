@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Other original J/C/O/optional/U scopes and existing chainSiteFor/com-qadp; language/source/type/proof/ownership/finalization general algorithm redesign, product execution/repair/performance/GREEN within source audit.
 
 
+
+## Adopted Implementation Intake
+
+[com-4sg9](com-4sg9.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-h61e; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-selected-instances.json) retains all main/mixed roles and normative grounds. Recorded prepared value layouts drive final destruction/deinit registration and body demand. Preserve exact recipe/body/source provenance and real canonical/layout/queue effects; no source inference, owner success or late-bare memo follows from this physical preparation.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
