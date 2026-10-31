@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 No product repair/execution/GREEN in this audit. No language, derive policy, generic depth, traversal/recursive algorithm, retry lifecycle, ABI/runtime or backend changes. Reader absence does not authorize deletion of fnTypes/genInsts; lexical discovery does not grant source preparation or body execution services.
 
 
+
+## Adopted Implementation Intake
+
+[com-3z5o](com-3z5o.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) retains all main/mixed roles and normative grounds. Array element dependency registration is a canonical selected-type/ordered-registry consumer. Preserve fallible resolve/projection/mangle byte effects and exact inherited context, without generic/function/body/native or source orchestration.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

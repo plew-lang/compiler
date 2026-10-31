@@ -11,7 +11,7 @@ tags: [frontend, verification]
 ---
 # Narrow canonical metadata/type-construction leaf inputs
 
-Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/source-query-and-module-inputs.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-source-query-and-module-inputs.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of com-jno0/phase 3; no product repair was performed by the audit.
+Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/source-query-and-module-inputs.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-source-query-and-module-inputs.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of audit closure; implementation admission is assigned below; no product repair was performed by the audit.
 
 ## Guarantee and Scope
 同session canonical type/child/label/view/nominal/binder/instance-key readersとexplicit value inputs。必要箇所だけtype/name/keyword interner・canonical publisher・body-derived type-result writer・diagnosticを許可し、sourceFacts publication/lexical cursor/Mono/Mid全writerを露出しない。 ParamId/nominal/projection/view/labelsのidentity、simultaneous replacement、default fields/sentinels/empty vectors、type pools/index/summaries、current type/name/keyword cache mutationを保存。recordLayout queryはalias/module/import provenanceとinternerも必要。
@@ -53,3 +53,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other domains, source/algorithm/ABI changes, optional passive payload shrinking, product repair/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-3z5o](com-3z5o.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-ia09, met-acfl; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) retains all main/mixed roles and normative grounds. Canonical type reconstruction, substitution, result-cache publication and compatibility/signature projections consume exact nominal/ParamId/view/label identity. Keep actual per-entry interner/type/name/proof/diagnostic writes and no raw source-fact/cursor/Mono/Mid authority.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

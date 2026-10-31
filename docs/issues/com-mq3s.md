@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 No product repair/execution/GREEN in this audit. No inference/compatibility/visibility/operator/conformance algorithm or source acceptance redesign, general solver/termination proof, body/Mid/native execution, arbitrary passive payload splitting or promotion of optional duplicate-carrier simplification into a requirement.
 
 
+
+## Adopted Implementation Intake
+
+[com-3z5o](com-3z5o.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-ucze, met-acfl; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) retains all main/mixed roles and normative grounds. Expected-value, operator/unary/index and field checks validate current source type/applicability and latch failures. Preserve branch-specific recorded/unrecorded effects and permitted legacy layout writers; do not grant source construction/prepare or broad shared-service union.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Other groups and optional/previous C/J/O scopes; language/source/solver/general algorithm/ownership/native/runtime correctness redesign. Product execution/repair/performance/GREEN not part of this audit.
 
 
+
+## Adopted Implementation Intake
+
+[com-8ttz](com-8ttz.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-acfl; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) retains all main/mixed roles and normative grounds. Field existence reads saved projection/Unit or selected receiver storage identity under exact source owner. Construction metadata reading does not grant source outcome/payload publication or general type query.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

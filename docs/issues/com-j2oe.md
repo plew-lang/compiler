@@ -32,3 +32,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other domains, source/algorithm/ABI changes, optional passive payload shrinking, product repair/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-3z5o](com-3z5o.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-604k; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) retains all main/mixed roles and normative grounds. Remove only the exact confirmed unused source-query/selected-instance formals at their real callers. This independent current-feature API cleanup does not narrow the remaining Comp/query authority; corresponding source selection/evidence/type authority repairs remain under their separate phase-three owners. Preserve registered provenance and actual caller evaluation/cache/query effects without a broader refactor.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

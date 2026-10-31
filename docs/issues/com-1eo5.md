@@ -1,7 +1,7 @@
 ---
 id: com-1eo5
 status: open
-deps: []
+deps: [com-0y1t]
 links: [com-mmk9]
 created: 2026-10-30T13:33:36Z
 type: task
@@ -27,3 +27,13 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Other original J/C/O/optional/U scopes and existing com-9sa5; language/source acceptance/ownership/type/solver/general algorithm redesign, product execution/repair/performance/GREEN within this source audit.
 
 
+
+## Adopted Implementation Intake
+
+[com-8ttz](com-8ttz.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ucze, met-6e6k, met-acfl, met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) retains all main/mixed roles and normative grounds. Recorded/symbolic/legacy/free/method arguments check the complete selected source signature and value compatibility. Literal context/source writer and stored local/global pending append remain distinct; no invented function-value arity semantics.
+
+Required narrowed producer prerequisites: com-0y1t. Chosen implementation-order prerequisites for the exact narrowed producer/reader interfaces identified in the accepted closure. Close these existing finite producer scopes before replacing this caller; do not infer arbitrary graph-wide callee ordering. Source preparation/ready/publication distinctions remain unchanged.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

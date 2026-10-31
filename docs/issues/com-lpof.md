@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Other groups/original J/C/O/optional/other U and existing Scan mainC repair owners; source/type/proof/normalization/general algorithm redesign, product execution/repair/performance/GREEN within source audit.
 
 
+
+## Adopted Implementation Intake
+
+[com-8ttz](com-8ttz.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ucze, met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) retains all main/mixed roles and normative grounds. Confirmed excess authority in dormant method/associated-witness APIs remains required in the accepted finite API contract. Zero callers do not prove unsupported/optional. Only associated-witness branch receives exact SourceAdmission query.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

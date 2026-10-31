@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 No implementation or GREEN in this input audit, no language/ABI/algorithm/performance change, no automatic reclassification of neighboring APIs or passive-record decomposition. This bounded responsibility task does not require a globally minimal compiler service proof.
 
 
+
+## Adopted Implementation Intake
+
+[com-3z5o](com-3z5o.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ia09, met-6e6k; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) retains all main/mixed roles and normative grounds. Associated output and provided Self/Item environments preserve original binder/evidence identity for source and final consumers. Restrict setters to actual Self/Item slots and keep explicit canonical/proof services per operation.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

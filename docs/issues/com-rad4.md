@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Other prior mainC/J/O/optional/API scopes; no language/destruction/interface/proof/type/solver/ABI correctness redesign, native/performance/GREEN or product execution within source-only audit.
+
+## Adopted Implementation Intake
+
+[com-8ttz](com-8ttz.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, com-h61e, com-an0b; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) retains all main/mixed roles and normative grounds. Shared fallible closed shape grounds selected declaration fields and associated projections before declaration dependency query or final destruction publication. Closed com-fbqh establishes phase-three source projection/first-concrete consumer obligation; declaration effects/final ownership remain separate phase-four consumers. Reuse closed repair without claiming API authority is narrowed. Canonical Mid declaration/effect/typed-readiness consumers also require the exact narrowed descriptor/dependency interface; retain their separate Mid-area admission.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

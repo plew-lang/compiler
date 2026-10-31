@@ -31,8 +31,6 @@ Optional components stay optional and must not become mandatory merely because t
 
 ## Adopted Implementation Intake
 
-[com-lk60](com-lk60.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ia09; actual tk prerequisites retain this open repair.
+[com-lk60](com-lk60.md) retains every original confirmed role. The [finite routing correction](../../../evidence/existing-feature-conformance/audit-intake/pure-formal-routing-correction.json) supersedes only this owner's original phase-three placement: this is required phase-four current-feature API cleanup with actual com-604k admission, not optional work.
 
-[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-constraints.json) retains all main/mixed roles and normative grounds. witness completenessのunused binder operandsはsource適合evidence serviceの過剰入力であり、met-si6j criterion8の構造的責務閉鎖に必須。小さな見かけやhistorical independent表現は任意化の根拠にならない。
-
-Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
+The exact scope removes unused witnessedHas tps/targs only; it does not narrow the remaining query/Comp authority, change source admission or publish evidence. That substantive authority repair remains with com-4aon at met-ia09. Preserve caller evaluation/grounding and the complete original Guarantee/Completion/Excluded. The [original outcome](../../../evidence/existing-feature-conformance/audit-intake/api-constraints.json) remains immutable historical assignment evidence; this correction governs current routing. Product repair remains open.

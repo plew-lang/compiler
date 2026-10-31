@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 OriginalJ/C/O/optional/mainC and othercomponents/repair owners unchanged. No languageacceptance/default/dictionary/operator/containment/publicAPI/admission algorithm redesign orperformancecertification.
+
+## Adopted Implementation Intake
+
+[com-3z5o](com-3z5o.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ucze, met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) retains all main/mixed roles and normative grounds. Global/public API closure and export-surface checks are existing source visibility/signature admission. Preserve exact module/owner and declaration terms, failure prefixes and required narrow query effects; no unrelated syntax, driver or executable grants.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

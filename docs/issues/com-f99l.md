@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Other prior mainC/J/O/optional/API scopes; no language/destruction/interface/proof/type/solver/ABI correctness redesign, native/performance/GREEN or product execution within source-only audit.
+
+## Adopted Implementation Intake
+
+[com-8ttz](com-8ttz.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) retains all main/mixed roles and normative grounds. Associated assumptions derive from exact retained interface/supertrait path with clause prerequisite identity and bounded type/evidence writes. Same scoped evidence feeds callee/consumer environments; no arbitrary source authority.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

@@ -1,7 +1,7 @@
 ---
 id: com-tmfg
 status: open
-deps: []
+deps: [com-vkvv]
 links: [com-mmk9]
 created: 2026-10-30T13:50:28Z
 type: task
@@ -27,3 +27,13 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Other groups/original J/C/O/optional/other U and existing Scan mainC repair owners; source/type/proof/normalization/general algorithm redesign, product execution/repair/performance/GREEN within source audit.
 
 
+
+## Adopted Implementation Intake
+
+[com-8ttz](com-8ttz.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-acfl; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) retains all main/mixed roles and normative grounds. Aggregate destination slots consume frozen result/source-kind/variant/field mapping. Direct record/Arrayliteral children readonly; nominal/enum branches retain explicit field grounding. No AST constructor revalidation.
+
+Required narrowed producer prerequisites: com-vkvv. Chosen implementation-order prerequisites for the exact narrowed producer/reader interfaces identified in the accepted closure. Close these existing finite producer scopes before replacing this caller; do not infer arbitrary graph-wide callee ordering. Source preparation/ready/publication distinctions remain unchanged.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

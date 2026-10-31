@@ -1,7 +1,7 @@
 ---
 id: com-an0b
 status: open
-deps: [com-0t9x, com-egv2, com-f17t, com-i86w, com-l0mr, com-m4kt, com-p9rd, com-vyk7]
+deps: [com-0t9x, com-egv2, com-f17t, com-i86w, com-l0mr, com-m4kt, com-p9rd, com-vyk7, com-rad4, com-tfz7]
 links: []
 created: 2026-10-31T07:06:20Z
 type: epic
@@ -33,3 +33,7 @@ New opcode/language semantics, unsupported async/unique/generic shapes, optional
 ## Scoped Audit Intake com-ptko
 
 The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) assigns exact required input-authority repair subsets to this admission contract: com-0t9x, com-egv2, com-f17t, com-i86w, com-l0mr, com-m4kt, com-p9rd, com-vyk7. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-8ttz
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) assigns exact required input-authority repair subsets to this admission contract: com-rad4, com-tfz7. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

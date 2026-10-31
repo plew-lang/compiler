@@ -1,7 +1,7 @@
 ---
 id: com-h61e
 status: open
-deps: [com-6gma, com-8b4d, com-debo, com-kss7, com-ktyj, com-pmwi, com-u6h0, com-w1rq, com-fcmw, com-sj9s, com-zq25, com-08i0, com-3j3n, com-5m8j, com-6u0t, com-70tb, com-9h5s, com-a414, com-cuiw, com-djoz, com-e1ea, com-hem0, com-hra0, com-kl06, com-oaaq, com-rib7, com-s8fu, com-t6gz, com-vk09, com-xx65, com-yb1d, com-za40]
+deps: [com-6gma, com-8b4d, com-debo, com-kss7, com-ktyj, com-pmwi, com-u6h0, com-w1rq, com-fcmw, com-sj9s, com-zq25, com-08i0, com-3j3n, com-5m8j, com-6u0t, com-70tb, com-9h5s, com-a414, com-cuiw, com-djoz, com-e1ea, com-hem0, com-hra0, com-kl06, com-oaaq, com-rib7, com-s8fu, com-t6gz, com-vk09, com-xx65, com-yb1d, com-za40, com-282i, com-hjrk, com-rad4, com-tfz7, com-wsfk]
 links: []
 created: 2026-10-31T06:23:46Z
 type: epic
@@ -53,3 +53,7 @@ The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake
 ## Scoped Audit Intake com-71gu
 
 The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-llvm-physical.json) assigns exact required input-authority repair subsets to this admission contract: com-08i0, com-3j3n, com-5m8j, com-6u0t, com-70tb, com-9h5s, com-a414, com-cuiw, com-djoz, com-e1ea, com-hem0, com-hra0, com-kl06, com-oaaq, com-rib7, com-s8fu, com-t6gz, com-vk09, com-xx65, com-yb1d, com-za40. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-8ttz
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) assigns exact required input-authority repair subsets to this admission contract: com-282i, com-hjrk, com-rad4, com-tfz7, com-wsfk. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

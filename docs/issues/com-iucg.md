@@ -1,7 +1,7 @@
 ---
 id: com-iucg
 status: open
-deps: []
+deps: [com-dc9e]
 links: [com-mmk9]
 created: 2026-10-30T15:50:24Z
 type: task
@@ -25,3 +25,13 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Other prior mainC/J/O/optional/API scopes; no language/destruction/interface/proof/type/solver/ABI correctness redesign, native/performance/GREEN or product execution within source-only audit.
+
+## Adopted Implementation Intake
+
+[com-8ttz](com-8ttz.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ia09, met-ucze; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) retains all main/mixed roles and normative grounds. Selected call/interface signature bound projections use exact source root, receiver, requirement and binder substitution. No call reselection, new root, source publication or execution scope is implied.
+
+Required narrowed producer prerequisites: com-dc9e. Chosen implementation-order prerequisites for the exact narrowed producer/reader interfaces identified in the accepted closure. Close these existing finite producer scopes before replacing this caller; do not infer arbitrary graph-wide callee ordering. Source preparation/ready/publication distinctions remain unchanged.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

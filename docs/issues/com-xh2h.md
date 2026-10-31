@@ -35,3 +35,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other domains, language acceptance/algorithm/ABI changes, unsupported feature work, product edits/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-8ttz](com-8ttz.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-604k; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) retains all main/mixed roles and normative grounds. Eight registered schema owner/cycle families inspect explicit graph/scoped substitutions/module markers/declared consuming receiver uniqueness without requesting a body/receiver. Structural declaration admission is separate from source selected-call/publication areas. Preserve legacy macro marker observation without endorsing a new language exception.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

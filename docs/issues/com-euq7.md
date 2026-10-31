@@ -11,7 +11,7 @@ tags: [frontend, verification]
 ---
 # Narrow owner diagnostic / formatter inputs
 
-Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/source-query-and-module-inputs.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-source-query-and-module-inputs.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of com-jno0/phase 3; no product repair was performed by the audit.
+Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/source-query-and-module-inputs.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-source-query-and-module-inputs.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of audit closure; implementation admission is assigned below; no product repair was performed by the audit.
 
 ## Guarantee and Scope
 owned CompileDiagnostic値、explicit operator/source spans、immutable AST/type/byte formatting readers、currentSourceOwner resolver/sessionとfirst-failure latch store、tcLog/trace policyへ限定する。 source/module/path/line/offset/severity/message、ownerごとfirst failure、tcLog false immediate Err / true continuationと後段拒否、printingを行うcallerとpure formatterの区別を保存。
@@ -30,3 +30,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other domains, source/algorithm/ABI changes, optional passive payload shrinking, product repair/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-3z5o](com-3z5o.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-acfl, met-k7ks; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) retains all main/mixed roles and normative grounds. Type diagnostic continuation has an owner-specific first-failure latch that prevents successful source publication; formatting and message/span projections are diagnostic subsets. Preserve tcLog false immediate Err versus continued-check eventual rejection, without diagnostic relookup or arbitrary writer authority.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

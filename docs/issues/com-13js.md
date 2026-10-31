@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 No source selection/general visibility/solver/proof algorithm correctness or new semantics; no product repair/execution/ABI/runtime/performance. No optional field-count reduction or representative-call approximation, no capture/fullComp in hidden wrapper, no old classification rewrite.
 
 
+
+## Adopted Implementation Intake
+
+[com-3z5o](com-3z5o.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ucze, met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) retains all main/mixed roles and normative grounds. Final method/associated/extension selection uses exact receiver, candidate, proof and argument context. Narrow actual per-route services and keep saved-source selection/fallback distinctions; no caller-wide publication or executable grant.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

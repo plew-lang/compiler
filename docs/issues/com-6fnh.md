@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 ExistingmainC/unused/optional/J/O and otheroriginalscopes, source/language/solver/ownership/pattern/coverage algorithm certification, productexecute/GREEN/ABI/native/performance.
+
+## Adopted Implementation Intake
+
+[com-8ttz](com-8ttz.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-acfl, met-6e6k; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) retains all main/mixed roles and normative grounds. Destructure nominal/field coverage is source pattern/type admission with stable bindings before frozen pattern facts/Mid. Preserve declaration identity and per-entry bounded reader/writer grants.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Audit source investigation only: no product repair/execution/GREEN, source/typing/lookup/ABI/runtime semantics change, passive payload mandatory decomposition, whole source solver/instance-key correctness or global minimal service proof. No forwarding Comp/callback escape, arbitrary Syntax/Mid/source preparation/publication/final-body queue/configuration grants.
 
 
+
+## Adopted Implementation Intake
+
+[com-3z5o](com-3z5o.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-ia09, met-ucze; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) retains all main/mixed roles and normative grounds. Method result/parameter grounding and explicit selected environments carry original Func/ParamIds/proof/public-interface/receiver recipes into final descriptors. Preserve signature completeness versus groundness and NOTREADY identities, without caller context leakage or source reselection.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

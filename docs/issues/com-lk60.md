@@ -1,6 +1,6 @@
 ---
 id: com-lk60
-status: closed
+status: in_progress
 deps: [com-mmk9]
 links: []
 created: 2026-10-31T06:19:18Z
@@ -49,3 +49,7 @@ All41 assigned repair owners and their exact confirmed roles have grounded requi
 [Classification review](../../../evidence/existing-feature-conformance/audit-intake/api-constraints-classification-review.json) records the original issues and reasoned corrections. [Final independent graph/scope review](../../../evidence/existing-feature-conformance/audit-intake/api-constraints-review.json) checks concrete assignments and graph, not product GREEN. Adopt its evidence-backed acceptance and stated limits after final review.
 
 Every required repair reaches actual integration; phase-three repairs reach G1 through affected areas. Secondary domains and actual producer prerequisites are retained as real edges; no whole global/native intake prerequisite is added to unrelated G1 work. Existing recovery tasks discover these scoped inputs without repeating the completed audit or replacing their own distinct contracts. All product repairs remain open, so closing this assignment cannot bypass them. Source baseline9665094d is unchanged; no product source/test/native/binary/runner edit or execution, new feature, semantic/ABI decision, performance/main/seed/carrier claim occurred.
+
+## Finite Routing Correction
+
+Cross-batch contract comparison found that com-crym removes unused immutable formals only; it does not close the separate witness-query authority owned by com-4aon. The [correction](../../../evidence/existing-feature-conformance/audit-intake/pure-formal-routing-correction.json) preserves all41owner/100role membership and moves only crym admission from met-ia09 to com-604k as required phase-four API cleanup. The original outcome/review remain exact historical snapshots, not current edge authority for this one corrected owner. Re-admit this finite correction independently before status-only closure; no product repair is certified.

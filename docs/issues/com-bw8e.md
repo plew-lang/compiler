@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Audit does not implement repairs, execute tests, certify GREEN, revise source acceptance/lookup/typing algorithms, change default evaluation or ownership semantics, or certify whole solver soundness. Do not infer native execution or arbitrary Mid/source publication authority from type-query reachability.
 
 
+
+## Adopted Implementation Intake
+
+[com-3z5o](com-3z5o.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-ucze; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) retains all main/mixed roles and normative grounds. Argument type inference is source value/applicability context with exact recorded/construction distinctions. Restrict actual services per branch and never give sealed operation navigation preparation or write authority; its exact affected consumer subset of the shared65-call table remains scoped.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

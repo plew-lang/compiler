@@ -1,7 +1,7 @@
 ---
 id: com-wsfk
 status: open
-deps: []
+deps: [com-hjrk, com-tfz7]
 links: [com-mmk9]
 created: 2026-10-30T15:50:24Z
 type: task
@@ -25,3 +25,13 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Other prior mainC/J/O/optional/API scopes; no language/destruction/interface/proof/type/solver/ABI correctness redesign, native/performance/GREEN or product execution within source-only audit.
+
+## Adopted Implementation Intake
+
+[com-8ttz](com-8ttz.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-h61e; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) retains all main/mixed roles and normative grounds. Finite release-effect graph propagates child/deinit seeds before ready/needsRelease/fieldNeedsRelease publication. Partial placeholder is not ready. This is ownership fixed point and executable admission, not source expression typing.
+
+Required narrowed producer prerequisites: com-hjrk, com-tfz7. Chosen implementation-order prerequisites for the exact narrowed producer/reader interfaces identified in the accepted closure. Close these existing finite producer scopes before replacing this caller; do not infer arbitrary graph-wide callee ordering. Source preparation/ready/publication distinctions remain unchanged.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
