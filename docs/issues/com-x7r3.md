@@ -52,3 +52,7 @@ rules. Record the finite graph diff, expected ready/blocked behavior and an
 independent review of scope, completeness and cycles. Investigation closure is
 not repair completion. Source edits, test execution, final admission and main
 integration are excluded from this assignment task.
+
+## Already Routed Cross-Compiler Intake
+
+The adopted com-k35g outcome under meta/evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json installs com-geem -> type/conversion plus selection-area admission, and com-r2sw -> publication-area admission. Each repair reaches G1 through its affected area. Reuse these exact owners/edges and source-matching evidence; normalize later scoped intake by union, not last-write-wins or duplicate repair creation. This supplies existing input, not completion of this task's combined recovery-audit assignment.

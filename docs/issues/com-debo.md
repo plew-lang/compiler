@@ -22,3 +22,11 @@ Enumerate actual source/fixture consumers. Preserve async/type flags, bounds/mis
 ## Excluded
 llvmTargetComponent (already explicit), physical lowering/ABI/LLVM algorithms, source semantics and performance work.
 
+
+## Adopted Implementation Intake
+
+[com-k35g](com-k35g.md) classifies this exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-h61e; actual tk prerequisites retain the open repair.
+
+[Scoped intake outcome](../../../evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json) preserves every main/mixed role and the normative reason. Existing finalized flag/type queries and registered-body slot lookup must not receive unrelated mutable/native capabilities. Definition-only APIs retain finite signature/consumer scope, not a new feature.
+
+The original audit-time independence does not waive this implementation admission. Keep the original finite guarantee, caller/delegate/control and excluded optional scopes. This is assignment only, not product repair/GREEN.

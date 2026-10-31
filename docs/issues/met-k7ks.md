@@ -1,7 +1,7 @@
 ---
 id: met-k7ks
 status: open
-deps: []
+deps: [com-bz23, com-ktyj, com-mexd]
 links: []
 created: 2026-10-21T11:05:50Z
 type: task
@@ -53,3 +53,7 @@ Existing source/generated/instantiated cause provenance, retained request failur
 ## Supporting Observation from Phase-Two Re-review
 
 At compiler production `87b382d2`, the actual Hash derive consumer compiles with root `use @Std/Hash only { Hash, Hasher, SipHasher }`. Removing only Hasher while preserving generated output rejects at `MissingSupport.gen.pw:2` with `implementation requires a trait constraint not guaranteed by the requirement`, rather than naming the missing consumer dependency. [com-io5f](com-io5f.md) preserves the successful/negative pair and [observed diagnostic](../../../evidence/existing-feature-conformance/phase-two-rereview/root-use/hash-missing-support.stderr). Root-use isolation is correct; this is a non-blocking cause-reporting improvement/control for this existing diagnostic task, not an additional phase-two acceptance requirement or prescribed exact wording. Preserve the originating missing binding/constraint cause through final reporting when closing this task.
+
+## Audited Adapter Authority Prerequisites
+
+The adopted com-k35g intake connects declaration diagnostic projection com-bz23, terminal preparation reporting com-mexd and observation/final-output finishing com-ktyj as required prerequisites. Preserve owned diagnostics, same-session provenance, trace/output/exit order and physical module/result transfer. Observation does not grant source meaning or arbitrary compiler mutation. The latter native/output consumers also block [com-h61e](com-h61e.md); this diagnostic scope does not erase that execution boundary. Product repairs and current-candidate admission remain open.

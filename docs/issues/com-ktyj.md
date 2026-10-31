@@ -23,3 +23,11 @@ Characterize trace enabled/disabled, stride/count boundaries, diagnostic-before-
 Changing phase or CLI semantics, monitoring, work counters, native/JIT lifetime algorithms, diagnostic conversion policy or performance optimization. CLI orchestration may still own the full construction session.
 
 
+
+## Adopted Implementation Intake
+
+[com-k35g](com-k35g.md) classifies this exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): met-k7ks, com-h61e; actual tk prerequisites retain the open repair.
+
+[Scoped intake outcome](../../../evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json) preserves every main/mixed role and the normative reason. Current phase observations and owned diagnostic/output finishing must not inherit arbitrary compiler mutation. Preserve quiet/trace/output/error/native release ordering; no new monitoring or CLI semantics.
+
+The original audit-time independence does not waive this implementation admission. Keep the original finite guarantee, caller/delegate/control and excluded optional scopes. This is assignment only, not product repair/GREEN.

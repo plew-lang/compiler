@@ -52,3 +52,7 @@ G2/G3 evidence owners. Exclusions have contract grounds. Missing knowledge is
 explicit, not marked compliant. Independent review checks the inventory against
 real entry points rather than the original eight-family checklist. No compiler
 repair, task closure re-admission, new feature or new architecture is included.
+
+## Reusable Adopted Intake Evidence
+
+Use the com-ax5g partition and accepted scoped outcomes under meta/evidence/existing-feature-conformance/audit-intake/ as source-matching inputs. The first com-k35g outcome retains com-geem descriptor-reader applicability/type roles and com-r2sw publication/proof-tag helper roles. Map their actual source entry/consumer boundaries in this inventory rather than repeating their completed input-authority investigation. The inventory's own decision-coverage contract is not completed by this input.

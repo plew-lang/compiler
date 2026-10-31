@@ -28,3 +28,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Error text/acceptance changes, generic provenance schema redesign and unrelated source preparation.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-k35g](com-k35g.md) classifies this exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): met-k7ks; actual tk prerequisites retain the open repair.
+
+[Scoped intake outcome](../../../evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json) preserves every main/mixed role and the normative reason. Existing declaration error location/render conversion consumes origin and error projections only. No new diagnostic schema, source rule or recovery semantics.
+
+The original audit-time independence does not waive this implementation admission. Keep the original finite guarantee, caller/delegate/control and excluded optional scopes. This is assignment only, not product repair/GREEN.

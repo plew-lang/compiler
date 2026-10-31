@@ -22,3 +22,11 @@ Characterize normal root parsing, impl-only part rejection, recursive Published 
 ## Excluded
 Changes to language visibility/use/part/macro semantics, source acquisition, parser algorithms and unrelated compiler refactoring. No compiler execution, repair or performance improvement was performed by this audit.
 
+
+## Adopted Implementation Intake
+
+[com-k35g](com-k35g.md) classifies this exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-604k; actual tk prerequisites retain the open repair.
+
+[Scoped intake outcome](../../../evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json) preserves every main/mixed role and the normative reason. Existing parser and structural impl-only part admission need mutable syntax construction or readonly graph/source provenance, not semantic/Mid/native authority. No grammar, visibility, use or macro change.
+
+The original audit-time independence does not waive this implementation admission. Keep the original finite guarantee, caller/delegate/control and excluded optional scopes. This is assignment only, not product repair/GREEN.

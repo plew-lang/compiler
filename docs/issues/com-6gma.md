@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Old mainC/com-9h5s runtime leaves, optional passive declarationAccess, justified LLVM owner/slots; language/runtime/ABI/async/scheduling/backend algorithm redesign, product execution/performance/GREEN.
+
+## Adopted Implementation Intake
+
+[com-k35g](com-k35g.md) classifies this exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-h61e; actual tk prerequisites retain the open repair.
+
+[Scoped intake outcome](../../../evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json) preserves every main/mixed role and the normative reason. Prepared whole/requested/executable emission consumes fixed semantic/Mid results and bounded physical services. Narrow native-entry authority, preserving all mode/error/native lifetime lanes; no new backend feature.
+
+The original audit-time independence does not waive this implementation admission. Keep the original finite guarantee, caller/delegate/control and excluded optional scopes. This is assignment only, not product repair/GREEN.

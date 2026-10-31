@@ -11,7 +11,7 @@ tags: [frontend, verification]
 ---
 # Remove Arena receivers from pure IR hash and proof-tag helpers
 
-Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/ir-stores-and-values.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-ir-stores-and-values.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of com-jno0/phase 3; no product repair was performed by the audit.
+Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/ir-stores-and-values.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-ir-stores-and-values.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up was independent of audit closure. The implementation intake below now governs its required phase-three admission; no product repair was performed by the audit.
 
 ## Guarantee and Scope
 All five pure helper APIs and their actual source/fixture consumers, including external Comp-method uses of finalAggregateHash, use explicit scalar/key inputs without Arena or Comp receiver. Preserve key/hash mapping, seven bound tag domains, decoder prevalidation, caller sentinels and overflow behavior. Count helpers separately from call expressions.
@@ -29,3 +29,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Hash/tag format or semantics, whole Arena decomposition, proof selection and unrelated publication APIs.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-k35g](com-k35g.md) classifies this exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-acfl; actual tk prerequisites retain the open repair.
+
+[Scoped intake outcome](../../../evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json) preserves every main/mixed role and the normative reason. Existing final-call/aggregate hash keys and conformance proof-tag serialization support owner facts and publication. Remove unrelated Arena/Comp from pure scalar-key helpers through source/fixture consumers; preserve all tags, keys and failure rules.
+
+The original audit-time independence does not waive this implementation admission. Keep the original finite guarantee, caller/delegate/control and excluded optional scopes. This is assignment only, not product repair/GREEN.

@@ -1,6 +1,6 @@
 ---
 id: com-vr57
-status: open
+status: in_progress
 deps: [com-mmk9]
 links: []
 created: 2026-10-31T06:19:17Z

@@ -11,7 +11,7 @@ tags: [frontend, verification]
 ---
 # Narrow pattern descriptor pool-reader inputs
 
-Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/ir-stores-and-values.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-ir-stores-and-values.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of com-jno0/phase 3; no product repair was performed by the audit.
+Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/ir-stores-and-values.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-ir-stores-and-values.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up was independent of audit closure. The implementation intake below now governs its required phase-three admission; no product repair was performed by the audit.
 
 ## Guarantee and Scope
 All at routes receive no unrelated Decls/Arena capabilities, including through wrappers/captures. Static route review plus repair-owned relevant declaration matching/inference/grounding controls establish unchanged source lineage and diagnostic behavior.
@@ -28,3 +28,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 No eager bind/type array snapshot retained across type inference, no mutation authority, solver or binder matching algorithm changes.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-k35g](com-k35g.md) classifies this exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-ucze; actual tk prerequisites retain the open repair.
+
+[Scoped intake outcome](../../../evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json) preserves every main/mixed role and the normative reason. Existing pattern bind/type descriptor readers supply semantic matching/inference/grounding. Limit pool access to the exact context before source publication, preserving live identities and forbidding eager stale snapshots.
+
+The original audit-time independence does not waive this implementation admission. Keep the original finite guarantee, caller/delegate/control and excluded optional scopes. This is assignment only, not product repair/GREEN.

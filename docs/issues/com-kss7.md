@@ -23,3 +23,11 @@ Characterize empty/plain/separator-containing ranges and both helper results. Na
 LLVM numeric parsing algorithms, language literal acceptance, other compiler interfaces and speculative performance work. No performance improvement is claimed by this audit.
 
 
+
+## Adopted Implementation Intake
+
+[com-k35g](com-k35g.md) classifies this exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-h61e; actual tk prerequisites retain the open repair.
+
+[Scoped intake outcome](../../../evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json) preserves every main/mixed role and the normative reason. Floating-literal physical byte normalization uses fixed admitted source bytes/range; narrow the actual emission leaf without changing literal source admission.
+
+The original audit-time independence does not waive this implementation admission. Keep the original finite guarantee, caller/delegate/control and excluded optional scopes. This is assignment only, not product repair/GREEN.

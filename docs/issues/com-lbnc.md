@@ -49,3 +49,7 @@ Independent review checks oracle grounds and missing boundary combinations.
 This task audits and proposes controls; repairing compiler/expectations belongs
 to the routed tasks, with RED before each actual repair. It does not certify a
 new candidate, add every unimplemented feature or repeat all final gates.
+
+## Reusable Scoped Intake Controls
+
+The adopted com-k35g outcome under meta/evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json retains com-geem matching/inference/grounding and com-r2sw scalar-key/proof-tag controls. Use them when deriving this task's semantic oracle/path contrasts; an API narrowing conclusion alone is not exercised source-semantic coverage. Existing test-audit qualified roles remain distinct from this decision-boundary audit.

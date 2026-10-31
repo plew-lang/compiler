@@ -28,3 +28,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Backend service decomposition, proof representation, source semantics, native ownership or runtime behavior changes.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-k35g](com-k35g.md) classifies this exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-h61e; actual tk prerequisites retain the open repair.
+
+[Scoped intake outcome](../../../evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json) preserves every main/mixed role and the normative reason. Executable session must retain private same-owner construction state and expose lowering/result fronts; repair current mutable compiler escape rather than introduce new host API. Source-publication area is related, not proof this is only a source checker task.
+
+The original audit-time independence does not waive this implementation admission. Keep the original finite guarantee, caller/delegate/control and excluded optional scopes. This is assignment only, not product repair/GREEN.

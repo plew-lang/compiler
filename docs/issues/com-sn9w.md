@@ -46,3 +46,7 @@ owner where final repair placement needs the combined audits; it installs actual
 repair and G1 dependencies after these audits close. Do not require com-x7r3 to
 finish before its prerequisite audit can close. Audit closure does not certify
 repair completion or allow G1 admission.
+
+## Reusable Adopted Input-Authority Conclusions
+
+com-k35g preserves com-geem and com-r2sw as required phase-three repairs at the exact roles in meta/evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json. Reuse their accepted original source/answer evidence when identity/scope matches; inspect missing semantic-decision boundaries under this audit's own contract. Do not repeat the whole API audit, declare these repairs complete, or omit the descriptor reader's selection/applicability consumers.

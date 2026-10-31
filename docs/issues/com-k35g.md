@@ -1,6 +1,6 @@
 ---
 id: com-k35g
-status: in_progress
+status: closed
 deps: [com-mmk9]
 links: []
 created: 2026-10-31T06:19:17Z
@@ -41,3 +41,30 @@ Close only after every assigned classification question is answered, a bounded i
 No product source/std/test/expectation/binary/runner edits or compiler/build/test/ASan/JIT/performance execution; no product Python imports. No semantic/architecture decision, new feature, gate weakening, main/seed/carrier promotion, product GREEN or parent completion claim. Stop for an unapproved decision needed to classify the subject.
 
 
+
+## Outcome
+
+The assigned13 current-feature repair owners and all22 confirmed roles have
+supported admission assignments; six original passive-value optional scopes
+retain their explicit outside-required disposition and closed audit decision
+owner. No required classification question remains for this bounded batch.
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json)
+retains exact original roles, normative grounds, resolved admission owners and
+16 actual required edges. The source baseline is9665094d; original accepted
+input-authority conclusions are reused only for their unchanged scope.
+
+[Classification review](../../../evidence/existing-feature-conformance/audit-intake/api-session-and-inputs-classification-review.json)
+accepts the scope. Its two finite concerns are addressed by actual secondary
+edges: com-geem blocks both selection/type areas, and com-ktyj blocks both
+structured reporting/native execution admission. [Final independent graph and
+scope review](../../../evidence/existing-feature-conformance/audit-intake/api-session-and-inputs-review.json)
+checks the concrete assignment and controls, not an implementation result.
+Adopt the exact source/contract/graph-backed conclusions with their limits.
+
+Both phase-three repairs reach G1 through their affected areas and are recorded
+as reusable inputs in the existing recovery inventory/audits/assignment tasks.
+Other current repairs block their actual phase-four/integration owners; the
+native area does not become an unrelated G1 prerequisite. All13 product repair
+tasks remain open, and closing this assignment cannot bypass them. Product
+source/tests/native/binaries/runners were not edited or executed; whole intake,
+repair/GREEN, performance and main/seed/carrier admission remain uncertified.

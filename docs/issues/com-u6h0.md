@@ -24,3 +24,11 @@ Inventory actual callers and delegated effects for these exact APIs. Apply TDD/r
 ## Excluded
 Whole-backend redesign, source semantics, descriptor publication algorithms and performance work.
 
+
+## Adopted Implementation Intake
+
+[com-k35g](com-k35g.md) classifies this exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-h61e; actual tk prerequisites retain the open repair.
+
+[Scoped intake outcome](../../../evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json) preserves every main/mixed role and the normative reason. Existing LLVM type/layout/string/runtime helper inputs are finalized metadata plus explicitly retained memo/interner/physical effects. Source pools may be readonly inputs but must not confer source selection/publication.
+
+The original audit-time independence does not waive this implementation admission. Keep the original finite guarantee, caller/delegate/control and excluded optional scopes. This is assignment only, not product repair/GREEN.
