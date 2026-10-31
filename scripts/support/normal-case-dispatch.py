@@ -25,7 +25,7 @@ def dispatch(phase, paths):
         print(f'plewc: {phase} dispatch: empty selection or duplicate case identities', file=sys.stderr)
         return 1
     try:
-        jobs = int(os.environ.get('PLEW_TEST_JOBS', os.environ.get('JOBS', '1')))
+        jobs = int(os.environ.get('PLEW_TEST_JOBS') or os.environ.get('JOBS', '1'))
         if jobs <= 0:
             raise ValueError()
     except ValueError:

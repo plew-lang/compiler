@@ -162,6 +162,9 @@ sys.exit(7 if mode=='after-results-error' else p.returncode)
         p = subprocess.run(['/bin/sh','-c',script],cwd=root,capture_output=True,text=True,timeout=25,
                            env={**env,'DISPATCH_MODE':'complete','PLEW_TEST_JOBS':'3','PLEW_TEST_PROGRESS':'1'})
         record(phase,'configured-workers','1',p,p.returncode==0 and '2 cases; 3 workers' in p.stderr)
+        p = subprocess.run(['/bin/sh','-c',script],cwd=root,capture_output=True,text=True,timeout=25,
+                           env={**env,'DISPATCH_MODE':'complete','PLEW_TEST_JOBS':'','PLEW_TEST_PROGRESS':'1'})
+        record(phase,'empty-budget-default','1',p,p.returncode==0 and '2 cases; 2 workers' in p.stderr)
         # The dispatcher can exit before a child that still owns its output pipe.
         # Cancellation must reclaim that process group even after the parent exits.
         pidfile = root / 'child.pid'

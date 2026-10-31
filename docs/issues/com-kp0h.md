@@ -41,7 +41,8 @@ zero results; successful dispatch with zero or one missing result; duplicate or
 foreign result identities (including equal total count); complete results followed
 by dispatcher failure; worker interruption; out-of-order complete successes; and
 complete results containing a legitimate case failure. Keep progress enabled and
-quiet operation, existing labels, parallel budget and compiler/link/runtime/golden
+quiet operation, existing labels, parallel budget (including an empty override
+falling back to the standalone CPU default) and compiler/link/runtime/golden
 checks. Results must correspond exactly once to the frozen discovered inputs.
 
 Use controlled processes for intended failure causes and production adapters,
