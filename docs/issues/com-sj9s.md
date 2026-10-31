@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 No product repair/execution/GREEN within audit; no new sendability/worker/reference/deinit language acceptance, runtime RC selection, semantic algorithm soundness or globally minimal service proof. Observed current/spec differences are recorded, not fixed by input narrowing.
 
 
+
+## Adopted Implementation Intake
+
+[com-vr57](com-vr57.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-h61e; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) retains all main/mixed roles and normative grounds. Existing legacy field ownership/release-shape queries feed downstream ownership/layout interpretation. Narrow field terms and required canonical/proof/diagnostic services, preserving frame restoration obligations; no runtime RC/worker feature.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

@@ -1,7 +1,7 @@
 ---
 id: com-f8bw
 status: open
-deps: [com-legt]
+deps: [com-legt, com-wfpt, com-zigu]
 links: []
 created: 2026-10-21T15:16:01Z
 type: task
@@ -27,3 +27,7 @@ Infer/Type and Infer/Check consume Infer/Sendability.typeRefIsSendable; current 
 Supported generic/annotation checks with scalars, arrays/structs/enums containing Ref or WeakRef, unrelated same-named types, mutable-reference controls and nested/recursive query termination. Preserve explicit unsupported worker rejection. Close current predicate/result evidence without claiming safe cross-thread execution exists.
 
 Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is below 7 seconds. This task does not close the mixed/new-feature parent automatically.
+
+## Scoped Audit Intake com-vr57
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) assigns exact required input-authority repair subsets to this admission contract: com-wfpt, com-zigu. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

@@ -11,7 +11,7 @@ tags: [frontend, verification]
 ---
 # Narrow prepared source-reader acquisition and provenance input services
 
-Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/source-owner-and-preparation-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-source-owner-and-preparation-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of com-jno0/phase 3; no product repair was performed by the audit.
+Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/source-owner-and-preparation-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-source-owner-and-preparation-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of audit closure; implementation admission is assigned below; no product repair was performed by the audit.
 
 ## Guarantee and Scope
 Only acquisition/identity/statistics, source-owner closed predicate and namespace/parent navigation APIs listed by rows; preserve session/owner/cache/measurement/strong payload/error contracts without whole Comp behind a view.
@@ -30,3 +30,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Language/algorithm/ABI/runtime changes, full compiler redesign, product edits/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-vr57](com-vr57.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-acfl; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) retains all main/mixed roles and normative grounds. Prepared source-reader acquisition, source-owner closedness and lexical namespace navigation are source publication/read capability boundaries. Preserve outcome/session/strong payload/cache/statistics/error lifetimes, no arbitrary view unwrap.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

@@ -1,7 +1,7 @@
 ---
 id: met-ucze
 status: open
-deps: [com-qehq, com-qb05, com-17yh, com-4kti, com-fyxe, com-072n, com-3qne, com-o3vw, com-6cw6, com-ra96, com-zy6r, com-y8l4, met-g53w, met-tfbl, com-geem]
+deps: [com-qehq, com-qb05, com-17yh, com-4kti, com-fyxe, com-072n, com-3qne, com-o3vw, com-6cw6, com-ra96, com-zy6r, com-y8l4, met-g53w, met-tfbl, com-geem, com-0lz8, com-17ha, com-7cpj, com-9aap, com-kb6f, com-uk6c, com-1fxn, com-27h6, com-4wxu, com-6z28, com-ckde, com-cn5o, com-cx2r, com-e681, com-jvmv, com-k3cc, com-k5i6, com-kgom, com-m13a, com-y9r7, com-zcrx]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -130,3 +130,11 @@ both 381-input maps unchanged. Original fifteen rejection pairs and 3qne41/6
 remain intact; nested-root and exact-duplicate controls pass. Receipt
 meta/evidence/existing-feature-conformance/source-owner-facts/trait-chain-placement-repair.json.
 Final changed-input G1/G2 gates remain separate; historical gates do not qualify.
+
+## Scoped Audit Intake com-vr57
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) assigns exact required input-authority repair subsets to this admission contract: com-0lz8, com-17ha, com-7cpj, com-9aap, com-kb6f, com-uk6c. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-yjyu
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-defaults-and-literals.json) assigns exact required input-authority repair subsets to this admission contract: com-1fxn, com-27h6, com-4wxu, com-6z28, com-ckde, com-cn5o, com-cx2r, com-e681, com-jvmv, com-k3cc, com-k5i6, com-kgom, com-m13a, com-y9r7, com-zcrx. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

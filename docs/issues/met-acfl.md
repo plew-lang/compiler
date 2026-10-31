@@ -1,7 +1,7 @@
 ---
 id: met-acfl
 status: open
-deps: [com-kp3y, com-vkw3, com-wqa0, com-m3c6, com-gnj9, com-nr7y, com-6zph, com-r2sw]
+deps: [com-kp3y, com-vkw3, com-wqa0, com-m3c6, com-gnj9, com-nr7y, com-6zph, com-r2sw, com-0lz8, com-4ccf, com-7cpj, com-h4cm, com-iq17, com-l8kt, com-q6pv, com-rgml, com-sk71, com-37u0, com-4wxu, com-ckde, com-r8gt, com-ru19, com-zcrx]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -96,3 +96,11 @@ E4 admission leave no unfinished obligation in the existing publication subset.
 Close this area with its required descendants. Runtime closure ownership/startup
 SCC and unsupported unique/shared facilities remain outside this subset.
 G2a/G2b and whole phase-three/main/seed/adopted-carrier gates remain separate.
+
+## Scoped Audit Intake com-vr57
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) assigns exact required input-authority repair subsets to this admission contract: com-0lz8, com-4ccf, com-7cpj, com-h4cm, com-iq17, com-l8kt, com-q6pv, com-rgml, com-sk71. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-yjyu
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-defaults-and-literals.json) assigns exact required input-authority repair subsets to this admission contract: com-37u0, com-4wxu, com-ckde, com-r8gt, com-ru19, com-zcrx. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

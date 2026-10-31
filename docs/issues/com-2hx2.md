@@ -56,3 +56,7 @@ repair, task closure re-admission, new feature or new architecture is included.
 ## Reusable Adopted Intake Evidence
 
 Use the com-ax5g partition and accepted scoped outcomes under meta/evidence/existing-feature-conformance/audit-intake/ as source-matching inputs. The first com-k35g outcome retains com-geem descriptor-reader applicability/type roles and com-r2sw publication/proof-tag helper roles. Map their actual source entry/consumer boundaries in this inventory rather than repeating their completed input-authority investigation. The inventory's own decision-coverage contract is not completed by this input.
+
+## Further Scoped Cross-Compiler Intake
+
+Use the [adopted intake evidence](../../../evidence/existing-feature-conformance/audit-intake/README.md) for later source-matching scoped outcomes as well as the first session/input batch. Exact member roles, normative grounds and actual admission edges belong to each outcome and its current tk owners. Reuse them without repeating the whole API/test audit, but complete this task's distinct decision-inventory/semantic-path/combined-assignment contract. Union multi-domain scoped dependencies; do not deduplicate away requirements by owner name.

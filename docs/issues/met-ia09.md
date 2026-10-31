@@ -1,7 +1,7 @@
 ---
 id: met-ia09
 status: open
-deps: [com-v2xk, com-yojf, com-072n, com-3qne, com-6cw6, com-cwu1, com-ra96, com-y8l4, com-sby0]
+deps: [com-v2xk, com-yojf, com-072n, com-3qne, com-6cw6, com-cwu1, com-ra96, com-y8l4, com-sby0, com-uk6c, com-37u0, com-4wxu, com-cx2r, com-fppu, com-ru19]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -194,3 +194,11 @@ both 381-input maps unchanged. Original fifteen rejection pairs and 3qne41/6
 remain intact; nested-root and exact-duplicate controls pass. Receipt
 meta/evidence/existing-feature-conformance/source-owner-facts/trait-chain-placement-repair.json.
 Final changed-input G1/G2 gates remain separate; historical gates do not qualify.
+
+## Scoped Audit Intake com-vr57
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) assigns exact required input-authority repair subsets to this admission contract: com-uk6c. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-yjyu
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-defaults-and-literals.json) assigns exact required input-authority repair subsets to this admission contract: com-37u0, com-4wxu, com-cx2r, com-fppu, com-ru19. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

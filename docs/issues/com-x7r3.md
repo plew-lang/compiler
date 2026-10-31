@@ -56,3 +56,7 @@ integration are excluded from this assignment task.
 ## Already Routed Cross-Compiler Intake
 
 The adopted com-k35g outcome under meta/evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json installs com-geem -> type/conversion plus selection-area admission, and com-r2sw -> publication-area admission. Each repair reaches G1 through its affected area. Reuse these exact owners/edges and source-matching evidence; normalize later scoped intake by union, not last-write-wins or duplicate repair creation. This supplies existing input, not completion of this task's combined recovery-audit assignment.
+
+## Further Scoped Cross-Compiler Intake
+
+Use the [adopted intake evidence](../../../evidence/existing-feature-conformance/audit-intake/README.md) for later source-matching scoped outcomes as well as the first session/input batch. Exact member roles, normative grounds and actual admission edges belong to each outcome and its current tk owners. Reuse them without repeating the whole API/test audit, but complete this task's distinct decision-inventory/semantic-path/combined-assignment contract. Union multi-domain scoped dependencies; do not deduplicate away requirements by owner name.

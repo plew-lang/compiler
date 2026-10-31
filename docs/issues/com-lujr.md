@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Other original J/C/O/optional/U/mainC; language/source/type/solver/overload/coverage/ownership algorithms, productrepair/execution/performance/GREEN within audit.
+
+## Adopted Implementation Intake
+
+[com-yjyu](com-yjyu.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): com-fuo8, met-6e6k; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-defaults-and-literals.json) retains all main/mixed roles and normative grounds. Existing match exhaustiveness uses exact saved subject type and conditional enum/Bool query paths. Preserve wildcard/struct early cases and existing coverage algorithm while limiting query authority, not a new exhaustiveness policy.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

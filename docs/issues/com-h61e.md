@@ -1,7 +1,7 @@
 ---
 id: com-h61e
 status: open
-deps: [com-6gma, com-8b4d, com-debo, com-kss7, com-ktyj, com-pmwi, com-u6h0, com-w1rq]
+deps: [com-6gma, com-8b4d, com-debo, com-kss7, com-ktyj, com-pmwi, com-u6h0, com-w1rq, com-fcmw, com-sj9s, com-zq25]
 links: []
 created: 2026-10-31T06:23:46Z
 type: epic
@@ -45,3 +45,7 @@ simplifications. Existing source-only audit evidence is not current product
 GREEN or a whole-backend algorithm proof.
 
 
+
+## Scoped Audit Intake com-vr57
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) assigns exact required input-authority repair subsets to this admission contract: com-fcmw, com-sj9s, com-zq25. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

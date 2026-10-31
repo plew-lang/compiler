@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Other original J/C/O/optional/U/mainC; language/source/type/solver/overload/coverage/ownership algorithms, productrepair/execution/performance/GREEN within audit.
+
+## Adopted Implementation Intake
+
+[com-yjyu](com-yjyu.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-ucze; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-defaults-and-literals.json) retains all main/mixed roles and normative grounds. Existing argument outer-view ID recovery participates in source type/applicability context; preserve stripped path bypass and first-seen view order, no projection-owner interpretation or whole Comp service union.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

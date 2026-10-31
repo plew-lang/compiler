@@ -1,7 +1,7 @@
 ---
 id: com-kgom
 status: open
-deps: []
+deps: [com-6z28]
 links: [com-mmk9]
 created: 2026-10-30T14:51:45Z
 type: task
@@ -25,3 +25,13 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Other original J/C/O/optional/U/mainC; language/source/type/solver/overload/coverage/ownership algorithms, productrepair/execution/performance/GREEN within audit.
+
+## Adopted Implementation Intake
+
+[com-yjyu](com-yjyu.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ucze; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-defaults-and-literals.json) retains all main/mixed roles and normative grounds. Current receiver-specialized argument ranking preserves recvPatternParams/ParamId-first matching distinct from function binders and actual provided-proof policy; no invented candidate scope or overload priority.
+
+Required narrowed producer prerequisites: com-6z28. Chosen implementation-order prerequisite: first close these exact actually reached limited callee/publication interfaces, then remove whole-Comp delegation from the enclosing caller. This is not all-call graph ordering and excludes caller-side guards not invoked by this API.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

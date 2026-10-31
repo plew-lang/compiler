@@ -1,7 +1,7 @@
 ---
 id: com-k5i6
 status: open
-deps: []
+deps: [com-cx2r, com-jvmv]
 links: [com-mmk9]
 created: 2026-10-30T14:05:20Z
 type: task
@@ -27,3 +27,13 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Other original J/C/O/optional/U scopes and foldConst/com-g5lm; language/source/type/operator/fold/proof/ownership general algorithm redesign, product execution/repair/performance/GREEN within source audit.
 
 
+
+## Adopted Implementation Intake
+
+[com-yjyu](com-yjyu.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-ucze; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-defaults-and-literals.json) retains all main/mixed roles and normative grounds. Existing selected operator RHS context consumes the saved parameter without reselecting; only unrecorded probes query witnesses. Recursive literal/value checking and owner-failure latch remain bounded source checker effects.
+
+Required narrowed producer prerequisites: com-cx2r, com-jvmv. Chosen implementation-order prerequisite: first close these exact actually reached limited callee/publication interfaces, then remove whole-Comp delegation from the enclosing caller. This is not all-call graph ordering and excludes caller-side guards not invoked by this API.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

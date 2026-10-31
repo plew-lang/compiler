@@ -1,7 +1,7 @@
 ---
 id: met-6e6k
 status: open
-deps: [com-g2qg, com-nplw, com-nucu, com-m0bf, com-e9l2, com-loyb, com-3q2n, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-o3vw, com-v1wa, com-tkz7, com-l8m1, com-6zph, com-geem]
+deps: [com-g2qg, com-nplw, com-nucu, com-m0bf, com-e9l2, com-loyb, com-3q2n, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-o3vw, com-v1wa, com-tkz7, com-l8m1, com-6zph, com-geem, com-0fk5, com-100o, com-4ccf, com-9aap, com-aii4, com-g127, com-oftp, com-1fxn, com-cn5o, com-e681, com-fppu, com-g5lm, com-jvmv, com-k5i6, com-lujr, com-m13a, com-r8gt, com-y9r7, com-zbas, com-zsw5]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -101,3 +101,11 @@ inputs unchanged and independently matched. Original directiveargs unchanged;
 alias/homonymous configuration and missing/retained fact controls pass. Receipt
 meta/evidence/existing-feature-conformance/source-owner-facts/synthetic-construction-identity-repair.json.
 Changed-input G1/G2 and parent completion remain separate obligations.
+
+## Scoped Audit Intake com-vr57
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) assigns exact required input-authority repair subsets to this admission contract: com-0fk5, com-100o, com-4ccf, com-9aap, com-aii4, com-g127, com-oftp. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-yjyu
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-defaults-and-literals.json) assigns exact required input-authority repair subsets to this admission contract: com-1fxn, com-cn5o, com-e681, com-fppu, com-g5lm, com-jvmv, com-k5i6, com-lujr, com-m13a, com-r8gt, com-y9r7, com-zbas, com-zsw5. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

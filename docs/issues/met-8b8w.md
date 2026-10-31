@@ -1,7 +1,7 @@
 ---
 id: met-8b8w
 status: open
-deps: []
+deps: [com-7aaj]
 links: []
 created: 2026-10-21T15:41:34Z
 type: task
@@ -45,3 +45,7 @@ missing same-provider state / bare-versus-empty-parenthesized controls. These
 are evidence for this existing scope, not new macro-role syntax or audit closure
 prerequisites. Recover original private-access intent under ordinary factory
 visibility; do not preserve obsolete blanket private-field rejection by accident.
+
+## Scoped Audit Intake com-vr57
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) assigns exact required input-authority repair subsets to this admission contract: com-7aaj. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

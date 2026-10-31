@@ -11,7 +11,7 @@ tags: [frontend, verification]
 ---
 # Isolate source fact construction and projection gateway inputs
 
-Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/source-owner-and-preparation-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-source-owner-and-preparation-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of com-jno0/phase 3; no product repair was performed by the audit.
+Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/source-owner-and-preparation-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-source-owner-and-preparation-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of audit closure; implementation admission is assigned below; no product repair was performed by the audit.
 
 ## Guarantee and Scope
 Only exact confirmed SourceFacts.pw Comp gateways/child registration/finish/aggregate-match readers and pure key comparison listed by rows; preserve coherent directory/backing owners, activation, lineage and publication protocol. Semantic child checking and context normalizer remain outside mandatory narrowing.
@@ -30,3 +30,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Language/algorithm/ABI/runtime changes, full compiler redesign, product edits/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-vr57](com-vr57.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-acfl; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) retains all main/mixed roles and normative grounds. Existing SourceFacts construction/projection, closure-child registration, finish and aggregate-match readers must preserve coherent backing/activation/publication without broad Comp gateways. Semantic orchestration remains owned separately.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

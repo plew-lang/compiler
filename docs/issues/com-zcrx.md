@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Other J/C/O/optional/mainC/prepareFieldDefaultGeneratorsJ/recordsFieldDefault existingC owners, sourceacceptance/defaultalgorithm/language/ABI redesign or productruntime/performance/GREEN within audit.
+
+## Adopted Implementation Intake
+
+[com-yjyu](com-yjyu.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-acfl, met-ucze; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-defaults-and-literals.json) retains all main/mixed roles and normative grounds. Selected default-generator call publication consumes fixed declaration/schema/source-writer services with exact lexical/evaluation/call-site/proof identities. No arbitrary inference, preparation or executable publication follows.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

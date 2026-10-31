@@ -1,7 +1,7 @@
 ---
 id: com-fuo8
 status: open
-deps: [com-2suv, com-0ssn, com-9tau, com-gnj9, com-ugee, com-jzdz, com-nr7y, com-l8m1, com-sby0, com-l9yo, com-wrjh]
+deps: [com-2suv, com-0ssn, com-9tau, com-gnj9, com-ugee, com-jzdz, com-nr7y, com-l8m1, com-sby0, com-l9yo, com-wrjh, com-100o, com-6u4o, com-q6pv, com-sk71, com-g5lm, com-lujr]
 links: []
 created: 2026-10-21T15:16:01Z
 type: epic
@@ -98,3 +98,11 @@ only this bounded below7s exit. That checkpoint did not cover the missing-give c
 The scoped checkpoint covered existing admitted expression forms, not new loop/value-break syntax,
 Never, unsupported ownership features, mixed com-tijs, the eleven phase-three
 criteria, full frozen-candidate G2 gates or main/seed/adopted-carrier promotion.
+
+## Scoped Audit Intake com-vr57
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) assigns exact required input-authority repair subsets to this admission contract: com-100o, com-6u4o, com-q6pv, com-sk71. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-yjyu
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-defaults-and-literals.json) assigns exact required input-authority repair subsets to this admission contract: com-g5lm, com-lujr. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

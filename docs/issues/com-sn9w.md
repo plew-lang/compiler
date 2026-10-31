@@ -50,3 +50,7 @@ repair completion or allow G1 admission.
 ## Reusable Adopted Input-Authority Conclusions
 
 com-k35g preserves com-geem and com-r2sw as required phase-three repairs at the exact roles in meta/evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json. Reuse their accepted original source/answer evidence when identity/scope matches; inspect missing semantic-decision boundaries under this audit's own contract. Do not repeat the whole API audit, declare these repairs complete, or omit the descriptor reader's selection/applicability consumers.
+
+## Further Scoped Cross-Compiler Intake
+
+Use the [adopted intake evidence](../../../evidence/existing-feature-conformance/audit-intake/README.md) for later source-matching scoped outcomes as well as the first session/input batch. Exact member roles, normative grounds and actual admission edges belong to each outcome and its current tk owners. Reuse them without repeating the whole API/test audit, but complete this task's distinct decision-inventory/semantic-path/combined-assignment contract. Union multi-domain scoped dependencies; do not deduplicate away requirements by owner name.

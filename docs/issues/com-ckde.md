@@ -1,7 +1,7 @@
 ---
 id: com-ckde
 status: open
-deps: []
+deps: [com-4wxu, com-zcrx]
 links: [com-mmk9]
 created: 2026-10-30T14:51:22Z
 type: task
@@ -25,3 +25,13 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Other J/C/O/optional/mainC/prepareFieldDefaultGeneratorsJ/recordsFieldDefault existingC owners, sourceacceptance/defaultalgorithm/language/ABI redesign or productruntime/performance/GREEN within audit.
+
+## Adopted Implementation Intake
+
+[com-yjyu](com-yjyu.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-acfl, met-ucze; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-defaults-and-literals.json) retains all main/mixed roles and normative grounds. Selected bound-call/default argument recording publishes source operations for a fixed original callee/generator. Preserve explicit/default evaluation order and all lexical/proof/call-site identities through ordinary final readers.
+
+Required narrowed producer prerequisites: com-zcrx, com-4wxu. Chosen implementation-order prerequisite: first close these exact actually reached limited callee/publication interfaces, then remove whole-Comp delegation from the enclosing caller. This is not all-call graph ordering and excludes caller-side guards not invoked by this API.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

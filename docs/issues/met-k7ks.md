@@ -1,7 +1,7 @@
 ---
 id: met-k7ks
 status: open
-deps: [com-bz23, com-ktyj, com-mexd]
+deps: [com-bz23, com-ktyj, com-mexd, com-6h5i, com-g127]
 links: []
 created: 2026-10-21T11:05:50Z
 type: task
@@ -57,3 +57,7 @@ At compiler production `87b382d2`, the actual Hash derive consumer compiles with
 ## Audited Adapter Authority Prerequisites
 
 The adopted com-k35g intake connects declaration diagnostic projection com-bz23, terminal preparation reporting com-mexd and observation/final-output finishing com-ktyj as required prerequisites. Preserve owned diagnostics, same-session provenance, trace/output/exit order and physical module/result transfer. Observation does not grant source meaning or arbitrary compiler mutation. The latter native/output consumers also block [com-h61e](com-h61e.md); this diagnostic scope does not erase that execution boundary. Product repairs and current-candidate admission remain open.
+
+## Scoped Audit Intake com-vr57
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) assigns exact required input-authority repair subsets to this admission contract: com-6h5i, com-g127. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

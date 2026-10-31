@@ -1,7 +1,7 @@
 ---
 id: com-604k
 status: in_progress
-deps: [com-p10m, com-w4c2, com-6ygf, com-9ttw, met-si6j, met-k7ks, met-2t3l, com-ydgx, com-2p9p, com-wqd7, com-zgk9, com-lndr, met-0139, com-8w4c, com-7g6i, com-0k37, com-7u06, com-legt, com-f8bw, com-2o4w, com-cgdk, com-fkxl, com-j3pp, com-esri, met-8b8w, com-ax5g, com-h61e, com-qt11]
+deps: [com-p10m, com-w4c2, com-6ygf, com-9ttw, met-si6j, met-k7ks, met-2t3l, com-ydgx, com-2p9p, com-wqd7, com-zgk9, com-lndr, met-0139, com-8w4c, com-7g6i, com-0k37, com-7u06, com-legt, com-f8bw, com-2o4w, com-cgdk, com-fkxl, com-j3pp, com-esri, met-8b8w, com-ax5g, com-h61e, com-qt11, com-zcwf]
 links: []
 created: 2026-10-21T15:16:01Z
 type: epic
@@ -69,3 +69,7 @@ All required task contracts hold through actual final consumers and cleanup/fail
 Complete current-source cross-boundary review and normal, generation, dependency, ASan/LSan, fixed-point and formal performance gates with matching inputs/artifacts/conditions. User-approved formal median is below 7 seconds; at least 7 seconds triggers investigation and stopping if repair is judged difficult. Preserve positive/reject/corrupt-boundary controls and source-mode parity for equivalent requested work. Do not turn unsupported APIs or every unknown language combination into this goal.
 
 Synchronize spec/design/source/issue/evidence, then meet normal main integration criteria and merge before selecting new feature families. Investigation completion is not implementation completion; passing existing tests alone is not architectural closure. Any necessary unapproved semantic/architecture change is a user decision, not an excuse to weaken the design or gates.
+
+## Scoped Audit Intake com-vr57
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) assigns exact required input-authority repair subsets to this admission contract: com-zcwf. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

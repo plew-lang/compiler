@@ -1,7 +1,7 @@
 ---
 id: com-6h5i
 status: open
-deps: []
+deps: [com-0t9x, com-bz23, com-u09r]
 links: [com-mmk9]
 created: 2026-10-29T18:13:53Z
 type: task
@@ -28,3 +28,13 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Language/algorithm/ABI/runtime changes, full compiler redesign, product edits/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-vr57](com-vr57.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): met-k7ks; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) retains all main/mixed roles and normative grounds. Existing preparation diagnostic conversion consumes source/body/error projections and trace, not arbitrary preparation/termination. Preserve shared immediate leaf repair ownership.
+
+Required narrowed producer prerequisites: com-bz23, com-0t9x, com-u09r. Actual programPreparationDiagnostic delegates declarationProgramDiagnostic, reportMidBuildError and midPreparationDiagnostic. Their narrowed producer contracts must exist before this converter can eliminate full Comp without a capture/unwrap.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

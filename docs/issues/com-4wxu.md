@@ -11,7 +11,7 @@ tags: [frontend, verification]
 ---
 # Separate label/default and bound-copy input services
 
-Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/source-default-literal-and-recovery.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-source-default-literal-and-recovery.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of com-jno0/phase 3; no product repair was performed by the audit.
+Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/source-default-literal-and-recovery.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-source-default-literal-and-recovery.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of audit closure; implementation admission is assigned below; no product repair was performed by the audit.
 
 ## Guarantee and Scope
 Exactly named label/index/bind/generator slot/ParamId projection, recordsFieldDefault and copied FuncBound methods. Keep isolated label interning, one-based IDs, owner/range lineage and original source clause provenance.
@@ -31,3 +31,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Source/algorithm redesign, unsupported-feature implementation, speculative cost claims, product execution within the originating audit and whole compiler algorithm certification. Appropriate later repair validation remains required.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-yjyu](com-yjyu.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ucze, met-ia09, met-acfl; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-defaults-and-literals.json) retains all main/mixed roles and normative grounds. Existing label/parameter index maps, default generator selection, recordsFieldDefault observation predicate and copied lexical FuncBounds link common applicability to exact source/default contexts. Preserve ParamIds and original clause provenance; the predicate is not a source publisher.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
