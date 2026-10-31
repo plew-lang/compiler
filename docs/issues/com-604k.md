@@ -1,7 +1,7 @@
 ---
 id: com-604k
 status: in_progress
-deps: [com-p10m, com-w4c2, com-6ygf, com-9ttw, met-si6j, met-k7ks, met-2t3l, com-ydgx, com-2p9p, com-wqd7, com-zgk9, com-lndr, met-0139, com-8w4c, com-7g6i, com-0k37, com-7u06, com-legt, com-f8bw, com-2o4w, com-cgdk, com-fkxl, com-j3pp, com-esri, met-8b8w]
+deps: [com-p10m, com-w4c2, com-6ygf, com-9ttw, met-si6j, met-k7ks, met-2t3l, com-ydgx, com-2p9p, com-wqd7, com-zgk9, com-lndr, met-0139, com-8w4c, com-7g6i, com-0k37, com-7u06, com-legt, com-f8bw, com-2o4w, com-cgdk, com-fkxl, com-j3pp, com-esri, met-8b8w, com-ax5g]
 links: []
 created: 2026-10-21T15:16:01Z
 type: epic
@@ -16,6 +16,18 @@ tags: [design, verification]
 Implement the adopted responsibility, decision, publication, ownership and failure contracts for features already provided by the compiler, from input through final consumption. Remove known in-scope deviations and obsolete migration authorities before returning to new feature implementation. The meta [progress plan](../../../agents/compiler-design-progress.md) owns phases/current stage; this epic owns integration scope and completion. Design/spec remain normative; no new compiler architecture is adopted here.
 
 Scope classification is [com-esri](com-esri.md). Its pinned matrix records inclusion, exclusion and split ownership, not mutable issue statuses. Required integration work is expressed by this epic's tk dependencies, not another checklist with copied states. Mixed parents remain open for their excluded feature work; completion of their scoped child does not complete the original feature.
+
+## Intake of Cross-Compiler Audit Findings
+
+[com-ax5g](com-ax5g.md) owns intake of the completed API/test audits into current
+implementation scopes and actual admission dependencies. It is a required
+prerequisite here, not an added prerequisite of the completed audit epic.
+Its classification must preserve all finite finding owners, optional/unsupported
+subsets and undecided source contracts; the old com-esri snapshot does not cover
+later findings automatically. Required repairs must block their real area/G1 or
+integration owner, not disappear when an assignment task closes. Phase-three
+work uses its existing inventory/audit/assignment path; unrelated domains do not
+become phase-three prerequisites merely because the audits were cross-compiler.
 
 ## Ordering and Start Conditions
 

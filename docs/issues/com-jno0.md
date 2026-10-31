@@ -1,6 +1,6 @@
 ---
 id: com-jno0
-status: open
+status: closed
 deps: [com-5by1, com-ouh2, com-e713, com-8iys, com-5zvv, com-tqzw, com-3p7m, com-am6u, com-mmk9]
 links: []
 created: 2026-10-26T12:48:12Z
@@ -91,10 +91,10 @@ required work, and found no mandatory correction. The author accepts the
 source/graph-backed conclusions. This is plan verification only; inventories,
 audits and operating effectiveness remain unverified.
 
-## Closure Readiness Result
+## Closure Readiness Result (Historical Assessment)
 
 Ready for closure under the existing audit-and-rules Completion contract.
-This is a readiness assessment only: status remains open as requested.
+At that assessment, status remained open because only readiness verification was requested.
 
 [Readiness evidence](../../../evidence/llm-development-workflow/epic-readiness.json)
 retains the original contract and exact observed document/child/evidence scope.
@@ -116,3 +116,31 @@ phase three. This readiness neither certifies future workflow effectiveness nor
 GREEN, performance, implementation-phase completion, main or seed admission.
 A later actual closure must retain these distinctions and record its outcome;
 this verification performs no issue-state transition.
+
+## Outcome
+
+Closed as investigated and common rules installed, following the user's explicit
+request to preserve future remediation and then close this epic. The unchanged
+Completion contract is satisfied by the nine child contracts, their substantive
+source/test evidence and scoped independent acceptance; no required API-input
+question remains unanswered.
+
+[Closure decision and retention checks](../../../evidence/llm-development-workflow/epic-closure.json)
+retain baseline revisions, canonical audit hashes, exact role/owner reconciliation
+and the real dependency graph. [Independent closure review](../../../evidence/llm-development-workflow/epic-closure-review.json)
+checks preservation and future routing against the existing contracts. Adopt its
+evidence-backed conclusions; required violations/concerns remaining: zero.
+The former readiness-only report remains historical evidence, not a second live
+state authority.
+
+The remaining global intake is now owned by open [com-ax5g](com-ax5g.md), an actual
+required prerequisite of integration parent [com-604k](com-604k.md). It must retain
+all finding roles, classify their real scopes, and connect required repairs to
+actual admission prerequisites. Closing that assignment alone cannot waive the
+repairs. Global classification and implementation repairs are not complete.
+All320 API product owners and55 separate test follow-ups remain open; qualified
+existing/source-oracle/optional/unsupported/duplicate dispositions are preserved.
+No finding was deleted, made mandatory merely by audit membership, or silently
+restricted to phase three. This outcome does not certify product GREEN,
+performance, implementation admission, main/seed promotion or future workflow
+effectiveness. No product code, tests, runner or generated binary was changed.
