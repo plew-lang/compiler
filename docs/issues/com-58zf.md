@@ -45,3 +45,11 @@ Batch0056 adds exactly run/{mid_buffer_append_cfg_lowering,mid_buffer_clear_arc_
 ## Explicit User Collection Buffer Construction API
 
 Batch0080 adds exactly run/user_collection.pw/.out. Stack factory uses current real associated Buffer.new(), while adopted named-factory construction differs. Preserve user-authored safe-floor operations, scalar/String behavior and copied collection divergence; generic Stack factory publication shorthand remains separately unresolved in com-owb3. This is not a ban on every constructor-like ordinary associated function.
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 30.
+
+Row30: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Plan existing Buffer construction API/factory migration with exact capacity/overflow/drop and field-place controls. Preserve closed com-p10m current assoc lane and separate synthetic identity/capability work. Current collection reentrant-place verification is a separate contract and is not expanded into public constructor migration. Required admission: com-604k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

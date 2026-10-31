@@ -33,3 +33,7 @@ Frontend F6 classifies argCount/argAt argument tests as old admitted-subset
 regressions, not current Process.args/ExitCode API conformance. New API migration
 remains in this parent; it is not a fixture-only expectation correction or an
 extra requirement for the admitted-subset child com-cgdk.
+
+## Qualified Test Intake com-ti5b Row14
+
+[Exact scope and retained roles](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) route only the current required subset to com-cgdk. This original mixed parent remains open for its other explicit future/optional scopes; subset completion cannot close the whole parent.

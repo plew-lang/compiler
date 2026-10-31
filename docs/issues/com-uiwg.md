@@ -24,3 +24,11 @@ For panic/overlapping_inout_ref, overlapping_inout_container, overlapping_inout_
 Start with controlled RED cases exercising the real worker, including early erroneous trap, late trap after forbidden effect, correct trap and legal/no-trap counterpart. Independently review and validate affected normal/ASan paths. No compiler semantics change is implied by this detection gap. Separate repair, no audit epic parent/dependency; fixing this is not required to close the audit, but all assigned audit inputs remain its work.
 
 
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 16.
+
+Row16: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Pre-trap shared-access assertions must observe legal-cell effects and absence of conflicting callee-body effects on real normal/ASan-D paths, with flushing/buffering controls rather than source comments as proof. Required admission: com-an0b, com-9l3b.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

@@ -24,3 +24,11 @@ Preserve dispatcher status and reconcile expected versus returned case identitie
 Repair requires task-start TDD, fixed candidate/input identity, relevant actual consumer checks, scoped independent review and applicable gates. This is a separately owned follow-up, not a child or dependency of com-jno0 or its audits. No phase-three certification implied.
 
 
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 1.
+
+Row1: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Preserve actual normal dispatcher results/status/case identity before accepting normal run/panic/reject/part evidence. This validator repair precedes affected gate reliance, not all source investigations. Required admission: com-9l3b.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

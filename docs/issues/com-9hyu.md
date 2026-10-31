@@ -23,3 +23,11 @@ Make the overwritten key expose both the new payload/witness outcome and unchang
 
 Follow TDD, verify complete stdout and actual registration/runner, independent review. Finite fixture/assertion repair; no general Dictionary implementation rewrite unless a separately evidenced defect is assigned. No new language rules and no fresh candidate correctness claimed by this issue.
 
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 21.
+
+Row21: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Dictionary existential replacement needs a returned-new-value observation plus existing size/copy independence; this repairs an assertion gap in current collection semantics, not a new compiler defect. Required admission: com-zgk9.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

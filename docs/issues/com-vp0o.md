@@ -87,3 +87,11 @@ Batch0071 adds exactly run/source_structural_owner_evidence.pw/.out. Its constru
 ## Explicit Committed Array Binding Internal Conversion Oracle
 
 Batch0080 adds exactly run/value_control_binding_context.pw/.out. Retaining committed source Array[Square] is useful, but tcCheckValue/callArgumentConversion and saved ArrayRepack success to Array[any Shape] for the committed container conflict with adopted generic invariance. Separate provisional literal element context from conversion of an already-bound container; preserve source commitment, fork/entry comparisons and evidence-source boundary while reconciling the obsolete internal success oracle. Not all helper assertions are wrong, and this is no ordinary covariance permission or audit-time golden rewrite.
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 20.
+
+Row20: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Existing existential boxing/erasure fixtures need source-oracle/control reconciliation for invariant generic containers, nominal Self outputs and copyable versus unique existential boundaries. Preserve historical useful purposes without treating current outputs as specification. Required admission: met-6e6k, met-ia09.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

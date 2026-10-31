@@ -239,3 +239,11 @@ Batch0080 adds exactly run/unused_generic_enum_context.pw/.out. Standard Optiona
 ## Manual Global-Module Optional Reader
 
 Batch0129 adds exactly tests/compiler/codegen/GlobalModules.pw Optional.Some(v: _) completion reader. Migrate only standard payload label to adopted value while preserving listed body IDs and emission purposes. Custom CompilerSessionResult and LlvmLoweringResult payload labels stay unchanged. Manual helper context, not a new primary source obligation or executed failure.
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 33.
+
+Row33: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Plan coherent Optional payload-label migration for exact admitted copyable producers/patterns/consumers, preserving forward inference and nominal Chain identity controls. No allowunique/autounique feature prerequisite or new alias label is added. Required admission: com-604k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

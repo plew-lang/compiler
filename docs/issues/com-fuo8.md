@@ -1,7 +1,7 @@
 ---
 id: com-fuo8
 status: open
-deps: [com-2suv, com-0ssn, com-9tau, com-gnj9, com-ugee, com-jzdz, com-nr7y, com-l8m1, com-sby0, com-l9yo, com-wrjh, com-100o, com-6u4o, com-q6pv, com-sk71, com-g5lm, com-lujr, com-dsfy, com-ge01, com-n5lu, com-xc6h, com-iri8, com-3vq7, com-rs2x, com-017t, com-e6zm, com-ge39, com-hux9, com-qrmt, com-jciu, com-q51y, com-ysl5, com-zefb]
+deps: [com-2suv, com-0ssn, com-9tau, com-gnj9, com-ugee, com-jzdz, com-nr7y, com-l8m1, com-sby0, com-l9yo, com-wrjh, com-100o, com-6u4o, com-q6pv, com-sk71, com-g5lm, com-lujr, com-dsfy, com-ge01, com-n5lu, com-xc6h, com-iri8, com-3vq7, com-rs2x, com-017t, com-e6zm, com-ge39, com-hux9, com-qrmt, com-jciu, com-q51y, com-ysl5, com-zefb, com-bfvd, com-ntm8]
 links: []
 created: 2026-10-21T15:16:01Z
 type: epic
@@ -126,3 +126,7 @@ The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake
 ## Scoped Audit Intake com-7a5t
 
 The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-construction.json) assigns exact required input-authority repair subsets to this admission contract: com-jciu, com-q51y, com-ysl5, com-zefb. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Test Admission Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) installs required finite repair/investigation prerequisites at this actual admission: com-ntm8 (row5), com-bfvd (row17). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.

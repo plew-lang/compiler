@@ -295,3 +295,7 @@ Batch0122 optionally qualifies exactly run/weakref_match_temp.pw/.out. Its origi
 ## Manual Leak Survey Profile Prose
 
 Batch0133 adds the optional scripts/diagnostics/leak-survey.sh header reference to the permanent generated-program leak gate as levelD; current permanent generated-app leak gate is C. Preserve survey meaning: CLEAN reports only absence of its LSan marker, not successful application execution, ASan cleanliness or golden equality. Prose clarification only, no runner/assertion or gate-strength change required by this optional item.
+
+## Qualified Test Intake com-ti5b Row28
+
+[Exact scope and retained roles](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) route only the current required subset to met-fvzp. This original mixed parent remains open for its other explicit future/optional scopes; subset completion cannot close the whole parent.

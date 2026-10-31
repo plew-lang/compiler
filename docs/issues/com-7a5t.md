@@ -1,6 +1,6 @@
 ---
 id: com-7a5t
-status: in_progress
+status: closed
 deps: [com-mmk9]
 links: []
 created: 2026-10-31T06:19:18Z

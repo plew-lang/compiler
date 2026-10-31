@@ -65,3 +65,11 @@ Batch0114 adds exactly run/ref_arrow_field_bind_arc.pw/.out. Actual292d2d56 expl
 ## User Collection Element Ownership
 
 Batch0121 adds exactly run/user_collection.pw/.out. Actual4d029d42 and6b1a7c5e explicitly target String acquisition, retirement, peek/pop ownership and CoW through user-authored Stack methods over Buffer. All stored elements are immortal literals; display concatenations never enter the collection. Missing/excessive element acquisition or release can retain all six outputs without freed String backing, even with application instrumentation. Preserve scalar/count/order/CoW observations and reconcile this exact wrapper path with releasable elements plus discriminating lifecycle/instrumentation or matching precise structural evidence, verifying selected candidate allocation. Existing buffer_string uses managed item-N elements on the direct Buffer path and is a useful complement, not proof every Stack instantiation detects ownership loss. Existing public Buffer construction and generic publication qualifications remain separate. No current compiler memory defect reproduced, all-collection matrix required, production repair or real execution performed.
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 27.
+
+Row27: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Array/Buffer retirement assertions need genuinely managed heap old/new String paths and discriminating release controls, preserving current value/CoW/size behavior and no unproved compiler fault. Preserve all qualified non-collection String field/match/view/saved-key/returned-value lifetime paths and their physical ARC controls, not just the original Array/Buffer subset. Required admission: com-zgk9, com-9l3b, com-h61e.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

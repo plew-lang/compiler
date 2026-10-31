@@ -41,3 +41,11 @@ path-attribution question; this extension neither resolves that attribution nor
 requires implementing a general effect/alias optimizer. Root syntax/deinit and
 ordinary panic API migration remain separately owned. The outcome and source
 admission obligations are not the same assertion and are not double counted.
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 31.
+
+Row31: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Separate static alias rejection permission from dynamic runtime-access control claims; preserve finite actual proof frontier and deterministic runtime-dependent alias/nonalias contrasts without accepting arbitrary reject-or-panic. Required admission: com-an0b.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

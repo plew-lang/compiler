@@ -45,3 +45,11 @@ Batch0063 adds exactly run/newtype_conformance_inherit.pw/.out. pub impl String 
 ## Explicit Trait Method Result Context Foreign Primitive Setup
 
 Batch0077 adds exactly run/trait_method_result_context.pw/.out. Its unqualified impl I64 as locally owned Marker violates spec07:5/spec09:293–295 type-owner placement; owning Marker does not authorize foreign I64 impl. Preserve required/provided/default/result-only generic method expected I64 contexts, associated outputs, block/if/record consumers and bound discharge via an authorized setup. Optional Some label is separate existing met-2wca0028 scope. This finding was parent-discovered after independent initial0649e878, not an initial reviewer discovery. No new placement semantics or audit-time repair.
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 26.
+
+Row26: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Foreign-type inherent/extension implementation fixtures need ordinary module ownership/source admission reconciliation with useful current invocation controls retained. Required admission: met-ia09, met-ucze.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

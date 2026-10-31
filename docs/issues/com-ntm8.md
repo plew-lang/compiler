@@ -1,7 +1,7 @@
 ---
 id: com-ntm8
 status: open
-deps: []
+deps: [com-7u8z]
 links: []
 created: 2026-10-27T19:08:00Z
 type: task
@@ -309,3 +309,13 @@ Batch0129 adds exactly tests/compiler/codegen/GlobalModules.pw bare for byte in 
 ## Lazy CLI Type-Import Reason Isolation
 
 Batch0132 adds exactly the generated type-import family in tests/tooling/test-lazy-cli.py. Types.pw publishes struct Hidden but no public memberwise factory; the unimported Hidden annotation and external <Types.Hidden value=1I64 /> therefore contain independent failures. Erroneously admitting the annotation could still reject construction and satisfy status1/entry timing. Isolate that exact intended name-visibility reason or publish valid construction; preserve unused-run success, whole check/build, late demand and untaken-main-branch distinctions. Existing memberwisemodule and moduleprivatefactory controls are complementary. No compiler execution, all-negative reason mandate or new semantic ruling.
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 5.
+
+Row5: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Exact source negative/control oracles must discriminate the intended selection/evidence/type/owner/completion reason instead of setup or unrelated failure. All extended qualified findings and corrections remain; not an all-corpus rewrite. Required admission: met-ucze, met-ia09, met-6e6k, met-acfl, com-fuo8, com-9l3b.
+
+Required producer close/use dependency: com-7u8z. Exact phantomdep intended-reason assertion consumes the canonical fixture schema ruling. This is a close/use prerequisite for that subset; other ntm8 controls can proceed without waiting.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

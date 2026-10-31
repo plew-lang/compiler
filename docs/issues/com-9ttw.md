@@ -1,7 +1,7 @@
 ---
 id: com-9ttw
 status: open
-deps: []
+deps: [com-7u8z]
 links: []
 created: 2026-10-21T13:09:07Z
 type: task
@@ -57,3 +57,7 @@ before claiming a demonstrated CLI failure. No compiler code was changed here.
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
 
 Existing git/path dependency resolution, source-use reachability, joint same-major constraints and top-level lock. Local fixed repos cover path-to-git, unused edges, constraint order, compatible/incompatible versions and cold/warm locks. No native-package executor.
+
+## Test Admission Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) installs required finite repair/investigation prerequisites at this actual admission: com-7u8z (row23). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.

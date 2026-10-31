@@ -27,3 +27,11 @@ Exact positive and paired rejection above only; bare generic-owner factory short
 ## Explicit Ordinary Call Later-Sibling Empty Array Context
 
 Batch0049 adds exactly run/generic_empty_array_arg.pw/.out to the existing same-rule ordinary-call/factory-attribute question. Original515a625f intentionally lets later seed determine an earlier xs:[] T. Forward available expectations and provisional body terms do not by themselves establish this acceptance. Derive or request the canonical same-call inference rule; preserve source-order evaluation and no overload rescue. Bare loop and nonunique float contexts remain separate exact owners; suffixing seed does not discharge this question.
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 25.
+
+Row25: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Constructor sibling inference needs finite canonical forward-resolution oracle reconciliation before current type acceptance/control changes. No new backward inference or expectation rule is adopted by assignment. Required admission: met-6e6k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

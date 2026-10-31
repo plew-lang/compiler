@@ -28,3 +28,11 @@ Repair requires task-start TDD, fixed candidate/input identity, relevant actual 
 ## Selected Observational Input Clarification
 
 Batch0132 independently reconfirms the exact fingerprint checker gap. SOURCE selects the temporary src/_.pw, but measure-self-compile.sh cd selects compiler-cwd Plew.toml/Plew.lock, not the checker-created temporary package stubs. Derive expected content identities from the actual selected closure and one bounded changed-content contrast; retain sampling handshake and status/artifact checks. Source_tree64hex/name presence alone is not a content oracle. This is existing exact ownership, not a new task or demonstrated production-hashing defect.
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 11.
+
+Row11: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Measurement fingerprint assertions need independent actual selected input-content oracles before formal performance admission; do not alter the measurement protocol or trust helper-under-test alone. Required admission: com-p5um.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

@@ -53,3 +53,11 @@ Ordinary deinit already has an inherent-impl implementation; rejecting its prohi
 ## Explicit Aggregate Lowering Struct-Body Deinit Lane
 
 Batch0074 adds exactly run/syntax_lower_decl_aggregates.pw/.out. Embedded ordinary Box[T] contains struct-body deinit; current direct Lower registers destructor function/deinit row1. Adopted deinit requires unique Self and defining-module inherent impl, so this intermediate registration oracle is current internal lane only. Preserve generic field/binder and Choice variant registration when reconciling valid impl deinit versus malformed-source checks; do not claim old counts certify adopted source or destructor runtime, or automatically rewrite the golden. Existing generic_deinit_on_struct pins unique-only rejection but combines capability and placement; no new language decision or audit-time repair.
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 13.
+
+Row13: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Reuse included impl-only deinit placement/source+std+test migration, preserving actual runtime assertions and the qualified internal lowerer lane. No conditional unique-generic deinit is added. Required admission: com-604k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

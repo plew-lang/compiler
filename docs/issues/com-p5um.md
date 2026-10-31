@@ -1,7 +1,7 @@
 ---
 id: com-p5um
 status: open
-deps: [com-61jt, com-auvx]
+deps: [com-61jt, com-auvx, com-jy25, com-nqiq]
 links: []
 created: 2026-10-23T10:41:59Z
 type: task
@@ -65,3 +65,7 @@ Receipt meta/evidence/existing-feature-conformance/source-owner-facts/phase3g-se
 retains all timing/artifact references. Older gates remain in Git/raw history
 and are not same-source speed comparisons or new-candidate certification.
 Full suites, parent completion and main/seed/adopted carrier remain uncertified.
+
+## Test Admission Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) installs required finite repair/investigation prerequisites at this actual admission: com-nqiq (row11), com-jy25 (row12). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.

@@ -1,7 +1,7 @@
 ---
 id: com-an0b
 status: open
-deps: [com-0t9x, com-egv2, com-f17t, com-i86w, com-l0mr, com-m4kt, com-p9rd, com-vyk7, com-rad4, com-tfz7]
+deps: [com-0t9x, com-egv2, com-f17t, com-i86w, com-l0mr, com-m4kt, com-p9rd, com-vyk7, com-rad4, com-tfz7, com-jbau, com-l92e, com-pshx, com-uiwg]
 links: []
 created: 2026-10-31T07:06:20Z
 type: epic
@@ -37,3 +37,7 @@ The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake
 ## Scoped Audit Intake com-8ttz
 
 The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) assigns exact required input-authority repair subsets to this admission contract: com-rad4, com-tfz7. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Test Admission Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) installs required finite repair/investigation prerequisites at this actual admission: com-pshx (row8), com-uiwg (row16), com-l92e (row19), com-jbau (row31). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.

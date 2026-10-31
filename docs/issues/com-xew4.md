@@ -28,3 +28,11 @@ Repair requires task-start TDD, fixed candidate/input identity, relevant actual 
 ## Explicit Heterogeneous Operator-RHS Overflow
 
 Batch0022 adds reject/operator_hetero_nested_range.pw/.err as the fourth exact arithmetic-result oracle. Original7d064ca2 guarded witness Rhs=I8 contextual typing and silent truncation of100*3. Both literals fit I8; multiplication overflow is adopted runtime panic, unlike operator_hetero_rhs_range's single out-of-range literal200. Preserve selected Rhs/Output independence and overflow behavior when reconciling the compile-reject oracle. This is the same finite result-overflow issue, not a new operator typing rule.
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 4.
+
+Row4: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Constant arithmetic-result overflow oracle needs canonical source typing versus runtime panic reconciliation. Keep literal range rejection and generic/Rhs context, finite original intent and side-effect controls; no semantic rule chosen here. Required admission: met-6e6k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

@@ -1,6 +1,6 @@
 ---
 id: com-2kze
-status: open
+status: in_progress
 deps: [com-tqzw]
 links: []
 created: 2026-10-31T06:19:19Z

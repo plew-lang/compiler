@@ -41,3 +41,11 @@ Batch0068 adds exactly run/return_owned_local_move_arc.pw/.out: two bare public 
 ## Explicit Nested Place Store Repeated Publication Marker
 
 Batch0072 adds exactly run/store_to_place_arc.pw/.out. Original5406437d has one Slot bare factory marker;2aee8ff4 adds a standalone marker leaving the first. Apply the existing finite canonical idempotence/publication question, not duplicate custom-function-body error. Preserve enum reassignment/nested Array reference displacement and cleanup11/12/13 order; no immediate removal chosen during audit.
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 32.
+
+Row32: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Repeated memberwise publication markers need exact source identity/idempotence oracle decision before changing current factory acceptance. Preserve all qualified cross-module/newtype/reference controls and ask user if no adopted rule settles it. Required admission: met-ucze, met-ia09.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

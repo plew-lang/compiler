@@ -19,3 +19,11 @@ Recover adopted API decision and compare exact Array forwarder/fixture versus Bu
 
 Completion: finite ruling with rationale and owned repairs/controls; actual repairs follow TDD and independent review. No all-standard-library reorganization, new collection semantics or broad Buffer rewrite. Evidence runtime-batch-0089.json. Unread source/driver obligations remain audit work.
 
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 29.
+
+Row29: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Array.swapRemove versus Buffer-only adopted API ownership needs finite canonical decision/control reconciliation. No surface API is removed merely from audit wording, and no broad Std rewrite is required. Required admission: com-zgk9.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

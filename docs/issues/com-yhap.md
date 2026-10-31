@@ -21,3 +21,11 @@ Current spec08 explicitly requires complete type arguments for existential forma
 
 Recover adopted source-bound decision, compare same-scope/qualified form and exact/ambiguous multiple Read instances. State whether omission has a canonical meaning and what evidence persists to admission/final call; request surface judgment if undecided. Preserve old qualified-owner regression through an explicit Read[I64] control if omission is rejected. Own finite specification/test/compiler follow-ups; no blanket banning of zero-arity bounds or new trait inference solver. Evidence part-batch-0086.json; independent contract-first review required. Audit outcome inspection is complete only for this exact assertion; source-admission unit remains separately tracked.
 
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 24.
+
+Row24: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Omitted positional trait-bound source contract is a finite current declaration/evidence oracle question. Resolve canonical grounds or seek a surface decision before expectation changes; assigning investigation does not settle semantics. Required admission: met-ia09.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

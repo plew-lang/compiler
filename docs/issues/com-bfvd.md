@@ -316,3 +316,11 @@ Batch0131 adds exactly tests/tooling/test-check-command.py generated not-execute
 ## Manual Returning and Partial Session Module Inputs
 
 Batch0136 adds exactly tests/compiler/codegen/ReturningModule.pw and SessionModule.pw outer manual helper guards, using ordinary unimported panic calls and legacy statements respectively. Reconcile explicit Core import/calls while preserving structured-return on valid/bad/fresh/no-main/unfinished-contract inputs, partial-main lowering and unchanged terminal diagnostic after invalid unused request. ReturningModule.out is manual oracle data; no automatic current consumer/invocation was found. Do not invent automatic registration, new run ordinals or successful execution; retain original manual intent and source qualifications.
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 17.
+
+Row17: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Ordinary public panic admission/migration must preserve existing divergence/callable invocation and terminal no-unwind behavior. Scope finite investigation before fixtures/imports change; do not silently rewrite the compiler or add a second runtime. Required admission: com-fuo8, met-ucze, com-cgdk.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

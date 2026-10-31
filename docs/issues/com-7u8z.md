@@ -70,3 +70,11 @@ All omit the specified target plew version; same_name also uses the old dependen
 ## Generated Dependency Harness Manifest Contexts
 
 Batch0130 adds exactly tests/harness/test-deps.sh nine generated Plew.toml instances: leaf, mid, app1, app2, app3, leaf2, mida, midb and app4 (mkmid template invoked twice). All omit plew; seven contain dependency keyed tables and two have no dependency table. Apply the existing unresolved canonical schema ruling, without deciding it from current table-parser acceptance. Preserve newest/explicit/transitive/two-major lock, CLI/cache and runtime-value checks. These are generated setup contexts, not new primary source roles or a wholesale resolver feature request.
+
+## Scoped Test Audit Intake com-ti5b
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 23.
+
+Row23: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Exact package fixture manifests require canonical schema/source graph admission before using them as dependency/visibility oracles, preserving intended package/module behaviors. Required admission: com-9ttw, com-9l3b.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
