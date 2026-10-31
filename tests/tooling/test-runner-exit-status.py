@@ -2,7 +2,6 @@
 """Exercise the actual tests/harness/test.sh workers with controlled compiler/linker doubles."""
 import os
 from pathlib import Path
-import re
 import subprocess
 import tempfile
 
@@ -40,15 +39,14 @@ with tempfile.TemporaryDirectory(prefix='plew-runtime-preparation-') as director
         assert not list(root.glob('plew-test-runtime.*')), 'runtime scratch leaked'
     print('PASS runtime/once-cleanup-and-failure', flush=True)
 
-workers = {}
-for phase in ('run', 'part'):
-    match = re.search(rf'{phase}_results=.*?sh -c \'\n(.*?)\n\' sh \| progress_stream {phase} ', source, re.S)
-    assert match, phase
-    workers[phase] = match.group(1)
+adapter = (Path(__file__).resolve().parents[2] / 'tests/harness/case-phase.sh').read_text()
+workers = {phase: 'sh ./tests/harness/case-phase.sh --worker ' + phase + ' "$1"' for phase in ('run', 'part')}
 
 with tempfile.TemporaryDirectory(prefix='plew-runner-status-') as directory:
     root = Path(directory)
     install_supervisors(root)
+    (root / 'tests/harness').mkdir(parents=True)
+    (root / 'tests/harness/case-phase.sh').write_text(adapter)
     tools = root / 'tools'
     tools.mkdir()
     compiler = tools / 'compiler'
@@ -68,14 +66,12 @@ chmod +x "$output"
     compiler.chmod(0o755)
     linker.chmod(0o755)
     env = {**os.environ, 'PATH': str(tools) + os.pathsep + os.environ['PATH'],
-           'PLEWC': str(compiler), 'PLEW_RT': '', 'PLEW_LD': ''}
+           'PLEWC': str(compiler), 'PLEW_RT': '', 'PLEW_LD': '', 'TMPDIR': str(root)}
     cases = [('normal', 'printf "expected\\n"', True),
              ('nonzero', 'printf "expected\\n"; exit 7', False),
              ('signal', 'printf "expected\\n"; kill -TERM $$', False),
              ('mismatch', 'printf "wrong\\n"', False)]
     for phase, worker in workers.items():
-        # Isolate the production workers' scratch paths without changing their logic.
-        worker = worker.replace('/tmp/t_', str(root / 't_'))
         for name, body, expected_pass in cases:
             for stdin in (False, True) if phase == 'run' else (False,):
                 case = name + ('_stdin' if stdin else '')

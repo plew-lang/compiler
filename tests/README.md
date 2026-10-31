@@ -26,6 +26,15 @@ does not imply that the others passed.
 specification test. Some inputs import compiler internals. Classify by the
 assertion's responsibility, not prefixes such as `mid_` or the tool used.
 
+The normal harness uses `harness/case-phase.sh` and the common
+`scripts/support/normal-case-dispatch.py` collector for all five fixture phases.
+The collector checks dispatcher status and exactly one terminal result per
+discovered case; missing, duplicate, foreign or malformed results fail the phase.
+`tooling/test-normal-dispatch.py` is registered in the normal harness and checks
+that contract through the production callers and controlled subprocess faults,
+including parallel budgets, progress and cancellation. Compiler semantics and
+the separately owned gen/ASan classifications retain their own tests.
+
 `compiler/codegen/test-buffer-capacity.py` is registered in the normal harness.
 It checks the actual emitted runtime at O0/O2 with bounded allocation-failure
 injection, overflow/header/zero-size limits and unchanged backing on failure,

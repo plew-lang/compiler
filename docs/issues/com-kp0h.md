@@ -57,3 +57,13 @@ regression plus representative real compiler cases through that adapter and the
 applicable normal consumer checks; whole-candidate gates/main admission remain
 separate. Preserve pre-existing candidate/source failures with exact evidence,
 not weaker expectations or a false full-suite GREEN.
+
+## Intended RED
+
+[Fixed legacy phase evidence](../../../evidence/test-runner-dispatch/red.json)
+records100 controlled production-phase scenarios: all70 incomplete/invalid
+result scenarios incorrectly exit0, while30 complete success/order/failure
+controls behave as expected. Progress ON/OFF and all five phases are included.
+The old harness is unchanged; this is real dispatch/result aggregation evidence,
+not product semantics or a whole normal-suite success. Final regression will
+use the shared production adapter after extraction, with no legacy fallback.
