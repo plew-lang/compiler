@@ -46,3 +46,11 @@ does not also complete its separate outcome obligation. Evidence lives under
 meta `evidence/test-audit/scoped-reviews/frontend-batch-0056.json` and its review.
 This finite follow-up is independent of audit completion.
 
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 58.
+
+Row58: Retain Body payload and dynamic path, actual positive/tag-loss negative and meaningful IR. Source-admission credit is not outcome execution; no general ABI/layout algorithm rewrite or reproduced compiler bug. com-xlmh confirmed mixed-tail enum tag-loss false success must be repaired before crediting dynamic aggregate return/propagation/field projection across canonical Mid and physical emission. Both None and Unsupported.Projection print16; generic switch marker is insufficient. Required admission: com-h61e, com-an0b.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

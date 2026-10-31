@@ -46,3 +46,11 @@ Evidence and independent receipt: meta `evidence/test-audit/scoped-reviews/`
 repair, performance or phase-three certification is claimed. This follow-up is
 not a dependency of the audit; unread obligations remain with their audit owners.
 
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 59.
+
+Row59: Preserve Tree alias and unique Chain discard/recursive cleanup separately. No copyable exception/ban or recursive representation redesign inferred. Source rule undecided, not future unsupported by default. com-vjlg must reconcile copyable Tree explicit consuming-match move with spec03 parameter/call modes and spec11 match before saved pattern ownership/publication and actual Mid owner-transfer/drop admission. Required admission: met-acfl, com-an0b.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

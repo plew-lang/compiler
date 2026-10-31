@@ -1,7 +1,7 @@
 ---
 id: com-9l3b
 status: open
-deps: [com-p5um, com-o3vw, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-072n, com-3qne, com-uuya, com-vuv9, com-6cw6, com-v1wa, com-tkz7, com-141b, com-4vr8, com-7u8z, com-jy25, com-k4c9, com-kp0h, com-mt7l, com-ntm8, com-pshx, com-rb1s, com-sp65, com-uiwg, com-yvsf]
+deps: [com-p5um, com-o3vw, com-rtki, com-9d1o, com-0uw9, com-16gs, com-cev5, com-072n, com-3qne, com-uuya, com-vuv9, com-6cw6, com-v1wa, com-tkz7, com-141b, com-4vr8, com-7u8z, com-jy25, com-k4c9, com-kp0h, com-mt7l, com-ntm8, com-pshx, com-rb1s, com-sp65, com-uiwg, com-yvsf, com-fsuq, com-kxyj, met-k62r, met-u3lg]
 links: []
 created: 2026-10-23T10:41:59Z
 type: task
@@ -107,3 +107,7 @@ This does not close phase4/com-604k or promote main/seeds/adopted carrier.
 ## Test Admission Intake com-ti5b
 
 The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) installs required finite repair/investigation prerequisites at this actual admission: com-kp0h (row1), com-mt7l (row2), com-k4c9 (row3), com-ntm8 (row5), com-141b (row6), com-rb1s (row7), com-pshx (row8), com-yvsf (row9), com-jy25 (row12), com-uiwg (row16), com-sp65 (row18), com-7u8z (row23), com-4vr8 (row27). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.
+
+## Test Admission Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) installs required finite repair/investigation prerequisites at this actual admission: met-u3lg (row79), met-k62r (row87), com-fsuq (row89), com-kxyj (row90), com-mt7l (row95), com-p5um (row97). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.

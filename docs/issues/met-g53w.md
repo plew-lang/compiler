@@ -309,3 +309,11 @@ and was not bundled into the newly requested lexical/visibility task.
 ## Explicit Existential Capability Overload Oracle
 
 Batch0064 adds exactly run/overload_existential_capability_distinct.pw/.out for finite source-oracle reconciliation. Spec08:375 allows any sendable P to erase guarantee to any P; spec07:109 separates valid declaration pair from call uniqueness and adds no specialization. plain call only fits ordinary parameter, safe call fits both unless an already adopted selection rule resolves it. Recover canonical grounds before preserving expected2 or changing test; current exact-before-erasure implementation is not normative evidence and no compiler bug was reproduced. Preserve declared capability distinction, directional erasure and ordinary unambiguous call. Existing overload_shared_declaration_admission unused generic requirement box formation remains explicitly unclassified above, not blanket future unsupported invocation scope.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 61.
+
+Row61: Preserve directional erasure/plain unique call, lexical independent binders/Unproved/AnalysisLimit and existing WIP failed positives. New ranking or generic invocation not adopted; prior strict proposal/slice success cannot close current contract. met-g53w shared structural overload declaration admission/selected identity remains current. Exact capability-erasure overload safe call oracle needs canonical ranking; unused generic requirement box formation/nongeneric member use is expressly unclassified and cannot be dismissed as future invocation. Required admission: met-ucze, met-ia09.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

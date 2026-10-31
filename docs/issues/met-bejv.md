@@ -27,3 +27,11 @@ A bounded canonical disposition and concrete owned correction close this investi
 ## Explicit Third Cross-Module Bundle Assumption
 
 Batch0007 adds exactly `tests/fixtures/partreject/trait_subject_cycle_extension_crossmodule/{Main,A,B,Lib}.pw` plus Main.err. It expects the A-as-B/B-as-A edges from separately owned same-spelling E bundles to merge and form a cycle, although source does not identify them as one resolved extension. The cycle rejection is correct if they are parts of one extension; the unresolved issue is that identity premise. Include this third root with the earlier two, preserving genuine same-resolved-bundle cycle controls and distinct-owner comparisons. Do not relax cycle verification or choose global spelling identity during audit.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 35.
+
+Row35: Keep same-resolved-owner cycle/duplicate and distinct-owner/private controls. No global union or new priority chosen. met-bejv must distinguish explicit bound extension selector and resolved bundle identity before selected source member/visibility admission; com-604k separately receives module publication/declaration-cycle premise. Namespace-only imports do not prove flat #Extra binding or global same-spelling bundle identity. Required admission: met-ucze, com-604k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

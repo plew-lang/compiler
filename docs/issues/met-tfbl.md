@@ -360,3 +360,11 @@ New repair tasks/dependencies have not yet been added: the goal requires stoppin
 when required task changes are discovered. This investigation remains in_progress
 pending assignment of the required repairs/decision dispositions; investigation
 and decomposition review are complete. Parent/G1 must not close on this report.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 62.
+
+Row62: Reuse 65-project/588-command historical evidence without rerun or new success credit. pow priority stays explicit decision boundary; function-typed capture excluded. Investigation in_progress until real repairs assigned, not product repair. met-tfbl accepted investigation proves V1/V2 lexical binding/visibility, V3 full function-value arguments, V4 global receiver identity and G1 gen-harness authority. Current source selection and global/generated publication-to-final-use admissions need actual finite repair assignment. Required admission: met-ucze, met-acfl.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

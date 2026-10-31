@@ -61,3 +61,11 @@ Existing git/path dependency resolution, source-use reachability, joint same-maj
 ## Test Admission Intake com-ti5b
 
 The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) installs required finite repair/investigation prerequisites at this actual admission: com-7u8z (row23). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.
+
+## Scoped Test Audit Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 94.
+
+Row94: No fresh network failure/uninspected scope/native package executor/schema decision. Preserve per-import root-lock enforcement, direct bindings/cold-warm/unused edges. Current resolver must use admitted source-use closure/joint same-major constraints/path-to-git/root-lock provenance with newest compatible order independence. A4 different-major success does not close it. Required admission: com-604k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

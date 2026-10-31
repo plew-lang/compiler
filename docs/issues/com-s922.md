@@ -76,3 +76,11 @@ Batch0063 adds exactly run/operator_literal_nested.pw/.out: ordinary integer ari
 ## Explicit Synthetic Literal Warmup Dependency
 
 Batch0066 adds exactly run/recorded_literal_value_compatibility.pw/.out for its first unrecorded raw Expr.Int checked under F64. This current helper setup does not establish ordinary integer-to-float source permission; existing finite canonical literal-context reconciliation covers it. Preserve distinct successful I64 recorded fact and refusal to reinterpret that committed fact as F64. This batch assigns observed behavior only, not a new normal-source admission. No automatic suffix, removal or expanded float rule.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 44.
+
+Row44: B32 unconditional float_cast defect verdict is withdrawn by the canonical correction; preserve direct7 as F32/-7 as F64 and all4 outputs. Raw Expr.Int helper warmup is not ordinary-source permission; committed I64 cannot be retyped F64. Later-sibling inference stays com-pxja, not solved by suffixing. com-s922 combines confirmed nonunique F32/F64 setups with unresolved direct-literal casts, ordinary Int-to-Float contexts, numeric operator/match Self/Rhs/Output and wrapped value-region expectations. Type/context and selected operator/result/completion admissions must retain the finite questions, not decide from golden or current helper acceptance. Required admission: met-6e6k, met-ucze, com-fuo8.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

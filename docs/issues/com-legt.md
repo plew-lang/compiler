@@ -27,3 +27,11 @@ Standard declaration registration -> semantic term and selected intrinsic identi
 Same-named unrelated user types versus exact standard declarations, qualified/re-exported standard uses, known intrinsic valid/invalid signatures, strong/weak expiration and restoration, alias mutation and cell pin during current inout projection. Verify AOT/JIT and ownership failure/cleanup; no new public pointer API is required.
 
 Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is below 7 seconds. This task does not close the mixed/new-feature parent automatically.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 46.
+
+Row46: FrozenRef/MutexRef/Guard/Weakable, new .* and WeakRef[R] remain outside. Current I64/I32 negative/alias/lifetime controls remain useful; API difference alone does not make fixture wrong. Source type/place and selected method admissions must consume exact identity. met-op15 exact broad contexts preserve current arrow field/method type checks, root/cell lifetime/writeback and weak operations. The real current repair owner is com-legt (registered identity through semantic terms, selected intrinsic/projection and runtime copy/drop/upgrade), not the full new-reference migration parent. Required admission: com-604k, met-6e6k, met-ucze.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

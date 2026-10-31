@@ -1,7 +1,7 @@
 ---
 id: com-604k
 status: in_progress
-deps: [com-p10m, com-w4c2, com-6ygf, com-9ttw, met-si6j, met-k7ks, met-2t3l, com-ydgx, com-2p9p, com-wqd7, com-zgk9, com-lndr, met-0139, com-8w4c, com-7g6i, com-0k37, com-7u06, com-legt, com-f8bw, com-2o4w, com-cgdk, com-fkxl, com-j3pp, com-esri, met-8b8w, com-ax5g, com-h61e, com-qt11, com-zcwf, com-an0b, com-id5r, com-lzm2, com-uvys, com-vbvu, com-9sa5, com-xh2h, com-crym, com-0huw, com-j2oe, com-r3od, com-3y0f, com-n8nh, com-v8mk, com-r2sw, com-dgbf, com-dxgh, com-fsxx, com-ma6z, com-nq9x, com-ough, com-wmr0, com-y1h9, com-58zf, met-2wca, met-fvzp]
+deps: [com-p10m, com-w4c2, com-6ygf, com-9ttw, met-si6j, met-k7ks, met-2t3l, com-ydgx, com-2p9p, com-wqd7, com-zgk9, com-lndr, met-0139, com-8w4c, com-7g6i, com-0k37, com-7u06, com-legt, com-f8bw, com-2o4w, com-cgdk, com-fkxl, com-j3pp, com-esri, met-8b8w, com-ax5g, com-h61e, com-qt11, com-zcwf, com-an0b, com-id5r, com-lzm2, com-uvys, com-vbvu, com-9sa5, com-xh2h, com-crym, com-0huw, com-j2oe, com-r3od, com-3y0f, com-n8nh, com-v8mk, com-r2sw, com-dgbf, com-dxgh, com-fsxx, com-ma6z, com-nq9x, com-ough, com-wmr0, com-y1h9, com-58zf, met-2wca, met-fvzp, com-fkzm, met-tfxc, com-tfdi, com-tk96, com-x95z, met-bejv, met-l1u5]
 links: []
 created: 2026-10-21T15:16:01Z
 type: epic
@@ -31,8 +31,9 @@ become phase-three prerequisites merely because the audits were cross-compiler.
 
 ## Ordering and Start Conditions
 
-Phase 2 is complete under [com-io5f](com-io5f.md). Select [com-ax5g](com-ax5g.md)
-next to route the completed cross-compiler audit findings. Repair false-success
+Phase 2 is complete under [com-io5f](com-io5f.md). Follow the exact adopted
+assignments and actual dependencies of [com-ax5g](com-ax5g.md); its classification
+closure does not complete their product repairs. Repair false-success
 validation paths before relying on their affected admission results; use actual
 mode/consumer prerequisites, not an all-runner-repairs barrier for phase three.
 
@@ -46,7 +47,8 @@ findings close at their existing domain owners; independent units need not wait
 for unrelated classification. Final integration/main/seed/carrier requirements
 remain separate. The manual com-ydgx diagnostic repair is not a prerequisite of
 the standard sanitizer gate. Detailed sequencing belongs in the meta progress
-plan; no complete per-finding classification is claimed here.
+plan; exact per-finding assignments and independent acceptance belong to the
+scoped intake evidence, not a copied list in this epic.
 
 
 com-w4c2 follows the approved root-only use rule, with one module-wide binding environment shared by parts. Its scope includes real part/provider/consumer migration; the former file-local lookup direction is superseded. Reconsideration conditions for macro dependency verbosity/collisions belong to the source design, not an immediate exception or another mandatory feature family.
@@ -107,3 +109,11 @@ The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake
 ## Test Admission Intake com-ti5b
 
 The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) installs required finite repair/investigation prerequisites at this actual admission: met-2t3l (row13), com-cgdk (row14), met-8b8w (row15), met-fvzp (row28), com-58zf (row30), met-2wca (row33). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.
+
+## Test Admission Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) installs required finite repair/investigation prerequisites at this actual admission: com-2p9p (row75), com-fkzm (row77), met-8b8w (row80), com-7u06 (row84), met-si6j (row88), com-ydgx (row91), com-0k37 (row93), com-9ttw (row94), met-tfxc (row96). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.
+
+## Test Admission Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) installs required finite repair/investigation prerequisites at this actual admission: met-l1u5 (row34), met-bejv (row35), com-legt (row46), com-tfdi (row50), com-x95z (row51), com-cgdk (row54), com-tk96 (row56), com-wqd7 (row60). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.

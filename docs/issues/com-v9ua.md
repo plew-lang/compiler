@@ -45,3 +45,11 @@ Meta evidence/test-audit/scoped-reviews/frontend-batch-0064.json and independent
 receipt own the static audit. No compiler/source/expected-output/runner changes
 or actual compiler/native/ASan execution. Subsequent repair is outside the audit;
 this task does not block completing the assigned audit obligations.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 64.
+
+Row64: Preserve Money Neg/Bool Not and I32-without-Not rejection; BitNot integer wording related finite contrast. No new user witness permission, ban or source change until grounded. com-v9ua must reconcile spec12 general Not witness with Bool-only wording before selected unary operation and result type admission. Current custom Switch/BitNot acceptance and origin intent are insufficient. Required admission: met-ucze, met-6e6k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

@@ -17,3 +17,11 @@ Bounded investigation: recover that one root's original grammar/coverage purpose
 
 Deliverable: explicit canonical oracle or finite unresolved question, required test disposition and concrete repair owner if needed, with independent review. This separate follow-up is not a child/prerequisite of test audit; no compiler/test/expectation/runner repair, real compiler execution or feature completion is claimed. Unread audit obligations remain with com-e713. Evidence: meta/evidence/test-audit/scoped-reviews/frontend-batch-0021.json and independent receipt (pending reconciliation).
 
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 47.
+
+Row47: Do not assume supported or future solely from rejection. Finite investigation can yield evidenced unsupported disposition; unresolved classification must block affected pattern admission until then. com-9rju must determine the exact nested match-pattern source-admission path and saved binding/pattern facts using canonical syntax and typed controls. Historical single-level parser limit, Point(...) and print(0) setup cannot establish adopted nested-match prohibition. Required admission: met-acfl.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

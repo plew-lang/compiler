@@ -1,7 +1,7 @@
 ---
 id: com-2o4w
 status: open
-deps: [com-6u0t]
+deps: [com-6u0t, com-fsuq]
 links: []
 created: 2026-10-21T15:16:01Z
 type: task
@@ -31,3 +31,7 @@ Close with exact revision/scope, final-consumer evidence, removed competing path
 ## Scoped Audit Intake com-71gu
 
 The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-llvm-physical.json) assigns exact required input-authority repair subsets to this admission contract: com-6u0t. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Test Admission Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) installs required finite repair/investigation prerequisites at this actual admission: com-fsuq (row89). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.

@@ -51,3 +51,11 @@ phase3 is complete; unread cycle and projection obligations remain in the audit.
 ## Explicit Inherited Projection Signature Evidence
 
 Batch0052 adds exactly run/inherited_projection_identity.pw/.out. Embedded Diamond inherits Parent[I64] and Parent[Bool] but declares missing()->Self#Parent[String].Item without that premise. analyzeFrontendDeclarations normal route completes declarations, so its successful unwrap is more than raw parse/registration. Recover canonical ordinary-signature projection justification separately from the valid helper unresolved/no-fabricated-equality assertion. Preserve diamond inherited equalities, foreign receiver distinction, Conflict versus known term0, and no executable body discovery. Do not assert whole oracle invalid or invent implicit Parent[String] evidence from current success; reuse the finite ordinary-signature/impl-head evidence investigation.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 51.
+
+Row51: Preserve growth/binder multiplicity/parameterized distinction/equalities/conflicts and unused declaration checks. Do not invent missing proof or special source exception; receiver_generic_exact already bound and excluded. com-x95z must reconcile symbolic projection graph terms versus actual source well-formedness and inherited projection premises. Saved associated evidence and full projection type/instance admission cannot rely on structural graph comparison as proof; input declaration-cycle gate is distinct. Required admission: met-ia09, met-6e6k, com-604k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

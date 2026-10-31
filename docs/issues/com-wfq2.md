@@ -37,3 +37,11 @@ Batch0069 adds exactly run/{source_call_proof_boundary,source_call_proof_evidenc
 ## Explicit Static Member Condition Producer Setup
 
 Batch0070 adds exactly run/source_member_condition_evidence.pw/.out. Embedded unconstrained trait B[V] is restricted by impl[V] B[V] as P where V:Q, contrary to spec08 full-source-range rule. Original cac8b92f establishes this condition-proof producer intent. Preserve nonzero selected child conditions and missing/wrong proof-variant guards using legitimate nominal/unconditional setup or an explicitly bounded current implementation lane. Do not infer permission from current producer success or silently delete the finite evidence regression.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 40.
+
+Row40: No new conditional-trait-edge feature or semantic relaxation. Preserve wrong/missing proof and shrinking-edge/cycle purposes; current helper-lane success cannot bless ordinary source. Foreign I64 setup owner remains distinct. com-wfq2 reconciles selected-instance conditional trait-to-trait edges against spec08 full-source-range rule and preserves saved condition/proof propagation plus selected source calls. Required declaration-before-success and legitimate nominal/unconditional proof controls are part of this existing evidence contract. Required admission: met-ia09, met-ucze.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

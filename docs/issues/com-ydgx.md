@@ -26,3 +26,11 @@ Route the manual sanitizer mode through the shared full IR instrumentation/link 
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
 
 Existing manual --asan mode must instrument generated Plew IR through the shared helper before claiming coverage. Preserve retain/drop assertions and intentional UAF/clean controls. Standard ASan remains an independent gate; discovery of the manual test is not changed.
+
+## Scoped Test Audit Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 91.
+
+Row91: Manual, separately discovered. Standard ASan independent/not invalidated; no com-9l3b prerequisite or JIT coverage expansion, and unexecuted manual test not standard green. Existing manual return-transfer --asan must instrument generated Plew loads/stores via shared IR/link route before memory-coverage claim, preserving raw retain/drop and UAF/clean controls. Required admission: com-604k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

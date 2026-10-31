@@ -1,7 +1,7 @@
 ---
 id: com-h61e
 status: open
-deps: [com-6gma, com-8b4d, com-debo, com-kss7, com-ktyj, com-pmwi, com-u6h0, com-w1rq, com-fcmw, com-sj9s, com-zq25, com-08i0, com-3j3n, com-5m8j, com-6u0t, com-70tb, com-9h5s, com-a414, com-cuiw, com-djoz, com-e1ea, com-hem0, com-hra0, com-kl06, com-oaaq, com-rib7, com-s8fu, com-t6gz, com-vk09, com-xx65, com-yb1d, com-za40, com-282i, com-hjrk, com-rad4, com-tfz7, com-wsfk, com-opq3, com-vdp1, com-90e7, com-dxgh, com-141b, com-4vr8, com-pshx, com-rb1s, com-z5k3]
+deps: [com-6gma, com-8b4d, com-debo, com-kss7, com-ktyj, com-pmwi, com-u6h0, com-w1rq, com-fcmw, com-sj9s, com-zq25, com-08i0, com-3j3n, com-5m8j, com-6u0t, com-70tb, com-9h5s, com-a414, com-cuiw, com-djoz, com-e1ea, com-hem0, com-hra0, com-kl06, com-oaaq, com-rib7, com-s8fu, com-t6gz, com-vk09, com-xx65, com-yb1d, com-za40, com-282i, com-hjrk, com-rad4, com-tfz7, com-wsfk, com-opq3, com-vdp1, com-90e7, com-dxgh, com-141b, com-4vr8, com-pshx, com-rb1s, com-z5k3, com-kxyj, com-tk96, com-xlmh]
 links: []
 created: 2026-10-31T06:23:46Z
 type: epic
@@ -69,3 +69,11 @@ The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake
 ## Test Admission Intake com-ti5b
 
 The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) installs required finite repair/investigation prerequisites at this actual admission: com-141b (row6), com-rb1s (row7), com-pshx (row8), com-z5k3 (row10), com-4vr8 (row27). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.
+
+## Test Admission Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) installs required finite repair/investigation prerequisites at this actual admission: com-kxyj (row90). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.
+
+## Test Admission Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) installs required finite repair/investigation prerequisites at this actual admission: com-tk96 (row56), com-xlmh (row58). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.

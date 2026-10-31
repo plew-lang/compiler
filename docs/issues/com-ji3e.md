@@ -23,3 +23,11 @@ Bounded candidate discovery uses whitespace-tolerant pub(get)/pubget searches ov
 Add or reuse exactly one owner-authorized two-module pair: direct external read succeeds, direct external write fails for the getter-only field. Publicly construct an otherwise valid object through an admitted factory; do not accidentally test private factory/field reachability, immutable caller binding, absent name/import, or only construct-time attribute assignment. Preserve same-module write success and public read+write ordinary field behavior as needed neighboring controls; do not duplicate the entire visibility matrix or broaden into collection inout/callback effects.
 
 Recover original purposes and follow task-start TDD with fixed candidate/input: a setter test must fail for the intended visibility reason and the read contrast must exercise the public getter path. Trace declaration visibility/selected place permission through normal module resolution and actual run/partreject consumer; independent review checks discrimination and registration. Applicable gates belong to the later repair. Audit does not edit tests/compiler/runners or require this repair to finish before audit closure. No phase3/main/seed completion implied.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 57.
+
+Row57: Use admitted public factory and mutable caller to isolate permission. Preserve internal writes/ordinary public field and existing valid tests; no full visibility matrix or compiler bug claim. com-ji3e exact two-module external pub(get) read-success/write-rejection detector is required for selected field permission and writable-place admission. Same-module and factory publication controls cannot detect this boundary. Required admission: met-ucze, met-6e6k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

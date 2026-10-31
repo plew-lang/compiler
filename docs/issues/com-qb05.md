@@ -139,3 +139,11 @@ confirms the cited current controls actually PASS in final normal gate
 20261025T062041-test-509a3f using exact candidate3c532ce1, with unchanged inputs.
 This scoped acceptance does not certify the reopened value-result boundary or
 phase-three parent.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 66.
+
+Row66: Preserve ordinary/method/factory/default full signatures/labels/modes/bounds/result and final Mid/LLVM no-reselection. Do not reopen com-cwu1 accepted different boundary or infer old task/whole-area closure from repeated controls. com-qb05 original finite saved written-call authority repairs retain their exact evidence; current reopening for com-zy6r and required met-tfbl disposition still block re-admission. B67/B70/B80 are qualified reuse, not new repair discoveries. Required admission: met-ucze.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

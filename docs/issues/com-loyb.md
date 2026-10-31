@@ -109,3 +109,11 @@ embedded preflight/fresh tests. No ordinary-source acceptance bug is claimed.
 All sessions are recovered; final G2a/b and C6 onward remain incomplete.
 This does not establish latest formal performance, parent completion, main
 integration or candidate ASan success.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 63.
+
+Row63: Audit reuse creates no extra endpoint repair and does not reopen already-correct finite evidence. Do not transfer Text-graph setup failures into source regressions or require unsupported conversions/ARC optimization. com-loyb retains exact saved source/target/site/owner conversion proof through completion and final instantiation. Existing finite96e375a7 endpoint fix remains valid, while reopened com-6zph must close new current gaps before this area. Required admission: met-6e6k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

@@ -32,3 +32,7 @@ Do not repair fixtures/compiler semantics, introduce byte-exact comparison for a
 ## Completion and Limits
 
 Recover original comparison purpose, independently review expectation/read failure controls and final consumer classification, retain exact commands/inputs/results, and pass applicable gates. Audit discovered/assigned the defect only; repair is separate and has no dependency on audit closure or com-jno0. No actual source/generated program success is inferred from doubles.
+
+## Qualified Test Intake com-5azh Row95
+
+[Exact scope and retained roles](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) route only the current required subset to com-mt7l. The original status and qualified future/optional/historical/duplicate disposition remain unchanged. This subset neither closes a mixed parent nor reopens a closed duplicate; follow the canonical repair above.

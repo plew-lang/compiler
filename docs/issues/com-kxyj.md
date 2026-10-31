@@ -38,3 +38,11 @@ Recover this check’s original factory-lowering purpose. Require relevant evide
 The two checkers share positive-observation validity as their responsibility but retain two separate completion items: requested coverage observations and strong-cell target evidence. A precise claim/retirement disposition may replace obsolete checks only with the original guarantee and applicable shared coverage accounted for. Independent postinitial review accepted this bounded grouping; audit evidence does not certify either repair.
 
 
+
+## Scoped Test Audit Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 90.
+
+Row90: Quiet successful require-mid remains valid; warning filtering/fallback/positive IDs/definition mapping/unchanged LLVM preserved. Keep two finite completion items, evidenced retirement/narrowing only preserving guarantee; no all-body/trace framework/current backend defect claim. Normal registrations must require real positive body emission for reachable coverage fixture and selected Ref/MutableRef factory evidence, not any two value names. Actual final physical emission observation and gate claims depend on this detector. Required admission: com-9l3b, com-h61e.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

@@ -23,3 +23,11 @@ Spec09 rejects only unselectable same-extension collisions and permits distinct 
 Recover original selected-root diff and canonical design/spec grounds; document the chosen applicable existing rule or seek user judgment if the direct/provided priority remains a source-surface choice. Assign precise test/oracle correction with normal valid direct/inherent-provided, two-trait selector and truly inseparable duplicate contrasts, plus normal declaration-check/no-use paths. Preserve source provenance through selected consumer; no local spelling exception.
 
 This audit performs no compiler/test/expectation change or execution and does not reopen all extension lookup. Meta evidence/test-audit/scoped-reviews/frontend-batch-0014.json and its independent review own scoped evidence. Unread primary units stay in their audit.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 42.
+
+Row42: Preserve real unselectable-collision/no-use contrasts and distinct trait origins. No new priority inferred from LowerRegistration or existing reject. com-j1cl must settle exact named-bundle direct/provided surface priority before callable selection/unused surface collision admission. Bare inherent priority does not alone settle E.same versus E#A.same. Required admission: met-ucze.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

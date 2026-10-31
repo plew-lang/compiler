@@ -42,3 +42,11 @@ unique-copy bypass without following the entire pass chain and a negative contro
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included bounded verification**.
 
 Current return Copy-to-Move eligibility across declaration admission, optimization on/off and executable verification. Valid copyable controls, malformed unique Copy and incomplete destruction evidence distinguish an actual bypass from an already-protected path. Fix or close with the complete proof, not table presence.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 60.
+
+Row60: Unverified safety boundary, not reproduced bypass; valid inputs/23 optimization modes do not complete malformed eligibility proof. Keep full-body counts, scope-transfer contrast and applicable final consumers. com-wqd7 already requires finite proof or fix that malformed unique Copy cannot become accepted Move through return transfer before executable verification, including opt on/off and destruction unknowns. Direct final UniqueCopy rejection does not settle that chain. Required admission: com-an0b, com-604k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

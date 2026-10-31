@@ -69,3 +69,11 @@ Full suites, parent completion and main/seed/adopted carrier remain uncertified.
 ## Test Admission Intake com-ti5b
 
 The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) installs required finite repair/investigation prerequisites at this actual admission: com-nqiq (row11), com-jy25 (row12). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.
+
+## Scoped Test Audit Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 97.
+
+Row97: Direct standalone claim needs external complete fixed-input proof. Preserve measured candidate/fixed point/<7s/refresh; old3c532ce1 not current gate, no new anonymous checker repair. Existing open G2a is actual G2b prerequisite after G1. Standalone collector is bounded; standard validate includes locked closure/native/support/carrierStd/run_gate before+after, so B133 assigns no new standard-gate defect. Required admission: com-9l3b.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

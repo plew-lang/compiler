@@ -29,3 +29,11 @@ Record exact source/contract differences, original intent, justified finite disp
 ## Explicit Mid FFI String Conversion Control
 
 Batch0058 adds exactly run/mid_ffi_intrinsic_calls.pw/.out. Current stringFromCString returns String and copies valid ASCII before raw cFree; adopted fallible String.fromCString API differs. Retain finite declaration-selected FFI call/ownership/link purpose, not invalid-UTF8 or arbitrary C pointer safety coverage; empty golden alone does not inspect copied content.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 56.
+
+Row56: No mandatory fallible String.fromCString UTF8 feature implementation or fixture rewrite merely from API difference. Do not credit invalid-UTF8/arbitrary pointer/free/leak behavior; struct deinit migration separate. com-tk96 finite original-purpose/current-ASCII-lane/API-migration disposition must qualify actual FFI source/physical result evidence before it is credited to current external-call admission. Current copying before cFree and selected intrinsic/link purpose remain meaningful. Required admission: com-604k, com-h61e.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

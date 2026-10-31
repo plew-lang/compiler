@@ -1,7 +1,7 @@
 ---
 id: com-zgk9
 status: open
-deps: [com-4vr8, com-9hyu, com-j0a9]
+deps: [com-4vr8, com-9hyu, com-j0a9, met-k62r]
 links: []
 created: 2026-10-13T01:29:04Z
 type: task
@@ -28,3 +28,7 @@ Current Buffer/Array/Dictionary/Set operations, CoW/iteration ownership, nested 
 ## Test Admission Intake com-ti5b
 
 The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) installs required finite repair/investigation prerequisites at this actual admission: com-9hyu (row21), com-4vr8 (row27), com-j0a9 (row29). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.
+
+## Test Admission Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) installs required finite repair/investigation prerequisites at this actual admission: met-k62r (row87). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.

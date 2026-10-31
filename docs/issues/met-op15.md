@@ -62,3 +62,7 @@ No same-named-user-type runtime miscompile was reproduced by this audit.
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Mixed: split current subset**.
 
 Current standard references, weak operations and exact trusted identity are com-legt. FrozenRef/MutexRef/Guard/Weakable, new .* and WeakRef[R] public migration remain outside. Existing arrow operations still need safe root lifetime/writeback.
+
+## Qualified Test Intake com-2kze Row46
+
+[Exact scope and retained roles](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) route only the current required subset to com-legt. The original status and qualified future/optional/historical/duplicate disposition remain unchanged. This subset neither closes a mixed parent nor reopens a closed duplicate; follow the canonical repair above.

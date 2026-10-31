@@ -99,3 +99,11 @@ D1 retained-reader/foreign-session and C6 descriptor controls keep their recorde
 scopes. No new performance claim: latest runtime production remains `c1b731bd`,
 whose saved generation2 fixed-point median is 6.830579 seconds. D3/D4, runtime
 closure/startup planning and final G2a/G2b gates remain separately owned.
+
+## Scoped Test Audit Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 69.
+
+Row69: Historical five-row/f6039d8a repair remains valid; nr7y itself is now closed. Context adds no new defect and cannot re-close D2. Current D2 metadata remains open for com-nr7y disposition/fresh closure of closure/global/default/provided/generated owner-domain authority. Required admission: met-acfl.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

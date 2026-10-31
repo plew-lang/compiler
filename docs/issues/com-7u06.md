@@ -27,3 +27,11 @@ Saved source signature -> common Mid activation-input acquisition/transfer plan 
 Ready and pending awaits, completion during entry, dropping a user handle while pending, timer/waiter lifetime, copy/move input cleanup and rejected explicit borrows. Establish the exact existing timer contract; do not claim wall-clock/OS readiness from the virtual-clock lane. Trace actual producers/consumers before labeling any missing guard a runtime bug.
 
 Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is below 7 seconds. This task does not close the mixed/new-feature parent automatically.
+
+## Scoped Test Audit Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 84.
+
+Row84: Preserve ready-await inline and timer virtual-clock limits; no unconditional yield. Composite/unique results, method/generic async/cancellation/worker/I/O family excluded; explicit borrow/inout refusal and logical/public signatures remain. Existing scalar async activation input acquire/transfer, common Mid access/drop/frame liveness and final AOT/JIT release require current owner com-7u06.19 named runtime contexts are not its completion. Required admission: com-an0b, com-604k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

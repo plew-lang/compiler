@@ -25,3 +25,11 @@ Audit does not modify or execute this test. This exact control finding is separa
 ## Explicit Second Contextual-If Control
 
 Batch0012 adds exactly run/contextual_construction_if.pw and .out. Its closure fn(point:Point) is called as closure(if ...), missing required point:. Path-fixed introducing e36371c2 contains the same setup, so this is not a recently lost label. Preserve all seven outputs and contextual return/annotated/free/method/closure/interpolation/assignment positions under a correctly labeled call, with missing/wrong-label rejection contrasts. This supplements the original standalone_block_context pair and does not count either unread primary admission/outcome as audited.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 39.
+
+Row39: Retain all contexts and missing/wrong-label negatives. Do not infer an actual compiler bug without execution or replace context tests with trivial call tests. met-umnp has confirmed spec04 closure-label mismatch in two seven-output context controls. Selected function-value full signature must admit point: while contextual construction/result type evidence remains meaningful. Required admission: met-ucze, met-6e6k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

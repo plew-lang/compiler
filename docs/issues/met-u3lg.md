@@ -31,3 +31,11 @@ Independent review must reconcile actual exits/markers, negative search errors, 
 ## Negative-Only Trace Guard Input Extension
 
 Batch0132 extends the finite input/search-error boundary to tests/tooling/test-trace-phase-progress.sh, exactly its two negative grep predicates over src/Codegen/Mono/Call.pw. Missing/unreadable input or failed search can become absence and reach PASS while other positive source checks succeed (static source counterexample; no copied execution here). Preserve valid input and both forbidden-pattern rejections, distinguish nonmatch from search error, and retain the existing Loader controls. These two named checkers only; not every architecture grep or compiler trace implementation.
+
+## Scoped Test Audit Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 79.
+
+Row79: Exactly Loader three forbidden spellings and MonoCall two negative patterns. Keep clean/forbidden controls, nonmatch vs error. Loader copied probe measured; trace is static only. No compiler/parser/trace semantic repair or every-grep scope. Normal test.sh registers both named architecture/trace guards. Unavailable negative-only input or failed search can look like absence/PASS; repair before normal gate and shared-parser Loader evidence are relied on. Required admission: com-9l3b, com-2p9p.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

@@ -23,3 +23,11 @@ Acceptance: independently review the intended contract and final procedure, veri
 
 Found by com-ouh2; evidence/test-audit/README.md retains source-discovery limits.
 
+
+## Scoped Test Audit Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 77.
+
+Row77: Manual frontend diagnostic, not standard discovered gate. No suite registration, semantics/com-bfvd expansion or G2/standard-ASan prerequisite. Returning TemplateDependencyUnfinalized emits diagnostic, continues to returned stdout and normal exit; exact manual README exit0/exit1 contradiction and setup/execution separation need correction. Required admission: com-604k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

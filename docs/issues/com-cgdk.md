@@ -39,3 +39,11 @@ Preserve the original finite contract and meaningful controls; intake does not c
 ## Test Admission Intake com-ti5b
 
 The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) installs required finite repair/investigation prerequisites at this actual admission: com-bfvd (row17). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.
+
+## Scoped Test Audit Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 54.
+
+Row54: Process.args/new ExitCode migration stays com-8j0w, init ordering com-fkxl. Do not require fixture-only rewrite from API difference or promise reusable teardown. com-cgdk is the existing actual current process/main/argument/exit/event-loop/signal/reap and nongeneric-storage owner. B37 argCount source remains a meaningful current subset, with driver-to-final-runtime behavior required before integration. Required admission: com-604k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

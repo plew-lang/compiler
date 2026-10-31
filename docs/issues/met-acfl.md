@@ -1,7 +1,7 @@
 ---
 id: met-acfl
 status: open
-deps: [com-kp3y, com-vkw3, com-wqa0, com-m3c6, com-gnj9, com-nr7y, com-6zph, com-0lz8, com-4ccf, com-7cpj, com-h4cm, com-iq17, com-l8kt, com-q6pv, com-rgml, com-sk71, com-37u0, com-4wxu, com-ckde, com-r8gt, com-ru19, com-zcrx, com-8y74, com-fczr, com-t4gm, com-dsfy, com-ge01, com-v7fu, com-vyk7, com-0pxa, com-0u0i, com-1eo5, com-6fnh, com-8ejz, com-9sa5, com-bvfx, com-d0th, com-dc9e, com-dwp6, com-e2dp, com-g49i, com-k3i6, com-m66h, com-tmfg, com-tr3a, com-8by9, com-d4m2, com-euq7, com-hd9n, com-lwsd, com-mq3s, com-r3od, com-sezm, com-vh0x, com-0vbn, com-1fbr, com-3vq7, com-4sot, com-74ky, com-aaia, com-duny, com-jm7l, com-rs2x, com-ynz6, com-5bmt, com-7mjp, com-aqud, com-ctor, com-e6zm, com-ge39, com-hux9, com-iaqs, com-j2i7, com-n4ps, com-qadp, com-qrmt, com-zftv, com-0cfk, com-dgbf, com-jciu, com-nq9x, com-orol, com-ough, com-pra8, com-q51y, com-ui4c, com-wmr0, com-ntm8, com-owb3]
+deps: [com-kp3y, com-vkw3, com-wqa0, com-m3c6, com-gnj9, com-nr7y, com-6zph, com-0lz8, com-4ccf, com-7cpj, com-h4cm, com-iq17, com-l8kt, com-q6pv, com-rgml, com-sk71, com-37u0, com-4wxu, com-ckde, com-r8gt, com-ru19, com-zcrx, com-8y74, com-fczr, com-t4gm, com-dsfy, com-ge01, com-v7fu, com-vyk7, com-0pxa, com-0u0i, com-1eo5, com-6fnh, com-8ejz, com-9sa5, com-bvfx, com-d0th, com-dc9e, com-dwp6, com-e2dp, com-g49i, com-k3i6, com-m66h, com-tmfg, com-tr3a, com-8by9, com-d4m2, com-euq7, com-hd9n, com-lwsd, com-mq3s, com-r3od, com-sezm, com-vh0x, com-0vbn, com-1fbr, com-3vq7, com-4sot, com-74ky, com-aaia, com-duny, com-jm7l, com-rs2x, com-ynz6, com-5bmt, com-7mjp, com-aqud, com-ctor, com-e6zm, com-ge39, com-hux9, com-iaqs, com-j2i7, com-n4ps, com-qadp, com-qrmt, com-zftv, com-0cfk, com-dgbf, com-jciu, com-nq9x, com-orol, com-ough, com-pra8, com-q51y, com-ui4c, com-wmr0, com-ntm8, com-owb3, com-4jad, com-9rju, com-l5l9, com-vjlg, met-tfbl]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -140,3 +140,11 @@ The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake
 ## Test Admission Intake com-ti5b
 
 The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-001-033.json) installs required finite repair/investigation prerequisites at this actual admission: com-ntm8 (row5), com-owb3 (row22). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.
+
+## Test Admission Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) installs required finite repair/investigation prerequisites at this actual admission: com-vkw3 (row69). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.
+
+## Test Admission Intake com-2kze
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-034-066.json) installs required finite repair/investigation prerequisites at this actual admission: com-9rju (row47), com-4jad (row55), com-vjlg (row59), met-tfbl (row62), com-l5l9 (row65). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.

@@ -35,3 +35,11 @@ Extend the shared classification investigation only to these18 negative invocati
 ## ASan B Failure-Domain Extension
 
 Batch0130 separately audits the checker contract of tests/harness/asan-compile-corpus.sh B reject invocations and the actual diagnostic/supervisor channel. Status1 plus ^plewc: error: and no ASan report also accepts an internal Error1 as RAN. Actual ed4a4f9 introduced expected status/diagnostics and successful-completion counts; c72b1b6 tightened trace-only rejection without separating internal failure. Own this failure-domain boundary explicitly, preserving valid source rejection, compiler instrumentation, all-input counts and existing statuses. Do not add per-fixture .err matching, require a source-oracle redesign, weaken sanitizers or assume another regex can distinguish domains absent a sound channel. No current compiler memory defect or actual B execution was reproduced. Batch0123 remains instrumentation-envelope evidence only; it neither certifies source reasons nor previously owned this checker extension.
+
+## Scoped Test Audit Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 89.
+
+Row89: Preserve reasons/ABI positives/supervision/instrumentation/status. ASan B not source-oracle proof. No per-fixture err/all-runner scope or invented regex channel; unresolved failure channel needs explicit disposition. Actual normal reject/partreject, registered expose18 (6shared+4ABI+8managed) and standard ASan B source-rejection domains need sound failure classification. Internal/silent/wrong-status/diagnostic-then-signal must not become PASS; current scalar/pointer expose admission also affected. Required admission: com-9l3b, com-2o4w.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

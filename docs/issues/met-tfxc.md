@@ -24,3 +24,11 @@ Use task-start TDD against the actual production selector/result path with contr
 ## Completion and Limits
 
 Record exact input/commands, preserve working controls, verify final summary/status propagation and independent findings disposition. This is a separate bounded repair with no audit dependency; audit assignment is not repaired success, whole Mid coverage or compiler certification.
+
+## Scoped Test Audit Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 96.
+
+Row96: Keep valid pair/missing companion/default7/exact output/status/stderr/input/new-output-dir/watchdog/raw LLVM22 ASan controls. No normal kp0h/all-checker matrix/new standard gate prerequisite. Manual Mid --cases DIRECTORY must reject explicit empty/nonexistent selection instead of setup succeeding/results=[]/all([]) true. Finite real tooling false-success, not source rule or unsupported feature. Required admission: com-604k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

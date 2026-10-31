@@ -443,3 +443,11 @@ do not substitute checks at a final reader for complete source admission and
 sealed producer-to-consumer authority. No new specification decision is needed
 for the confirmed findings. Phase four, main, seeds and adopted-carrier promotion
 remain outside this boundary.
+
+## Scoped Test Audit Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 88.
+
+Row88: No new broad audit/source representative or completion claim; previously closed exact B2 work stays valid. Current source-to-final-use parent is explicitly incomplete; integration already requires it. Reuse generic closure bound contexts while retaining recovery inventory/audits/assignment, areas and G1/G2/G3. Required admission: com-604k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

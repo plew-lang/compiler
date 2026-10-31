@@ -95,3 +95,11 @@ the measurements and toolchain. The measured compiler is retained as
 All build/check/scoped/formal sessions are recovered to terminal status.
 Subsequent phase-three tasks, parent completion and latest full G2 gates remain
 outside this closure. Main, seed and adopted carrier are unchanged.
+
+## Scoped Test Audit Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 86.
+
+Row86: Earlier20c5b9b8/b9187931 fixes and closed com-cwu1 remain valid. Synthetic baseline/mutation does not execute embedded app/re-close C6; runtime capture/new ABI excluded. Current descriptor re-admission remains open: exact source result/receiver/parameter/dependencies must reach instance publication/Mid/LLVM; com-ra96 is actual current required predecessor. Required admission: met-6e6k.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.

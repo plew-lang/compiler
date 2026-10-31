@@ -52,3 +52,7 @@ admission is separately [met-nm1w](met-nm1w.md).
 [met-8b8w](met-8b8w.md) owns current gen's directive-form/library handoff, compatible host units/private result framing and recorded-input receipt/admission through their final consumers. Its scope does not introduce new public macro declarations.
 
 The new `macro X as ...` / `macrointerface` syntax, macro-role registration/visibility and standard-provider migration to that form remain unimplemented public-family work in this parent. Current Syntax has ordinary Derive/ParameterizedDerive traits and trait-based providers; completing their bounded handoff repair neither certifies that legacy role model as the final design nor closes this parent. When the public role family is implemented, it must use the same host/framing/admission contracts rather than a competing generator. Arbitrary provider I/O freshness and package-native execution remain outside the adopted current contract.
+
+## Qualified Test Intake com-5azh Row80
+
+[Exact scope and retained roles](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) route only the current required subset to met-8b8w. The original status and qualified future/optional/historical/duplicate disposition remain unchanged. This subset neither closes a mixed parent nor reopens a closed duplicate; follow the canonical repair above.

@@ -27,3 +27,11 @@ Show the chosen oracle rejects a normal-result replacement of this specific miss
 ## Audit Disposition
 
 Finite test-coverage follow-up only; actual fixture/compiler/expectation/runner changes and native/sanitizer execution were not performed in the audit. This is not a prerequisite of audit closure. Its scoped searches and confirmation limits live in the batch0095 receipt; all remaining planned audit units remain their audit owners' work.
+
+## Scoped Test Audit Intake com-5azh
+
+The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) retains each original row, primary/secondary role, correction and current/excluded boundary. Required original row ordinal(s): 87.
+
+Row87: Reuse equivalent registered control first, else smallest specific trap+present/safe-absence contrasts. No compiler defect/global absence/API expansion; com-sp65 signal classification separate; setup/Array panic cannot satisfy target. Current collection owner com-zgk9 receives finite Dictionary missing-key Index panic detector; registered normal/panic evidence must distinguish this branch from safe get/getOr absence before gate credit. Required admission: com-zgk9, com-9l3b.
+
+Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
