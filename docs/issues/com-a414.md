@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Old mainC/com-9h5s runtime leaves, optional passive declarationAccess, justified LLVM owner/slots; language/runtime/ABI/async/scheduling/backend algorithm redesign, product execution/performance/GREEN.
+
+## Adopted Implementation Intake
+
+[com-71gu](com-71gu.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-h61e; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-llvm-physical.json) retains all main/mixed roles and normative grounds. Current scalar-async suspend/resume emission consumes fixed canonical body/frame/native contracts and limited reached derived effects. Restore temporary permit/scoped state on every exit and balance actually begun records; retain intentionally installed native function state and valid partial native prefixes, no rollback or source checking behind backend.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

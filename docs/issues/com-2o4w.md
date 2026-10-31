@@ -1,7 +1,7 @@
 ---
 id: com-2o4w
 status: open
-deps: []
+deps: [com-6u0t]
 links: []
 created: 2026-10-21T15:16:01Z
 type: task
@@ -27,3 +27,7 @@ Selected source declaration/signature -> common CAbi scalar/integer/F32/inout cl
 Two-way C controls on the current host for permitted widths/signs, Float, pointer, inout writeback, exposed names and labels, signature mismatches and unsupported boundary rejection; compare AOT/JIT entry failure/lifetime. Aggregate-layout absence remains in the parent and does not become an asserted supported feature.
 
 Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is below 7 seconds. This task does not close the mixed/new-feature parent automatically.
+
+## Scoped Audit Intake com-71gu
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-llvm-physical.json) assigns exact required input-authority repair subsets to this admission contract: com-6u0t. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

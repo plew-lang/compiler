@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 No product repair/execution/GREEN in input audit, no runtime/ABI/source acceptance or algorithm redesign, no mathematically minimal per-native-field decomposition. Old unused-formal/eid and existing justified physical registry scopes are not reclassified.
 
 
+
+## Adopted Implementation Intake
+
+[com-71gu](com-71gu.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-h61e; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-llvm-physical.json) retains all main/mixed roles and normative grounds. Existing canonical place/value/drop/aggregate/enum/Buffer/conversion emission consumes frozen same-session contracts and selected evidence. Narrow per-entry read/writer grants while retaining coherent native ownership, conditional alias/interner/measurement effects and15 actual Buffer cases; no semantic preparation behind emission.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 No product repair/GREEN or runtime execution within audit; no source selection/ABI/runtime/ownership algorithm redesign, globally minimal service proof or full malformed-IR verification.
 
 
+
+## Adopted Implementation Intake
+
+[com-71gu](com-71gu.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-h61e; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-llvm-physical.json) retains all main/mixed roles and normative grounds. Current paired runtime numeric/system/String/FFI/cell preflight and emission use fixed selected descriptors/native operands. Preserve probe versus emitter distinctions, conditional native target-C/alias caches and FromBytes retain queue; no source-success acquisition or arbitrary source writer.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

@@ -1,6 +1,6 @@
 ---
 id: com-71gu
-status: in_progress
+status: closed
 deps: [com-mmk9]
 links: []
 created: 2026-10-31T06:19:18Z
@@ -41,3 +41,11 @@ Close only after every assigned classification question is answered, a bounded i
 No product source/std/test/expectation/binary/runner edits or compiler/build/test/ASan/JIT/performance execution; no product Python imports. No semantic/architecture decision, new feature, gate weakening, main/seed/carrier promotion, product GREEN or parent completion claim. Stop for an unapproved decision needed to classify the subject.
 
 
+
+## Outcome
+
+All21 assigned repair owners and their exact confirmed roles have grounded required existing-feature admission assignments; 1 optional roles retain explicit outside-required dispositions. [Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-llvm-physical.json) retains every original main/mixed role, normative reason, actual receiving owner and 22 required edges. Required classification questions for this batch are answered; no product repair is certified.
+
+[Classification review](../../../evidence/existing-feature-conformance/audit-intake/api-llvm-physical-classification-review.json) records the original issues and reasoned corrections. [Final independent graph/scope review](../../../evidence/existing-feature-conformance/audit-intake/api-llvm-physical-review.json) checks concrete assignments and graph, not product GREEN. Adopt its evidence-backed acceptance and stated limits after final review.
+
+Every required repair reaches actual integration; phase-three repairs reach G1 through affected areas. Secondary domains and actual producer prerequisites are retained as real edges; no whole global/native intake prerequisite is added to unrelated G1 work. Existing recovery tasks discover these scoped inputs without repeating the completed audit or replacing their own distinct contracts. All product repairs remain open, so closing this assignment cannot bypass them. Source baseline9665094d is unchanged; no product source/test/native/binary/runner edit or execution, new feature, semantic/ABI decision, performance/main/seed/carrier claim occurred.

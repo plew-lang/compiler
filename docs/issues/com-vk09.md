@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 No product implementation/GREEN/performance or runtime/ABI/ARC/proof algorithm certification in source-only audit. No language/source acceptance strengthening or runtime execute permission from Mid Ready, row, alias memo or native symbol.
 
 
+
+## Adopted Implementation Intake
+
+[com-71gu](com-71gu.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-h61e; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-llvm-physical.json) retains all main/mixed roles and normative grounds. Existing erased witness thunks and dynamic closure/existential preflight/calls consume frozen selected witness/adapter/body/type/ABI identities. Preserve concrete queue/cache/native effects and cached-read/error distinctions without source reselection.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

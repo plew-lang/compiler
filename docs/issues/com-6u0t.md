@@ -41,3 +41,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Language/source/ABI/runtime algorithm redesign, unrelated compiler facilities, speculative performance claims and product execution within the audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-71gu](com-71gu.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-h61e, com-2o4w; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-llvm-physical.json) retains all main/mixed roles and normative grounds. Current finalized closure/layout/type/C scalar/parameter/inout/extern/exposed/global/local/conversion representation adapters consume frozen contracts and bounded memo/name/diagnostic/native caches. Remove semantic authority while preserving exact C/physical ownership and writeback.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
