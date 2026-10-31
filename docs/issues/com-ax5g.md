@@ -30,6 +30,41 @@ existing/historical/unsupported/duplicate roles. These sets overlap and are not
 Use com-esri as a historical classification input, not as a current classification
 of findings added later. Current inclusion authority is com-604k and its contracts.
 
+## Execution Order and Repair Timing
+
+This is the next selected planning task, before further broad repair work. Pin
+subjects and partition oversized classification work into finite domain children
+first; do not start another whole-source/test audit. The meta
+[execution order](../../../agents/compiler-design-progress.md#監査結果の取込みと再開順序)
+owns the shared phase sequence; this task owns exact finding membership,
+classifications and actual admission edges, not product implementation.
+
+Prioritize routing of validation defects that can turn missing execution,
+missing expectations or unrelated failure into success. Examples already owned:
+normal dispatch com-kp0h, part/gen goldens com-mt7l, gen rejection com-k4c9,
+signal-aware panic classification com-sp65, and instrumentation detection
+com-yvsf. These are candidate receiving owners, not a claim they all gate every
+mode. Include their complete qualified audit dispositions and sibling findings;
+this example list is not the full intake inventory. Repair each applicable
+validator before relying on its affected result for admission. Scope diagnostic
+checker repairs to consumers that actually use them.
+
+Route phase-three authority and test findings through the existing recovery map,
+audits and com-x7r3, reusing matching audit evidence rather than duplicating it.
+Other existing-feature findings belong to their Mid/backend/runtime/driver/etc.
+contracts, normally phase four or an independently ready prerequisite. Test
+expectation/detection/control repairs close with their affected source repair or
+area acceptance. Required in-scope repairs finish before that area/G1/integration,
+not in an anonymous final-gate fix bucket. Optional/new-feature-only subjects
+retain grounds and owners for later selection; small visible impact or repair
+cost alone is no basis for exclusion.
+
+Domain intake may release a bounded repair once its membership, contract and
+real admission dependencies are independently checked. It need not wait for
+unrelated global classification. The complete intake task cannot close until
+all pinned subjects have their required dispositions. No compiler/product repair
+or all-finding classification is claimed by this execution-plan update.
+
 ## Actions and Guarantee
 
 1. Pin the current finding/owner sets and reconcile every finding or scoped subset
@@ -84,3 +119,12 @@ No product source/std/test/expectation/binary/runner edit, actual behavior repai
 new compiler feature, full gate execution, main/seed/carrier promotion or future
 workflow-efficacy claim belongs to this assignment task. Product repairs follow
 normal TDD/review and affected-scope gates in their own tasks.
+
+## Planning Reconciliation Check
+
+The [plan check](../../../evidence/existing-feature-conformance/source-owner-facts/audit-intake-plan.json)
+records the full issue-header/dependency snapshot and selected contract review.
+The [independent review](../../../evidence/existing-feature-conformance/source-owner-facts/audit-intake-plan-review.json)
+checks the execution sequence and limits. This is documentation planning only:
+classification, graph intake and repairs remain open; no task state, actual
+prerequisite or product input changes in this update.

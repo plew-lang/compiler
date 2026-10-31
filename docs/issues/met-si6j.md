@@ -296,9 +296,10 @@ required after source repair and G1 admission.
 
 This is the user-requested investigation of the **completion method**, following
 [met-tfbl](met-tfbl.md), not another implementation acceptance. Original eleven
-criteria remain unchanged. The recovery below is a proposal for task-plan
-reconciliation; it has not silently created tasks, changed dependencies, or
-authorized source repair.
+criteria remain unchanged. The recovery below records the rationale for task-plan reconciliation. The
+current adopted inventory/audit/assignment tasks and actual prerequisites are
+listed in Scope and Restart and Phase Three Execution Plan; this retrospective
+alone does not authorize product changes.
 
 ### Evidence and Failure of the Previous Inference
 
@@ -429,13 +430,15 @@ extending an allegedly complete surface.
 
 ## Current Outcome
 
-**Not complete.** The user-requested retrospective now questions sufficiency of
-the previous coverage/closure method. Review the recovery proposal above before
-resuming the repair sequence; no revised task graph has yet been adopted.
+**Not complete.** Follow the adopted recovery chain com-2hx2 -> com-sn9w/com-lbnc
+-> com-x7r3 before resuming broad semantic repairs. The retrospective explains
+why source-to-final-use decision coverage must be demonstrated. Reuse applicable
+cross-compiler audit evidence and existing finite owners through com-ax5g; do not
+repeat the complete audits or wait for unrelated domain intake.
 Retain the finite required repairs from com-9hf7 and the four met-tfbl proposals,
-but do not assume that list exhausts required work. After scope reconciliation,
-independently re-admit affected task/areas and G1, then run the necessary
-new-candidate G2a/G2b and G3 reconciliation. Preserve valid unaffected work;
+but do not assume that list exhausts required work. After scope reconciliation
+and actual required repairs, independently re-admit affected task/areas and G1,
+then run new-candidate G2a/G2b and G3 reconciliation. Preserve valid unaffected work;
 do not substitute checks at a final reader for complete source admission and
 sealed producer-to-consumer authority. No new specification decision is needed
 for the confirmed findings. Phase four, main, seeds and adopted-carrier promotion

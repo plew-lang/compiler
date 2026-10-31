@@ -31,14 +31,22 @@ become phase-three prerequisites merely because the audits were cross-compiler.
 
 ## Ordering and Start Conditions
 
-Phase 2 is complete under [com-io5f](com-io5f.md). Phase 3 remains active under
-[met-si6j](met-si6j.md): the fresh specification-first [com-9hf7](com-9hf7.md)
-review confirms11 existing-contract gaps, assigned to10 required finite repairs.
-The scoped com-ugee repair remains complete; it is not whole-frontend closure.
-Source-area/G1 re-admission and new final G2/G3 follow those repairs. Prior gates
-remain valid only for their exact candidate/input scope. Phase four and final
-integration/main/seed/carrier requirements remain separate. The manual
-com-ydgx diagnostic repair is not a prerequisite of the standard sanitizer gate.
+Phase 2 is complete under [com-io5f](com-io5f.md). Select [com-ax5g](com-ax5g.md)
+next to route the completed cross-compiler audit findings. Repair false-success
+validation paths before relying on their affected admission results; use actual
+mode/consumer prerequisites, not an all-runner-repairs barrier for phase three.
+
+Phase 3 remains active under [met-si6j](met-si6j.md). Resume its decision inventory
+com-2hx2, bounded com-sn9w/com-lbnc and assignment com-x7r3 before broad semantic
+repairs. Existing com-9hf7 repairs and met-tfbl findings are inputs to that
+reconciliation, not proof they exhaust the phase. Preserve scoped com-ugee and
+other valid work. Required repairs and source-area/G1 re-admission precede new
+final G2/G3; prior gates cover only their exact candidate/input scope. Phase-four
+findings close at their existing domain owners; independent units need not wait
+for unrelated classification. Final integration/main/seed/carrier requirements
+remain separate. The manual com-ydgx diagnostic repair is not a prerequisite of
+the standard sanitizer gate. Detailed sequencing belongs in the meta progress
+plan; no complete per-finding classification is claimed here.
 
 
 com-w4c2 follows the approved root-only use rule, with one module-wide binding environment shared by parts. Its scope includes real part/provider/consumer migration; the former file-local lookup direction is superseded. Reconsideration conditions for macro dependency verbosity/collisions belong to the source design, not an immediate exception or another mandatory feature family.
