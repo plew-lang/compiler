@@ -1,7 +1,7 @@
 ---
 id: com-ax5g
-status: open
-deps: [com-mmk9, com-tqzw]
+status: in_progress
+deps: [com-mmk9, com-tqzw, com-k35g, com-vr57, com-yjyu, com-71gu, com-ptko, com-8ttz, com-lk60, com-7a5t, com-3z5o, com-7kzd, com-4sg9, com-ti5b, com-2kze, com-5azh]
 links: []
 created: 2026-10-31T05:40:51Z
 type: task
@@ -128,3 +128,19 @@ The [independent review](../../../evidence/existing-feature-conformance/source-o
 checks the execution sequence and limits. This is documentation planning only:
 classification, graph intake and repairs remain open; no task state, actual
 prerequisite or product input changes in this update.
+
+## Adopted Finite Intake Partition
+
+The [immutable partition](../../../evidence/existing-feature-conformance/audit-intake/partition.json)
+pins320 product owners/1120 confirmed API roles,31 optional scopes and98 test
+rows into14 initial classification units. Actual child IDs/states/prerequisites
+belong to tk, not a second manual checklist. Every required classification child
+is a real prerequisite of this task; product repairs are separate.
+
+[Independent partition review](../../../evidence/existing-feature-conformance/audit-intake/partition-review.json)
+accepts exact scope preservation. Adopt its canonical reconstruction, not a
+claim of fully blind reading: its first combined read exposed candidate output
+before independent reconstruction. Cardinality alone does not prove a1-2-day
+bound; split precise remaining work before exceeding that bound. Repeated test
+owners retain each scope and union required edges; no subject vanishes by owner
+name deduplication. No classification or repair is completed by partitioning.
