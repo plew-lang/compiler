@@ -1,6 +1,6 @@
 ---
 id: com-kp0h
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-27T19:08:00Z
@@ -68,3 +68,27 @@ controls behave as expected. Progress ON/OFF and all five phases are included.
 The old harness is unchanged; this is real dispatch/result aggregation evidence,
 not product semantics or a whole normal-suite success. Final regression will
 use the shared production adapter after extraction, with no legacy fallback.
+
+## Outcome
+
+Resolved at compiler `94fb96db921c57ea9034f224325de895ab547ad2`.
+All five actual normal phases now share dispatch status and exactly-once
+expected/result identity reconciliation; the original worker checks and discovery
+are preserved. Cancellation reclaims the owned group, and progress plus CPU/default,
+empty-override and explicit worker budgets are retained.
+
+The [completion record](../../../evidence/test-runner-dispatch/completion.json)
+links original RED, final160 controls and56 existing status controls (exit0),
+five detected mutation kinds, actual compiler adapter smoke10/10, baseline worker
+comparison and [independent acceptance](../../../evidence/test-runner-dispatch/final-review.json).
+No required in-scope defect, concern or specification decision remains.
+
+The complete standard normal consumer at6d9cac0f/jobs8 covered all2,834 fixture
+identities with unchanged inputs, no omission/duplicate and skip0, but exited1 on
+five source failures also reproduced by the old worker with the same candidate.
+The final94fb production delta only restores empty-override fallback; final
+controls/smoke are separate, not a false final-revision full-suite GREEN.
+[Exact limits and failures](../../../evidence/test-runner-dispatch/README.md)
+remain mandatory inputs to com-2hx2/com-lbnc/com-x7r3 and open final gate com-9l3b.
+No compiler source, fixtures, expected values, timeout, seed or carrier was changed
+or promoted. This closure does not certify phase three, performance or main.

@@ -111,3 +111,14 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 ## Test Admission Intake com-5azh
 
 The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) installs required finite repair/investigation prerequisites at this actual admission: met-u3lg (row79), met-k62r (row87), com-fsuq (row89), com-kxyj (row90), com-mt7l (row95), com-p5um (row97). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.
+
+## WIP Runner-Repair Consumer Check
+
+The [normal consumer receipt](../../../evidence/test-runner-dispatch/normal-consumer.json)
+for com-kp0h records all 2,834 fixture identities without missing/duplicate
+results, skip0 and five source failures, exit1 with unchanged inputs.
+This is 20261031T092549-test-08fb9d on WIP candidate e6ff9d19, not a measured
+final-candidate G2b success. The [five old/new worker controls](../../../evidence/test-runner-dispatch/real-failure-controls.json)
+retain unchanged-source diagnostics; com-x7r3 carries their investigation/repair
+assignment via the existing recovery audits. No source failure is waived by
+closing the finite runner repair, and this gate remains incomplete.

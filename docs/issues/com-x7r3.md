@@ -62,3 +62,18 @@ The adopted com-k35g outcome under meta/evidence/existing-feature-conformance/au
 Use the [adopted intake evidence](../../../evidence/existing-feature-conformance/audit-intake/README.md) for later source-matching scoped outcomes as well as the first session/input batch. Exact member roles, normative grounds and actual admission edges belong to each outcome and its current tk owners. Reuse them without repeating the whole API/test audit, but complete this task's distinct decision-inventory/semantic-path/combined-assignment contract. Union multi-domain scoped dependencies; do not deduplicate away requirements by owner name.
 
 The [finite routing correction](../../../evidence/existing-feature-conformance/audit-intake/pure-formal-routing-correction.json) governs superseded pure-helper placement. Do not reconstruct the old r2sw phase-three edge from historical outcome snapshots or duplicate this helper cleanup inside source-authority recovery.
+
+## WIP Normal-Consumer Failure Input
+
+The [com-kp0h same-input controls](../../../evidence/test-runner-dispatch/real-failure-controls.json)
+retain five source-rejection failures from complete normal run
+20261031T092549-test-08fb9d on candidate e6ff9d19. Old and extracted workers
+produce the same FAIL identities; no source or expected output was changed.
+The exact names, input hashes and diagnostics are in that record.
+
+Carry these as explicit inputs to com-2hx2/com-lbnc and this finite assignment:
+determine whether each is stale internal API usage, a valid source regression,
+or already covered by an existing owner before choosing a repair. Do not use
+the worker comparison as evidence that the compiler rejection is correct.
+The record is not a new generic implementation bucket, an optional disposition,
+or a reason to close area/G1/G2b; com-9l3b remains open.
