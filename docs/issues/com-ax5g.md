@@ -1,6 +1,6 @@
 ---
 id: com-ax5g
-status: in_progress
+status: closed
 deps: [com-mmk9, com-tqzw, com-k35g, com-vr57, com-yjyu, com-71gu, com-ptko, com-8ttz, com-lk60, com-7a5t, com-3z5o, com-7kzd, com-4sg9, com-ti5b, com-2kze, com-5azh]
 links: []
 created: 2026-10-31T05:40:51Z
@@ -144,3 +144,38 @@ before independent reconstruction. Cardinality alone does not prove a1-2-day
 bound; split precise remaining work before exceeding that bound. Repeated test
 owners retain each scope and union required edges; no subject vanishes by owner
 name deduplication. No classification or repair is completed by partitioning.
+
+## Outcome
+
+Resolved as completed intake assignment, with all14 exact classification children
+independently accepted and closed. The [final reconciliation](../../../evidence/existing-feature-conformance/audit-intake/final-reconciliation.json)
+retains all320 API product owners/1120 confirmed roles/31 optional scopes and98
+exact test rows. The [fresh independent whole-scope review](../../../evidence/existing-feature-conformance/audit-intake/final-reconciliation-review.json)
+accepts exact membership, substantive current/future/optional/history boundaries,
+753 required edges after the documented two-edge normalization, and the real
+acyclic graph. All394 distinct required receiving repair/investigation owners
+remain unclosed;277 exact phase-three receivers retain G1 admission. These are
+scope/graph cardinalities, not independent bug counts or implementation progress.
+
+The required integration/G1 routes survive removal of all audit/intake nodes.
+Closing this assignment therefore does not discharge product repairs. Closed
+valid historical work and the py42-to-mt7l duplicate redirect are preserved;
+mixed optional/new-feature parents are not made mandatory wholesale. Source
+oracle questions remain finite blocking investigations, without silently choosing
+language semantics. Validators precede reliance on their affected results;
+manual/future contracts do not become unrelated standard-gate prerequisites.
+
+The original audit/scoped records remain immutable, with crym/r2sw phase-four
+pure-helper placement governed only by the explicit finite correction and review.
+The existing com-2hx2 -> com-sn9w/com-lbnc -> com-x7r3 recovery contracts remain
+distinct; accepted whole-compiler evidence is reused without repeating its audit
+or replacing their decision inventory/path/assignment obligations.
+
+Tracked product source/std/tests/scripts/native/distribution/manifest/lock inputs
+are unchanged from9665094d. Pre-existing bin/plewc/cache dirt is excluded from
+that claim and untouched. No compiler/program/build/test/ASan/JIT/performance
+execution, product repair, new API, semantic/architecture decision, area/gate
+completion, main/seed/carrier promotion or GREEN is certified. Product repairs
+follow their own TDD, finite controls, independent review and actual admission.
+The [shared execution plan](../../../agents/compiler-design-progress.md#監査結果の取込みと再開順序)
+and current worklog select the next work without a duplicate task-state ledger.
