@@ -11,7 +11,7 @@ tags: [frontend, verification]
 ---
 # Narrow finalized Mid adapter consumer inputs
 
-Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/mid-builder-consumer-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-mid-builder-consumer-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of com-jno0/phase 3; no product repair was performed by the audit.
+Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/mid-builder-consumer-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-mid-builder-consumer-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of audit closure; implementation admission is assigned below; no product repair was performed by the audit.
 
 ## Guarantee and Scope
 newtype/witness/drop leaf は finalized descriptor/type/proof reader と canonical append/check service に限定。instance dispatcher の普通/invalid fallback/closure/drop/witness routes は existing prepared request に委任。 same body origin/signature readiness/environment/selected call resolution/conversion proof tag、passing modes、nominal unique/capture cell、cleanup 範囲、canonical identity と error を保存。
@@ -31,3 +31,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other compiler domains, source meaning/algorithm changes, all product edits/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-ptko](com-ptko.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) retains all main/mixed roles and normative grounds. Newtype, existential witness and closure-drop adapter construction consumes finalized source signature/conversion/requirement evidence through explicit instance origins. Retain prepared-request delegation and canonical output ownership without source fallback or full compiler capability.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

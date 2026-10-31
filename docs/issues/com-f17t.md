@@ -36,3 +36,11 @@ replace the original readonly keywordSpans description with its actual bounded
 lookup cache/counter writer and append-only source lineage. Original records stay
 immutable. Main/component C verdicts and repair ownership are unchanged; no new
 answered-question count or repaired/GREEN claim follows from this correction.
+
+## Adopted Implementation Intake
+
+[com-ptko](com-ptko.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-an0b; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) retains all main/mixed roles and normative grounds. Declaration destruction dependency closure is a separate symbolic ownership/effect product with scoped semantic-type/proof queries and publication. Preserve its real child deferred facts and fallible producer; it is not executable preparation or a second source selector.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

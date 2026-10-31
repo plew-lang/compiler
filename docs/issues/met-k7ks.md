@@ -1,7 +1,7 @@
 ---
 id: met-k7ks
 status: open
-deps: [com-bz23, com-ktyj, com-mexd, com-6h5i, com-g127]
+deps: [com-bz23, com-ktyj, com-mexd, com-6h5i, com-g127, com-0t9x, com-id5r, com-u09r]
 links: []
 created: 2026-10-21T11:05:50Z
 type: task
@@ -61,3 +61,7 @@ The adopted com-k35g intake connects declaration diagnostic projection com-bz23,
 ## Scoped Audit Intake com-vr57
 
 The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) assigns exact required input-authority repair subsets to this admission contract: com-6h5i, com-g127. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-ptko
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) assigns exact required input-authority repair subsets to this admission contract: com-0t9x, com-id5r, com-u09r. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Other groups/old main C checkConversionProofBoundary and com-t4gm; language/solver/general algorithm redesign or source/body/executable orchestration. Product implementation/execution/performance/GREEN is not part of this audit.
 
 
+
+## Adopted Implementation Intake
+
+[com-lk60](com-lk60.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-constraints.json) retains all main/mixed roles and normative grounds. 保存conversion/static/path/condition/projection evidenceのscope・endpoint整合を検査する。source記録→instance evidence→final conversion／proof consumerの工程3境界。
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

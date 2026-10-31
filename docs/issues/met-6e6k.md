@@ -1,7 +1,7 @@
 ---
 id: met-6e6k
 status: open
-deps: [com-g2qg, com-nplw, com-nucu, com-m0bf, com-e9l2, com-loyb, com-3q2n, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-o3vw, com-v1wa, com-tkz7, com-l8m1, com-6zph, com-geem, com-0fk5, com-100o, com-4ccf, com-9aap, com-aii4, com-g127, com-oftp, com-1fxn, com-cn5o, com-e681, com-fppu, com-g5lm, com-jvmv, com-k5i6, com-lujr, com-m13a, com-r8gt, com-y9r7, com-zbas, com-zsw5]
+deps: [com-g2qg, com-nplw, com-nucu, com-m0bf, com-e9l2, com-loyb, com-3q2n, com-4kti, com-nqjd, com-fyxe, com-6paa, com-qbwg, com-i62n, com-uruz, com-o3vw, com-v1wa, com-tkz7, com-l8m1, com-6zph, com-geem, com-0fk5, com-100o, com-4ccf, com-9aap, com-aii4, com-g127, com-oftp, com-1fxn, com-cn5o, com-e681, com-fppu, com-g5lm, com-jvmv, com-k5i6, com-lujr, com-m13a, com-r8gt, com-y9r7, com-zbas, com-zsw5, com-03ra, com-4oor, com-4vvt, com-8y74, com-9z44, com-be0m, com-bswq, com-cerv, com-dtc6, com-g3ex, com-gh9g, com-hg3t, com-hnm8, com-j0r9, com-jr91, com-majd, com-nhtx, com-p5q2, com-ppr3, com-t4gm, com-t63i, com-u1tx, com-x197, com-y0l9, com-3gut, com-9ovy, com-cjfn, com-gewn, com-hfwv, com-i86w, com-kpd0, com-n5lu, com-xc6h]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -109,3 +109,11 @@ The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake
 ## Scoped Audit Intake com-yjyu
 
 The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-defaults-and-literals.json) assigns exact required input-authority repair subsets to this admission contract: com-1fxn, com-cn5o, com-e681, com-fppu, com-g5lm, com-jvmv, com-k5i6, com-lujr, com-m13a, com-r8gt, com-y9r7, com-zbas, com-zsw5. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-lk60
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-constraints.json) assigns exact required input-authority repair subsets to this admission contract: com-03ra, com-4oor, com-4vvt, com-8y74, com-9z44, com-be0m, com-bswq, com-cerv, com-dtc6, com-g3ex, com-gh9g, com-hg3t, com-hnm8, com-j0r9, com-jr91, com-majd, com-nhtx, com-p5q2, com-ppr3, com-t4gm, com-t63i, com-u1tx, com-x197, com-y0l9. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-ptko
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) assigns exact required input-authority repair subsets to this admission contract: com-3gut, com-9ovy, com-cjfn, com-gewn, com-hfwv, com-i86w, com-kpd0, com-n5lu, com-xc6h. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

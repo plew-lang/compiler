@@ -30,3 +30,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other APIs, changed source acceptance/algorithms/ABI, unsupported feature work, product repair/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-ptko](com-ptko.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-604k; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) retains all main/mixed roles and normative grounds. Parser derive draining and existing module public/import registration are input identity and pending-work boundaries. Remove unused operands and unrelated compiler authority while preserving module/root identity, source lineage and queue/interner effects; no visibility policy change.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

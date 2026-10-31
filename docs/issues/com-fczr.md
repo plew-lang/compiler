@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Other groups and existing requireDeclarationProofSupport mainC/com-t4gm; language/solver/general dependency/fixedpoint/source-selection algorithm redesign or product execution/performance/GREEN within this audit.
 
 
+
+## Adopted Implementation Intake
+
+[com-lk60](com-lk60.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-acfl, met-ia09, met-ucze; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-constraints.json) retains all main/mixed roles and normative grounds. source-selected call constraint planの初回Building書込と後続のrecorded proof admissionを分離する保存authorityの工程3修正。source signature/selection consumerも受入に必要。
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

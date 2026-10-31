@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Actual product repair/execution within this audit, whole-algorithm soundness, language changes, broad unrelated optional record decomposition or measured performance claims.
 
 
+
+## Adopted Implementation Intake
+
+[com-ptko](com-ptko.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-an0b; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) retains all main/mixed roles and normative grounds. The three existing ownership verifier APIs consume canonical Mid and stage-specific immutable metadata while updating caller-owned dataflow state. Keep exact type/destruction/readiness facts and failure context; no full compiler or source construction capability is required.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

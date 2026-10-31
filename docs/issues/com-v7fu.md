@@ -11,7 +11,7 @@ tags: [frontend, verification]
 ---
 # Separate prepared Mid body requests and canonical cache ownership
 
-Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/mid-builder-consumer-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-mid-builder-consumer-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of com-jno0/phase 3; no product repair was performed by the audit.
+Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/mid-builder-consumer-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-mid-builder-consumer-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of audit closure; implementation admission is assigned below; no product repair was performed by the audit.
 
 ## Guarantee and Scope
 same-session prepared function/closure/global request、canonical store/check と closure/template registry を一つの制御された owner front にする。internal Comp を維持しても mutable Comp/arena/source directory の外部 escape、unwrap、Comp を渡す callback は許さない。 function/closure/global、cache hit/miss/failure と measured reader acquisition、synthetic/global owner、foreign session pairing、canonical IDs/structural checks、capture owner/lifetime/default を維持する。
@@ -33,3 +33,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other compiler domains, source meaning/algorithm changes, all product edits/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-ptko](com-ptko.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-acfl; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) retains all main/mixed roles and normative grounds. Function/closure/global parametric body requests expose a controlled same-session owner front consuming strong published source facts. Preserve cache/failure/source owner/lifetime and canonical registry behavior, with internal Comp private and no unwrap/callback escape.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

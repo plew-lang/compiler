@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Other prior mainC/J/O/optional/API scopes; no language/destruction/interface/proof/type/solver/ABI correctness redesign, native/performance/GREEN or product execution within source-only audit.
+
+## Adopted Implementation Intake
+
+[com-ptko](com-ptko.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ia09, met-ucze; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) retains all main/mixed roles and normative grounds. Existing checkExistentialRequirementCall consumes dispatchability, the public requirement signature/result conversion and selected witness plan. Bound its exact source interface/evidence services and caller subset; general actual-argument admission remains with the ordinary source call checker, not a new grant to this helper.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

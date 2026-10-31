@@ -33,3 +33,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 No compiler algorithm/source acceptance/declaration-obligation solver/termination redesign, general least-fixedpoint proof, source or executable preparation, native/runtime/build/test/performance execution or product repair within this audit. Do not invent execution queue authority from caller-local request records or split coherent metadata solely by field count.
 
 
+
+## Adopted Implementation Intake
+
+[com-lk60](com-lk60.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-constraints.json) retains all main/mixed roles and normative grounds. semantic/phantom conversion evidenceと実payload declaration obligationsをsaved endpointsから展開する。意味型をlayoutで消さず宣言obligationを解釈する工程3契約。
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

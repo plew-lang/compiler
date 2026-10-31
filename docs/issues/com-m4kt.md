@@ -31,3 +31,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other compiler APIs/algorithms, source semantics, product repair/execution and speculative performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-ptko](com-ptko.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-an0b; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) retains all main/mixed roles and normative grounds. Published Mid place/operand/operation/type and ownership/conversion readiness validation is an independent verifier consumer. Give it immutable admitted metadata and precise normalization services, preserving structural failure rather than repairing missing source decisions.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

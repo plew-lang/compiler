@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Other repair groups and original J/C/O/optional/other U scopes; language/source/solver/general selection or proof algorithm redesign, product execution/performance/GREEN within this audit.
 
 
+
+## Adopted Implementation Intake
+
+[com-lk60](com-lk60.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ucze, met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-constraints.json) retains all main/mixed roles and normative grounds. 唯一の実protocol callerが空引数の要求を選択し、そのselected requirementを後で記録する。選択の入力責務とproof groundingの境界なので工程3のsource選択／evidence契約に属する。
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

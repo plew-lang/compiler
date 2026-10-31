@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Other groups/old main C checkConversionProofBoundary and com-t4gm; language/solver/general algorithm redesign or source/body/executable orchestration. Product implementation/execution/performance/GREEN is not part of this audit.
 
 
+
+## Adopted Implementation Intake
+
+[com-lk60](com-lk60.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-acfl, met-6e6k; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-constraints.json) retains all main/mixed roles and normative grounds. 既存DeclarationConversion行をselection/proof freeze後に完了し、成功owner公開の前提を作る。保存のwrite境界とsaved conversion consumerを閉じる工程3。
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

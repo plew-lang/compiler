@@ -11,7 +11,7 @@ tags: [frontend, verification]
 ---
 # Narrow Mid saved-fact admission and transfer reader inputs
 
-Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/mid-builder-consumer-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-mid-builder-consumer-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of com-jno0/phase 3; no product repair was performed by the audit.
+Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/mid-builder-consumer-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-mid-builder-consumer-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of audit closure; implementation admission is assigned below; no product repair was performed by the audit.
 
 ## Guarantee and Scope
 session/source owner resolver、strong PreparedSemanticFacts、exact source call-head/aggregate/closure/transfer lookup、source-offset diagnostic、acquisition counter、type/view normalization interner を操作別 front にする。raw source builder/publication writer は渡さない。 missing/failed/foreign-owner/session、Function/Closure/Global identity、default None と explicit target、statement kind/owner/source offset、Pending recipe、provided/default/synthetic call origin、strong payload lifetime、normalization/cache mutation を維持。 operation-reader hint/lifecycle/fallback と exact location key/panic semantics も維持する。
@@ -33,3 +33,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other compiler domains, source meaning/algorithm changes, all product edits/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-ptko](com-ptko.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-acfl, com-fuo8; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) retains all main/mixed roles and normative grounds. Successful owner admission and sealed type/call/aggregate/closure/transfer readers are the publication-to-final-reader boundary. Preserve strong prepared facts, exact source/session/owner, missing/failed distinctions and measured acquisitions; no raw writer or AST reinference may escape.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

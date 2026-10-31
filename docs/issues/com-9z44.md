@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 Other groups and already-owned repairs; language/solver/iteration/source algorithm redesign, product execution/changes/performance or GREEN within this audit. Outer source publication, body readiness and executable queues stay with their callers.
 
 
+
+## Adopted Implementation Intake
+
+[com-lk60](com-lk60.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-ucze; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-constraints.json) retains all main/mixed roles and normative grounds. same-session source callの保存recipe/resultとclosed protocol receiverを読む。source選択の結果がfinal resultへ至る契約であり独立backend algorithmではない。
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

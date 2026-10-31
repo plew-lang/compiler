@@ -40,3 +40,11 @@ The main and other component classifications remain unchanged. Product repair in
 this issue remains open and unimplemented; this answer neither closes this issue
 nor completes com-mmk9. Preserve the required contract and failure distinctions
 when replacing the broad API boundary.
+
+## Adopted Implementation Intake
+
+[com-ptko](com-ptko.md) classifies the exact confirmed scope as required existing-feature phase4 conformance. Required admission owner(s): com-an0b, met-acfl; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) retains all main/mixed roles and normative grounds. Declaration effect scan and source-bound saved-call access checking consume retained operation identity into symbolic ownership/effects. The source publication/reader subset also requires D-area admission; keep body/close/public orchestration excluded and do not mutate committed source operations.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

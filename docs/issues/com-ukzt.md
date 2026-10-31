@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Other J/C/O/optional/mainC scopes, source/solver/proof/conformance/selection/applicability algorithm redesign, product execution/GREEN/performance. Existing unused witnessedHas tps/targs mainC/com-crym separate; evaluation effects retained.
+
+## Adopted Implementation Intake
+
+[com-lk60](com-lk60.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ia09, met-ucze; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-constraints.json) retains all main/mixed roles and normative grounds. via宣言のsignature compatibilityとtarget candidate検査はtrait satisfactionと通常callの共通applicability。source適合が終点なので工程3。
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

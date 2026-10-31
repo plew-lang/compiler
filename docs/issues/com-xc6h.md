@@ -11,7 +11,7 @@ tags: [frontend, verification]
 ---
 # Close required mutable services for checked Mid value evaluation
 
-Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/mid-builder-consumer-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-mid-builder-consumer-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of com-jno0/phase 3; no product repair was performed by the audit.
+Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/mid-builder-consumer-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-mid-builder-consumer-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of audit closure; implementation admission is assigned below; no product repair was performed by the audit.
 
 ## Guarantee and Scope
 common recursive evaluator を same-session body owner の制御された front にし、literal decode cache、type-view registration/interner、canonical closure provider、saved descriptor/recipe reads と diagnostic/trace を個別許可する。 occurrence-local call/aggregate cache、Unit versus divergence、actual call reached versus input termination、child order/snapshots、parent cache restore、await Promise owner/suspend、Try selected error recipe/return home、view/cast boundaries と Copy/Move を維持。
@@ -36,3 +36,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other compiler domains, source meaning/algorithm changes, all product edits/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-ptko](com-ptko.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, com-fuo8; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) retains all main/mixed roles and normative grounds. The common checked-expression evaluator consumes saved types/recipes/completion through ordered aggregate, call, short-circuit, await and Try lowering. Preserve exact value snapshots, scope/cache restore and source owner while bounding literal/interner/canonical provider services.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

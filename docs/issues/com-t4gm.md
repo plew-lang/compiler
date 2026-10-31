@@ -11,7 +11,7 @@ tags: [frontend, verification]
 ---
 # Narrow conversion navigation clause-index and proof-support inputs
 
-Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/constraints-and-declaration-obligation-inputs.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-constraints-and-declaration-obligation-inputs.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of com-jno0/phase 3; no product repair was performed by the audit.
+Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/constraints-and-declaration-obligation-inputs.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-constraints-and-declaration-obligation-inputs.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of audit closure; implementation admission is assigned below; no product repair was performed by the audit.
 
 ## Guarantee and Scope
 Only recordGlobalConversionOwner/sourceDeclarationCallBoundIndices/requireDeclarationProofSupport/checkConversionProofBoundary/callConstraintIsRelevant/callConstraintSubstitutionState/selectedCallHasDeferredConstraints/declarationTypeScope; preserve readonly canonical equality/closedness, same-session owner/location/prepared strong reader and actual hint/cache/measurement effects, lexical owner/binders, bounded conversion map writes, bound index ordering/duplicates, all actual sentinels/Deferred/error behavior and diagnostic provenance. Neighboring full evidence admission, grounding and dependency recursion is outside confirmed scope.
@@ -34,3 +34,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other domains, language acceptance/solver/algorithm redesign, broad new verification requirements, product edits/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-lk60](com-lk60.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ia09, met-acfl, met-6e6k; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-constraints.json) retains all main/mixed roles and normative grounds. mixed mainCの宣言clause-index/proof-support/relevance/substitutionに加えglobal conversion owner navigation writeとconversion endpointを保持する。scopeはsource admission／保存／型conversionの工程3に跨がる。
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

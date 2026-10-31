@@ -1,7 +1,7 @@
 ---
 id: met-acfl
 status: open
-deps: [com-kp3y, com-vkw3, com-wqa0, com-m3c6, com-gnj9, com-nr7y, com-6zph, com-r2sw, com-0lz8, com-4ccf, com-7cpj, com-h4cm, com-iq17, com-l8kt, com-q6pv, com-rgml, com-sk71, com-37u0, com-4wxu, com-ckde, com-r8gt, com-ru19, com-zcrx]
+deps: [com-kp3y, com-vkw3, com-wqa0, com-m3c6, com-gnj9, com-nr7y, com-6zph, com-r2sw, com-0lz8, com-4ccf, com-7cpj, com-h4cm, com-iq17, com-l8kt, com-q6pv, com-rgml, com-sk71, com-37u0, com-4wxu, com-ckde, com-r8gt, com-ru19, com-zcrx, com-8y74, com-fczr, com-t4gm, com-dsfy, com-ge01, com-v7fu, com-vyk7]
 links: []
 created: 2026-10-13T01:40:08Z
 type: epic
@@ -104,3 +104,11 @@ The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake
 ## Scoped Audit Intake com-yjyu
 
 The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-defaults-and-literals.json) assigns exact required input-authority repair subsets to this admission contract: com-37u0, com-4wxu, com-ckde, com-r8gt, com-ru19, com-zcrx. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-lk60
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-constraints.json) assigns exact required input-authority repair subsets to this admission contract: com-8y74, com-fczr, com-t4gm. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Scoped Audit Intake com-ptko
+
+The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) assigns exact required input-authority repair subsets to this admission contract: com-dsfy, com-ge01, com-v7fu, com-vyk7. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.

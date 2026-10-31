@@ -11,7 +11,7 @@ tags: [frontend, verification]
 ---
 # Narrow Mid statement control and pattern evaluation services
 
-Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/mid-builder-consumer-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-mid-builder-consumer-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of com-jno0/phase 3; no product repair was performed by the audit.
+Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/mid-builder-consumer-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-mid-builder-consumer-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of audit closure; implementation admission is assigned below; no product repair was performed by the audit.
 
 ## Guarantee and Scope
 admitted statement/transfer/pattern/type/recipe reader と common evaluation/continuation/diagnostic fronts、coherent local/scope/loop/CFG owner に限定。 Return/Give/Break/Continue exact targets、condition binding/reachability/order、source completion と CFG の区別、Storage/ReturnBoundary、Overwrite、capture/destructure/drop markers、for/try abstract recipes、sequence/default flags、failure-prefix/restore を維持。
@@ -44,3 +44,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other compiler domains, source meaning/algorithm changes, all product edits/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-ptko](com-ptko.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): com-fuo8, met-acfl; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) retains all main/mixed roles and normative grounds. Admitted statements, condition chains, patterns and transfer lowering consume successful source completion and exact Return/Give/Break/Continue targets. The closure spans source publication to final CFG/cleanup consumption; preserve normal-value versus no-continuation and local/scope owner semantics.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

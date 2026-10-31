@@ -11,7 +11,7 @@ tags: [frontend, verification]
 ---
 # Narrow selected Mid call place and argument evaluation services
 
-Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/mid-builder-consumer-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-mid-builder-consumer-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of com-jno0/phase 3; no product repair was performed by the audit.
+Evidence: [capability decision](../../../evidence/compiler-api-audit/capabilities/mid-builder-consumer-services.json) and [independent review](../../../evidence/compiler-api-audit/review-capability-mid-builder-consumer-services.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This finite follow-up is independent of audit closure; implementation admission is assigned below; no product repair was performed by the audit.
 
 ## Guarantee and Scope
 readonly saved-call/place/type/AST navigation と制御された recursive Mid evaluation/access/canonical-provider/literal/type-normalization/diagnostic fronts、coherent draft owner を渡す。 exact keys/modes/evaluationOrder/parameter order、one-time base/index/reference evaluation、strong owner temp/projection range lineage、access-marker lane、no-continuation/error、cache/scope restore、normalized call representation と trace を維持。
@@ -41,3 +41,11 @@ For an unresolved input question, first produce an exact direct/delegated reader
 Other compiler domains, source meaning/algorithm changes, all product edits/execution/performance within this audit.
 Optional components stay optional and must not become mandatory merely because they share a row. No changes to language acceptance are delegated by this issue.
 
+
+## Adopted Implementation Intake
+
+[com-ptko](com-ptko.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ucze, com-fuo8, met-6e6k; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) retains all main/mixed roles and normative grounds. Selected call/place/receiver and access lowering consumes fixed source selection, evaluation order and modes through final temporaries and CFG. Preserve one-time base/index evaluation, strong owner lifetimes, projections and no-continuation; it cannot select source calls again.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

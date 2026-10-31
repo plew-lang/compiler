@@ -31,3 +31,11 @@ No product execution/repair/GREEN in audit; no source acceptance/algorithm/ABI r
 ## Corrected Async Carrier Input Contract
 
 [Reviewed correction](../../../evidence/compiler-api-audit/resolutions/trait-async-bare-memo-correction.json) and [independent receipt](../../../evidence/compiler-api-audit/review-resolution-trait-async-bare-memo-correction.json) supersede the earlier broad M-cache sentence. Required canonical/name/keyword/proof effects remain per entry; the fixed Promise[Unit] path does not access the bare-nominal memo. Original scope, classification, repair ownership and open/unimplemented status are unchanged.
+
+## Adopted Implementation Intake
+
+[com-lk60](com-lk60.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ucze, met-6e6k, met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-constraints.json) retains all main/mixed roles and normative grounds. 選択済みrequirementのown method binderを実引数から推論しresultに適用するsource call typing。selected proofとsignature result readerの工程3受入を伴う。
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

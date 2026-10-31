@@ -27,3 +27,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 No product implementation/GREEN or whole Mid/ownership/CFG/proof/ABI/source acceptance certification in audit. No parser/semantic checker/projection proof solve/condition selection/MonoWork/destructor queue/native handle/driver grants. Do not minimize passive descriptor field count or treat outer fixture setup producer as callee authority.
 
 
+
+## Adopted Implementation Intake
+
+[com-ptko](com-ptko.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-6e6k, met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) retains all main/mixed roles and normative grounds. Structural term/type instantiation and selected signatures are the explicit-environment final consumers of saved source types and evidence. Preserve selected ParamId/SelfItem/callsite/session identities and conditional interner/acquisition effects without source reselection or unrelated writers.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.

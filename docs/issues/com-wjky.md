@@ -25,3 +25,11 @@ Preserve exact actual caller and source/session/type/proof/pool lifetimes, order
 
 ## Excluded
 Other original main C/J/O/optional/components and existing repair owners; algorithm correctness/solver/termination/GREEN/performance; unrelated source/body/executable/configuration writers.
+
+## Adopted Implementation Intake
+
+[com-ptko](com-ptko.md) classifies the exact confirmed scope as required existing-feature phase3 conformance. Required admission owner(s): met-ucze, met-ia09; actual tk prerequisites retain this open repair.
+
+[Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) retains all main/mixed roles and normative grounds. Current lexical implementation/global/namespace/anonymous construction queries participate in source candidate and binder resolution. Preserve visibility, exact declaration/Self/ParamId identity and actual conditional interner/query services without whole compiler or executable authority.
+
+Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
