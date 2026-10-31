@@ -1,6 +1,6 @@
 ---
 id: com-kp0h
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-27T19:08:00Z
@@ -32,3 +32,28 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 Row1: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Preserve actual normal dispatcher results/status/case identity before accepting normal run/panic/reject/part evidence. This validator repair precedes affected gate reliance, not all source investigations. Required admission: com-9l3b.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+## Repair Scenarios
+
+Before implementation, test the actual production phase dispatch/aggregation
+boundary for each run/panic/reject/part/partreject phase: dispatcher failure with
+zero results; successful dispatch with zero or one missing result; duplicate or
+foreign result identities (including equal total count); complete results followed
+by dispatcher failure; worker interruption; out-of-order complete successes; and
+complete results containing a legitimate case failure. Keep progress enabled and
+quiet operation, existing labels, parallel budget and compiler/link/runtime/golden
+checks. Results must correspond exactly once to the frozen discovered inputs.
+
+Use controlled processes for intended failure causes and production adapters,
+not a copied collector as proof. RED may pin the unchanged legacy phase while
+its production adapter is extracted; final regression must invoke the actual
+shared adapter and preserve the same observable scenarios. Keep existing worker
+exit/output tests through the real worker entry. No fixture/golden omission,
+timeout relaxation, gen/ASan classification change or compiler semantic repair.
+
+Own the common dispatch status and identity reconciliation once, and have all
+five standard phases consume it. Required verification is the scoped tooling
+regression plus representative real compiler cases through that adapter and the
+applicable normal consumer checks; whole-candidate gates/main admission remain
+separate. Preserve pre-existing candidate/source failures with exact evidence,
+not weaker expectations or a false full-suite GREEN.
