@@ -1,6 +1,6 @@
 ---
 id: com-mt7l
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-27T19:08:00Z
@@ -72,6 +72,24 @@ existing56 runner-status and160 dispatcher controls exit0. The
 [five isolated mutation kinds](../../../evidence/required-goldens/mutations.json)
 detect ignored read status, rejection of valid empty goldens and hidden read errors.
 The [complete gen consumer](../../../evidence/required-goldens/gen-consumer.json)
-passes25 positive/5 reject plus gen-input-ast with unchanged inputs. Normal
-consumer and independent completion review remain pending; no full candidate or
-phase-three closure is claimed by these results.
+passes25 positive/5 reject plus gen-input-ast with unchanged inputs. The
+[complete normal consumer](../../../evidence/required-goldens/normal-consumer.json)
+returns every planned identity once (2,834), with part93/partreject84 passing.
+Its exit1 and five known source failures match the earlier same-carrier/source
+run; full candidate GREEN and phase-three closure are not claimed.
+
+## Outcome
+
+Resolved at product revision7c42951d. Each owning part/gen consumer checks the
+actual read status before comparison, retaining diagnostics, valid empty goldens
+and legacy comparison behavior. No source/fixture expectations were changed.
+The [independent completion review](../../../evidence/required-goldens/review.json)
+derived the contract before inspecting the diff, independently reproduced the six
+baseline false successes and final22 passing controls, and reconciled standard
+normal/gen evidence. Its findings contain no mandatory defects, unconfirmed
+in-scope concerns or unresolved specification; closure is accepted on that evidence.
+
+The [evidence entry](../../../evidence/required-goldens/README.md) owns the saved
+results and limits. Known five source failures remain at their open owners and
+com-9l3b remains open; this finite repair is not whole-suite GREEN or main/seed
+admission.
