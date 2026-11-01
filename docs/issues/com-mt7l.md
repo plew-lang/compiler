@@ -58,3 +58,20 @@ preflight exists/readable check, owns admission to comparison. Validate the
 shared dispatcher and existing status controls, and applicable actual normal/gen
 consumers with frozen candidate/source. Known unrelated WIP source failures must
 remain explicit rather than changing goldens or claiming whole-candidate GREEN.
+
+## TDD Evidence
+
+The [fixed RED](../../../evidence/required-goldens/red.json) uses unchanged
+production comparisons at fb85fb74 and test commit31ccc459: six false successes
+across part/gen, with16 preserved controls. It records exact source hashes,
+command and terminal exit1. Final test assertions also distinguish I/O diagnostics
+from progress and unrelated compiler/link/runtime failures.
+
+At7c42951d the [22 controls](../../../evidence/required-goldens/green.json),
+existing56 runner-status and160 dispatcher controls exit0. The
+[five isolated mutation kinds](../../../evidence/required-goldens/mutations.json)
+detect ignored read status, rejection of valid empty goldens and hidden read errors.
+The [complete gen consumer](../../../evidence/required-goldens/gen-consumer.json)
+passes25 positive/5 reject plus gen-input-ast with unchanged inputs. Normal
+consumer and independent completion review remain pending; no full candidate or
+phase-three closure is claimed by these results.
