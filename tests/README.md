@@ -86,6 +86,11 @@ Dependency tests create isolated packages in scratch; their implementation is
 `fixtures/genast/` is not automatically enumerated: adding an input also
 requires registering its checks in `compiler/codegen/test-gen-input-ast.sh`.
 
+`tooling/test-required-goldens.py` is registered in the normal harness. It checks
+part/gen required-golden read failures through their production consumers and
+final summaries/exits, while preserving valid empty and trailing-newline output.
+Its controlled compiler/linker processes isolate I/O handling, not language rules.
+
 ## Shared inputs and companions
 
 Keep one input and all its companions together. A run fixture requires `.out`;

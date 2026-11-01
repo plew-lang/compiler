@@ -86,7 +86,8 @@ case "$phase" in
     status=0
     got=$(python3 ./scripts/support/watch-command.py -- "$bin" 2>/dev/null) || status=$?
     if [ "$status" -ne 0 ]; then echo "FAIL part/$name(exit:$status)"; exit 0; fi
-    if [ "$got" = "$(cat "$dir/Main.out")" ]; then echo "PASS part/$name"; else echo "FAIL part/$name"; fi
+    if ! expected=$(cat "$dir/Main.out"); then echo "FAIL part/$name(golden)"; exit 0; fi
+    if [ "$got" = "$expected" ]; then echo "PASS part/$name"; else echo "FAIL part/$name"; fi
     ;;
     partreject)
     main="$1"; [ -f "$main" ] || exit 0

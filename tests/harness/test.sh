@@ -65,6 +65,7 @@ done
 # Verify that execution failures cannot pass a golden-output comparison.
 python3 ./tests/tooling/test-runner-exit-status.py
 python3 -B ./tests/tooling/test-normal-dispatch.py
+python3 -B ./tests/tooling/test-required-goldens.py
 
 # --- run/ : compile, link, run, compare stdout to the golden .out ---
 run_results=$(sh ./tests/harness/case-phase.sh run)

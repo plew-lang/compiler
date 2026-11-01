@@ -123,8 +123,12 @@ os.execv(os.environ['REAL_CAT'],[os.environ['REAL_CAT'],*sys.argv[1:]])
                 failed_rows = [line for line in p.stdout.splitlines() if line.startswith('failing:')]
                 # A compiler/link/program failure is not a golden-read RED.
                 ok &= failed_rows in ([f'failing: {label}'], [f'failing: {label}(golden)'])
-            if expected is None or mechanism:
-                ok &= bool(p.stderr.strip())  # Keep actual read diagnostics visible.
+            if expected is None:
+                ok &= 'No such file or directory' in p.stderr
+            elif mechanism == 'permissions':
+                ok &= 'Permission denied' in p.stderr
+            elif mechanism:
+                ok &= 'controlled golden read failure' in p.stderr
             results.append(dict(phase=phase, scenario=name, read_fault=mechanism,
                                 expected_exit=0 if success else 1, actual_exit=p.returncode,
                                 passed=bool(ok), stdout=p.stdout, stderr=p.stderr))

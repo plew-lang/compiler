@@ -80,7 +80,10 @@ for app in tests/fixtures/gen/*/App.pw; do
     if [ "$status" -ne 0 ]; then
         fail=$((fail + 1)); failed="$failed $name(exit:$status)"; continue
     fi
-    if [ "$got" = "$(cat "$dir/App.out")" ]; then
+    if ! expected=$(cat "$dir/App.out"); then
+        fail=$((fail + 1)); failed="$failed $name(golden)"; continue
+    fi
+    if [ "$got" = "$expected" ]; then
         pass=$((pass + 1))
         echo "PASS gen/$name" >&2
     else
