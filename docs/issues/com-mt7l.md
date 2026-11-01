@@ -1,6 +1,6 @@
 ---
 id: com-mt7l
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-27T19:08:00Z
@@ -40,3 +40,21 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 Row95: Preserve original snapshots and accepted correction, one repair count. Not kp0h terminal-result closure/tfxc selector/every output oracle; no duplicate reopening or individual fixture absence claim. met-py42 stays closed duplicate; actual com-mt7l owns part Main.out and gen App.out missing/unreadable required-file read failure with valid present-empty comparisons. Normal/gen adapters must propagate failure. Required admission: com-9l3b.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+## Repair Scenarios
+
+Exercise the actual normal part caller/worker/collector and positive gen loop
+through each production final summary and exit. Use missing and unreadable
+required goldens with empty and nonempty program output, plus a controlled
+nonzero read after returning matching bytes (the file remains readable).
+Retain valid empty, newline-only, nonempty and legacy trailing-newline matches,
+and both empty/nonempty mismatch directions. Keep exact run-mode comparisons
+in the existing runner-status controls unchanged.
+
+Use isolated controlled compiler/linker programs for deterministic I/O faults;
+never edit committed fixture expectations or copy a replacement comparator into
+the regression. Preserve read diagnostics. Actual read status, not merely a
+preflight exists/readable check, owns admission to comparison. Validate the
+shared dispatcher and existing status controls, and applicable actual normal/gen
+consumers with frozen candidate/source. Known unrelated WIP source failures must
+remain explicit rather than changing goldens or claiming whole-candidate GREEN.
