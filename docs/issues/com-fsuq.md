@@ -1,7 +1,7 @@
 ---
 id: com-fsuq
 status: in_progress
-deps: []
+deps: [com-6lza]
 links: []
 created: 2026-10-27T18:40:48Z
 type: bug
@@ -21,7 +21,7 @@ Before changing code, independently inspect diagnostic/runner contracts and hist
 
 Excluded: adding .err to all 427 cases, correcting each fixture expectation, compiler semantics changes, suite reduction, weakening sanitizer/watchdog checks, or claims about every other runner phase. Only the named expose and ASan B checker extensions below are additionally owned; other phase audits remain with com-e713/com-5zvv.
 
-Acceptance: discriminating RED/GREEN controls plus affected production worker/runner checks; independent review of actual failure paths and source-result contract. Repair execution is separate from audit work; this issue has no dependency on audit closure and does not become an audit completion prerequisite.
+Acceptance: discriminating RED/GREEN controls plus affected production worker/runner checks; independent review of actual failure paths and source-result contract. Repair execution is separate from the completed com-jno0 API/test audits and does not become their completion prerequisite. The distinct failure-policy investigation com-6lza is now an explicit prerequisite for this repair.
 
 Found by com-ouh2; source baseline tests/harness/test.sh SHA is in the evidence snapshot.
 
@@ -82,22 +82,13 @@ missing-function/closure invariant failures. Neither its variant name nor a
 rendered prefix/location/substring proves source rejection. Supervisors retain
 signal/timeout/status but cannot recover that erased domain.
 
-Decision requested, not adopted:
-
-1. Recommended: retain explicit failure kinds from producer to CLI; give source
-   rejection exit1 and non-source failures a distinct ordinary status. Keep
-   detailed causes internally, reason companions and existing sanitizer/supervisor
-   protections. Do not infer kinds from wording or default unclassified errors
-   to source rejection. Exact non-source codes need a documented mapping.
-2. Alternative: retain the same explicit failure kinds but publish a structured
-   terminal result channel and preserve broad exit compatibility. This adds an
-   output/protocol surface and input/output handling to the consumers; no general
-   diagnostic serialization is currently adopted.
-
-Both require a producer-to-CLI transport decision rather than another negative
-regex. [Rust's driver result adapter](https://doc.rust-lang.org/stable/nightly-rustc/rustc_driver_impl/fn.catch_with_exit_code.html)
-is a reference for mapping returned failure to exit status; its exact status
-policy is not automatically Plew's contract.
+The earlier CLI transport alternatives are not adopted. Following the user's
+request, first complete the separate compiler-wide failure/panic audit
+[com-6lza](com-6lza.md). It must assess lower-layer API tests, typed failure
+retention and genuine invariant violations before choosing any public CLI
+change. Neither distinct exit codes nor a structured output protocol is a
+prerequisite by assumption. Source/IO/unsupported failures and validators of
+malformed input must not be converted to panic merely by message matching.
 
 Before final repair certification, inventory all producers/conversions/terminal
 adapters feeding these named consumers; do not tag all existing Frontend errors
@@ -120,5 +111,16 @@ source diagnostics; the shared constructor does not provide their distinction.
 Legacy terminal helpers have only definitions/unused imports in the current
 source scan; live CLI exits and retained failure services still need the chosen
 transport. Object/JIT/callback neighbors are impact boundaries, not permission to
-change application exit or callback ABI incidentally. Product repair and the
-user's result-channel decision remain outstanding.
+change application exit or callback ABI incidentally. Product repair remains
+outstanding; the failure-policy decision now follows com-6lza rather than an
+isolated CLI-only choice.
+
+
+## Audit Dependency and Resumption
+
+com-6lza is a prerequisite investigation, not a parent or completion waiver.
+Preserve this task's finite normal/expose/ASan B scope and existing RED. Once the
+audit fixes the failure-policy boundary, attach the relevant finite producer/
+transport repairs as actual prerequisites and complete these consumers' own
+RED/GREEN, affected runner controls and independent completion review. Audit
+completion or creation of follow-ups does not repair the32 false successes.
