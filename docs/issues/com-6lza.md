@@ -133,9 +133,11 @@ before semantic inspection. Batch result files record inspected families,
 preconditions, returned/terminal behavior, propagation, findings and remaining
 cross-batch questions. Their existence is not independent acceptance or audit
 completion. The [checkpoint](../../../evidence/compiler-failure-audit/checkpoint.json) names current inspected units and structural checks;
-All104 static batch records now exist. Cross-batch semantic reconciliation,
-policy adoption, finite repair assignment, affected-admission dependencies and
-fresh whole completion review remain unfinished; record presence is not acceptance.
+The104 original batch records and cross-batch dispositions are saved; finite
+repair assignment and affected-admission dependencies are adopted. Fresh whole
+review found a missing distribution entry, now recorded as a corrective
+supplement pending recheck. Required policy decisions remain unadopted. Record
+presence and limited reviews are not whole completion acceptance.
 
 Controlled shell probes distinguish downstream pipeline success from upstream
 failure and failed build/generator publication from normal success/rejection.
@@ -160,9 +162,11 @@ distinguishes lower owner-API tests from terminal/process integration without
 assuming today's generic Failure establishes source rejection.
 [Partial owner adoption](../../../evidence/compiler-failure-audit/correction-owner-adoption.json)
 creates16 finite tasks and identifies seven existing owner units for service and
-Mid/backend findings. Actual dependencies are not yet installed; a proposed
-generation cycle requires review. Tooling/frontend/Syntax/stdlib assignment,
-necessary user decisions and fresh whole completion review remain required.
+Mid/backend findings. Actual accepted dependencies are installed, with diagnostic
+finite increments, the generation-cycle proposal removed and conditional
+relations kept conditional. Tooling and frontend/Syntax finite assignment is
+also recorded and scoped-reviewed; stdlib IO findings coalesce those owners.
+Necessary user decisions and fresh whole completion review remain required.
 No product repair, changed panic/CLI policy, main/seed acceptance or GREEN is
 claimed. Keep this task in_progress.
 
@@ -201,3 +205,32 @@ compiler/std/test/seed source or failure policy has changed.
 New independent whole completion and assignment reviews are now requested.
 Required policy dispositions remain explicit and not adopted. Do not close from
 the candidate reconciliation or treat audit assignment as source conformance.
+
+## Whole Review Coverage Correction
+
+Fresh whole review found that the original inventory omitted the real
+`distribution/_.pw` entry. Preserve the original inventory as evidence of its
+actual313-file scope, not a complete-universe claim. The
+[corrective supplement](../../../evidence/compiler-failure-audit/supplemental-inventory.json)
+and [B105](../../../evidence/compiler-failure-audit/batches/B105.json) inspect its
+entire79-line entry and actual embedded-resource/Compiler/Resolver/native result
+consumers at the same pinned source revision. Combined scope is314 files and105
+batches; no product defect is newly asserted merely from the inventory miss.
+This correction and the existing assignment-record synchronizations require
+independent recheck. User decisions remain pending and no closure is claimed.
+
+## Independent Whole Review Disposition
+
+[Whole completion review](../../../evidence/compiler-failure-audit/whole-completion-review.json)
+accepted WC1/WC1a/WC1b corrections after inspecting actual distribution source,
+supplement integration and exact result consumers.
+[Whole assignment review](../../../evidence/compiler-failure-audit/whole-assignment-review.json)
+accepted W1/W2 current-state synchronization and W3's exact resolver output
+repair [com-sh7q](com-sh7q.md) with real met-0139/com-604k prerequisites.
+All314 original-plus-supplement source hashes still match. This is not product
+repair or GREEN.
+
+Only WC2 remains for closure: the two explicitly submitted policy questions above
+are unanswered. Keep in_progress; after answers, record the adopted reasons in
+proper design/spec owners, update exact finite implementation contracts, review
+that delta independently and perform the final requirement-by-requirement audit.

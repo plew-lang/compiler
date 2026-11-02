@@ -33,7 +33,7 @@ From [com-6lza](com-6lza.md), [tooling intake](../../../evidence/compiler-failur
 
 - If shared domain transport adopted, consume only actual relevant adapter; no blanket fsuq prerequisite.
 
-This is an admission proposal, not an installed dependency. Record actual dependencies after cycle and responsibility review.
+Actual accepted connections and conditional exclusions are recorded in [tooling adoption](../../../evidence/compiler-failure-audit/tooling-owner-adoption.json). The optional restart diagnostic has no unconditional standard-gate prerequisite; recorded standard-gate edges are installed. Product repair remains open.
 
 ## Completion
 
