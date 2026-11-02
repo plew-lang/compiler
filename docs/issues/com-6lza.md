@@ -234,3 +234,18 @@ Only WC2 remains for closure: the two explicitly submitted policy questions abov
 are unanswered. Keep in_progress; after answers, record the adopted reasons in
 proper design/spec owners, update exact finite implementation contracts, review
 that delta independently and perform the final requirement-by-requirement audit.
+
+## Confirmed Source-Input Boundary
+
+The user explicitly confirmed that invalid input expressible in source must not
+trigger compiler panic. [Diagnostics](../design/diagnostics.md#finding-failure-and-presentation)
+now states that it produces a diagnostic and failed request; invoking an
+admitted-state helper before checking its source-input preconditions is a
+compiler bug, not permission to panic as input validation. Explicit application
+or generator execution remains a separate contract.
+
+This confirmation does not select the previously unspecified escape repertoire
+or adopt a blanket terminal policy for genuine internal invariant violations.
+Those decisions remain open; do not infer them from the source-input rule. The
+contract clarification must be included in the policy-delta review before
+investigation closure. No product implementation or test has changed.

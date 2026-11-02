@@ -24,6 +24,8 @@ An error-severity record cannot be buffered while the same required request publ
 
 A returning compiler service propagates failure to its caller. Terminal compatibility adapters may remain only where callers still rely on termination; making such an adapter return without converting its callers would continue with invalid state. The adopted service boundary returns results and leaves process termination to the execution/CLI adapter. This is an architectural requirement, not a claim that all old terminal sites have migrated.
 
+Invalid user-authored source must be rejected with a diagnostic and a failed request, not compiler panic. Passing that input into a helper before establishing its admitted-state preconditions is a compiler bug, not an exception to this rule. Executing an explicit user-program or generator panic follows its separate execution contract.
+
 Diagnostic continuation can collect additional findings after an error without authorizing publication. It must retain owner failure separately from tentative type facts, and later requests must not reinterpret those tentative facts as accepted meaning. Continuation is not a fallback overload/type selector.
 
 ## Provenance and Lifetime
