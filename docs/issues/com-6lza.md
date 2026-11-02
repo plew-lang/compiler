@@ -132,7 +132,7 @@ revision-pinned universe and exact104 batches (313 files,106,768 lines), fixed
 before semantic inspection. Batch result files record inspected families,
 preconditions, returned/terminal behavior, propagation, findings and remaining
 cross-batch questions. Their existence is not independent acceptance or audit
-completion. Current source inspection covers B063/B064/B066/B068/B069/B075/B077;
+completion. The [checkpoint](../../../evidence/compiler-failure-audit/checkpoint.json) names current inspected units and structural checks;
 all other batches, final cross-batch reconciliation, policy adoption, finite
 repair assignment, affected-admission dependencies and fresh completion review
 remain unfinished.
