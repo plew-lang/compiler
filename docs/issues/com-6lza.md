@@ -1,6 +1,6 @@
 ---
 id: com-6lza
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-02T10:59:44Z
@@ -123,4 +123,23 @@ The [independent document review](../../../evidence/rejection-domains/audit-task
 accepted this audit contract and dependency arrangement. An old com-fsuq sentence
 about independence from com-jno0 audit closure was clarified to distinguish this
 new prerequisite. No mandatory scope defect or unconfirmed concern remains.
-This reviews the task definition only; the compiler-wide audit has not started.
+This reviews the task definition only, not the subsequent semantic audit.
+
+## Pinned Audit and Current Checkpoint
+
+The [audit entry](../../../evidence/compiler-failure-audit/README.md) links the
+revision-pinned universe and exact104 batches (313 files,106,768 lines), fixed
+before semantic inspection. Batch result files record inspected families,
+preconditions, returned/terminal behavior, propagation, findings and remaining
+cross-batch questions. Their existence is not independent acceptance or audit
+completion. Current source inspection covers B063/B064/B066/B068/B069/B075/B077;
+all other batches, final cross-batch reconciliation, policy adoption, finite
+repair assignment, affected-admission dependencies and fresh completion review
+remain unfinished.
+
+Controlled shell probes distinguish downstream pipeline success from upstream
+failure and failed build/generator publication from normal success/rejection.
+They are explicitly not actual Plew compiler/runtime/sanitizer execution.
+Additional TOML nonprogress is a static control-flow finding, not an executed
+parser reproduction. No product source, CLI status policy or panic policy has
+changed. Continue the remaining pinned units; do not close from the partial map.
