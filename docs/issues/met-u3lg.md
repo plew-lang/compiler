@@ -39,3 +39,9 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 Row79: Exactly Loader three forbidden spellings and MonoCall two negative patterns. Keep clean/forbidden controls, nonmatch vs error. Loader copied probe measured; trace is static only. No compiler/parser/trace semantic repair or every-grep scope. Normal test.sh registers both named architecture/trace guards. Unavailable negative-only input or failed search can look like absence/PASS; repair before normal gate and shared-parser Loader evidence are relied on. Required admission: com-9l3b, com-2p9p.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+## Failure Audit Tooling Intake com-6lza
+
+Existing two scripts only: nonmatch1 differs from hit0 and failed search/missing/unreadable input; preserve forbidden spellings and positive structure.
+
+Exact aliases, controls and exclusions: [tooling owner evidence](../../../evidence/compiler-failure-audit/tooling-owner-candidates.json), unit `negative-two-existing`. Existing scope and actual admission relations are preserved. No broader observer/structural-gate repair, product completion or GREEN is implied.

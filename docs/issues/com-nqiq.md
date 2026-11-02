@@ -36,3 +36,9 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 Row11: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Measurement fingerprint assertions need independent actual selected input-content oracles before formal performance admission; do not alter the measurement protocol or trust helper-under-test alone. Required admission: com-p5um.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+## Failure Audit Tooling Intake com-6lza
+
+Existing selected fingerprint TEST oracle: independently expected source/manifest/lock-selected dependency bytes and one change contrast; SOURCE temp root does not change compiler-cwd manifest selection.
+
+Exact aliases, controls and exclusions: [tooling owner evidence](../../../evidence/compiler-failure-audit/tooling-owner-candidates.json), unit `fingerprint-test-existing`. Existing scope and actual admission relations are preserved. No broader observer/structural-gate repair, product completion or GREEN is implied.

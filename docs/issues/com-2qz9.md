@@ -29,5 +29,3 @@ Use meaningful lower-API RED for the named cause-reduction branch with valid suc
 ## Excluded
 
 No universal rich error object, new stable code taxonomy, wholesale panic conversion, CLI/ABI policy change, hidden semantic reselection, surviving-host recovery or unrelated diagnostic-family migration. Other met-k7ks work does not become a prerequisite of this finite increment.
-
-

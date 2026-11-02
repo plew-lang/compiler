@@ -44,4 +44,3 @@ Finding references: PACKAGE-INPUT-STRING-BOUNDARY field-admission portion, packa
 Inspect the pinned finding and current owner preconditions before implementation. Establish meaningful RED for the exact defect and preserved positive/boundary controls, then repair producer through final consumer and remove competing interpretation. Verify all returned exits/publication obligations in scope, run affected gates, obtain independent review, and record revisions/results. Do not close from added checks or audit assignment. No mass panic conversion, surviving-host recovery, changed public CLI code/format or unspecified syntax policy is authorized by this ticket; request any required decision before adoption.
 
 Admission connections will be recorded after exact dependency/cycle review; creation alone does not complete audit intake.
-

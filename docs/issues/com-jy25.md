@@ -36,3 +36,9 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 Row12: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Nested worker/measurement progress consumers must distinguish stale phase alternation from actual advancing counters/LLVM work before relying on supervised gates. Preserve60second deadline and cleanup, not a heartbeat exception. Required admission: com-p5um, com-9l3b.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+## Failure Audit Tooling Intake com-6lza
+
+Only existing stale repeated/alternating phase/counter semantics in process_watch and measure-self-compile.record_line, preserving existing60second deadline, sampler draining/reaping and real LLVM progress.
+
+Exact aliases, controls and exclusions: [tooling owner evidence](../../../evidence/compiler-failure-audit/tooling-owner-candidates.json), unit `progress-existing`. Existing scope and actual admission relations are preserved. No broader observer/structural-gate repair, product completion or GREEN is implied.
