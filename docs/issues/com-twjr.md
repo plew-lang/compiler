@@ -7,7 +7,7 @@ created: 2026-11-02T21:30:19Z
 type: bug
 priority: 2
 assignee: Koji Murata
-tags: [diagnostics, verification]
+tags: [driver, frontend, verification]
 ---
 # Return package input errors for nonprogressing TOML values
 

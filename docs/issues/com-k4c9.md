@@ -1,7 +1,7 @@
 ---
 id: com-k4c9
 status: open
-deps: []
+deps: [com-yeua]
 links: []
 created: 2026-10-27T19:08:00Z
 type: bug
@@ -32,3 +32,9 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 Row3: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Generation rejection checks must distinguish intended domain failures from internal/setup/timeouts before current gen/gate acceptance. Preserve all qualified genreject/missing-support/genast findings. Required admission: com-9l3b, met-8b8w.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+## Failure Audit Intake com-6lza
+
+- `NEGATIVE-GEN-CONSUMERS`: semantic-rejection-consumers gen, GEN-AST-APPLICATION-STATUS-BYPASS, GEN-INPUT-AND-LIST-STATUS-BYPASS. Existing exact contract explicitly covers5 genreject, missing-support/genast failures and preserves valid provider/application controls.
+
+Exact source scopes, controls and exclusions: [finite evidence](../../../evidence/compiler-failure-audit/correction-owner-candidates.json). Actual accepted admission edges: [dependency adoption](../../../evidence/compiler-failure-audit/dependency-adoption.json). Preserve this task's existing finite scope; audit intake is not repair, GREEN or permission to adopt unresolved panic/CLI policy.

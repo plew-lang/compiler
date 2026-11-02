@@ -50,3 +50,9 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 Row60: Unverified safety boundary, not reproduced bypass; valid inputs/23 optimization modes do not complete malformed eligibility proof. Keep full-body counts, scope-transfer contrast and applicable final consumers. com-wqd7 already requires finite proof or fix that malformed unique Copy cannot become accepted Move through return transfer before executable verification, including opt on/off and destruction unknowns. Direct final UniqueCopy rejection does not settle that chain. Required admission: com-an0b, com-604k.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+## Failure Audit Intake com-6lza
+
+- `UNIQUE-RETURN-TRANSFER`: unique-copy-domain, existing com-wqd7. Existing exact open investigation already requires proof or missing guard for return transfer and malformed unique Copy preservation. Keep its original bounded investigation; do not close it from valid-source expectation.
+
+Exact source scopes, controls and exclusions: [finite evidence](../../../evidence/compiler-failure-audit/correction-owner-candidates.json). Actual accepted admission edges: [dependency adoption](../../../evidence/compiler-failure-audit/dependency-adoption.json). Preserve this task's existing finite scope; audit intake is not repair, GREEN or permission to adopt unresolved panic/CLI policy.

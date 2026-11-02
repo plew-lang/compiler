@@ -73,3 +73,9 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 Row80: Retain all30 source/provider and25 generation role qualifications. v1wa/w4c2 closed repairs preserved; met-2t3l/k4c9 qualified scopes separate, lm8j optional. No new formal macro permission. Current trait-provider directive/library handoff, compatible isolated host units/common state, private framing and receipts/admission belong to met-8b8w. Public macro/macrointerface role family remains future com-vy62. Required admission: com-604k.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+## Failure Audit Intake com-6lza
+
+- `DEV-GEN-PUBLICATION`: DEVELOPMENT-GEN-PUBLICATION, driver-publication gen. met-8b8w steps2-3 and Removal explicitly own runner publication, failed/incomplete output and ordinary generated-part receipt admission for current provider forms.
+
+Exact source scopes, controls and exclusions: [finite evidence](../../../evidence/compiler-failure-audit/correction-owner-candidates.json). Actual accepted admission edges: [dependency adoption](../../../evidence/compiler-failure-audit/dependency-adoption.json). Preserve this task's existing finite scope; audit intake is not repair, GREEN or permission to adopt unresolved panic/CLI policy.

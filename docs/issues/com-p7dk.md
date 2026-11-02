@@ -7,7 +7,7 @@ created: 2026-11-02T21:30:19Z
 type: bug
 priority: 2
 assignee: Koji Murata
-tags: [diagnostics, verification]
+tags: [driver, verification]
 ---
 # Retain git query and archive producer status before dependency publication
 

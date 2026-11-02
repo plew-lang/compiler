@@ -1,7 +1,7 @@
 ---
 id: com-2o4w
 status: open
-deps: [com-6u0t, com-fsuq]
+deps: [com-6u0t, com-fsuq, com-cpi4]
 links: []
 created: 2026-10-21T15:16:01Z
 type: task
@@ -35,3 +35,9 @@ The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake
 ## Test Admission Intake com-5azh
 
 The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/test-dispositions-067-098.json) installs required finite repair/investigation prerequisites at this actual admission: com-fsuq (row89). Retain each row qualifier and secondary domain. Validators must be repaired before relying on their affected result; source/expectation questions close with the corresponding area. Manual tools, unsupported shapes and optional scopes do not become unrelated standard-gate prerequisites. Assignment is not product repair or area completion.
+
+## Failure Audit Intake com-6lza
+
+- `EXPOSE-DECL-ATTRS`: EXPOSE-DECLARATION-ABI-ATTRIBUTES. Current task explicitly owns current host scalar/pointer extern/exposed functions, common CAbi integer classification to LLVM entry, permitted widths/signs and signature mismatches. Declaration-only attribute parity is within that current handoff, not aggregate feature expansion.
+
+Exact source scopes, controls and exclusions: [finite evidence](../../../evidence/compiler-failure-audit/correction-owner-candidates.json). Actual accepted admission edges: [dependency adoption](../../../evidence/compiler-failure-audit/dependency-adoption.json). Preserve this task's existing finite scope; audit intake is not repair, GREEN or permission to adopt unresolved panic/CLI policy.

@@ -5,9 +5,9 @@ deps: []
 links: []
 created: 2026-11-02T21:30:19Z
 type: task
-priority: 2
+priority: 1
 assignee: Koji Murata
-tags: [diagnostics, verification]
+tags: [diagnostics, frontend, driver, verification]
 ---
 # Carry producer failure domains to compiler rejection consumers
 

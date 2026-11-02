@@ -1,7 +1,7 @@
 ---
 id: com-fsuq
 status: in_progress
-deps: [com-6lza]
+deps: [com-6lza, com-yeua]
 links: []
 created: 2026-10-27T18:40:48Z
 type: bug
@@ -124,3 +124,9 @@ audit fixes the failure-policy boundary, attach the relevant finite producer/
 transport repairs as actual prerequisites and complete these consumers' own
 RED/GREEN, affected runner controls and independent completion review. Audit
 completion or creation of follow-ups does not repair the32 false successes.
+
+## Failure Audit Intake com-6lza
+
+- `NEGATIVE-SOURCE-CONSUMERS`: semantic-rejection-consumers normal/expose/ASan B, existing80controls/32false-success. Current exact contract owns normal reject/partreject,18 expose negative calls and ASan B classifier. Sound producer channel must precede classifier repair; existing task expressly requires decision if unavailable.
+
+Exact source scopes, controls and exclusions: [finite evidence](../../../evidence/compiler-failure-audit/correction-owner-candidates.json). Actual accepted admission edges: [dependency adoption](../../../evidence/compiler-failure-audit/dependency-adoption.json). Preserve this task's existing finite scope; audit intake is not repair, GREEN or permission to adopt unresolved panic/CLI policy.

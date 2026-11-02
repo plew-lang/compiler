@@ -7,7 +7,7 @@ created: 2026-11-02T21:30:19Z
 type: bug
 priority: 2
 assignee: Koji Murata
-tags: [diagnostics, verification]
+tags: [backend, driver, verification]
 ---
 # Return non-success when required compiler text output fails
 

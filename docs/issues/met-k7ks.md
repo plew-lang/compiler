@@ -1,7 +1,7 @@
 ---
 id: met-k7ks
 status: open
-deps: [com-bz23, com-ktyj, com-mexd, com-6h5i, com-g127, com-0t9x, com-id5r, com-u09r, com-9sa5, com-euq7, com-ecm1, com-p8xt, com-zpo1, com-xp8r, com-jyy5, com-ysl5]
+deps: [com-bz23, com-ktyj, com-mexd, com-6h5i, com-g127, com-0t9x, com-id5r, com-u09r, com-9sa5, com-euq7, com-ecm1, com-p8xt, com-zpo1, com-xp8r, com-jyy5, com-ysl5, com-gye8, com-bd93, com-2qz9, com-cpi4]
 links: []
 created: 2026-10-21T11:05:50Z
 type: task
@@ -85,3 +85,12 @@ The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake
 ## Scoped Audit Intake com-7a5t
 
 The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-construction.json) assigns exact required input-authority repair subsets to this admission contract: com-jyy5, com-ysl5. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Failure Audit Intake com-6lza
+
+- `CAUSE-TRANSPORT`: SERVICE-DOMAIN-LOSS provenance subset, DECLARATION-DOMAIN-LOSS, PREPARATION-DOMAIN-LOSS, LLVM-CLOSURE-EVIDENCE-CAUSE-LOSS, MID-ACCESS-OWNER-CAUSE-LOSS, MID-BLOCK-ERROR-CAUSE-OVERWRITE, MID-INSTANTIATION-CAUSE-REDUCTION, MID-DECLARATION-MATCH-CAUSE-REDUCTION. met-k7ks37-48 explicitly requires original domain cause through adapters/retained failures/final renderer. Own exact data loss, not a declaration that CompileDiagnostic or Failure is invalid.
+- `NATIVE-CALLBACK-CAUSE`: CALLBACK-CAUSE-SHADOW, native-callback-cause. Existing original-cause-through-adapters contract covers this current native reporting path. Record native reorder/cleanup as a finite adapter increment, coordinated with current callback ABI admission; no new recovery protocol.
+
+Exact source scopes, controls and exclusions: [finite evidence](../../../evidence/compiler-failure-audit/correction-owner-candidates.json). Actual accepted admission edges: [dependency adoption](../../../evidence/compiler-failure-audit/dependency-adoption.json). Preserve this task's existing finite scope; audit intake is not repair, GREEN or permission to adopt unresolved panic/CLI policy.
+
+Finite increments [com-bd93](com-bd93.md), [com-2qz9](com-2qz9.md) and [com-cpi4](com-cpi4.md) separate source, Mid and native callback work so those limited admissions need not await unrelated diagnostic work. The exact LLVM closure-evidence reduction remains in this owner's backend scope.

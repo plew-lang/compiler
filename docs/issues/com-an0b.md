@@ -1,7 +1,7 @@
 ---
 id: com-an0b
 status: open
-deps: [com-0t9x, com-egv2, com-f17t, com-i86w, com-l0mr, com-m4kt, com-p9rd, com-vyk7, com-rad4, com-tfz7, com-jbau, com-l92e, com-pshx, com-uiwg, com-7u06, met-6zp3, com-l5l9, com-vjlg, com-wqd7, com-xlmh]
+deps: [com-0t9x, com-egv2, com-f17t, com-i86w, com-l0mr, com-m4kt, com-p9rd, com-vyk7, com-rad4, com-tfz7, com-jbau, com-l92e, com-pshx, com-uiwg, com-7u06, met-6zp3, com-l5l9, com-vjlg, com-wqd7, com-xlmh, com-2qz9, com-sozp]
 links: []
 created: 2026-10-31T07:06:20Z
 type: epic

@@ -7,7 +7,7 @@ created: 2026-11-02T21:30:19Z
 type: bug
 priority: 2
 assignee: Koji Murata
-tags: [diagnostics, verification]
+tags: [frontend, driver, diagnostics]
 ---
 # Distinguish undeclared dependencies from unavailable declared inputs
 

@@ -165,3 +165,24 @@ generation cycle requires review. Tooling/frontend/Syntax/stdlib assignment,
 necessary user decisions and fresh whole completion review remain required.
 No product repair, changed panic/CLI policy, main/seed acceptance or GREEN is
 claimed. Keep this task in_progress.
+
+## Decisions Submitted, Not Adopted
+
+1. Internal invariant policy: ordinary source/input/tool/limit/validator failures
+   remain returned, distinguishable failures. The candidate is terminal panic
+   only for an impossible condition under proven admitted-state preconditions;
+   the alternative is typed internal failure through returning services where
+   possible. Panic aborts without unwind/deinit or surviving-host recovery. The
+   audit has not adopted a compiler-wide panic rule or changed the current
+   returning-service contract. Required interface changes must await a decision.
+2. Unspecified escape spellings: unknown simple escapes and unbraced/empty or
+   nonhex Unicode escapes currently decode permissively. The recommended source
+   rule rejects those spellings, preserving defined valid scalar escapes. This
+   is distinct from the already-defined valid Unicode character implementation
+   gap and does not adopt a new digit limit. The question was submitted to the
+   user; no syntax rule or product implementation has changed.
+
+The complete spelling-by-spelling evidence is retained in
+[Syntax reconciliation](../../../evidence/compiler-failure-audit/reconciliation-syntax.json).
+Do not implement either undecided policy by interpreting a task assignment as
+user approval.

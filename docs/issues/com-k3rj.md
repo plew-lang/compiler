@@ -7,7 +7,7 @@ created: 2026-11-02T21:30:20Z
 type: bug
 priority: 2
 assignee: Koji Murata
-tags: [diagnostics, verification]
+tags: [frontend, ownership, verification]
 ---
 # Restore temporary source verifier state on every returned error
 
