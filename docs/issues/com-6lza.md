@@ -140,6 +140,9 @@ remain unfinished.
 Controlled shell probes distinguish downstream pipeline success from upstream
 failure and failed build/generator publication from normal success/rejection.
 They are explicitly not actual Plew compiler/runtime/sanitizer execution.
-Additional TOML nonprogress is a static control-flow finding, not an executed
-parser reproduction. No product source, CLI status policy or panic policy has
+Additional isolated lower-API probes execute the pinned Syntax parser and current
+Toml source: malformed comments/enums lose parse failure, a final-backslash
+character aborts, and malformed TOML stalls after entering parsing. Positive and
+already-rejected controls and a scoped independent review are linked at the audit
+entry. These do not establish full parser or compiler coverage. No product source, CLI status policy or panic policy has
 changed. Continue the remaining pinned units; do not close from the partial map.
