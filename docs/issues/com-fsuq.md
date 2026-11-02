@@ -1,6 +1,6 @@
 ---
 id: com-fsuq
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-27T18:40:48Z
@@ -43,3 +43,66 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 Row89: Preserve reasons/ABI positives/supervision/instrumentation/status. ASan B not source-oracle proof. No per-fixture err/all-runner scope or invented regex channel; unresolved failure channel needs explicit disposition. Actual normal reject/partreject, registered expose18 (6shared+4ABI+8managed) and standard ASan B source-rejection domains need sound failure classification. Internal/silent/wrong-status/diagnostic-then-signal must not become PASS; current scalar/pointer expose admission also affected. Required admission: com-9l3b, com-2o4w.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+
+## Task-Start Scenarios
+
+Inspect the original diagnostic, CLI and supervisor contracts/history before
+changing classification. Exercise actual normal reject/partreject workers with
+and without reason companions; all three expose negative invocation families;
+and the actual ASan B corpus classifier. Controlled compilers cover successful
+source rejection, accepted input, silent exit1, internal failure, wrong ordinary
+status, diagnostic-then-signal, and timeout/supervisor failure. Retain intended
+reason checks, valid acceptance controls, progress/aggregation, and sanitizer
+rejection. Distinguish read/setup errors from the intended RED.
+
+The test doubles isolate failure classification and do not certify source
+semantics, compiler instrumentation or whole-suite success. If presentation has
+already erased the failure domain, preserve evidence and request the required
+result/diagnostic boundary decision rather than inventing a text heuristic.
+
+
+## Investigation Checkpoint and Required Decision
+
+At product baseline b3bfa3ea, the unregistered task-start checker
+`tests/tooling/test-rejection-domains.py` exercises80 controlled cases through
+actual production classifiers:32 false successes,48 preserved contrasts and0
+unrecognized terminals/setup failures. The [RED](../../../evidence/rejection-domains/red.json)
+and [independent channel review](../../../evidence/rejection-domains/channel-review.json)
+retain source identity, direct outcomes, history and limits. The reviewer
+independently reproduced the same results. Production classifiers and compiler
+source have not changed; this task remains in_progress.
+
+The missing boundary is structural. `Diag::CompileDiagnostic` holds only
+severity/location/message. `PreparedProgram::programPreparationDiagnostic` and
+`DeclarationProgram::declarationProgramDiagnostic` erase typed causes, while
+`CompilerDiagnostics::reportProgramPreparationError` and Compiler CLI failures
+report them with exit1. Even `DeclarationAccessError.Frontend` can contain
+missing-function/closure invariant failures. Neither its variant name nor a
+rendered prefix/location/substring proves source rejection. Supervisors retain
+signal/timeout/status but cannot recover that erased domain.
+
+Decision requested, not adopted:
+
+1. Recommended: retain explicit failure kinds from producer to CLI; give source
+   rejection exit1 and non-source failures a distinct ordinary status. Keep
+   detailed causes internally, reason companions and existing sanitizer/supervisor
+   protections. Do not infer kinds from wording or default unclassified errors
+   to source rejection. Exact non-source codes need a documented mapping.
+2. Alternative: retain the same explicit failure kinds but publish a structured
+   terminal result channel and preserve broad exit compatibility. This adds an
+   output/protocol surface and input/output handling to the consumers; no general
+   diagnostic serialization is currently adopted.
+
+Both require a producer-to-CLI transport decision rather than another negative
+regex. [Rust's driver result adapter](https://doc.rust-lang.org/stable/nightly-rustc/rustc_driver_impl/fn.catch_with_exit_code.html)
+is a reference for mapping returned failure to exit status; its exact status
+policy is not automatically Plew's contract.
+
+Before final repair certification, inventory all producers/conversions/terminal
+adapters feeding these named consumers; do not tag all existing Frontend errors
+as source. Complete actual runner integration and relevant positive/panic/ABI
+controls. The current124/125 controls do not test real watchdog/error cleanup;
+reuse those supervision controls or add them if the integration changes. Add an
+isolated wrong-source-reason contrast when implementing the shared classifier.
+These are remaining obligations of this task, not completed product guarantees.
