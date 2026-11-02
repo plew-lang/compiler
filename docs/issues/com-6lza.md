@@ -133,9 +133,9 @@ before semantic inspection. Batch result files record inspected families,
 preconditions, returned/terminal behavior, propagation, findings and remaining
 cross-batch questions. Their existence is not independent acceptance or audit
 completion. The [checkpoint](../../../evidence/compiler-failure-audit/checkpoint.json) names current inspected units and structural checks;
-all other batches, final cross-batch reconciliation, policy adoption, finite
-repair assignment, affected-admission dependencies and fresh completion review
-remain unfinished.
+All104 static batch records now exist. Cross-batch semantic reconciliation,
+policy adoption, finite repair assignment, affected-admission dependencies and
+fresh whole completion review remain unfinished; record presence is not acceptance.
 
 Controlled shell probes distinguish downstream pipeline success from upstream
 failure and failed build/generator publication from normal success/rejection.
@@ -146,3 +146,22 @@ character aborts, and malformed TOML stalls after entering parsing. Positive and
 already-rejected controls and a scoped independent review are linked at the audit
 entry. These do not establish full parser or compiler coverage. No product source, CLI status policy or panic policy has
 changed. Continue the remaining pinned units; do not close from the partial map.
+
+## Partial Cross-Batch Intake
+
+The [cross-question correspondence](../../../evidence/compiler-failure-audit/cross-question-coverage.json)
+accounts for395 original questions without omission or duplication and verifies
+all313 fixed source hashes. This is structural evidence only. Seven domain
+receipts retain semantic traces and limitations; selected Mid/backend and stdlib
+corrections received finite independent rechecks.
+
+The [API/process assertion proposal](../../../evidence/compiler-failure-audit/testing-boundary-proposal.md)
+distinguishes lower owner-API tests from terminal/process integration without
+assuming today's generic Failure establishes source rejection.
+[Partial owner adoption](../../../evidence/compiler-failure-audit/correction-owner-adoption.json)
+creates16 finite tasks and identifies seven existing owner units for service and
+Mid/backend findings. Actual dependencies are not yet installed; a proposed
+generation cycle requires review. Tooling/frontend/Syntax/stdlib assignment,
+necessary user decisions and fresh whole completion review remain required.
+No product repair, changed panic/CLI policy, main/seed acceptance or GREEN is
+claimed. Keep this task in_progress.
