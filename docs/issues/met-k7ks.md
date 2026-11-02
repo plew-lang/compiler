@@ -94,3 +94,9 @@ The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake
 Exact source scopes, controls and exclusions: [finite evidence](../../../evidence/compiler-failure-audit/correction-owner-candidates.json). Actual accepted admission edges: [dependency adoption](../../../evidence/compiler-failure-audit/dependency-adoption.json). Preserve this task's existing finite scope; audit intake is not repair, GREEN or permission to adopt unresolved panic/CLI policy.
 
 Finite increments [com-bd93](com-bd93.md), [com-2qz9](com-2qz9.md) and [com-cpi4](com-cpi4.md) separate source, Mid and native callback work so those limited admissions need not await unrelated diagnostic work. The exact LLVM closure-evidence reduction remains in this owner's backend scope.
+
+## Frontend and Syntax Failure Audit Intake com-6lza
+
+- `SOURCE-PROVENANCE`: Exact adopted met-k7ks completion; separate call-specific com-lndr only reporting distinctions, not semantic selection. Existing owner retains whole provenance; adopted finite increments in diagnostic-owner-increments.json prevent narrow admissions waiting for unrelated whole-parent work.
+
+Exact scopes/scenarios/exclusions are in [finite intake](../../../evidence/compiler-failure-audit/frontend-syntax-owner-candidates.json); adopted paths are in [assignment](../../../evidence/compiler-failure-audit/frontend-syntax-owner-adoption.json). Preserve existing owner scope and unresolved policy boundaries. This is audit intake, not product completion.

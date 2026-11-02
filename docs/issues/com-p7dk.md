@@ -43,3 +43,9 @@ Finding references: FETCH-QUERY-STATUS, FETCH-UPSTREAM-STATUS, fetch-status.
 Inspect the pinned finding and current owner preconditions before implementation. Establish meaningful RED for the exact defect and preserved positive/boundary controls, then repair producer through final consumer and remove competing interpretation. Verify all returned exits/publication obligations in scope, run affected gates, obtain independent review, and record revisions/results. Do not close from added checks or audit assignment. No mass panic conversion, surviving-host recovery, changed public CLI code/format or unspecified syntax policy is authorized by this ticket; request any required decision before adoption.
 
 Admission connections will be recorded after exact dependency/cycle review; creation alone does not complete audit intake.
+
+## Frontend and Syntax Failure Audit Intake com-6lza
+
+- `SUPPORT-HANDOFF`: Existing correction-owner-adoption names exact root finite support tasks; this row is alias coverage, not another product unit.
+
+Exact scopes/scenarios/exclusions are in [finite intake](../../../evidence/compiler-failure-audit/frontend-syntax-owner-candidates.json); adopted paths are in [assignment](../../../evidence/compiler-failure-audit/frontend-syntax-owner-adoption.json). Preserve existing owner scope and unresolved policy boundaries. This is audit intake, not product completion.

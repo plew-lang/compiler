@@ -1,7 +1,7 @@
 ---
 id: com-f8bw
 status: open
-deps: [com-legt, com-wfpt, com-zigu]
+deps: [com-legt, com-wfpt, com-zigu, com-5zam]
 links: []
 created: 2026-10-21T15:16:01Z
 type: task
@@ -31,3 +31,9 @@ Close with exact revision/scope, final-consumer evidence, removed competing path
 ## Scoped Audit Intake com-vr57
 
 The [scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) assigns exact required input-authority repair subsets to this admission contract: com-wfpt, com-zigu. Their real prerequisites block this scope until the finite repairs and applicable independent controls pass. Preserve every source/physical/diagnostic role identified there; a primary assignment does not erase another required consumer. This is adopted assignment, not repaired product or area re-admission.
+
+## Frontend and Syntax Failure Audit Intake com-6lza
+
+- `SENDABILITY-SEMANTICS`: Current com-f8bw purpose and producer→consumer contract explicitly cover this behavior; N3 new-task proposal is replaced by this existing owner.
+
+Exact scopes/scenarios/exclusions are in [finite intake](../../../evidence/compiler-failure-audit/frontend-syntax-owner-candidates.json); adopted paths are in [assignment](../../../evidence/compiler-failure-audit/frontend-syntax-owner-adoption.json). Preserve existing owner scope and unresolved policy boundaries. This is audit intake, not product completion.

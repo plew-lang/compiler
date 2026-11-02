@@ -35,3 +35,9 @@ No implementation or GREEN in this input audit, no language/ABI/algorithm/perfor
 [Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) retains all main/mixed roles and normative grounds. Witness/record/type grounding consumes explicit body/substitution/evidence and bounded canonical/proof/conditional legacy-layout services. Preserve canonical semantic children versus compatibility carriers and exact legitimate publication prefixes.
 
 Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
+
+## Frontend and Syntax Failure Audit Intake com-6lza
+
+- `GROUND-FRAME`: Exact current Completion says temporary map scopes must restore on both Result exits; this supersedes receipt tentative new owner only for matching APIs.
+
+Exact scopes/scenarios/exclusions are in [finite intake](../../../evidence/compiler-failure-audit/frontend-syntax-owner-candidates.json); adopted paths are in [assignment](../../../evidence/compiler-failure-audit/frontend-syntax-owner-adoption.json). Preserve existing owner scope and unresolved policy boundaries. This is audit intake, not product completion.

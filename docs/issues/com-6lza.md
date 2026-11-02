@@ -145,7 +145,7 @@ Toml source: malformed comments/enums lose parse failure, a final-backslash
 character aborts, and malformed TOML stalls after entering parsing. Positive and
 already-rejected controls and a scoped independent review are linked at the audit
 entry. These do not establish full parser or compiler coverage. No product source, CLI status policy or panic policy has
-changed. Continue the remaining pinned units; do not close from the partial map.
+changed. Continue whole reconciliation and independent completion review; do not close from partial maps or batch counts.
 
 ## Partial Cross-Batch Intake
 
@@ -186,3 +186,18 @@ The complete spelling-by-spelling evidence is retained in
 [Syntax reconciliation](../../../evidence/compiler-failure-audit/reconciliation-syntax.json).
 Do not implement either undecided policy by interpreting a task assignment as
 user approval.
+
+## Whole Reconciliation Candidate
+
+[Requirement-by-requirement candidate](../../../evidence/compiler-failure-audit/whole-reconciliation.json)
+links all seven domain dispositions, original and additional finding ownership,
+actual admission dependencies, lower-API/process assertions and limitations.
+[Original findings](../../../evidence/compiler-failure-audit/finding-intake.json)
+have finite owners for49 entries/48 IDs; additional domain questions/case aliases
+are separately mapped. Service/Mid, tooling and frontend/Syntax finite assignment
+reviews do not establish whole completion. Product tasks remain open; no
+compiler/std/test/seed source or failure policy has changed.
+
+New independent whole completion and assignment reviews are now requested.
+Required policy dispositions remain explicit and not adopted. Do not close from
+the candidate reconciliation or treat audit assignment as source conformance.

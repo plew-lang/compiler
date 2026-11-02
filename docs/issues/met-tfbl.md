@@ -356,10 +356,11 @@ Neither review certifies a repaired implementation or any final validation gate.
 Review conclusions and required scope refinements are incorporated above rather
 than stored in separate review files.
 
-New repair tasks/dependencies have not yet been added: the goal requires stopping
-when required task changes are discovered. This investigation remains in_progress
-pending assignment of the required repairs/decision dispositions; investigation
-and decomposition review are complete. Parent/G1 must not close on this report.
+The four finite repair tasks and affected area/G1 dependencies are now assigned
+in the Failure Audit assignment section below. This investigation remains
+in_progress pending its own completion/decision disposition; product repairs
+and parent/G1 acceptance remain outstanding. Investigation/decomposition review
+and task assignment do not establish repaired compiler behavior.
 
 ## Scoped Test Audit Intake com-2kze
 
@@ -368,3 +369,7 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 Row62: Reuse 65-project/588-command historical evidence without rerun or new success credit. pow priority stays explicit decision boundary; function-typed capture excluded. Investigation in_progress until real repairs assigned, not product repair. met-tfbl accepted investigation proves V1/V2 lexical binding/visibility, V3 full function-value arguments, V4 global receiver identity and G1 gen-harness authority. Current source selection and global/generated publication-to-final-use admissions need actual finite repair assignment. Required admission: met-ucze, met-acfl.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+## Finite Repair Assignment from Failure Audit
+
+The established four-way repair decomposition is now assigned to [com-r88j](com-r88j.md) (lexical selection/visibility), [com-l4x2](com-l4x2.md) (complete function-value call admission), [com-za4f](com-za4f.md) (global callable receiver identity), and [com-3mh9](com-3mh9.md) (gen synthetic identity/lexical body checking). Actual affected area/G1 dependencies are recorded in [audit adoption](../../../evidence/compiler-failure-audit/frontend-syntax-owner-adoption.json). No implementation or whole phase-three completion follows from assignment; the separate named Pow/local-binding interpretation remains undecided and excluded.

@@ -35,3 +35,9 @@ Audit does not implement repairs, execute tests, certify GREEN, revise source ac
 [Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) retains all main/mixed roles and normative grounds. Expression/value-block/chain-hole type inference is one physical source-query authority across recorded and construction routes. Preserve normal/Unit/non-normal and explicit environment/owner keys, bounded caches and NOTREADY identities; no false split into fake source segments.
 
 Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
+
+## Frontend and Syntax Failure Audit Intake com-6lza
+
+- `EXPR-TYPE-FRAME`: Completion explicitly requires all-exit restoration within exact query APIs.
+
+Exact scopes/scenarios/exclusions are in [finite intake](../../../evidence/compiler-failure-audit/frontend-syntax-owner-candidates.json); adopted paths are in [assignment](../../../evidence/compiler-failure-audit/frontend-syntax-owner-adoption.json). Preserve existing owner scope and unresolved policy boundaries. This is audit intake, not product completion.

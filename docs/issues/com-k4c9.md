@@ -38,3 +38,9 @@ Preserve the original finite contract and meaningful controls; intake does not c
 - `NEGATIVE-GEN-CONSUMERS`: semantic-rejection-consumers gen, GEN-AST-APPLICATION-STATUS-BYPASS, GEN-INPUT-AND-LIST-STATUS-BYPASS. Existing exact contract explicitly covers5 genreject, missing-support/genast failures and preserves valid provider/application controls.
 
 Exact source scopes, controls and exclusions: [finite evidence](../../../evidence/compiler-failure-audit/correction-owner-candidates.json). Actual accepted admission edges: [dependency adoption](../../../evidence/compiler-failure-audit/dependency-adoption.json). Preserve this task's existing finite scope; audit intake is not repair, GREEN or permission to adopt unresolved panic/CLI policy.
+
+## Frontend and Syntax Failure Audit Intake com-6lza
+
+- `GEN-REJECTION-CONSUMER`: Exact current bug contract; existing driver assignment NEGATIVE-GEN-CONSUMERS reused.
+
+Exact scopes/scenarios/exclusions are in [finite intake](../../../evidence/compiler-failure-audit/frontend-syntax-owner-candidates.json); adopted paths are in [assignment](../../../evidence/compiler-failure-audit/frontend-syntax-owner-adoption.json). Preserve existing owner scope and unresolved policy boundaries. This is audit intake, not product completion.

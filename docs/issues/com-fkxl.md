@@ -29,3 +29,9 @@ This task owns generating, retaining and closing the startup summaries it consum
 Direct/indirect/single-root cycles, declaration order reversal, dependencies through blocks/defaults/invoked closures/drop and supported async, clean independent initializers and AOT/JIT agreement. Refine existing effect producers with their owners; do not add hidden global waits or force a new worker service to finish this current-subset task.
 
 Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is below 7 seconds. This task does not close the mixed/new-feature parent automatically.
+
+## Frontend and Syntax Failure Audit Intake com-6lza
+
+- `GLOBAL-STARTUP`: com-fkxl explicitly owns summary producers through current startup, no unassigned producer excuse.
+
+Exact scopes/scenarios/exclusions are in [finite intake](../../../evidence/compiler-failure-audit/frontend-syntax-owner-candidates.json); adopted paths are in [assignment](../../../evidence/compiler-failure-audit/frontend-syntax-owner-adoption.json). Preserve existing owner scope and unresolved policy boundaries. This is audit intake, not product completion.

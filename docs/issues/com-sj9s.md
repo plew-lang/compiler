@@ -35,3 +35,9 @@ No product repair/execution/GREEN within audit; no new sendability/worker/refere
 [Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-frontend-services.json) retains all main/mixed roles and normative grounds. Existing legacy field ownership/release-shape queries feed downstream ownership/layout interpretation. Narrow field terms and required canonical/proof/diagnostic services, preserving frame restoration obligations; no runtime RC/worker feature.
 
 Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
+
+## Frontend and Syntax Failure Audit Intake com-6lza
+
+- `ARC-FRAME`: Completion explicitly requires all-exit restoration for exact helpers; unlike a generic narrowing-only neighbor this endpoint is already in contract.
+
+Exact scopes/scenarios/exclusions are in [finite intake](../../../evidence/compiler-failure-audit/frontend-syntax-owner-candidates.json); adopted paths are in [assignment](../../../evidence/compiler-failure-audit/frontend-syntax-owner-adoption.json). Preserve existing owner scope and unresolved policy boundaries. This is audit intake, not product completion.

@@ -35,3 +35,9 @@ Other original J/C/O/optional/U scopes and existing chainSiteFor/com-qadp; langu
 [Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-selected-instances.json) retains all main/mixed roles and normative grounds. Prepared source place/value scanners realize saved completion and selected final-call/access/interface facts. Preserve body identity, legitimate Index normalization writes, scoped finalization/queues and all-exit restoration without source reinference on missing prepared facts.
 
 Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
+
+## Frontend and Syntax Failure Audit Intake com-6lza
+
+- `SCAN-FRAME`: Issue explicitly names scanExpectedTy gap and Completion owns all-exit lexical restoration. Neighboring finalization APIs not absorbed.
+
+Exact scopes/scenarios/exclusions are in [finite intake](../../../evidence/compiler-failure-audit/frontend-syntax-owner-candidates.json); adopted paths are in [assignment](../../../evidence/compiler-failure-audit/frontend-syntax-owner-adoption.json). Preserve existing owner scope and unresolved policy boundaries. This is audit intake, not product completion.

@@ -1,7 +1,7 @@
 ---
 id: met-8b8w
 status: open
-deps: [com-7aaj, com-qadp, com-k4c9, com-mt7l, com-uy99]
+deps: [com-7aaj, com-qadp, com-k4c9, com-mt7l, com-uy99, com-ijru]
 links: []
 created: 2026-10-21T15:41:34Z
 type: task
@@ -79,3 +79,9 @@ Preserve the original finite contract and meaningful controls; intake does not c
 - `DEV-GEN-PUBLICATION`: DEVELOPMENT-GEN-PUBLICATION, driver-publication gen. met-8b8w steps2-3 and Removal explicitly own runner publication, failed/incomplete output and ordinary generated-part receipt admission for current provider forms.
 
 Exact source scopes, controls and exclusions: [finite evidence](../../../evidence/compiler-failure-audit/correction-owner-candidates.json). Actual accepted admission edges: [dependency adoption](../../../evidence/compiler-failure-audit/dependency-adoption.json). Preserve this task's existing finite scope; audit intake is not repair, GREEN or permission to adopt unresolved panic/CLI policy.
+
+## Frontend and Syntax Failure Audit Intake com-6lza
+
+- `GEN-PIPELINE`: Explicit existing met-8b8w three increments and removal criteria cover this behavior; already adopted DEV-GEN-PUBLICATION same owner no duplicate.
+
+Exact scopes/scenarios/exclusions are in [finite intake](../../../evidence/compiler-failure-audit/frontend-syntax-owner-candidates.json); adopted paths are in [assignment](../../../evidence/compiler-failure-audit/frontend-syntax-owner-adoption.json). Preserve existing owner scope and unresolved policy boundaries. This is audit intake, not product completion.
