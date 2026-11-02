@@ -106,3 +106,19 @@ controls. The current124/125 controls do not test real watchdog/error cleanup;
 reuse those supervision controls or add them if the integration changes. Add an
 isolated wrong-source-reason contrast when implementing the shared classifier.
 These are remaining obligations of this task, not completed product guarantees.
+
+
+## Decision-Independent Boundary Preparation
+
+The [producer/conversion/terminal map](../../../evidence/rejection-domains/producer-boundaries.json)
+records nine inspected boundary groups and all18 literal `CompileDiagnostic`
+construction sites at the pinned inputs. It also indexes986 syntactic
+`diagnosticAt` occurrences across81 files without claiming that their semantic
+failure kinds have been classified. Direct construction includes input IO,
+unsupported operations, coverage and ABI invariants, warnings and ordinary
+source diagnostics; the shared constructor does not provide their distinction.
+Legacy terminal helpers have only definitions/unused imports in the current
+source scan; live CLI exits and retained failure services still need the chosen
+transport. Object/JIT/callback neighbors are impact boundaries, not permission to
+change application exit or callback ABI incidentally. Product repair and the
+user's result-channel decision remain outstanding.
