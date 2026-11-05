@@ -52,3 +52,16 @@ Actual accepted admission connections are recorded in [dependency adoption](../.
 - `SOURCE-DOMAIN`: Newly registered existing com-yeua exact unit already covers returning/cache/CLI origin; do not create duplicate D1 catchall.
 
 Exact scopes/scenarios/exclusions are in [finite intake](../../../evidence/compiler-failure-audit/frontend-syntax-owner-candidates.json); adopted paths are in [assignment](../../../evidence/compiler-failure-audit/frontend-syntax-owner-adoption.json). Preserve existing owner scope and unresolved policy boundaries. This is audit intake, not product completion.
+
+## Adopted Failure Policy
+
+The [diagnostic contract](../design/diagnostics.md#input-failures-and-internal-invariants)
+now permits panic only for genuine contradictions of established internal
+invariants. Ordinary invalid source/input/tool/limit and validator refusals
+remain typed failures. Existing generic internal wording is not proof of that
+precondition; unresolved classification must fail closed as non-source failure.
+Preserve the domain through returned/cache/terminal consumers and the named
+negative-test lanes. An abort/crash/timeout never counts as correct source
+rejection, even after an expected diagnostic. No public exit-code catalog or
+protocol was selected by this policy; retain the existing explicit interface
+decision boundary. Implementation and actual consumer RED/GREEN remain open.

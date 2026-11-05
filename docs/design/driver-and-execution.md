@@ -162,7 +162,7 @@ one-shot run and paused type-checking work do not depend on that host protocol.
 
 ## Failure and OS Integration
 
-Compiler services return structured diagnostics or domain failures. CLI/process adapters render them and choose exit status. Native lazy materialization cannot recover by returning through an arbitrary function signature with a guessed value; terminal execution failure aborts/stops the execution process. Prior I/O is not rolled back, and user destruction is not guaranteed on that path.
+Expected compiler failures return structured diagnostics or domain failures. CLI/process adapters render them and choose exit status. Genuine admitted-state invariant violations may terminate as compiler bugs under the [diagnostic failure contract](diagnostics.md#input-failures-and-internal-invariants); invalid source and validator input are not that exception. Native lazy materialization cannot recover by returning through an arbitrary function signature with a guessed value; terminal execution failure aborts/stops the execution process. Prior I/O is not rolled back, and user destruction is not guaranteed on that path.
 
 The one-shot worker isolates compiler/application execution from the outer command's process orchestration. The outer command owns spawning, signal forwarding, waiting, exit-status propagation, temporary files, and final artifact publication. Build output must not replace a previous good artifact until generation and linking succeed. A compiler object file alone is not a completed executable.
 

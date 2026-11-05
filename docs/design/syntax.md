@@ -96,3 +96,9 @@ Chapter review found no blocking design problem. The distinction between executa
 ## Retained Follow-up Investigations
 
 [shared grammar/materialization coverage](../issues/com-2p9p.md). These scoped tasks retain implementation limits or uninspected combinations; their existence is not evidence of a current defect or completed coverage.
+
+## Literal Escape Admission
+
+The spec's [shared character/string escape grammar](../../../spec/spec/01-basics/02-basic-types.md#文字文字列リテラル共通のエスケープ) is a closed set. Unknown escapes, missing Unicode braces, empty/nonhex digits and invalid scalars produce source diagnostics, not compiler panic or a fabricated decoded value. Retain original literal/source offsets and refuse successful cache/publication after failure. Checked accumulation must reject out-of-range scalar values without machine-integer overflow, including long digit sequences; leading zeros do not introduce a digit-count restriction. Lexical segmentation alone is not successful semantic escape validation.
+
+Rust and Swift both use explicit escape grammars and braced Unicode scalar forms ([Rust](https://doc.rust-lang.org/reference/tokens.html#character-escapes), [Swift](https://github.com/swiftlang/swift-book/blob/main/TSPL.docc/ReferenceManual/LexicalStructure.md#string-literals)). Plew uses the common simple forms without importing Rust byte/hex escapes, underscore separators or either language's digit-count limit. This catches spelling mistakes without inventing a silent backslash-removal conversion. Existing doubled braces and escaped-line folding keep their own source rules; decoded Unicode brace characters are values and must not be reparsed as interpolation.

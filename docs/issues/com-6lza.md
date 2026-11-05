@@ -1,6 +1,6 @@
 ---
 id: com-6lza
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-02T10:59:44Z
@@ -30,8 +30,8 @@ whether an error is a normal result of the API's input contract or an impossible
 state under its admitted preconditions. In particular, a validator returning an
 error for intentionally malformed input is not itself a compiler bug.
 
-The discussion's candidate policy is panic for genuine unrecoverable invariant
-violations and typed returned failures for expected failure paths. It is not
+The adopted policy permits panic for genuine admitted-state invariant
+violations and keeps typed returned failures for expected failure paths. It is not
 permission to mechanically replace messages containing internal with panic.
 Identify conflicts with current returning-service/design contracts and obtain
 any required decision before adopting changes. Panic aborts without unwind or
@@ -125,169 +125,72 @@ about independence from com-jno0 audit closure was clarified to distinguish this
 new prerequisite. No mandatory scope defect or unconfirmed concern remains.
 This reviews the task definition only, not the subsequent semantic audit.
 
-## Pinned Audit and Current Checkpoint
+## Audit Evidence and Follow-up
 
-The [audit entry](../../../evidence/compiler-failure-audit/README.md) links the
-revision-pinned universe and exact104 batches (313 files,106,768 lines), fixed
-before semantic inspection. Batch result files record inspected families,
-preconditions, returned/terminal behavior, propagation, findings and remaining
-cross-batch questions. Their existence is not independent acceptance or audit
-completion. The [checkpoint](../../../evidence/compiler-failure-audit/checkpoint.json) names current inspected units and structural checks;
-The104 original batch records and cross-batch dispositions are saved; finite
-repair assignment and affected-admission dependencies are adopted. Fresh whole
-review found a missing distribution entry, now recorded as a corrective
-supplement pending recheck. Required policy decisions remain unadopted. Record
-presence and limited reviews are not whole completion acceptance.
+[Whole reconciliation](../../../evidence/compiler-failure-audit/whole-reconciliation.json)
+connects every requirement to the fixed source audit, classifications, API/process
+assertion proposal, finite correction owners and actual admission dependencies.
+The original inventory covers313 files/104 batches; fresh whole review found the
+omitted distribution entry and the [fixed supplement](../../../evidence/compiler-failure-audit/supplemental-inventory.json)
+adds its complete79 lines. Combined scope is314 files/105 batches. The original
+inventory is preserved as actually incomplete, not retroactively rewritten.
 
-Controlled shell probes distinguish downstream pipeline success from upstream
-failure and failed build/generator publication from normal success/rejection.
-They are explicitly not actual Plew compiler/runtime/sanitizer execution.
-Additional isolated lower-API probes execute the pinned Syntax parser and current
-Toml source: malformed comments/enums lose parse failure, a final-backslash
-character aborts, and malformed TOML stalls after entering parsing. Positive and
-already-rejected controls and a scoped independent review are linked at the audit
-entry. These do not establish full parser or compiler coverage. No product source, CLI status policy or panic policy has
-changed. Continue whole reconciliation and independent completion review; do not close from partial maps or batch counts.
+Seven domain records answer395 original cross-batch questions. The
+[original finding intake](../../../evidence/compiler-failure-audit/finding-intake.json)
+accounts for49 entries/48 IDs and separately identifies additional conditional
+findings. Finite implementation owners and actual affected-admission paths are
+recorded in service/Mid, tooling and frontend/Syntax adoption evidence. The
+supplemental resolver-output publication failure is assigned to
+[com-sh7q](com-sh7q.md), with actual met-0139/com-604k prerequisites. Static
+conditional paths are not newly executed source crash/miscompile reproductions.
 
-## Partial Cross-Batch Intake
+[Fresh whole completion review](../../../evidence/compiler-failure-audit/whole-completion-review.json)
+accepted coverage corrections WC1/WC1a/WC1b; the
+[whole assignment review](../../../evidence/compiler-failure-audit/whole-assignment-review.json)
+accepted W1/W2/W3 after record/source/dependency rechecks. Independent input
+boundary clarification is in the
+[finite review](../../../evidence/compiler-failure-audit/source-input-boundary-review.json).
+Product repairs remain open; this does not certify compiler conformance or GREEN.
 
-The [cross-question correspondence](../../../evidence/compiler-failure-audit/cross-question-coverage.json)
-accounts for395 original questions without omission or duplication and verifies
-all313 fixed source hashes. This is structural evidence only. Seven domain
-receipts retain semantic traces and limitations; selected Mid/backend and stdlib
-corrections received finite independent rechecks.
+## Adopted Failure and Escape Policy
 
-The [API/process assertion proposal](../../../evidence/compiler-failure-audit/testing-boundary-proposal.md)
-distinguishes lower owner-API tests from terminal/process integration without
-assuming today's generic Failure establishes source rejection.
-[Partial owner adoption](../../../evidence/compiler-failure-audit/correction-owner-adoption.json)
-creates16 finite tasks and identifies seven existing owner units for service and
-Mid/backend findings. Actual accepted dependencies are installed, with diagnostic
-finite increments, the generation-cycle proposal removed and conditional
-relations kept conditional. Tooling and frontend/Syntax finite assignment is
-also recorded and scoped-reviewed; stdlib IO findings coalesce those owners.
-Necessary user decisions and fresh whole completion review remain required.
-No product repair, changed panic/CLI policy, main/seed acceptance or GREEN is
-claimed. Keep this task in_progress.
+On2026-11-05 the user explicitly approved the Rust/Swift-based recommendation,
+including specification changes. The [policy adoption delta](../../../evidence/compiler-failure-audit/policy-adoption.json)
+links that decision to the current normative owners and finite implementation
+scope. This resolves the two previous WC2 choices. The [independent policy review](../../../evidence/compiler-failure-audit/policy-adoption-review.json)
+accepted the delta after correcting the literal spellings; the whole reviewer
+independently confirmed WC2 resolved.
 
-## Decisions Submitted, Not Adopted
+- [Diagnostics](../design/diagnostics.md#input-failures-and-internal-invariants)
+  permits panic only for genuine contradictions of established internal
+  invariants. Ordinary invalid source/input/tool/limit and validator refusal
+  remain distinguishable returned failures. Recovery/failed-owner state is not
+  admission; existing errors are not mechanically converted to panic. No unwind,
+  deinit/host recovery, public exit-code catalog or serialization is adopted.
+- The [shared escape grammar](../../../spec/spec/01-basics/02-basic-types.md#文字文字列リテラル共通のエスケープ)
+  defines the closed common simple escapes and braced nonempty hexadecimal
+  Unicode scalars. Unknown/nonhex/unbraced/empty/invalid forms are compile errors,
+  not implicit byte conversion or panic. No new digit-count restriction; checked
+  accumulation prevents machine overflow. Existing brace/line-fold rules remain.
+  [Syntax design](../design/syntax.md#literal-escape-admission) records the rationale.
 
-1. Internal invariant policy: ordinary source/input/tool/limit/validator failures
-   remain returned, distinguishable failures. The candidate is terminal panic
-   only for an impossible condition under proven admitted-state preconditions;
-   the alternative is typed internal failure through returning services where
-   possible. Panic aborts without unwind/deinit or surviving-host recovery. The
-   audit has not adopted a compiler-wide panic rule or changed the current
-   returning-service contract. Required interface changes must await a decision.
-2. Unspecified escape spellings: unknown simple escapes and unbraced/empty or
-   nonhex Unicode escapes currently decode permissively. The recommended source
-   rule rejects those spellings, preserving defined valid scalar escapes. This
-   is distinct from the already-defined valid Unicode character implementation
-   gap and does not adopt a new digit limit. The question was submitted to the
-   user; no syntax rule or product implementation has changed.
+[com-9d4c](com-9d4c.md) owns source escape validation and successful-cache refusal;
+[com-a0fc](com-a0fc.md) owns matching character scalar-value decoding. Their real
+admission dependencies remain installed. [com-yeua](com-yeua.md) carries the
+failure-domain policy to the named returning/process consumers before fsuq/gen
+consumer repair. No product implementation, test, seed or CLI behavior changed
+while adopting these contracts. Other unresolved interfaces remain their finite
+implementation tasks' explicit decision boundaries, not silently chosen here.
 
-The complete spelling-by-spelling evidence is retained in
-[Syntax reconciliation](../../../evidence/compiler-failure-audit/reconciliation-syntax.json).
-Do not implement either undecided policy by interpreting a task assignment as
-user approval.
+## Completion State
 
-## Whole Reconciliation Candidate
+The [whole requirement reconciliation](../../../evidence/compiler-failure-audit/whole-reconciliation.json)
+accepts all investigation deliverables. The [final verification](../../../evidence/compiler-failure-audit/final-verification.json)
+confirms314 source identities,105 exact batches,395 questions each once, and156
+actual dependency steps without a reachable cycle. These structural checks
+supplement, rather than replace, semantic finite/whole reviews. The adopted
+specification is revision e705561. Product follow-ups stay open, including
+com-fsuq, com-yeua, com-9d4c, com-a0fc and com-sh7q.
 
-[Requirement-by-requirement candidate](../../../evidence/compiler-failure-audit/whole-reconciliation.json)
-links all seven domain dispositions, original and additional finding ownership,
-actual admission dependencies, lower-API/process assertions and limitations.
-[Original findings](../../../evidence/compiler-failure-audit/finding-intake.json)
-have finite owners for49 entries/48 IDs; additional domain questions/case aliases
-are separately mapped. Service/Mid, tooling and frontend/Syntax finite assignment
-reviews do not establish whole completion. Product tasks remain open; no
-compiler/std/test/seed source or failure policy has changed.
-
-New independent whole completion and assignment reviews are now requested.
-Required policy dispositions remain explicit and not adopted. Do not close from
-the candidate reconciliation or treat audit assignment as source conformance.
-
-## Whole Review Coverage Correction
-
-Fresh whole review found that the original inventory omitted the real
-`distribution/_.pw` entry. Preserve the original inventory as evidence of its
-actual313-file scope, not a complete-universe claim. The
-[corrective supplement](../../../evidence/compiler-failure-audit/supplemental-inventory.json)
-and [B105](../../../evidence/compiler-failure-audit/batches/B105.json) inspect its
-entire79-line entry and actual embedded-resource/Compiler/Resolver/native result
-consumers at the same pinned source revision. Combined scope is314 files and105
-batches; no product defect is newly asserted merely from the inventory miss.
-This correction and the existing assignment-record synchronizations require
-independent recheck. User decisions remain pending and no closure is claimed.
-
-## Independent Whole Review Disposition
-
-[Whole completion review](../../../evidence/compiler-failure-audit/whole-completion-review.json)
-accepted WC1/WC1a/WC1b corrections after inspecting actual distribution source,
-supplement integration and exact result consumers.
-[Whole assignment review](../../../evidence/compiler-failure-audit/whole-assignment-review.json)
-accepted W1/W2 current-state synchronization and W3's exact resolver output
-repair [com-sh7q](com-sh7q.md) with real met-0139/com-604k prerequisites.
-All314 original-plus-supplement source hashes still match. This is not product
-repair or GREEN.
-
-Only WC2 remains for closure: the two explicitly submitted policy questions above
-are unanswered. Keep in_progress; after answers, record the adopted reasons in
-proper design/spec owners, update exact finite implementation contracts, review
-that delta independently and perform the final requirement-by-requirement audit.
-
-## Confirmed Source-Input Boundary
-
-The user explicitly confirmed that invalid input expressible in source must not
-trigger compiler panic. [Diagnostics](../design/diagnostics.md#finding-failure-and-presentation)
-now states that it produces a diagnostic and failed request; invoking an
-admitted-state helper before checking its source-input preconditions is a
-compiler bug, not permission to panic as input validation. Explicit application
-or generator execution remains a separate contract.
-
-This confirmation does not select the previously unspecified escape repertoire
-or adopt a blanket terminal policy for genuine internal invariant violations.
-Those decisions remain open; do not infer them from the source-input rule. The
-contract clarification must be included in the policy-delta review before
-investigation closure. No product implementation or test has changed.
-
-## Rust and Swift Based Recommendation (Not Yet Adopted)
-
-Requested recommendation, not approval to change language or process behavior:
-
-- Ordinary invalid source, input/environment/tool errors, implementation/resource
-  limits and validator refusals remain distinguishable returned failures. Panic
-  is permitted only for a genuine contradiction of already-established internal
-  invariants. Missing facts after an earlier source error or recovery placeholder
-  are not automatically such a contradiction. If input validity or admission is
-  unproved, retain a typed failure rather than asserting it away. An internal
-  panic fails the invocation as a compiler bug; it never satisfies a negative
-  source test. No unwind/deinit/surviving-host recovery is promised.
-- Use a closed common simple escape set: `\0`, `\\`, `\t`, `\n`, `\r`, `\"`,
-  `\'`, plus Unicode `\u{...}`. Require a nonempty sequence of hexadecimal
-  digits and a Unicode scalar (0..10FFFF excluding D800..DFFF). Reject unknown
-  escapes, missing braces, empty/nonhex digits and invalid scalars as ordinary
-  compile errors. Preserve Plew's existing doubled-brace and physical-newline/
-  escaped-line-folding rules; do not add Rust's byte/hex escape or raw-string
-  features. Do not silently adopt Rust's underscore syntax. A new digit-count
-  limit is not part of this recommendation; accumulation must check the scalar
-  bound without overflowing. String and character spellings share these rules.
-
-Rust's [diagnostic levels](https://doc.rust-lang.org/stable/nightly-rustc/rustc_errors/enum.Level.html)
-distinguish ordinary Error, Bug/ICE and delayed bugs; its
-[error-type contract](https://rustc-dev-guide.rust-lang.org/ty.html) explains
-retaining prior error evidence rather than treating every missing fact as a new
-compiler bug. This supports the origin distinction, not copying Rust's internal
-fatal-error unwind mechanism into Plew's aborting panic. Swift's
-[diagnostic guidelines](https://github.com/swiftlang/swift/blob/main/docs/Diagnostics.md)
-likewise treat ordinary invalid programs through diagnostics.
-
-The [Rust literal grammar](https://doc.rust-lang.org/reference/tokens.html#character-escapes)
-and [Swift lexical grammar](https://github.com/swiftlang/swift-book/blob/main/TSPL.docc/ReferenceManual/LexicalStructure.md#string-literals)
-provide explicit accepted escapes and braced Unicode scalar forms. They differ
-in extensions and digit counts; Plew need not import either whole grammar.
-The common closed forms avoid silent backslash removal and accidental NUL/A
-conversion, preserve intended scalar meaning and permit checked linear decoding.
-
-These recommendations do not settle WC2 until adopted. The already-confirmed
-invalid-source-no-panic contract remains in force independently. No compiler,
-Syntax, test, seed, CLI status or specification has been changed here.
+Close as **investigated**. No product repair, compiler-wide conformance, suite
+GREEN, performance, main integration, carrier or seed promotion is certified.

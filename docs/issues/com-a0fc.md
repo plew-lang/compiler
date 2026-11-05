@@ -27,7 +27,7 @@ Origin: [com-6lza](com-6lza.md), [finite source/Syntax intake](../../../evidence
 
 ## Excluded
 
-- No new Grapheme, escape digit/bracing/unknown policy choice or general Unicode repertoire redesign.
+- No new Grapheme or independent escape grammar/policy; consume the adopted shared spec and coordinate com-9d4c.
 
 Static defined-feature refusal, not invalid source or invariant. Local spec already defines form; no successful new execution claimed.
 
@@ -36,3 +36,14 @@ Static defined-feature refusal, not invalid source or invariant. Local spec alre
 Exact producer→retention→required consumer, meaningful defect-specific RED/positive/refusal/boundary/noninterference controls, original failure preserved, legitimate prefixes retained, applicable gates and independent review. This proposal is not implemented or verified. Do not infer authorization for an undecided syntax/panic/CLI policy from this assignment. Preserve original error and legitimate published prefixes; make no rollback/recovery promise beyond the actual API contract.
 
 Required admission proposal: {"phase": "4-existing-feature", "receivers": ["com-604k"], "reason": "Existing input/runtime/diagnostic/gen contract outside source checker algorithm; integration admission, not automatically all phase3 gates."}. Actual accepted edges are recorded in the audit adoption evidence after cycle review.
+
+## Adopted Shared Character Semantics
+
+Consume the [shared escape contract](../../../spec/spec/01-basics/02-basic-types.md#文字文字列リテラル共通のエスケープ).
+Character value decoding must agree with string decoding for the seven simple
+escapes and valid Unicode scalars, including carriage return and NUL. Add exact
+scalar controls for every simple escape, raw-versus-escaped Unicode, leading
+zeros and invalid scalar/overflow refusal. Invalid source must not reach an
+unchecked internal read or compiler panic. Grammar/refusal/cache authority is
+coordinated with com-9d4c; this task owns character scalar-value completion and
+exact dependency uptake, not a competing grammar. Implementation remains open.
