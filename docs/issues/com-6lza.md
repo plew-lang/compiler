@@ -249,3 +249,45 @@ or adopt a blanket terminal policy for genuine internal invariant violations.
 Those decisions remain open; do not infer them from the source-input rule. The
 contract clarification must be included in the policy-delta review before
 investigation closure. No product implementation or test has changed.
+
+## Rust and Swift Based Recommendation (Not Yet Adopted)
+
+Requested recommendation, not approval to change language or process behavior:
+
+- Ordinary invalid source, input/environment/tool errors, implementation/resource
+  limits and validator refusals remain distinguishable returned failures. Panic
+  is permitted only for a genuine contradiction of already-established internal
+  invariants. Missing facts after an earlier source error or recovery placeholder
+  are not automatically such a contradiction. If input validity or admission is
+  unproved, retain a typed failure rather than asserting it away. An internal
+  panic fails the invocation as a compiler bug; it never satisfies a negative
+  source test. No unwind/deinit/surviving-host recovery is promised.
+- Use a closed common simple escape set: `\0`, `\\`, `\t`, `\n`, `\r`, `\"`,
+  `\'`, plus Unicode `\u{...}`. Require a nonempty sequence of hexadecimal
+  digits and a Unicode scalar (0..10FFFF excluding D800..DFFF). Reject unknown
+  escapes, missing braces, empty/nonhex digits and invalid scalars as ordinary
+  compile errors. Preserve Plew's existing doubled-brace and physical-newline/
+  escaped-line-folding rules; do not add Rust's byte/hex escape or raw-string
+  features. Do not silently adopt Rust's underscore syntax. A new digit-count
+  limit is not part of this recommendation; accumulation must check the scalar
+  bound without overflowing. String and character spellings share these rules.
+
+Rust's [diagnostic levels](https://doc.rust-lang.org/stable/nightly-rustc/rustc_errors/enum.Level.html)
+distinguish ordinary Error, Bug/ICE and delayed bugs; its
+[error-type contract](https://rustc-dev-guide.rust-lang.org/ty.html) explains
+retaining prior error evidence rather than treating every missing fact as a new
+compiler bug. This supports the origin distinction, not copying Rust's internal
+fatal-error unwind mechanism into Plew's aborting panic. Swift's
+[diagnostic guidelines](https://github.com/swiftlang/swift/blob/main/docs/Diagnostics.md)
+likewise treat ordinary invalid programs through diagnostics.
+
+The [Rust literal grammar](https://doc.rust-lang.org/reference/tokens.html#character-escapes)
+and [Swift lexical grammar](https://github.com/swiftlang/swift-book/blob/main/TSPL.docc/ReferenceManual/LexicalStructure.md#string-literals)
+provide explicit accepted escapes and braced Unicode scalar forms. They differ
+in extensions and digit counts; Plew need not import either whole grammar.
+The common closed forms avoid silent backslash removal and accidental NUL/A
+conversion, preserve intended scalar meaning and permit checked linear decoding.
+
+These recommendations do not settle WC2 until adopted. The already-confirmed
+invalid-source-no-panic contract remains in force independently. No compiler,
+Syntax, test, seed, CLI status or specification has been changed here.
