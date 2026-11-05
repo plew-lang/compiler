@@ -24,7 +24,9 @@ pub impl Comp {
         mut val p: P = <P bytes=fileBytes toks=lx.toks pos=0U64 base=fileStart />
         val roots: SyntaxSlice = parseProgramSyntaxInto(p: inout p, file: inout self.syntax)
         if p.hasErr {
-            return <Result.Err error=self.diagnosticAt(offset: p.errOff, msg: p.errMsg) />
+            // This cursor was constructed here from source bytes. The pinned
+            // parser's fail contract is a syntax error, not a raw IR validator.
+            return <Result.Err error=self.diagnosticAt(offset: p.errOff, msg: p.errMsg, failureDomain: <FailureDomain.Source />) />
         }
         return <Result.Ok value=roots />
     }

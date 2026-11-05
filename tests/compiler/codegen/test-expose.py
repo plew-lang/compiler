@@ -16,6 +16,7 @@ root = Path(__file__).resolve().parents[3]
 compiler = Path(os.environ.get('PLEWC', root / 'bin/plewc')).absolute()
 sys.path.insert(0, str(root / 'scripts/support'))
 import llvm_link
+import compiler_failure_result as failure_result
 config = os.environ.get("LLVM_CONFIG") or ("/opt/homebrew/opt/llvm@22/bin/llvm-config" if options.asan else shutil.which("llvm-config") or "/opt/homebrew/opt/llvm/bin/llvm-config")
 
 def run(*args):
@@ -72,8 +73,9 @@ with tempfile.TemporaryDirectory(prefix='plew-expose-') as folder:
         assert execution.stderr == b'', execution.stderr
 for name in ['expose_labels', 'expose_duplicate', 'expose_generic', 'expose_method', 'expose_associated', 'expose_main']:
     source = root / 'tests/fixtures/reject' / (name + '.pw')
-    result = subprocess.run([str(compiler), str(source)], capture_output=True, timeout=55)
-    assert result.returncode != 0, name
+    result = failure_result.run_compiler([str(compiler), str(source)], capture_output=True, timeout=55)
+    assert result.source_rejection, (name, result.record())
+    assert not any(marker in result.stderr for marker in [b'ERROR: AddressSanitizer', b'ERROR: LeakSanitizer', b'AddressSanitizer:DEADLYSIGNAL']), result.stderr
     assert source.with_suffix('.err').read_bytes().strip() in result.stderr, result.stderr
 # Separate modules may declare the same external name, but cannot silently
 # change its ABI. I8/U8 share an LLVM type and differ in extension attributes.
@@ -83,8 +85,9 @@ with tempfile.TemporaryDirectory(prefix='plew-expose-collision-') as folder:
     for parameter, result in [('I64', 'I8'), ('I8', 'I64'), ('U8', 'I8'), ('I8', 'U8')]:
         source = directory / 'Main.pw'
         source.write_text('use ./Library as Library\nextern(c) { fn entry(value~: ' + parameter + ') -> ' + result + ' }\nfn main() { val value = entry(1' + parameter + ') }\n')
-        execution = subprocess.run([str(compiler), str(source)], capture_output=True, timeout=55)
-        assert execution.returncode != 0, (parameter, result)
+        execution = failure_result.run_compiler([str(compiler), str(source)], capture_output=True, timeout=55)
+        assert execution.source_rejection, (parameter, result, execution.record())
+        assert not any(marker in execution.stderr for marker in [b'ERROR: AddressSanitizer', b'ERROR: LeakSanitizer', b'AddressSanitizer:DEADLYSIGNAL']), execution.stderr
         # Namespace-only imports do not contribute bare-call candidates. The
         # local extern call is type-correct; the external ABI conflict is the error.
         expected = b'conflicting C function ABI for external name'
@@ -110,7 +113,8 @@ with tempfile.TemporaryDirectory(prefix='plew-expose-managed-') as folder:
             ('expose fn entry() -> ' + type_name + ' { panic "unreachable" }', b'expose return ABI is not supported'),
         ]:
             source.write_text(imports + declaration + '\nfn main() {}\n')
-            execution = subprocess.run([str(compiler), str(source)], capture_output=True, timeout=55)
-            assert execution.returncode != 0, (type_name, declaration)
+            execution = failure_result.run_compiler([str(compiler), str(source)], capture_output=True, timeout=55)
+            assert execution.source_rejection, (type_name, declaration, execution.record())
+            assert not any(marker in execution.stderr for marker in [b'ERROR: AddressSanitizer', b'ERROR: LeakSanitizer', b'AddressSanitizer:DEADLYSIGNAL']), execution.stderr
             assert diagnostic in execution.stderr, execution.stderr
 print('PASS expose: C and Plew calls, external-only roots, integer/float/void/inout ABI, labels and name collisions')

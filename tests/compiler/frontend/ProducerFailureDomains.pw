@@ -45,6 +45,16 @@ fn sourceFailure() -> CompileDiagnostic {
 
 fn main() {
     val source = sourceFailure()
+    mut val syntax: Comp = <Comp />
+    match analyzeFrontend(c: inout syntax,
+        input: <FrontendInput.Text text="fn main(" path="MalformedSyntax.pw" />,
+        sources: <SourceAccess />) {
+        Result.Err(error: val diagnostic) => {
+            if !diagnostic.isSourceRejection() { panic("parser failure lost source domain") }
+        }
+        Result.Ok(value: _) => { panic("malformed syntax was accepted") }
+    }
+    print("parser source distinguished")
     mut val missing: Comp = <Comp />
     match analyzeFrontend(c: inout missing,
         input: <FrontendInput.File path="/nonexistent/plew-failure-domain-input.pw" />,

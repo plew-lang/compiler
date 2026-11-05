@@ -52,6 +52,8 @@ of this classification. Process consumers must also establish normal failure
 termination and the required diagnostic reason; abort, signal, timeout, missing
 or unclassified results never become correct rejection from matching text.
 The typed field does not select a public exit-code or serialization protocol.
+The [private compiler failure report](driver-and-execution.md#private-compiler-failure-report)
+owns the repository-internal terminal transport and its process checks.
 
 Rust's [diagnostic levels](https://doc.rust-lang.org/stable/nightly-rustc/rustc_errors/enum.Level.html) distinguish ordinary errors, compiler bugs and delayed bugs; its [error-type contract](https://rustc-dev-guide.rust-lang.org/ty.html) retains prior error evidence. Swift's [diagnostic guidelines](https://github.com/swiftlang/swift/blob/main/docs/Diagnostics.md) similarly route ordinary invalid programs through diagnostics. Plew adopts that responsibility distinction. Rust's internal fatal-error unwind implementation is not copied into Plew's aborting panic. Returning every impossible state as ordinary source rejection would hide compiler bugs; asserting on unvalidated input would misclassify expected failure. Neither is adopted.
 

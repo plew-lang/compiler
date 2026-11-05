@@ -107,3 +107,24 @@ validation and independent task completion review. Parser text saying
 unsupported is not a classification oracle: current spec/02 explicitly excludes
 multi-scalar character literals until Grapheme is defined. Preserve unknown
 origins rather than guessing from wording.
+
+## Private Channel WIP and Acceptance Boundary Stop
+
+The [channel checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/channel-checkpoint.json)
+records standard build20261105T173354-build-79a432, fresh candidate149267d3,
+real CLI7/returning API3/decoder7 controls and consumer88 RED/GREEN. This is WIP,
+not closure: producer inventory/classification, all named real consumers,
+normal-dispatch double adaptation, affected gates and independent task review
+remain. Public compiler statuses/text/callback ABI are unchanged.
+
+Implementation stopped at the task-correction condition. The eight managed ABI
+negatives in the expose18 contract currently test a backend implementation
+subset (B053 exposed-c-entry), not an established source-language prohibition
+(spec/15 leaves detailed boundary eligibility unresolved). All eight exact real
+inputs reach the expected ABI diagnostic, exit1 and unclassified domain. A
+Source-only classifier must not manufacture Source for them. Recommend separating
+these eight into precise expected-Limit assertions with intended reason, normal
+status1 and abnormal/sanitizer vetoes, preserving Source-only ordinary rejection
+and source-invalid exposure. Confirm the task acceptance amendment before
+implementing it; no source semantics or other non-source acceptance is adopted.
+Task status and acceptance conditions remain unchanged; no completion claimed.

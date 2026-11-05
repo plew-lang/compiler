@@ -24,6 +24,7 @@ scenarios = [
     ('internal-one', False), ('internal-after-reason', False),
     ('wrong-status-after-reason', False), ('signal-after-reason', False),
     ('timeout-status', False), ('supervisor-status', False), ('asan-after-reason', False),
+    ('wrong-source-reason', False),
 ]
 expose = (ROOT / 'tests/compiler/codegen/test-expose.py').read_text()
 fixture_block = expose[expose.index("for name in ['expose_labels'"):expose.index('# Separate modules')]
@@ -34,7 +35,8 @@ with tempfile.TemporaryDirectory(prefix='plew-rejection-domains-') as directory:
     root = Path(directory)
     copied = ('tests/harness/case-phase.sh', 'tests/harness/asan-compile-corpus.sh',
               'scripts/support/normal-case-dispatch.py', 'scripts/support/watch-command.py',
-              'scripts/support/trace-command.py', 'scripts/support/process_watch.py')
+              'scripts/support/trace-command.py', 'scripts/support/process_watch.py',
+              'scripts/support/compiler_failure_result.py')
     for name in copied:
         p = root / name
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -64,6 +66,10 @@ elif p.exists():
  elif 'expose fn entry() ->' in text:reason='expose return ABI is not supported'
 if mode=='accepted':sys.exit(0)
 if mode=='silent-one':sys.exit(1)
+if mode=='wrong-source-reason':reason='a different source rejection'
+if mode!='silent-one' and '_PLEW_COMPILER_FAILURE_FD' in os.environ:
+ domain='internal' if mode in ['internal-one','internal-after-reason'] else 'source'
+ os.write(int(os.environ['_PLEW_COMPILER_FAILURE_FD']), b'plew.compiler.failure.v1\\n'+os.environ['_PLEW_COMPILER_FAILURE_ID'].encode()+b'\\n'+domain.encode()+b'\\n')
 if mode=='internal-one':print('plewc: error: internal error: program Mid preparation failed',file=sys.stderr)
 else:print('plewc: error: '+reason,file=sys.stderr)
 if mode=='internal-after-reason':print('plewc: error: internal error: program Mid preparation failed',file=sys.stderr)
@@ -81,7 +87,9 @@ sys.exit({'wrong-status-after-reason':2,'timeout-status':124,'supervisor-status'
              ('partreject', True), ('expose-fixtures', True),
              ('expose-collisions', True), ('expose-managed', True), ('asan-B', False)]
     for lane, companion in lanes:
-        for scenario, should_accept in scenarios:
+        for scenario, default_accept in scenarios:
+            # No reason oracle is claimed for lanes without a companion.
+            should_accept = default_accept or (scenario == 'wrong-source-reason' and not companion)
             invocation = root / 'invocations.txt'
             invocation.write_text('')
             local_env = {**env, 'INVOCATIONS': str(invocation), 'REJECTION_SCENARIO': scenario}
@@ -111,7 +119,7 @@ sys.exit({'wrong-status-after-reason':2,'timeout-status':124,'supervisor-status'
                 block, expected_calls = {'expose-fixtures': (fixture_block, 6),
                                           'expose-collisions': (collision_block, 4),
                                           'expose-managed': (managed_block, 8)}[lane]
-                script = 'import subprocess,tempfile\nfrom pathlib import Path\nroot=Path('+repr(str(root))+')\ncompiler=Path('+repr(str(compiler))+')\n' + block
+                script = 'import subprocess,tempfile,sys\nfrom pathlib import Path\nsys.path.insert(0,'+repr(str(root / 'scripts/support'))+')\nimport compiler_failure_result as failure_result\nroot=Path('+repr(str(root))+')\ncompiler=Path('+repr(str(compiler))+')\n' + block
                 p = subprocess.run([sys.executable, '-B', '-c', script], cwd=root, env=local_env, capture_output=True, text=True, timeout=15)
                 recognized = p.returncode == 0 or (p.returncode == 1 and 'AssertionError' in p.stderr and 'Traceback' in p.stderr)
                 accepted = p.returncode == 0

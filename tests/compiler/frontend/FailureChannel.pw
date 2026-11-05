@@ -1,0 +1,24 @@
+// A real Plew terminal adapter, not a text-classifying fake compiler.
+use ../../../src/CompilerFailureOutput only { emitCompilerFailure }
+use ../../../src/Diag only { CompileDiagnostic, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic }
+use @Std/Process only { argAt, exit }
+
+fn main() {
+    val mode = argAt(1I64)
+    val domain = match mode {
+        "input" => <FailureDomain.Input />
+        "tool" => <FailureDomain.Tool />
+        "limit" => <FailureDomain.Limit />
+        "internal" => <FailureDomain.Internal />
+        "unclassified" => <FailureDomain.Unclassified />
+        _ => <FailureDomain.Source />
+    }
+    val severity = if mode == "warning" { give <DiagnosticSeverity.Warning /> } else { give <DiagnosticSeverity.Error /> }
+    val diagnostic = <CompileDiagnostic failureDomain=domain severity=severity
+        location=<DiagnosticLocation.Unpositioned /> message="same message" />
+    if mode == "render" { emitDiagnostic(diagnostic: diagnostic) } else { emitCompilerFailure(diagnostic: diagnostic) }
+    if mode == "twice" { emitCompilerFailure(diagnostic: diagnostic) }
+    if mode == "source-panic" { panic("controlled after diagnostic") }
+    if mode == "source-status2" { exit(code: 2I64) }
+    exit(code: 1I64)
+}

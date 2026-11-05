@@ -1,8 +1,8 @@
+use ./CompilerFailureOutput only { emitCompilerFailure }
 // CLI adapter only. Embedders call analyzeFrontend with explicit inputs.
 use @Std/Io only { readStdin }
 use @Std/Process only { argCount, argAt, exit }
 use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontend }
-use ./Diag only { emitDiagnostic }
 use ./SourceAccess only { SourceAccess }
 use ./Path only { computeStdRoot }
 
@@ -83,7 +83,7 @@ pub fn runFrontend(c: inout Comp, sources: SourceAccess = <SourceAccess />, firs
     match analysis {
         Result.Ok(value: _) => {}
         Result.Err(error: val diagnostic) => {
-            emitDiagnostic(diagnostic: diagnostic)
+            emitCompilerFailure(diagnostic: diagnostic)
             exit(code: 1)
         }
     }

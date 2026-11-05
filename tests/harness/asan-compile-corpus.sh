@@ -30,13 +30,19 @@ echo "== B. compile corpus under ASan =="
 b_results=$(ls tests/fixtures/run/*.pw tests/fixtures/reject/*.pw tests/fixtures/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     f="$1"; err="$TMP/b_$(printf "%s" "$f" | tr "/" "_").err"
     compile_exit=0
-    python3 ./scripts/support/trace-command.py "$err" -- ./plewc_asan --trace-phases "$f" > /dev/null || compile_exit=$?
     expected_exit=0
     case "$f" in tests/fixtures/reject/*) expected_exit=1 ;; esac
-    if grep -q "ERROR: AddressSanitizer" "$err"; then
+    if [ "$expected_exit" -eq 1 ]; then
+        # The checker requires the raw compiler status1 and private source
+        # domain; trace supervision remains outside the descriptor owner.
+        python3 ./scripts/support/trace-command.py "$err" -- python3 ./scripts/support/compiler_failure_result.py --require-source-rejection -- ./plewc_asan --trace-phases "$f" > /dev/null || compile_exit=$?
+    else
+        python3 ./scripts/support/trace-command.py "$err" -- ./plewc_asan --trace-phases "$f" > /dev/null || compile_exit=$?
+    fi
+    if grep -Eq "ERROR: (Address|Leak)Sanitizer|AddressSanitizer:DEADLYSIGNAL" "$err"; then
         echo "FAIL compiling $f: $(grep "ERROR: AddressSanitizer" "$err" | head -1)"
-    elif [ "$compile_exit" -ne "$expected_exit" ]; then
-        echo "FAIL compiling $f: expected exit=$expected_exit, got=$compile_exit"
+    elif [ "$compile_exit" -ne 0 ]; then
+        echo "FAIL compiling $f: expected successful compilation/rejection assertion, got=$compile_exit"
     elif [ "$expected_exit" -eq 1 ] && ! grep -q "^plewc: error:" "$err"; then
         echo "FAIL compiling $f: missing rejection diagnostic"
     else

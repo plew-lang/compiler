@@ -1,9 +1,10 @@
+use ./CompilerFailureOutput only { emitCompilerFailure }
 use ./CheckedProgram only { CompilerSession }
 use @Std/Core only { MutableRef }
 use ./CompilerSessions only { compilerSessionSnapshot, findCompilerSession }
 use ./Backend only { LlvmLoweringResult, transferLlvmModule }
 use ./LlvmHandles only { LLVMContextRef, LLVMModuleRef }
-use ./Diag only { emitDiagnostic, emitDiagnostics }
+use ./Diag only { emitDiagnostics }
 use @Std/Io only { eprint }
 
 // Runs synchronously while the application is stopped. The host keeps ORC and
@@ -24,7 +25,7 @@ expose fn plew_compiler_prepare_body(sessionId~: U64, bodyId~: U64, module~: ino
             return 0I32
         }
         LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
-            emitDiagnostic(diagnostic: diagnostic)
+            emitCompilerFailure(diagnostic: diagnostic)
             return 1I32
         }
     }

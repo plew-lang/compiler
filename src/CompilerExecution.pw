@@ -1,3 +1,4 @@
+use ./CompilerFailureOutput only { emitCompilerFailure }
 // One process execution owns its compiler session and ORC code together.
 use ./CompilerCallbacks as Callbacks
 use ./CompilerSessions only { registerCompilerSession, compilerSessionSnapshot, findCompilerSession, unregisterCompilerSession }
@@ -5,7 +6,7 @@ use ./CheckedProgram only { CompilerSession, CompilerSessionResult }
 use ./Frontend only { FrontendInput, FrontendOptions }
 use ./SourceAccess only { SourceAccess }
 use ./Backend only { LlvmJit, LlvmJitCreation, LlvmLoweringResult, ProgramArguments }
-use ./Diag only { emitDiagnostic, emitDiagnostics }
+use ./Diag only { emitDiagnostics }
 use @Std/Io only { eprint }
 use @Std/Core only { MutableRef }
 
@@ -34,7 +35,7 @@ pub fn executeProgram(input: FrontendInput, sources: SourceAccess,
     val opened = CompilerSession.open(input: input, sources: sources, options: options)
     match move opened {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => {
-            emitDiagnostic(diagnostic: diagnostic)
+            emitCompilerFailure(diagnostic: diagnostic)
             return 1I32
         }
         CompilerSessionResult.Success(session: val session) => {
@@ -53,7 +54,7 @@ pub fn executeProgram(input: FrontendInput, sources: SourceAccess,
                     val declarations = shared->lowerDeclarations()
                     emitDiagnostics(diagnostics: shared->takeDiagnostics())
                     match move declarations {
-                        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) return 1I32 }
+                        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { emitCompilerFailure(diagnostic: diagnostic) return 1I32 }
                         LlvmLoweringResult.Success(module: val module) => {
                             if execution->jit.registerDeclarations(module: move module, sessionId: id) != 0I32 { return 1I32 }
                         }
@@ -61,7 +62,7 @@ pub fn executeProgram(input: FrontendInput, sources: SourceAccess,
                     val globals = shared->lowerGlobalStorage()
                     emitDiagnostics(diagnostics: shared->takeDiagnostics())
                     match move globals {
-                        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) return 1I32 }
+                        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { emitCompilerFailure(diagnostic: diagnostic) return 1I32 }
                         LlvmLoweringResult.Success(module: val module) => {
                             if execution->jit.add(module: move module) != 0I32 { return 1I32 }
                         }

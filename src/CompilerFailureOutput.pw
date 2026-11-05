@@ -1,0 +1,72 @@
+// CLI failure transport only. Returning services and diagnostic rendering do
+// not consult process state. The parent owns the private descriptor and ID.
+use ./Diag only { CompileDiagnostic, DiagnosticSeverity, FailureDomain, emitDiagnostic }
+use @Std/Ffi only { CString, stringFromCString, arrayCPtr }
+
+extern(c) {
+    fn getenv(name~: CPtr[U8]) -> CPtr[U8]
+    fn write(descriptor~: I32, bytes~: CPtr[U8], count~: U64) -> I64
+}
+
+fn environment(name: String) -> String {
+    val key = <CString.copied text=name />
+    return stringFromCString(getenv(key.ptr))
+}
+
+fn failureDescriptor(text: String) -> Optional[I32] {
+    val bytes = text.bytes()
+    if bytes.count() == 0U64 || bytes.count() > 10U64 { return <Optional.None /> }
+    mut val descriptor = 0I32
+    for byte in bytes {
+        if byte < 48U8 || byte > 57U8 { return <Optional.None /> }
+        val digit = (byte as I32) - 48I32
+        if descriptor > 214748364I32 || (descriptor == 214748364I32 && digit > 7I32) { return <Optional.None /> }
+        descriptor = descriptor * 10I32 + digit
+    }
+    // Never turn malformed private configuration into a write to standard IO.
+    if descriptor < 3I32 { return <Optional.None /> }
+    return <Optional.Some v=descriptor />
+}
+
+fn validFailureIdentity(identity: String) -> Bool {
+    val bytes = identity.bytes()
+    if bytes.count() != 32U64 { return false }
+    for byte in bytes {
+        if !(byte >= 48U8 && byte <= 57U8) && !(byte >= 97U8 && byte <= 102U8) { return false }
+    }
+    return true
+}
+
+fn failureDomainTag(domain: FailureDomain) -> String {
+    return match domain {
+        FailureDomain.Source => "source"
+        FailureDomain.Input => "input"
+        FailureDomain.Tool => "tool"
+        FailureDomain.Limit => "limit"
+        FailureDomain.Internal => "internal"
+        FailureDomain.Unclassified => "unclassified"
+    }
+}
+
+fn recordFailureDomain(domain: FailureDomain) {
+    val descriptor = match failureDescriptor(text: environment(name: "_PLEW_COMPILER_FAILURE_FD")) {
+        Optional.Some(v: val descriptor) => descriptor
+        Optional.None => { return }
+    }
+    val identity = environment(name: "_PLEW_COMPILER_FAILURE_ID")
+    if !validFailureIdentity(identity: identity) { return }
+    val record = "plew.compiler.failure.v1\n" + identity + "\n" + failureDomainTag(domain: domain) + "\n"
+    val bytes = record.bytes()
+    // One append to the inherited file offset. The consumer accepts exactly
+    // one complete record; partial/failed or repeated writes fail closed.
+    write(descriptor, arrayCPtr(bytes), bytes.count())
+}
+
+pub fn emitCompilerFailure(diagnostic: CompileDiagnostic) {
+    emitDiagnostic(diagnostic: diagnostic)
+    val domain = match diagnostic.severity {
+        DiagnosticSeverity.Error => diagnostic.failureDomain
+        DiagnosticSeverity.Warning => <FailureDomain.Unclassified />
+    }
+    recordFailureDomain(domain: domain)
+}

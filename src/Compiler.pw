@@ -1,3 +1,4 @@
+use ./CompilerFailureOutput only { emitCompilerFailure }
 // Low-level compiler driver shared by the development and distributed entries.
 use @Std/Process only { argCount, argAt, exit }
 use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontend }
@@ -6,7 +7,7 @@ use ./CompilerExecution only { executeProgram }
 use ./CheckedProgram only { CheckedProgram, ProgramCheckResult, prepareCheckedProgram, ExecutableCompilationResult }
 use ./Backend only { emitLlvmRuntime, lowerLlvm, lowerPreparedLlvm, nativeCpu, LlvmModule, LlvmLoweringResult }
 use ./SourceAccess only { SourceAccess }
-use ./Diag only { CompileDiagnostic, emitDiagnostic, emitDiagnostics }
+use ./Diag only { CompileDiagnostic, emitDiagnostics }
 
 extern(c) {
     fn plew_llvm_initialize_worker(trace~: I32)
@@ -45,7 +46,7 @@ pub fn runCompiler(sources: SourceAccess = <SourceAccess />, firstArgument: I64 
     match compileSource(sources: sources, firstArgument: firstArgument, emitText: true) {
         CompilationResult.Success(compilation: val compilation) => {}
         CompilationResult.Failure(diagnostic: val diagnostic) => {
-            emitDiagnostic(diagnostic: diagnostic)
+            emitCompilerFailure(diagnostic: diagnostic)
             exit(code: 1I64)
         }
     }
@@ -130,7 +131,7 @@ pub fn compileObject(sources: SourceAccess, firstArgument: I64, output: String, 
             return compilation.module.writeObject(output: output, cpu: cpu, trace: trace)
         }
         CompilationResult.Failure(diagnostic: val diagnostic) => {
-            emitDiagnostic(diagnostic: diagnostic)
+            emitCompilerFailure(diagnostic: diagnostic)
             return 1I32
         }
     }
@@ -145,7 +146,7 @@ pub fn runCheck(sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1
             emitDiagnostics(diagnostics: checked.takeDiagnostics())
         }
         ProgramCheckResult.Failure(diagnostic: val diagnostic) => {
-            emitDiagnostic(diagnostic: diagnostic)
+            emitCompilerFailure(diagnostic: diagnostic)
             exit(code: 1I64)
         }
     }

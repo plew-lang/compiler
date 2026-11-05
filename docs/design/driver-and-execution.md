@@ -168,6 +168,41 @@ The one-shot worker isolates compiler/application execution from the outer comma
 
 A stable package-manager/tool installation strategy is separate from these runtime contracts. Single-binary distribution can embed standard resources and runtime objects while still using the permitted OS SDK/linker services. Development versus distribution linking must not change source checking or runtime meaning.
 
+### Private Compiler Failure Report
+
+`CompilerFailureOutput.emitCompilerFailure` is the process-adapter boundary:
+it renders the retained diagnostic and transports its producer-owned failure
+domain. Rendering alone and returning compiler services do not write a process
+result. Warning severity cannot publish a source-rejection record.
+
+The repository's internal consumer creates a fresh unlinked temporary file and
+32-character lowercase hexadecimal invocation ID. It inherits that file's
+writable descriptor into the compiler using `_PLEW_COMPILER_FAILURE_FD` and
+`_PLEW_COMPILER_FAILURE_ID`; the parent owns its lifetime through child
+termination. Descriptors below3, invalid signed32-bit descriptor spellings and
+invalid IDs produce no report. The adapter appends one bounded record:
+`plew.compiler.failure.v1` + newline, invocation ID + newline, then the lowercase
+failure-domain tag + newline. Failed/partial writes cannot establish rejection.
+
+The shared consumer accepts exactly one complete bounded record for that
+invocation, after process termination. It snapshots the observed status and
+report fields; it does not retain a mutable process object as admission evidence.
+Source domain plus normal exit1 is a necessary condition, not proof of the
+intended reason or absence of sanitizer/supervisor failures. Consumers retain
+those independent assertions. Missing, stale, repeated, malformed or unknown
+records fail closed, as do wrong statuses, signals and timeouts. No text-only
+fallback can recreate a missing domain.
+
+`compiler_failure_result.run_compiler` owns this per-invocation transport, not
+watchdog policy. Keep existing supervision outside the helper; an intervening
+wrapper must explicitly preserve the descriptor or no report is available.
+The CLI assertion mode changes a checker result, not the compiler's public exit
+status. Public diagnostic text and callback ABI are unchanged. This is a private
+coordinated implementation protocol, not a stable user-facing schema. A fresh
+owned descriptor avoids stale path receipts; adding metadata to stderr/stdout
+would mix it with diagnostics or emitted LLVM, and a new public exit-code
+catalog is outside this repair's adopted boundary.
+
 ## Distribution Boundary
 
 The adopted distribution unit is one native `plew` executable per supported OS/CPU, containing CLI dispatch, compiler modes, package resolver, required LLVM optimization/object/ORC facilities, standard source resources, runtime materials, version identity, and third-party notices. A single distribution file does not require a single process: isolated workers may reenter the same executable in an internal mode. A compatibility `plewc` symlink may select compiler mode, but a separate compiler binary, shell wrapper, or Python entry is not a required user dependency. Internal CLI/compiler responsibilities remain separate despite this packaging.

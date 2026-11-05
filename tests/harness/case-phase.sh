@@ -69,10 +69,10 @@ case "$phase" in
     want="tests/fixtures/reject/$name.err"
     perr="${case_tmp}/t_reject_$name.err"
     code=0
-    sh -c "python3 ./scripts/support/watch-command.py -- \"\$PLEWC\" \"\$1\" >/dev/null 2>\"\$2\"" sh "$pw" "$perr" 2>/dev/null || code=$?
-    if [ "$code" -eq 0 ]; then echo "FAIL reject/$name(accepted)"
-    elif [ "$code" -ge 128 ]; then echo "FAIL reject/$name(crash=$code)"
-    elif [ "$code" -ne 1 ]; then echo "FAIL reject/$name(exit=$code)"
+    sh -c "python3 ./scripts/support/watch-command.py -- python3 ./scripts/support/compiler_failure_result.py --require-source-rejection -- \"\$PLEWC\" \"\$1\" >/dev/null 2>\"\$2\"" sh "$pw" "$perr" 2>/dev/null || code=$?
+    if [ "$code" -ge 128 ]; then echo "FAIL reject/$name(crash=$code)"
+    elif [ "$code" -ne 0 ]; then echo "FAIL reject/$name(classification=$code)"
+    elif grep -Eq "ERROR: (Address|Leak)Sanitizer|AddressSanitizer:DEADLYSIGNAL" "$perr"; then echo "FAIL reject/$name(sanitizer)"
     elif [ -f "$want" ] && ! grep -qF "$(cat "$want")" "$perr"; then echo "FAIL reject/$name(diagnostic)"
     else echo "PASS reject/$name"; fi
     ;;
@@ -95,10 +95,10 @@ case "$phase" in
     want="$(dirname "$main")/Main.err"
     perr="${case_tmp}/t_partreject_$name.err"
     code=0
-    sh -c "python3 ./scripts/support/watch-command.py -- \"\$PLEWC\" \"\$1\" >/dev/null 2>\"\$2\"" sh "$main" "$perr" 2>/dev/null || code=$?
-    if [ "$code" -eq 0 ]; then echo "FAIL partreject/$name(accepted)"
-    elif [ "$code" -ge 128 ]; then echo "FAIL partreject/$name(crash=$code)"
-    elif [ "$code" -ne 1 ]; then echo "FAIL partreject/$name(exit=$code)"
+    sh -c "python3 ./scripts/support/watch-command.py -- python3 ./scripts/support/compiler_failure_result.py --require-source-rejection -- \"\$PLEWC\" \"\$1\" >/dev/null 2>\"\$2\"" sh "$main" "$perr" 2>/dev/null || code=$?
+    if [ "$code" -ge 128 ]; then echo "FAIL partreject/$name(crash=$code)"
+    elif [ "$code" -ne 0 ]; then echo "FAIL partreject/$name(classification=$code)"
+    elif grep -Eq "ERROR: (Address|Leak)Sanitizer|AddressSanitizer:DEADLYSIGNAL" "$perr"; then echo "FAIL partreject/$name(sanitizer)"
     elif [ -f "$want" ] && ! grep -qF "$(cat "$want")" "$perr"; then echo "FAIL partreject/$name(diagnostic)"
     else echo "PASS partreject/$name"; fi
     ;;

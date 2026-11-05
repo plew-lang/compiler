@@ -91,6 +91,14 @@ part/gen required-golden read failures through their production consumers and
 final summaries/exits, while preserving valid empty and trailing-newline output.
 Its controlled compiler/linker processes isolate I/O handling, not language rules.
 
+`tooling/test-compiler-failure-result.py` is registered in the normal harness.
+It checks the shared private record decoder, observed statuses, fresh invocation
+identity, post-record signal and the actual watchdog timeout path. It does not
+replace the compiler producer and normal/expose/ASan B integration controls.
+`tooling/test-compiler-failure-channel.py` and
+`tooling/test-failure-channel-values.py` are manual scoped producer probes for
+com-yeua, including the actual CLI and the Plew terminal adapter respectively.
+
 ## Shared inputs and companions
 
 Keep one input and all its companions together. A run fixture requires `.out`;
