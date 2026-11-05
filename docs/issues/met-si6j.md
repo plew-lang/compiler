@@ -139,6 +139,66 @@ are only required outputs (B0 -> its call-path closures, selected-call closure -
 operation API final closure, nominal-producer classification -> facet closure,
 saved completion -> final cleanup). Current selection belongs in worklog.
 
+### Phase Three Completion Schedule
+
+This is the selected execution plan through **G3 and closure of this parent**,
+not a replacement for tk dependencies or a second mutable task list. The
+[planning snapshot](../../../evidence/existing-feature-conformance/phase3-completion-plan-check.json)
+checks the whole issue store and partitions every currently unfinished prerequisite
+by its actual admission. The [independent plan review](../../../evidence/existing-feature-conformance/phase3-completion-plan-review.json)
+checks this routing and its limits. Snapshot counts are not effort estimates or
+proof that the graph captures every unknown defect. New confirmed in-scope work
+must update its real owner/admission before closure.
+
+| Step | Existing action owners and selected work | Exit to the next boundary |
+|---|---|---|
+| 1. Bound the recovery | com-2hx2 -> com-sn9w / com-lbnc -> com-x7r3. Reuse accepted API, test and failure audits; inspect their missing phase-three semantic paths rather than repeating whole-compiler audits. Reconcile existing four lexical repair owners and outstanding overload/boxing classifications. | Independently reviewed finite repair scopes, preserved valid closed work, and actual area/G1 dependencies. Further broad semantic repairs wait for this assignment; unrelated static investigation need not wait for all runner repairs. |
+| 2. Make the evidence trustworthy | Select com-yeua -> com-fsuq early, as the current restart order specifies. com-k4c9 separately repairs gen consumption. Repair other affected assertion, supervisor and measurement prerequisites before relying on them. | Actual producer-to-consumer RED/GREEN and preserved positive, source-rejection, signal/timeout and program-panic distinctions. Do not equate source-domain classification with the intended rejection reason. API assertions supplement, not replace, real CLI/runner/sanitizer integration. |
+| 3. Close common source admission | G1's source-input/failure owners com-bd93, com-tvgb, com-gye8, com-twjr, com-a08g, com-2nb3 and com-9d4c, alongside com-yeua. Keep Syntax changes and exact dependency uptake in their existing owner. | Failed/partial/cyclic inputs and failed owners cannot publish successful source facts; the original typed cause survives. These are explicit G1 prerequisites even where they also affect phase four. No blanket conversion to panic or unrelated driver rewrite. |
+| 4. Execute bounded semantic slices | Use the five area rows below and actual ready prerequisites. Prefer the known source acceptance/call-selection and type/proof producers needed by a slice, then its retained publication, explicit instantiation and final readers. A slice closes the affected producer-to-final-use contract; do not implement all writers first and leave readers for a later mega-task. | Each required leaf has its own scoped validation, removed competing authority and independent completion review. Narrow excessive API inputs in the same affected responsibility path; a wrapper or an extra verifier does not complete the migration. |
+| 5. Re-admit areas and mode contracts | Close met-ucze, met-ia09, met-6e6k, met-acfl and com-fuo8 only after their required descendants and shared repairs. Reconcile already closed A/F/parser/ownership contracts at their actual changed boundaries. | All eleven criteria have applicable source/removal/control evidence owners, including requested check/build/run/gen bodies. Reopen only affected closed work; do not attribute an old gate to a new candidate or repeat every old review by default. |
+| 6. Admit and freeze G1 | com-61jt reconciles every required area, direct source-admission repair and recovery output. Finish applicable validation infrastructure before freezing inputs that include it. | Zero known unfinished in-scope implementation or unresolved source/owner/mode rows; exact source/carrier/std/dependency/tool/script inputs frozen. Missing repairs return to named owners, not anonymous G1 work. |
+| 7. Prove the final candidate | com-p5um (G2a): fixed point and formal self-host median **below7 seconds**. Then com-9l3b (G2b): complete normal/gen/deps/LLVM22 ASan-LSan and required registered controls on the measured compiler with matching frozen inputs. | All required standard gates pass with counts/identity/cleanup and input integrity. No concurrent build/test during formal measurement, no source edits during a run, no substituted old candidate or weakened gates. |
+| 8. Close the phase | com-lzpe (G3) independently reconciles final gate applicability, all eleven criteria, task/area state, design/worklog and remaining exclusions. Then close met-si6j. | Phase three complete; explicit handoff to phase four. com-604k, main integration and seed/carrier promotion remain separate boundaries. |
+
+Steps are selection priorities and admission milestones, not artificial whole-area
+barriers. In particular, step2 is interleaved with recovery before its affected
+test observations; step3 and each source slice respect actual producer needs.
+Shared prerequisites are implemented and reviewed once, then reused by every
+area whose contract they affect. Do not sum overlapping area descendant counts.
+
+| Semantic area | Concrete remaining work to route through its bounded leaves | Scoped closure proof |
+|---|---|---|
+| met-ucze: selection and calls | Lexical binding/visibility com-r88j; function-value admission com-l4x2; global callable identity com-za4f; gen lexical/synthetic identity com-3mh9; overload admission met-g53w and remaining com-ra96/com-zy6r/com-y8l4; scoped applicability and API-authority repairs. | One selected identity plus full labels/types/passing/bounds reaches the actual static/dynamic/implicit caller; no unrelated loaded declaration or diagnostic search chooses meaning. The four lexical repairs are not the whole area. |
+| met-ia09: constraints and callee environments | Retained requirement/proof/signature inputs, inherited receivers and exact instance environments, including shared overload/Unit repairs and all audited authority restrictions. | Abstract obligations and concrete witness/ParamId interpretation remain distinct; final callees consume the selected evidence without new source selection. |
+| met-6e6k: types, conversions and descriptors | com-l8m1 common-result conversions; com-6zph conversion sealing; remaining com-loyb/com-3q2n checks and finite type/descriptor/nominal/API repairs. | Committed type/shape and exact conversion endpoints survive wrapping, publication, instantiation and actual Mid/backend use; missing or foreign facts fail instead of being reconstructed. |
+| met-acfl: immutable publication and owners | com-vkw3 closure/global/default/provided/gen owner verification; shared conversion sealing, temporary-frame restoration, global callable/gen repairs and mutable writer/reader restrictions. | Successful owner-local immutable facts are complete; failed/pending/foreign owners cannot publish; final readers cannot mutate facts or recover missing semantic decisions. |
+| com-fuo8: completion and exits | com-sby0 Unit contracts, com-l9yo admitted scalar-async returns, com-tl9c transfer targets, com-9tau callable divergence and reopened com-2suv/com-gnj9 result/cleanup checks, plus scoped API repairs. | Source value formation, explicit divergence and analytical reachability stay distinct; saved results/targets control actual Mid edges and cleanup for block/if/match/short-circuit. |
+
+All five rows include their **entire real required dependency closure**, not only
+the examples named here. Pure API-authority repairs without a reproduced behavior
+bug are still mandatory where the adopted contract requires them. Existing
+correct rows may close by applicable structural and executed-control evidence;
+no rewrite is required just to create visible code changes.
+
+The final-gate dependency closure also contains real work outside these five
+areas. G2a's com-jy25/com-nqiq cover supervision and fingerprint assertions.
+G2b additionally requires its current finite checker/fixture/instrumentation
+owners (including com-darc/com-q83o/com-c3tx/com-1qbr/com-yvsf/com-uy99/com-8qqa,
+com-sp65/com-uiwg, com-141b/com-4vr8, and the other actual dependencies).
+These are not waived or all postponed until a long final run fails. Their exact
+membership is in tk and the planning snapshot; execute each before trusting its
+affected result, with remaining gate-only prerequisites complete before G2.
+Do not require unrelated phase-four runtime/native/IO repair or new concurrency,
+unique-generics, lifetime or target features merely because they are open.
+
+If a gate discovers a new defect, preserve its exact failing inputs and classify
+its owner first. A source or measured-tool change returns through affected
+area/G1 admission, refreezing and applicable G2a/G2b checks. A checker-only change
+still requires matching frozen-input/evidence verification; unchanged results
+are reusable only within their recorded conditions. Neither G3 nor the next
+phase may hide a mandatory failed gate or unresolved in-scope repair.
+
 ### Bounded Task Policy
 
 - Each bounded task requires an independent subagent completion review before
