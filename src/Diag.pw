@@ -65,12 +65,30 @@ pub enum DiagnosticLocation {
 
 pub enum DiagnosticSeverity { Error Warning }
 
+// The producer owns this classification. Message text and severity alone do
+// not distinguish an invalid source program from a compiler or input failure.
+pub enum FailureDomain { Unclassified Source Input Tool Limit Internal }
+
 pub struct CompileDiagnostic {
     pub val severity: DiagnosticSeverity = <DiagnosticSeverity.Error />
+    pub val failureDomain: FailureDomain = <FailureDomain.Unclassified />
     pub val location: DiagnosticLocation
     pub val message: String
 }
-pub impl CompileDiagnostic { factory }
+pub impl CompileDiagnostic {
+    factory
+
+    fn isSourceRejection() -> Bool {
+        match self.severity {
+            DiagnosticSeverity.Warning => { return false }
+            DiagnosticSeverity.Error => {}
+        }
+        return match self.failureDomain {
+            FailureDomain.Source => true
+            _ => false
+        }
+    }
+}
 
 pub fn emitDiagnostic(diagnostic: CompileDiagnostic) {
     match diagnostic.severity {

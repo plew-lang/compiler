@@ -36,6 +36,23 @@ Admission must establish the preconditions before an internal consumer relies on
 
 Do not mechanically replace existing errors whose message says internal with panic. First establish exact owner, input stage, admission and failure origin. Existing returning-service errors must preserve their cause through retention and final consumers; neither a generic Failure nor an error-severity message establishes the source domain.
 
+Compiler diagnostic values retain a producer-owned `FailureDomain`: `Source`,
+`Input`, `Tool`, `Limit`, `Internal`, or `Unclassified`. The default is
+`Unclassified`, which cannot establish source rejection. A producer assigns
+`Source` only when its own operation has established a source-language violation;
+being called from the frontend or wrapping a parser/validator error is not enough.
+Returned results, request caches and stage conversions preserve that field along
+with the original diagnostic. An internal-domain returned failure does not by
+itself establish the admitted-state precondition for panic.
+
+`CompileDiagnostic.isSourceRejection()` requires both error severity and the
+explicit source domain. It is a value-level query, not proof of a failed process
+or an intended rejection reason. Rendering remains nonterminal and independent
+of this classification. Process consumers must also establish normal failure
+termination and the required diagnostic reason; abort, signal, timeout, missing
+or unclassified results never become correct rejection from matching text.
+The typed field does not select a public exit-code or serialization protocol.
+
 Rust's [diagnostic levels](https://doc.rust-lang.org/stable/nightly-rustc/rustc_errors/enum.Level.html) distinguish ordinary errors, compiler bugs and delayed bugs; its [error-type contract](https://rustc-dev-guide.rust-lang.org/ty.html) retains prior error evidence. Swift's [diagnostic guidelines](https://github.com/swiftlang/swift/blob/main/docs/Diagnostics.md) similarly route ordinary invalid programs through diagnostics. Plew adopts that responsibility distinction. Rust's internal fatal-error unwind implementation is not copied into Plew's aborting panic. Returning every impossible state as ordinary source rejection would hide compiler bugs; asserting on unvalidated input would misclassify expected failure. Neither is adopted.
 
 ## Provenance and Lifetime

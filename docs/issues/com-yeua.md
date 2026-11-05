@@ -1,6 +1,6 @@
 ---
 id: com-yeua
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-02T21:30:19Z
@@ -65,3 +65,45 @@ negative-test lanes. An abort/crash/timeout never counts as correct source
 rejection, even after an expected diagnostic. No public exit-code catalog or
 protocol was selected by this policy; retain the existing explicit interface
 decision boundary. Implementation and actual consumer RED/GREEN remain open.
+
+## Execution scenarios
+
+Keep the original producer-to-consumer scope. First establish a typed domain on
+returning diagnostic values with an unclassified, non-source default. Equal
+severity/location/message must not imply equal failure domains. Rendering must
+remain nonterminal and preserve the human output. Then classify the named actual
+producer branches and preserve domains through request/cache/stage conversions,
+before implementing a private per-invocation result channel in terminal adapters
+and consuming it in the existing negative lanes. Public exit codes, diagnostic
+text and ORC callback ABI remain unchanged; any required change retains the
+explicit decision boundary above.
+
+Required controls: equal rendered source/internal/input/tool/limit failures;
+unclassified default; warning versus failed request; repeat/drain/cache retention;
+source parser/check rejection versus missing input/raw owner/limit/tool failure;
+actual normal/expose/ASan B consumer with silent1, internal1, status2,
+signal/timeout and expected diagnostic followed by abnormal termination. Reuse
+com-fsuq's saved80 controls and keep gen consumption in com-k4c9. API tests are
+necessary but do not replace real producer/CLI/consumer integration or scoped
+independent completion review.
+
+## Current implementation checkpoint (not closure)
+
+Typed FailureDomain and fail-closed diagnostic values are implemented. Existing
+rendered text remains unchanged. Meaningful source/input/stage-conversion REDs,
+source owner cache repeat/drain controls and GREEN on both the fixed old carrier
+and the freshly rebuilt compiler are recorded in
+[the implementation checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/README.md).
+Standard build 20261105T164302-build-d0fd8b passed with unchanged inputs. No
+whole profile, fixed point, formal performance or final consumer completion is
+claimed. The checker is explicitly a manual scoped probe pending the complete
+channel/consumer integration; the task remains in_progress.
+
+Remaining: producer classification beyond the named initial return/global-access
+and missing-root-input branches, including validating the fixed parser contract;
+CompilerSession/ORC and all named retention/conversion boundaries; the private
+per-invocation result channel and actual normal/expose/ASan B consumers; required
+validation and independent task completion review. Parser text saying
+unsupported is not a classification oracle: current spec/02 explicitly excludes
+multi-scalar character literals until Grapheme is defined. Preserve unknown
+origins rather than guessing from wording.

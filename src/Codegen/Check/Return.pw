@@ -48,7 +48,7 @@ pub impl Comp {
 
     inout fn requireExpressionCompletionValue(exprId: U64, completion: SourceCompletion) -> Result[(), CompileDiagnostic] {
         if !completion.source.normal() {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a source-diverging expression cannot be used as a value (spec/11)") />
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a source-diverging expression cannot be used as a value (spec/11)", failureDomain: <FailureDomain.Source />) />
         }
         return <Result.Ok value=() />
     }
@@ -257,7 +257,7 @@ pub impl Comp {
     inout fn checkDivergingBody(blkId: U64, offset: U64) -> Result[(), CompileDiagnostic] {
         val flow = self.blockCompletion(blkId: blkId)
         if flow.execution.normal() {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a diverging function cannot reach the end of its body (spec/04)") />
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a diverging function cannot reach the end of its body (spec/04)", failureDomain: <FailureDomain.Source />) />
         }
         return <Result.Ok value=() />
     }
@@ -272,7 +272,7 @@ pub impl Comp {
             return <Result.Ok value=() />
         }
         if self.blockCompletesNormally(blkId: f.body) {
-            return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "this function has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (Plew does not implicitly return the last expression)") />
+            return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "this function has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (Plew does not implicitly return the last expression)", failureDomain: <FailureDomain.Source />) />
         }
         return <Result.Ok value=() />
     }

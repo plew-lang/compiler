@@ -1,0 +1,41 @@
+// diagnostics.md: presentation is not failure identity. Unknown is fail-closed.
+use ../../../src/Diag only { CompileDiagnostic, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic }
+use @Std/Io only { print }
+
+fn diagnostic(domain: FailureDomain) -> CompileDiagnostic {
+    return <CompileDiagnostic failureDomain=domain
+        location=<DiagnosticLocation.Unpositioned /> message="same message" />
+}
+
+fn retained(diagnostic: CompileDiagnostic) -> Result[(), CompileDiagnostic] {
+    return <Result.Err error=diagnostic />
+}
+
+fn main() {
+    val unknown = <CompileDiagnostic location=<DiagnosticLocation.Unpositioned /> message="same message" />
+    if unknown.isSourceRejection() { panic("unclassified failure was source rejection") }
+    match unknown.failureDomain {
+        FailureDomain.Unclassified => {}
+        _ => { panic("the default domain was not unclassified") }
+    }
+    val source = diagnostic(domain: <FailureDomain.Source />)
+    if !source.isSourceRejection() { panic("explicit source failure was lost") }
+    val others: Array[FailureDomain] = [<FailureDomain.Internal />, <FailureDomain.Input />, <FailureDomain.Tool />, <FailureDomain.Limit />, <FailureDomain.Unclassified />]
+    for domain in others {
+        val other = diagnostic(domain: domain)
+        if other.isSourceRejection() { panic("non-source failure was source rejection") }
+        emitDiagnostic(diagnostic: other)
+    }
+    val warning = <CompileDiagnostic severity=<DiagnosticSeverity.Warning /> failureDomain=<FailureDomain.Source />
+        location=<DiagnosticLocation.Unpositioned /> message="same message" />
+    if warning.isSourceRejection() { panic("warning was a source rejection") }
+    match retained(diagnostic: source) {
+        Result.Err(error: val stored) => {
+            if !stored.isSourceRejection() { panic("returned failure lost its domain") }
+            emitDiagnostic(diagnostic: stored)
+        }
+        Result.Ok(value: _) => { panic("failed request returned success") }
+    }
+    emitDiagnostic(diagnostic: source)
+    print("failure domains retained")
+}

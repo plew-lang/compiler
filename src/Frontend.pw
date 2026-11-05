@@ -61,7 +61,7 @@ use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkg
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
-use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, DiagnosticLocation, DiagnosticSeverity, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -1489,7 +1489,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
         // empty string and the compiler silently emits an empty program (exit 0),
         // which hides a typo'd path. (Acceptance soundness: never silently accept.)
         if !(sources.exists(path: entryBytes)) {
-            return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Unpositioned />
+            return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Input /> location=<DiagnosticLocation.Unpositioned />
                 message="cannot open source file: " + rootPath /> />
         }
         mut val pathBuf: Array[U8] = []

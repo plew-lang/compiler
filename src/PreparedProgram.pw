@@ -3,7 +3,7 @@ use ./Mid/Build only { MidBuildError, MidFunctionTemplates }
 // Includes declaration global effects; unresolved declaration obligations do
 // not yet constitute a whole-target checked-program token.
 use ./Frontend only { Comp }
-use ./Diag only { CompileDiagnostic }
+use ./Diag only { CompileDiagnostic, FailureDomain }
 use ./Mid/Program only { MidExecutableProgram, MidExecutableRequests, MidProgramError }
 use ./Mid/Ambient only { MidAmbientProgram }
 use ./Mid/DeclarationAccess only { DeclarationAccessAnalysis }
@@ -80,7 +80,7 @@ pub fn programPreparationDiagnostic(c: inout Comp, error: ProgramPreparationErro
     match error {
         ProgramPreparationError.Frontend(diagnostic: val diagnostic) => { return diagnostic }
         ProgramPreparationError.GlobalAccess(offset: val offset) => {
-            return c.diagnosticAt(offset: offset, msg: "borrowed global storage overlaps an access in the called body")
+            return c.diagnosticAt(offset: offset, msg: "borrowed global storage overlaps an access in the called body", failureDomain: <FailureDomain.Source />)
         }
         ProgramPreparationError.Declaration(error: val failure) => { return declarationProgramDiagnostic(c: inout c, error: failure) }
         ProgramPreparationError.Mid(error: val failure) => {

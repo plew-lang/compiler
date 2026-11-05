@@ -1,7 +1,7 @@
 // Declaration-only Mid preparation. No executable discovery or LLVM work.
 // Remaining obligations are explicit; success is not a whole-target check token.
 use ./Frontend only { Comp, tracePhase }
-use ./Diag only { CompileDiagnostic }
+use ./Diag only { CompileDiagnostic, FailureDomain }
 use ./Mid/Build only { MidBuildError, MidBodyBuild, MidFunctionTemplates, ensureParametricMidClosureBody }
 use ./Mid/DeclarationAccess only { analyzeDeclarationGlobalAccessWithRequests, analyzeDeclarationGlobalAccessRoots, checkDeclarationBodyAccess, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
 use ./Mid/Verify only { MidVerifyError }
@@ -220,7 +220,7 @@ fn declarationAccessOffset(c: inout Comp, owner: DeclarationAccessNode) -> U64 {
 pub fn declarationProgramDiagnostic(c: inout Comp, error: DeclarationProgramError) -> CompileDiagnostic {
     match error {
         DeclarationProgramError.GlobalAccess(offset: val offset) => {
-            return c.diagnosticAt(offset: offset, msg: "borrowed global storage overlaps an access in the called body")
+            return c.diagnosticAt(offset: offset, msg: "borrowed global storage overlaps an access in the called body", failureDomain: <FailureDomain.Source />)
         }
         DeclarationProgramError.Analysis(error: val failure) => {
             match failure {

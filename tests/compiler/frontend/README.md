@@ -89,3 +89,11 @@ also a valid input. Open TypeTerms and declaration heads with incomplete generic
 passed to this closed-instance API; their dependencies remain separate analysis
 obligations. Every available final contract must pass those eligibility checks
 and is compared; filtering cannot silently omit a published contract.
+
+`test-failure-domains.py --compiler PATH --out NEW_DIRECTORY` is a manual scoped
+TDD probe for com-yeua. It runs the existing returning-renderer control,
+`FailureDomains.pw` (typed diagnostic values with identical rendered messages),
+and `ProducerFailureDomains.pw` (actual source/input producers, repeated failed
+owner requests, queue draining and stage conversion). It does not certify the
+private process-result channel, normal/expose/ASan rejection consumers or the
+whole failure-classification migration. Those integration gates remain required.

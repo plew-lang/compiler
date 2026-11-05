@@ -1,0 +1,79 @@
+// Actual producers and source-owner cache, without invoking the compiler CLI.
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain, emitDiagnostic }
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { SemanticCompletionOwner }
+use ../../../src/DeclarationProgram only { DeclarationProgramError, declarationProgramDiagnostic }
+use ../../../src/PreparedProgram only { ProgramPreparationError, programPreparationDiagnostic }
+use @Std/Io only { print }
+
+fn sourceFailure() -> CompileDiagnostic {
+    mut val compiler: Comp = <Comp />
+    val result = analyzeFrontend(c: inout compiler,
+        input: <FrontendInput.Text text="fn domainMissingResult() -> I64 {{}}\nfn main() {{}}" path="MissingReturn.pw" />,
+        sources: <SourceAccess />)
+    val diagnostic = match result {
+        Result.Err(error: val diagnostic) => diagnostic
+        Result.Ok(value: _) => { panic("missing return was accepted") }
+    }
+    if !diagnostic.isSourceRejection() { emitDiagnostic(diagnostic: diagnostic) panic("missing return lost its source domain") }
+    val name = compiler.internBytes(s: "domainMissingResult")
+    mut val target = compiler.arena.functionCount()
+    mut val index = 0U64
+    while index < compiler.arena.functionCount() {
+        if compiler.arena.functionAt(index: index).nameId == name.nameId { target = index }
+        index += 1U64
+    }
+    if target == compiler.arena.functionCount() { panic("source function was not registered") }
+    compiler.pendingDiagnostics.append(diagnostic)
+    val drained = compiler.takeDiagnostics()
+    if drained.count() != 1U64 || !drained[0U64].isSourceRejection() { panic("drain lost failure domain") }
+    if compiler.takeDiagnostics().count() != 0U64 { panic("drain did not empty presentation queue") }
+    index = 0U64
+    while index < 2U64 {
+        match compiler.prepareLexicalBody(fnIdx: target) {
+            Result.Err(error: val cached) => {
+                if !cached.isSourceRejection() || cached.message != diagnostic.message { panic("repeat lost cached failure") }
+            }
+            Result.Ok(value: _) => { panic("draining presentation recovered failed source owner") }
+        }
+        index += 1U64
+    }
+    print("source cache retained")
+    return diagnostic
+}
+
+fn main() {
+    val source = sourceFailure()
+    mut val missing: Comp = <Comp />
+    match analyzeFrontend(c: inout missing,
+        input: <FrontendInput.File path="/nonexistent/plew-failure-domain-input.pw" />,
+        sources: <SourceAccess />) {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain {
+                FailureDomain.Input => {}
+                _ => { panic("missing input lost input domain") }
+            }
+            if diagnostic.isSourceRejection() { panic("missing input was source rejection") }
+        }
+        Result.Ok(value: _) => { panic("missing input was accepted") }
+    }
+    print("input distinguished")
+    mut val raw: Comp = <Comp />
+    match raw.preparedSemanticFacts(owner: <SemanticCompletionOwner.Function index=0U64 />) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.isSourceRejection() { panic("raw missing owner was source rejection") }
+        }
+        Result.Ok(value: _) => { panic("raw missing owner was accepted") }
+    }
+    val forwarded = programPreparationDiagnostic(c: inout raw,
+        error: <ProgramPreparationError.Frontend diagnostic=source />)
+    if !forwarded.isSourceRejection() { panic("outer preparation lost source domain") }
+    val declarationAccess = declarationProgramDiagnostic(c: inout raw,
+        error: <DeclarationProgramError.GlobalAccess offset=0U64 />)
+    if !declarationAccess.isSourceRejection() { panic("declaration access rejection lost its domain") }
+    val access = programPreparationDiagnostic(c: inout raw,
+        error: <ProgramPreparationError.GlobalAccess offset=0U64 />)
+    if !access.isSourceRejection() { panic("source access rejection lost its domain") }
+    print("raw and converted domains retained")
+}
