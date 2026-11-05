@@ -131,8 +131,11 @@ open/in_progress/closed and real prerequisites.
 | G2b (3G) | [com-9l3b](com-9l3b.md): Run all final correctness and sanitizer gates on the measured compiler | Final standard gates |
 | G3 (3G) | [com-lzpe](com-lzpe.md): Synchronize phase three parents and discharge the eleven criteria | Final closure and handoff |
 
-Current resumption order is com-2hx2, then com-sn9w/com-lbnc and com-x7r3
-before further broad semantic repairs. The A-G rows retain existing work/evidence
+The recovery inventory com-2hx2 has independent completion evidence. The
+selected next work is com-yeua -> com-fsuq, then com-sn9w/com-lbnc and
+com-x7r3 before further broad semantic repairs. Static audit work does not
+technically require unrelated runner repairs; see the completion schedule.
+The A-G rows retain existing work/evidence
 owners; they are not the current priority list. This is not an artificial
 whole-area dependency: independent bounded tasks may be ready. Hard tk edges
 are only required outputs (B0 -> its call-path closures, selected-call closure ->
@@ -149,6 +152,37 @@ by its actual admission. The [independent plan review](../../../evidence/existin
 checks this routing and its limits. Snapshot counts are not effort estimates or
 proof that the graph captures every unknown defect. New confirmed in-scope work
 must update its real owner/admission before closure.
+
+The [current graph recheck](../../../evidence/existing-feature-conformance/phase3-completion-plan-recheck.json)
+confirms the complete store and remaining prerequisite membership. The recovery
+inventory is closed; com-yeua is the selected implementation in progress. Counts
+include parent, investigation, implementation and gate work; shared prerequisites
+are counted once, and these totals do not estimate remaining effort.
+
+**Immediate execution checkpoints:**
+
+1. Finish com-yeua's typed origins, retained session/ORC failures and private
+   terminal handoff through the named real consumers. Current domain-value and
+   sender/decoder controls are scoped WIP; rebuild the actual compiler and verify
+   the CLI/consumer path. Preserve diagnostic-reason and abnormal-exit checks.
+2. Close com-fsuq's classifier contract using its retained 80 controls and real
+   normal/partreject/expose/ASan B consumers. com-yeua owns channel integration;
+   com-fsuq owns rejection admission. Reuse shared results without treating either
+   the channel alone or one passing lane as completion of both tickets.
+3. Complete com-sn9w and com-lbnc from the bounded com-2hx2 map, reusing existing
+   audits. Their deliverables are supported dispositions and finite repair
+   proposals, not another compiler-wide inventory or an implementation certificate.
+   Repair com-k4c9 before trusting affected gen rejection observations.
+4. Close com-x7r3 with an independently reviewed union of findings and existing
+   repair owners, actual area/G1 edges and an executable leaf order. Resolve
+   material unknowns through their finite owners. This is the next point at which
+   the entire semantic repair order can be committed without inventing answers.
+
+Every implementation leaf uses guarantee scenarios, meaningful RED/GREEN,
+producer-to-final-use closure, removal of replaced authorities and independent
+completion review. Reuse valid closed work and matching evidence. Review only
+changed conclusions when a later slice affects it; do not restart the whole audit
+or defer known repairs into final gate tickets.
 
 | Step | Existing action owners and selected work | Exit to the next boundary |
 |---|---|---|
