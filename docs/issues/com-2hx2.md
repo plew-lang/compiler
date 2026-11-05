@@ -1,6 +1,6 @@
 ---
 id: com-2hx2
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-26T12:48:12Z
@@ -62,3 +62,21 @@ Use the com-ax5g partition and accepted scoped outcomes under meta/evidence/exis
 Use the [adopted intake evidence](../../../evidence/existing-feature-conformance/audit-intake/README.md) for later source-matching scoped outcomes as well as the first session/input batch. Exact member roles, normative grounds and actual admission edges belong to each outcome and its current tk owners. Reuse them without repeating the whole API/test audit, but complete this task's distinct decision-inventory/semantic-path/combined-assignment contract. Union multi-domain scoped dependencies; do not deduplicate away requirements by owner name.
 
 The [finite routing correction](../../../evidence/existing-feature-conformance/audit-intake/pure-formal-routing-correction.json) governs superseded pure-helper placement. Do not reconstruct the old r2sw phase-three edge from historical outcome snapshots or duplicate this helper cleanup inside source-authority recovery.
+
+## Execution Contract
+
+The [working map](../../../evidence/existing-feature-conformance/phase3-decision-map/README.md)
+pins the current source and tracks inspected entry paths separately from missing
+ones. Required scenarios include declaration/free/member/factory/implicit call,
+local/global/closure, default/provided/generated owner, type/conversion/proof,
+value-region completion, successful/failed publication and final instance/Mid/LLVM
+readers. Inventory is not compliance: every observed competing API is retained
+for com-sn9w, including paths outside the lexical audit's four repair units.
+
+Each row names concrete producer/constructor, explicit and retained inputs,
+result/failure identity, storage, final readers and search-backed competing paths.
+Matching existing audit evidence is reused with source hashes and exact scope.
+Before closure, require entry-to-final-use coverage of the eleven criteria,
+finite exact audit-batch membership, justified exclusions, no silently missing
+entry, and a fresh independent review. No product/test changes or fictional
+RED/GREEN are part of this inventory.
