@@ -1,0 +1,2 @@
+use ./Library only { Counter }
+fn main() { mut val item = <Counter.known /> item.observed = 4I64 }

@@ -186,7 +186,7 @@ pub impl Comp {
         val v: U64 = self.fieldVis(structIndex: self.structIndexForType(ref: ownerRef), fieldStart: fieldStart, fieldLen: fieldLen)
         if v == 0U64 {
             if !(self.inTypeDefinitionModule(ownerRef: ownerRef, offset: offset)) {
-                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "field is private (visible only in its defining module)") />
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "field is private (visible only in its defining module)", failureDomain: <FailureDomain.Source />) />
             }
         }
         return <Result.Ok value=() />
@@ -196,12 +196,12 @@ pub impl Comp {
         val v: U64 = self.fieldVis(structIndex: self.structIndexForType(ref: ownerRef), fieldStart: fieldStart, fieldLen: fieldLen)
         if v == 0U64 {
             if !(self.inTypeDefinitionModule(ownerRef: ownerRef, offset: offset)) {
-                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "field is private (writable only in its defining module)") />
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "field is private (writable only in its defining module)", failureDomain: <FailureDomain.Source />) />
             }
         } else {
             if v == 1U64 {
                 if !(self.inTypeDefinitionModule(ownerRef: ownerRef, offset: offset)) {
-                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "field is `pub(get)` — readable but writable only in its defining module") />
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "field is `pub(get)` — readable but writable only in its defining module", failureDomain: <FailureDomain.Source />) />
                 }
             }
         }

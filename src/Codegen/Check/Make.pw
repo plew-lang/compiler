@@ -69,7 +69,7 @@ pub impl Comp {
                 if fields[fj].nameId == qBd {
                     found = true
                     if ownerModule != 4000000000U64 && fields[fj].vis == 0U64 && self.moduleOf(offset: bd.offset) != ownerModule {
-                        return <Result.Err error=self.diagnosticAt(offset: bd.offset, msg: "field is private (visible only in its defining module)") />
+                        return <Result.Err error=self.diagnosticAt(offset: bd.offset, msg: "field is private (visible only in its defining module)", failureDomain: <FailureDomain.Source />) />
                     }
                 }
                 fj += 1

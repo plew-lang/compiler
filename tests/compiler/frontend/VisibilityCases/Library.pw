@@ -1,0 +1,8 @@
+pub struct Counter {
+    mut val value: I64
+    pub(get) mut val observed: I64
+}
+pub impl Counter {
+    factory known() { return <Counter value=1I64 observed=2I64 /> }
+    fn read() -> I64 { return self.value }
+}

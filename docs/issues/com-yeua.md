@@ -161,3 +161,20 @@ The real production reject observation preserves all150 prior passes and reaches
 internal valid-rejection double now emits the private channel; all160 unchanged
 control assertions pass. Other producers, named retention/conversion boundaries,
 instrumented ASan B and whole-task completion verification remain outstanding.
+
+## Scoped Field Visibility Checkpoint
+
+[visibility-domain-checkpoint.json](../../../evidence/rejection-domains/diagnostic-domain-implementation/visibility-domain-checkpoint.json)
+records same-fixture producer RED→GREEN and fresh API4 probes. Known private
+read/write/pattern and pub(get) setter refusals are Source at the four existing
+producer sites. Unknown owner/field behavior and visibility/order are unchanged.
+Public getter and same-module private access remain accepted. Independent review
+accepts source changes and fresh API only. Actual normal reject classification
+preserves342 prior passes and reaches388/1068, with680 failures retained.
+
+Classification caution: current FrontendInput.Text parses only its root, without
+the File branch's dependency discovery. Missing factory messages through that
+path do not establish source invalidity. Initial dependency/stdRoot setup errors
+are excluded from RED; the final cross-module fixture uses File graph admission.
+Text graph support is not added by this increment. Parent completion, other
+producers/retention, instrumented ASan B and all final gates remain outstanding.

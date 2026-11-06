@@ -1,0 +1,35 @@
+// Visibility producers classify known declaration violations, not diagnostic text.
+use ../../../src/Diag only { emitDiagnostic }
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use @Std/Io only { print }
+
+fn requireVisibilityFailure(input: FrontendInput, message: String) {
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: input, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != message { emitDiagnostic(diagnostic: diagnostic) panic("wrong visibility refusal") }
+            if !diagnostic.isSourceRejection() { panic("visibility refusal lost Source domain") }
+        }
+        Result.Ok(value: _) => { panic("private field access was accepted") }
+    }
+}
+
+fn main() {
+    requireVisibilityFailure(input: <FrontendInput.File path="tests/fixtures/partreject/moduleprivatefield/Main.pw" />,
+        message: "field is private (visible only in its defining module)")
+    print("private read")
+    requireVisibilityFailure(input: <FrontendInput.File path="tests/fixtures/partreject/namespace_pattern_private_field/Main.pw" />,
+        message: "field is private (visible only in its defining module)")
+    print("private pattern")
+    requireVisibilityFailure(input: <FrontendInput.File path="tests/compiler/frontend/VisibilityCases/PrivateWrite.pw" />,
+        message: "field is private (writable only in its defining module)")
+    print("private write")
+    requireVisibilityFailure(input: <FrontendInput.File path="tests/compiler/frontend/VisibilityCases/SetterWrite.pw" />,
+        message: "field is `pub(get)` — readable but writable only in its defining module")
+    print("public getter private setter")
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/VisibilityCases/Read.pw" />,
+        sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    print("public getter and module access retained")
+}

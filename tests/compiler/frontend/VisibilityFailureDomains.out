@@ -1,0 +1,5 @@
+private read
+private pattern
+private write
+public getter private setter
+public getter and module access retained
