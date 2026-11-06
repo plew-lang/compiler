@@ -262,3 +262,21 @@ retains actual phase-three/area intake; none is automatically a met-c1pg
 prerequisite. Earlier awaiting-decision observations above are historical
 checkpoints now superseded by this authorized assignment. met-c1pg's remaining
 input/source-domain/identity controls remain in_progress.
+
+## Authored Provenance Increment
+
+[Fixed-input checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-authored-sites-checkpoint.json)
+records standard build 20261106T181802-build-4c77d5, fresh candidate
+plewc-trait-cycle-authored-sites, 22 internal assertions and two CLI Source
+refusals. Unknown nominal, primitive arity and missing projection member retain
+source diagnostics; equivalent malformed raw requests retain Input failures.
+Lower records authored sites privately, independently of legacy binder visibility
+suppression and the public temporary use list. A reconstructed first-attempt
+baseline with all source hashes matched demonstrates the forged-use-list RED.
+
+Independent read-only review by trait_cycle_admission_wip_review accepted this
+increment's provenance boundary and reconciled all 22 native/2 CLI results,
+exact causes/domains and fixture/candidate hashes. No task completion, full
+suite, fixedpoint or performance certification is claimed. Canonical view
+selector admission/identity, record ABI-name independence in the private graph,
+remaining source-domain controls and whole-task review remain unfinished.

@@ -1,6 +1,15 @@
 // Part of the lowering pass (root: _.pw): type lowering, record-struct
 // synthesis, and argument / field / dict-literal lowering.
 
+impl Comp {
+    inout fn recordAuthoredTypeUse(ref: U64, site: U64) {
+        self.loweringTypeUses.append(ref)
+        if site != 0U64 && self.modules.sourceFileContaining(offset: site).isSome() && !self.authoredTypeUseSites.contains(key: ref) {
+            self.authoredTypeUseSites[ref] = site
+        }
+    }
+}
+
 pub impl Comp {
     inout fn typePathHead(names: Array[Span]) -> Result[U64, CompileDiagnostic] {
         val initial = self.typeNamespaceModule(name: names[0U64])
@@ -436,7 +445,7 @@ pub impl Comp {
 
     inout fn lowerType(t: TypeAst) -> Result[PType, CompileDiagnostic] {
         val type = (try self.lowerTypeCore(t: (try self.normalizeProjectionTypeActive(t: t))))
-        self.loweringTypeUses.append(type.ref)
+        self.recordAuthoredTypeUse(ref: type.ref, site: t.span.start)
         return <Result.Ok value=type />
     }
 
@@ -616,7 +625,7 @@ pub impl Comp {
     // a normalized TypeAst.
     inout fn lowerSyntaxType(id: TypeId) -> Result[PType, CompileDiagnostic] {
         val type = (try self.lowerSyntaxTypeNode(t: syntaxType(file: self.syntax, id: id)))
-        self.loweringTypeUses.append(type.ref)
+        self.recordAuthoredTypeUse(ref: type.ref, site: syntaxType(file: self.syntax, id: id).span.start)
         return <Result.Ok value=type />
     }
 

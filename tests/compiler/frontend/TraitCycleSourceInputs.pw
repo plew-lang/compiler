@@ -2,17 +2,32 @@ use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
 use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/Diag only { emitDiagnostic }
 use @Std/Io only { print }
+use @Std/Process only { argAt }
 
 fn main() {
+    val scenario = argAt(1I64)
+    val source = if scenario == "primitiveArity" {
+        give "trait A[Item] {{}} trait B[Item] {{}} impl A[I64[I64]] as B[I64[I64]] {{}} fn main() {{}}"
+    } else if scenario == "missingProjectionMember" {
+        give "trait A[Item] {{}} trait B[Item] {{}} trait P {{ type Item }} impl[T] A[T#P.NoSuch] as B[T#P.NoSuch] {{}} fn main() {{}}"
+    } else {
+        if scenario != "" && scenario != "unknownNominal" { panic("unknown source input scenario") }
+        give "trait A[Item] {{}} trait B[Item] {{}} impl A[Unknown] as B[Unknown] {{}} fn main() {{}}"
+    }
+    val expected = if scenario == "primitiveArity" {
+        give "type argument count does not match the type constructor"
+    } else if scenario == "missingProjectionMember" {
+        give "associated-type projection names an unknown member"
+    } else { give "unknown type in this type annotation" }
     mut val compiler = <Comp />
-    match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[Item] {{}} trait B[Item] {{}} impl A[Unknown] as B[Unknown] {{}} fn main() {{}}" path="UnknownGraphType.pw" />, sources: <SourceAccess />) {
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text=source path="InvalidGraphType.pw" />, sources: <SourceAccess />) {
         Result.Err(error: val diagnostic) => {
-            if !diagnostic.isSourceRejection() {
+            if !diagnostic.isSourceRejection() || diagnostic.message != expected {
                 emitDiagnostic(diagnostic: diagnostic)
-                panic("authored unknown type did not retain Source failure")
+                panic("authored type did not retain Source failure")
             }
         }
-        Result.Ok(value: _) => { panic("authored unknown graph type was accepted") }
+        Result.Ok(value: _) => { panic("authored invalid graph type was accepted") }
     }
     print("source graph input refused")
 }

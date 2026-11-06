@@ -76,7 +76,7 @@ impl Comp {
                     if member.nameId == term.assocNameId { found = true }
                 }
                 if !found {
-                    return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "unresolved projection member") />
+                    return <Result.Err error=self.patternTypeSemanticFailure(ref: current, offset: offset, reason: "unresolved projection member", sourceMessage: "associated-type projection names an unknown member") />
                 }
                 facts.projectionOwners[current] = declaration.nameStart
             } else if term.paramId != 0U64 {
@@ -134,7 +134,7 @@ impl Comp {
                     val pointer = rangeEquals(bytes: self.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "CPtr") || rangeEquals(bytes: self.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "CMutPtr")
                     val arity = if pointer { give 1U64 } else { give 0U64 }
                     if term.args.count() != arity {
-                        return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "constructor argument shape mismatch") />
+                        return <Result.Err error=self.patternTypeSemanticFailure(ref: current, offset: offset, reason: "constructor argument shape mismatch", sourceMessage: "type argument count does not match the type constructor") />
                     }
                 }
             }

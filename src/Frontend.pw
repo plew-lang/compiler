@@ -436,6 +436,8 @@ pub struct Comp {
     // block. Record requests local uses; declaration loading checks only the
     // remaining signature/field uses. Synthetic types are not new source uses.
     pub mut val loweringTypeUses: Array[U64] = []
+    // Authored provenance is independent of legacy visibility suppression.
+    mut val authoredTypeUseSites: Dictionary[U64, U64] = [:]
     // Source constructions awaiting a parameter or result expectation.
     pub mut val pendingConstructionContexts: Set[U64] = Set.new()
     pub mut val pendingInterpolationWrites: Dictionary[U64, InterpolationWrite] = [:]

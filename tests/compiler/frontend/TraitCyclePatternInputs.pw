@@ -48,6 +48,15 @@ fn main() {
         val functionName = compiler.internBytes(s: "fn")
         argument = compiler.pushType(t: <TypeRef nameStart=functionName.nameStart nameLen=functionName.nameLen args=[] />)
         expected = "invalid pattern type input: constructor argument shape mismatch"
+    } else if scenario == "rawMissingProjectionMember" || scenario == "rawMissingMemberWithSourceSite" || scenario == "rawMissingMemberWithUseList" {
+        val traitName = compiler.internBytes(s: "Projection")
+        val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: traitName.nameId))
+        val member = compiler.internBytes(s: "NoSuch")
+        val site = if scenario != "rawMissingProjectionMember" { give subject.nameStart } else { give 0U64 }
+        // A real source coordinate alone is not a Lower-produced type-use receipt.
+        argument = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] projectionReceiver=integer assocTraitStart=declaration.nameStart assocTraitLen=declaration.nameLen assocTraitId=declaration.nameId assocNameId=member.nameId hasAssocTraitDecl=true assocTraitDeclOffset=declaration.nameStart siteOffset=site />)
+        if scenario == "rawMissingMemberWithUseList" { compiler.loweringTypeUses.append(argument) }
+        expected = "invalid pattern type input: unresolved projection member"
     } else if scenario == "recordProjectionInvalidChild" || scenario == "recordProjectionValid" {
         val traitName = compiler.internBytes(s: "Projection")
         val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: traitName.nameId))

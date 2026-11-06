@@ -111,12 +111,16 @@ eligibility, duplicate binders, nominal/primitive/function arity, name identitie
 and record-projection children. Run separate scenarios `viewedBinder`,
 `foreignBinder`, `duplicateBinder`, `nominalArity`, `nameIdentity`,
 `binderNameIdentity`, `primitiveArity`, `functionArity`,
-`recordProjectionInvalidChild` and `recordProjectionValid`. All require exit 0,
+`recordProjectionInvalidChild`, `recordProjectionValid`,
+`rawMissingProjectionMember`, `rawMissingMemberWithSourceSite` and
+`rawMissingMemberWithUseList`. The last three assert Input-domain rejection
+even with an authored coordinate or a forged public use-list entry. All require exit 0,
 empty stderr and the companion stdout golden.
 
 `TraitCycleCanonicalIdentity.pw` takes `legacy`, `same` or `distinct` and checks
 that legacy/resolved carriers of one owner close the same cycle, while different
-actual owners do not. `TraitCycleSourceInputs.pw` takes no argument and checks
-that an authored unknown graph type returns a Source diagnostic. Compile/link
+actual owners do not. `TraitCycleSourceInputs.pw` takes `unknownNominal`,
+`primitiveArity` or `missingProjectionMember` and checks the exact Source
+diagnostic for each authored error (no argument retains `unknownNominal`). Compile/link
 and compare their companion goldens by the same manual procedure. These bounded
 checks do not certify the whole task, source-set semantics or final gates.
