@@ -2,7 +2,7 @@
 id: met-c1pg
 status: open
 deps: [com-x95z]
-links: [com-xh2h]
+links: [com-xh2h, com-amjl]
 created: 2026-11-06T07:58:54Z
 type: bug
 priority: 1
@@ -135,5 +135,6 @@ trace registration through bare/bundle/view entries, graph construction,
 ranking, unification and search deduplication at c63ffc07. Two raw invalid-ref
 equality paths remain; current helper accessibility also permits bypassing an
 entry-only repair. This inspection changes neither scope nor dependencies.
-com-x95z's follow-up assignment remains pending. No product or fixture edit,
-executed RED/GREEN, task start/closure or independent completion is claimed.
+com-x95z's source/oracle follow-up is assigned to com-amjl; the bounded
+investigation is closed as investigated after independent assignment review. No product or fixture edit,
+executed RED/GREEN, task start/closure or independent product completion is claimed.

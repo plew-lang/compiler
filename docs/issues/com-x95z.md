@@ -1,6 +1,6 @@
 ---
 id: com-x95z
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-27T22:54:20Z
@@ -84,12 +84,27 @@ negative growth oracles.
 The positive graph setup's full-source success and inherited fixture's embedded
 missing Parent[String] declaration are not justified by their valid helper/
 structural purposes. Current ordinary unbounded T#P.Item signatures also pass.
-A separate declaration/signature projection-justification repair and the two
-named success-setup corrections need a concrete owner. Do not introduce
+A separate trait-view/projection-justification repair and the two named
+success-setup corrections are assigned to com-amjl. Do not introduce
 conditional trait-to-trait conformance while adjusting them (com-wfq2).
 
-The task remains in_progress: concrete follow-up assignment and authorization
-for the existing source-success test correction are pending under the goal's
-stop conditions. No compiler/fixture changes, correction GREEN or phase-three
-completion is claimed. Do not repeat the investigation from scratch on resume;
-adopt its finite evidence and close only after assigning the receiving repair.
+The user authorized follow-up issue creation including the clarified trait-view
+contract and the two source-success setup corrections. [com-amjl](com-amjl.md)
+owns common trait-view evidence admission and projection/final-consumer closure;
+met-ia09, met-6e6k and com-604k depend on that repair. met-c1pg stays separate and
+does not wait for its product GREEN. The assignment/completion review accepts investigated closure. No compiler/fixture changes, correction GREEN or
+phase-three completion is claimed. Do not repeat the investigation on resume.
+
+## Closure: Investigated
+
+The finite investigation and receiving assignment are complete at source
+51519401 (no product change from the recorded c63ffc07 investigation).
+New com-amjl and the actual area/integration dependencies retain all source and
+oracle corrections; met-c1pg retains raw graph admission/identity repair.
+Independent neutral projection_view_task_review accepts scope, task granularity,
+all four fixture purposes and the dependency graph. Its required stale-owner/
+pending-assignment corrections were applied, including the final two-line
+recheck. Exact adoption, review disposition and saved revision are in
+[task-adoption.json](../../../evidence/rejection-domains/projection-admission-investigation/task-adoption.json).
+Reason: investigated. No compiler/test repair, GREEN, area, phase-three or
+integration completion is certified by closing this finite task.
