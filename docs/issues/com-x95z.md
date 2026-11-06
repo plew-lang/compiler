@@ -1,6 +1,6 @@
 ---
 id: com-x95z
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-27T22:54:20Z
@@ -70,3 +70,26 @@ projections are invalid or fabricate conformance. This dependency waits for
 the bounded investigation and explicit follow-up assignment, not every later
 product repair it assigns. No new source decision or product completion is
 implied by the dependency.
+
+## Finite Investigation Checkpoint — Not Closed
+
+[Findings](../../../evidence/rejection-domains/projection-admission-investigation/README.md)
+record all four introducing purposes, canonical obligations, exact current
+checks/native embedding and independent neutral review. Structural graph terms
+and full source signature admission have distinct prerequisites; no new surface
+policy is needed. Graph checking must not solve receiver conformance before
+structural cycle/growth comparison. met-c1pg keeps that repair and the two
+negative growth oracles.
+
+The positive graph setup's full-source success and inherited fixture's embedded
+missing Parent[String] declaration are not justified by their valid helper/
+structural purposes. Current ordinary unbounded T#P.Item signatures also pass.
+A separate declaration/signature projection-justification repair and the two
+named success-setup corrections need a concrete owner. Do not introduce
+conditional trait-to-trait conformance while adjusting them (com-wfq2).
+
+The task remains in_progress: concrete follow-up assignment and authorization
+for the existing source-success test correction are pending under the goal's
+stop conditions. No compiler/fixture changes, correction GREEN or phase-three
+completion is claimed. Do not repeat the investigation from scratch on resume;
+adopt its finite evidence and close only after assigning the receiving repair.
