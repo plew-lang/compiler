@@ -105,3 +105,18 @@ empty stderr and match `TraitCycleInputAdmission.out`. Its Input-domain and exac
 input-failure assertions distinguish malformed requests from actual source
 cycle refusals. These initial cases do not certify the task's complete binder,
 identity, source-set or ordinary-source contract.
+
+`TraitCyclePatternInputs.pw` covers graph-input binder membership versus matching
+eligibility, duplicate binders, nominal/primitive/function arity, name identities
+and record-projection children. Run separate scenarios `viewedBinder`,
+`foreignBinder`, `duplicateBinder`, `nominalArity`, `nameIdentity`,
+`binderNameIdentity`, `primitiveArity`, `functionArity`,
+`recordProjectionInvalidChild` and `recordProjectionValid`. All require exit 0,
+empty stderr and the companion stdout golden.
+
+`TraitCycleCanonicalIdentity.pw` takes `legacy`, `same` or `distinct` and checks
+that legacy/resolved carriers of one owner close the same cycle, while different
+actual owners do not. `TraitCycleSourceInputs.pw` takes no argument and checks
+that an authored unknown graph type returns a Source diagnostic. Compile/link
+and compare their companion goldens by the same manual procedure. These bounded
+checks do not certify the whole task, source-set semantics or final gates.

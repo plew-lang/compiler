@@ -157,3 +157,59 @@ nominal identity after validating existence; do not leave that as the endpoint.
 The ordinary unknown-type source probe also currently returns Input and needs
 correction within this producer-to-input boundary. Source-cycle domains,
 preserved graph/source controls and final independent completion remain pending.
+
+## Second Increment and Shared Child Regression
+
+Canonical nominal/projection owners are now retained in private admission facts
+and consumed by graph relation, alpha comparison and search. Binder membership
+uses lexical ParamId separately from free-variable eligibility. Exact authored
+lowering-use receipts distinguish an invalid source type from an artificial raw
+request; nominal unknown/arity refusals do not bless unproven raw input as Source.
+
+[Incremental executed assertions](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-input-second-increment.json)
+retain the scoped RED/GREEN and unresolved cases. Earlier native runs compile
+imported compiler source and are not final fresh-CLI verification.
+
+A real representation defect was reproduced: rebuildProjectionTerm retains a
+record receiver mirror, while common child count/ref/label formerly selected
+record fields before the projection receiver/trait arguments. A raw invalid
+receiver was admitted (executed RED); valid record projection and known extension
+view controls passed. Both TypeRef and scalar child APIs now prioritize the
+projection discriminator. Independent read-only review confirms that the explicit
+receiver, not duplicate record mirror fields, is the semantic authority. [Fresh build and native checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-input-second-checkpoint.json)
+records standard build 20261106T111547-build-728482, unchanged inputs and exit 0.
+The saved bin/plewc-trait-cycle-input-second candidate passes all 17 native
+assertions across the four current internal fixtures.
+
+Remaining finite admission work includes view-source identity/selector validity,
+record ABI-name independence in graph heads, preserved source-domain cases and
+source-set/freshening controls. The common non-cycle typeTermRefSameHead also
+retains a record-first shortcut: independently track its actual equality defect
+and repair ownership rather than claiming the child change repairs all equality.
+No task/area/phase completion, full suite, formal performance or fixed point is
+claimed by this increment.
+
+[Additional authored controls](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-source-shape-probes.json)
+confirm that source I64[I64] and T#P.NoSuch currently return Input rather than
+Source; these are required remaining corrections, not accepted behavior. A
+wrong projection positional arity is rejected earlier as Unclassified and is
+retained for com-yeua's actual producer classification.
+
+The [non-cycle common-head probe](../../../evidence/rejection-domains/diagnostic-domain-implementation/record-projection-head-probe.json)
+compiles/links successfully, then fails its structural inequality assertion:
+two record-receiver projections selecting different associated members compare
+equal through typeRefEq. This probe establishes an internal structural equality
+defect, not a demonstrated ordinary-source miscompile. The common head still
+short-circuits on isRecord before inspecting projection identity. com-vh0x
+explicitly excludes algorithm/acceptance changes, so it cannot silently absorb
+this product repair. Confirm separate finite repair ownership before extending
+implementation scope.
+
+[Independent scope review](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-input-second-review.json)
+confirms a separate finite bug is needed for the non-cycle head shortcut. The
+raw probe has no receiver conformance evidence; do not call it a valid-source
+miscompile. Include a justified receiver/associated-output control in that
+repair's acceptance. Proposed actual area intake: met-6e6k and met-ia09, not an
+automatic met-c1pg prerequisite. Task addition is awaiting user decision under
+the active task-gap stop condition. Current met-c1pg remains in_progress with
+the explicitly retained admission/source-domain work.

@@ -302,6 +302,17 @@ fn selectedInterfaceRoot(template: CallTemplate) -> U64 {
     return 0U64
 }
 
+// Private admission receipts: callers cannot construct unchecked graph inputs.
+struct PatternInputFacts {
+    mut val nominalOwners: Dictionary[U64, U64] = [:]
+    mut val projectionOwners: Dictionary[U64, U64] = [:]
+}
+
+struct CheckedTraitCycleGraph {
+    val graph: TraitCycleGraph
+    val facts: PatternInputFacts
+}
+
 pub struct Comp {
     mut val semanticClosures: Array[SemanticClosure] = []
     mut val sourceFacts: SourceFactDirectory = <SourceFactDirectory />

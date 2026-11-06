@@ -1,0 +1,80 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Bind, Conform, TypeRef }
+use ../../../src/Diag only { FailureDomain, emitDiagnostic }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    val scenario = argAt(1I64)
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[Item] {{}} trait B[Item] {{}} trait Projection {{ type Item }} struct Box[T] {{}} extension E {{ impl A[I64] as B[I64] {{}} }} fn main() {{}}" path="PatternInput.pw" />, sources: <SourceAccess />).unwrap()
+    val subject = compiler.decls.traitAt(index: 0U64)
+    val target = compiler.decls.traitAt(index: 1U64)
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
+    val parameterName = compiler.internBytes(s: "T")
+    val identity = compiler.nextParamId
+    compiler.nextParamId += 2U64
+    val parameter = <Bind nameStart=parameterName.nameStart nameLen=parameterName.nameLen nameId=parameterName.nameId paramId=identity fieldStart=0U64 fieldLen=0U64 />
+    mut val parameters: Array[Bind] = [parameter]
+    mut val argument = integer
+    mut val expected = ""
+    if scenario == "viewedBinder" {
+        // A structural graph pattern may retain a view-qualified lexical
+        // parameter without solving that view's receiver applicability.
+        val extension = compiler.internBytes(s: "E")
+        argument = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=identity args=[] viewExtId=extension.nameId viewIds=[extension.nameId] />)
+    } else if scenario == "foreignBinder" {
+        argument = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=identity + 1U64 args=[] />)
+        expected = "invalid pattern type input: foreign lexical type parameter"
+    } else if scenario == "duplicateBinder" {
+        parameters.append(parameter)
+        expected = "invalid trait-cycle input: duplicate lexical type parameter"
+    } else if scenario == "nominalArity" {
+        val box = compiler.arena.structAt(index: 0U64)
+        argument = compiler.pushType(t: <TypeRef nameStart=box.nameStart nameLen=box.nameLen args=[] hasDecl=true declOffset=box.defOffset />)
+        expected = "invalid pattern type input: nominal argument arity mismatch"
+    } else if scenario == "nameIdentity" {
+        argument = compiler.arena.registerType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen nameId=parameterName.nameId args=[] />, nameCount: compiler.interner.entries.count())
+        expected = "invalid pattern type input: inconsistent type name identity"
+    } else if scenario == "binderNameIdentity" {
+        parameters = [<Bind nameStart=integerName.nameStart nameLen=integerName.nameLen nameId=parameterName.nameId paramId=identity fieldStart=0U64 fieldLen=0U64 />]
+        expected = "invalid trait-cycle input: invalid lexical type parameter"
+    } else if scenario == "primitiveArity" {
+        argument = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[integer] />)
+        expected = "invalid pattern type input: constructor argument shape mismatch"
+    } else if scenario == "functionArity" {
+        val functionName = compiler.internBytes(s: "fn")
+        argument = compiler.pushType(t: <TypeRef nameStart=functionName.nameStart nameLen=functionName.nameLen args=[] />)
+        expected = "invalid pattern type input: constructor argument shape mismatch"
+    } else if scenario == "recordProjectionInvalidChild" || scenario == "recordProjectionValid" {
+        val traitName = compiler.internBytes(s: "Projection")
+        val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: traitName.nameId))
+        val member = compiler.internBytes(s: "Item")
+        val receiver = if scenario == "recordProjectionValid" {
+            give compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true />)
+        } else { give 999999U64 }
+        // Projection rebuilding retains a record receiver's mirror fields.
+        // Those fields must never hide the semantic receiver relation.
+        argument = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true projectionReceiver=receiver assocTraitStart=declaration.nameStart assocTraitLen=declaration.nameLen assocTraitId=declaration.nameId assocNameId=member.nameId hasAssocTraitDecl=true assocTraitDeclOffset=declaration.nameStart />)
+        if scenario == "recordProjectionInvalidChild" { expected = "invalid pattern type input: invalid type term reference" }
+    } else { panic("unknown test scenario") }
+    compiler.decls.registerConform(<Conform sourceModule=0U64 typeStart=subject.nameStart typeLen=subject.nameLen typeId=subject.nameId subjectTraitOwner=subject.nameStart typeArity=1U64 subjectArgs=compiler.pushConformTypes(types: [argument]) typeParams=compiler.pushConformBinds(binds: parameters) traitStart=target.nameStart traitLen=target.nameLen traitArgs=compiler.pushConformTypes(types: [integer]) derived=false />)
+    match compiler.checkTraitSubjectCycles(activeExtIds: []) {
+        Result.Ok(value: _) => {
+            if expected != "" { panic("invalid pattern input was admitted") }
+        }
+        Result.Err(error: val diagnostic) => {
+            if expected == "" || diagnostic.message != expected {
+                emitDiagnostic(diagnostic: diagnostic)
+                panic("wrong pattern input result")
+            }
+            match diagnostic.failureDomain {
+                FailureDomain.Input => {}
+                _ => { panic("pattern input did not retain Input domain") }
+            }
+        }
+    }
+    print("pattern input contract retained")
+}

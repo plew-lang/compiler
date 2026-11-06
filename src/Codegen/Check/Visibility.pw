@@ -357,6 +357,20 @@ pub impl Comp {
 
     // A single authored use has identical semantics at declaration load and
     // lexical body request. Projection and visibility checks precede consumers.
+    fn authoredDeclarationTypeUseSite(ref: U64) -> Optional[U64] {
+        // Source provenance is an actual lowering receipt, not merely a span
+        // attached by a raw TypeRef caller or a convenient file-name heuristic.
+        for authored in self.loweringTypeUses {
+            if authored == ref && ref < self.arena.typeCount() {
+                val type = self.arena.typeTermAt(index: ref)
+                if type.siteOffset != 0U64 && self.modules.sourceFileContaining(offset: type.siteOffset).isSome() {
+                    return <Optional.Some v=type.siteOffset />
+                }
+            }
+        }
+        return <Optional.None />
+    }
+
     inout fn checkSourceTypeUses(types: Array[U64]) -> Result[(), CompileDiagnostic] {
         for ref in types {
             if !self.checkedTypeUses.contains(ref) {

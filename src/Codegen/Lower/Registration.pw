@@ -9,11 +9,30 @@
 // cycle ranking and unification consume its validated terms, never source text
 // as an implicit missing-owner identity.
 impl Comp {
+    fn patternBinderIdentityIndex(params: PatternBindInput, identity: U64) -> U64 {
+        if identity == 0U64 { return params.count() }
+        mut val index = 0U64
+        while index < params.count() {
+            if params.at(index: index, declarations: self.decls, functions: self.arena).paramId == identity { return index }
+            index += 1U64
+        }
+        return params.count()
+    }
+
     inout fn patternTypeInputFailure(offset: U64, reason: String) -> CompileDiagnostic {
         return self.diagnosticAt(offset: offset, msg: "invalid pattern type input: " + reason, failureDomain: <FailureDomain.Input />)
     }
 
-    inout fn checkPatternTypeInput(ref: U64, params: PatternBindInput, sourceModule: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn patternTypeSemanticFailure(ref: U64, offset: U64, reason: String, sourceMessage: String) -> CompileDiagnostic {
+        match self.authoredDeclarationTypeUseSite(ref: ref) {
+            Optional.Some(v: val site) => {
+                return self.diagnosticAt(offset: site, msg: sourceMessage, failureDomain: <FailureDomain.Source />)
+            }
+            Optional.None => { return self.patternTypeInputFailure(offset: offset, reason: reason) }
+        }
+    }
+
+    inout fn checkPatternTypeInput(ref: U64, params: PatternBindInput, sourceModule: U64, offset: U64, facts: inout PatternInputFacts) -> Result[(), CompileDiagnostic] {
         mut val pending: Array[U64] = [ref]
         mut val finishing: Array[Bool] = [false]
         mut val states: Dictionary[U64, U64] = [:]
@@ -39,6 +58,9 @@ impl Comp {
             if term.nameLen > self.arena.bytes.count() - term.nameStart {
                 return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "invalid type name span") />
             }
+            if term.nameId != intern(c: inout self, start: term.nameStart, len: term.nameLen) {
+                return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "inconsistent type name identity") />
+            }
             if term.assocNameId != 0U64 {
                 val owner = if term.hasAssocTraitDecl { give term.assocTraitDeclOffset } else { give term.assocTraitStart }
                 val traitIndex = self.decls.traitOwnerIndex(offset: owner)
@@ -56,8 +78,9 @@ impl Comp {
                 if !found {
                     return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "unresolved projection member") />
                 }
+                facts.projectionOwners[current] = declaration.nameStart
             } else if term.paramId != 0U64 {
-                if self.plainBinder(ref: current, params: params) >= params.count() {
+                if self.patternBinderIdentityIndex(params: params, identity: term.paramId) >= params.count() {
                     return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "foreign lexical type parameter") />
                 }
             } else if term.isRecord {
@@ -66,13 +89,52 @@ impl Comp {
                 }
             } else if !self.isFnType(ref: current) && !self.isCompatibilityBuiltin(type: self.arena.typeTermAt(index: current)) {
                 if self.plainBinder(ref: current, params: params) >= params.count() {
-                    val identity = if term.hasDecl {
-                        give self.typeDeclName(identity: <Bind nameStart=term.declOffset nameLen=term.nameLen fieldStart=0U64 fieldLen=0U64 />)
-                    } else {
-                        give self.typeDeclIdentityAt(useMod: sourceModule, start: term.nameStart, len: term.nameLen)
+                    val useModule = match self.authoredDeclarationTypeUseSite(ref: current) {
+                        Optional.Some(v: val site) => self.moduleOf(offset: site)
+                        Optional.None => sourceModule
                     }
-                    if identity.nameLen == 0U64 {
-                        return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "unresolved type term owner") />
+                    val identity = if term.hasDecl {
+                        give <Bind nameStart=term.declOffset nameLen=1U64 fieldStart=0U64 fieldLen=0U64 />
+                    } else {
+                        give self.typeDeclIdentityAt(useMod: useModule, start: term.nameStart, len: term.nameLen)
+                    }
+                    if self.typeDeclName(identity: identity).nameLen == 0U64 {
+                        return <Result.Err error=self.patternTypeSemanticFailure(ref: current, offset: offset, reason: "unresolved type term owner", sourceMessage: "unknown type in this type annotation") />
+                    }
+                    val structure = self.arena.structIndexByOffset(offset: identity.nameStart)
+                    val enumeration = self.arena.enumIndexByOffset(offset: identity.nameStart)
+                    val trait = self.decls.traitOwnerIndex(offset: identity.nameStart)
+                    val arity = if structure < self.arena.structCount() {
+                        give self.arena.structAt(index: structure).typeParams.count()
+                    } else if enumeration < self.arena.enumCount() {
+                        give self.arena.enumAt(index: enumeration).typeParams.count()
+                    } else if trait < self.decls.traitOwnerCount() {
+                        give self.decls.traitOwnerAt(index: trait).arity
+                    } else { give 0U64 }
+                    val arguments = if term.isAny { give self.positionalTraitArgs(t: term).count() } else { give term.args.count() }
+                    if arguments != arity {
+                        return <Result.Err error=self.patternTypeSemanticFailure(ref: current, offset: offset, reason: "nominal argument arity mismatch", sourceMessage: "type argument count does not match the type declaration") />
+                    }
+                    match facts.nominalOwners.get(key: current) {
+                        Optional.Some(v: val owner) => {
+                            if owner != identity.nameStart {
+                                return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "conflicting type term owner") />
+                            }
+                        }
+                        Optional.None => { facts.nominalOwners[current] = identity.nameStart }
+                    }
+                }
+            } else {
+                val function = self.isFnType(ref: current)
+                if function {
+                    if !term.isDiverging && term.args.count() == 0U64 {
+                        return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "constructor argument shape mismatch") />
+                    }
+                } else {
+                    val pointer = rangeEquals(bytes: self.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "CPtr") || rangeEquals(bytes: self.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "CMutPtr")
+                    val arity = if pointer { give 1U64 } else { give 0U64 }
+                    if term.args.count() != arity {
+                        return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "constructor argument shape mismatch") />
                     }
                 }
             }
@@ -87,6 +149,40 @@ impl Comp {
             }
         }
         return <Result.Ok value=() />
+    }
+
+    // Compare established heads, without resolving a name again. The same
+    // canonical owner may have legacy or resolved carriers; neither carrier
+    // readiness nor an alias's spelling creates a second semantic identity.
+    inout fn patternInputHeadsEqual(left: U64, right: U64, facts: PatternInputFacts) -> Bool {
+        val a = self.arena.typeAt(index: left)
+        val b = self.arena.typeAt(index: right)
+        if a.assocNameId != 0U64 || b.assocNameId != 0U64 {
+            if a.assocNameId == 0U64 || b.assocNameId == 0U64 || a.assocNameId != b.assocNameId { return false }
+            match facts.projectionOwners.get(key: left) {
+                Optional.Some(v: val owner) => {
+                    match facts.projectionOwners.get(key: right) {
+                        Optional.Some(v: val other) => { return owner == other }
+                        Optional.None => { return false }
+                    }
+                }
+                Optional.None => { return false }
+            }
+        }
+        if a.isRecord != b.isRecord || a.isAny != b.isAny || a.isSendable != b.isSendable || a.isDiverging != b.isDiverging || a.viewExtId != b.viewExtId || !self.sameViewIdSet(a: a.viewIds, b: b.viewIds) { return false }
+        match facts.nominalOwners.get(key: left) {
+            Optional.Some(v: val owner) => {
+                match facts.nominalOwners.get(key: right) {
+                    Optional.Some(v: val other) => { return owner == other }
+                    Optional.None => { return false }
+                }
+            }
+            Optional.None => {
+                if facts.nominalOwners.contains(key: right) { return false }
+            }
+        }
+        if a.paramId != 0U64 || b.paramId != 0U64 { return a.paramId != 0U64 && a.paramId == b.paramId }
+        return a.nameId == b.nameId && a.assocTraitId == b.assocTraitId && a.hasAssocTraitDecl == b.hasAssocTraitDecl && a.assocTraitDeclOffset == b.assocTraitDeclOffset
     }
 }
 
@@ -241,12 +337,7 @@ pub impl Comp {
         val term: TypeTerm = self.arena.typeTermAt(index: ref)
         if term.hasTopLevelView() || term.assocTraitId != 0U64 || term.args.len != 0U64 { return params.count() }
         if term.paramId != 0U64 {
-            mut val i: U64 = 0U64
-            while i < params.count() {
-                if params.at(index: i, declarations: self.decls, functions: self.arena).paramId == term.paramId { return i }
-                i += 1U64
-            }
-            return params.count()
+            return self.patternBinderIdentityIndex(params: params, identity: term.paramId)
         }
         return self.binderIndex(params: params, nameId: term.nameId)
     }

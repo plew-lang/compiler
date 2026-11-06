@@ -1,0 +1,18 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[Item] {{}} trait B[Item] {{}} impl A[Unknown] as B[Unknown] {{}} fn main() {{}}" path="UnknownGraphType.pw" />, sources: <SourceAccess />) {
+        Result.Err(error: val diagnostic) => {
+            if !diagnostic.isSourceRejection() {
+                emitDiagnostic(diagnostic: diagnostic)
+                panic("authored unknown type did not retain Source failure")
+            }
+        }
+        Result.Ok(value: _) => { panic("authored unknown graph type was accepted") }
+    }
+    print("source graph input refused")
+}

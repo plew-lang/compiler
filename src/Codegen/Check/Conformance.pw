@@ -99,7 +99,7 @@ pub impl Comp {
 // Only the checked graph entry below is public. Raw relations are implementation
 // details and cannot be called to manufacture an identity without admission.
 impl Comp {
-    inout fn checkTraitCycleInput(cf: Conform) -> Result[(), CompileDiagnostic] {
+    inout fn checkTraitCycleInput(cf: Conform, facts: inout PatternInputFacts) -> Result[(), CompileDiagnostic] {
         val subject = self.decls.traitOwnerIndex(offset: cf.typeStart)
         val target = self.decls.traitOwnerIndex(offset: cf.traitStart)
         if subject >= self.decls.traitOwnerCount() || target >= self.decls.traitOwnerCount() {
@@ -121,15 +121,40 @@ impl Comp {
         if cf.typeArity != subjectOwner.arity || cf.subjectArgs.len != subjectOwner.arity || cf.traitArgs.len != targetOwner.arity {
             return <Result.Err error=self.diagnosticAt(offset: cf.defOffset, msg: "invalid trait-cycle input: trait argument arity mismatch", failureDomain: <FailureDomain.Input />) />
         }
+        mut val binder = 0U64
+        while binder < cf.typeParams.len {
+            val parameter = self.conformBindAt(binds: cf.typeParams, index: binder)
+            if parameter.paramId == 0U64 || parameter.paramId >= self.nextParamId || parameter.nameId == 0U64 || parameter.nameId > self.interner.entries.count() {
+                return <Result.Err error=self.diagnosticAt(offset: cf.defOffset, msg: "invalid trait-cycle input: invalid lexical type parameter", failureDomain: <FailureDomain.Input />) />
+            }
+            if parameter.nameStart > self.arena.bytes.count() {
+                return <Result.Err error=self.diagnosticAt(offset: cf.defOffset, msg: "invalid trait-cycle input: invalid lexical type parameter", failureDomain: <FailureDomain.Input />) />
+            }
+            if parameter.nameLen > self.arena.bytes.count() - parameter.nameStart {
+                return <Result.Err error=self.diagnosticAt(offset: cf.defOffset, msg: "invalid trait-cycle input: invalid lexical type parameter", failureDomain: <FailureDomain.Input />) />
+            }
+            if intern(c: inout self, start: parameter.nameStart, len: parameter.nameLen) != parameter.nameId {
+                return <Result.Err error=self.diagnosticAt(offset: cf.defOffset, msg: "invalid trait-cycle input: invalid lexical type parameter", failureDomain: <FailureDomain.Input />) />
+            }
+            mut val previous = 0U64
+            while previous < binder {
+                val prior = self.conformBindAt(binds: cf.typeParams, index: previous)
+                if prior.paramId == parameter.paramId || prior.nameId == parameter.nameId {
+                    return <Result.Err error=self.diagnosticAt(offset: cf.defOffset, msg: "invalid trait-cycle input: duplicate lexical type parameter", failureDomain: <FailureDomain.Input />) />
+                }
+                previous += 1U64
+            }
+            binder += 1U64
+        }
         val params = <PatternBindInput.Conformance range=cf.typeParams />
         mut val index = 0U64
         while index < cf.subjectArgs.len {
-            try self.checkPatternTypeInput(ref: self.conformTypeAt(types: cf.subjectArgs, index: index), params: params, sourceModule: cf.sourceModule, offset: cf.defOffset)
+            try self.checkPatternTypeInput(ref: self.conformTypeAt(types: cf.subjectArgs, index: index), params: params, sourceModule: cf.sourceModule, offset: cf.defOffset, facts: inout facts)
             index += 1U64
         }
         index = 0U64
         while index < cf.traitArgs.len {
-            try self.checkPatternTypeInput(ref: self.conformTypeAt(types: cf.traitArgs, index: index), params: params, sourceModule: cf.sourceModule, offset: cf.defOffset)
+            try self.checkPatternTypeInput(ref: self.conformTypeAt(types: cf.traitArgs, index: index), params: params, sourceModule: cf.sourceModule, offset: cf.defOffset, facts: inout facts)
             index += 1U64
         }
         return <Result.Ok value=() />
@@ -194,7 +219,7 @@ impl Comp {
     // equal except that unifying it would require a self-embedding binder.
     // Keeping the third outcome separate is important: a growth in one
     // argument is not a cycle when another argument cannot match.
-    inout fn traitCycleTermRelation(a: TraitCycleTerm, b: TraitCycleTerm, binds: inout Array[TraitCycleBind]) -> U64 {
+    inout fn traitCycleTermRelation(a: TraitCycleTerm, b: TraitCycleTerm, binds: inout Array[TraitCycleBind], facts: PatternInputFacts) -> U64 {
         val ab: U64 = self.traitCycleBinder(ref: a.ref, scope: a.scope)
         val bb: U64 = self.traitCycleBinder(ref: b.ref, scope: b.scope)
         val aDecl: U64 = self.traitCycleDecl(scope: a.scope)
@@ -209,14 +234,14 @@ impl Comp {
             val aName: U64 = self.conformBindAt(binds: self.decls.conformAt(index: aDecl).typeParams, index: ab).nameId
             val aFound: U64 = self.traitCycleBindIndex(binds: binds, scope: a.scope, nameId: aName)
             if aFound < binds.count() {
-                return self.traitCycleTermRelation(a: <TraitCycleTerm ref=binds[aFound].ref scope=binds[aFound].refScope />, b: b, binds: inout binds)
+                return self.traitCycleTermRelation(a: <TraitCycleTerm ref=binds[aFound].ref scope=binds[aFound].refScope />, b: b, binds: inout binds, facts: facts)
             }
         }
         if bIsBinder {
             val bName: U64 = self.conformBindAt(binds: self.decls.conformAt(index: bDecl).typeParams, index: bb).nameId
             val bFound: U64 = self.traitCycleBindIndex(binds: binds, scope: b.scope, nameId: bName)
             if bFound < binds.count() {
-                return self.traitCycleTermRelation(a: a, b: <TraitCycleTerm ref=binds[bFound].ref scope=binds[bFound].refScope />, binds: inout binds)
+                return self.traitCycleTermRelation(a: a, b: <TraitCycleTerm ref=binds[bFound].ref scope=binds[bFound].refScope />, binds: inout binds, facts: facts)
             }
         }
         if aIsBinder && bIsBinder && a.scope == b.scope && ab == bb { return 1U64 }
@@ -226,19 +251,17 @@ impl Comp {
             binds.append(<TraitCycleBind scope=a.scope nameId=nameId ref=b.ref refScope=b.scope />)
             return 1U64
         }
-        if bIsBinder { return self.traitCycleTermRelation(a: b, b: a, binds: inout binds) }
+        if bIsBinder { return self.traitCycleTermRelation(a: b, b: a, binds: inout binds, facts: facts) }
         if a.ref == 0U64 || b.ref == 0U64 || a.ref >= self.arena.typeCount() || b.ref >= self.arena.typeCount() { return 0U64 }
         val ta: TypeRef = self.arena.typeAt(index: a.ref)
         val tb: TypeRef = self.arena.typeAt(index: b.ref)
-        if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
-            if ta.assocNameId == 0U64 || tb.assocNameId == 0U64 || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId { return 0U64 }
-        } else if ta.nameId != tb.nameId || ta.hasDecl != tb.hasDecl || ta.declOffset != tb.declOffset || ta.isRecord != tb.isRecord || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId { return 0U64 }
+        if !self.patternInputHeadsEqual(left: a.ref, right: b.ref, facts: facts) { return 0U64 }
         if self.typeTermChildCount(t: ta) != self.typeTermChildCount(t: tb) { return 0U64 }
         mut val i: U64 = 0U64
         mut val grows: Bool = false
         while i < self.typeTermChildCount(t: ta) {
             if self.typeTermChildLabel(t: ta, index: i) != self.typeTermChildLabel(t: tb, index: i) { return 0U64 }
-            val relation: U64 = self.traitCycleTermRelation(a: <TraitCycleTerm ref=self.typeTermChildRef(t: ta, index: i) scope=a.scope />, b: <TraitCycleTerm ref=self.typeTermChildRef(t: tb, index: i) scope=b.scope />, binds: inout binds)
+            val relation: U64 = self.traitCycleTermRelation(a: <TraitCycleTerm ref=self.typeTermChildRef(t: ta, index: i) scope=a.scope />, b: <TraitCycleTerm ref=self.typeTermChildRef(t: tb, index: i) scope=b.scope />, binds: inout binds, facts: facts)
             if relation == 0U64 { return 0U64 }
             if relation == 2U64 { grows = true }
             i += 1U64
@@ -247,8 +270,8 @@ impl Comp {
         return 1U64
     }
 
-    inout fn unifyTraitCycleTerms(a: TraitCycleTerm, b: TraitCycleTerm, binds: inout Array[TraitCycleBind]) -> Bool {
-        return self.traitCycleTermRelation(a: a, b: b, binds: inout binds) == 1U64
+    inout fn unifyTraitCycleTerms(a: TraitCycleTerm, b: TraitCycleTerm, binds: inout Array[TraitCycleBind], facts: PatternInputFacts) -> Bool {
+        return self.traitCycleTermRelation(a: a, b: b, binds: inout binds, facts: facts) == 1U64
     }
 
     inout fn copyTraitCycleBinds(binds: Array[TraitCycleBind]) -> Array[TraitCycleBind] {
@@ -261,11 +284,11 @@ impl Comp {
         return copied
     }
 
-    inout fn traitCycleNodeMatches(a: TraitCycleNode, b: TraitCycleNode, binds: inout Array[TraitCycleBind]) -> Bool {
+    inout fn traitCycleNodeMatches(a: TraitCycleNode, b: TraitCycleNode, binds: inout Array[TraitCycleBind], facts: PatternInputFacts) -> Bool {
         if a.owner != b.owner || a.args.count() != b.args.count() { return false }
         mut val i: U64 = 0U64
         while i < a.args.count() {
-            if !(self.unifyTraitCycleTerms(a: <TraitCycleTerm ref=a.args[i] scope=a.scope />, b: <TraitCycleTerm ref=b.args[i] scope=b.scope />, binds: inout binds)) { return false }
+            if !(self.unifyTraitCycleTerms(a: <TraitCycleTerm ref=a.args[i] scope=a.scope />, b: <TraitCycleTerm ref=b.args[i] scope=b.scope />, binds: inout binds, facts: facts)) { return false }
             i += 1U64
         }
         return true
@@ -298,7 +321,7 @@ impl Comp {
         return aScopes.count()
     }
 
-    inout fn traitCycleTermsAlphaEqual(a: TraitCycleTerm, b: TraitCycleTerm, aBinds: Array[TraitCycleBind], bBinds: Array[TraitCycleBind], aScopes: inout Array[U64], bScopes: inout Array[U64]) -> Bool {
+    inout fn traitCycleTermsAlphaEqual(a: TraitCycleTerm, b: TraitCycleTerm, aBinds: Array[TraitCycleBind], bBinds: Array[TraitCycleBind], aScopes: inout Array[U64], bScopes: inout Array[U64], facts: PatternInputFacts) -> Bool {
         val aBinder: U64 = self.traitCycleBinder(ref: a.ref, scope: a.scope)
         val bBinder: U64 = self.traitCycleBinder(ref: b.ref, scope: b.scope)
         val aDecl: U64 = self.traitCycleDecl(scope: a.scope)
@@ -307,11 +330,11 @@ impl Comp {
         val bIsBinder: Bool = bDecl < self.decls.conformCount() && bBinder < self.decls.conformAt(index: bDecl).typeParams.count()
         if aIsBinder {
             val ai: U64 = self.traitCycleBindIndex(binds: aBinds, scope: a.scope, nameId: self.conformBindAt(binds: self.decls.conformAt(index: aDecl).typeParams, index: aBinder).nameId)
-            if ai < aBinds.count() { return self.traitCycleTermsAlphaEqual(a: <TraitCycleTerm ref=aBinds[ai].ref scope=aBinds[ai].refScope />, b: b, aBinds: aBinds, bBinds: bBinds, aScopes: inout aScopes, bScopes: inout bScopes) }
+            if ai < aBinds.count() { return self.traitCycleTermsAlphaEqual(a: <TraitCycleTerm ref=aBinds[ai].ref scope=aBinds[ai].refScope />, b: b, aBinds: aBinds, bBinds: bBinds, aScopes: inout aScopes, bScopes: inout bScopes, facts: facts) }
         }
         if bIsBinder {
             val bi: U64 = self.traitCycleBindIndex(binds: bBinds, scope: b.scope, nameId: self.conformBindAt(binds: self.decls.conformAt(index: bDecl).typeParams, index: bBinder).nameId)
-            if bi < bBinds.count() { return self.traitCycleTermsAlphaEqual(a: a, b: <TraitCycleTerm ref=bBinds[bi].ref scope=bBinds[bi].refScope />, aBinds: aBinds, bBinds: bBinds, aScopes: inout aScopes, bScopes: inout bScopes) }
+            if bi < bBinds.count() { return self.traitCycleTermsAlphaEqual(a: a, b: <TraitCycleTerm ref=bBinds[bi].ref scope=bBinds[bi].refScope />, aBinds: aBinds, bBinds: bBinds, aScopes: inout aScopes, bScopes: inout bScopes, facts: facts) }
         }
         if aIsBinder || bIsBinder {
             if !(aIsBinder) || !(bIsBinder) || aDecl != bDecl || aBinder != bBinder { return false }
@@ -324,31 +347,29 @@ impl Comp {
         if a.ref == 0U64 || b.ref == 0U64 || a.ref >= self.arena.typeCount() || b.ref >= self.arena.typeCount() { return false }
         val ta: TypeRef = self.arena.typeAt(index: a.ref)
         val tb: TypeRef = self.arena.typeAt(index: b.ref)
-        if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
-            if ta.assocNameId == 0U64 || tb.assocNameId == 0U64 || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId { return false }
-        } else if ta.nameId != tb.nameId || ta.hasDecl != tb.hasDecl || ta.declOffset != tb.declOffset || ta.isRecord != tb.isRecord || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId { return false }
+        if !self.patternInputHeadsEqual(left: a.ref, right: b.ref, facts: facts) { return false }
         if self.typeTermChildCount(t: ta) != self.typeTermChildCount(t: tb) { return false }
         mut val i: U64 = 0U64
         while i < self.typeTermChildCount(t: ta) {
-            if self.typeTermChildLabel(t: ta, index: i) != self.typeTermChildLabel(t: tb, index: i) || !(self.traitCycleTermsAlphaEqual(a: <TraitCycleTerm ref=self.typeTermChildRef(t: ta, index: i) scope=a.scope />, b: <TraitCycleTerm ref=self.typeTermChildRef(t: tb, index: i) scope=b.scope />, aBinds: aBinds, bBinds: bBinds, aScopes: inout aScopes, bScopes: inout bScopes)) { return false }
+            if self.typeTermChildLabel(t: ta, index: i) != self.typeTermChildLabel(t: tb, index: i) || !(self.traitCycleTermsAlphaEqual(a: <TraitCycleTerm ref=self.typeTermChildRef(t: ta, index: i) scope=a.scope />, b: <TraitCycleTerm ref=self.typeTermChildRef(t: tb, index: i) scope=b.scope />, aBinds: aBinds, bBinds: bBinds, aScopes: inout aScopes, bScopes: inout bScopes, facts: facts)) { return false }
             i += 1U64
         }
         return true
     }
 
-    inout fn traitCycleSearchEquivalent(a: TraitCycleSearch, b: TraitCycleSearch) -> Bool {
+    inout fn traitCycleSearchEquivalent(a: TraitCycleSearch, b: TraitCycleSearch, facts: PatternInputFacts) -> Bool {
         if a.node.owner != b.node.owner || a.node.args.count() != b.node.args.count() { return false }
         mut val aScopes: Array[U64] = []
         mut val bScopes: Array[U64] = []
         mut val i: U64 = 0U64
         while i < a.node.args.count() {
-            if !(self.traitCycleTermsAlphaEqual(a: <TraitCycleTerm ref=a.node.args[i] scope=a.node.scope />, b: <TraitCycleTerm ref=b.node.args[i] scope=b.node.scope />, aBinds: a.binds, bBinds: b.binds, aScopes: inout aScopes, bScopes: inout bScopes)) { return false }
+            if !(self.traitCycleTermsAlphaEqual(a: <TraitCycleTerm ref=a.node.args[i] scope=a.node.scope />, b: <TraitCycleTerm ref=b.node.args[i] scope=b.node.scope />, aBinds: a.binds, bBinds: b.binds, aScopes: inout aScopes, bScopes: inout bScopes, facts: facts)) { return false }
             i += 1U64
         }
         return true
     }
 
-    inout fn traitCyclePathReaches(start: TraitCycleNode, node: TraitCycleNode, binds: Array[TraitCycleBind], graph: TraitCycleGraph) -> Bool {
+    inout fn traitCyclePathReaches(start: TraitCycleNode, node: TraitCycleNode, binds: Array[TraitCycleBind], graph: TraitCycleGraph, facts: PatternInputFacts) -> Bool {
         mut val pending: Array[TraitCycleSearch] = [<TraitCycleSearch node=node binds=binds />]
         mut val visited: Array[TraitCycleSearch] = []
         mut val cursor: U64 = 0U64
@@ -356,11 +377,11 @@ impl Comp {
             val current: TraitCycleSearch = pending[cursor]
             cursor += 1U64
             mut val closedBinds: Array[TraitCycleBind] = self.copyTraitCycleBinds(binds: current.binds)
-            if self.traitCycleNodeMatches(a: current.node, b: start, binds: inout closedBinds) { return true }
+            if self.traitCycleNodeMatches(a: current.node, b: start, binds: inout closedBinds, facts: facts) { return true }
             mut val seen: Bool = false
             mut val vi: U64 = 0U64
             while vi < visited.count() {
-                if self.traitCycleSearchEquivalent(a: current, b: visited[vi]) { seen = true }
+                if self.traitCycleSearchEquivalent(a: current, b: visited[vi], facts: facts) { seen = true }
                 vi += 1U64
             }
             if seen { continue }
@@ -374,7 +395,7 @@ impl Comp {
                 mut val nextBinds: Array[TraitCycleBind] = self.copyTraitCycleBinds(binds: current.binds)
                 val scope: U64 = (cursor + 1U64) * self.decls.conformCount() + ci
                 val subject: TraitCycleNode = <TraitCycleNode owner=edge.typeStart args=self.copyConformTypes(types: edge.subjectArgs) scope=scope />
-                if self.traitCycleNodeMatches(a: current.node, b: subject, binds: inout nextBinds) {
+                if self.traitCycleNodeMatches(a: current.node, b: subject, binds: inout nextBinds, facts: facts) {
                     val target: TraitCycleNode = <TraitCycleNode owner=edge.traitStart args=self.copyConformTypes(types: edge.traitArgs) scope=scope />
                     pending.append(<TraitCycleSearch node=target binds=nextBinds />)
                 }
@@ -387,19 +408,20 @@ impl Comp {
     // The owner graph decides only SCC membership; exact trait instances are
     // handled by the symbolic automaton.  Build components once per active
     // source-set with iterative Kosaraju, keeping compiler-stack use bounded.
-    inout fn buildTraitCycleGraph(activeExtIds: Array[U64]) -> Result[TraitCycleGraph, CompileDiagnostic] {
+    inout fn buildTraitCycleGraph(activeExtIds: Array[U64]) -> Result[CheckedTraitCycleGraph, CompileDiagnostic] {
         mut val graph = <TraitCycleGraph />
+        mut val facts = <PatternInputFacts />
         mut val candidate = 0U64
         while candidate < self.decls.traitSubjectConformCount() {
             val ci = self.decls.traitSubjectConformIndexAt(index: candidate)
             val edge = self.decls.conformAt(index: ci)
             if self.traitCycleEdgeActive(cf: edge, activeExtIds: activeExtIds) {
-                try self.checkTraitCycleInput(cf: edge)
+                try self.checkTraitCycleInput(cf: edge, facts: inout facts)
                 graph.append(conformIndex: ci, source: edge.typeStart, target: edge.traitStart)
             }
             candidate += 1U64
         }
-        return <Result.Ok value=graph />
+        return <Result.Ok value=<CheckedTraitCycleGraph graph=graph facts=facts /> />
     }
 
     inout fn traitCycleConstructorCount(ref: U64, params: PatternBindInput) -> U64 {
@@ -476,7 +498,9 @@ pub impl Comp {
     // passes its complete extension-source set, making extensions edge-active
     // only when the programmer explicitly selected them.
     inout fn checkTraitSubjectCycles(activeExtIds: Array[U64], offset: U64 = 0U64) -> Result[(), CompileDiagnostic] {
-        val graph = (try self.buildTraitCycleGraph(activeExtIds: activeExtIds))
+        val admitted = (try self.buildTraitCycleGraph(activeExtIds: activeExtIds))
+        val graph = admitted.graph
+        val facts = admitted.facts
         val components = graph.components()
         mut val edgeId: U64 = 1U64
         while edgeId <= graph.edgeCount() {
@@ -494,7 +518,7 @@ pub impl Comp {
             val source: TraitCycleNode = <TraitCycleNode owner=edge.typeStart args=self.copyConformTypes(types: edge.subjectArgs) scope=ci />
             val target: TraitCycleNode = <TraitCycleNode owner=edge.traitStart args=self.copyConformTypes(types: edge.traitArgs) scope=ci />
             val binds: Array[TraitCycleBind] = []
-            if self.traitCyclePathReaches(start: source, node: target, binds: binds, graph: graph) {
+            if self.traitCyclePathReaches(start: source, node: target, binds: binds, graph: graph, facts: facts) {
                 mut val report: U64 = edge.defOffset
                 if offset != 0U64 { report = offset }
                 return <Result.Err error=self.diagnosticAt(offset: report, msg: "trait-to-trait conformance cycle") />

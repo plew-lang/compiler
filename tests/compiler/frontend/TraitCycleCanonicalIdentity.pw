@@ -1,0 +1,47 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Conform, TraitDef, TypeRef }
+use ../../../src/Diag only { emitDiagnostic }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn appendEdge(compiler: inout Comp, subject: TraitDef, target: TraitDef, argument: U64) {
+    val arguments = compiler.pushConformTypes(types: [argument])
+    compiler.decls.registerConform(<Conform sourceModule=0U64 typeStart=subject.nameStart typeLen=subject.nameLen typeId=subject.nameId subjectTraitOwner=subject.nameStart typeArity=1U64 subjectArgs=arguments traitStart=target.nameStart traitLen=target.nameLen traitArgs=arguments derived=false />)
+}
+
+fn main() {
+    val scenario = argAt(1I64)
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[Item] {{}} trait B[Item] {{}} struct Box[T] {{}} struct Other[T] {{}} fn main() {{}}" path="CanonicalInput.pw" />, sources: <SourceAccess />).unwrap()
+    val subject = compiler.decls.traitAt(index: 0U64)
+    val target = compiler.decls.traitAt(index: 1U64)
+    val boxName = compiler.internBytes(s: "Box")
+    val box = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: boxName.nameId))
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
+    val canonical = compiler.pushType(t: <TypeRef nameStart=box.nameStart nameLen=box.nameLen args=[integer] hasDecl=true declOffset=box.defOffset />)
+    val other = if scenario == "legacy" {
+        give compiler.pushType(t: <TypeRef nameStart=box.nameStart nameLen=box.nameLen args=[integer] />)
+    } else if scenario == "same" {
+        give canonical
+    } else if scenario == "distinct" {
+        val name = compiler.internBytes(s: "Other")
+        val declaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: name.nameId))
+        give compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[integer] hasDecl=true declOffset=declaration.defOffset />)
+    } else { panic("unknown test scenario") }
+    appendEdge(compiler: inout compiler, subject: subject, target: target, argument: canonical)
+    appendEdge(compiler: inout compiler, subject: target, target: subject, argument: other)
+    match compiler.checkTraitSubjectCycles(activeExtIds: []) {
+        Result.Ok(value: _) => {
+            if scenario != "distinct" { panic("same canonical owner did not close the cycle") }
+        }
+        Result.Err(error: val diagnostic) => {
+            if scenario == "distinct" || diagnostic.message != "trait-to-trait conformance cycle" {
+                emitDiagnostic(diagnostic: diagnostic)
+                panic("wrong canonical identity result")
+            }
+        }
+    }
+    print("canonical graph identity retained")
+}
