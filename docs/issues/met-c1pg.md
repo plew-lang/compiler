@@ -2,7 +2,7 @@
 id: met-c1pg
 status: in_progress
 deps: [com-x95z]
-links: [com-xh2h, com-amjl]
+links: [com-xh2h, com-amjl, com-bvc8]
 created: 2026-11-06T07:58:54Z
 type: bug
 priority: 1
@@ -245,3 +245,20 @@ malformed parameter parsing ownership distinct. Existing com-amjl still owns
 source trait-view evidence; this investigation does not silently expand that
 issue, com-vh0x's API scope, or met-c1pg into all three repairs. Task assignment
 remains pending after the requested investigation.
+
+## Adopted Follow-up Assignment
+
+The user authorized the four finite follow-ups after clarification:
+[com-wka4](com-wka4.md) owns bare declared-subject/owner admission;
+[com-0w38](com-0w38.md) owns record impl prohibition including named extensions;
+[com-cuoy](com-cuoy.md) owns unsupported suffix conversion into fake parameters;
+[com-bvc8](com-bvc8.md) owns projection head identity and the API/data
+responsibility investigation around receiver mirrors. The latter must examine
+necessary inputs and competing category interpretation, not just reorder a
+conditional. These are open product repairs, not completion of this issue.
+
+[Assignment reconciliation](../../../evidence/rejection-domains/diagnostic-domain-implementation/record-issue-adoption.json)
+retains actual phase-three/area intake; none is automatically a met-c1pg
+prerequisite. Earlier awaiting-decision observations above are historical
+checkpoints now superseded by this authorized assignment. met-c1pg's remaining
+input/source-domain/identity controls remain in_progress.

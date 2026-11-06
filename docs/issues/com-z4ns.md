@@ -2,7 +2,7 @@
 id: com-z4ns
 status: open
 deps: []
-links: []
+links: [com-0w38, com-wka4]
 created: 2026-10-27T20:14:26Z
 type: task
 priority: 2

@@ -2,7 +2,7 @@
 id: com-j2i7
 status: open
 deps: []
-links: [com-mmk9]
+links: [com-mmk9, com-bvc8]
 created: 2026-10-29T19:04:13Z
 type: task
 priority: 2

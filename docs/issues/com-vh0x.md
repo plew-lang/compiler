@@ -2,7 +2,7 @@
 id: com-vh0x
 status: open
 deps: []
-links: [com-mmk9]
+links: [com-mmk9, com-bvc8]
 created: 2026-10-29T18:53:36Z
 type: task
 priority: 2
