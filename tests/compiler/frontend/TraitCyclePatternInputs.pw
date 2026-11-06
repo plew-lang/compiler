@@ -39,6 +39,13 @@ fn main() {
         val second = if scenario == "multipleTraitViews" { give <ResolvedViewSource surfaceId=subject.nameId traitOwner=subject.nameStart /> } else { give first }
         argument = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=[first, second] />)
         if scenario == "multipleTraitViews" { expected = "invalid pattern type input: multiple trait view selectors" }
+    } else if scenario == "parameterArity" {
+        argument = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=identity args=[integer] />)
+        expected = "invalid pattern type input: constructor argument shape mismatch"
+    } else if scenario == "cyclicTypeTerm" {
+        val box = compiler.arena.structAt(index: 0U64)
+        argument = compiler.pushType(t: <TypeRef nameStart=box.nameStart nameLen=box.nameLen args=[compiler.arena.typeCount()] hasDecl=true declOffset=box.defOffset />)
+        expected = "invalid pattern type input: cyclic type term input"
     } else if scenario == "foreignBinder" {
         argument = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=identity + 1U64 args=[] />)
         expected = "invalid pattern type input: foreign lexical type parameter"

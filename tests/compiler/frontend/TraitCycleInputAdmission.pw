@@ -1,6 +1,6 @@
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
 use ../../../src/SourceAccess only { SourceAccess }
-use ../../../src/Ir only { Conform, TypeRef }
+use ../../../src/Ir only { Conform, ConformTypeRange, TypeRef }
 use ../../../src/Diag only { FailureDomain, emitDiagnostic }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
@@ -28,6 +28,18 @@ fn main() {
     if scenario == "missingOwner" {
         compiler.decls.registerConform(<Conform sourceModule=0U64 typeStart=0U64 typeLen=0U64 typeId=0U64 subjectTraitOwner=1U64 traitStart=0U64 traitLen=0U64 derived=false />)
         requireInputFailure(compiler: inout compiler, message: "invalid trait-cycle input: missing or inconsistent trait owner")
+    } else if scenario == "foreignOwner" || scenario == "invalidRange" || scenario == "traitArity" {
+        analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[Item] {{}} fn main() {{}}" path="CycleInput.pw" />, sources: <SourceAccess />).unwrap()
+        val declaration = compiler.decls.traitAt(index: 0U64)
+        val name = compiler.internBytes(s: "I64")
+        val integer = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
+        val arguments = compiler.pushConformTypes(types: [integer])
+        val subjectArguments = if scenario == "invalidRange" { give <ConformTypeRange start=999999U64 len=1U64 /> } else { give arguments }
+        val targetArguments = if scenario == "traitArity" { give compiler.pushConformTypes(types: []) } else { give arguments }
+        val owner = if scenario == "foreignOwner" { give declaration.nameStart + 1U64 } else { give declaration.nameStart }
+        compiler.decls.registerConform(<Conform sourceModule=0U64 typeStart=declaration.nameStart typeLen=declaration.nameLen typeId=declaration.nameId subjectTraitOwner=owner typeArity=1U64 subjectArgs=subjectArguments traitStart=declaration.nameStart traitLen=declaration.nameLen traitArgs=targetArguments derived=false />)
+        val message = if scenario == "foreignOwner" { give "invalid trait-cycle input: missing or inconsistent trait owner" } else if scenario == "invalidRange" { give "invalid trait-cycle input: invalid declaration range" } else { give "invalid trait-cycle input: trait argument arity mismatch" }
+        requireInputFailure(compiler: inout compiler, message: message)
     } else {
         analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[Item] {{}} fn main() {{}}" path="CycleInput.pw" />, sources: <SourceAccess />).unwrap()
         val declaration = compiler.decls.traitAt(index: 0U64)

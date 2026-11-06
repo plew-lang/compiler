@@ -101,7 +101,9 @@ whole failure-classification migration. Those integration gates remain required.
 `TraitCycleInputAdmission.pw` is the met-c1pg raw graph-input regression. Compile
 and link by the manual procedure, then run the resulting executable separately
 with `missingOwner`, `invalidRef` and `unknownNominal`. Each must exit 0, have
-empty stderr and match `TraitCycleInputAdmission.out`. Its Input-domain and exact
+empty stderr and match `TraitCycleInputAdmission.out`. Additional scenarios
+`foreignOwner`, `invalidRange` and `traitArity` assert the respective exact Input
+refusals. Its Input-domain and exact
 input-failure assertions distinguish malformed requests from actual source
 cycle refusals. These initial cases do not certify the task's complete binder,
 identity, source-set or ordinary-source contract.
@@ -116,6 +118,8 @@ and record-projection children. Run separate scenarios `viewedBinder`,
 `rawMissingMemberWithUseList`. These three assert Input-domain rejection
 even with an authored coordinate or a forged public use-list entry. All require exit 0,
 empty stderr and the companion stdout golden.
+`parameterArity` rejects an applied lexical parameter and `cyclicTypeTerm`
+rejects a recursive raw term; `viewedBinder` remains a valid contrast.
 View admission scenarios are `invalidViewOwner`, `viewOwnerNameMismatch`,
 `unknownExtension`, `multipleTraitViews` and `duplicateTraitView`: exact Input
 refusals for malformed selectors, normalization for a repeated valid trait.

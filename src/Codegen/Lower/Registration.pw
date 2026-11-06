@@ -121,6 +121,9 @@ impl Comp {
                 if self.patternBinderIdentityIndex(params: params, identity: term.paramId) >= params.count() {
                     return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "foreign lexical type parameter") />
                 }
+                if term.args.count() != 0U64 {
+                    return <Result.Err error=self.patternTypeSemanticFailure(ref: current, offset: offset, reason: "constructor argument shape mismatch", sourceMessage: "a type parameter cannot take type arguments") />
+                }
             } else if term.isRecord {
                 if term.recordFieldLabels.count() != term.recordFieldTerms.count() {
                     return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "record field relation mismatch") />

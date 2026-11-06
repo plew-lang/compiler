@@ -314,3 +314,36 @@ producer, full-suite, runtime source-fixture or performance certification is
 claimed. The existing absence of empty-bundle source identity was observed, not
 reinterpreted as a new acceptance policy. Source cycle/growth classification and
 the whole-task guarantee reconciliation remain pending.
+
+## Parameter Shape Repair and Surface Decision Boundary
+
+[Executed boundary record](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-parameterized-view-boundary.json)
+retains a parameterArity RED and six Input-domain GREEN controls: parameter
+arity, cyclic term, preserved viewed binder, inconsistent existing subject owner,
+invalid conformance pool range and trait arity. The retained product change
+rejects type arguments on a lexical parameter; no task closure is claimed.
+
+A neutral whole-task review also identified projection-only assoc groups on a
+nonprojection term as an unsound raw shape. Producer investigation found that
+Syntax can retain such arguments for `T#P[I64]` without `.Item`. The CLI accepts
+that annotation. Spec09's trait-view and spec08's parameterized-trait wording do
+not explicitly determine its surface meaning. The earlier suggestion that this
+is necessarily malformed source was withdrawn; parser acceptance is likewise
+not adopted specification. Do not turn authored provenance into a Source/Limit
+choice before that boundary is decided. Raw projection fields are not a valid
+substitute for retaining a complete parameterized view instance.
+
+The user has been asked whether memberless parameterized trait views are
+allowed. Source cycle/growth annotations from trial build
+20261106T190017-build-be53b9 were withdrawn from retained source pending this
+boundary. Its candidate is an experimental binary, not current-source adoption;
+the six internal tests compile/import the retained source and do not certify
+that trial CLI as sound. Raw assoc-group refusal, source producers, valid bound
+projection/cross-module controls, normal-suite boundary and whole-task neutral
+completion review remain open. No new issue or surface policy was silently
+introduced; resume after the required decision and explicit finite assignment.
+
+Independent read-only reconciliation by trait_cycle_completion_gap_review
+accepted this finite WIP and all six native results/hashes, with the experimental
+CLI/source mismatch and unresolved raw/surface boundary explicitly retained.
+This does not close met-c1pg or certify normal/full gates.
