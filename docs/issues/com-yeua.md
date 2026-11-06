@@ -108,23 +108,39 @@ unsupported is not a classification oracle: current spec/02 explicitly excludes
 multi-scalar character literals until Grapheme is defined. Preserve unknown
 origins rather than guessing from wording.
 
-## Private Channel WIP and Acceptance Boundary Stop
+## Authorized ABI Refusal Distinction
 
-The [channel checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/channel-checkpoint.json)
-records standard build20261105T173354-build-79a432, fresh candidate149267d3,
-real CLI7/returning API3/decoder7 controls and consumer88 RED/GREEN. This is WIP,
-not closure: producer inventory/classification, all named real consumers,
-normal-dispatch double adaptation, affected gates and independent task review
-remain. Public compiler statuses/text/callback ABI are unchanged.
+The user authorized checking the eight managed expose inputs against actual
+backend support, correcting their tests, and recording future support. Preserve
+all18 cases: six source-exposure restrictions and four conflicting external ABI
+cases require Source; the eight Buffer[I64]/Ref[I64]/String/Array[I64] parameter
+and result cases require precise Limit, normal exit1, intended ABI reason and
+no sanitizer/supervisor failure. Ordinary reject/partreject and ASan B source
+lanes remain Source-only. Do not accept arbitrary non-source failures or tag an
+implementation restriction as a language prohibition. No skip or deletion.
 
-Implementation stopped at the task-correction condition. The eight managed ABI
-negatives in the expose18 contract currently test a backend implementation
-subset (B053 exposed-c-entry), not an established source-language prohibition
-(spec/15 leaves detailed boundary eligibility unresolved). All eight exact real
-inputs reach the expected ABI diagnostic, exit1 and unclassified domain. A
-Source-only classifier must not manufacture Source for them. Recommend separating
-these eight into precise expected-Limit assertions with intended reason, normal
-status1 and abnormal/sanitizer vetoes, preserving Source-only ordinary rejection
-and source-invalid exposure. Confirm the task acceptance amendment before
-implementing it; no source semantics or other non-source acceptance is adopted.
-Task status and acceptance conditions remain unchanged; no completion claimed.
+The source-owned boolean support query first obtains checked final destruction;
+its failed contract/ABI queries propagate their original domain, while its
+explicit supported-subset false result produces Limit. Preserve supported scalar,
+pointer, narrow integer/F32 and native O0/O2 controls. Controlled doubles must
+cover Source/Limit cross-substitution, wrong reason, status/signal/timeout,
+sanitizer and missing/malformed channel. The original 80 RED and subsequent88
+controls remain historical evidence, not proof of this amended contract.
+
+[met-2qbc](met-2qbc.md) owns future managed/unique C exposure eligibility and
+ownership decisions, separately from repr(c) aggregate layout com-042v. Future
+support is not a new prerequisite for phase three. Precise refusal and preserving
+existing positive ABI behavior remain required here. The previous WIP channel
+checkpoint is retained in meta; these tasks remain in_progress and unclosed.
+
+## Scoped Exposure Classification Verification
+
+The [approved finite correction](../../../evidence/rejection-domains/diagnostic-domain-implementation/managed-abi-correction.json)
+records meaningful fixed-candidate RED, new build20261106T024018-build-0778a6
+with unchanged inputs, actual Source10/Limit8 and C/Plew/Clang/O0/O2 positives,
+96 controlled domain/status/reason contrasts and CLI regression7. Independent
+managed_expose_refusal_review accepts this finite correction, including exact
+old/new eight inputs and producer preconditions. No skip/deletion or new ABI
+support. met-2qbc remains future work. This is not completion of this task:
+remaining producer/classifier integration, runner controls and applicable gates
+plus independent whole-task review still apply.

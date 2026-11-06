@@ -28,7 +28,7 @@ use ./Mid only { MidParametricBody, MidExecutableBody, MidPreparationError, MidR
 pub use ./Frontend only { Comp }
 pub use @Plew/Syntax only { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
 pub use ./Ir only { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, BindRange, Arg, ArgRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, ViaWitness, FuncBound, FnInst, InstanceEnvironment, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
-use ./Diag only { CompileDiagnostic, DiagnosticLocation, digitStrU }
+use ./Diag only { CompileDiagnostic, DiagnosticLocation, FailureDomain, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, isBinTraitOp, binTraitMethodName, unaryMethodName }
 
 // The initial backend subset is deliberately fail-closed. Keep the reason as

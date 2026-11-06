@@ -11,7 +11,7 @@ tags: [verification, tooling]
 ---
 # Reject non-source failures in negative-test result classification
 
-Prevent normal reject/partreject workers, the finite expose cases and ASan B checker cases below from reporting PASS for non-source compiler failures.
+Require Source for normal reject/partreject, ASan B source cases and the ten source-invalid/conflicting-ABI expose controls. Require precise Limit for the eight managed-ABI capability controls. No lane may pass an unrelated failure, signal, timeout or sanitizer error.
 
 Confirmed audit evidence: evidence/test-audit/rejection-classification.json (meta) executes the actual worker bodies extracted from tests/harness/test.sh, with production supervisors and fixed compiler doubles. Without .err, silent exit 1 and a plewc internal-error diagnostic plus exit 1 both publish PASS for both phases. With a reason companion, unrelated text fails in the measured controls. No real compiler miscompile/rejection or individual wrong expectation is claimed.
 
@@ -30,7 +30,7 @@ Found by com-ouh2; source baseline tests/harness/test.sh SHA is in the evidence 
 
 Batch0124 independently reads tests/compiler/codegen/test-expose.py in full. Its three negative branches require only nonzero status and the expected diagnostic substring: six shared expose_* rejection fixtures, four generated external ABI collisions and eight generated managed parameter/result cases. A result with exact intended diagnostic followed by signal(-6), or wrong ordinary status2, satisfies each conjunction. The six fixtures also have standard reject coverage; the generated twelve do not pass that worker. This is a concrete source-result classification gap, not a reproduced compiler crash or merely a missing diagnostic reason. Meta runtime-batch-0124.json and its review retain the source-backed counterexample.
 
-Extend the shared classification investigation only to these18 negative invocations. Preserve all specific reason assertions, successful C/Plew/O0/O2/Clang ABI controls, optional ASan scope and callback/aggregate ABI exclusions. Distinguish clean intended source rejection from diagnostic-then-crash/wrong status/timeout; do not require a full C ABI matrix, treat an unrelated panic-template failure as expected ABI refusal, or tighten statuses by weakening diagnostics. Recover original intent and use controlled RED/GREEN on the actual checker path, then independently review. Current managed-return legacy panic setup is a separate source-lane migration qualification. No repair or actual compiler/program execution occurred during this audit.
+Extend the shared classification investigation only to these18 negative invocations. Preserve all specific reason assertions, successful C/Plew/O0/O2/Clang ABI controls, optional ASan scope and callback/aggregate ABI exclusions. Distinguish the intended Source rejection or precisely scoped Limit refusal from diagnostic-then-crash/wrong status/timeout; do not require a full C ABI matrix, treat an unrelated panic-template failure as expected ABI refusal, or tighten statuses by weakening diagnostics. Recover original intent and use controlled RED/GREEN on the actual checker path, then independently review. Current managed-return legacy panic setup is a separate source-lane migration qualification. No repair or actual compiler/program execution occurred during this audit.
 
 ## ASan B Failure-Domain Extension
 
@@ -131,23 +131,39 @@ completion or creation of follow-ups does not repair the32 false successes.
 
 Exact source scopes, controls and exclusions: [finite evidence](../../../evidence/compiler-failure-audit/correction-owner-candidates.json). Actual accepted admission edges: [dependency adoption](../../../evidence/compiler-failure-audit/dependency-adoption.json). Preserve this task's existing finite scope; audit intake is not repair, GREEN or permission to adopt unresolved panic/CLI policy.
 
-## Private Channel WIP and Acceptance Boundary Stop
+## Authorized ABI Refusal Distinction
 
-The [channel checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/channel-checkpoint.json)
-records standard build20261105T173354-build-79a432, fresh candidate149267d3,
-real CLI7/returning API3/decoder7 controls and consumer88 RED/GREEN. This is WIP,
-not closure: producer inventory/classification, all named real consumers,
-normal-dispatch double adaptation, affected gates and independent task review
-remain. Public compiler statuses/text/callback ABI are unchanged.
+The user authorized checking the eight managed expose inputs against actual
+backend support, correcting their tests, and recording future support. Preserve
+all18 cases: six source-exposure restrictions and four conflicting external ABI
+cases require Source; the eight Buffer[I64]/Ref[I64]/String/Array[I64] parameter
+and result cases require precise Limit, normal exit1, intended ABI reason and
+no sanitizer/supervisor failure. Ordinary reject/partreject and ASan B source
+lanes remain Source-only. Do not accept arbitrary non-source failures or tag an
+implementation restriction as a language prohibition. No skip or deletion.
 
-Implementation stopped at the task-correction condition. The eight managed ABI
-negatives in the expose18 contract currently test a backend implementation
-subset (B053 exposed-c-entry), not an established source-language prohibition
-(spec/15 leaves detailed boundary eligibility unresolved). All eight exact real
-inputs reach the expected ABI diagnostic, exit1 and unclassified domain. A
-Source-only classifier must not manufacture Source for them. Recommend separating
-these eight into precise expected-Limit assertions with intended reason, normal
-status1 and abnormal/sanitizer vetoes, preserving Source-only ordinary rejection
-and source-invalid exposure. Confirm the task acceptance amendment before
-implementing it; no source semantics or other non-source acceptance is adopted.
-Task status and acceptance conditions remain unchanged; no completion claimed.
+The source-owned boolean support query first obtains checked final destruction;
+its failed contract/ABI queries propagate their original domain, while its
+explicit supported-subset false result produces Limit. Preserve supported scalar,
+pointer, narrow integer/F32 and native O0/O2 controls. Controlled doubles must
+cover Source/Limit cross-substitution, wrong reason, status/signal/timeout,
+sanitizer and missing/malformed channel. The original 80 RED and subsequent88
+controls remain historical evidence, not proof of this amended contract.
+
+[met-2qbc](met-2qbc.md) owns future managed/unique C exposure eligibility and
+ownership decisions, separately from repr(c) aggregate layout com-042v. Future
+support is not a new prerequisite for phase three. Precise refusal and preserving
+existing positive ABI behavior remain required here. The previous WIP channel
+checkpoint is retained in meta; these tasks remain in_progress and unclosed.
+
+## Scoped Exposure Classification Verification
+
+The [approved finite correction](../../../evidence/rejection-domains/diagnostic-domain-implementation/managed-abi-correction.json)
+records meaningful fixed-candidate RED, new build20261106T024018-build-0778a6
+with unchanged inputs, actual Source10/Limit8 and C/Plew/Clang/O0/O2 positives,
+96 controlled domain/status/reason contrasts and CLI regression7. Independent
+managed_expose_refusal_review accepts this finite correction, including exact
+old/new eight inputs and producer preconditions. No skip/deletion or new ABI
+support. met-2qbc remains future work. This is not completion of this task:
+remaining producer/classifier integration, runner controls and applicable gates
+plus independent whole-task review still apply.

@@ -756,31 +756,31 @@ pub impl Comp {
     inout fn registerDeclaredFunc(f: Func, registerSurface: Bool = true) -> Result[U64, CompileDiagnostic] {
         if f.isExposed {
             if f.hasRecv || f.isAssoc {
-                return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "expose requires a free function; methods and associated functions cannot be exposed") />
+                return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "expose requires a free function; methods and associated functions cannot be exposed", failureDomain: <FailureDomain.Source />) />
             }
             if f.isAsync {
-                return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "expose requires a synchronous function") />
+                return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "expose requires a synchronous function", failureDomain: <FailureDomain.Source />) />
             }
             if f.typeParams.len != 0U64 {
-                return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "expose requires a nongeneric function") />
+                return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "expose requires a nongeneric function", failureDomain: <FailureDomain.Source />) />
             }
             // The program entry owns the external main symbol and has the OS
             // entry ABI, rather than the source function's C-compatible ABI.
             if self.nameIsMain(f: f) {
-                return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "exposed name conflicts with the program entry symbol `main`") />
+                return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "exposed name conflicts with the program entry symbol `main`", failureDomain: <FailureDomain.Source />) />
             }
             mut val parameterIndex = 0U64
             while parameterIndex < f.params.count() {
                 val parameter = self.funcParamAt(params: f.params, index: parameterIndex)
                 if !parameter.noLabel {
-                    return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "expose requires every parameter to be unlabeled (`~`)") />
+                    return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "expose requires every parameter to be unlabeled (`~`)", failureDomain: <FailureDomain.Source />) />
                 }
                 parameterIndex += 1U64
             }
             mut val previous = self.arena.firstFunctionNamed(nameId: f.nameId)
             while previous < self.arena.functionCount() {
                 if self.arena.functionAt(index: previous).isExposed {
-                    return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "duplicate exposed function name") />
+                    return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "duplicate exposed function name", failureDomain: <FailureDomain.Source />) />
                 }
                 previous = self.arena.nextFunctionNamed(index: previous)
             }

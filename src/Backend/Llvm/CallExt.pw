@@ -69,7 +69,7 @@ pub impl LlvmCtx {
         while slot < self.declId.count() {
             if self.declId[slot] == key {
                 if plew_pointer_equal(self.declTy[slot], signature) == 0I32 {
-                    return <Result.Err error=c.diagnosticAt(offset: declaration.nameStart, msg: "conflicting C function ABI for external name") />
+                    return <Result.Err error=c.diagnosticAt(offset: declaration.nameStart, msg: "conflicting C function ABI for external name", failureDomain: <FailureDomain.Source />) />
                 }
                 index = 0U64
                 while index < parameters.count() {

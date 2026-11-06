@@ -22,6 +22,7 @@ class FailureResultTests(unittest.TestCase):
             for code in [0, 1, 2, 124, 125, -6, -15]:
                 result = CompilerResult(code, IDENTITY, domain, 'complete')
                 self.assertEqual(result.source_rejection, domain == 'source' and code == 1)
+                self.assertEqual(result.implementation_limit, domain == 'limit' and code == 1)
 
     def test_missing_wrong_duplicate_partial_and_unknown_fail_closed(self):
         for data in [b'', FRAME[:-1], FRAME + FRAME, FRAME + b'\n',
@@ -29,6 +30,7 @@ class FailureResultTests(unittest.TestCase):
                      FRAME.replace(IDENTITY.encode(), b'1' * 32), FRAME + b'x' * 1025]:
             domain, state = decode_record(data, IDENTITY)
             self.assertFalse(CompilerResult(1, IDENTITY, domain, state).source_rejection)
+            self.assertFalse(CompilerResult(1, IDENTITY, domain, state).implementation_limit)
 
     def test_real_subprocess_gets_fresh_descriptor_and_identity(self):
         program = "import os,sys; os.write(int(os.environ['_PLEW_COMPILER_FAILURE_FD']), b'plew.compiler.failure.v1\\n'+os.environ['_PLEW_COMPILER_FAILURE_ID'].encode()+b'\\nsource\\n'); print('same diagnostic',file=sys.stderr);sys.exit(1)"

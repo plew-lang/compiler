@@ -84,6 +84,18 @@ The [FFI specification](https://github.com/plew-lang/spec/blob/main/spec/04-exec
 
 C lowering owns scalar widths, target-required extension attributes, compatible pointer/inout representation, and conversion into/out of the private body. A private representation different from C's representation requires an explicit boundary conversion, including copy-in/copy-out for inout where appropriate. The same rules apply to imported calls and exposed definitions. Unsupported target ABI cases fail explicitly rather than borrowing a familiar host policy.
 
+The implemented exposure subset distinguishes a source restriction from an ABI
+capability refusal. Invalid exposure declarations or conflicting external source
+signatures retain Source failure. A checked parameter/result outside the current
+C ABI/ownership subset retains Limit failure, including the current Buffer,
+Ref, String and Array controls. An error establishing the checked type/destruction
+contract propagates unchanged; it is not converted to Limit merely because it
+occurred during emission. Tests require the exact domain, normal failed process,
+intended reason and absence of sanitizer/supervisor failure. This does not define
+a permanent source prohibition or promise a direct C representation for every
+managed type. [Managed exposure eligibility](../issues/met-2qbc.md) owns that
+future decision separately from aggregate layout.
+
 The shared C signature description must retain physical parameter/result types, target extension attributes, conversions, splitting/indirection where supported, and writeback requirements. Imported declarations, call sites, and exposed definitions consume this same description. Matching LLVM value types alone is insufficient when signext/zeroext or other ABI requirements differ. External declarations and exposed definitions share external-symbol conflict checking; ownership-managed values cannot qualify merely because their private representation is pointer-shaped.
 
 C-compatible memory layout and function-boundary classification are separate. The specification's `repr(c)` struct contract does not imply aggregate call support is implemented. This chapter has not independently established parser, AST, semantic-type, or shared-memory-layout support for that syntax either. Target classification can pass the same field layout using different registers or coercions; a two-float aggregate may be classified differently on Apple arm64, Linux x86_64, and Windows x86_64. Narrow integer/Bool extension rules likewise vary by target. Do not generalize one native Clang comparison into a portable classifier. The compiler owns this classification; reference Clang is a development oracle, not a required product subprocess.

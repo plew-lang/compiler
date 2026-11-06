@@ -1,7 +1,7 @@
 ---
 id: com-qnyl
 status: open
-deps: []
+deps: [met-2qbc]
 links: []
 created: 2026-10-13T01:10:11Z
 type: task

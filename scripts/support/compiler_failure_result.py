@@ -46,6 +46,10 @@ class CompilerResult:
     def source_rejection(self):
         return self.returncode == 1 and self.channel == 'complete' and self.failure_domain == 'source'
 
+    @property
+    def implementation_limit(self):
+        return self.returncode == 1 and self.channel == 'complete' and self.failure_domain == 'limit'
+
     def record(self):
         return {'schema': 1, 'invocation': self.invocation,
                 'returncode': self.returncode, 'channel': self.channel,

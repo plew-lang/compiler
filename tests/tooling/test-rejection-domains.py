@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--report', type=Path, required=True)
 args = parser.parse_args()
 scenarios = [
-    ('source-rejection', True), ('accepted', False), ('silent-one', False),
+    ('source-rejection', True), ('limit-refusal', False), ('accepted', False), ('silent-one', False),
     ('internal-one', False), ('internal-after-reason', False),
     ('wrong-status-after-reason', False), ('signal-after-reason', False),
     ('timeout-status', False), ('supervisor-status', False), ('asan-after-reason', False),
@@ -68,7 +68,7 @@ if mode=='accepted':sys.exit(0)
 if mode=='silent-one':sys.exit(1)
 if mode=='wrong-source-reason':reason='a different source rejection'
 if mode!='silent-one' and '_PLEW_COMPILER_FAILURE_FD' in os.environ:
- domain='internal' if mode in ['internal-one','internal-after-reason'] else 'source'
+ domain='internal' if mode in ['internal-one','internal-after-reason'] else 'source' if mode=='source-rejection' else 'limit' if mode=='limit-refusal' else os.environ['EXPECTED_FAILURE_DOMAIN']
  os.write(int(os.environ['_PLEW_COMPILER_FAILURE_FD']), b'plew.compiler.failure.v1\\n'+os.environ['_PLEW_COMPILER_FAILURE_ID'].encode()+b'\\n'+domain.encode()+b'\\n')
 if mode=='internal-one':print('plewc: error: internal error: program Mid preparation failed',file=sys.stderr)
 else:print('plewc: error: '+reason,file=sys.stderr)
@@ -89,10 +89,11 @@ sys.exit({'wrong-status-after-reason':2,'timeout-status':124,'supervisor-status'
     for lane, companion in lanes:
         for scenario, default_accept in scenarios:
             # No reason oracle is claimed for lanes without a companion.
-            should_accept = default_accept or (scenario == 'wrong-source-reason' and not companion)
+            should_accept = (scenario == 'limit-refusal' if lane == 'expose-managed' else default_accept) or (scenario == 'wrong-source-reason' and not companion)
             invocation = root / 'invocations.txt'
             invocation.write_text('')
-            local_env = {**env, 'INVOCATIONS': str(invocation), 'REJECTION_SCENARIO': scenario}
+            local_env = {**env, 'INVOCATIONS': str(invocation), 'REJECTION_SCENARIO': scenario,
+                         'EXPECTED_FAILURE_DOMAIN': 'limit' if lane == 'expose-managed' else 'source'}
             if lane in ['reject', 'partreject']:
                 source = root / 'tests/fixtures' / lane / ('fixture.pw' if lane == 'reject' else 'fixture/Main.pw')
                 want = source.with_suffix('.err')

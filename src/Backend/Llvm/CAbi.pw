@@ -113,7 +113,7 @@ pub impl LlvmCtx {
         val signed = LLVMGetEnumAttributeAtIndex(function, truncU32(n: index), signedKind) != 0U64
         val unsigned = LLVMGetEnumAttributeAtIndex(function, truncU32(n: index), unsignedKind) != 0U64
         if signed != (expected == signedKind) || unsigned != (expected == unsignedKind) {
-            return <Result.Err error=c.diagnosticAt(offset: offset, msg: "conflicting C function ABI for external name") />
+            return <Result.Err error=c.diagnosticAt(offset: offset, msg: "conflicting C function ABI for external name", failureDomain: <FailureDomain.Source />) />
         }
         return <Result.Ok value=() />
     }

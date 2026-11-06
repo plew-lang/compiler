@@ -78,12 +78,12 @@ pub impl LlvmCtx {
         mut val index = 0U64
         while index < prepared.parameterTypes.count() {
             if !(try self.exposedCTypeSupported(c: inout c, ref: prepared.parameterTypes[index])) {
-                return <Result.Err error=c.diagnosticAt(offset: declaration.nameStart, msg: "expose parameter ABI is not supported by the C backend") />
+                return <Result.Err error=c.diagnosticAt(offset: declaration.nameStart, msg: "expose parameter ABI is not supported by the C backend", failureDomain: <FailureDomain.Limit />) />
             }
             index += 1U64
         }
         if declaration.hasRet && !(try self.exposedCTypeSupported(c: inout c, ref: prepared.resultType)) {
-            return <Result.Err error=c.diagnosticAt(offset: declaration.nameStart, msg: "expose return ABI is not supported by the C backend") />
+            return <Result.Err error=c.diagnosticAt(offset: declaration.nameStart, msg: "expose return ABI is not supported by the C backend", failureDomain: <FailureDomain.Limit />) />
         }
         mut val name: Array[U8] = []
         index = 0U64
