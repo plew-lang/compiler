@@ -42,6 +42,17 @@ A conditional-order change alone is not sufficient if the same ambiguity remains
 in other affected semantic readers. This finite repair need not replace every
 TypeRef or perform all future API narrowing.
 
+Within the affected APIs and their direct caller paths, remove information or
+capabilities proven unnecessary even when they do not cross a responsibility
+boundary or cause the observed bug. Change the actual signatures/payloads and
+callers; do not merely document unused inputs or hide them in a wrapper.
+An unused field in a coherent semantic record alone does not require splitting
+that record. Establish necessity from the operation's contract as well as its
+actual reads; do not duplicate validation/selection to eliminate an argument.
+If cleanup requires a wider shared-API redesign, assign the remaining work to a
+finite linked issue with its boundary and completion conditions. Do not silently
+expand this repair or describe deferred cleanup as completed.
+
 Keep source conformance admission separate. Do not make equality search for
 conformance or use absence of a valid record conformance to ignore a confirmed
 structural error. Comparisons should consume established semantic identity;
@@ -58,9 +69,16 @@ the specification forbids it. Trace shared head/child APIs through equality and
 actual affected consumers (including caller guards) and through any adjusted
 constructor/substitution paths; retain semantic fields through final use.
 
-Complete API/data responsibility findings, remove competing decisions, run
+Complete API/data responsibility findings and scoped unnecessary-input removal,
+record the justified coherent payloads and any explicitly assigned wider work,
+remove competing decisions, run
 applicable behavior/structural checks and independent neutral review. Performance
 checks follow the parent goal; no unproved performance claim or verifier weakening.
+
+The unnecessary-input scope clarification (baseline f32be228 plus this
+document-only amendment) received independent read-only review by
+record_issue_assignment_review: accepted without corrections. This does not
+certify implementation or task completion.
 
 ## Boundaries and Intake
 
