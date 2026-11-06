@@ -1,7 +1,7 @@
 ---
 id: com-yeua
 status: in_progress
-deps: []
+deps: [met-c1pg]
 links: []
 created: 2026-11-02T21:30:19Z
 type: task
@@ -179,25 +179,20 @@ are excluded from RED; the final cross-module fixture uses File graph admission.
 Text graph support is not added by this increment. Parent completion, other
 producers/retention, instrumented ASan B and all final gates remain outstanding.
 
-## Pending Trait-Cycle Admission Prerequisite
+## Trait-Cycle Repair Prerequisite
 
-[trait-cycle-admission-blocker.json](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-admission-blocker.json)
-retains the exact probe, fixed candidate, source-domain RED and independent
-review. Raw missing owner0, identical out-of-range refs, and unknown nominal
-arguments currently produce a cycle diagnostic with Source=false. No Source
-annotation has been applied to the two cycle/growth branches: doing so would
-turn missing input facts into apparent source violations.
+[met-c1pg](met-c1pg.md) owns the two confirmed defects: malformed graph inputs
+are not diagnosed at their validity boundary, and unresolved/invalid identities
+can be used as cycle evidence. It is an actual prerequisite of this task, with
+com-x95z supplying the existing symbolic-projection admission conclusion.
+The user approved filing this repair after clarifying both responsibilities.
 
-The proposed finite prerequisite establishes owner/arity/binder/symbolic-term
-admission at the graph request boundary, then enables classification after that
-proof. Reuse canonical term/scope contracts rather than a second cycle-only type
-checker. Preserve spec09 structural projection rules; do not require concrete
-instance conformance to validate a structural graph. Reject malformed raw input
-with typed non-Source failure, never silently discard unknown edges. Preserve
-bare/growth rejection and shrinking/diamond acceptance with raw contrasts.
-
-Task creation and dependency adoption are awaiting the user decision required
-by the goal's task-scope stop condition. This proposal is not a new accepted
-scope, completed prerequisite, changed source semantics or task closure. The
-new TraitCycleFailureDomains fixture remains an intentional WIP RED on the
-work branch. Existing type/visibility checkpoints remain valid.
+[Executed raw evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-admission-blocker.json)
+retains the three counterexamples; current raw diagnostics remain non-Source.
+No Source annotation has been applied to the cycle/growth branches. Do not
+classify those refusals until met-c1pg establishes the input/comparison contract.
+Then finish this task's source-domain retention and real consumer integration;
+met-c1pg does not close this task or substitute for the channel/consumer gates.
+TraitCycleFailureDomains remains intentional WIP RED pending that paired work.
+See [task/dependency adoption](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-task-adoption.json)
+for the checked graph and planning review; no implementation is certified there.

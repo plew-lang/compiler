@@ -59,3 +59,14 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 Row51: Preserve growth/binder multiplicity/parameterized distinction/equalities/conflicts and unused declaration checks. Do not invent missing proof or special source exception; receiver_generic_exact already bound and excluded. com-x95z must reconcile symbolic projection graph terms versus actual source well-formedness and inherited projection premises. Saved associated evidence and full projection type/instance admission cannot rely on structural graph comparison as proof; input declaration-cycle gate is distinct. Required admission: met-ia09, met-6e6k, com-604k.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+## Receiving Cycle-Input Repair
+
+[met-c1pg](met-c1pg.md) depends on this finite investigation's projection
+admission conclusion and valid graph/source oracles. Distinguish structural
+comparison premises from ordinary/inherited-signature proof requirements before
+that repair chooses its input predicate. Do not infer that all symbolic
+projections are invalid or fabricate conformance. This dependency waits for
+the bounded investigation and explicit follow-up assignment, not every later
+product repair it assigns. No new source decision or product completion is
+implied by the dependency.

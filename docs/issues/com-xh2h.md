@@ -2,7 +2,7 @@
 id: com-xh2h
 status: open
 deps: []
-links: [com-mmk9]
+links: [com-mmk9, met-c1pg]
 created: 2026-10-29T18:38:28Z
 type: task
 priority: 2
@@ -43,3 +43,12 @@ Optional components stay optional and must not become mandatory merely because t
 [Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) retains all main/mixed roles and normative grounds. Eight registered schema owner/cycle families inspect explicit graph/scoped substitutions/module markers/declared consuming receiver uniqueness without requesting a body/receiver. Structural declaration admission is separate from source selected-call/publication areas. Preserve legacy macro marker observation without endorsing a new language exception.
 
 Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
+
+## Related Semantic Repair
+
+[met-c1pg](met-c1pg.md) separately owns the confirmed malformed-input admission
+and unresolved-identity cycle defects. The present task remains phase-four
+API-authority/signature narrowing; preserve intended source semantics, not
+those raw defects as refactor invariants. Reconcile the eventual corrected
+contract and actual callers when narrowing. Related work is linked, without
+making the whole phase-four narrowing a prerequisite of phase-three diagnosis.

@@ -161,7 +161,10 @@ are counted once, and these totals do not estimate remaining effort.
 
 **Immediate execution checkpoints:**
 
-1. Finish com-yeua's typed origins, retained session/ORC failures and private
+1. First close com-x95z's finite projection-admission investigation and
+   met-c1pg's graph-input/identity repair (actual prerequisites of com-yeua).
+   These are not completion of the broader phase-four com-xh2h refactor.
+   Then finish com-yeua's typed origins, retained session/ORC failures and private
    terminal handoff through the named real consumers. Current domain-value and
    sender/decoder controls are scoped WIP; rebuild the actual compiler and verify
    the CLI/consumer path. Preserve diagnostic-reason and abnormal-exit checks.
