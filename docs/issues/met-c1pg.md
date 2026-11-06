@@ -280,3 +280,15 @@ exact causes/domains and fixture/candidate hashes. No task completion, full
 suite, fixedpoint or performance certification is claimed. Canonical view
 selector admission/identity, record ABI-name independence in the private graph,
 remaining source-domain controls and whole-task review remain unfinished.
+
+## Private Record Identity Increment
+
+[RED/GREEN checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-record-identity-checkpoint.json)
+records a same-field/different-ABI-name cycle missed by baseline 96ea5682.
+The private graph head now recognizes records structurally after checking
+qualifiers; shared child traversal retains field labels and types. Fresh build
+20261106T183012-build-43ebc7 passed unchanged inputs and 25 internal assertions,
+including changed-label and changed-type controls. Independent source review
+accepted the finite change and required those fresh controls, now satisfied.
+Common non-cycle comparison remains com-bvc8; view/source-domain controls,
+whole-task review and parent gates remain open.

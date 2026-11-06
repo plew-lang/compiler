@@ -20,7 +20,14 @@ fn main() {
     val box = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: boxName.nameId))
     val integerName = compiler.internBytes(s: "I64")
     val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
-    val canonical = compiler.pushType(t: <TypeRef nameStart=box.nameStart nameLen=box.nameLen args=[integer] hasDecl=true declOffset=box.defOffset />)
+    val recordScenario = scenario == "recordSame" || scenario == "recordLabelDistinct" || scenario == "recordChildDistinct"
+    val field = compiler.internBytes(s: "field")
+    val canonical = if recordScenario {
+        val layout = compiler.internBytes(s: "RecordLayoutOne")
+        give compiler.pushType(t: <TypeRef nameStart=layout.nameStart nameLen=layout.nameLen args=[] isRecord=true recordFieldLabels=[field.nameId] recordFieldTerms=[integer] />)
+    } else {
+        give compiler.pushType(t: <TypeRef nameStart=box.nameStart nameLen=box.nameLen args=[integer] hasDecl=true declOffset=box.defOffset />)
+    }
     val other = if scenario == "legacy" {
         give compiler.pushType(t: <TypeRef nameStart=box.nameStart nameLen=box.nameLen args=[integer] />)
     } else if scenario == "same" {
@@ -29,15 +36,24 @@ fn main() {
         val name = compiler.internBytes(s: "Other")
         val declaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: name.nameId))
         give compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[integer] hasDecl=true declOffset=declaration.defOffset />)
+    } else if recordScenario {
+        val layout = compiler.internBytes(s: "RecordLayoutTwo")
+        val label = if scenario == "recordLabelDistinct" { give compiler.internBytes(s: "otherField").nameId } else { give field.nameId }
+        val child = if scenario == "recordChildDistinct" {
+            val booleanName = compiler.internBytes(s: "Bool")
+            give compiler.pushType(t: <TypeRef nameStart=booleanName.nameStart nameLen=booleanName.nameLen args=[] />)
+        } else { give integer }
+        give compiler.pushType(t: <TypeRef nameStart=layout.nameStart nameLen=layout.nameLen args=[] isRecord=true recordFieldLabels=[label] recordFieldTerms=[child] />)
     } else { panic("unknown test scenario") }
+    val distinct = scenario == "distinct" || scenario == "recordLabelDistinct" || scenario == "recordChildDistinct"
     appendEdge(compiler: inout compiler, subject: subject, target: target, argument: canonical)
     appendEdge(compiler: inout compiler, subject: target, target: subject, argument: other)
     match compiler.checkTraitSubjectCycles(activeExtIds: []) {
         Result.Ok(value: _) => {
-            if scenario != "distinct" { panic("same canonical owner did not close the cycle") }
+            if !distinct { panic("same canonical owner did not close the cycle") }
         }
         Result.Err(error: val diagnostic) => {
-            if scenario == "distinct" || diagnostic.message != "trait-to-trait conformance cycle" {
+            if distinct || diagnostic.message != "trait-to-trait conformance cycle" {
                 emitDiagnostic(diagnostic: diagnostic)
                 panic("wrong canonical identity result")
             }

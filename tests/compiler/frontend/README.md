@@ -117,9 +117,11 @@ and record-projection children. Run separate scenarios `viewedBinder`,
 even with an authored coordinate or a forged public use-list entry. All require exit 0,
 empty stderr and the companion stdout golden.
 
-`TraitCycleCanonicalIdentity.pw` takes `legacy`, `same` or `distinct` and checks
+`TraitCycleCanonicalIdentity.pw` takes `legacy`, `same`, `distinct`, `recordSame`,
+`recordLabelDistinct` or `recordChildDistinct` and checks
 that legacy/resolved carriers of one owner close the same cycle, while different
-actual owners do not. `TraitCycleSourceInputs.pw` takes `unknownNominal`,
+actual owners do not. Record cases ignore ABI layout names while retaining
+field labels and field types. `TraitCycleSourceInputs.pw` takes `unknownNominal`,
 `primitiveArity` or `missingProjectionMember` and checks the exact Source
 diagnostic for each authored error (no argument retains `unknownNominal`). Compile/link
 and compare their companion goldens by the same manual procedure. These bounded

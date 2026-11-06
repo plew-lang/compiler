@@ -170,6 +170,9 @@ impl Comp {
             }
         }
         if a.isRecord != b.isRecord || a.isAny != b.isAny || a.isSendable != b.isSendable || a.isDiverging != b.isDiverging || a.viewExtId != b.viewExtId || !self.sameViewIdSet(a: a.viewIds, b: b.viewIds) { return false }
+        // Record heads have no nominal owner. Shared child traversal compares
+        // labels and semantic fields; the synthetic ABI layout name is separate.
+        if a.isRecord { return true }
         match facts.nominalOwners.get(key: left) {
             Optional.Some(v: val owner) => {
                 match facts.nominalOwners.get(key: right) {
