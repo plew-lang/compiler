@@ -127,3 +127,13 @@ conformance solver redesign, new SCC algorithm without a demonstrated defect,
 new type system/evidence authority, graph optimization, general API narrowing,
 public status/callback ABI changes, main/seed promotion and claims that scoped
 checks certify phase-three/final gates.
+
+## Read-only Implementation Checkpoint
+
+The [caller map and next defect tests](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-caller-map.md)
+trace registration through bare/bundle/view entries, graph construction,
+ranking, unification and search deduplication at c63ffc07. Two raw invalid-ref
+equality paths remain; current helper accessibility also permits bypassing an
+entry-only repair. This inspection changes neither scope nor dependencies.
+com-x95z's follow-up assignment remains pending. No product or fixture edit,
+executed RED/GREEN, task start/closure or independent completion is claimed.
