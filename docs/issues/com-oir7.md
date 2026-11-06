@@ -2,7 +2,7 @@
 id: com-oir7
 status: open
 deps: []
-links: [com-mmk9, com-amjl]
+links: [com-mmk9, com-amjl, com-zdod, com-4k31]
 created: 2026-10-30T14:45:42Z
 type: task
 priority: 2

@@ -1,8 +1,8 @@
 ---
 id: com-amjl
 status: open
-deps: [com-x95z]
-links: [com-oir7, com-8egj, met-c1pg, com-16j0, com-0w38, com-wka4]
+deps: [com-x95z, com-zdod]
+links: [com-oir7, com-8egj, met-c1pg, com-16j0, com-0w38, com-wka4, com-9hde]
 created: 2026-11-06T09:51:26Z
 type: bug
 priority: 1
@@ -137,3 +137,14 @@ trait-to-trait support, general solver/SCC redesign, unrelated API narrowing,
 new unique/opening features, main/seed promotion, and claiming scope-wide
 completion from helper comparisons alone.
 
+
+## Complete-Instance View Coordination
+
+The approved type/value view rule and executed state investigation are assigned
+to com-zdod (shared complete selector terms), com-9hde (Syntax/Lower) and
+com-4k31 (final call selection). This repair depends on com-zdod's term contract
+and retains common exact receiver/instance source-proof admission, including
+its original projection controls and authorized test corrections. com-4k31
+consumes that shared proof instead of implementing another solver. No dependency
+on com-4k31 or whole Syntax migration is introduced here; coordinate the shared
+API with its actual producer/consumer without duplicating their task bodies.

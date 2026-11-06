@@ -1,7 +1,7 @@
 ---
 id: met-si6j
 status: in_progress
-deps: [met-ucze, met-ia09, met-acfl, met-6e6k, com-gyup, met-rzt4, com-fuo8, com-4bib, com-s248, com-lzpe, com-bkqq, com-wka4, com-0w38, com-cuoy, com-bvc8]
+deps: [met-ucze, met-ia09, met-acfl, met-6e6k, com-gyup, met-rzt4, com-fuo8, com-4bib, com-s248, com-lzpe, com-bkqq, com-wka4, com-0w38, com-cuoy, com-bvc8, com-zdod, com-9hde, com-4k31]
 links: []
 created: 2026-10-13T01:29:29Z
 type: epic
@@ -161,8 +161,12 @@ are counted once, and these totals do not estimate remaining effort.
 
 **Immediate execution checkpoints:**
 
-1. First close com-x95z's finite projection-admission investigation and
-   met-c1pg's graph-input/identity repair (actual prerequisites of com-yeua).
+1. com-x95z's finite projection-admission investigation is closed. First finish
+   com-zdod's complete view terms -> com-9hde's Syntax/Lower path -> met-c1pg's
+   structural graph-input/identity repair, then resume com-yeua. Exact call
+   selection com-4k31 separately waits for com-9hde and com-amjl's shared source
+   proof, and remains mandatory before the affected phase-three area closes;
+   do not make that whole call/conformance repair a graph prerequisite.
    These are not completion of the broader phase-four com-xh2h refactor.
    Then finish com-yeua's typed origins, retained session/ORC failures and private
    terminal handoff through the named real consumers. Current domain-value and

@@ -1,8 +1,8 @@
 ---
 id: met-c1pg
 status: in_progress
-deps: [com-x95z]
-links: [com-xh2h, com-amjl, com-bvc8]
+deps: [com-x95z, com-9hde]
+links: [com-xh2h, com-amjl, com-bvc8, com-zdod, com-4k31]
 created: 2026-11-06T07:58:54Z
 type: bug
 priority: 1
@@ -372,3 +372,18 @@ closure is claimed. Finite repair ownership/dependencies must cover Syntax ->
 semantic view terms -> identity/substitution -> conformance/call selection ->
 final evidence; do not hide this missing path as an Input-shape refusal inside
 cycle validation.
+
+## Authorized View Repair Assignment
+
+The user requested finite repair issues after the current-state investigation.
+[com-zdod](com-zdod.md) owns complete selector terms and common structural
+operations; [com-9hde](com-9hde.md) owns type/value Syntax and Lower;
+[com-4k31](com-4k31.md) owns exact instance selection through final calls.
+The structural/Syntax path is an actual prerequisite here: this issue depends
+on com-9hde, which depends on com-zdod. Do not reject legitimate memberless
+views as malformed projection payload instead of repairing their producer.
+This issue does not depend on full com-4k31/com-amjl completion or solve concrete
+receiver applicability; retain the previously scoped structural graph contract.
+After these prerequisites, finish the raw category checks, Source cycle/growth
+producers and remaining scoped graph controls/review. New product repair
+assignment does not certify any implementation or close this issue.
