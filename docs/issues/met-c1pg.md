@@ -347,3 +347,28 @@ Independent read-only reconciliation by trait_cycle_completion_gap_review
 accepted this finite WIP and all six native results/hashes, with the experimental
 CLI/source mismatch and unresolved raw/surface boundary explicitly retained.
 This does not close met-c1pg or certify normal/full gates.
+
+## Accepted Complete-Instance View Rule and Current-State Investigation
+
+The user approved selecting a complete trait instance in value/type views:
+canonical owner plus all positional arguments. Parameterized bare `#P` is
+rejected even with one conformance; memberless `T#P[I64]` is allowed. This
+supersedes the pending question above and is explicit in spec09 and design
+name-lookup/types-and-evidence.
+
+[Current-state investigation](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-view-instance-state.json)
+records 16 source checks and five JIT/five AOT executions. Nonparameterized
+provided-method selection works directly and through stored views. Parameterized
+value views parse as a bare view followed by indexing. Parameterized type views
+lose the selector and retain arguments in projection-only storage; matching
+method calls fail too. Bare parameterized selectors dispatch by ordinary call
+argument matching. Current view keys cannot retain positional argument values.
+
+Independent review accepted this finite investigation, correcting the parser
+claim: no complete view formation was established. The declaration-overlap
+setup is excluded as a view control; wrong-instance failures do not prove sound
+selection because matching calls fail identically. No product repair or task
+closure is claimed. Finite repair ownership/dependencies must cover Syntax ->
+semantic view terms -> identity/substitution -> conformance/call selection ->
+final evidence; do not hide this missing path as an Input-shape refusal inside
+cycle validation.
