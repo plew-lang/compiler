@@ -213,3 +213,35 @@ repair's acceptance. Proposed actual area intake: met-6e6k and met-ia09, not an
 automatic met-c1pg prerequisite. Task addition is awaiting user decision under
 the active task-gap stop condition. Current met-c1pg remains in_progress with
 the explicitly retained admission/source-domain work.
+
+## User-Requested Projection Reachability Investigation
+
+[Bounded investigation](../../../evidence/rejection-domains/diagnostic-domain-implementation/record-projection-investigation.json)
+separates three findings; no product repair or expanded completion is claimed.
+
+- Production rebuilding and explicit substitution can construct the record-mirror
+  projection pair that common typeRefEq incorrectly equates. That substitution
+  does not satisfy T:Projection; it is not a legal source-instantiation proof.
+  Authored bound generic, nested-record-field and concrete nominal controls
+  compare correctly. Source conformance and structural identity are distinct
+  responsibilities; equality must not query conformance to repair its head.
+- Spec02 explicitly forbids anonymous record impl/trait conformance. CLI --check
+  nevertheless accepts a record conformance and its generic-bound use. This
+  source refusal defect must not be treated as a valid conformance control.
+- The apparent direct source projection case is another path: the parser reads
+  one authored parameter as five (value, #, Projection, ., First) without error.
+  File frontend parameter0 is a plain record. No associated projection was
+  parsed, so this does not reach the projection-head defect. The first owner is
+  Syntax's record-type return plus permissive parameter token/separator parsing,
+  not demonstrated loss by lowering. The corresponding newtype parse does error.
+
+An independent fresh reviewer confirms these limits and the corrected parser
+cause. Earlier advice to use a justified record conformance as a legal source
+control is withdrawn: the specification forbids it. Use valid nominal/nested
+record controls separately from malformed internal projection relations.
+
+Keep finite structural-head repair, forbidden record conformance admission, and
+malformed parameter parsing ownership distinct. Existing com-amjl still owns
+source trait-view evidence; this investigation does not silently expand that
+issue, com-vh0x's API scope, or met-c1pg into all three repairs. Task assignment
+remains pending after the requested investigation.
