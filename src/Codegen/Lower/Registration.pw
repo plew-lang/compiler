@@ -4,6 +4,92 @@
 // resolution. Function bodies/signatures remain in `arena.funcs`; every source
 // declaration enters the surface through registerDeclaredFunc.
 
+// Raw pattern inputs need structural identities, not concrete conformance or
+// satisfiability. Keep this admission beside the common binder/child contracts;
+// cycle ranking and unification consume its validated terms, never source text
+// as an implicit missing-owner identity.
+impl Comp {
+    inout fn patternTypeInputFailure(offset: U64, reason: String) -> CompileDiagnostic {
+        return self.diagnosticAt(offset: offset, msg: "invalid pattern type input: " + reason, failureDomain: <FailureDomain.Input />)
+    }
+
+    inout fn checkPatternTypeInput(ref: U64, params: PatternBindInput, sourceModule: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        mut val pending: Array[U64] = [ref]
+        mut val finishing: Array[Bool] = [false]
+        mut val states: Dictionary[U64, U64] = [:]
+        while pending.count() != 0U64 {
+            val current = pending.removeLast()
+            val finish = finishing.removeLast()
+            if finish {
+                states[current] = 2U64
+                continue
+            }
+            if current == 0U64 || current >= self.arena.typeCount() {
+                return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "invalid type term reference") />
+            }
+            val state = states.getOr(key: current, fallback: 0U64)
+            if state == 2U64 { continue }
+            if state == 1U64 {
+                return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "cyclic type term input") />
+            }
+            val term = self.arena.typeAt(index: current)
+            if term.nameStart > self.arena.bytes.count() {
+                return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "invalid type name span") />
+            }
+            if term.nameLen > self.arena.bytes.count() - term.nameStart {
+                return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "invalid type name span") />
+            }
+            if term.assocNameId != 0U64 {
+                val owner = if term.hasAssocTraitDecl { give term.assocTraitDeclOffset } else { give term.assocTraitStart }
+                val traitIndex = self.decls.traitOwnerIndex(offset: owner)
+                if traitIndex >= self.decls.traitOwnerCount() {
+                    return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "unresolved projection trait owner") />
+                }
+                val declaration = self.decls.traitOwnerAt(index: traitIndex)
+                if term.assocTraitId != declaration.nameId || term.assocTraitArgs.count() != declaration.arity {
+                    return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "projection trait instance mismatch") />
+                }
+                mut val found = false
+                for member in declaration.assocTypes {
+                    if member.nameId == term.assocNameId { found = true }
+                }
+                if !found {
+                    return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "unresolved projection member") />
+                }
+            } else if term.paramId != 0U64 {
+                if self.plainBinder(ref: current, params: params) >= params.count() {
+                    return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "foreign lexical type parameter") />
+                }
+            } else if term.isRecord {
+                if term.recordFieldLabels.count() != term.recordFieldTerms.count() {
+                    return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "record field relation mismatch") />
+                }
+            } else if !self.isFnType(ref: current) && !self.isCompatibilityBuiltin(type: self.arena.typeTermAt(index: current)) {
+                if self.plainBinder(ref: current, params: params) >= params.count() {
+                    val identity = if term.hasDecl {
+                        give self.typeDeclName(identity: <Bind nameStart=term.declOffset nameLen=term.nameLen fieldStart=0U64 fieldLen=0U64 />)
+                    } else {
+                        give self.typeDeclIdentityAt(useMod: sourceModule, start: term.nameStart, len: term.nameLen)
+                    }
+                    if identity.nameLen == 0U64 {
+                        return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "unresolved type term owner") />
+                    }
+                }
+            }
+            states[current] = 1U64
+            pending.append(current)
+            finishing.append(true)
+            mut val child = self.typeTermChildCount(t: term)
+            while child != 0U64 {
+                child -= 1U64
+                pending.append(self.typeTermChildRef(t: term, index: child))
+                finishing.append(false)
+            }
+        }
+        return <Result.Ok value=() />
+    }
+}
+
 pub impl Comp {
     inout fn funcDeclModule(f: Func) -> U64 {
         match self.modules.sourceFileContaining(offset: f.defOffset) {

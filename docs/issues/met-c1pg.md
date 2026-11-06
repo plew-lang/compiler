@@ -1,6 +1,6 @@
 ---
 id: met-c1pg
-status: open
+status: in_progress
 deps: [com-x95z]
 links: [com-xh2h, com-amjl]
 created: 2026-11-06T07:58:54Z
@@ -138,3 +138,22 @@ entry-only repair. This inspection changes neither scope nor dependencies.
 com-x95z's source/oracle follow-up is assigned to com-amjl; the bounded
 investigation is closed as investigated after independent assignment review. No product or fixture edit,
 executed RED/GREEN, task start/closure or independent product completion is claimed.
+
+## Implementation WIP: First Three Malformed Requests
+
+`TraitCycleInputAdmission.pw` executes the missing-owner, out-of-range-ref and
+unknown-nominal cases. [Initial RED](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-input-red.json)
+and [fresh checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-input-first-checkpoint.json)
+retain exact assertions, hashes and actual results. Standard build
+20261106T102721-build-35b44d passed with unchanged inputs; candidate
+bin/plewc-trait-cycle-input-first passes these three native assertions.
+
+This is not completion. Independent WIP review confirms graph Result/error
+transport and private raw helper boundaries, but requires retained canonical
+identity through relation/search, lexical membership separate from free-variable
+eligibility, complete binder/arity/constructor inputs and preserved ordinary
+source diagnostic domains. The new pattern-input code currently drops resolved
+nominal identity after validating existence; do not leave that as the endpoint.
+The ordinary unknown-type source probe also currently returns Input and needs
+correction within this producer-to-input boundary. Source-cycle domains,
+preserved graph/source controls and final independent completion remain pending.

@@ -1,0 +1,49 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Conform, TypeRef }
+use ../../../src/Diag only { FailureDomain, emitDiagnostic }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn requireInputFailure(compiler: inout Comp, message: String) {
+    match compiler.checkTraitSubjectCycles(activeExtIds: []) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != message {
+                emitDiagnostic(diagnostic: diagnostic)
+                panic("invalid graph was not refused at input admission")
+            }
+            match diagnostic.failureDomain {
+                FailureDomain.Input => {}
+                _ => { panic("malformed graph did not retain Input failure domain") }
+            }
+            if diagnostic.isSourceRejection() { panic("malformed graph became source rejection") }
+        }
+        Result.Ok(value: _) => { panic("malformed graph was admitted") }
+    }
+}
+
+fn main() {
+    val scenario = argAt(1I64)
+    mut val compiler = <Comp />
+    if scenario == "missingOwner" {
+        compiler.decls.registerConform(<Conform sourceModule=0U64 typeStart=0U64 typeLen=0U64 typeId=0U64 subjectTraitOwner=1U64 traitStart=0U64 traitLen=0U64 derived=false />)
+        requireInputFailure(compiler: inout compiler, message: "invalid trait-cycle input: missing or inconsistent trait owner")
+    } else {
+        analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[Item] {{}} fn main() {{}}" path="CycleInput.pw" />, sources: <SourceAccess />).unwrap()
+        val declaration = compiler.decls.traitAt(index: 0U64)
+        mut val argument = 999999U64
+        if scenario == "unknownNominal" {
+            val name = compiler.internBytes(s: "NoDeclarationOwner")
+            argument = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
+        } else if scenario != "invalidRef" { panic("unknown test scenario") }
+        val arguments = compiler.pushConformTypes(types: [argument])
+        compiler.decls.registerConform(<Conform sourceModule=0U64 typeStart=declaration.nameStart typeLen=declaration.nameLen typeId=declaration.nameId subjectTraitOwner=declaration.nameStart typeArity=1U64 subjectArgs=arguments traitStart=declaration.nameStart traitLen=declaration.nameLen traitArgs=arguments derived=false />)
+        val message = if scenario == "invalidRef" {
+            give "invalid pattern type input: invalid type term reference"
+        } else {
+            give "invalid pattern type input: unresolved type term owner"
+        }
+        requireInputFailure(compiler: inout compiler, message: message)
+    }
+    print("invalid trait-cycle input refused")
+}

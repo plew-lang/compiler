@@ -97,3 +97,11 @@ and `ProducerFailureDomains.pw` (actual source/input producers, repeated failed
 owner requests, queue draining and stage conversion). It does not certify the
 private process-result channel, normal/expose/ASan rejection consumers or the
 whole failure-classification migration. Those integration gates remain required.
+
+`TraitCycleInputAdmission.pw` is the met-c1pg raw graph-input regression. Compile
+and link by the manual procedure, then run the resulting executable separately
+with `missingOwner`, `invalidRef` and `unknownNominal`. Each must exit 0, have
+empty stderr and match `TraitCycleInputAdmission.out`. Its Input-domain and exact
+input-failure assertions distinguish malformed requests from actual source
+cycle refusals. These initial cases do not certify the task's complete binder,
+identity, source-set or ordinary-source contract.

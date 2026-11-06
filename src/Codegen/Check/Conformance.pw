@@ -94,6 +94,47 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+}
+
+// Only the checked graph entry below is public. Raw relations are implementation
+// details and cannot be called to manufacture an identity without admission.
+impl Comp {
+    inout fn checkTraitCycleInput(cf: Conform) -> Result[(), CompileDiagnostic] {
+        val subject = self.decls.traitOwnerIndex(offset: cf.typeStart)
+        val target = self.decls.traitOwnerIndex(offset: cf.traitStart)
+        if subject >= self.decls.traitOwnerCount() || target >= self.decls.traitOwnerCount() {
+            return <Result.Err error=self.diagnosticAt(offset: cf.defOffset, msg: "invalid trait-cycle input: missing or inconsistent trait owner", failureDomain: <FailureDomain.Input />) />
+        }
+        val subjectOwner = self.decls.traitOwnerAt(index: subject)
+        val targetOwner = self.decls.traitOwnerAt(index: target)
+        if cf.subjectTraitOwner != subjectOwner.nameStart || cf.typeLen != subjectOwner.nameLen || cf.traitLen != targetOwner.nameLen || cf.typeId != subjectOwner.nameId {
+            return <Result.Err error=self.diagnosticAt(offset: cf.defOffset, msg: "invalid trait-cycle input: missing or inconsistent trait owner", failureDomain: <FailureDomain.Input />) />
+        }
+        val typeCount = self.decls.conformTypePool.count()
+        val bindCount = self.decls.conformBindPool.count()
+        if cf.subjectArgs.start > typeCount || cf.traitArgs.start > typeCount || cf.typeParams.start > bindCount {
+            return <Result.Err error=self.diagnosticAt(offset: cf.defOffset, msg: "invalid trait-cycle input: invalid declaration range", failureDomain: <FailureDomain.Input />) />
+        }
+        if cf.subjectArgs.len > typeCount - cf.subjectArgs.start || cf.traitArgs.len > typeCount - cf.traitArgs.start || cf.typeParams.len > bindCount - cf.typeParams.start {
+            return <Result.Err error=self.diagnosticAt(offset: cf.defOffset, msg: "invalid trait-cycle input: invalid declaration range", failureDomain: <FailureDomain.Input />) />
+        }
+        if cf.typeArity != subjectOwner.arity || cf.subjectArgs.len != subjectOwner.arity || cf.traitArgs.len != targetOwner.arity {
+            return <Result.Err error=self.diagnosticAt(offset: cf.defOffset, msg: "invalid trait-cycle input: trait argument arity mismatch", failureDomain: <FailureDomain.Input />) />
+        }
+        val params = <PatternBindInput.Conformance range=cf.typeParams />
+        mut val index = 0U64
+        while index < cf.subjectArgs.len {
+            try self.checkPatternTypeInput(ref: self.conformTypeAt(types: cf.subjectArgs, index: index), params: params, sourceModule: cf.sourceModule, offset: cf.defOffset)
+            index += 1U64
+        }
+        index = 0U64
+        while index < cf.traitArgs.len {
+            try self.checkPatternTypeInput(ref: self.conformTypeAt(types: cf.traitArgs, index: index), params: params, sourceModule: cf.sourceModule, offset: cf.defOffset)
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
     // Trait-subject conformances are directed instance edges.  The concrete
     // conformance fixpoint is intentionally idempotent, but its fact
     // deduplication is not declaration-graph validation: a cycle is invalid
@@ -186,10 +227,7 @@ pub impl Comp {
             return 1U64
         }
         if bIsBinder { return self.traitCycleTermRelation(a: b, b: a, binds: inout binds) }
-        if a.ref == 0U64 || b.ref == 0U64 || a.ref >= self.arena.typeCount() || b.ref >= self.arena.typeCount() {
-            if a.ref == b.ref { return 1U64 }
-            return 0U64
-        }
+        if a.ref == 0U64 || b.ref == 0U64 || a.ref >= self.arena.typeCount() || b.ref >= self.arena.typeCount() { return 0U64 }
         val ta: TypeRef = self.arena.typeAt(index: a.ref)
         val tb: TypeRef = self.arena.typeAt(index: b.ref)
         if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
@@ -235,8 +273,6 @@ pub impl Comp {
 
     inout fn traitCycleEdgeActive(cf: Conform, activeExtIds: Array[U64]) -> Bool {
         if cf.derived || self.isMacrointerfaceCompatConform(cf: cf) { return false }
-        if self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen) != cf.typeStart { return false }
-        if self.canonicalTraitOwner(start: cf.traitStart, len: cf.traitLen) != cf.traitStart { return false }
         if cf.extId == 0U64 { return true }
         mut val i: U64 = 0U64
         while i < activeExtIds.count() {
@@ -285,7 +321,7 @@ pub impl Comp {
             bScopes.append(b.scope)
             return true
         }
-        if a.ref == 0U64 || b.ref == 0U64 || a.ref >= self.arena.typeCount() || b.ref >= self.arena.typeCount() { return a.ref == b.ref }
+        if a.ref == 0U64 || b.ref == 0U64 || a.ref >= self.arena.typeCount() || b.ref >= self.arena.typeCount() { return false }
         val ta: TypeRef = self.arena.typeAt(index: a.ref)
         val tb: TypeRef = self.arena.typeAt(index: b.ref)
         if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
@@ -351,18 +387,19 @@ pub impl Comp {
     // The owner graph decides only SCC membership; exact trait instances are
     // handled by the symbolic automaton.  Build components once per active
     // source-set with iterative Kosaraju, keeping compiler-stack use bounded.
-    inout fn buildTraitCycleGraph(activeExtIds: Array[U64]) -> TraitCycleGraph {
+    inout fn buildTraitCycleGraph(activeExtIds: Array[U64]) -> Result[TraitCycleGraph, CompileDiagnostic] {
         mut val graph = <TraitCycleGraph />
         mut val candidate = 0U64
         while candidate < self.decls.traitSubjectConformCount() {
             val ci = self.decls.traitSubjectConformIndexAt(index: candidate)
             val edge = self.decls.conformAt(index: ci)
             if self.traitCycleEdgeActive(cf: edge, activeExtIds: activeExtIds) {
+                try self.checkTraitCycleInput(cf: edge)
                 graph.append(conformIndex: ci, source: edge.typeStart, target: edge.traitStart)
             }
             candidate += 1U64
         }
-        return graph
+        return <Result.Ok value=graph />
     }
 
     inout fn traitCycleConstructorCount(ref: U64, params: PatternBindInput) -> U64 {
@@ -432,11 +469,14 @@ pub impl Comp {
         return true
     }
 
+}
+
+pub impl Comp {
     // `activeExtIds` is empty for the declaration-time bare graph.  A view
     // passes its complete extension-source set, making extensions edge-active
     // only when the programmer explicitly selected them.
     inout fn checkTraitSubjectCycles(activeExtIds: Array[U64], offset: U64 = 0U64) -> Result[(), CompileDiagnostic] {
-        val graph = self.buildTraitCycleGraph(activeExtIds: activeExtIds)
+        val graph = (try self.buildTraitCycleGraph(activeExtIds: activeExtIds))
         val components = graph.components()
         mut val edgeId: U64 = 1U64
         while edgeId <= graph.edgeCount() {
