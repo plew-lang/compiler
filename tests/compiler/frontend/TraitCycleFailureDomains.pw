@@ -1,0 +1,33 @@
+use ../../../src/Diag only { emitDiagnostic }
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use @Std/Io only { print }
+
+fn requireCycleFailure(path: String, message: String) {
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=path />,
+        sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != message { emitDiagnostic(diagnostic: diagnostic) panic("wrong cycle refusal") }
+            if !diagnostic.isSourceRejection() { panic("trait cycle refusal lost Source domain") }
+        }
+        Result.Ok(value: _) => { panic("trait cycle was accepted") }
+    }
+}
+
+fn requireAllowedGraph(path: String) {
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=path />,
+        sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+}
+
+fn main() {
+    requireCycleFailure(path: "tests/fixtures/reject/trait_subject_cycle_bare.pw", message: "trait-to-trait conformance cycle")
+    print("cycle Source")
+    requireCycleFailure(path: "tests/fixtures/reject/trait_subject_cycle_generic_growth.pw", message: "trait-to-trait conformance edge grows within a cycle")
+    print("growth Source")
+    requireAllowedGraph(path: "tests/fixtures/run/trait_subject_cycle_generic_shrink_allowed.pw")
+    print("shrinking graph retained")
+    requireAllowedGraph(path: "tests/fixtures/run/trait_subject_cycle_diamond_acyclic.pw")
+    print("acyclic diamond retained")
+}

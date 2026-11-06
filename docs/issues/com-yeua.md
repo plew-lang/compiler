@@ -178,3 +178,26 @@ path do not establish source invalidity. Initial dependency/stdRoot setup errors
 are excluded from RED; the final cross-module fixture uses File graph admission.
 Text graph support is not added by this increment. Parent completion, other
 producers/retention, instrumented ASan B and all final gates remain outstanding.
+
+## Pending Trait-Cycle Admission Prerequisite
+
+[trait-cycle-admission-blocker.json](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-admission-blocker.json)
+retains the exact probe, fixed candidate, source-domain RED and independent
+review. Raw missing owner0, identical out-of-range refs, and unknown nominal
+arguments currently produce a cycle diagnostic with Source=false. No Source
+annotation has been applied to the two cycle/growth branches: doing so would
+turn missing input facts into apparent source violations.
+
+The proposed finite prerequisite establishes owner/arity/binder/symbolic-term
+admission at the graph request boundary, then enables classification after that
+proof. Reuse canonical term/scope contracts rather than a second cycle-only type
+checker. Preserve spec09 structural projection rules; do not require concrete
+instance conformance to validate a structural graph. Reject malformed raw input
+with typed non-Source failure, never silently discard unknown edges. Preserve
+bare/growth rejection and shrinking/diamond acceptance with raw contrasts.
+
+Task creation and dependency adoption are awaiting the user decision required
+by the goal's task-scope stop condition. This proposal is not a new accepted
+scope, completed prerequisite, changed source semantics or task closure. The
+new TraitCycleFailureDomains fixture remains an intentional WIP RED on the
+work branch. Existing type/visibility checkpoints remain valid.
