@@ -1,6 +1,6 @@
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
 use ../../../src/SourceAccess only { SourceAccess }
-use ../../../src/Ir only { Bind, Conform, TypeRef }
+use ../../../src/Ir only { Bind, Conform, TypeRef, ResolvedViewSource }
 use ../../../src/Diag only { FailureDomain, emitDiagnostic }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
@@ -25,6 +25,20 @@ fn main() {
         // parameter without solving that view's receiver applicability.
         val extension = compiler.internBytes(s: "E")
         argument = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=identity args=[] viewExtId=extension.nameId viewIds=[extension.nameId] />)
+    } else if scenario == "invalidViewOwner" || scenario == "viewOwnerNameMismatch" || scenario == "unknownExtension" {
+        val name = compiler.internBytes(s: "Projection")
+        val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
+        val owner = if scenario == "invalidViewOwner" { give 999999U64 } else if scenario == "unknownExtension" { give 0U64 } else { give declaration.nameStart }
+        val surface = if scenario == "viewOwnerNameMismatch" { give subject.nameId } else if scenario == "unknownExtension" { give compiler.internBytes(s: "MissingExtension").nameId } else { give declaration.nameId }
+        argument = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=[<ResolvedViewSource surfaceId=surface traitOwner=owner />] />)
+        expected = if scenario == "invalidViewOwner" { give "invalid pattern type input: unresolved view trait owner" } else if scenario == "viewOwnerNameMismatch" { give "invalid pattern type input: inconsistent view trait identity" } else { give "invalid pattern type input: unresolved extension view source" }
+    } else if scenario == "multipleTraitViews" || scenario == "duplicateTraitView" {
+        val name = compiler.internBytes(s: "Projection")
+        val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
+        val first = <ResolvedViewSource surfaceId=declaration.nameId traitOwner=declaration.nameStart />
+        val second = if scenario == "multipleTraitViews" { give <ResolvedViewSource surfaceId=subject.nameId traitOwner=subject.nameStart /> } else { give first }
+        argument = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=[first, second] />)
+        if scenario == "multipleTraitViews" { expected = "invalid pattern type input: multiple trait view selectors" }
     } else if scenario == "foreignBinder" {
         argument = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=identity + 1U64 args=[] />)
         expected = "invalid pattern type input: foreign lexical type parameter"

@@ -292,3 +292,25 @@ including changed-label and changed-type controls. Independent source review
 accepted the finite change and required those fresh controls, now satisfied.
 Common non-cycle comparison remains com-bvc8; view/source-domain controls,
 whole-task review and parent gates remain open.
+
+## View Admission and Identity Increment
+
+[Fixed-input checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-view-identity-checkpoint.json)
+records build 20261106T184825-build-20e0c1, 37 internal assertions and 15
+source checks. Shared semantic view readers supply validated, deduplicated
+selector sets retained in private graph facts. Trait selectors retain actual
+owners, including same-spelled declarations from two real modules; extension
+existence reuses the current registered bundle query without receiver
+applicability or conformance search. Unknown/mismatched owners and multiple
+trait selectors fail typed admission. Projection parents' compatibility mirrors
+are not a second identity: their receiver children own view semantics.
+
+Independent review found and corrected premature parent-mirror comparison and
+missing multiple-trait rejection; executed intermediate REDs and the reconstructed
+intermediate source hash are preserved. Final source/result review accepted the
+37 native cases and 15 source check controls. Successful source checks retain
+existing warnings; they are not all stderr-empty. No whole-task, Source cycle
+producer, full-suite, runtime source-fixture or performance certification is
+claimed. The existing absence of empty-bundle source identity was observed, not
+reinterpreted as a new acceptance policy. Source cycle/growth classification and
+the whole-task guarantee reconciliation remain pending.

@@ -32,6 +32,41 @@ impl Comp {
         }
     }
 
+    inout fn checkPatternViewInput(ref: U64, offset: U64, facts: inout PatternInputFacts) -> Result[(), CompileDiagnostic] {
+        mut val sources: Array[ResolvedViewSource] = []
+        mut val traitOwner = 0U64
+        for source in self.typeRefViewSources(ref: ref) {
+            if source.traitOwner != 0U64 {
+                val owner = self.decls.traitOwnerIndex(offset: source.traitOwner)
+                if owner >= self.decls.traitOwnerCount() {
+                    return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "unresolved view trait owner") />
+                }
+                if traitOwner != 0U64 && traitOwner != source.traitOwner {
+                    return <Result.Err error=self.patternTypeSemanticFailure(ref: ref, offset: offset, reason: "multiple trait view selectors", sourceMessage: "a view source set may select only one trait") />
+                }
+                traitOwner = source.traitOwner
+                if source.surfaceId != self.decls.traitOwnerAt(index: owner).nameId {
+                    return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "inconsistent view trait identity") />
+                }
+            } else {
+                if source.surfaceId == 0U64 || source.surfaceId > self.interner.entries.count() {
+                    return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "unresolved extension view source") />
+                }
+                val name = self.interner.entries[source.surfaceId - 1U64]
+                if !self.isExtName(start: name.start, len: name.len) {
+                    return <Result.Err error=self.patternTypeSemanticFailure(ref: ref, offset: offset, reason: "unresolved extension view source", sourceMessage: "unknown extension view source") />
+                }
+            }
+            mut val present = false
+            for existing in sources {
+                if self.semanticViewSourceEq(a: existing, b: source) { present = true }
+            }
+            if !present { sources.append(source) }
+        }
+        if sources.count() != 0U64 { facts.viewSources[ref] = sources }
+        return <Result.Ok value=() />
+    }
+
     inout fn checkPatternTypeInput(ref: U64, params: PatternBindInput, sourceModule: U64, offset: U64, facts: inout PatternInputFacts) -> Result[(), CompileDiagnostic] {
         mut val pending: Array[U64] = [ref]
         mut val finishing: Array[Bool] = [false]
@@ -61,6 +96,9 @@ impl Comp {
             if term.nameId != intern(c: inout self, start: term.nameStart, len: term.nameLen) {
                 return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "inconsistent type name identity") />
             }
+            // Projection parents retain compatibility mirrors. Their explicit
+            // receiver child owns view identity and is admitted recursively.
+            if term.assocNameId == 0U64 { try self.checkPatternViewInput(ref: current, offset: offset, facts: inout facts) }
             if term.assocNameId != 0U64 {
                 val owner = if term.hasAssocTraitDecl { give term.assocTraitDeclOffset } else { give term.assocTraitStart }
                 val traitIndex = self.decls.traitOwnerIndex(offset: owner)
@@ -169,7 +207,8 @@ impl Comp {
                 Optional.None => { return false }
             }
         }
-        if a.isRecord != b.isRecord || a.isAny != b.isAny || a.isSendable != b.isSendable || a.isDiverging != b.isDiverging || a.viewExtId != b.viewExtId || !self.sameViewIdSet(a: a.viewIds, b: b.viewIds) { return false }
+        if !self.sameSemanticViewSourceSet(a: facts.viewSources.getOr(key: left, fallback: []), b: facts.viewSources.getOr(key: right, fallback: [])) { return false }
+        if a.isRecord != b.isRecord || a.isAny != b.isAny || a.isSendable != b.isSendable || a.isDiverging != b.isDiverging { return false }
         // Record heads have no nominal owner. Shared child traversal compares
         // labels and semantic fields; the synthetic ABI layout name is separate.
         if a.isRecord { return true }

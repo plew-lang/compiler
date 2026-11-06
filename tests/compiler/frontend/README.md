@@ -113,15 +113,24 @@ and record-projection children. Run separate scenarios `viewedBinder`,
 `binderNameIdentity`, `primitiveArity`, `functionArity`,
 `recordProjectionInvalidChild`, `recordProjectionValid`,
 `rawMissingProjectionMember`, `rawMissingMemberWithSourceSite` and
-`rawMissingMemberWithUseList`. The last three assert Input-domain rejection
+`rawMissingMemberWithUseList`. These three assert Input-domain rejection
 even with an authored coordinate or a forged public use-list entry. All require exit 0,
 empty stderr and the companion stdout golden.
+View admission scenarios are `invalidViewOwner`, `viewOwnerNameMismatch`,
+`unknownExtension`, `multipleTraitViews` and `duplicateTraitView`: exact Input
+refusals for malformed selectors, normalization for a repeated valid trait.
 
 `TraitCycleCanonicalIdentity.pw` takes `legacy`, `same`, `distinct`, `recordSame`,
 `recordLabelDistinct` or `recordChildDistinct` and checks
 that legacy/resolved carriers of one owner close the same cycle, while different
 actual owners do not. Record cases ignore ABI layout names while retaining
-field labels and field types. `TraitCycleSourceInputs.pw` takes `unknownNominal`,
+field labels and field types. Additional scenarios `viewSame`, `viewDistinct`,
+`extensionLegacy`, `extensionSet`, `extensionDistinct`, `projectionMirror` and
+`viewSameSpellingDistinct` check resolved owner identity, legacy carriers,
+unordered/deduplicated extension sets and receiver-owned projection views.
+`viewSameSpellingDistinct` loads the two actual same-named trait owners under
+`fixtures/TraitCycleViews/`; run from the compiler root.
+`TraitCycleSourceInputs.pw` takes `unknownNominal`,
 `primitiveArity` or `missingProjectionMember` and checks the exact Source
 diagnostic for each authored error (no argument retains `unknownNominal`). Compile/link
 and compare their companion goldens by the same manual procedure. These bounded

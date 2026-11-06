@@ -306,6 +306,7 @@ fn selectedInterfaceRoot(template: CallTemplate) -> U64 {
 struct PatternInputFacts {
     mut val nominalOwners: Dictionary[U64, U64] = [:]
     mut val projectionOwners: Dictionary[U64, U64] = [:]
+    mut val viewSources: Dictionary[U64, Array[ResolvedViewSource]] = [:]
 }
 
 struct CheckedTraitCycleGraph {

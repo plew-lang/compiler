@@ -1,6 +1,6 @@
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
 use ../../../src/SourceAccess only { SourceAccess }
-use ../../../src/Ir only { Conform, TraitDef, TypeRef }
+use ../../../src/Ir only { Bind, Conform, TraitDef, TypeRef, ResolvedViewSource }
 use ../../../src/Diag only { emitDiagnostic }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
@@ -10,19 +10,66 @@ fn appendEdge(compiler: inout Comp, subject: TraitDef, target: TraitDef, argumen
     compiler.decls.registerConform(<Conform sourceModule=0U64 typeStart=subject.nameStart typeLen=subject.nameLen typeId=subject.nameId subjectTraitOwner=subject.nameStart typeArity=1U64 subjectArgs=arguments traitStart=target.nameStart traitLen=target.nameLen traitArgs=arguments derived=false />)
 }
 
+fn viewArgument(compiler: inout Comp, integerName: Bind, scenario: String, second: Bool) -> U64 {
+    if scenario == "projectionMirror" {
+        val name = compiler.internBytes(s: "FirstView")
+        val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
+        val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
+        val member = compiler.internBytes(s: "Item")
+        val extension = compiler.internBytes(s: if second { give "F" } else { give "E" })
+        return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] projectionReceiver=integer assocTraitStart=declaration.nameStart assocTraitLen=declaration.nameLen assocTraitId=declaration.nameId assocNameId=member.nameId hasAssocTraitDecl=true assocTraitDeclOffset=declaration.nameStart viewSources=[<ResolvedViewSource surfaceId=extension.nameId />] />)
+    }
+    if scenario == "viewSameSpellingDistinct" {
+        val name = compiler.internBytes(s: "P")
+        mut val index = compiler.decls.firstTraitNamed(nameId: name.nameId)
+        if second {
+            index += 1U64
+            while index < compiler.decls.traitCount() && compiler.decls.traitAt(index: index).nameId != name.nameId { index += 1U64 }
+        }
+        if index >= compiler.decls.traitCount() { panic("missing independent P owner") }
+        val declaration = compiler.decls.traitAt(index: index)
+        return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=[<ResolvedViewSource surfaceId=declaration.nameId traitOwner=declaration.nameStart />] />)
+    }
+    if scenario == "viewSame" || scenario == "viewDistinct" {
+        val text = if second && scenario == "viewDistinct" { give "SecondView" } else { give "FirstView" }
+        val name = compiler.internBytes(s: text)
+        val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
+        return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=[<ResolvedViewSource surfaceId=declaration.nameId traitOwner=declaration.nameStart />] />)
+    }
+    val extension = compiler.internBytes(s: "E")
+    if second && scenario == "extensionLegacy" {
+        return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewExtId=extension.nameId viewIds=[extension.nameId] />)
+    }
+    val other = compiler.internBytes(s: "F")
+    val sources = if scenario == "extensionSet" {
+        give if second {
+            give [<ResolvedViewSource surfaceId=other.nameId />, <ResolvedViewSource surfaceId=extension.nameId />, <ResolvedViewSource surfaceId=other.nameId />]
+        } else { give [<ResolvedViewSource surfaceId=extension.nameId />, <ResolvedViewSource surfaceId=other.nameId />] }
+    } else if second && scenario == "extensionDistinct" { give [<ResolvedViewSource surfaceId=other.nameId />] }
+    else { give [<ResolvedViewSource surfaceId=extension.nameId />] }
+    return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=sources />)
+}
+
 fn main() {
     val scenario = argAt(1I64)
     mut val compiler = <Comp />
-    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[Item] {{}} trait B[Item] {{}} struct Box[T] {{}} struct Other[T] {{}} fn main() {{}}" path="CanonicalInput.pw" />, sources: <SourceAccess />).unwrap()
+    if scenario == "viewSameSpellingDistinct" {
+        analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/TraitCycleViews/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    } else {
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[Item] {{}} trait B[Item] {{}} struct Box[T] {{}} struct Other[T] {{}} trait FirstView {{ type Item }} trait SecondView {{}} extension E {{ impl A[Bool] as B[Bool] {{}} }} extension F {{ impl A[Bool] as B[Bool] {{}} }} fn main() {{}}" path="CanonicalInput.pw" />, sources: <SourceAccess />).unwrap()
+    }
     val subject = compiler.decls.traitAt(index: 0U64)
     val target = compiler.decls.traitAt(index: 1U64)
     val boxName = compiler.internBytes(s: "Box")
     val box = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: boxName.nameId))
     val integerName = compiler.internBytes(s: "I64")
     val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
+    val viewScenario = scenario == "projectionMirror" || scenario == "viewSameSpellingDistinct" || scenario == "viewSame" || scenario == "viewDistinct" || scenario == "extensionLegacy" || scenario == "extensionSet" || scenario == "extensionDistinct"
     val recordScenario = scenario == "recordSame" || scenario == "recordLabelDistinct" || scenario == "recordChildDistinct"
     val field = compiler.internBytes(s: "field")
-    val canonical = if recordScenario {
+    val canonical = if viewScenario {
+        give viewArgument(compiler: inout compiler, integerName: integerName, scenario: scenario, second: false)
+    } else if recordScenario {
         val layout = compiler.internBytes(s: "RecordLayoutOne")
         give compiler.pushType(t: <TypeRef nameStart=layout.nameStart nameLen=layout.nameLen args=[] isRecord=true recordFieldLabels=[field.nameId] recordFieldTerms=[integer] />)
     } else {
@@ -36,6 +83,8 @@ fn main() {
         val name = compiler.internBytes(s: "Other")
         val declaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: name.nameId))
         give compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[integer] hasDecl=true declOffset=declaration.defOffset />)
+    } else if viewScenario {
+        give viewArgument(compiler: inout compiler, integerName: integerName, scenario: scenario, second: true)
     } else if recordScenario {
         val layout = compiler.internBytes(s: "RecordLayoutTwo")
         val label = if scenario == "recordLabelDistinct" { give compiler.internBytes(s: "otherField").nameId } else { give field.nameId }
@@ -45,7 +94,7 @@ fn main() {
         } else { give integer }
         give compiler.pushType(t: <TypeRef nameStart=layout.nameStart nameLen=layout.nameLen args=[] isRecord=true recordFieldLabels=[label] recordFieldTerms=[child] />)
     } else { panic("unknown test scenario") }
-    val distinct = scenario == "distinct" || scenario == "recordLabelDistinct" || scenario == "recordChildDistinct"
+    val distinct = scenario == "viewSameSpellingDistinct" || scenario == "viewDistinct" || scenario == "extensionDistinct" || scenario == "distinct" || scenario == "recordLabelDistinct" || scenario == "recordChildDistinct"
     appendEdge(compiler: inout compiler, subject: subject, target: target, argument: canonical)
     appendEdge(compiler: inout compiler, subject: target, target: subject, argument: other)
     match compiler.checkTraitSubjectCycles(activeExtIds: []) {

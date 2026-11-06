@@ -1,0 +1,7 @@
+use ./First only { P as FirstP }
+use ./Second only { P as SecondP }
+trait A[Item] {}
+trait B[Item] {}
+struct Box[T] {}
+struct Other[T] {}
+fn main() {}
