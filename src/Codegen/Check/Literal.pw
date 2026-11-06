@@ -105,18 +105,18 @@ pub impl Comp {
         if tyLen != 0 {
             // explicit type suffix: range-check against it (never ambiguous).
             if !(self.litFitsType(value: value, neg: neg, dstStart: tyStart, dstLen: tyLen)) {
-                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "integer literal is out of range for its type") />
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "integer literal is out of range for its type", failureDomain: <FailureDomain.Source />) />
             }
             return <Result.Ok value=() />
         }
         if eKind == 1 {
             if !(litFitsBits(value: value, neg: neg, bits: eBits, sgn: eSgn)) {
-                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "integer literal is out of range for its type") />
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "integer literal is out of range for its type", failureDomain: <FailureDomain.Source />) />
             }
             return <Result.Ok value=() />
         }
         if eKind == 0 {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "integer literal has no type from context; add a type annotation or a suffix (e.g. `5I32`)") />
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "integer literal has no type from context; add a type annotation or a suffix (e.g. `5I32`)", failureDomain: <FailureDomain.Source />) />
         }
         return <Result.Ok value=() />
     }

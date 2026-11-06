@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory(prefix='plew-normal-dispatch-') as directory:
     root = Path(directory)
     for name in ('scripts/support/watch-command.py', 'scripts/support/trace-command.py',
                  'scripts/support/process_watch.py', 'scripts/support/normal-case-dispatch.py',
-                 'tests/harness/case-phase.sh'):
+                 'tests/harness/case-phase.sh', 'scripts/support/compiler_failure_result.py'):
         (root / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / name, root / name)
     tools = root / 'tools'
@@ -43,11 +43,15 @@ with tempfile.TemporaryDirectory(prefix='plew-normal-dispatch-') as directory:
         p.write_text(text)
         p.chmod(0o755)
         return p
-    compiler = tool('compiler', '''#!/bin/sh
-case "$1" in
- tests/fixtures/reject/*|tests/fixtures/partreject/*) echo expected-rejection >&2; exit 1 ;;
- *) cat "$1" ;;
-esac
+    compiler = tool('compiler', '#!' + sys.executable + '\n' + '''import os,sys
+from pathlib import Path
+source=Path(sys.argv[1])
+if sys.argv[1].startswith(('tests/fixtures/reject/','tests/fixtures/partreject/')):
+ identity=os.environ['_PLEW_COMPILER_FAILURE_ID'].encode()
+ os.write(int(os.environ['_PLEW_COMPILER_FAILURE_FD']),b'plew.compiler.failure.v1\\n'+identity+b'\\nsource\\n')
+ print('expected-rejection',file=sys.stderr)
+ sys.exit(1)
+sys.stdout.buffer.write(source.read_bytes())
 ''')
     tool('clang', '''#!/bin/sh
 while [ "$#" -gt 0 ]; do

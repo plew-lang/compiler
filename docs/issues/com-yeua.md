@@ -144,3 +144,20 @@ old/new eight inputs and producer preconditions. No skip/deletion or new ABI
 support. met-2qbc remains future work. This is not completion of this task:
 remaining producer/classifier integration, runner controls and applicable gates
 plus independent whole-task review still apply.
+
+## Scoped Type Producer Checkpoint
+
+[type-domain-checkpoint.json](../../../evidence/rejection-domains/diagnostic-domain-implementation/type-domain-checkpoint.json)
+records source type/literal producer RED→GREEN and fresh API checks. A discovered
+raw counterexample compared an unowned nominal to a builtin and falsely produced
+Source. I64/F64/function/record contrasts in both directions now remain
+Unresolved before shape/sendability/conformance decisions; ordinary and generic
+value checks retain non-Source refusal. Compatibility owns this decision and
+resolves a legacy nominal owner once, rather than classifiers correcting it.
+Independent review accepts the finite source/API checkpoint only.
+
+The real production reject observation preserves all150 prior passes and reaches
+342/1068;726 remain failures, not skips or accepted refusals. The normal-dispatch
+internal valid-rejection double now emits the private channel; all160 unchanged
+control assertions pass. Other producers, named retention/conversion boundaries,
+instrumented ASan B and whole-task completion verification remain outstanding.

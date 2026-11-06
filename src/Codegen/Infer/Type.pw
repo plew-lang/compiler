@@ -107,6 +107,17 @@ pub impl Comp {
         }
         val te = self.arena.typeTermAt(index: exp)
         val tin = self.arena.typeTermAt(index: actual)
+        // Establish both heads before any shape, width, sendability or
+        // conformance mismatch can count as an established incompatibility.
+        // An unowned nominal remains unknown even opposite a structural type.
+        val expectedOwner = match self.compatibilityHeadOwner(ref: exp, type: te) {
+            Optional.Some(v: val owner) => owner
+            Optional.None => { return <Result.Ok value=<TypeCompatibility.Unresolved /> /> }
+        }
+        val inferredOwner = match self.compatibilityHeadOwner(ref: actual, type: tin) {
+            Optional.Some(v: val owner) => owner
+            Optional.None => { return <Result.Ok value=<TypeCompatibility.Unresolved /> /> }
+        }
         if te.isSendable && !((try self.typeRefIsSendable(ref: actual))) {
             return <Result.Ok value=<TypeCompatibility.Incompatible /> />
         }
@@ -205,7 +216,7 @@ pub impl Comp {
             }
             return <Result.Ok value=<TypeCompatibility.Compatible /> />
         }
-        return <Result.Ok value=(try self.namedTypeCompatibility(expectedRef: exp, inferredRef: actual, te: te, tin: tin)) />
+        return <Result.Ok value=(try self.namedTypeCompatibility(expectedRef: exp, inferredRef: actual, te: te, tin: tin, expectedOwner: expectedOwner, inferredOwner: inferredOwner)) />
     }
 
     // Structural field-by-field compatibility of two Record TypeTerms.
@@ -246,32 +257,30 @@ pub impl Comp {
         return rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "String") || rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "CPtr") || rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "CMutPtr") || rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "COpaque")
     }
 
-    inout fn namedTypeCompatibility(expectedRef: U64, inferredRef: U64, te: TypeTerm, tin: TypeTerm) -> Result[TypeCompatibility, CompileDiagnostic] {
+    // Non-nominal constructors have no declaration owner (Some(0)); only
+    // the named comparison consumes that identity. Legacy nominal spellings
+    // resolve once here, so every comparison branch sees the same readiness.
+    inout fn compatibilityHeadOwner(ref: U64, type: TypeTerm) -> Optional[U64] {
+        if type.paramId != 0U64 || type.assocNameId != 0U64 || type.isAny || type.isRecord || self.isFnType(ref: ref) || self.isCompatibilityBuiltin(type: type) || self.isSelfTypeInProvided(start: type.nameStart, len: type.nameLen) {
+            return <Optional.Some v=0U64 />
+        }
+        // Legacy record layout spellings are reified by the structural path.
+        if type.nameLen > 0U64 && self.arena.bytes[type.nameStart] == 40U8 { return <Optional.Some v=0U64 /> }
+        if type.hasDecl { return <Optional.Some v=type.declOffset /> }
+        val declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: type.nameStart), start: type.nameStart, len: type.nameLen)
+        if declaration.nameLen == 0U64 { return <Optional.None /> }
+        return <Optional.Some v=declaration.nameStart />
+    }
+
+    inout fn namedTypeCompatibility(expectedRef: U64, inferredRef: U64, te: TypeTerm, tin: TypeTerm, expectedOwner: U64, inferredOwner: U64) -> Result[TypeCompatibility, CompileDiagnostic] {
         val expectedBuiltin = self.isCompatibilityBuiltin(type: te)
         val inferredBuiltin = self.isCompatibilityBuiltin(type: tin)
         if expectedBuiltin || inferredBuiltin {
             if !(expectedBuiltin && inferredBuiltin) || !self.typeTermRefSameHead(a: expectedRef, b: inferredRef) {
                 return <Result.Ok value=<TypeCompatibility.Incompatible /> />
             }
-        } else if te.hasDecl && tin.hasDecl {
-            if te.declOffset != tin.declOffset { return <Result.Ok value=<TypeCompatibility.Incompatible /> /> }
-        } else {
-            // Resolve only legacy terms lacking an owner. The conservative
-            // candidate head-name filter intentionally excludes C handles and
-            // generic declarations, so it cannot prove final compatibility.
-            val expectedDeclaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: te.nameStart), start: te.nameStart, len: te.nameLen)
-            val inferredDeclaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: tin.nameStart), start: tin.nameStart, len: tin.nameLen)
-            mut val expectedOwner = te.declOffset
-            mut val inferredOwner = tin.declOffset
-            if !te.hasDecl {
-                if expectedDeclaration.nameLen == 0U64 { return <Result.Ok value=<TypeCompatibility.Unresolved /> /> }
-                expectedOwner = expectedDeclaration.nameStart
-            }
-            if !tin.hasDecl {
-                if inferredDeclaration.nameLen == 0U64 { return <Result.Ok value=<TypeCompatibility.Unresolved /> /> }
-                inferredOwner = inferredDeclaration.nameStart
-            }
-            if expectedOwner != inferredOwner { return <Result.Ok value=<TypeCompatibility.Incompatible /> /> }
+        } else if expectedOwner != inferredOwner {
+            return <Result.Ok value=<TypeCompatibility.Incompatible /> />
         }
         // Once the nominal heads are known, a view is part of semantic type
         // identity even when the payload layout is unchanged. Unresolved

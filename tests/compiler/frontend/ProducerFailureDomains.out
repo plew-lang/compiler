@@ -1,4 +1,5 @@
 source cache retained
+source type failures distinguished
 parser source distinguished
 input distinguished
 raw and converted domains retained

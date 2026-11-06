@@ -126,18 +126,18 @@ pub impl Comp {
             val expected = self.arena.typeTermAt(index: expectedGround)
             val actual = self.arena.typeTermAt(index: inferred)
             if expected.args.len != actual.args.len {
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "function value has the wrong number of parameters for the expected function type (spec/04)") />
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "function value has the wrong number of parameters for the expected function type (spec/04)", failureDomain: <FailureDomain.Source />) />
             }
             mut val index = 0U64
             while index < expected.args.len {
                 if self.typeTermRefIdentityChildLabel(ref: expectedGround, index: index) != self.typeTermRefIdentityChildLabel(ref: inferred, index: index) {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "function value's parameter label does not match the expected function type (spec/04)") />
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "function value's parameter label does not match the expected function type (spec/04)", failureDomain: <FailureDomain.Source />) />
                 }
                 if !((try self.typesCompatible(expected: self.arena.typeArgumentAt(index: expected.args.start + index), inferred: self.arena.typeArgumentAt(index: actual.args.start + index)))) {
                     if index == 0U64 {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "function value's return type does not match the expected function type (spec/04)") />
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "function value's return type does not match the expected function type (spec/04)", failureDomain: <FailureDomain.Source />) />
                     }
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "function value's parameter type does not match the expected function type (spec/04)") />
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "function value's parameter type does not match the expected function type (spec/04)", failureDomain: <FailureDomain.Source />) />
                 }
                 index += 1U64
             }
@@ -150,7 +150,7 @@ pub impl Comp {
                     if inferred != 0U64 {
                         if inferred < self.arena.typeCount() {
                             if !((try self.typeRefIsSendable(ref: inferred))) {
-                                return self.continueTypeDiagnostic(diagnostic: self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "this value does not provide the `sendable` guarantee required here (use a `sendable fn` literal or a structurally sendable value; spec/04,14)"))
+                                return self.continueTypeDiagnostic(diagnostic: self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "this value does not provide the `sendable` guarantee required here (use a `sendable fn` literal or a structurally sendable value; spec/04,14)", failureDomain: <FailureDomain.Source />))
                             }
                         }
                     }
@@ -170,7 +170,7 @@ pub impl Comp {
             eprintInt(n: self.lineOf(offset: self.exprOffset(id: valueExpr)))
             eprint(text: "\n")
         }
-        return self.continueTypeDiagnostic(diagnostic: self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)"))
+        return self.continueTypeDiagnostic(diagnostic: self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)", failureDomain: <FailureDomain.Source />))
     }
 
     // Compatibility reads the committed source operation. The only query

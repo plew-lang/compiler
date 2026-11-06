@@ -718,7 +718,8 @@ pub impl Comp {
         val inferred: U64 = (try self.expressionSourceType(exprId: valueExpr))
         // Operators and other values share the same proof-directed projection
         // normalization and rigid type comparison.
-        if !((try self.typesCompatible(expected: expectedRef, inferred: inferred))) {
+        val compatibility = try self.typeCompatibility(expected: expectedRef, inferred: inferred)
+        if !compatibility.isCompatible() {
             if self.traceCodegen {
                 eprint(text: "[trace-codegen] generic-type-mismatch expected=")
                 self.traceMonoTypeHead(ref: expectedRef)
@@ -730,7 +731,10 @@ pub impl Comp {
                 self.traceMonoTypeHead(ref: (try self.groundTypeRef(ref: inferred)))
                 eprint(text: "\n")
             }
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "type mismatch in a generic body: a type parameter is a distinct opaque type, not the type required here (spec/06)") />
+            // The candidate-filter predicate also returns false for unresolved
+            // facts. Only an established incompatibility proves source refusal.
+            val domain = if compatibility.isUnresolved() { give <FailureDomain.Unclassified /> } else { give <FailureDomain.Source /> }
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "type mismatch in a generic body: a type parameter is a distinct opaque type, not the type required here (spec/06)", failureDomain: domain) />
         }
         return <Result.Ok value=() />
     }
