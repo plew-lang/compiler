@@ -306,3 +306,33 @@ retain a projection and equal the exact expected unresolved term. Review accepte
 that repair and independently replayed both saved native binaries successfully.
 The initial new internal setup lacked nominal declaration identity; its failure
 is not a product RED. Full suite/ASan/common proof-admission closure remains open.
+
+## Nested Conditional-wrapper Controls
+
+The user requested a maintained positive/rejection pair for
+Wrap[T#Parser.Output]:Mark when Wrap[U]:Mark itself requires U:Required.
+Keep associated_condition_normalization_structural unchanged as its independent
+concrete-Wrap control. Add associated_condition_normalization_nested for the
+successful conditional path, checking both direct and generic Use method calls.
+Add associated_condition_normalization_nested_missing as a rejection fixture:
+both Good/Bad satisfy Parser, but only Good.Output satisfies Required. Call the
+same requireUse for Good before Bad; require the missing-where diagnostic for
+the Bad instance request, not malformed projection/visibility/parser failure.
+Current diagnostics point to the requirement declaration rather than the Bad
+callsite; these tests do not certify source-location correctness. An isolated Good
+companion and direct method calls may be used as diagnostic controls. Test the
+selected fixed compiler through check, lazy-run and AOT/native where applicable,
+and production normal dispatch; preserve meaningful Source rejection
+classification separately from legacy process exit. No compiler/spec change or
+common admission completion is implied by adding these controls.
+
+[Executed controls](../../../evidence/rejection-domains/diagnostic-domain-implementation/nested-conditional-wrapper-controls.json):
+Good check/lazy/AOT/native succeeds with direct/generic method result checks;
+Bad check/lazy refuses with the intended where reason. Adding only
+Rejected:Required makes both modes succeed; direct Bad.use also refuses.
+All209 inputs remain unchanged. Production run dispatcher passes, but reject
+worker reports FAIL(classification=1): its private receipt is unclassified, not
+Source. Preserve this failing test and existing com-yeua/com-fsuq responsibility;
+do not weaken the oracle or call it GREEN. Neutral review accepts the additional
+coverage and independently replays the positive binary; source location remains
+a limitation. The existing structural fixture is byte-unchanged from31014653.

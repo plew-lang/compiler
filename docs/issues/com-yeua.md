@@ -196,3 +196,17 @@ met-c1pg does not close this task or substitute for the channel/consumer gates.
 TraitCycleFailureDomains remains intentional WIP RED pending that paired work.
 See [task/dependency adoption](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-task-adoption.json)
 for the checked graph and planning review; no implementation is certified there.
+
+## Nested Conditional-wrapper Source Refusal Control
+
+The newly maintained reject fixture
+`associated_condition_normalization_nested_missing` exercises an actual source
+where-condition refusal through nested projection/conditional conformance.
+[Execution and independent review](../../../evidence/rejection-domains/diagnostic-domain-implementation/nested-conditional-wrapper-controls.json)
+show check/lazy exit1 with the intended where diagnostic but an unclassified
+private receipt; normal reject reports FAIL(classification=1). Good and
+Required-added controls pass, so this is not arbitrary invalid raw input.
+Keep this source producer/transport case within the existing domain-classification
+work; do not weaken com-fsuq's consumer or tag unrelated failures Source. The
+location currently points to the requirement declaration, and lazy refusal adds
+ORC wrapper diagnostics; neither is certified fixed by this test addition.

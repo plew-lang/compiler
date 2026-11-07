@@ -1,0 +1,25 @@
+// Unlike the concrete Wrap conformance in the structural companion, this
+// checks a nested conditional conformance after resolving Parser.Output.
+trait Parser { type Output }
+trait Mark {}
+trait Required {}
+trait Use { fn use() -> I64 }
+struct Accepted {}
+struct Rejected {}
+impl Accepted as Required {}
+struct Good {}
+struct Bad {}
+impl Good as Parser { type Output = Accepted }
+impl Bad as Parser { type Output = Rejected }
+struct Wrap[U] {}
+impl[U] Wrap[U] as Mark where U: Required {}
+struct Nested[T] { val value: T }
+impl[T] Nested[T] as Use where T: Parser, Wrap[T#Parser.Output]: Mark {
+    fn use() -> I64 { return 1I64 }
+}
+fn requireUse[T](value: T) -> I64 where T: Use { return value.use() }
+fn main() {
+    val nested = <Nested[Good] value=<Good /> />
+    if nested.use() != 1I64 { panic("wrong direct conditional method") }
+    if requireUse(value: nested) != 1I64 { panic("wrong generic conditional method") }
+}

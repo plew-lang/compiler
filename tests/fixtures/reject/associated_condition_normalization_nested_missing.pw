@@ -1,0 +1,25 @@
+// Failure differs from the run companion only at the projected output's
+// Required conformance. Both receivers satisfy Parser; the missing condition
+// must prevent Nested[Bad] from satisfying Use.
+trait Parser { type Output }
+trait Mark {}
+trait Required {}
+trait Use { fn use() -> I64 }
+struct Accepted {}
+struct Rejected {}
+impl Accepted as Required {}
+struct Good {}
+struct Bad {}
+impl Good as Parser { type Output = Accepted }
+impl Bad as Parser { type Output = Rejected }
+struct Wrap[U] {}
+impl[U] Wrap[U] as Mark where U: Required {}
+struct Nested[T] { val value: T }
+impl[T] Nested[T] as Use where T: Parser, Wrap[T#Parser.Output]: Mark {
+    fn use() -> I64 { return 1I64 }
+}
+fn requireUse[T](value: T) -> I64 where T: Use { return value.use() }
+fn main() {
+    val accepted = requireUse(value: <Nested[Good] value=<Good /> />)
+    val rejected = requireUse(value: <Nested[Bad] value=<Bad /> />)
+}
