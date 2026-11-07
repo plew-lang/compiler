@@ -1,0 +1,3 @@
+use ./PrivateMethods as Library
+fn main() { val x = 1I64
+ val y = x#Library.Extra.number() }

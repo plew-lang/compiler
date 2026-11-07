@@ -1,0 +1,2 @@
+pub extension Extra { pub impl I64 { fn number() -> I64 { return 7I64 } } }
+pub fn marker() -> I64 { return 5I64 }

@@ -95,30 +95,31 @@ pub impl Comp {
         return false
     }
 
-    // Every imported binding must exist on its selected module's public
-    // surface. Re-export chains use the same query as qualified call resolution.
+    // Authored imports/re-exports were admitted before lowering. Qualified
+    // uses consume that same public surface rather than a second export scan.
     inout fn checkImports() -> Result[(), CompileDiagnostic] {
-        mut val i: U64 = 0
-        while i < self.modules.importOriginCount() {
-            val origin = self.modules.importOriginAt(index: i)
-            match self.moduleBindingFromOrigin(origin: origin) {
-                ModuleBinding.Missing => {
-                    return <Result.Err error=self.diagnosticAt(offset: origin.sourceStart, msg: "imported name is not exported by the specified module (declare it `pub` in that module)") />
-                }
-                _ => {}
-            }
-            i += 1U64
+        val bindings = match self.moduleScopeBindings {
+            Optional.Some(v: val admitted) => admitted
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "import validation before module binding admission", failureDomain: <FailureDomain.Internal />) /> }
         }
-        i = 0U64
-        while i < self.modules.qualifiedUseCount() {
-            val origin = self.modules.qualifiedUseAt(index: i)
-            match self.moduleBindingFromOrigin(origin: origin) {
-                ModuleBinding.Missing => {
-                    return <Result.Err error=self.diagnosticAt(offset: origin.localStart, msg: "name is not public in the specified namespace") />
+        mut val index = 0U64
+        while index < self.modules.qualifiedUseCount() {
+            val origin = self.modules.qualifiedUseAt(index: index)
+            if origin.isSynthesized {
+                // Typed compiler synthesis retains its explicit defining-module
+                // authority; it is not an authored public namespace selection.
+                match self.moduleBindingFromOrigin(origin: origin) {
+                    ModuleBinding.Missing => { return <Result.Err error=self.diagnosticAt(offset: origin.localStart, msg: "missing synthesized qualified binding", failureDomain: <FailureDomain.Internal />) /> }
+                    _ => {}
                 }
-                _ => {}
+            } else {
+                val nameId = intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength)
+                match bindings.kind(moduleId: origin.targetModule, nameId: nameId, requirePublic: true) {
+                    Optional.None => { return <Result.Err error=self.diagnosticAt(offset: origin.localStart, msg: "name is not public in the specified namespace", failureDomain: <FailureDomain.Source />) /> }
+                    _ => {}
+                }
             }
-            i += 1U64
+            index += 1U64
         }
         return <Result.Ok value=() />
     }

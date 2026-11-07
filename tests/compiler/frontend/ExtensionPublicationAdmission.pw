@@ -1,0 +1,41 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic }
+use @Plew/Syntax only { rangeEquals }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    val scenario = argAt(1I64)
+    val rejected = scenario == "ImportPrivatePrivate" || scenario == "ImportPrivatePublic" || scenario == "ImportPrivateEmpty" || scenario == "QualifiedPrivate"
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ExtensionPublication/" + scenario + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {
+            if rejected { print("0") return }
+            val name = if scenario == "PublicEmpty" || scenario == "PrivateEmpty" || scenario == "ImportPublicEmpty" { give "Empty" } else { give "Extra" }
+            val public = scenario == "PublicPrivate" || scenario == "PublicPublic" || scenario == "ImportPublicPrivate" || scenario == "ImportPublicPublic" || scenario == "PublicEmpty" || scenario == "ImportPublicEmpty" || scenario == "QualifiedPublic" || scenario == "QualifiedBarrel"
+            if scenario == "Interpolation" {
+                mut val synthetic = false
+                mut val index = 0U64
+                while index < compiler.modules.qualifiedUseCount() {
+                    if compiler.modules.qualifiedUseAt(index: index).isSynthesized { synthetic = true }
+                    index += 1U64
+                }
+                if !synthetic { print("0") return }
+            }
+            mut val count = 0U64
+            for val entry in compiler.modules.exports {
+                if rangeEquals(bytes: compiler.arena.bytes, start: entry.nameStart, len: entry.nameLen, kw: name) {
+                    if entry.fieldStart != compiler.moduleOf(offset: entry.nameStart) { print("0") return }
+                    count += 1U64
+                }
+            }
+            print(if count == (if public { give 1U64 } else { give 0U64 }) { give "1" } else { give "0" })
+        }
+        Result.Err(error: val diagnostic) => {
+            val expected = if scenario == "QualifiedPrivate" { give "name is not public in the specified namespace" } else { give "imported name is not exported by the specified module (declare it `pub` in that module)" }
+            if rejected && diagnostic.isSourceRejection() && diagnostic.message == expected { print("1") }
+            else { emitDiagnostic(diagnostic: diagnostic) print("0") }
+        }
+    }
+}

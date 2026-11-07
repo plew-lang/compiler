@@ -1,0 +1,4 @@
+struct S {}
+pub extension Extra {
+    impl S { fn number() -> I64 { return 1I64 } }
+}

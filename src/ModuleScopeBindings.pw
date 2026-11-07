@@ -100,11 +100,11 @@ pub impl ModuleScopeBindings {
 }
 
 pub impl AdmittedModuleScopeBindings {
-    fn kind(moduleId: U64, nameId: U64) -> Optional[ScopeBindingKind] {
+    fn kind(moduleId: U64, nameId: U64, requirePublic: Bool = false) -> Optional[ScopeBindingKind] {
         mut val entry = self.nameHeads.getOr(key: nameId, fallback: 0U64)
         while entry != 0U64 {
             val binding = self.entries[entry - 1U64]
-            if binding.moduleId == moduleId { return <Optional.Some v=binding.kind /> }
+            if binding.moduleId == moduleId && (!requirePublic || binding.isPublic) { return <Optional.Some v=binding.kind /> }
             entry = self.nextNamed[entry - 1U64]
         }
         return <Optional.None />

@@ -1,0 +1,5 @@
+use @Std/Io only { print }
+use ./Barrel as Library
+fn main() { val x = 1I64
+ val y = x#Library.Other.number()
+ print("{y}") }

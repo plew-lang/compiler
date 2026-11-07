@@ -32,7 +32,7 @@ impl Comp {
             SyntaxTopItemKind.Trait => { try self.registerSyntaxModuleName(bindings: inout bindings, name: syntaxTrait(file: self.syntax, id: <TraitId raw=payload />).name, kind: <ScopeBindingKind.Trait />, isPublic: isPublic) }
             SyntaxTopItemKind.NewType => { try self.registerSyntaxModuleName(bindings: inout bindings, name: syntaxNewtype(file: self.syntax, id: <NewtypeId raw=payload />).name, kind: <ScopeBindingKind.Type />, isPublic: isPublic) }
             SyntaxTopItemKind.GlobalVal => { try self.registerSyntaxModuleName(bindings: inout bindings, name: syntaxStmt(file: self.syntax, id: <StmtId raw=payload />).name, kind: <ScopeBindingKind.Value />, isPublic: isPublic) }
-            SyntaxTopItemKind.Extension => { try self.registerSyntaxModuleName(bindings: inout bindings, name: syntaxExtension(file: self.syntax, id: <ExtensionId raw=payload />).name, kind: <ScopeBindingKind.Extension />, isPublic: false) }
+            SyntaxTopItemKind.Extension => { try self.registerSyntaxModuleName(bindings: inout bindings, name: syntaxExtension(file: self.syntax, id: <ExtensionId raw=payload />).name, kind: <ScopeBindingKind.Extension />, isPublic: isPublic) }
             // Extension-name publication must come from its declaration's
             // adopted visibility rule, never be inferred from a pub impl.
             SyntaxTopItemKind.Impl => {}

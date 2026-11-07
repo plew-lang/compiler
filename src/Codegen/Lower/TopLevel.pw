@@ -269,6 +269,9 @@ pub impl Comp {
 
     inout fn lowerPublishedItem(inner: TopItemAst) -> Result[(), CompileDiagnostic] {
         match inner {
+            TopItemAst.Extension(name: _, val nameSpan, span: _) => {
+                self.recordExportFrom(nameStart: nameSpan.start, nameLen: nameSpan.end - nameSpan.start, moduleOffset: nameSpan.start)
+            }
             TopItemAst.Extern(val e) => {
                 val xfB: U64 = self.arena.functionCount()
                 val xsB: U64 = self.arena.structCount()
@@ -338,6 +341,10 @@ pub impl Comp {
 
     inout fn lowerSyntaxPublishedItem(item: TopItemId) -> Result[(), CompileDiagnostic] {
         match syntaxTopItemKind(file: self.syntax, item: item) {
+            SyntaxTopItemKind.Extension => {
+                val extension = syntaxExtension(file: self.syntax, id: <ExtensionId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
+                self.recordExportFrom(nameStart: extension.name.start, nameLen: extension.name.end - extension.name.start, moduleOffset: extension.name.start)
+            }
             SyntaxTopItemKind.Extern => {
                 val funcBefore: U64 = self.arena.functionCount()
                 val structBefore: U64 = self.arena.structCount()

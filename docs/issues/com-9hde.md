@@ -441,3 +441,28 @@ The publication-blocked owner probes are scratch diagnostics, not normative test
 fixtures. R4 final review checks declaration/import construction failures and
 subsequent finish/declaration/import calls all retain the initial Collision and
 both offsets. Other review requirements and implementation remain open; the adopted publication decision is recorded above.
+
+## Extension Publication Increment
+
+Specification b31ccfa and design45a46bc3 close com-scq5. Syntax5174ace adds
+Published around the declaration marker only, independently of impl flags.
+[Producer evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/extension-publication-producer.json): actual private/public RED contrasts, final18 and existing19fixture/121 control cases, independently reexecuted.
+
+This consumer increment preserves the declaration flag in the admitted module
+surface, removes import rechecking against a separate lowered export scan, and
+checks authored qualified names against the same admitted public table. Explicit
+synthesized qualified origins retain their defining-module authority. Published
+extension names also reach the existing exports consumers through their original
+name/module provenance, in both direct and value-AST adapters.
+[Consumer evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/extension-publication-binding.json): two successive RED boundaries, native16 including direct exports/provenance and synthetic interpolation assertions,
+fresh CLI8 including qualified/barrel-alias actual calls and private rejection,
+standard build20261107T165331-build-1b06a1 passed with unchanged inputs. Neutral
+review independently reexecuted native16 and CLI8, matched current220/216 input
+hashes, and accepted only this finite publication consumer increment.
+
+Exact Syntax tag/pin uptake remains pending. Automatic approval review rejected
+publishing proposed tag0.1.11-dev.32 at5174ace because shared version publication
+exceeds ordinary branch push while consumer/full gates remain unfinished; explicit
+user approval was requested. Do not retry or publish through another route
+without that approval. A local path override is still WIP-only, excluded from
+commits; the other required kind/owner/legacy/diagnostic repairs remain open.
