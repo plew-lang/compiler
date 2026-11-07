@@ -192,3 +192,19 @@ channel and asserts that exact local failure sequence and exit124. The same
 external-channel probe passes seven cases and emits no parent events. No
 production monitor/classifier or timeout was weakened. Scoped impact review
 and normal gate recovery remain required; task remains in progress.
+
+## CLI boundary fixture migration
+
+The full normal gate 20261107T072051-test-53f724 exposed one stale internal
+architecture assertion: test-frontend-input-boundary.py still required the
+old emitDiagnostic call after the private failure-output adapter changed at
+323e1146. Preserve its analysis-versus-CLI responsibility contract: require
+emitCompilerFailure at the CLI, and forbid both old and new output functions
+in the checked analysis path. Direct python3 -B revalidation passes. Product
+source and semantic expectations are unchanged.
+[Normal result and baseline comparisons](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-final-normal.json)
+retain exit1: 5 known run failures, 680 reject and 80 partreject classification
+failures. All 1068 reject results match the earlier visibility survey; all 84
+partreject results match the earlier visibility carrier under the same current
+worker and fixtures. This fixture correction does not close com-fsuq or certify
+whole-suite GREEN.

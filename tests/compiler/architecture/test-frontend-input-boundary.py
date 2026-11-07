@@ -14,7 +14,7 @@ assert 'sources.stdRoot' in analysis
 entry = analysis.split('// Whether the literal', 1)[0]
 assert '-> Result[(), CompileDiagnostic]' in entry
 assert 'c.errorAt(' not in entry and 'exit(' not in entry
-assert 'match analysis {' in driver and 'emitDiagnostic(diagnostic: diagnostic)' in driver
+assert 'match analysis {' in driver and 'emitCompilerFailure(diagnostic: diagnostic)' in driver
 assert 'return <FrontendRequest input=input sources=configuredSourceAccess(sources: sources)' in driver
 assert 'pub fn configuredSourceAccess(sources: SourceAccess) -> SourceAccess' in driver
 assert 'analyzeFrontend(c: inout c, input: request.input, sources: request.sources, options: request.options)' in driver
@@ -33,7 +33,7 @@ session = checked.split('pub unique struct CompilerSession {', 1)[1].split('}', 
 assert 'pub val ' not in session and 'pub mut val ' not in session
 assert 'mut val session: CompilerSession' in checked
 checking = opening + checking + completion
-for forbidden in ('finalizeFrontendExecutables(', 'LLVMContextCreate(', 'lowerRequestedLlvm(', 'lowerGlobalStorageLlvm(', 'argCount(', 'readStdin(', 'exit(', 'emitDiagnostic('):
+for forbidden in ('finalizeFrontendExecutables(', 'LLVMContextCreate(', 'lowerRequestedLlvm(', 'lowerGlobalStorageLlvm(', 'argCount(', 'readStdin(', 'exit(', 'emitDiagnostic(', 'emitCompilerFailure('):
     assert forbidden not in checking, f'whole-target check crosses its boundary: {forbidden}'
 # Sessions now also own explicit backend requests. Static check/open must not
 # execute them; importing their result types is not code generation.
