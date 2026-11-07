@@ -263,3 +263,14 @@ selection, common view-conformance evidence, raw-input categorization, retained
 proof through final consumers, authorized old fixture repairs and applicable
 gates. Legacy adapters and dependency behavior need re-review. This increment
 is not task closure, final performance or final-candidate admission.
+
+
+Maintained source controls now cover the finite final-use increment:
+fixtures/run/associated_short_projection_complete_bound.pw passes a concrete
+Value plus I64 through generic T.Item parameter/result and prints42; the old
+candidate rejected before use, while the new candidate check/run succeeds.
+fixtures/reject/associated_short_projection_distinct_instances.pw was wrongly
+accepted by the old candidate and now rejects with the intended short-source
+ambiguity in check/run. Full proof admission/task closure remains open.
+Standard build20261107T204652-build-017d31 passes with unchanged inputs;
+fresh candidate bin/plewc-short-projection-bound-context is WIP only.

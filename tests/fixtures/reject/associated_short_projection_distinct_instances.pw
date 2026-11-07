@@ -1,0 +1,3 @@
+trait Project[K] { type Item }
+fn target[T](value: T.Item) where T: Project[I64] + Project[Bool] {}
+fn main() {}

@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+trait Project[K] { type Item }
+struct Value {}
+impl Value as Project[I64] { type Item = I64 }
+fn echo[T](owner~: T, value~: T.Item) -> T.Item where T: Project[I64] {
+    return value
+}
+fn main() {
+    val result = echo(<Value />, 42I64)
+    print(result)
+}
