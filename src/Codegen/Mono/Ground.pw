@@ -396,27 +396,11 @@ pub impl Comp {
     }
 
     fn typeTermRefViewArgumentCount(ref: U64) -> U64 {
-        val term = self.arena.typeTermAt(index: ref)
-        mut val count = 0U64
-        mut val index = 0U64
-        while index < term.viewSources.len {
-            count += self.arena.typeViewSourceAt(index: term.viewSources.start + index).traitInstance.positionalArgs.count()
-            index += 1U64
-        }
-        return count
+        return self.arena.typeViewArgumentCount(sources: self.arena.typeTermAt(index: ref).viewSources)
     }
 
     fn typeTermRefViewArgumentAt(ref: U64, index: U64) -> U64 {
-        val term = self.arena.typeTermAt(index: ref)
-        mut val remaining = index
-        mut val sourceIndex = 0U64
-        while sourceIndex < term.viewSources.len {
-            val arguments = self.arena.typeViewSourceAt(index: term.viewSources.start + sourceIndex).traitInstance.positionalArgs
-            if remaining < arguments.count() { return arguments[remaining] }
-            remaining -= arguments.count()
-            sourceIndex += 1U64
-        }
-        return 0U64
+        return self.arena.typeViewArgumentAt(sources: self.arena.typeTermAt(index: ref).viewSources, index: index)
     }
 
     inout fn typeTermChildCount(t: TypeRef) -> U64 {
@@ -483,8 +467,8 @@ pub impl Comp {
         if ref >= self.arena.typeTermCount() { return 0U64 }
         val t = self.arena.typeTermAt(index: ref)
         if t.assocNameId != 0U64 { return 1U64 + t.assocTraitArgs.len }
-        if t.isRecord { return t.recordFieldTerms.len + self.typeTermRefViewArgumentCount(ref: ref) }
-        return t.args.len + t.assocTraitArgs.len + self.typeTermRefViewArgumentCount(ref: ref)
+        if t.isRecord { return t.recordFieldTerms.len + self.arena.typeViewArgumentCount(sources: t.viewSources) }
+        return t.args.len + t.assocTraitArgs.len + self.arena.typeViewArgumentCount(sources: t.viewSources)
     }
 
     inout fn typeTermRefProjectionReceiver(ref: U64) -> U64 {

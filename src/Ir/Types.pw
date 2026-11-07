@@ -21,6 +21,12 @@ pub impl Arena {
     fn typeRecordFieldAt(index: U64) -> U64 { return self.typeRecordFieldPool[index] }
     fn typeViewIdAt(index: U64) -> U64 { return self.typeViewIdPool[index] }
     fn typeViewSourceAt(index: U64) -> ResolvedViewSource { return self.typeViewSourcePool[index] }
+    fn typeViewArgumentCount(sources: TypeViewSourceRange) -> U64 {
+        return sources.argumentCount(pool: self.typeViewSourcePool)
+    }
+    fn typeViewArgumentAt(sources: TypeViewSourceRange, index: U64) -> U64 {
+        return sources.argumentAt(pool: self.typeViewSourcePool, index: index)
+    }
     fn typeArgumentLabelAt(index: U64) -> U64 { return self.typeArgumentLabelPool[index] }
     fn typeAssocArgumentAt(index: U64) -> U64 { return self.typeAssocArgumentPool[index] }
     fn typeAssocArgumentLabelAt(index: U64) -> U64 { return self.typeAssocArgumentLabelPool[index] }
@@ -119,6 +125,32 @@ pub impl Arena {
         }
         self.typeDeclarationResolutionFinished = true
         return true
+    }
+}
+
+// The loop needs only a range and its pool. Passing a whole compiler (or
+// arena) by value here makes each hot structural query copy unrelated state.
+impl TypeViewSourceRange {
+    fn argumentCount(pool: Array[ResolvedViewSource]) -> U64 {
+        mut val count = 0U64
+        mut val index = 0U64
+        while index < self.len {
+            count += pool[self.start + index].traitInstance.positionalArgs.count()
+            index += 1U64
+        }
+        return count
+    }
+
+    fn argumentAt(pool: Array[ResolvedViewSource], index: U64) -> U64 {
+        mut val remaining = index
+        mut val sourceIndex = 0U64
+        while sourceIndex < self.len {
+            val arguments = pool[self.start + sourceIndex].traitInstance.positionalArgs
+            if remaining < arguments.count() { return arguments[remaining] }
+            remaining -= arguments.count()
+            sourceIndex += 1U64
+        }
+        return 0U64
     }
 }
 

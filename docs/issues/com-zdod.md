@@ -163,6 +163,19 @@ The known projection/record head relation belongs to com-bvc8; a selector with
 those arguments inherits that boundary, so results do not claim universal
 projection/record identity is repaired.
 
+## Measured Reader Cost
+
+[Formal self-host and diagnosis](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-self-host-before-reader-repair.json)
+reached generation-three LLVM/runtime fixed point, median 11.444476s. The
+adopted carrier compiled that same source in 7.178753s. This is not acceptance
+of the seven-second performance condition. CPU samples and optimized LLVM
+identify the newly added view-argument loop passing the whole Comp by value
+from hot child-count queries. The loop only needs its range and source pool.
+A scoped behavior-preserving repair moves those loops to the pooled-range
+owner, retaining read-only semantics and the common semantic-child API. No
+compiler-specific retain/drop exception or fake mutable receiver is allowed.
+Fresh build, targeted GREEN, same-source performance and review are pending.
+
 ## Remaining Work
 
 Reconcile qualified-binder handling, alias/owner
