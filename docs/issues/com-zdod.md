@@ -1,6 +1,6 @@
 ---
 id: com-zdod
-status: in_progress
+status: closed
 deps: []
 links: [com-oir7, com-bvc8, met-c1pg]
 created: 2026-11-06T23:54:58Z
@@ -220,16 +220,14 @@ source-proof investigation; it is not certified here. The unused bare-ID
 addition adapter is a migration cleanup candidate for com-9hde, not an
 alternative semantic identity path. Do not add new semantic callers to it.
 
-## Remaining Work
+## Remaining Boundaries
 
-Reconcile qualified-binder handling, alias/owner
-and normalization composition scenarios, complete keys/rebuild/caller use,
-applicable normal/fixed-point/performance gates and neutral completion review.
-Keep known projection-versus-receiver category repair assigned to com-bvc8;
-coordinate shared readers without claiming that whole repair here. Syntax,
-source conformance proof and final executable view selection remain separate
-mandatory tasks. Task and parent remain open.
-
+This finite structural contract is resolved; syntax/Lower (com-9hde), source
+conformance evidence (com-amjl), final executable selection (com-4k31) and
+general projection-versus-receiver category repair (com-bvc8) remain separate
+mandatory tasks. The parent and classification tasks remain open. Compatibility
+adapters may not gain new semantic callers; com-9hde removes the unused bare-ID
+addition adapter when consuming the complete selector artifact.
 
 ## Normal Fixture API Uptake
 
@@ -286,5 +284,24 @@ The repair moves the existing shared source-head comparison ahead of kind
 early returns, without a separate record comparator. All other canonical
 record/projection category work remains open under com-bvc8.
 [Actual RED and review](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-record-identity-repair.json).
-Fresh build and GREEN remain pending; prior finite completion conclusions do
-not certify this newly found combination.
+Fresh build 20261107T063833-build-51493e and all 135 native cases passed.
+The final whole-scope reviewer reconciled these eight added record controls.
+
+
+## Closure — Resolved
+
+Product source bb989e34, test-only boundary migration 36075766. The shared
+complete selector now reaches covered construction, validation, normalization,
+equality/matching, traversal, substitution/grounding and semantic body keys.
+Targeted native 135 cases and input hashes were independently reconciled.
+[Final formal evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-record-five-sample-self-host.json)
+records generation-three LLVM/runtime fixed point and predeclared five-sample
+median 6.611536s, all outputs equal and inputs unchanged. The original
+three-sample 7.015027s threshold miss remains preserved, without sample removal.
+[Complete normal reconciliation and neutral closure review](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-final-normal.json)
+record all 2834 cases, no duplicates, unchanged inputs and exit1. Five known run
+failures, 680 reject and 80 partreject classification failures match baselines;
+no additional scoped regression remains. The stale internal CLI-output assertion
+was migrated without weakening the analysis/CLI boundary and directly passed.
+This is scoped closure, not whole-suite GREEN or promotion. Above pending
+checkpoints describe intermediate evidence and are superseded by this closure.
