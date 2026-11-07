@@ -1,0 +1,5 @@
+use ./Barrel only { P as Selected }
+struct S {}
+impl S as Selected[I64] {}
+fn target(value: S#Selected[I64]) {}
+fn main() {}

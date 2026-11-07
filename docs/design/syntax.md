@@ -41,6 +41,25 @@ Source spans refer to the original admitted text. Interned spelling can be share
 
 Semantic input is not a checked artifact. An annotation or contextual hint is a request to check under a type, not proof that the resulting expression has that type. If lowering carries a hint to an omitted construction or closure annotation, checking must validate and publish the completed result. Backend consumers must not infer success from syntax fields that happen to be filled.
 
+### Name-dependent Source Applications
+
+A method-source selector can require declaration binding before the syntax's
+role is known. Shared Syntax retains qualified segments, positional argument
+syntax, index syntax and source coordinates needed by the semantic owner;
+it must not guess a namespace or type from spelling. A parameterized trait
+requires its complete positional application. An extension or zero-arity trait
+view is complete before an ordinary following index. These classifications
+implement the existing view and indexing rules, rather than a new precedence
+or type-checking fallback. Once bound, a failure in the selected interpretation
+cannot select the other interpretation instead.
+
+Similarly, a qualified source path must survive until lookup distinguishes
+namespace prefixes, the trait source and an associated projection. Lower consumes
+shared syntax; it does not parse the source text again. The exact arena/adapter
+encoding is an implementation choice constrained by this contract and its
+preservation tests. [The source handoff task](../issues/com-9hde.md) records the
+remaining implementation gap and scoped evidence.
+
 ## 4. Normalization Without Competing Meaning
 
 Normalization may remove syntactic distinctions only if later consumers do not need them for meaning, evaluation order, control targets, or diagnostics. The operation's children and provenance must survive until the responsible semantic stage consumes them.

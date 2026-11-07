@@ -41,24 +41,25 @@ this to complete child arguments, aliases/qualified paths and ordinary indexing
 before final uptake. A parser setup failure is not semantic RED. Product source
 remains unchanged until the executed regression is established.
 
-## Pending Grammar Handoff Decision
+## Grammar Handoff Contract
 
-The producer RED is executed: compile/link/native exit0 with empty runtime
-stderr; direct/materialized/frozen memberless A#P[I64] each prints0 instead of1,
-while plain A#P and A#P[I64].Item controls print1. See
-[producer evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-view-syntax-producer-red.json).
+The [executed producer RED](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-view-syntax-producer-red.json)
+shows the lost type-position selector. Value-position brackets may be positional
+trait arguments or existing indexing. Shared Syntax must preserve sufficient
+syntax to classify that application after lexical source binding. Parameterized
+traits require a complete application; extension and zero-arity trait views are
+already complete before the preserved index. No name-spelling guesses, semantic
+fallback between meanings, or compiler-owned reparser is permitted.
 
-The shared parser has no lexical declaration environment. Immediately after
-#Source, square brackets may be positional trait type arguments or existing
-indexing on extension/zero-argument-trait views. Identifier spelling cannot
-choose meaning, and a later compiler-owned reparser would violate the single
-grammar authority. Before value-position product changes, the user is asked whether to retain
-an unresolved bracket-application syntax and classify it after ordinary lexical
-source resolution, preserving existing syntax. The alternative requires
-parenthesized views for indexing and changes the language surface. The former
-is a proposal, not adopted yet; its precise grammar representation and lowering
-must be designed before implementation. The value-position grammar remains unchanged.
-
+A prior implementation note incorrectly made this internal direction contingent
+on user approval. [Neutral contract review](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-view-type-alias-controls.json)
+confirmed it follows from spec09, this task's preservation requirements and the
+adopted syntax handoff design. No approval was inferred from a continuation;
+the unnecessary confirmation request is withdrawn. The concrete representation
+still requires design and meaningful producer/consumer tests. Consult the user
+only if meaning remains undecidable under existing rules, or a proposed solution
+changes the surface/precedence/parenthesis requirement. Qualified namespace vs
+trait/projection interpretation follows the same existing ownership boundary.
 
 ## Type-position increment (in progress)
 
@@ -110,8 +111,8 @@ listed above stay open.
 
 ## Known-owner impl arity increment (in progress)
 
-This existing task requirement is independent of the pending value-bracket
-handoff. [Executed RED and scope](../../../evidence/rejection-domains/diagnostic-domain-implementation/impl-trait-arity-increment.json):
+This existing task requirement is independent of the still-open value-bracket
+implementation. [Executed RED and scope](../../../evidence/rejection-domains/diagnostic-domain-implementation/impl-trait-arity-increment.json):
 valid one-argument and zero-argument conformances pass; missing/extra arguments
 incorrectly diagnose an unknown trait. Unknown trait is already rejected, not an
 acceptance defect. New AST/spanless controls additionally exercise the adapter.
@@ -132,3 +133,23 @@ cases and5 existing generic/trait controls pass with unchanged recorded inputs.
 Independent final review reran all35 native cases and checked194/197 input
 hashes and6 preservation fixture goldens against current files; no additional
 required fix for this finite increment. The full task remains open.
+
+
+## Type alias preservation and qualified-path investigation
+
+[Actual File alias controls](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-view-type-alias-controls.json)
+pass direct import, barrel and alias type views, retaining canonical owner,
+I64 argument and exact written selector coordinates. All17 executions (including
+the13 existing cases and no-argument golden default) pass with197 recorded
+inputs unchanged. Neutral review independently reran the cases and checked hashes.
+These are preserved GREEN contracts, not a new product repair or task closure.
+
+Namespace-qualified impl setup succeeds, but `S#Types.P[I64]`,
+`S#Types.P[I64].Item` and `S#Types.Zero` fail with projection-arity diagnostics.
+The parser currently converts the first dot after# into projection fields
+before namespace resolution. Do not patch this by spelling guesses or a Lower
+parser. The shared-path handoff must preserve segments until their ordinary
+binding owner can distinguish namespace, trait and associated projection.
+The scope remains in this existing task. Neutral review confirmed unresolved retention follows from the adopted
+single-grammar/handoff contract; the earlier unnecessary user-confirmation
+request is withdrawn. Concrete representation design is the next step.
