@@ -1,0 +1,30 @@
+// Manual returning-service/rendering contrast for both collision origins.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic, DiagnosticLocation }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+fn main() {
+    val scenario = if argAt(1I64) == "" { give "TypeTrait" } else { give argAt(1I64) }
+    val path = "tests/compiler/frontend/fixtures/ModuleBindings/" + scenario + ".pw"
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => { print("0") }
+        Result.Err(error: val diagnostic) => {
+            if !diagnostic.isSourceRejection() { print("0") return }
+            emitDiagnostic(diagnostic: diagnostic)
+            if diagnostic.notes.count() != 1U64 || diagnostic.notes[0U64].message != "previous binding is here" { print("0") return }
+            val primaryLine = if scenario == "TypeTrait" { give 2I64 } else { give 1I64 }
+            val previousLine = if scenario == "TypeTrait" { give 1I64 } else { give 2I64 }
+            match diagnostic.location {
+                DiagnosticLocation.File(path: val actual, line: val line) => { if actual != path || line != primaryLine { print("0") return } }
+                _ => { print("0") return }
+            }
+            match diagnostic.notes[0U64].location {
+                DiagnosticLocation.File(path: val actual, line: val line) => { if actual != path || line != previousLine { print("0") return } }
+                _ => { print("0") return }
+            }
+            print("1")
+        }
+    }
+}

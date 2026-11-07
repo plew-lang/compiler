@@ -1,0 +1,6 @@
+plewc: error: primary
+plewc: note: line 3: earlier
+plewc: note: Other.pw:4: related
+plewc: warning: Main.pw:5: warning
+plewc: note: context
+plewc: error: line 6: input

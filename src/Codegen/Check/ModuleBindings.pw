@@ -7,7 +7,11 @@ impl Comp {
             Result.Ok(value: _) => { return <Result.Ok value=() /> }
             Result.Err(error: val failure) => {
                 match failure {
-                    ScopeBindingFailure.Collision(firstOffset: _, secondOffset: val offset) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "duplicate module binding name (spec/15): only valid free-function overloads may share a name", failureDomain: <FailureDomain.Source />) /> }
+                    ScopeBindingFailure.Collision(firstOffset: val firstOffset, secondOffset: val offset) => {
+                        val primary = self.diagnosticAt(offset: offset, msg: "duplicate module binding name (spec/15): only valid free-function overloads may share a name", failureDomain: <FailureDomain.Source />)
+                        val previous = self.diagnosticAt(offset: firstOffset, msg: "previous binding is here")
+                        return <Result.Err error=<CompileDiagnostic severity=primary.severity failureDomain=primary.failureDomain location=primary.location message=primary.message notes=[<DiagnosticNote location=previous.location message=previous.message />] /> />
+                    }
                     ScopeBindingFailure.MissingImport(val offset) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "imported name is not exported by the specified module (declare it `pub` in that module)", failureDomain: <FailureDomain.Source />) /> }
                     ScopeBindingFailure.ImportCycle(val offset) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "module use graph contains a cycle (spec/15)", failureDomain: <FailureDomain.Source />) /> }
                     ScopeBindingFailure.Closed(val offset) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "module binding registration after admission", failureDomain: <FailureDomain.Internal />) /> }

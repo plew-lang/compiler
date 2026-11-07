@@ -510,3 +510,28 @@ at the new shared admission diagnostic. Do not rewrite opaque numeric IDs in
 pure structural comparison tests merely because semantic source IDs changed.
 Expanded fragment/reexport/conformance-only/numeric-collision controls, fresh
 compiler execution, exact Syntax pin and whole-task gates remain required.
+
+## Collision Diagnostic Origins (R5)
+
+[Returning and rendered collision context](../../../evidence/rejection-domains/diagnostic-domain-implementation/module-binding-collision-diagnostics.json)
+records an actual successful-executable RED for the missing first location and
+GREEN after retaining structured notes. Declaration/declaration, import/import
+and import/declaration cases inspect Source classification, both file-local
+locations and the exact supplementary message. A leaf renderer control covers
+primary/context location variants, notes absence, warnings and domain independence.
+The primary and note follow admission registration order; no source ordering or
+semantic collision decision is changed. A neutral reviewer independently reran
+all four final native cases and checked the whole diagnostic transport path;
+no mandatory repair remains in this finite R5 scope.
+
+The first standard build completed compilation/linking but its formal gate was
+invalidated by an in-flight edit to tests/compiler/frontend/README.md only.
+It must not be reported as a passed immutable-input gate. The resulting candidate
+`bin/plewc-collision-diagnostic-notes` rejects the three actual CLI inputs with
+both origins. The replacement standard build `20261107T175415-build-d1ceef` passed with all
+inputs unchanged. Formal self-host `20261107T175932-self-host-7a0e4f` reached
+generation3 LLVM/runtime equality and all3 samples produced identical outputs:
+7.252218 / 6.729189 / 6.731090 seconds, median6.731090 (<7).
+The saved fixed-point candidate `bin/plewc-source-binding-fixed-point` repeats
+the owner/kind check/run8 and collision CLI3 controls. This is WIP evidence,
+not full-suite acceptance, exact Syntax pin uptake, or adopted-carrier promotion.

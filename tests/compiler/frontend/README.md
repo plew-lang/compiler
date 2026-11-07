@@ -189,3 +189,17 @@ two alias/republication paths and must print `41/42`. The related
 com-4k31; it is not included among passing identity controls. The existing
 normal `extension_assoc_source_select.pw` provides the smaller same-module
 associated-call control. See the task evidence for candidates and exact results.
+
+
+### Collision diagnostic context (manual)
+
+`ModuleBindingCollisionLocations.pw` takes `TypeTrait` (default),
+`DifferentImportedKinds` or `ImportedTypeLocalTrait`. Its stdout matches its
+`.out`; stderr must contain the primary error and `previous binding is here`
+note at the two original fixture lines. It also inspects the returning service's
+Source failure and structured note locations. Registration order, rather than
+source line order, determines which conflicting binding is primary.
+`DiagnosticNotes.pw` has no arguments; compare stdout with `.out` and stderr
+exactly with `.stderr`. This leaf test covers notes with unpositioned primaries,
+line/file/unpositioned context and warning/failure-domain independence. Both are
+manual native diagnostics outside the normal suite.

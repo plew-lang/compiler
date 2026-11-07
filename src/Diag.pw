@@ -69,11 +69,18 @@ pub enum DiagnosticSeverity { Error Warning }
 // not distinguish an invalid source program from a compiler or input failure.
 pub enum FailureDomain { Unclassified Source Input Tool Limit Internal }
 
+pub struct DiagnosticNote {
+    pub val location: DiagnosticLocation
+    pub val message: String
+}
+pub impl DiagnosticNote { factory }
+
 pub struct CompileDiagnostic {
     pub val severity: DiagnosticSeverity = <DiagnosticSeverity.Error />
     pub val failureDomain: FailureDomain = <FailureDomain.Unclassified />
     pub val location: DiagnosticLocation
     pub val message: String
+    pub val notes: Array[DiagnosticNote] = []
 }
 pub impl CompileDiagnostic {
     factory
@@ -90,30 +97,37 @@ pub impl CompileDiagnostic {
     }
 }
 
-pub fn emitDiagnostic(diagnostic: CompileDiagnostic) {
-    match diagnostic.severity {
-        DiagnosticSeverity.Error => { eprint(text: "plewc: error: ") }
-        DiagnosticSeverity.Warning => { eprint(text: "plewc: warning: ") }
-    }
-    match diagnostic.location {
-        DiagnosticLocation.Unpositioned => {
-            eprint(text: diagnostic.message)
-            eprint(text: "\n")
-            return
-        }
+// Presentation consumes locations already mapped by the diagnostic producer.
+// Notes carry context only; the primary severity/domain still owns failure.
+fn emitDiagnosticMessage(location: DiagnosticLocation, message: String) {
+    match location {
+        DiagnosticLocation.Unpositioned => {}
         DiagnosticLocation.Line(line: val line) => {
             eprint(text: "line ")
             eprintInt(n: line)
+            eprint(text: ": ")
         }
         DiagnosticLocation.File(path: val path, line: val line) => {
             eprint(text: path)
             eprint(text: ":")
             eprintInt(n: line)
+            eprint(text: ": ")
         }
     }
-    eprint(text: ": ")
-    eprint(text: diagnostic.message)
+    eprint(text: message)
     eprint(text: "\n")
+}
+
+pub fn emitDiagnostic(diagnostic: CompileDiagnostic) {
+    match diagnostic.severity {
+        DiagnosticSeverity.Error => { eprint(text: "plewc: error: ") }
+        DiagnosticSeverity.Warning => { eprint(text: "plewc: warning: ") }
+    }
+    emitDiagnosticMessage(location: diagnostic.location, message: diagnostic.message)
+    for note in diagnostic.notes {
+        eprint(text: "plewc: note: ")
+        emitDiagnosticMessage(location: note.location, message: note.message)
+    }
 }
 
 pub fn emitDiagnostics(diagnostics: Array[CompileDiagnostic]) {

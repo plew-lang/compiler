@@ -1,0 +1,13 @@
+// Manual leaf-level rendering: notes are retained even with no primary location,
+// and never change the primary warning/domain's source-rejection classification.
+use ../../../src/Diag only { CompileDiagnostic, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic }
+use @Std/Io only { print }
+fn main() {
+    val diagnostic = <CompileDiagnostic location=<DiagnosticLocation.Unpositioned /> failureDomain=<FailureDomain.Source /> message="primary" notes=[<DiagnosticNote location=<DiagnosticLocation.Line line=3I64 /> message="earlier" />, <DiagnosticNote location=<DiagnosticLocation.File path="Other.pw" line=4I64 /> message="related" />] />
+    emitDiagnostic(diagnostic: diagnostic)
+    val warning = <CompileDiagnostic severity=<DiagnosticSeverity.Warning /> failureDomain=<FailureDomain.Source /> location=<DiagnosticLocation.File path="Main.pw" line=5I64 /> message="warning" notes=[<DiagnosticNote location=<DiagnosticLocation.Unpositioned /> message="context" />] />
+    emitDiagnostic(diagnostic: warning)
+    val input = <CompileDiagnostic failureDomain=<FailureDomain.Input /> location=<DiagnosticLocation.Line line=6I64 /> message="input" />
+    emitDiagnostic(diagnostic: input)
+    print(if diagnostic.isSourceRejection() && !warning.isSourceRejection() && !input.isSourceRejection() { give "1" } else { give "0" })
+}
