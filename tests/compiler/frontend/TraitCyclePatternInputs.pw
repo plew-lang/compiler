@@ -30,13 +30,13 @@ fn main() {
         argument = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=[valid, malformed] />)
         expected = "invalid pattern type input: inconsistent view trait identity"
     } else if scenario == "viewArity" || scenario == "viewExtraArity" || scenario == "viewArgumentRef" || scenario == "extensionArguments" || scenario == "viewArgumentBinder" || scenario == "differentViewInstances" {
-        val extension = compiler.internBytes(s: "E")
+        val extension = compiler.moduleScopeBindings.unwrap().extensionId(moduleId: 0U64, nameId: compiler.internBytes(s: "E").nameId).unwrap()
         val selectorArgument = if scenario == "viewArgumentRef" { give 999999U64 } else if scenario == "viewArgumentBinder" {
             give compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=identity + 1U64 args=[] />)
         } else { give integer }
         val arguments: Array[U64] = if scenario == "viewArity" { give [] } else if scenario == "viewExtraArity" { give [integer, integer] } else { give [selectorArgument] }
         val source = if scenario == "extensionArguments" {
-            give <ResolvedViewSource surfaceId=extension.nameId traitInstance=<TraitInstanceKey owner=0U64 positionalArgs=arguments /> />
+            give <ResolvedViewSource surfaceId=extension traitInstance=<TraitInstanceKey owner=0U64 positionalArgs=arguments /> />
         } else { give <ResolvedViewSource surfaceId=subject.nameId traitInstance=<TraitInstanceKey owner=subject.nameStart positionalArgs=arguments /> /> }
         mut val sources = [source]
         if scenario == "differentViewInstances" {
@@ -49,15 +49,16 @@ fn main() {
     } else if scenario == "viewedBinder" {
         // A structural graph pattern may retain a view-qualified lexical
         // parameter without solving that view's receiver applicability.
-        val extension = compiler.internBytes(s: "E")
-        argument = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=identity args=[] viewExtId=extension.nameId viewIds=[extension.nameId] />)
+        val extension = compiler.moduleScopeBindings.unwrap().extensionId(moduleId: 0U64, nameId: compiler.internBytes(s: "E").nameId).unwrap()
+        argument = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=identity args=[] viewExtId=extension viewIds=[extension] />)
     } else if scenario == "invalidViewOwner" || scenario == "viewOwnerNameMismatch" || scenario == "unknownExtension" {
         val name = compiler.internBytes(s: "Projection")
         val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
         val owner = if scenario == "invalidViewOwner" { give 999999U64 } else if scenario == "unknownExtension" { give 0U64 } else { give declaration.nameStart }
-        val surface = if scenario == "viewOwnerNameMismatch" { give subject.nameId } else if scenario == "unknownExtension" { give compiler.internBytes(s: "MissingExtension").nameId } else { give declaration.nameId }
+        val surface = if scenario == "viewOwnerNameMismatch" { give subject.nameId } else if scenario == "unknownExtension" { give 999999U64 } else { give declaration.nameId }
+        if scenario == "unknownExtension" && compiler.moduleScopeBindings.unwrap().extensionBinding(identity: surface).isSome() { panic("unknown extension test ID unexpectedly exists") }
         argument = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=[<ResolvedViewSource surfaceId=surface traitInstance=<TraitInstanceKey owner=owner positionalArgs=[] /> />] />)
-        expected = if scenario == "invalidViewOwner" { give "invalid pattern type input: unresolved view trait owner" } else if scenario == "viewOwnerNameMismatch" { give "invalid pattern type input: inconsistent view trait identity" } else { give "invalid pattern type input: unresolved extension view source" }
+        expected = if scenario == "invalidViewOwner" { give "invalid pattern type input: unresolved view trait owner" } else if scenario == "viewOwnerNameMismatch" { give "invalid pattern type input: inconsistent view trait identity" } else { give "invalid pattern type input: unresolved extension view source identity" }
     } else if scenario == "multipleTraitViews" || scenario == "duplicateTraitView" {
         val name = compiler.internBytes(s: "Projection")
         val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))

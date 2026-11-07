@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+use ./Shared only { S }
+use ./FragmentSource only { Origin as Fragments }
+use ./FragmentBarrel only { Exposed as Fragments }
+fn main() {
+    val value = <S />
+    print("{value#Fragments.number()}")
+    print("{value#Fragments.other()}")
+}

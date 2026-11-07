@@ -35,3 +35,19 @@ For instances with identical call argument shapes, first establish a setup allow
 Close producer-to-final-call selection with exact target/output assertions, preserved nongeneric/extension controls, removal of owner/arity-only decisions and fallback reselection in affected consumers, required validation and neutral review. This task is the end-to-end acceptance owner after term/syntax prerequisites, not a field-addition or --check-only task. Parent gates/performance policy remain unchanged; no unsupported-feature workarounds, ARC exceptions, new overload semantics, full solver redesign or main/seed promotion. com-amjl retains projection evidence and its existing test repairs; com-bvc8 retains non-cycle projection head/category repair; API authority tickets remain separately required.
 
 
+
+## Concrete Associated Extension Control
+
+During com-9hde canonical bundle verification, fresh candidate
+`bin/plewc-canonical-extension-identity` and prior candidate
+`bin/plewc-extension-publication` both reject the existing
+`tests/fixtures/run/extension_assoc_source_select.pw` at its
+`Sample#Extra.value()` call with `no matching method for this argument list`.
+This is not a newly introduced identity regression. Both candidates also
+reject the associated call in the new valid two-path reexport/fragment setup
+`tests/compiler/frontend/fixtures/ViewSourceOwners/FragmentAssociatedUse.pw`.
+The direct compatibility final-resolver API value/associated contrast is GREEN;
+that does not certify the parser's ExtView+ordinary Method path. Trace the
+associated receiver/source through the common frontend owner rather than add
+another consumer-specific spelling fallback. Keep the existing successful
+value-call controls and the exact-instance guarantees above.

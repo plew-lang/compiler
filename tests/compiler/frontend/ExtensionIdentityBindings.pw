@@ -1,0 +1,23 @@
+// Bundle identity is owned by the admitted original declaration, including
+// empty/root declarations, fragments and multiple aliased republication paths.
+use ../../../src/ModuleScopeBindings only { ModuleScopeBindings, ScopeBindingKind }
+use @Std/Io only { print }
+fn main() {
+    mut val builder = <ModuleScopeBindings />
+    builder.addDeclaration(moduleId: 0U64, nameId: 100U64, kind: <ScopeBindingKind.Extension />, offset: 0U64, isPublic: true).unwrap()
+    builder.addDeclaration(moduleId: 0U64, nameId: 100U64, kind: <ScopeBindingKind.Extension />, offset: 20U64, isPublic: true).unwrap()
+    builder.addDeclaration(moduleId: 1U64, nameId: 100U64, kind: <ScopeBindingKind.Extension />, offset: 30U64, isPublic: true).unwrap()
+    builder.addDeclaration(moduleId: 1U64, nameId: 1U64, kind: <ScopeBindingKind.Trait />, offset: 40U64, isPublic: true).unwrap()
+    builder.addImport(moduleId: 2U64, nameId: 200U64, targetModule: 0U64, targetNameId: 100U64, isNamespace: false, isPublic: true, offset: 50U64).unwrap()
+    builder.addImport(moduleId: 3U64, nameId: 300U64, targetModule: 2U64, targetNameId: 200U64, isNamespace: false, isPublic: true, offset: 60U64).unwrap()
+    builder.addImport(moduleId: 3U64, nameId: 300U64, targetModule: 0U64, targetNameId: 100U64, isNamespace: false, isPublic: true, offset: 70U64).unwrap()
+    val bindings = builder.finish().unwrap()
+    val identity = bindings.extensionId(moduleId: 0U64, nameId: 100U64).unwrap()
+    val other = bindings.extensionId(moduleId: 1U64, nameId: 100U64).unwrap()
+    val original = bindings.extensionBinding(identity: identity).unwrap()
+    if identity == 0U64 || identity == other || original.ownerModule != 0U64 || original.ownerNameId != 100U64 || original.declarationOffset != 0U64 { print("0") return }
+    if bindings.extensionId(moduleId: 2U64, nameId: 200U64).unwrap() != identity || bindings.extensionId(moduleId: 3U64, nameId: 300U64).unwrap() != identity { print("0") return }
+    if bindings.extensionId(moduleId: 1U64, nameId: 1U64).isSome() || bindings.extensionBinding(identity: 999999U64).isSome() { print("0") return }
+    if builder.finish().unwrap().extensionId(moduleId: 0U64, nameId: 100U64).unwrap() != identity { print("0") return }
+    print("1")
+}

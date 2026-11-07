@@ -2,14 +2,14 @@
 // argument recovery and recursive view-cycle entries, not a copied matcher.
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
 use ../../../src/SourceAccess only { SourceAccess }
-use ../../../src/Ir only { TypeRef, ResolvedViewSource, TraitInstanceKey, Expr, Param, MakeFieldRange, InstanceEnvironment }
+use ../../../src/Ir only { TypeRef, ResolvedViewSource, TraitInstanceKey, Expr, Param, MakeFieldRange, InstanceEnvironment, Conform }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
 
 fn main() {
     val scenario = argAt(1I64)
     mut val compiler = <Comp />
-    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[K] {{}} trait B[K] {{}} trait P[K] {{ type Item }} struct S {{}} impl S as P[I64] {{ type Item=I64 }} impl S as P[Bool] {{ type Item=Bool }} extension E {{ impl A[I64] as B[I64] {{}} }} extension F {{ impl B[I64] as A[I64] {{}} }} extension P {{ impl A[I64] as B[I64] {{}} }} trait Zero {{}} trait OtherZero {{}} fn identity[T](value: T) -> T {{ return value }} fn main() {{}}" path="ViewConsumers.pw" />, sources: <SourceAccess />).unwrap()
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[K] {{}} trait B[K] {{}} trait P[K] {{ type Item }} struct S {{}} impl S as P[I64] {{ type Item=I64 }} impl S as P[Bool] {{ type Item=Bool }} extension E {{ impl A[I64] as B[I64] {{}} }} extension F {{ impl B[I64] as A[I64] {{}} }} trait Zero {{}} trait OtherZero {{}} fn identity[T](value: T) -> T {{ return value }} fn main() {{}}" path="ViewConsumers.pw" />, sources: <SourceAccess />).unwrap()
     val integerName = compiler.internBytes(s: "I64")
     val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
     val booleanName = compiler.internBytes(s: "Bool")
@@ -43,8 +43,8 @@ fn main() {
             rightSources = [<ResolvedViewSource surfaceId=otherZero.nameId traitInstance=<TraitInstanceKey owner=otherZero.nameStart positionalArgs=[] /> />]
         }
         if scenario == "recordExtension" || scenario == "recordExtensionOrderControl" {
-            val firstExtension = <ResolvedViewSource surfaceId=compiler.internBytes(s: "E").nameId />
-            val secondExtension = <ResolvedViewSource surfaceId=compiler.internBytes(s: "F").nameId />
+            val firstExtension = <ResolvedViewSource surfaceId=compiler.moduleScopeBindings.unwrap().extensionId(moduleId: 0U64, nameId: compiler.internBytes(s: "E").nameId).unwrap() />
+            val secondExtension = <ResolvedViewSource surfaceId=compiler.moduleScopeBindings.unwrap().extensionId(moduleId: 0U64, nameId: compiler.internBytes(s: "F").nameId).unwrap() />
             leftSources = [firstExtension]
             rightSources = [secondExtension]
             if scenario == "recordExtensionOrderControl" {
@@ -139,12 +139,19 @@ fn main() {
         print(if scenario == "argumentControl" || scenario == "argumentDuplicateControl" { give matches } else { give !matches })
         return
     }
-    val extension = compiler.internBytes(s: "E")
-    val reverse = compiler.internBytes(s: "F")
+    val extension = compiler.moduleScopeBindings.unwrap().extensionId(moduleId: 0U64, nameId: compiler.internBytes(s: "E").nameId).unwrap()
+    val reverse = compiler.moduleScopeBindings.unwrap().extensionId(moduleId: 0U64, nameId: compiler.internBytes(s: "F").nameId).unwrap()
+    // A deliberately colliding numeric extension tag must not be enabled by
+    // a trait view: kind, rather than the integer alone, controls activation.
+    if scenario == "traitSourceActivation" {
+        val sourceTrait = compiler.decls.traitAt(index: 0U64)
+        val targetTrait = compiler.decls.traitAt(index: 1U64)
+        compiler.decls.registerConform(<Conform sourceModule=0U64 typeStart=sourceTrait.nameStart typeLen=sourceTrait.nameLen typeId=sourceTrait.nameId subjectTraitOwner=sourceTrait.nameStart typeArity=1U64 subjectArgs=compiler.pushConformTypes(types: [integer]) traitStart=targetTrait.nameStart traitLen=targetTrait.nameLen traitArgs=compiler.pushConformTypes(types: [integer]) derived=false extId=trait.nameId />)
+    }
     val selected = if scenario == "traitSourceActivation" {
-        give [expectedSource, <ResolvedViewSource surfaceId=reverse.nameId />]
-    } else if scenario == "genericCycleControl" { give [<ResolvedViewSource surfaceId=extension.nameId />] }
-    else { give [<ResolvedViewSource surfaceId=extension.nameId />, <ResolvedViewSource surfaceId=reverse.nameId />] }
+        give [expectedSource, <ResolvedViewSource surfaceId=reverse />]
+    } else if scenario == "genericCycleControl" { give [<ResolvedViewSource surfaceId=extension />] }
+    else { give [<ResolvedViewSource surfaceId=extension />, <ResolvedViewSource surfaceId=reverse />] }
     val inner = compiler.typeRefWithViewSources(ref: integer, sources: selected)
     val viewed = if scenario == "traitSourceActivation" { give inner } else {
         give compiler.typeRefWithViewSources(ref: base, sources: [<ResolvedViewSource surfaceId=trait.nameId traitInstance=<TraitInstanceKey owner=trait.nameStart positionalArgs=[inner] /> />])

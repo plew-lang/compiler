@@ -61,8 +61,8 @@ fn viewArgument(compiler: inout Comp, integerName: Bind, scenario: String, secon
         val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
         val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
         val member = compiler.internBytes(s: "Item")
-        val extension = compiler.internBytes(s: if second { give "F" } else { give "E" })
-        return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] projectionReceiver=integer assocTraitStart=declaration.nameStart assocTraitLen=declaration.nameLen assocTraitId=declaration.nameId assocNameId=member.nameId hasAssocTraitDecl=true assocTraitDeclOffset=declaration.nameStart viewSources=[<ResolvedViewSource surfaceId=extension.nameId />] />)
+        val extension = compiler.moduleScopeBindings.unwrap().extensionId(moduleId: 0U64, nameId: compiler.internBytes(s: if second { give "F" } else { give "E" }).nameId).unwrap()
+        return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] projectionReceiver=integer assocTraitStart=declaration.nameStart assocTraitLen=declaration.nameLen assocTraitId=declaration.nameId assocNameId=member.nameId hasAssocTraitDecl=true assocTraitDeclOffset=declaration.nameStart viewSources=[<ResolvedViewSource surfaceId=extension />] />)
     }
     if scenario == "viewSameSpellingDistinct" {
         val name = compiler.internBytes(s: "P")
@@ -81,17 +81,17 @@ fn viewArgument(compiler: inout Comp, integerName: Bind, scenario: String, secon
         val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
         return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=[<ResolvedViewSource surfaceId=declaration.nameId traitInstance=<TraitInstanceKey owner=declaration.nameStart positionalArgs=[] /> />] />)
     }
-    val extension = compiler.internBytes(s: "E")
+    val extension = compiler.moduleScopeBindings.unwrap().extensionId(moduleId: 0U64, nameId: compiler.internBytes(s: "E").nameId).unwrap()
     if second && scenario == "extensionLegacy" {
-        return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewExtId=extension.nameId viewIds=[extension.nameId] />)
+        return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewExtId=extension viewIds=[extension] />)
     }
-    val other = compiler.internBytes(s: "F")
+    val other = compiler.moduleScopeBindings.unwrap().extensionId(moduleId: 0U64, nameId: compiler.internBytes(s: "F").nameId).unwrap()
     val sources = if scenario == "extensionSet" {
         give if second {
-            give [<ResolvedViewSource surfaceId=other.nameId />, <ResolvedViewSource surfaceId=extension.nameId />, <ResolvedViewSource surfaceId=other.nameId />]
-        } else { give [<ResolvedViewSource surfaceId=extension.nameId />, <ResolvedViewSource surfaceId=other.nameId />] }
-    } else if second && scenario == "extensionDistinct" { give [<ResolvedViewSource surfaceId=other.nameId />] }
-    else { give [<ResolvedViewSource surfaceId=extension.nameId />] }
+            give [<ResolvedViewSource surfaceId=other />, <ResolvedViewSource surfaceId=extension />, <ResolvedViewSource surfaceId=other />]
+        } else { give [<ResolvedViewSource surfaceId=extension />, <ResolvedViewSource surfaceId=other />] }
+    } else if second && scenario == "extensionDistinct" { give [<ResolvedViewSource surfaceId=other />] }
+    else { give [<ResolvedViewSource surfaceId=extension />] }
     return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=sources />)
 }
 

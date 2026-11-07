@@ -35,7 +35,7 @@ fn main() {
         give "fn target(value: S#P[I64]) {{}}"
     }
     val text = "trait P[K] {{ type Item }} trait Pair[K,L] {{}} trait Zero {{}} struct Box[T] {{}} struct S {{}} impl S as P[I64] {{ type Item=I64 }} impl S as P[Bool] {{ type Item=Bool }} impl S as P[Box[I64]] {{ type Item=I64 }} impl S as Pair[I64,Bool] {{}} impl S as Zero {{}} extension E {{ pub impl S {{ fn marker() {{}} }} }} " + target + " fn main() {{}}"
-    val expectedDiagnostic = if scenario == "named" { give "trait view source accepts positional type arguments only" } else if scenario == "extensionArguments" { give "an extension view does not take type arguments" } else if scenario == "unknown" { give "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)" } else { give "a trait view requires all positional type arguments" }
+    val expectedDiagnostic = if scenario == "named" { give "trait view source accepts positional type arguments only" } else if scenario == "extensionArguments" { give "an extension view does not take type arguments" } else if scenario == "unknown" { give "unknown view source (spec/09)" } else { give "a trait view requires all positional type arguments" }
     mut val compiler = <Comp />
     match analyzeFrontend(c: inout compiler, input: (if file { give <FrontendInput.File path="tests/compiler/frontend/fixtures/ImplTraitInstances/" + path + ".pw" /> } else { give <FrontendInput.Text text=text path="LoweredViews.pw" /> }), sources: <SourceAccess stdRoot="std/".bytes() />) {
         Result.Err(error: val diagnostic) => {

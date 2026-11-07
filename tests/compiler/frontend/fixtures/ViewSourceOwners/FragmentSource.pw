@@ -1,0 +1,3 @@
+use ./Shared only { S }
+pub extension Origin { pub impl S { fn number() -> I64 { return 41I64 } } }
+pub extension Origin { pub impl S { fn other() -> I64 { return 42I64 } assoc fn answer() -> I64 { return 42I64 } } }

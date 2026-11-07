@@ -169,3 +169,23 @@ compatibility, argument recovery and recursive view-cycle consumers. Run
 produce empty stderr. The source setup deliberately declares a trait and an
 extension with the same spelling to check that resolved source kind controls
 activation. It does not certify source parsing of parameterized view syntax.
+
+
+### Canonical extension identities (manual)
+
+`ExtensionFinalIdentity.pw`, `LegacyExtensionIdentity.pw` and
+`ExtensionIdentityBindings.pw` each print their companion golden without arguments.
+They exercise the compatibility final resolver, materialized AST conformance
+registration and sealed module-binding identity respectively. These are manual
+native diagnostics, not normal-suite coverage. The first covers value and
+associated resolver APIs; it does not cover parser-to-associated-call dispatch.
+
+`ViewSourceOwnerAdmission.pw` takes `TraitOnly`, `ExtensionOnly`,
+`DistinctSourceKinds` or `DistinctExtensionOwners` and checks actual file graph
+admission. Run those source fixtures with `--run` as well to distinguish selected
+bodies (`11`, `22`, `11/22`, `22/33`). `FragmentAliasUse.pw` adds two fragments and
+two alias/republication paths and must print `41/42`. The related
+`FragmentAssociatedUse.pw` is a preserved failing associated-call probe owned by
+com-4k31; it is not included among passing identity controls. The existing
+normal `extension_assoc_source_select.pw` provides the smaller same-module
+associated-call control. See the task evidence for candidates and exact results.

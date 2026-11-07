@@ -487,3 +487,26 @@ unused competing spelling-based view validators. Kind-erased compatibility IDs
 must not let a trait source activate an unrelated extension with an equal numeric
 ID. Retain empty declaration existence independently of receiver applicability.
 This is existing R2/R3 scope, not a call-site-only module filter workaround.
+
+
+## Canonical Identity WIP Verification
+
+[Finite migration evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/canonical-extension-identity-increment.json)
+records the canonical binding identity across impl/view/callable and cycle/proof
+activation. Owner/kind native4 pass. A direct value/associated final-resolver
+probe executes RED0→GREEN1 after removing the display-span roundtrip; a legacy
+AST Conform probe executes RED0→GREEN1 after replacing spelling interning with
+the same extension-only binding query. Both have successful compile/link/runtime
+and unchanged per-run inputs; setup failures are excluded. Neutral followup
+review verified the two missed paths are repaired and accepted those finite
+contrasts. These are not full conformance dispatch or task completion evidence.
+
+Before closing R2/R3, reconcile existing internal setup for canonical IDs in
+TraitCycleCanonicalIdentity, TraitCyclePatternInputs and SemanticTraitViewConsumers;
+preserve their original comparison/cycle/domain assertions, and replace the
+newly invalid same-module trait/extension name collision with a valid independent
+kind contrast. LoweredTraitViewSources keeps its unknown-name Source assertion
+at the new shared admission diagnostic. Do not rewrite opaque numeric IDs in
+pure structural comparison tests merely because semantic source IDs changed.
+Expanded fragment/reexport/conformance-only/numeric-collision controls, fresh
+compiler execution, exact Syntax pin and whole-task gates remain required.
