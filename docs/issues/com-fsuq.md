@@ -167,3 +167,16 @@ old/new eight inputs and producer preconditions. No skip/deletion or new ABI
 support. met-2qbc remains future work. This is not completion of this task:
 remaining producer/classifier integration, runner controls and applicable gates
 plus independent whole-task review still apply.
+
+## Isolated Worker Control Maintenance
+
+Normal gate 20261107T043419-test-a4db4e stops before compiler fixtures because
+its ASan corpus unit setup omits the production compiler_failure_result.py
+helper. The old status double also predates the private Source channel wired
+in 323e1146. Correct the internal setup/double, preserving the actual worker
+and strict status/domain/diagnostic requirements; this is not a new product
+semantic RED or a relaxation of classification.
+[Scoped correction evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/isolated-worker-source-receipt-repair.json)
+records 59 controlled PASS cases and empty stderr, including missing/Input/
+Internal receipts and Source-plus-trace-only refusal. Independent impact
+review and normal-gate recovery are pending. This does not close com-fsuq.

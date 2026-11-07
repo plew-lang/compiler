@@ -3,13 +3,28 @@
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 def install_supervisors(root):
     # Isolated workers must run the production supervisors and their shared module.
-    for name in ('scripts/support/watch-command.py', 'scripts/support/trace-command.py', 'scripts/support/process_watch.py'):
+    for name in ('scripts/support/watch-command.py', 'scripts/support/trace-command.py', 'scripts/support/process_watch.py', 'scripts/support/compiler_failure_result.py'):
         (root / name).parent.mkdir(parents=True, exist_ok=True)
         (root / name).write_bytes((Path(__file__).resolve().parents[2] / name).read_bytes())
+
+def write_compile_double(path, code, diagnostic='plewc: error: diagnostic', domain='source'):
+    # A successful negative-test double must publish the same private Source
+    # receipt as the real compiler. Exit1 and rendered text alone are not proof.
+    path.write_text('#!' + sys.executable + '\n' + f'''import os, sys
+print({diagnostic!r}, file=sys.stderr)
+domain = {domain!r}
+descriptor = os.environ.get('_PLEW_COMPILER_FAILURE_FD')
+identity = os.environ.get('_PLEW_COMPILER_FAILURE_ID')
+if descriptor is not None and identity is not None and domain is not None:
+    os.write(int(descriptor), ('plew.compiler.failure.v1\\n' + identity + '\\n' + domain + '\\n').encode())
+sys.exit({code})
+''')
+    path.chmod(0o755)
 
 source = (Path(__file__).resolve().parents[2] / 'tests/harness/test.sh').read_text()
 # Preparation must compile once, clean up, and stop on failure (no stale object).
@@ -193,8 +208,7 @@ with tempfile.TemporaryDirectory(prefix='plew-asan-compile-') as directory:
     compiler = root/'plewc_asan'
     for reject in (False, True):
         for code in (0, 1, 7, 143):
-            compiler.write_text(f'#!/bin/sh\necho "plewc: error: diagnostic" >&2\nexit {code}\n')
-            compiler.chmod(0o755)
+            write_compile_double(compiler, code)
             path = 'tests/fixtures/reject/fixture.pw' if reject else 'tests/fixtures/run/fixture.pw'
             result = subprocess.run(['sh','-c','f=$1; err=$2\n'+worker,'sh',path,str(root/'error')],
                                     cwd=root,capture_output=True,text=True)
@@ -203,8 +217,14 @@ with tempfile.TemporaryDirectory(prefix='plew-asan-compile-') as directory:
             assert result.stdout.startswith('RAN ' if expected else 'FAIL '), result
             print(f'PASS asan-compile/reject={reject}/exit={code}', flush=True)
 
-    compiler.write_text('#!/bin/sh\necho "[trace-phase] fixture:start" >&2\nexit 1\n')
-    compiler.chmod(0o755)
+    for domain in ('input', 'internal', None):
+        write_compile_double(compiler, 1, domain=domain)
+        result = subprocess.run(['sh','-c','f=$1; err=$2\n'+worker,'sh','tests/fixtures/reject/fixture.pw',str(root/'error')],
+                                cwd=root,capture_output=True,text=True)
+        assert result.returncode == 0 and result.stdout.startswith('FAIL '), result
+        print(f'PASS asan-compile/non-source={domain}', flush=True)
+
+    write_compile_double(compiler, 1, diagnostic='[trace-phase] fixture:start')
     result = subprocess.run(['sh','-c','f=$1; err=$2\n'+worker,'sh','tests/fixtures/reject/fixture.pw',str(root/'error')],
                             cwd=root,capture_output=True,text=True)
     assert result.returncode == 0 and result.stdout.startswith('FAIL '), result
