@@ -139,6 +139,26 @@ records successful build 20261107T023851-build-3d74c1 and all seven fixture/86
 native case executions passing. binderIndex is read-only. Completion gates and
 independent review are still outstanding; this checkpoint does not certify them.
 
+## Independent Completion Review
+
+Neutral read-only review of b7083d0e derived the guarantees from spec/design
+before inspecting the implementation and evidence. It found two scoped defects:
+directional unification ignores non-designated ParamIds, and postorder view
+normalization does not consume canonical nominal owners established by admission.
+Executed counterexamples confirm the former (wrong true result) and the latter
+(mixed stamped/unstamped duplicates rejected, also in reverse order and nested).
+Same-identity/designated-binder and already-stamped controls remain GREEN.
+Repair and fresh validation are in progress; the review does not certify closure.
+
+The normalized result must publish established declaration identity, rather than
+make later equality repeat lookup or depend on private admission tables. Raw
+input rows remain immutable. Rigid parameter heads compare lexical IDs, while
+only explicitly designated pattern binders may bind. Alias/original-name and
+same-spelled foreign-owner controls remain part of the required reconciliation.
+The known projection/record head relation belongs to com-bvc8; a selector with
+those arguments inherits that boundary, so results do not claim universal
+projection/record identity is repaired.
+
 ## Remaining Work
 
 Reconcile qualified-binder handling, alias/owner

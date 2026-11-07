@@ -101,6 +101,18 @@ impl Comp {
         }
         mut val normalized = ref
         if changed { normalized = self.rebuildTypeTermChildren(ref: ref, children: children) }
+        // Publish the declaration identity established by admission into the
+        // immutable result. Later structural consumers must not repeat lookup
+        // or require this boundary's private owner table to compare children.
+        match facts.nominalOwners.get(key: ref) {
+            Optional.Some(v: val owner) => {
+                val term = self.arena.typeAt(index: normalized)
+                if !term.hasDecl || term.declOffset != owner {
+                    normalized = self.pushType(t: <TypeRef nameStart=term.nameStart nameLen=term.nameLen nameId=term.nameId paramId=term.paramId args=term.args isRecord=term.isRecord recordFieldLabels=term.recordFieldLabels recordFieldTerms=term.recordFieldTerms viewExtId=term.viewExtId viewIds=term.viewIds viewSources=term.viewSources isAny=term.isAny argLabels=term.argLabels assocTraitStart=term.assocTraitStart assocTraitLen=term.assocTraitLen assocTraitId=term.assocTraitId assocTraitArgs=term.assocTraitArgs assocTraitArgLabels=term.assocTraitArgLabels assocNameStart=term.assocNameStart assocNameLen=term.assocNameLen assocNameId=term.assocNameId projectionReceiver=term.projectionReceiver isSendable=term.isSendable isDiverging=term.isDiverging hasDecl=true declOffset=owner hasAssocTraitDecl=term.hasAssocTraitDecl assocTraitDeclOffset=term.assocTraitDeclOffset siteOffset=term.siteOffset />)
+                }
+            }
+            Optional.None => {}
+        }
         // A projection's explicit receiver owns its view set, including any
         // normalization. Never validate or compare the parent's mirror again.
         if self.arena.typeTermAt(index: normalized).assocNameId == 0U64 {
@@ -503,7 +515,12 @@ pub impl Comp {
         if a == 0U64 || b == 0U64 || a >= self.arena.typeCount() || b >= self.arena.typeCount() { return a == b }
         val ta: TypeTerm = self.arena.typeTermAt(index: a)
         val tb: TypeTerm = self.arena.typeTermAt(index: b)
-        if ((ta.hasDecl && tb.hasDecl) && ta.declOffset != tb.declOffset) || (!(ta.hasDecl && tb.hasDecl) && ta.nameId != tb.nameId) || (!ignoreTopView && !(self.typeTermViewSourceHeadsEqual(a: a, b: b))) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId || ta.args.len != tb.args.len || ta.assocTraitArgs.len != tb.assocTraitArgs.len { return false }
+        if ta.paramId != 0U64 || tb.paramId != 0U64 {
+            if ta.paramId != tb.paramId { return false }
+        } else {
+            if ((ta.hasDecl && tb.hasDecl) && ta.declOffset != tb.declOffset) || (!(ta.hasDecl && tb.hasDecl) && ta.nameId != tb.nameId) { return false }
+        }
+        if (!ignoreTopView && !(self.typeTermViewSourceHeadsEqual(a: a, b: b))) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId || ta.args.len != tb.args.len || ta.assocTraitArgs.len != tb.assocTraitArgs.len { return false }
         mut val i: U64 = 0U64
         while i < ta.args.len {
             if !(self.unifyPatterns(a: self.arena.typeArgumentAt(index: ta.args.start + i), aSide: aSide, b: self.arena.typeArgumentAt(index: tb.args.start + i), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }

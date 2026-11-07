@@ -42,6 +42,16 @@ fn main() {
     val argument = if scenario == "closedness" || scenario == "environment" || scenario == "witness" || scenario == "legacyGrounding" || scenario == "genericBinding" || scenario == "genericBindingControl" || scenario == "occursView" || scenario == "callerOwned" { give parameter } else if scenario == "nestedEnvironment" { give nested } else if scenario == "projectionNormalization" { give validProjection } else if scenario == "projectionPresence" { give projection } else { give integer }
     val source = <ResolvedViewSource surfaceId=traitName.nameId traitInstance=<TraitInstanceKey owner=owner.nameStart positionalArgs=[argument] /> />
     val viewed = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] hasDecl=true declOffset=declaration.defOffset viewSources=[source] />)
+    if scenario == "rigidMatching" || scenario == "rigidMatchingControl" || scenario == "designatedMatchingControl" {
+        val identity = if scenario == "rigidMatchingControl" { give binding.paramId } else { give compiler.nextParamId }
+        val other = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=identity args=[] />)
+        val pattern = compiler.typeRefWithViewSources(ref: receiver, sources: [source.withArguments(arguments: [parameter])])
+        val actual = compiler.typeRefWithViewSources(ref: receiver, sources: [source.withArguments(arguments: [other])])
+        val scope = if scenario == "designatedMatchingControl" { give [binding] } else { give [] }
+        val same = compiler.typeRefListPatternMatches(pattern: <PatternTypeInput.Values values=[pattern] />, patternParams: <PatternBindInput.Values values=scope />, actual: <PatternTypeInput.Values values=[actual] />)
+        print(if scenario == "rigidMatching" { give !same } else { give same })
+        return
+    }
     if scenario == "rigidParamScope" || scenario == "rigidParamScopeControl" {
         val identity = if scenario == "rigidParamScopeControl" { give binding.paramId } else { give compiler.nextParamId }
         val other = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=identity args=[] />)

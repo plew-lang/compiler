@@ -11,6 +11,36 @@ fn appendEdge(compiler: inout Comp, subject: TraitDef, target: TraitDef, argumen
 }
 
 fn viewArgument(compiler: inout Comp, integerName: Bind, scenario: String, second: Bool) -> U64 {
+    if scenario == "viewOwnerAlias" || scenario == "viewOwnerAliasReverse" || scenario == "viewOwnerAliasNested" || scenario == "viewOwnerForeign" || scenario == "viewOwnerMixed" || scenario == "viewOwnerMixedReverse" || scenario == "viewOwnerNested" || scenario == "viewOwnerStampedControl" {
+        val name = compiler.internBytes(s: "ParameterView")
+        val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
+        val boxName = compiler.internBytes(s: "Box")
+        val alias = compiler.internBytes(s: "AliasBox")
+        val aliasScenario = scenario == "viewOwnerAlias" || scenario == "viewOwnerAliasReverse" || scenario == "viewOwnerAliasNested" || scenario == "viewOwnerForeign"
+        val box = if aliasScenario {
+            val identity = compiler.typeDeclIdentityAt(useMod: 0U64, start: alias.nameStart, len: alias.nameLen)
+            give compiler.arena.structAt(index: compiler.arena.structIndexByOffset(offset: identity.nameStart))
+        } else { give compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: boxName.nameId)) }
+        val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
+        val stamped = compiler.pushType(t: <TypeRef nameStart=box.nameStart nameLen=box.nameLen args=[integer] hasDecl=true declOffset=box.defOffset />)
+        val legacy = if scenario == "viewOwnerForeign" {
+            val foreign = compiler.internBytes(s: "ForeignBox")
+            val identity = compiler.typeDeclIdentityAt(useMod: 0U64, start: foreign.nameStart, len: foreign.nameLen)
+            // Equal spelling, distinct established declaration owners.
+            give compiler.pushType(t: <TypeRef nameStart=box.nameStart nameLen=box.nameLen args=[integer] hasDecl=true declOffset=identity.nameStart />)
+        } else {
+            val written = if aliasScenario { give alias } else { give boxName }
+            give compiler.pushType(t: <TypeRef nameStart=written.nameStart nameLen=written.nameLen args=[integer] />)
+        }
+        val canonicalSource = <ResolvedViewSource surfaceId=name.nameId traitInstance=<TraitInstanceKey owner=declaration.nameStart positionalArgs=[stamped] /> />
+        val legacySource = canonicalSource.withArguments(arguments: [legacy])
+        val sources = if second || scenario == "viewOwnerStampedControl" { give [canonicalSource, canonicalSource] } else if scenario == "viewOwnerMixedReverse" || scenario == "viewOwnerAliasReverse" { give [legacySource, canonicalSource] } else { give [canonicalSource, legacySource] }
+        val viewed = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=sources />)
+        if scenario == "viewOwnerNested" || scenario == "viewOwnerAliasNested" {
+            return compiler.pushType(t: <TypeRef nameStart=box.nameStart nameLen=box.nameLen args=[viewed] hasDecl=true declOffset=box.defOffset />)
+        }
+        return viewed
+    }
     if scenario == "viewArgumentSame" || scenario == "viewArgumentDistinct" || scenario == "viewArgumentDuplicate" || scenario == "viewNestedDuplicate" {
         val name = compiler.internBytes(s: "ParameterView")
         val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
@@ -68,7 +98,7 @@ fn viewArgument(compiler: inout Comp, integerName: Bind, scenario: String, secon
 fn main() {
     val scenario = argAt(1I64)
     mut val compiler = <Comp />
-    if scenario == "viewSameSpellingDistinct" {
+    if scenario == "viewOwnerAlias" || scenario == "viewOwnerAliasReverse" || scenario == "viewOwnerAliasNested" || scenario == "viewOwnerForeign" || scenario == "viewSameSpellingDistinct" {
         analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/TraitCycleViews/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
     } else {
     analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[Item] {{}} trait B[Item] {{}} struct Box[T] {{}} struct Other[T] {{}} trait FirstView {{ type Item }} trait SecondView {{}} trait ParameterView[Kind] {{}} extension E {{ impl A[Bool] as B[Bool] {{}} }} extension F {{ impl A[Bool] as B[Bool] {{}} }} fn main() {{}}" path="CanonicalInput.pw" />, sources: <SourceAccess />).unwrap()
@@ -79,7 +109,7 @@ fn main() {
     val box = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: boxName.nameId))
     val integerName = compiler.internBytes(s: "I64")
     val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
-    val viewScenario = scenario == "viewNestedDuplicate" || scenario == "viewArgumentSame" || scenario == "viewArgumentDistinct" || scenario == "viewArgumentDuplicate" || scenario == "projectionMirror" || scenario == "viewSameSpellingDistinct" || scenario == "viewSame" || scenario == "viewDistinct" || scenario == "extensionLegacy" || scenario == "extensionSet" || scenario == "extensionDistinct"
+    val viewScenario = scenario == "viewOwnerAlias" || scenario == "viewOwnerAliasReverse" || scenario == "viewOwnerAliasNested" || scenario == "viewOwnerForeign" || scenario == "viewOwnerMixed" || scenario == "viewOwnerMixedReverse" || scenario == "viewOwnerNested" || scenario == "viewOwnerStampedControl" || scenario == "viewNestedDuplicate" || scenario == "viewArgumentSame" || scenario == "viewArgumentDistinct" || scenario == "viewArgumentDuplicate" || scenario == "projectionMirror" || scenario == "viewSameSpellingDistinct" || scenario == "viewSame" || scenario == "viewDistinct" || scenario == "extensionLegacy" || scenario == "extensionSet" || scenario == "extensionDistinct"
     val recordScenario = scenario == "recordSame" || scenario == "recordLabelDistinct" || scenario == "recordChildDistinct"
     val field = compiler.internBytes(s: "field")
     val canonical = if viewScenario {
@@ -117,7 +147,8 @@ fn main() {
             if !distinct { panic("same canonical owner did not close the cycle") }
         }
         Result.Err(error: val diagnostic) => {
-            if distinct || diagnostic.message != "trait-to-trait conformance cycle" {
+            val expected = if scenario == "viewOwnerForeign" { give "invalid pattern type input: multiple trait view selectors" } else { give "trait-to-trait conformance cycle" }
+            if distinct || diagnostic.message != expected {
                 emitDiagnostic(diagnostic: diagnostic)
                 panic("wrong canonical identity result")
             }

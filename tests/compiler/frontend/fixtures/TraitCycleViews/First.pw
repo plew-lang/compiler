@@ -1,1 +1,2 @@
 pub trait P {}
+pub struct Box[T] {}
