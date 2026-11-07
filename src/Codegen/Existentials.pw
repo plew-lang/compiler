@@ -62,7 +62,7 @@ inout fn existentialTypesCompatible(sourceRef: U64, targetRef: U64) -> Bool {
     if !source.isAny || !target.isAny || !source.hasDecl || !target.hasDecl || source.declOffset != target.declOffset { return false }
     if target.isSendable && !source.isSendable { return false }
     if source.paramId != target.paramId || source.assocNameId != 0U64 || target.assocNameId != 0U64 || source.isDiverging != target.isDiverging { return false }
-    if source.viewExtId != target.viewExtId || !self.sameTypeTermViewIds(a: sourceRef, b: targetRef) { return false }
+    if source.viewExtId != target.viewExtId || !self.typeTermViewSourcesEqual(a: sourceRef, b: targetRef) { return false }
     val traitIndex = self.decls.traitIndexByOffset(offset: source.declOffset)
     if traitIndex >= self.decls.traitCount() { return false }
     val trait = self.decls.traitAt(index: traitIndex)

@@ -529,7 +529,27 @@ pub impl Comp {
         return 0U64
     }
 
-    inout fn sameTypeTermViewIds(a: U64, b: U64) -> Bool {
+    inout fn typeTermViewSourcesEqual(a: U64, b: U64) -> Bool {
+        if a >= self.arena.typeTermCount() || b >= self.arena.typeTermCount() { return false }
+        val count = self.typeTermViewSourceCount(ref: a)
+        if count != self.typeTermViewSourceCount(ref: b) { return false }
+        mut val index = 0U64
+        while index < count {
+            val wanted = self.typeTermViewSourceAt(ref: a, index: index)
+            mut val found = false
+            mut val other = 0U64
+            while other < count {
+                if self.semanticViewSourceEq(a: wanted, b: self.typeTermViewSourceAt(ref: b, index: other)) { found = true
+                    break }
+                other += 1U64
+            }
+            if !found { return false }
+            index += 1U64
+        }
+        return true
+    }
+
+    inout fn typeTermViewSourceHeadsEqual(a: U64, b: U64) -> Bool {
         if a >= self.arena.typeTermCount() || b >= self.arena.typeTermCount() { return false }
         val count = self.typeTermViewSourceCount(ref: a)
         if count != self.typeTermViewSourceCount(ref: b) { return false }
@@ -567,7 +587,7 @@ pub impl Comp {
         // All three empty representations give a zero source count. Both
         // empty sets therefore match without re-reading the same term rows.
         if ta.viewExtId != 0U64 || ta.viewIds.len != 0U64 || ta.viewSources.len != 0U64 || tb.viewExtId != 0U64 || tb.viewIds.len != 0U64 || tb.viewSources.len != 0U64 {
-            if !(self.sameTypeTermViewIds(a: a, b: b)) { return false }
+            if !(self.typeTermViewSourceHeadsEqual(a: a, b: b)) { return false }
         }
         if ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId { return false }
         return true

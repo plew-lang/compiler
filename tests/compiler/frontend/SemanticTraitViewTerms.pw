@@ -2,7 +2,7 @@
 // selector, publication, equality and traversal; source syntax is a later task.
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
 use ../../../src/SourceAccess only { SourceAccess }
-use ../../../src/Ir only { TypeRef, ResolvedViewSource, TraitInstanceKey, Bind, PatternBindInput, WitnessBind, WitnessMatch, InstanceEnvironment }
+use ../../../src/Ir only { TypeRef, ResolvedViewSource, TraitInstanceKey, Bind, PatternBindInput, WitnessBind, WitnessMatch, InstanceEnvironment, PatternTypeInput }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
 
@@ -39,9 +39,38 @@ fn main() {
     val projection = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] projectionReceiver=integer assocTraitStart=owner.nameStart assocTraitLen=owner.nameLen assocTraitId=owner.nameId assocTraitArgs=[integer] assocNameId=member.nameId hasAssocTraitDecl=true assocTraitDeclOffset=owner.nameStart />)
     val receiver = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] hasDecl=true declOffset=declaration.defOffset />)
     val validProjection = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] projectionReceiver=receiver assocTraitStart=owner.nameStart assocTraitLen=owner.nameLen assocTraitId=owner.nameId assocTraitArgs=[integer] assocNameId=member.nameId hasAssocTraitDecl=true assocTraitDeclOffset=owner.nameStart />)
-    val argument = if scenario == "closedness" || scenario == "environment" || scenario == "witness" || scenario == "legacyGrounding" || scenario == "callerOwned" { give parameter } else if scenario == "nestedEnvironment" { give nested } else if scenario == "projectionNormalization" { give validProjection } else if scenario == "projectionPresence" { give projection } else { give integer }
+    val argument = if scenario == "closedness" || scenario == "environment" || scenario == "witness" || scenario == "legacyGrounding" || scenario == "genericBinding" || scenario == "genericBindingControl" || scenario == "occursView" || scenario == "callerOwned" { give parameter } else if scenario == "nestedEnvironment" { give nested } else if scenario == "projectionNormalization" { give validProjection } else if scenario == "projectionPresence" { give projection } else { give integer }
     val source = <ResolvedViewSource surfaceId=traitName.nameId traitInstance=<TraitInstanceKey owner=owner.nameStart positionalArgs=[argument] /> />
     val viewed = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] hasDecl=true declOffset=declaration.defOffset viewSources=[source] />)
+    if scenario == "rigidViewMismatch" || scenario == "alphaViewMismatch" || scenario == "completeViewSet" || scenario == "genericBinding" || scenario == "genericBindingControl" {
+        val actual = compiler.typeRefWithViewSources(ref: receiver, sources: [otherSource])
+        val pattern = if scenario != "genericBinding" && scenario != "genericBindingControl" { give compiler.typeRefWithViewSources(ref: receiver, sources: [integerSource]) } else { give compiler.typeRefWithViewSources(ref: receiver, sources: [source]) }
+        if scenario == "completeViewSet" {
+            print(!compiler.typeTermViewSourcesEqual(a: pattern, b: actual))
+            return
+        }
+        if scenario == "alphaViewMismatch" {
+            print(!compiler.typeRefsAlphaEq(a: pattern, b: actual, aParams: [], bParams: []))
+            return
+        }
+        val patterns = if scenario == "genericBinding" || scenario == "genericBindingControl" { give [pattern, parameter] } else { give [pattern] }
+        val actuals = if scenario == "genericBinding" { give [actual, integer] } else if scenario == "genericBindingControl" { give [actual, boolean] } else { give [actual] }
+        // P[T] binds T to Bool; the later I64 must conflict with that same T.
+        val matches = compiler.typeRefListPatternMatches(pattern: <PatternTypeInput.Values values=patterns />, patternParams: <PatternBindInput.Values values=[binding] />, actual: <PatternTypeInput.Values values=actuals />)
+        print(if scenario == "genericBindingControl" { give matches } else { give !matches })
+        return
+    }
+    if scenario == "occursView" {
+        // Reject T = S#P[T] through the actual occurs-check path.
+        print(compiler.occursInPattern(side: 0U64, binderId: binding.paramId, ref: viewed, refSide: 0U64, aParams: <PatternBindInput.Values values=[binding] />, bParams: <PatternBindInput.Values values=[] />, binds: []))
+        return
+    }
+    if scenario == "duplicateBuilder" {
+        val duplicate = compiler.typeRefWithViewSources(ref: receiver, sources: [integerSource, useSource])
+        val single = compiler.typeRefWithViewSources(ref: receiver, sources: [integerSource])
+        print(compiler.typeRefEq(a: duplicate, b: single) && compiler.typeTermViewSourceCount(ref: duplicate) == 1U64)
+        return
+    }
     if scenario == "environment" || scenario == "nestedEnvironment" || scenario == "callerOwned" {
         val replacement = if scenario == "callerOwned" { give nested } else { give integer }
         val grounded = compiler.groundTermInEnvironment(ref: viewed, params: [binding], values: [replacement])

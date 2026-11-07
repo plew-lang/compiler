@@ -335,7 +335,7 @@ pub impl Comp {
         // Registration runs before the visibility pass annotates every
         // TypeRef with a declaration owner.  Compare owner identity whenever
         // both terms already carry it; later semantic consumers require it.
-        if ((ta.hasDecl && tb.hasDecl) && ta.declOffset != tb.declOffset) || (!(ta.hasDecl && tb.hasDecl) && ta.nameId != tb.nameId) || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging { return false }
+        if ((ta.hasDecl && tb.hasDecl) && ta.declOffset != tb.declOffset) || (!(ta.hasDecl && tb.hasDecl) && ta.nameId != tb.nameId) || !(self.typeTermViewSourceHeadsEqual(a: a, b: b)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging { return false }
         if ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId { return false }
         if ta.args.count() != tb.args.count() { return false }
         mut val i: U64 = 0
@@ -352,6 +352,15 @@ pub impl Comp {
             if i < tb.assocTraitArgLabels.count() { bl = tb.assocTraitArgLabels[i] }
             if al != bl || !(self.typeRefsAlphaEq(a: ta.assocTraitArgs[i], b: tb.assocTraitArgs[i], aParams: aParams, bParams: bParams)) { return false }
             i += 1U64
+        }
+        if ta.assocNameId == 0U64 {
+            val count = self.typeTermRefViewArgumentCount(ref: a)
+            if count != self.typeTermRefViewArgumentCount(ref: b) { return false }
+            i = 0U64
+            while i < count {
+                if !self.typeRefsAlphaEq(a: self.typeTermRefViewArgumentAt(ref: a, index: i), b: self.typeTermRefViewArgumentAt(ref: b, index: i), aParams: aParams, bParams: bParams) { return false }
+                i += 1U64
+            }
         }
         return true
     }
@@ -387,36 +396,6 @@ pub impl Comp {
         return self.binderIndex(params: params, nameId: term.nameId)
     }
 
-    // The raw selector relation is an unordered set, including when the
-    // stored range contains duplicates. Keep it distinct from resolved views.
-    fn sameTypeTermViewIdSet(a: TypeViewIdRange, b: TypeViewIdRange) -> Bool {
-        mut val index: U64 = 0U64
-        while index < a.len {
-            val selector = self.arena.typeViewIdAt(index: a.start + index)
-            mut val found = false
-            mut val other: U64 = 0U64
-            while other < b.len {
-                if self.arena.typeViewIdAt(index: b.start + other) == selector { found = true }
-                other += 1U64
-            }
-            if !found { return false }
-            index += 1U64
-        }
-        index = 0U64
-        while index < b.len {
-            val selector = self.arena.typeViewIdAt(index: b.start + index)
-            mut val found = false
-            mut val other: U64 = 0U64
-            while other < a.len {
-                if self.arena.typeViewIdAt(index: a.start + other) == selector { found = true }
-                other += 1U64
-            }
-            if !found { return false }
-            index += 1U64
-        }
-        return true
-    }
-
     inout fn occursInPattern(side: U64, binderId: U64, ref: U64, refSide: U64, aParams: PatternBindInput, bParams: PatternBindInput, binds: Array[UnifyBind]) -> Bool {
         mut val params: PatternBindInput = aParams
         if refSide != 0U64 { params = bParams }
@@ -437,16 +416,10 @@ pub impl Comp {
             return false
         }
         if ref == 0U64 || ref >= self.arena.typeCount() { return false }
-        val t: TypeTerm = self.arena.typeTermAt(index: ref)
-        mut val i: U64 = 0U64
-        while i < t.args.len {
-            if self.occursInPattern(side: side, binderId: binderId, ref: self.arena.typeArgumentAt(index: t.args.start + i), refSide: refSide, aParams: aParams, bParams: bParams, binds: binds) { return true }
-            i += 1U64
-        }
-        i = 0U64
-        while i < t.assocTraitArgs.len {
-            if self.occursInPattern(side: side, binderId: binderId, ref: self.arena.typeAssocArgumentAt(index: t.assocTraitArgs.start + i), refSide: refSide, aParams: aParams, bParams: bParams, binds: binds) { return true }
-            i += 1U64
+        mut val index = 0U64
+        while index < self.typeTermRefChildCount(ref: ref) {
+            if self.occursInPattern(side: side, binderId: binderId, ref: self.typeTermRefChildRef(ref: ref, index: index), refSide: refSide, aParams: aParams, bParams: bParams, binds: binds) { return true }
+            index += 1U64
         }
         return false
     }
@@ -480,7 +453,7 @@ pub impl Comp {
         if a == 0U64 || b == 0U64 || a >= self.arena.typeCount() || b >= self.arena.typeCount() { return a == b }
         val ta: TypeTerm = self.arena.typeTermAt(index: a)
         val tb: TypeTerm = self.arena.typeTermAt(index: b)
-        if ((ta.hasDecl && tb.hasDecl) && ta.declOffset != tb.declOffset) || (!(ta.hasDecl && tb.hasDecl) && ta.nameId != tb.nameId) || (!ignoreTopView && (ta.viewExtId != tb.viewExtId || !(self.sameTypeTermViewIdSet(a: ta.viewIds, b: tb.viewIds)))) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId || ta.args.len != tb.args.len || ta.assocTraitArgs.len != tb.assocTraitArgs.len { return false }
+        if ((ta.hasDecl && tb.hasDecl) && ta.declOffset != tb.declOffset) || (!(ta.hasDecl && tb.hasDecl) && ta.nameId != tb.nameId) || (!ignoreTopView && !(self.typeTermViewSourceHeadsEqual(a: a, b: b))) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId || ta.args.len != tb.args.len || ta.assocTraitArgs.len != tb.assocTraitArgs.len { return false }
         mut val i: U64 = 0U64
         while i < ta.args.len {
             if !(self.unifyPatterns(a: self.arena.typeArgumentAt(index: ta.args.start + i), aSide: aSide, b: self.arena.typeArgumentAt(index: tb.args.start + i), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }
@@ -494,6 +467,15 @@ pub impl Comp {
             if i < tb.assocTraitArgLabels.len { bl = self.arena.typeAssocArgumentLabelAt(index: tb.assocTraitArgLabels.start + i) }
             if al != bl || !(self.unifyPatterns(a: self.arena.typeAssocArgumentAt(index: ta.assocTraitArgs.start + i), aSide: aSide, b: self.arena.typeAssocArgumentAt(index: tb.assocTraitArgs.start + i), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }
             i += 1U64
+        }
+        if !ignoreTopView && ta.assocNameId == 0U64 {
+            val count = self.typeTermRefViewArgumentCount(ref: a)
+            if count != self.typeTermRefViewArgumentCount(ref: b) { return false }
+            i = 0U64
+            while i < count {
+                if !self.unifyPatterns(a: self.typeTermRefViewArgumentAt(ref: a, index: i), aSide: aSide, b: self.typeTermRefViewArgumentAt(ref: b, index: i), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds) { return false }
+                i += 1U64
+            }
         }
         return true
     }

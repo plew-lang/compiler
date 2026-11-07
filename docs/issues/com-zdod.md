@@ -96,3 +96,30 @@ rigid versus designated-binder matching and occurs checks. In particular,
 unifyPatterns/typeRefsAlphaEq/occursInPattern still have legacy argument-only
 walks; reconcile these actual consumers rather than declaring the shared
 reader fix sufficient. Follow with keys/callers, gates and independent review.
+
+## Relation and Builder Checkpoint
+
+[Six native REDs, seven fresh cases and retained controls](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-relations-increment.json)
+cover rigid matching, designated-binder consistency across a later argument,
+alpha equality, full source-set equality, occurs through view arguments and
+duplicate semantic builder normalization. The positive designated-binder
+control passes too. Build 20261107T014604-build-f9ee4e passed with fixed inputs;
+the fresh candidate passes all 20 semantic-view cases and eight earlier native
+controls. Direct and stored nongeneric provided-method views also retain their
+11/22 output under actual check/JIT/AOT source controls.
+
+The initial generic-binding test setup used different compatibility mirrors and
+was rejected for that unrelated reason; it is excluded as a binder-propagation
+RED. Aligning both sides to the same production builder exposes the intended
+failure before repair. Full selector equality and source-head equality now have
+separate names; the existential compatibility consumer uses the complete form.
+The owner/arity callable bucket remains a separate, explicitly coarse carrier.
+Unused pooled-id equality and the duplicated semantic source-set relation were
+removed. Raw graph admission still preserves raw sources: its normalization and
+child alignment must be repaired before claiming valid duplicate parameterized
+selectors in that boundary.
+
+Next increment: raw wrong owner/arity/ref/foreign binder/selector combinations,
+canonicalized checked graph children, and remaining inference/type recovery
+view-id consumers. Finish key/rebuild caller reconciliation and required gates,
+then obtain neutral task-completion review. No task or parent closure yet.
