@@ -5,6 +5,8 @@ from pathlib import Path
 import subprocess
 import sys
 import unittest
+import tempfile
+import json
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/support'))
@@ -61,8 +63,15 @@ class FailureResultTests(unittest.TestCase):
         helper = ROOT / 'scripts/support/compiler_failure_result.py'
         program = "import os,time;os.write(int(os.environ['_PLEW_COMPILER_FAILURE_FD']), b'plew.compiler.failure.v1\\n'+os.environ['_PLEW_COMPILER_FAILURE_ID'].encode()+b'\\nsource\\n');time.sleep(20)"
         supervisor = "import sys;from process_watch import run;sys.exit(run(sys.argv[1:],idle_seconds=0.2,grace_seconds=0.1))"
-        result = subprocess.run([sys.executable, '-B', '-c', supervisor, sys.executable, '-B', str(helper), '--require-source-rejection', '--', sys.executable, '-c', program], cwd=ROOT / 'scripts/support', capture_output=True, timeout=10)
-        self.assertEqual(result.returncode, 124, result.stderr)
+        # The expected stall belongs to this controlled fault, not the parent gate.
+        with tempfile.TemporaryDirectory(prefix='plew-failure-timeout-') as directory:
+            events = Path(directory) / 'worker-events.jsonl'
+            result = subprocess.run([sys.executable, '-B', '-c', supervisor, sys.executable, '-B', str(helper), '--require-source-rejection', '--', sys.executable, '-c', program], cwd=ROOT / 'scripts/support', capture_output=True, timeout=10,
+                                    env={**os.environ, 'PLEW_WATCH_EVENTS': str(events)})
+            self.assertEqual(result.returncode, 124, result.stderr)
+            records = [json.loads(line) for line in events.read_text().splitlines()]
+            self.assertEqual([record['kind'] for record in records], ['start', 'stalled', 'end'])
+            self.assertEqual(records[-1]['state'], 'stalled')
 
     def test_rendered_text_never_supplies_domain(self):
         result = run_compiler([sys.executable, '-c', "import sys;print('plewc: error: intended source rejection',file=sys.stderr);sys.exit(1)"], capture_output=True)

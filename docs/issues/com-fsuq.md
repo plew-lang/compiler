@@ -180,3 +180,15 @@ semantic RED or a relaxation of classification.
 records 59 controlled PASS cases and empty stderr, including missing/Input/
 Internal receipts and Source-plus-trace-only refusal. Independent impact
 review and normal-gate recovery are pending. This does not close com-fsuq.
+
+
+## Controlled Watchdog Fault Isolation
+
+Normal gate 20261107T045230-test-5dddd3 exposed the timeout-control test
+writing its intended stalled event into the outer gate event channel. A
+controlled inherited-event RED passes all seven unittest cases but publishes
+start/stalled/end to the parent. The test now owns a private temporary event
+channel and asserts that exact local failure sequence and exit124. The same
+external-channel probe passes seven cases and emits no parent events. No
+production monitor/classifier or timeout was weakened. Scoped impact review
+and normal gate recovery remain required; task remains in progress.
