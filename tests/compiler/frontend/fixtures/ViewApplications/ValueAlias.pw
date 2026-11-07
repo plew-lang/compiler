@@ -1,0 +1,8 @@
+use ../ImplTraitInstances/Barrel only { P as Selected }
+struct S {}
+pub impl S { factory }
+impl S as Selected[I64] {}
+impl S as Selected[Bool] {}
+fn target() { val value = <S /> val result = value#Selected[I64] }
+fn other() { val value = <S /> val result = value#Selected[Bool] }
+fn main() { target() other() }

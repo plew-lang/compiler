@@ -1,0 +1,8 @@
+use ../ImplTraitInstances/Barrel as Types
+struct S {}
+pub impl S { factory }
+impl S as Types.P[I64] {}
+impl S as Types.P[Bool] {}
+fn target() { val value = <S /> val result = value#Types.P[I64] }
+fn other() { val value = <S /> val result = value#Types.P[Bool] }
+fn main() { target() other() }

@@ -1,0 +1,52 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend, Expr }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic }
+use @Plew/Syntax only { parseExprFrom, rangeEquals }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    val mode = argAt(1I64)
+    val scenario = if mode == "" { give "ValueDirect" } else { give mode }
+    val adapter = argAt(2I64) == "adapter"
+    val alias = scenario == "ValueAlias"
+    val qualified = scenario == "ValueQualified" || scenario == "ValueQualifiedAlias"
+    val spelling = if alias { give "Selected" } else if qualified { give "Types.P" } else { give "P" }
+    val headLength = if alias { give 8U64 } else { give 1U64 }
+    val headOffset = if qualified { give 6U64 } else { give 0U64 }
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ViewApplications/" + scenario + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) print("0") return }
+        Result.Ok(value: _) => {}
+    }
+    val name = compiler.internBytes(s: "P")
+    val owner = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
+    val target = compiler.internBytes(s: "target")
+    val other = compiler.internBytes(s: "other")
+    val firstStart = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: target.nameId)).defOffset + "target() {{ val value = <S /> val result = ".bytes().count()
+    val secondStart = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: other.nameId)).defOffset + "other() {{ val value = <S /> val result = ".bytes().count()
+    if adapter {
+        compiler.lowerExpr(e: parseExprFrom(source: "value#" + spelling + "[I64]", start: firstStart)).unwrap()
+        compiler.lowerExpr(e: parseExprFrom(source: "value#" + spelling + "[Bool]", start: secondStart)).unwrap()
+    }
+    mut val integerCount = 0U64
+    mut val booleanCount = 0U64
+    for val expression in compiler.arena.exprs {
+        match expression {
+            Expr.ExtView(recv: _, source: val source, strip: val strip) => {
+                if strip || source.surfaceId != owner.nameId || source.traitInstance.owner != owner.nameStart || source.traitInstance.positionalArgs.count() != 1U64 || source.writtenLen != headLength || compiler.moduleOf(offset: source.writtenStart) != 0U64 { print("0") return }
+                val argument = compiler.arena.typeAt(index: source.traitInstance.positionalArgs[0U64])
+                if rangeEquals(bytes: compiler.arena.bytes, start: argument.nameStart, len: argument.nameLen, kw: "I64") {
+                    if source.writtenStart != firstStart + 6U64 + headOffset { print("0") return }
+                    integerCount += 1U64
+                } else if rangeEquals(bytes: compiler.arena.bytes, start: argument.nameStart, len: argument.nameLen, kw: "Bool") {
+                    if source.writtenStart != secondStart + 6U64 + headOffset { print("0") return }
+                    booleanCount += 1U64
+                } else { print("0") return }
+            }
+            _ => {}
+        }
+    }
+    val expected = if adapter { give 2U64 } else { give 1U64 }
+    print(integerCount == expected && booleanCount == expected)
+}

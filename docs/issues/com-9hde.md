@@ -590,3 +590,21 @@ Standard build20261107T184618-build-449dcd passes with immutable inputs; saved
 candidate bin/plewc-source-application-consumers performs check/run8 on actual
 value-view and three indexing fixtures. Invocation/setup failures are excluded
 from product RED. No new formal performance or full-task closure is claimed.
+
+## Completion Inventory Reconciliation
+
+[Current inventory and preserved results](../../../evidence/rejection-domains/diagnostic-domain-implementation/source-selector-acceptance-reconciliation.json)
+retain qualified value native10 and latest-candidate check/run10. Independent
+review reran current native10 and accepted its finite canonical-owner, I64/Bool
+instance and source-range assertions. Existing related12 tests/137 native
+executions also pass on candidate487138f4 with immutable inputs.
+
+A separate read-only neutral audit reconciles R1-R5 and producer/type/value/index/
+block/interpolation guarantees. Remaining evidence gaps are existing required
+controls, not new scope: private/public free overload provenance through alias/
+reexport/namespace; same namespace through multiple paths; local+imported
+overload union; extern name collisions; namespace-qualified type view, associated
+projection and zero-arity view. Close these before task-wide review. Missing
+evidence is not a diagnosed implementation defect. Exact Syntax pin/lock and
+current-candidate acceptance remain open; do not reuse the pre-repair formal
+median as a measurement of the latest source.

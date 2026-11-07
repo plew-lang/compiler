@@ -1,0 +1,8 @@
+use ../ImplTraitInstances/Owner only { P }
+struct S {}
+pub impl S { factory }
+impl S as P[I64] {}
+impl S as P[Bool] {}
+fn target() { val value = <S /> val result = value#P[I64] }
+fn other() { val value = <S /> val result = value#P[Bool] }
+fn main() { target() other() }

@@ -234,3 +234,12 @@ AST without forcing the setup analysis to consume that expression. These are
 formation/handoff controls, not full conformance proof or final method dispatch.
 `SourceViewApplications` and `ArrayViewAdmission` preserve existing value/plain
 and extension/zero-arity/parenthesized indexing paths separately.
+
+`QualifiedValueViewApplications.pw` takes no arguments (direct import) or
+`ValueBarrel`, `ValueAlias`, `ValueQualified`, `ValueQualifiedAlias`. Repeat all
+five with second argument `adapter` (`ValueDirect adapter` for the default).
+Each must exit0, match its companion golden, and have empty stderr. Actual File
+graphs contain I64 and Bool instances of one imported trait; the test checks
+canonical owner, each argument and exact original source-token range through
+direct Syntax and materialized Lower. CLI fixtures call both target bodies
+from main. This covers selector formation, not final method dispatch.
