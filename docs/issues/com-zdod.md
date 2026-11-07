@@ -94,7 +94,7 @@ does not solve concrete receiver conformance.
 - [Relations/builders](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-relations-increment.json): rigid/alpha/full-set equality, designated-binder consistency and positive control, occurs, duplicate builders; actual nongeneric direct/stored view check/JIT/AOT controls. An initial binder test rejected for mismatched compatibility mirrors and is excluded from RED evidence; aligned builders expose the intended RED.
 - [Raw boundary RED](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-raw-boundary-red.json) and [admission repair](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-admission-increment.json): missing/extra arity, extension arguments, invalid refs/foreign binders, distinct instances, top-level/nested duplicates, and malformed metadata combined with child normalization. The intermediate metadata-fold WIP was tested RED and repaired before claiming GREEN. Native assertion aborts are failed tests, never passing rejections.
 
-Latest build 20261107T020653-build-11a31c passed with fixed inputs. Candidate
+Admission-increment build 20261107T020653-build-11a31c passed with fixed inputs. Candidate
 bin/plewc-semantic-trait-view-admission passes six internal fixtures/69 case
 executions. The final duplicate tests also assert that original input rows retain
 their duplicate source data. The first broad run remains recorded as failed:
@@ -192,8 +192,33 @@ bin/plewc-semantic-trait-view-empty-range. Neutral impact review confirms that
 the guards follow from the old count relation, including raw empty-range and
 legacy/projection behavior. Same-source alternating diagnosis compares the
 previous fixed-point median 6.751016s with fresh candidate 6.615871s. [Native revalidation](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-empty-range-green.json)
-passes all seven fixtures/97 cases with fixed inputs. New formal performance
-and applicable task gates remain pending.
+passes all seven fixtures/97 cases with fixed inputs; neutral execution review
+reconciles the saved results. [Final formal measurement](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-empty-range-self-host.json)
+20261107T041919-self-host-356458 reaches generation-three LLVM/runtime fixed
+point and median 6.745457s (7.269976/6.745457/6.434975), satisfying the strict
+seven-second condition. The exact measured compiler is saved as
+bin/plewc-semantic-trait-view-fixed-point (SHA
+ ec69dc5a291024d1de8d0d31ad3da140612aa3305d14c6716559011daf01dabc).
+Normal suite 20261107T043419-test-a4db4e and a fresh whole-contract neutral
+completion review are running. This is not main/seed/adopted-carrier promotion.
+
+## Fresh Whole-Contract Review
+
+The independent complete_view_term_contract_review checked f2f2f0bc against
+the spec/design before implementation/evidence. It confirmed one remaining
+existential compatibility mirror decision. A runtime-erasure mirror concern
+was then confirmed by native execution.
+[Two actual REDs and five positive/negative controls](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-final-consumer-repair.json)
+exercise actual existential compatibility and runtimeTypeRef, including
+matching complete instances, different arguments/owners and nested retention.
+The repair removes the existential mirror decision and delegates runtime
+erasure to the existing common outer-view builder. It does not implement
+source proof or final executable selection. Fresh validation is in progress.
+
+proofSourceIsActive's legacy mirror read belongs to com-amjl's retained
+source-proof investigation; it is not certified here. The unused bare-ID
+addition adapter is a migration cleanup candidate for com-9hde, not an
+alternative semantic identity path. Do not add new semantic callers to it.
 
 ## Remaining Work
 

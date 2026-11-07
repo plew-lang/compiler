@@ -23,6 +23,36 @@ fn main() {
     val base = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] hasDecl=true declOffset=declaration.defOffset />)
     val expected = compiler.typeRefWithViewSources(ref: base, sources: [expectedSource])
     val actual = compiler.typeRefWithViewSources(ref: base, sources: [actualSource])
+    if scenario == "existentialMirror" || scenario == "existentialControl" || scenario == "existentialArguments" || scenario == "existentialOwner" {
+        val item = compiler.internBytes(s: "Item")
+        val interface = compiler.pushType(t: <TypeRef nameStart=trait.nameStart nameLen=trait.nameLen args=[integer, integer] argLabels=[0U64, item.nameId] isAny=true hasDecl=true declOffset=trait.nameStart />)
+        val canonical = compiler.typeRefWithViewSources(ref: interface, sources: [expectedSource])
+        val other = if scenario == "existentialArguments" {
+            give compiler.typeRefWithViewSources(ref: interface, sources: [actualSource])
+        } else if scenario == "existentialOwner" {
+            val name = compiler.internBytes(s: "A")
+            val owner = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
+            give compiler.typeRefWithViewSources(ref: interface, sources: [<ResolvedViewSource surfaceId=owner.nameId traitInstance=<TraitInstanceKey owner=owner.nameStart positionalArgs=[integer] /> />])
+        } else if scenario == "existentialMirror" {
+            give compiler.pushType(t: <TypeRef nameStart=trait.nameStart nameLen=trait.nameLen args=[integer, integer] argLabels=[0U64, item.nameId] isAny=true hasDecl=true declOffset=trait.nameStart viewSources=[expectedSource] />)
+        } else { give canonical }
+        val same = compiler.existentialTypesCompatible(sourceRef: other, targetRef: canonical)
+        print(if scenario == "existentialArguments" || scenario == "existentialOwner" { give !same } else { give same })
+        return
+    }
+    if scenario == "runtimeRawErase" || scenario == "runtimeBuilderEraseControl" || scenario == "runtimeNestedControl" {
+        val raw = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] hasDecl=true declOffset=declaration.defOffset viewSources=[expectedSource] />)
+        if scenario == "runtimeNestedControl" {
+            val name = compiler.internBytes(s: "Array")
+            val outer = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[raw] />)
+            val runtime = compiler.runtimeTypeRef(ref: outer)
+            print(runtime == outer && compiler.arena.typeAt(index: runtime).args[0U64] == raw)
+        } else {
+            val runtime = compiler.runtimeTypeRef(ref: if scenario == "runtimeRawErase" { give raw } else { give expected })
+            print(compiler.arena.typeViewSourceCount(ref: runtime) == 0U64 && compiler.typeRefEq(a: runtime, b: base))
+        }
+        return
+    }
     if scenario == "bodyInstanceKeys" {
         val name = compiler.internBytes(s: "identity")
         mut val function = compiler.arena.functionCount()

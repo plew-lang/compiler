@@ -148,3 +148,14 @@ its original projection controls and authorized test corrections. com-4k31
 consumes that shared proof instead of implementing another solver. No dependency
 on com-4k31 or whole Syntax migration is introduced here; coordinate the shared
 API with its actual producer/consumer without duplicating their task bodies.
+
+## Complete View Reader Handoff
+
+com-zdod's neutral completion review identifies proofSourceIsActive
+(src/Codegen/Mono/Resolve.pw) as still reading only viewIds/viewExtId. Its
+source-proof callers must consume retained complete sources, distinguish
+extension kind from same-spelled trait selectors, and preserve the selected
+instance/evidence. This is a finite investigation item within the existing
+view/projection proof repair, not a reproduced source-level wrong witness or
+new inference rule. Structural runtime erasure and existential equality are
+repaired/tested in com-zdod; those do not certify this proof activation.

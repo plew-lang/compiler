@@ -8,14 +8,7 @@ pub impl Comp {
     // representation. Every layout / receiver-instance consumer canonicalizes
     // through this one boundary; nested argument views remain type identity.
     inout fn runtimeTypeRef(ref: U64) -> U64 {
-        if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
-        val t: TypeRef = self.arena.typeAt(index: ref)
-        if t.viewExtId == 0U64 && t.viewIds.count() == 0U64 { return ref }
-        // Removing a value-view changes only the callable surface. It must
-        // retain the nominal and projection declaration identities: later
-        // proof/grounding and Mid storage consumers are not allowed to
-        // reconstruct either identity from the spelling.
-        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable isDiverging=t.isDiverging hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+        return self.typeRefWithoutOuterViews(ref: ref)
     }
 
     inout fn plainRefOfProjection(t: TypeRef) -> U64 {
