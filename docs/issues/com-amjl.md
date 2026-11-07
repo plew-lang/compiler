@@ -224,3 +224,42 @@ with no unique short source, while accepting BareShorthandInstance.pw
 short-form uniqueness contract. The com-9hde qualified explicit-path repair
 does not certify or replace them. Original results live under the saved
 qualified-type repair evidence; no new specification or task scope is adopted.
+
+
+## Short-form Complete-bound Context Increment (WIP)
+
+The name-only Lower context loses qualified paths and positional arguments;
+owner-only dedup also collapses P[I64] and P[Bool]. New
+ShortProjectionBoundInstances records seven actual failed assertions and the
+preserved zero-argument success. The current complete-context implementation
+passes17 native controls, including value-AST adapters, nested/two arguments,
+qualified bounds, ambiguous instances, missing/open premises and legacy SigAst
+with omitted optional rich bounds. MaterializedTypePathControls shorthandInstance
+now succeeds; the prior37 preservation cases also succeed before the last
+compatibility/dependency follow-up and must be rerun on the final source.
+
+Replace name/span-only context with complete TypeAst/TypeId constraint nodes at
+all four scope owners in both adapters. Preserve one constraint row per subject
+when legacy whereTraitTypes is absent, before concatenating impl/member scopes.
+Both short-projection adapters use one exact-instance uniqueness decision and
+save that instance directly. The normalizer only transforms representation;
+remove its name-only semantic choice and the subsequent owner/arity reselection.
+Reuse private argument decoders shared with full constraint lowering, filtering
+out non-member sources before recursively decoding their arguments.
+
+Neutral WIP review identified the rich-field omission/index-shift regression
+and a dependency recursion risk; both are mandatory before finite acceptance.
+The first dependent test accidentally gave P its own Item, unlike the review's
+Zero-plus-nonmember-P case; do not count that as the intended valid-source RED.
+Keep the corrected valid dependency control, and a separate recursive query
+control requiring typed Limit instead of a crash. Both adapters share a fixed
+32-request depth budget, restored on error; an initial128 budget overflowed the
+native unoptimized stack. This is resource exhaustion, not evidence of source
+invalidity. No infinite-recursion proof or language type rule is introduced.
+
+Remaining original task work includes semantic receiver/ParamId matching
+(current boundLhsMatches helpers still compare raw forms), inherited premise
+selection, common view-conformance evidence, raw-input categorization, retained
+proof through final consumers, authorized old fixture repairs and applicable
+gates. Legacy adapters and dependency behavior need re-review. This increment
+is not task closure, final performance or final-candidate admission.

@@ -497,7 +497,7 @@ pub impl Comp {
     }
 
     inout fn lowerType(t: TypeAst) -> Result[PType, CompileDiagnostic] {
-        val type = (try self.lowerTypeCore(t: (try self.normalizeProjectionTypeActive(t: t))))
+        val type = (try self.lowerTypeCore(t: (try self.normalizeProjectionType(t: t))))
         self.recordAuthoredTypeUse(ref: type.ref, site: t.span.start)
         return <Result.Ok value=type />
     }
@@ -604,6 +604,10 @@ pub impl Comp {
             for val label in t.projectionTraitArgLabels { if label != "" { labelled = true } }
             val source = try self.completeTypeViewSource(source: selected, arguments: arguments, hasLabels: labelled)
             if source.traitInstance.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection source must name a trait", failureDomain: <FailureDomain.Source />) /> }
+            projection = <Optional.Some v=<LoweredTypeProjection source=source member=self.lowerTypeName(name: t.projectionAssoc, span: t.projectionAssocSpan) /> />
+        }
+        if !projection.isSome() && t.projectionAssoc.bytes().count() > 0U64 {
+            val source = try self.uniqueProjectionSource(t: t)
             projection = <Optional.Some v=<LoweredTypeProjection source=source member=self.lowerTypeName(name: t.projectionAssoc, span: t.projectionAssocSpan) /> />
         }
         mut val assocTraitStart: U64 = 0U64
@@ -829,45 +833,18 @@ pub impl Comp {
             if source.traitInstance.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection source must name a trait", failureDomain: <FailureDomain.Source />) /> }
             projection = <Optional.Some v=<LoweredTypeProjection source=source member=<Bind nameStart=t.projectionAssoc.start nameLen=t.projectionAssoc.end - t.projectionAssoc.start fieldStart=0U64 fieldLen=0U64 /> /> />
         }
-        // Only short-form T.Item reaches this compatibility inference path.
-        mut val projectionTrait = <Span start=0U64 end=0U64 />
         if !projection.isSome() && !namespaceType && t.projectionAssoc.end > t.projectionAssoc.start {
-            projectionTrait = (try self.uniqueSyntaxProjectionTrait(t: t))
+            val source = try self.uniqueSyntaxProjectionSource(t: t)
+            projection = <Optional.Some v=<LoweredTypeProjection source=source member=<Bind nameStart=t.projectionAssoc.start nameLen=t.projectionAssoc.end - t.projectionAssoc.start fieldStart=0U64 fieldLen=0U64 /> /> />
         }
-
-        mut val assocTraitStart: U64 = 0U64
-        mut val assocTraitLen: U64 = 0U64
-        mut val assocTraitId: U64 = 0U64
-        if !projection.isSome() && projectionTrait.end > projectionTrait.start {
-            val owner: U64 = self.traitOwnerAtUse(start: projectionTrait.start, len: projectionTrait.end - projectionTrait.start, arity: syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t))
-            if owner != 0U64 {
-                assocTraitStart = owner
-                assocTraitLen = self.traitNameLenByOwner(owner: owner)
-            } else {
-                assocTraitStart = projectionTrait.start
-                assocTraitLen = projectionTrait.end - projectionTrait.start
-            }
-            assocTraitId = intern(c: inout self, start: assocTraitStart, len: assocTraitLen)
-        }
+        mut val assocTraitStart = 0U64
+        mut val assocTraitLen = 0U64
+        mut val assocTraitId = 0U64
         mut val assocTraitArgs: Array[U64] = []
         mut val assocTraitArgLabels: Array[U64] = []
-        mut val ati: U64 = 0U64
-        while !projection.isSome() && ati < syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t) {
-            assocTraitArgs.append((try self.lowerSyntaxType(id: syntaxTypeProjectionTraitArg(file: self.syntax, ty: t, index: ati))).ref)
-            val label: Span = syntaxTypeProjectionTraitArgLabel(file: self.syntax, ty: t, index: ati)
-            if label.end > label.start {
-                assocTraitArgLabels.append(intern(c: inout self, start: label.start, len: label.end - label.start))
-            } else { assocTraitArgLabels.append(0U64) }
-            ati += 1U64
-        }
-        mut val assocNameStart: U64 = 0U64
-        mut val assocNameLen: U64 = 0U64
-        mut val assocNameId: U64 = 0U64
-        if !projection.isSome() && !namespaceType && t.projectionAssoc.end > t.projectionAssoc.start {
-            assocNameStart = t.projectionAssoc.start
-            assocNameLen = t.projectionAssoc.end - t.projectionAssoc.start
-            assocNameId = intern(c: inout self, start: assocNameStart, len: assocNameLen)
-        }
+        mut val assocNameStart = 0U64
+        mut val assocNameLen = 0U64
+        mut val assocNameId = 0U64
         match projection {
             Optional.Some(v: val selected) => {
                 assocTraitStart = selected.source.traitInstance.owner

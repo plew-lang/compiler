@@ -1,0 +1,70 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic, FailureDomain }
+use @Plew/Syntax only { rangeEquals, parseItem, TopItemAst, SigAst }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+fn main() {
+    val scenario = argAt(1I64)
+    val bound = if scenario == "recursive" { give "Zero + P[T.Item]" } else if scenario == "dependent" { give "Zero + P[T.Item]" } else if scenario == "differentInstances" { give "P[I64] + P[Bool]" } else if scenario == "nested" { give "P[Array[I64]]" } else if scenario == "pair" { give "Pair[I64,Bool]" } else if scenario == "open" { give "P" } else if scenario == "zero" { give "Zero" } else { give "P[I64]" }
+    val signature = "fn target[T](value: T.Item)" + (if scenario == "noBound" { give "" } else if scenario == "qualified" { give " where T: Types.P[I64]" } else { give " where T: " + bound }) + " {{}}"
+    val prefix = if scenario == "dependent" { give "trait P[K] {{}} " } else { give "trait P[K] {{ type Item }} " }
+    val text = prefix + "trait Pair[K,L] {{ type Item }} trait Zero {{ type Item }} " + signature + " fn main() {{}}"
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: (if scenario == "qualified" { give <FrontendInput.File path="tests/compiler/frontend/fixtures/ImplTraitInstances/QualifiedShorthandInstance.pw" /> } else { give <FrontendInput.Text text=text path="ShortProjectionInstances.pw" /> }), sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Err(error: val diagnostic) => {
+            if scenario == "recursive" {
+                match diagnostic.failureDomain { FailureDomain.Limit => { print(diagnostic.message == "associated-type short projection analysis limit exceeded") } _ => { print("0") } }
+            } else if scenario == "differentInstances" { print(diagnostic.isSourceRejection() && diagnostic.message == "associated-type short projection is ambiguous — write the canonical `T#Trait.Item` form (spec/08)") }
+            else if scenario == "noBound" || scenario == "open" { print(diagnostic.isSourceRejection() && diagnostic.message == "associated-type short projection has no unique trait source — write `T#Trait.Item` or add an appropriate `where T: Trait` bound (spec/08)") }
+            else { emitDiagnostic(diagnostic: diagnostic) print("0") }
+            return
+        }
+        Result.Ok(value: _) => {}
+    }
+    if scenario == "differentInstances" || scenario == "noBound" || scenario == "open" { print("0") return }
+    val function = compiler.internBytes(s: "target")
+    val declaration = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: function.nameId))
+    mut val term = compiler.funcParamAt(params: declaration.params, index: 0U64).ty
+    if argAt(2I64) == "adapter" || argAt(2I64) == "legacy" {
+        val start = declaration.defOffset - 3U64
+        match parseItem(source: signature, start: start, end: start + signature.bytes().count()) {
+            TopItemAst.Decl(d: val ast) => {
+                if argAt(2I64) == "legacy" {
+                    val signature = <SigAst name=ast.name nameSpan=ast.nameSpan typeParams=ast.typeParams typeParamSpans=ast.typeParamSpans params=ast.params hasRet=ast.hasRet ret=ast.ret isAssoc=false whereParams=ast.whereParams whereTypes=ast.whereTypes whereTraits=ast.whereTraits />
+                    match compiler.lowerSigToFunc(sig: signature, isExtern: false, isCExtern: false) {
+                        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) print("0") return }
+                        Result.Ok(value: val lowered) => { term = compiler.funcParamAt(params: lowered.params, index: 0U64).ty }
+                    }
+                } else {
+                compiler.cur.typeParams = [compiler.funcBindAt(binds: declaration.typeParams, index: 0U64)]
+                compiler.lowerWhereTypes = ast.whereTypes
+                compiler.lowerWhereTraitTypes = ast.whereTraitTypes
+                match compiler.lowerType(t: ast.params[0U64].ty) {
+                    Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) print("0") return }
+                    Result.Ok(value: val value) => { term = value.ref }
+                }
+                }
+            }
+            _ => { print("0") return }
+        }
+    }
+    val projection = compiler.arena.typeAt(index: term)
+    val name = compiler.internBytes(s: if scenario == "pair" { give "Pair" } else if scenario == "zero" || scenario == "dependent" { give "Zero" } else { give "P" })
+    val trait = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
+    val arity = if scenario == "zero" || scenario == "dependent" { give 0U64 } else if scenario == "pair" { give 2U64 } else { give 1U64 }
+    if projection.assocTraitStart != trait.nameStart || projection.assocTraitId != trait.nameId || projection.assocTraitArgs.count() != arity || projection.assocNameId != compiler.internBytes(s: "Item").nameId || projection.projectionReceiver == 0U64 { print("0") return }
+    val receiver = compiler.arena.typeAt(index: projection.projectionReceiver)
+    if receiver.paramId == 0U64 || receiver.paramId != projection.paramId || receiver.viewSources.count() != 0U64 { print("0") return }
+    if arity == 0U64 { print("1") return }
+    val argument = compiler.arena.typeAt(index: projection.assocTraitArgs[0U64])
+    if !rangeEquals(bytes: compiler.arena.bytes, start: argument.nameStart, len: argument.nameLen, kw: if scenario == "nested" { give "Array" } else { give "I64" }) { print("0") return }
+    if scenario == "nested" {
+        if argument.args.count() != 1U64 { print("0") return }
+        val element = compiler.arena.typeAt(index: argument.args[0U64])
+        print(rangeEquals(bytes: compiler.arena.bytes, start: element.nameStart, len: element.nameLen, kw: "I64"))
+    } else if scenario == "pair" {
+        val second = compiler.arena.typeAt(index: projection.assocTraitArgs[1U64])
+        print(rangeEquals(bytes: compiler.arena.bytes, start: second.nameStart, len: second.nameLen, kw: "Bool"))
+    } else { print("1") }
+}

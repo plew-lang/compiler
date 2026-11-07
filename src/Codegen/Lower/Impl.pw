@@ -364,7 +364,7 @@ pub impl Comp {
 
     inout fn normalizeImplAstTrait(im: ImplAst) -> Result[ImplAst, CompileDiagnostic] {
         if im.traitPath.count() == 0U64 { return <Result.Ok value=im /> }
-        val ty = (try self.normalizeProjectionTypeActive(t: <TypeAst name=im.traitName nameSpan=im.traitNameSpan namePath=im.traitPath args=im.traitArgs span=im.traitNameSpan />))
+        val ty = (try self.normalizeProjectionType(t: <TypeAst name=im.traitName nameSpan=im.traitNameSpan namePath=im.traitPath args=im.traitArgs span=im.traitNameSpan />))
         if ty.projectionAssoc.bytes().count() != 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: im.traitNameSpan.start, msg: "an impl conformance requires a trait declaration, not an associated-type projection") />
         }
@@ -455,11 +455,11 @@ pub impl Comp {
         return <Result.Ok value=out />
     }
 
-    inout fn appendSyntaxMemberWhere(member: SyntaxMember, types: inout Array[TypeId], traits: inout Array[Span]) {
+    inout fn appendSyntaxMemberWhere(member: SyntaxMember, types: inout Array[TypeId], traits: inout Array[TypeId]) {
         mut val i: U64 = 0U64
         while i < syntaxMemberWhereCount(file: self.syntax, member: member) {
             types.append(syntaxMemberWhereType(file: self.syntax, member: member, index: i))
-            traits.append(syntaxMemberWhereTraitSpan(file: self.syntax, member: member, index: i))
+            traits.append(syntaxMemberWhereTraitType(file: self.syntax, member: member, index: i))
             i += 1U64
         }
     }
@@ -502,12 +502,12 @@ pub impl Comp {
             mut val subject = self.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
             mut val offset = im.span.start
             if index < im.whereTypes.count() {
-                subject = (try self.lowerType(t: (try self.normalizeProjectionType(t: im.whereTypes[index], whereTypes: im.whereTypes, whereTraits: im.whereTraits)))).ref
+                subject = (try self.lowerType(t: (try self.normalizeProjectionType(t: im.whereTypes[index])))).ref
                 offset = im.whereTypes[index].span.start
             }
             mut val traitType = <TypeAst name=im.whereTraits[index] args=[] span=<Span start=0U64 end=0U64 /> />
-            if index < im.whereTraitTypes.count() { traitType = try self.normalizeProjectionType(t: im.whereTraitTypes[index], whereTypes: im.whereTypes, whereTraits: im.whereTraits) }
-            val constraint = try self.lowerValueTraitConstraint(traitType: traitType, types: im.whereTypes, traits: im.whereTraits)
+            if index < im.whereTraitTypes.count() { traitType = try self.normalizeProjectionType(t: im.whereTraitTypes[index]) }
+            val constraint = try self.lowerValueTraitConstraint(traitType: traitType)
             bounds.append(<ConformBound subject=subject constraint=constraint offset=offset />)
             index += 1U64
         }
@@ -705,11 +705,11 @@ pub impl Comp {
     inout fn lowerSyntaxMethodMember(im: SyntaxImpl, conformanceTrait: Bind, m: SyntaxMember, recvN: Bind, recvTy: U64, recvTraitArgs: Array[U64], recvTraitOwner: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) -> Result[(), CompileDiagnostic] {
         val nameN: Bind = <Bind nameStart=m.name.start nameLen=m.name.end - m.name.start fieldStart=m.name.start fieldLen=m.name.end - m.name.start />
         mut val boundTypes: Array[TypeId] = []
-        mut val boundTraits: Array[Span] = []
+        mut val boundTraits: Array[TypeId] = []
         mut val i: U64 = 0U64
         while i < syntaxImplWhereCount(file: self.syntax, impl: im) {
             boundTypes.append(syntaxImplWhereType(file: self.syntax, impl: im, index: i))
-            boundTraits.append(syntaxImplWhereTraitSpan(file: self.syntax, impl: im, index: i))
+            boundTraits.append(syntaxImplWhereTraitType(file: self.syntax, impl: im, index: i))
             i += 1U64
         }
         self.appendSyntaxMemberWhere(member: m, types: inout boundTypes, traits: inout boundTraits)
@@ -731,7 +731,7 @@ pub impl Comp {
         self.lowerAssociatedArgs = recvTraitArgs
         val savedTP: Array[Bind] = self.cur.typeParams
         val savedWT: Array[TypeId] = self.lowerWhereSyntaxTypes
-        val savedWTr: Array[Span] = self.lowerWhereSyntaxTraits
+        val savedWTr: Array[TypeId] = self.lowerWhereSyntaxTraitTypes
         mut val skipScope: Array[Bind] = savedTP
         i = 0U64
         while i < ownParams.count() {
@@ -740,7 +740,7 @@ pub impl Comp {
         }
         self.cur.typeParams = skipScope
         self.lowerWhereSyntaxTypes = boundTypes
-        self.lowerWhereSyntaxTraits = boundTraits
+        self.lowerWhereSyntaxTraitTypes = boundTraits
         val params: Array[Param] = (try self.lowerSyntaxMemberParams(member: m))
         mut val retStart: U64 = 0U64
         mut val retLen: U64 = 0U64
@@ -825,28 +825,26 @@ pub impl Comp {
         self.lowerAssociatedArgs = savedAssociatedArgs
         self.cur.typeParams = savedTP
         self.lowerWhereSyntaxTypes = savedWT
-        self.lowerWhereSyntaxTraits = savedWTr
+        self.lowerWhereSyntaxTraitTypes = savedWTr
         return <Result.Ok value=() />
     }
 
     inout fn lowerMethodMember(im: ImplAst, conformanceTrait: Bind, m: MemberAst, recvN: Bind, recvTy: U64, recvTraitArgs: Array[U64], recvTraitOwner: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) -> Result[(), CompileDiagnostic] {
         val nameN: Bind = self.internBytes(s: m.name)
         mut val boundTypes: Array[TypeAst] = []
-        mut val boundTraits: Array[String] = []
+        mut val boundTraits: Array[TypeAst] = []
+        val implTraits = try self.valueProjectionTraitTypes(subjects: im.whereTypes, names: im.whereTraits, types: im.whereTraitTypes)
+        val memberTraits = try self.valueProjectionTraitTypes(subjects: m.whereTypes, names: m.whereTraits, types: m.whereTraitTypes)
         mut val bi0: U64 = 0
         while bi0 < im.whereTypes.count() {
             boundTypes.append(im.whereTypes[bi0])
-            if bi0 < im.whereTraits.count() {
-                boundTraits.append(im.whereTraits[bi0])
-            }
+            boundTraits.append(implTraits[bi0])
             bi0 += 1
         }
         mut val bi1: U64 = 0
         while bi1 < m.whereTypes.count() {
             boundTypes.append(m.whereTypes[bi1])
-            if bi1 < m.whereTraits.count() {
-                boundTraits.append(m.whereTraits[bi1])
-            }
+            boundTraits.append(memberTraits[bi1])
             bi1 += 1
         }
         // typeParams = impl's `[T]` (in scope for every member) ++ the method's own.
@@ -874,7 +872,7 @@ pub impl Comp {
         self.lowerAssociatedArgs = recvTraitArgs
         val savedTP: Array[Bind] = self.cur.typeParams
         val savedWT: Array[TypeAst] = self.lowerWhereTypes
-        val savedWTr: Array[String] = self.lowerWhereTraits
+        val savedWTr: Array[TypeAst] = self.lowerWhereTraitTypes
         mut val skipScope: Array[Bind] = savedTP
         mut val ski: U64 = 0
         while ski < ownParams.count() {
@@ -883,15 +881,15 @@ pub impl Comp {
         }
         self.cur.typeParams = skipScope
         self.lowerWhereTypes = boundTypes
-        self.lowerWhereTraits = boundTraits
-        val normParams: Array[ParamAst] = (try self.normalizeParams(params: m.params, whereTypes: boundTypes, whereTraits: boundTraits))
+        self.lowerWhereTraitTypes = boundTraits
+        val normParams: Array[ParamAst] = (try self.normalizeParams(params: m.params))
         val params: Array[Param] = (try self.lowerParams(params: normParams))
         mut val retStart: U64 = 0
         mut val retLen: U64 = 0
         mut val retIsArray: Bool = false
         mut val retRef: U64 = 0
         if m.hasRet {
-            val pt: PType = (try self.lowerType(t: (try self.normalizeProjectionType(t: m.ret, whereTypes: boundTypes, whereTraits: boundTraits))))
+            val pt: PType = (try self.lowerType(t: (try self.normalizeProjectionType(t: m.ret))))
             retStart = pt.start
             retLen = pt.len
             retIsArray = pt.isArray
@@ -980,7 +978,7 @@ pub impl Comp {
         self.lowerAssociatedArgs = savedAssociatedArgs
         self.cur.typeParams = savedTP
         self.lowerWhereTypes = savedWT
-        self.lowerWhereTraits = savedWTr
+        self.lowerWhereTraitTypes = savedWTr
         return <Result.Ok value=() />
     }
 
@@ -992,7 +990,7 @@ pub impl Comp {
         val conformanceTrait = if normalizedImpl.isTraitImpl {
             give (try self.resolvedImplTraitBind(im: normalizedImpl))
         } else { give <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 /> }
-        val receiverType = (try self.normalizeProjectionTypeActive(t: normalizedImpl.recvType))
+        val receiverType = (try self.normalizeProjectionType(t: normalizedImpl.recvType))
         val rawRecvN: Bind = self.lowerTypeName(name: receiverType.name, span: receiverType.nameSpan)
         val recvTraitOwner: U64 = self.traitOwnerAtUse(start: rawRecvN.nameStart, len: rawRecvN.nameLen, arity: receiverType.args.count())
         mut val recvN: Bind = rawRecvN
@@ -1024,10 +1022,10 @@ pub impl Comp {
         }
         val savedTP: Array[Bind] = self.cur.typeParams
         val savedWT: Array[TypeAst] = self.lowerWhereTypes
-        val savedWTr: Array[String] = self.lowerWhereTraits
+        val savedWTr: Array[TypeAst] = self.lowerWhereTraitTypes
         self.cur.typeParams = implScope
         self.lowerWhereTypes = normalizedImpl.whereTypes
-        self.lowerWhereTraits = normalizedImpl.whereTraits
+        self.lowerWhereTraitTypes = (try self.valueProjectionTraitTypes(subjects: normalizedImpl.whereTypes, names: normalizedImpl.whereTraits, types: normalizedImpl.whereTraitTypes))
         // Trait subjects are not value TypeRefs; concrete impl receivers are.
         // Preserve the latter's complete pattern (including generic arguments)
         // for callable-surface matching instead of collapsing to recvId.
@@ -1108,7 +1106,7 @@ pub impl Comp {
         self.drainDerives(typeStart: recvN.nameStart, typeLen: recvN.nameLen, isEnum: false, declStart: normalizedImpl.span.start, declEnd: normalizedImpl.span.end)
         self.cur.typeParams = savedTP
         self.lowerWhereTypes = savedWT
-        self.lowerWhereTraits = savedWTr
+        self.lowerWhereTraitTypes = savedWTr
         return <Result.Ok value=() />
     }
 
@@ -1149,18 +1147,18 @@ pub impl Comp {
         }
         val savedTP: Array[Bind] = self.cur.typeParams
         val savedWT: Array[TypeId] = self.lowerWhereSyntaxTypes
-        val savedWTr: Array[Span] = self.lowerWhereSyntaxTraits
+        val savedWTr: Array[TypeId] = self.lowerWhereSyntaxTraitTypes
         self.cur.typeParams = implScope
         mut val whereTypes: Array[TypeId] = []
-        mut val whereTraits: Array[Span] = []
+        mut val whereTraits: Array[TypeId] = []
         i = 0U64
         while i < syntaxImplWhereCount(file: self.syntax, impl: normalizedImpl) {
             whereTypes.append(syntaxImplWhereType(file: self.syntax, impl: normalizedImpl, index: i))
-            whereTraits.append(syntaxImplWhereTraitSpan(file: self.syntax, impl: normalizedImpl, index: i))
+            whereTraits.append(syntaxImplWhereTraitType(file: self.syntax, impl: normalizedImpl, index: i))
             i += 1U64
         }
         self.lowerWhereSyntaxTypes = whereTypes
-        self.lowerWhereSyntaxTraits = whereTraits
+        self.lowerWhereSyntaxTraitTypes = whereTraits
         mut val recvTy: U64 = 0U64
         if recvTraitOwner == 0U64 { recvTy = (try self.lowerSyntaxType(id: normalizedImpl.recvType)).ref }
         mut val subjectArgs: Array[U64] = []
@@ -1228,7 +1226,7 @@ pub impl Comp {
         self.drainDerives(typeStart: recvN.nameStart, typeLen: recvN.nameLen, isEnum: false, declStart: normalizedImpl.span.start, declEnd: normalizedImpl.span.end)
         self.cur.typeParams = savedTP
         self.lowerWhereSyntaxTypes = savedWT
-        self.lowerWhereSyntaxTraits = savedWTr
+        self.lowerWhereSyntaxTraitTypes = savedWTr
         return <Result.Ok value=() />
     }
 
@@ -1255,9 +1253,9 @@ pub impl Comp {
         }
         self.cur.typeParams = scopeTP
         val savedWhereTypes = self.lowerWhereTypes
-        val savedWhereTraits = self.lowerWhereTraits
+        val savedWhereTraits = self.lowerWhereTraitTypes
         self.lowerWhereTypes = sig.whereTypes
-        self.lowerWhereTraits = sig.whereTraits
+        self.lowerWhereTraitTypes = (try self.valueProjectionTraitTypes(subjects: sig.whereTypes, names: sig.whereTraits, types: sig.whereTraitTypes))
         val params: Array[Param] = (try self.lowerParams(params: sig.params))
         mut val retStart: U64 = 0
         mut val retLen: U64 = 0
@@ -1285,14 +1283,14 @@ pub impl Comp {
         mut val signatureBounds: Array[ConformBound] = []
         mut val boundIndex = 0U64
         while boundIndex < sig.whereTypes.count() {
-            val subjectType = try self.normalizeProjectionType(t: sig.whereTypes[boundIndex], whereTypes: sig.whereTypes, whereTraits: sig.whereTraits)
+            val subjectType = try self.normalizeProjectionType(t: sig.whereTypes[boundIndex])
             val subject = (try self.lowerType(t: subjectType)).ref
-            val constraint = try self.lowerValueTraitConstraint(traitType: sig.whereTraitTypes[boundIndex], types: sig.whereTypes, traits: sig.whereTraits)
+            val constraint = try self.lowerValueTraitConstraint(traitType: self.lowerWhereTraitTypes[boundIndex])
             signatureBounds.append(<ConformBound subject=subject constraint=constraint offset=sig.whereTypes[boundIndex].span.start />)
             boundIndex += 1U64
         }
         self.lowerWhereTypes = savedWhereTypes
-        self.lowerWhereTraits = savedWhereTraits
+        self.lowerWhereTraitTypes = savedWhereTraits
         self.cur.typeParams = savedTP
         val runtimeIntrinsic: RuntimeIntrinsicDeclaration = self.runtimeIntrinsicDeclaration(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
         return <Result.Ok value=<Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=sig.selfMove isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=sig.isAsync isDiverging=sig.isDiverging isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=nameStart signatureBounds=self.pushConformBounds(bounds: signatureBounds) /> />
@@ -1317,17 +1315,17 @@ pub impl Comp {
         }
         self.cur.typeParams = scope
         val savedWhereTypes = self.lowerWhereSyntaxTypes
-        val savedWhereTraits = self.lowerWhereSyntaxTraits
+        val savedWhereTraits = self.lowerWhereSyntaxTraitTypes
         mut val whereTypes: Array[TypeId] = []
-        mut val whereTraits: Array[Span] = []
+        mut val whereTraits: Array[TypeId] = []
         mut val boundIndex = 0U64
         while boundIndex < syntaxSigWhereCount(file: self.syntax, sig: sig) {
             whereTypes.append(syntaxSigWhereType(file: self.syntax, sig: sig, index: boundIndex))
-            whereTraits.append(syntaxSigWhereTraitSpan(file: self.syntax, sig: sig, index: boundIndex))
+            whereTraits.append(syntaxSigWhereTraitType(file: self.syntax, sig: sig, index: boundIndex))
             boundIndex += 1U64
         }
         self.lowerWhereSyntaxTypes = whereTypes
-        self.lowerWhereSyntaxTraits = whereTraits
+        self.lowerWhereSyntaxTraitTypes = whereTraits
         mut val params: Array[Param] = []
         i = 0U64
         while i < syntaxSigParamCount(file: self.syntax, sig: sig) {
@@ -1371,7 +1369,7 @@ pub impl Comp {
             boundIndex += 1U64
         }
         self.lowerWhereSyntaxTypes = savedWhereTypes
-        self.lowerWhereSyntaxTraits = savedWhereTraits
+        self.lowerWhereSyntaxTraitTypes = savedWhereTraits
         self.cur.typeParams = savedTP
         val runtimeIntrinsic: RuntimeIntrinsicDeclaration = self.runtimeIntrinsicDeclarationSyntax(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
         return <Result.Ok value=<Func nameStart=sig.name.start nameLen=sig.name.end - sig.name.start nameId=intern(c: inout self, start: sig.name.start, len: sig.name.end - sig.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=sig.selfInout selfMove=sig.selfMove isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=sig.isAsync isDiverging=sig.isDiverging isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=sig.name.start signatureBounds=self.pushConformBounds(bounds: signatureBounds) /> />
@@ -1433,12 +1431,12 @@ pub impl Comp {
         for val associated in t.assocTypes {
             val member = self.internBytes(s: associated.name).nameId
             for val bound in associated.bounds {
-                associatedBounds.append(<TraitAssociatedBound member=member constraint=(try self.lowerValueTraitConstraint(traitType: (try self.normalizeProjectionType(t: bound, whereTypes: [], whereTraits: [])))) offset=bound.span.start />)
+                associatedBounds.append(<TraitAssociatedBound member=member constraint=(try self.lowerValueTraitConstraint(traitType: (try self.normalizeProjectionType(t: bound)))) offset=bound.span.start />)
             }
         }
         mut val supertraits: Array[TraitConstraint] = []
         for val declared in t.supertraits {
-            val constraint = (try self.lowerValueTraitConstraint(traitType: (try self.normalizeProjectionType(t: declared, whereTypes: [], whereTraits: []))))
+            val constraint = (try self.lowerValueTraitConstraint(traitType: (try self.normalizeProjectionType(t: declared))))
             if constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declared.span.start, msg: "unknown supertrait or incompatible trait arguments") /> }
             supertraits.append(constraint)
         }

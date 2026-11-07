@@ -3,6 +3,82 @@
 
 // Lower generic parameter names `[T, U]` (Array[String]) to the arena's Bind spans.
 
+impl Comp {
+    inout fn beginShortProjection(site: U64) -> Result[(), CompileDiagnostic] {
+        // Bound query growth and aggregate stack use in unoptimized builds.
+        // Both AST representations consume this same request-depth budget.
+        if self.lowerProjectionDepth >= 32U64 { return <Result.Err error=self.diagnosticAt(offset: site, msg: "associated-type short projection analysis limit exceeded", failureDomain: <FailureDomain.Limit />) /> }
+        self.lowerProjectionDepth += 1U64
+        return <Result.Ok value=() />
+    }
+
+    // Legacy value ASTs may provide only the displayed trait name. Preserve
+    // one row per subject, with its authored site, before combining scopes.
+    inout fn valueProjectionTraitTypes(subjects: Array[TypeAst], names: Array[String], types: Array[TypeAst]) -> Result[Array[TypeAst], CompileDiagnostic] {
+        mut val result: Array[TypeAst] = []
+        mut val index = 0U64
+        while index < subjects.count() {
+            if index < types.count() { result.append(types[index]) }
+            else if index < names.count() { result.append(<TypeAst name=names[index] args=[] span=subjects[index].span />) }
+            else { return <Result.Err error=self.diagnosticAt(offset: subjects[index].span.start, msg: "invalid projection bound input", failureDomain: <FailureDomain.Input />) /> }
+            index += 1U64
+        }
+        return <Result.Ok value=result />
+    }
+
+    inout fn decodeValueTraitConstraintArguments(traitType: TypeAst, owner: U64, site: U64) -> Result[TraitConstraint, CompileDiagnostic] {
+        mut val boundArgs: Array[U64] = []
+        mut val boundAssocNames: Array[U64] = []
+        mut val boundAssocValues: Array[U64] = []
+        mut val ai: U64 = 0U64
+        while ai < traitType.args.count() {
+            val boundRef: U64 = (try self.lowerType(t: (try self.normalizeProjectionType(t: traitType.args[ai])))).ref
+            mut val label: U64 = 0U64
+            if ai < traitType.argLabels.count() && traitType.argLabels[ai].bytes().count() > 0U64 {
+                val labelBind: Bind = self.internBytes(s: traitType.argLabels[ai])
+                label = labelBind.nameId
+            }
+            if label == 0U64 { boundArgs.append(boundRef) }
+            else {
+                boundAssocNames.append(label)
+                boundAssocValues.append(boundRef)
+            }
+            ai += 1U64
+        }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        mut val pi: U64 = 0U64
+        while pi < boundAssocNames.count() && pi < boundAssocValues.count() {
+            predicates.append(<TraitAssocPredicate member=boundAssocNames[pi] value=boundAssocValues[pi] span=site />)
+            pi += 1U64
+        }
+        return <Result.Ok value=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=boundArgs /> positionalArgsOpen=boundArgs.count() == 0U64 assocPredicates=predicates /> />
+    }
+
+    inout fn decodeSyntaxTraitConstraintArguments(traitType: SyntaxType, owner: U64, site: U64) -> Result[TraitConstraint, CompileDiagnostic] {
+        mut val args: Array[U64] = []
+        mut val assocNames: Array[U64] = []
+        mut val assocValues: Array[U64] = []
+        mut val ai: U64 = 0U64
+        while ai < syntaxTypeArgCount(file: self.syntax, ty: traitType) {
+            val arg: U64 = (try self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: traitType, index: ai))).ref
+            val label = if ai < traitType.argLabels.count { give syntaxTypeArgLabel(file: self.syntax, ty: traitType, index: ai) } else { give <Span start=0U64 end=0U64 /> }
+            if label.end > label.start {
+                assocNames.append(intern(c: inout self, start: label.start, len: label.end - label.start))
+                assocValues.append(arg)
+            } else { args.append(arg) }
+            ai += 1U64
+        }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        ai = 0U64
+        while ai < assocNames.count() && ai < assocValues.count() {
+            predicates.append(<TraitAssocPredicate member=assocNames[ai] value=assocValues[ai] span=site />)
+            ai += 1U64
+        }
+        return <Result.Ok value=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=args /> positionalArgsOpen=args.count() == 0U64 assocPredicates=predicates /> />
+    }
+
+}
+
 pub impl Comp {
     fn traitOwnerHasAssocId(owner: U64, assocId: U64) -> Bool {
         val index = self.decls.traitOwnerIndex(offset: owner)
@@ -11,16 +87,6 @@ pub impl Comp {
             if member.nameId == assocId { return true }
         }
         return false
-    }
-
-    inout fn traitPositionalArity(traitId: U64) -> U64 {
-        mut val ti: U64 = 0U64
-        while ti < self.decls.traitCount() {
-            val tr: TraitDef = self.decls.traitAt(index: ti)
-            if tr.nameId == traitId { return tr.typeParams.count() }
-            ti += 1U64
-        }
-        return 0U64
     }
 
     inout fn boundLhsMatchesType(lhs: TypeAst, t: TypeAst) -> Bool {
@@ -46,35 +112,44 @@ pub impl Comp {
         return true
     }
 
-    inout fn uniqueProjectionTrait(t: TypeAst, whereTypes: Array[TypeAst], whereTraits: Array[String]) -> Result[String, CompileDiagnostic] {
-        val assocN: Bind = self.internBytes(s: t.projectionAssoc)
-        mut val found: String = ""
-        mut val foundId: U64 = 0
-        mut val count: U64 = 0
-        mut val i: U64 = 0
-        while i < whereTypes.count() {
-            if self.boundLhsMatchesType(lhs: whereTypes[i], t: t) {
-                if i < whereTraits.count() {
-                    val owner = self.traitOwnerForSelector(siteOffset: t.span.start, text: whereTraits[i])
-                    if self.traitOwnerHasAssocId(owner: owner, assocId: assocN.nameId) {
-                        if foundId != owner {
-                            found = whereTraits[i]
-                            foundId = owner
-                            count += 1U64
-                        }
-                    }
+    inout fn chooseShortProjectionSource(sources: Array[ResolvedViewSource], member: U64, site: U64) -> Result[ResolvedViewSource, CompileDiagnostic] {
+        mut val candidates: Array[ResolvedViewSource] = []
+        for val source in sources {
+            val ownerIndex = self.decls.traitOwnerIndex(offset: source.traitInstance.owner)
+            if ownerIndex >= self.decls.traitOwnerCount() { continue }
+            val owner = self.decls.traitOwnerAt(index: ownerIndex)
+            if owner.arity != source.traitInstance.positionalArgs.count() || !self.traitOwnerHasAssocId(owner: owner.nameStart, assocId: member) { continue }
+            mut val present = false
+            for val candidate in candidates { if self.semanticViewSourceEq(a: candidate, b: source) { present = true } }
+            if !present { candidates.append(source) }
+        }
+        if candidates.count() == 1U64 { return <Result.Ok value=candidates[0U64] /> }
+        val message = if candidates.count() == 0U64 { give "associated-type short projection has no unique trait source — write `T#Trait.Item` or add an appropriate `where T: Trait` bound (spec/08)" } else { give "associated-type short projection is ambiguous — write the canonical `T#Trait.Item` form (spec/08)" }
+        return <Result.Err error=self.diagnosticAt(offset: site, msg: message, failureDomain: <FailureDomain.Source />) />
+    }
+
+    inout fn uniqueProjectionSource(t: TypeAst) -> Result[ResolvedViewSource, CompileDiagnostic] {
+        try self.beginShortProjection(site: t.span.start)
+        val result = self.uniqueProjectionSourceCore(t: t)
+        self.lowerProjectionDepth -= 1U64
+        return result
+    }
+
+    inout fn uniqueProjectionSourceCore(t: TypeAst) -> Result[ResolvedViewSource, CompileDiagnostic] {
+        mut val sources: Array[ResolvedViewSource] = []
+        mut val index = 0U64
+        while index < self.lowerWhereTypes.count() && index < self.lowerWhereTraitTypes.count() {
+            if self.boundLhsMatchesType(lhs: self.lowerWhereTypes[index], t: t) {
+                val bound = try self.normalizeProjectionType(t: self.lowerWhereTraitTypes[index])
+                val source = if bound.nameSpan.end > bound.nameSpan.start { give (try self.bindViewSourceName(siteOffset: bound.span.start, name: bound.nameSpan)) } else { give (try self.lowerViewSource(siteOffset: bound.span.start, text: bound.name)) }
+                if self.traitOwnerHasAssocId(owner: source.traitInstance.owner, assocId: self.internBytes(s: t.projectionAssoc).nameId) {
+                    val constraint = try self.decodeValueTraitConstraintArguments(traitType: bound, owner: source.traitInstance.owner, site: bound.span.start)
+                    sources.append(source.withArguments(arguments: constraint.key.positionalArgs))
                 }
             }
-            i += 1
+            index += 1U64
         }
-        if count == 1U64 {
-            return <Result.Ok value=found />
-        }
-        if count == 0U64 {
-            return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type short projection has no unique trait source — write `T#Trait.Item` or add an appropriate `where T: Trait` bound (spec/08)") />
-        } else {
-            return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type short projection is ambiguous — write the canonical `T#Trait.Item` form (spec/08)") />
-        }
+        return self.chooseShortProjectionSource(sources: sources, member: self.internBytes(s: t.projectionAssoc).nameId, site: t.span.start)
     }
 
     inout fn boundLhsMatchesSyntaxType(lhs: TypeId, t: SyntaxType) -> Bool {
@@ -92,40 +167,35 @@ pub impl Comp {
         return true
     }
 
-    // Resolve a short associated projection without allocating a replacement
-    // SyntaxType node.  The immutable raw tree remains source truth; lowering
-    // chooses the unique trait source as a local span for this semantic use.
-    inout fn uniqueSyntaxProjectionTrait(t: SyntaxType) -> Result[Span, CompileDiagnostic] {
-        val assocId: U64 = intern(c: inout self, start: t.projectionAssoc.start, len: t.projectionAssoc.end - t.projectionAssoc.start)
-        mut val found: Span = <Span start=0U64 end=0U64 />
-        mut val foundId: U64 = 0U64
-        mut val count: U64 = 0U64
-        mut val i: U64 = 0U64
-        while i < self.lowerWhereSyntaxTypes.count() {
-            if self.boundLhsMatchesSyntaxType(lhs: self.lowerWhereSyntaxTypes[i], t: t) {
-                if i < self.lowerWhereSyntaxTraits.count() {
-                    val traitSpan: Span = self.lowerWhereSyntaxTraits[i]
-                    val owner = self.traitOwnerForSelectorSpan(siteOffset: t.span.start, start: traitSpan.start, len: traitSpan.end - traitSpan.start)
-                    if self.traitOwnerHasAssocId(owner: owner, assocId: assocId) {
-                        if foundId != owner {
-                            found = traitSpan
-                            foundId = owner
-                            count += 1U64
-                        }
-                    }
-                }
-            }
-            i += 1U64
-        }
-        if count == 1U64 { return <Result.Ok value=found />}
-        if count == 0U64 {
-            return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type short projection has no unique trait source — write `T#Trait.Item` or add an appropriate `where T: Trait` bound (spec/08)") />
-        } else {
-            return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type short projection is ambiguous — write the canonical `T#Trait.Item` form (spec/08)") />
-        }
+    // Both syntax adapters decode complete lexical constraints and use one
+    // instance-level uniqueness decision. Raw syntax is not rewritten.
+    inout fn uniqueSyntaxProjectionSource(t: SyntaxType) -> Result[ResolvedViewSource, CompileDiagnostic] {
+        try self.beginShortProjection(site: t.span.start)
+        val result = self.uniqueSyntaxProjectionSourceCore(t: t)
+        self.lowerProjectionDepth -= 1U64
+        return result
     }
 
-    inout fn normalizeProjectionType(t: TypeAst, whereTypes: Array[TypeAst], whereTraits: Array[String]) -> Result[TypeAst, CompileDiagnostic] {
+    inout fn uniqueSyntaxProjectionSourceCore(t: SyntaxType) -> Result[ResolvedViewSource, CompileDiagnostic] {
+        mut val sources: Array[ResolvedViewSource] = []
+        mut val index = 0U64
+        while index < self.lowerWhereSyntaxTypes.count() && index < self.lowerWhereSyntaxTraitTypes.count() {
+            if self.boundLhsMatchesSyntaxType(lhs: self.lowerWhereSyntaxTypes[index], t: t) {
+                val bound = try self.resolveSyntaxTypePath(t: syntaxType(file: self.syntax, id: self.lowerWhereSyntaxTraitTypes[index]))
+                val source = try self.bindViewSourceName(siteOffset: bound.span.start, name: bound.name)
+                val member = intern(c: inout self, start: t.projectionAssoc.start, len: t.projectionAssoc.end - t.projectionAssoc.start)
+                if self.traitOwnerHasAssocId(owner: source.traitInstance.owner, assocId: member) {
+                    val constraint = try self.decodeSyntaxTraitConstraintArguments(traitType: bound, owner: source.traitInstance.owner, site: bound.span.start)
+                    sources.append(source.withArguments(arguments: constraint.key.positionalArgs))
+                }
+            }
+            index += 1U64
+        }
+        val member = intern(c: inout self, start: t.projectionAssoc.start, len: t.projectionAssoc.end - t.projectionAssoc.start)
+        return self.chooseShortProjectionSource(sources: sources, member: member, site: t.span.start)
+    }
+
+    inout fn normalizeProjectionType(t: TypeAst) -> Result[TypeAst, CompileDiagnostic] {
         if t.namePath.count() != 0U64 {
             mut val names: Array[Span] = []
             mut val index = 0U64
@@ -147,12 +217,12 @@ pub impl Comp {
                 associated = tail.name
                 associatedSpan = tail.nameSpan
             }
-            return self.normalizeProjectionType(t: <TypeAst name=head.name nameSpan=head.nameSpan args=head.args span=t.span extView=t.extView extViewSpan=t.extViewSpan viewNames=t.viewNames viewSources=t.viewSources viewNameSpans=t.viewNameSpans projectionTrait=t.projectionTrait projectionTraitSpan=t.projectionTraitSpan projectionTraitArgs=t.projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionTraitArgLabelSpans=t.projectionTraitArgLabelSpans projectionAssoc=associated projectionAssocSpan=associatedSpan isAny=t.isAny argLabels=head.argLabels argLabelSpans=head.argLabelSpans isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord />, whereTypes: whereTypes, whereTraits: whereTraits)
+            return self.normalizeProjectionType(t: <TypeAst name=head.name nameSpan=head.nameSpan args=head.args span=t.span extView=t.extView extViewSpan=t.extViewSpan viewNames=t.viewNames viewSources=t.viewSources viewNameSpans=t.viewNameSpans projectionTrait=t.projectionTrait projectionTraitSpan=t.projectionTraitSpan projectionTraitArgs=t.projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionTraitArgLabelSpans=t.projectionTraitArgLabelSpans projectionAssoc=associated projectionAssocSpan=associatedSpan isAny=t.isAny argLabels=head.argLabels argLabelSpans=head.argLabelSpans isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord />)
         }
         mut val args: Array[TypeAst] = []
         mut val i: U64 = 0
         while i < t.args.count() {
-            args.append((try self.normalizeProjectionType(t: t.args[i], whereTypes: whereTypes, whereTraits: whereTraits)))
+            args.append((try self.normalizeProjectionType(t: t.args[i])))
             i += 1
         }
         if t.projectionAssoc.bytes().count() > 0U64 && t.projectionTrait.bytes().count() == 0U64 {
@@ -162,32 +232,21 @@ pub impl Comp {
                 return <Result.Ok value=<TypeAst name=t.projectionAssoc nameSpan=t.projectionAssocSpan args=args span=t.span extView=t.extView viewNames=t.viewNames viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord /> />
             }
         }
-        mut val projectionTrait: String = t.projectionTrait
-        if t.projectionAssoc.bytes().count() > 0 {
-            if projectionTrait.bytes().count() == 0 {
-                projectionTrait = (try self.uniqueProjectionTrait(t: t, whereTypes: whereTypes, whereTraits: whereTraits))
-            }
-        }
-
         mut val projectionTraitArgs: Array[TypeAst] = []
         i = 0U64
         while i < t.projectionTraitArgs.count() {
-            projectionTraitArgs.append((try self.normalizeProjectionType(t: t.projectionTraitArgs[i], whereTypes: whereTypes, whereTraits: whereTraits)))
+            projectionTraitArgs.append((try self.normalizeProjectionType(t: t.projectionTraitArgs[i])))
             i += 1U64
         }
-        return <Result.Ok value=<TypeAst name=t.name nameSpan=t.nameSpan args=args span=t.span extView=t.extView extViewSpan=t.extViewSpan viewNames=t.viewNames viewNameSpans=t.viewNameSpans viewSources=t.viewSources projectionTrait=projectionTrait projectionTraitSpan=t.projectionTraitSpan projectionTraitArgs=projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionTraitArgLabelSpans=t.projectionTraitArgLabelSpans projectionAssoc=t.projectionAssoc projectionAssocSpan=t.projectionAssocSpan isAny=t.isAny argLabels=t.argLabels argLabelSpans=t.argLabelSpans isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord /> />
+        return <Result.Ok value=<TypeAst name=t.name nameSpan=t.nameSpan args=args span=t.span extView=t.extView extViewSpan=t.extViewSpan viewNames=t.viewNames viewNameSpans=t.viewNameSpans viewSources=t.viewSources projectionTrait=t.projectionTrait projectionTraitSpan=t.projectionTraitSpan projectionTraitArgs=projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionTraitArgLabelSpans=t.projectionTraitArgLabelSpans projectionAssoc=t.projectionAssoc projectionAssocSpan=t.projectionAssocSpan isAny=t.isAny argLabels=t.argLabels argLabelSpans=t.argLabelSpans isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord /> />
     }
 
-    inout fn normalizeProjectionTypeActive(t: TypeAst) -> Result[TypeAst, CompileDiagnostic] {
-        return <Result.Ok value=(try self.normalizeProjectionType(t: t, whereTypes: self.lowerWhereTypes, whereTraits: self.lowerWhereTraits)) />
-    }
-
-    inout fn normalizeParams(params: Array[ParamAst], whereTypes: Array[TypeAst], whereTraits: Array[String]) -> Result[Array[ParamAst], CompileDiagnostic] {
+    inout fn normalizeParams(params: Array[ParamAst]) -> Result[Array[ParamAst], CompileDiagnostic] {
         mut val out: Array[ParamAst] = []
         mut val i: U64 = 0
         while i < params.count() {
             val p: ParamAst = params[i]
-            out.append(<ParamAst name=p.name ty=(try self.normalizeProjectionType(t: p.ty, whereTypes: whereTypes, whereTraits: whereTraits)) isInout=p.isInout isMove=p.isMove isBorrow=p.isBorrow noLabel=p.noLabel hasDefault=p.hasDefault defaultVal=p.defaultVal span=p.span />)
+            out.append(<ParamAst name=p.name ty=(try self.normalizeProjectionType(t: p.ty)) isInout=p.isInout isMove=p.isMove isBorrow=p.isBorrow noLabel=p.noLabel hasDefault=p.hasDefault defaultVal=p.defaultVal span=p.span />)
             i += 1
         }
         return <Result.Ok value=out />
@@ -365,18 +424,18 @@ pub impl Comp {
         val typeParams: Array[Bind] = (try self.lowerSyntaxDeclTypeParams(d: d))
         val savedTP: Array[Bind] = self.cur.typeParams
         val savedWT: Array[TypeId] = self.lowerWhereSyntaxTypes
-        val savedWTr: Array[Span] = self.lowerWhereSyntaxTraits
+        val savedWTr: Array[TypeId] = self.lowerWhereSyntaxTraitTypes
         self.cur.typeParams = typeParams
         mut val whereTypes: Array[TypeId] = []
-        mut val whereTraits: Array[Span] = []
+        mut val whereTraits: Array[TypeId] = []
         mut val i: U64 = 0U64
         while i < syntaxDeclWhereCount(file: self.syntax, decl: d) {
             whereTypes.append(syntaxDeclWhereType(file: self.syntax, decl: d, index: i))
-            whereTraits.append(syntaxDeclWhereTraitSpan(file: self.syntax, decl: d, index: i))
+            whereTraits.append(syntaxDeclWhereTraitType(file: self.syntax, decl: d, index: i))
             i += 1U64
         }
         self.lowerWhereSyntaxTypes = whereTypes
-        self.lowerWhereSyntaxTraits = whereTraits
+        self.lowerWhereSyntaxTraitTypes = whereTraits
         val params: Array[Param] = (try self.lowerSyntaxDeclParams(d: d))
         mut val retStart: U64 = 0U64
         mut val retLen: U64 = 0U64
@@ -397,7 +456,7 @@ pub impl Comp {
         try self.appendSyntaxFuncBounds(fnIdx: fnIdx, decl: d)
         self.cur.typeParams = savedTP
         self.lowerWhereSyntaxTypes = savedWT
-        self.lowerWhereSyntaxTraits = savedWTr
+        self.lowerWhereSyntaxTraitTypes = savedWTr
         self.drainDerives(typeStart: d.name.start, typeLen: d.name.end - d.name.start, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
         return <Result.Ok value=() />
     }
@@ -466,18 +525,18 @@ pub impl Comp {
         // scope so lowerType marks type-parameter heads as skip (siteOffset 0).
         val savedTP: Array[Bind] = self.cur.typeParams
         val savedWT: Array[TypeAst] = self.lowerWhereTypes
-        val savedWTr: Array[String] = self.lowerWhereTraits
+        val savedWTr: Array[TypeAst] = self.lowerWhereTraitTypes
         self.cur.typeParams = typeParams
         self.lowerWhereTypes = d.whereTypes
-        self.lowerWhereTraits = d.whereTraits
-        val normParams: Array[ParamAst] = (try self.normalizeParams(params: d.params, whereTypes: d.whereTypes, whereTraits: d.whereTraits))
+        self.lowerWhereTraitTypes = (try self.valueProjectionTraitTypes(subjects: d.whereTypes, names: d.whereTraits, types: d.whereTraitTypes))
+        val normParams: Array[ParamAst] = (try self.normalizeParams(params: d.params))
         val params: Array[Param] = (try self.lowerParams(params: normParams))
         mut val retStart: U64 = 0
         mut val retLen: U64 = 0
         mut val retIsArray: Bool = false
         mut val retRef: U64 = 0
         if d.hasRet {
-            val pt: PType = (try self.lowerType(t: (try self.normalizeProjectionType(t: d.ret, whereTypes: d.whereTypes, whereTraits: d.whereTraits))))
+            val pt: PType = (try self.lowerType(t: (try self.normalizeProjectionType(t: d.ret))))
             retStart = pt.start
             retLen = pt.len
             retIsArray = pt.isArray
@@ -496,33 +555,17 @@ pub impl Comp {
         try self.appendFuncBounds(fnIdx: fnIdx, params: d.whereParams, traits: d.whereTraits, types: d.whereTypes, traitTypes: d.whereTraitTypes)
         self.cur.typeParams = savedTP
         self.lowerWhereTypes = savedWT
-        self.lowerWhereTraits = savedWTr
+        self.lowerWhereTraitTypes = savedWTr
         // attach pending `@[...]` directives to this fn (a macro on a free function);
         // declStart/declEnd = the fn's source span for the gen harness slice.
         self.drainDerives(typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
         return <Result.Ok value=() />
     }
 
-    inout fn lowerValueTraitConstraint(traitType: TypeAst, fnIdx: U64 = 18446744073709551615U64, types: Array[TypeAst] = [], traits: Array[String] = []) -> Result[TraitConstraint, CompileDiagnostic] {
+    inout fn lowerValueTraitConstraint(traitType: TypeAst, fnIdx: U64 = 18446744073709551615U64) -> Result[TraitConstraint, CompileDiagnostic] {
         val tn = self.lowerTypeName(name: traitType.name, span: traitType.nameSpan)
-        mut val boundArgs: Array[U64] = []
-        mut val boundAssocNames: Array[U64] = []
-        mut val boundAssocValues: Array[U64] = []
-        mut val ai: U64 = 0U64
-        while ai < traitType.args.count() {
-            val boundRef: U64 = (try self.lowerType(t: (try self.normalizeProjectionType(t: traitType.args[ai], whereTypes: types, whereTraits: traits)))).ref
-            mut val label: U64 = 0U64
-            if ai < traitType.argLabels.count() && traitType.argLabels[ai].bytes().count() > 0U64 {
-                val labelBind: Bind = self.internBytes(s: traitType.argLabels[ai])
-                label = labelBind.nameId
-            }
-            if label == 0U64 { boundArgs.append(boundRef) }
-            else {
-                boundAssocNames.append(label)
-                boundAssocValues.append(boundRef)
-            }
-            ai += 1U64
-        }
+        val decoded = try self.decodeValueTraitConstraintArguments(traitType: traitType, owner: 0U64, site: traitType.span.start)
+        val boundArgs = decoded.key.positionalArgs
         // Resolve the trait spelling at its authored use once.  An use
         // alias is a surface name, not the semantic trait identity stored
         // in a bound: every later proof/query must see the declaration
@@ -539,7 +582,11 @@ pub impl Comp {
             traitUseStart = traitType.nameSpan.start
             traitUseLen = traitType.nameSpan.end - traitType.nameSpan.start
         }
-        val owner: U64 = self.traitOwnerAtUse(start: traitUseStart, len: traitUseLen, arity: boundArgs.count(), openArgs: boundArgs.count() == 0U64)
+        val owner = if traitType.nameSpan.end == traitType.nameSpan.start && traitType.span.start != 0U64 {
+            val selected = self.traitOwnerForSelector(siteOffset: traitType.span.start, text: traitType.name)
+            val index = self.decls.traitOwnerIndex(offset: selected)
+            give if index < self.decls.traitOwnerCount() && (boundArgs.count() == 0U64 || self.decls.traitOwnerAt(index: index).arity == boundArgs.count()) { give selected } else { give 0U64 }
+        } else { give self.traitOwnerAtUse(start: traitUseStart, len: traitUseLen, arity: boundArgs.count(), openArgs: boundArgs.count() == 0U64) }
         mut val resolvedOwner: U64 = owner
         if resolvedOwner == 0U64 && self.modules.qualifiedUseIndex(offset: traitUseStart) >= self.modules.qualifiedUseCount() && fnIdx < self.arena.functionCount() {
             resolvedOwner = self.traitOwnerInScopeById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: tn.nameId, arity: boundArgs.count())
@@ -552,16 +599,7 @@ pub impl Comp {
         if resolvedOwner == 0U64 && self.modules.qualifiedUseIndex(offset: traitUseStart) >= self.modules.qualifiedUseCount() && boundArgs.count() == 0U64 && fnIdx < self.arena.functionCount() {
             resolvedOwner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: tn.nameId)
         }
-        mut val predicates: Array[TraitAssocPredicate] = []
-        mut val pi: U64 = 0U64
-        while pi < boundAssocNames.count() && pi < boundAssocValues.count() {
-            predicates.append(<TraitAssocPredicate member=boundAssocNames[pi] value=boundAssocValues[pi] span=traitUseStart />)
-            pi += 1U64
-        }
-        // An omitted positional argument list remains open independently
-        // of the selected declaration's arity.
-        val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=resolvedOwner positionalArgs=boundArgs /> positionalArgsOpen=boundArgs.count() == 0U64 assocPredicates=predicates />
-        return <Result.Ok value=constraint />
+        return <Result.Ok value=<TraitConstraint key=<TraitInstanceKey owner=resolvedOwner positionalArgs=boundArgs /> positionalArgsOpen=decoded.positionalArgsOpen assocPredicates=decoded.assocPredicates /> />
     }
 
     inout fn appendFuncBounds(fnIdx: U64, params: Array[String], traits: Array[String], types: Array[TypeAst] = [], traitTypes: Array[TypeAst] = []) -> Result[(), CompileDiagnostic] {
@@ -569,11 +607,11 @@ pub impl Comp {
         while i < params.count() {
             val pn = self.internBytes(s: params[i])
             mut val traitType = <TypeAst name=traits[i] args=[] span=<Span start=0 end=0 /> />
-            if i < traitTypes.count() { traitType = try self.normalizeProjectionType(t: traitTypes[i], whereTypes: types, whereTraits: traits) }
+            if i < traitTypes.count() { traitType = try self.normalizeProjectionType(t: traitTypes[i]) }
             mut val pty = 0U64
-            if i < types.count() { pty = (try self.lowerType(t: (try self.normalizeProjectionType(t: types[i], whereTypes: types, whereTraits: traits)))).ref }
+            if i < types.count() { pty = (try self.lowerType(t: (try self.normalizeProjectionType(t: types[i])))).ref }
             else { pty = self.simpleTypeRef(nameStart: pn.nameStart, nameLen: pn.nameLen) }
-            val constraint = try self.lowerValueTraitConstraint(traitType: traitType, fnIdx: fnIdx, types: types, traits: traits)
+            val constraint = try self.lowerValueTraitConstraint(traitType: traitType, fnIdx: fnIdx)
             self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId constraint=constraint />)
             i += 1U64
         }
@@ -595,30 +633,13 @@ pub impl Comp {
     inout fn lowerSyntaxTraitConstraint(traitTy: TypeId, fnIdx: U64 = 18446744073709551615U64) -> Result[TraitConstraint, CompileDiagnostic] {
         val traitType: SyntaxType = (try self.resolveSyntaxTypePath(t: syntaxType(file: self.syntax, id: traitTy)))
         val trait = traitType.name
-        mut val args: Array[U64] = []
-        mut val assocNames: Array[U64] = []
-        mut val assocValues: Array[U64] = []
-        mut val ai: U64 = 0U64
-        while ai < syntaxTypeArgCount(file: self.syntax, ty: traitType) {
-            val arg: U64 = (try self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: traitType, index: ai))).ref
-            val label: Span = syntaxTypeArgLabel(file: self.syntax, ty: traitType, index: ai)
-            if label.end > label.start {
-                assocNames.append(intern(c: inout self, start: label.start, len: label.end - label.start))
-                assocValues.append(arg)
-            } else { args.append(arg) }
-            ai += 1U64
-        }
+        val decoded = try self.decodeSyntaxTraitConstraintArguments(traitType: traitType, owner: 0U64, site: trait.start)
+        val args = decoded.key.positionalArgs
         val traitId: U64 = intern(c: inout self, start: trait.start, len: trait.end - trait.start)
         mut val owner: U64 = self.traitOwnerAtUse(start: trait.start, len: trait.end - trait.start, arity: args.count(), openArgs: args.count() == 0U64)
         if owner == 0U64 && self.modules.qualifiedUseIndex(offset: trait.start) >= self.modules.qualifiedUseCount() && fnIdx < self.arena.functionCount() { owner = self.traitOwnerInScopeById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: traitId, arity: args.count()) }
         if owner == 0U64 && self.modules.qualifiedUseIndex(offset: trait.start) >= self.modules.qualifiedUseCount() && args.count() == 0U64 && fnIdx < self.arena.functionCount() { owner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: traitId) }
-        mut val predicates: Array[TraitAssocPredicate] = []
-        ai = 0U64
-        while ai < assocNames.count() && ai < assocValues.count() {
-            predicates.append(<TraitAssocPredicate member=assocNames[ai] value=assocValues[ai] span=trait.start />)
-            ai += 1U64
-        }
-        return <Result.Ok value=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=args /> positionalArgsOpen=args.count() == 0U64 assocPredicates=predicates /> />
+        return <Result.Ok value=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=args /> positionalArgsOpen=decoded.positionalArgsOpen assocPredicates=decoded.assocPredicates /> />
     }
 
     inout fn appendSyntaxBound(fnIdx: U64, param: Span, rawTrait: Span, ty: TypeId, traitTy: TypeId) -> Result[(), CompileDiagnostic] {

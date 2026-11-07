@@ -412,15 +412,18 @@ pub struct Comp {
     pub mut val activeAssumptionAdmission: Array[U64] = []
     pub mut val activeConformanceConditions: Array[WitnessMatch] = []
     // lowering-time where constraints for associated-type short projection
-    // normalization (`T.Item` -> `T#Trait.Item`). Kept on Comp rather than Cursor
+    // selection (T.Item -> canonical owner plus all positional arguments).
+    // Full trait nodes retain namespace paths and arguments. Kept on Comp rather than Cursor
     // because it uses Syntax-layer TypeAst and must not leak into Ir.pw.
     pub mut val lowerWhereTypes: Array[TypeAst] = []
-    pub mut val lowerWhereTraits: Array[String] = []
+    pub mut val lowerWhereTraitTypes: Array[TypeAst] = []
     // SyntaxFile counterpart of the legacy projection-normalization context.
     // The ID lowerer never reconstructs value TypeAst/String just to resolve
     // `T.Item` against an enclosing `where T: Trait` bound.
     pub mut val lowerWhereSyntaxTypes: Array[TypeId] = []
-    pub mut val lowerWhereSyntaxTraits: Array[Span] = []
+    pub mut val lowerWhereSyntaxTraitTypes: Array[TypeId] = []
+    // Shared bounded recursion for both short-projection syntax adapters.
+    pub mut val lowerProjectionDepth: U64 = 0U64
     pub mut val lowerAssociatedOwner: U64 = 0U64
     pub mut val lowerAssociatedArgs: Array[U64] = []
     // gen mode (spec/16 `plew gen`): set when invoked as `plewc --gen <file>`.
