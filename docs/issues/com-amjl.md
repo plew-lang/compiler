@@ -151,14 +151,10 @@ API with its actual producer/consumer without duplicating their task bodies.
 
 ## Complete View Reader Handoff
 
-com-zdod's neutral completion review identifies proofSourceIsActive
-(src/Codegen/Mono/Resolve.pw) as still reading only viewIds/viewExtId. Its
-source-proof callers must consume retained complete sources, distinguish
-extension kind from same-spelled trait selectors, and preserve the selected
-instance/evidence. This is a finite investigation item within the existing
-view/projection proof repair, not a reproduced source-level wrong witness or
-new inference rule. Structural runtime erasure and existential equality are
-repaired/tested in com-zdod; those do not certify this proof activation.
+The earlier com-zdod review identified a legacy proofSourceIsActive reader.
+Current source reads complete semantic sources and distinguishes extension kind;
+do not retain the old viewIds-only observation as a current defect. This does
+not establish exact-instance admission or retained proof to final consumers.
 
 ## Array Receiver Admission Increment
 
@@ -336,3 +332,37 @@ Source. Preserve this failing test and existing com-yeua/com-fsuq responsibility
 do not weaken the oracle or call it GREEN. Neutral review accepts the additional
 coverage and independently replays the positive binary; source location remains
 a limitation. The existing structural fixture is byte-unchanged from31014653.
+
+## Authored Provenance Producer Prefix (WIP)
+
+Preserve occurrence identity independently from structural type identity before
+implementing source proof admission. SourceTypeUses owns only append-only
+occurrences and bracketed lexical scope tokens. Each occurrence retains its term,
+original site, active token and immutable ParamId-bearing binder snapshot.
+Free functions, methods, impls and signatures reserve scope before lowering in
+both adapters; requirement/extern origins are distinct and requirements retain
+the trait owner. Private cores return Result through a wrapper that restores
+parent scope and records Lowered/Failed on all exits. Raw interning creates no
+receipt. Zero token is explicitly unowned, never module authority.
+
+This is producer-only provenance, not canonical owner binding, scope authority
+or admitted conformance. Lowered means syntax lowering completed only. Existing
+ref arrays/visibility consumers remain until the common receipt consumer replaces
+them; no correctness claim about their ref cache follows. Unsupported declaration
+origins, owner sealing and failed-ancestor authority remain non-authoritative.
+Next bind tokens to real function/conformance/raw-signature owners and publish
+owned premises, including inherent impl conditions and trait Self, through the
+shared proof query. Do not launder raw requirement clauses as implementation
+Requirement evidence or arbitrary Conformance pool authority. Then admit exact
+views under an explicit lexical environment, retain proofs and migrate final
+projection consumers. The existing8 source-admission REDs are still required.
+
+Manual AuthoredTypeUseProvenance tests store bounds/snapshots, same-term distinct
+occurrences, original sites in both adapters, impl/member ParamIds and parent
+tokens, requirement siblings/Self/trait owner, extern separation, raw interning,
+and success/failure restore. First execution assumptions about TypeRef ID equality
+and replaying an already registered declaration were test setup errors, not
+product REDs. The final native probe succeeds. Static independent review accepts
+this finite prefix after value impl/requirement and exact-site test additions.
+Fresh compiler controls, formal fixed-point/performance and task-wide admission
+remain pending. [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/authored-type-provenance-prefix.json).

@@ -277,3 +277,12 @@ only existing admission/name/ParamId receiver retention. The extra mode
 `shorthandInstance` deliberately remains a manual RED (stdout0 versus golden1)
 for com-amjl's complete-bound-instance retention; it must not be counted GREEN
 or removed from that task's required work.
+
+## Authored type provenance prefix
+
+`AuthoredTypeUseProvenance.pw` follows the manual native procedure above and
+compares stdout with its `.out`. It covers original occurrences/ParamIds, eight
+lower entry wrappers across both adapters, nested/error scope restoration and
+raw interning. It is not automatically discovered by the normal fixture suite.
+`Lowered` is a provenance-store state, not successful source/proof admission;
+common source-admission REDs and final-consumer tests remain required by com-amjl.

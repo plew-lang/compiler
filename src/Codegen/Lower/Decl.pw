@@ -421,6 +421,18 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxFuncDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: d.name.start)
+        val result = self.lowerSyntaxFuncDeclInSourceScope(d: d)
+        if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
+            return <Result.Err error=self.diagnosticAt(offset: d.name.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
+        }
+        return result
+    }
+
+}
+
+impl Comp {
+    inout fn lowerSyntaxFuncDeclInSourceScope(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
         val typeParams: Array[Bind] = (try self.lowerSyntaxDeclTypeParams(d: d))
         val savedTP: Array[Bind] = self.cur.typeParams
         val savedWT: Array[TypeId] = self.lowerWhereSyntaxTypes
@@ -460,6 +472,9 @@ pub impl Comp {
         self.drainDerives(typeStart: d.name.start, typeLen: d.name.end - d.name.start, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
         return <Result.Ok value=() />
     }
+}
+
+pub impl Comp {
 
     inout fn lowerStructDecl(d: DeclAst) -> Result[(), CompileDiagnostic] {
         val nm: Bind = self.internBytes(s: d.name)
@@ -518,6 +533,18 @@ pub impl Comp {
     }
 
     inout fn lowerFuncDecl(d: DeclAst) -> Result[(), CompileDiagnostic] {
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: d.nameSpan.start)
+        val result = self.lowerFuncDeclInSourceScope(d: d)
+        if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
+            return <Result.Err error=self.diagnosticAt(offset: d.nameSpan.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
+        }
+        return result
+    }
+
+}
+
+impl Comp {
+    inout fn lowerFuncDeclInSourceScope(d: DeclAst) -> Result[(), CompileDiagnostic] {
         val nameStart: U64 = d.nameSpan.start
         val nameLen: U64 = d.nameSpan.end - d.nameSpan.start
         val typeParams: Array[Bind] = (try self.lowerTypeParamNames(names: d.typeParams, anchor: nameStart, sendableFlags: d.typeParamSendable))
@@ -561,6 +588,9 @@ pub impl Comp {
         self.drainDerives(typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
         return <Result.Ok value=() />
     }
+}
+
+pub impl Comp {
 
     inout fn lowerValueTraitConstraint(traitType: TypeAst, fnIdx: U64 = 18446744073709551615U64) -> Result[TraitConstraint, CompileDiagnostic] {
         val tn = self.lowerTypeName(name: traitType.name, span: traitType.nameSpan)

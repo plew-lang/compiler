@@ -703,6 +703,18 @@ pub impl Comp {
     // not on a shadow MemberAst.  Its temporary arrays are semantic scopes and
     // pool payloads; no source tree is reconstructed or retained.
     inout fn lowerSyntaxMethodMember(im: SyntaxImpl, conformanceTrait: Bind, m: SyntaxMember, recvN: Bind, recvTy: U64, recvTraitArgs: Array[U64], recvTraitOwner: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) -> Result[(), CompileDiagnostic] {
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Method />, anchor: m.name.start, traitOwner: recvTraitOwner)
+        val result = self.lowerSyntaxMethodMemberInSourceScope(im: im, conformanceTrait: conformanceTrait, m: m, recvN: recvN, recvTy: recvTy, recvTraitArgs: recvTraitArgs, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: hasRecv, isAssoc: isAssoc, witnessed: inout witnessed)
+        if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
+            return <Result.Err error=self.diagnosticAt(offset: m.name.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
+        }
+        return result
+    }
+
+}
+
+impl Comp {
+    inout fn lowerSyntaxMethodMemberInSourceScope(im: SyntaxImpl, conformanceTrait: Bind, m: SyntaxMember, recvN: Bind, recvTy: U64, recvTraitArgs: Array[U64], recvTraitOwner: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) -> Result[(), CompileDiagnostic] {
         val nameN: Bind = <Bind nameStart=m.name.start nameLen=m.name.end - m.name.start fieldStart=m.name.start fieldLen=m.name.end - m.name.start />
         mut val boundTypes: Array[TypeId] = []
         mut val boundTraits: Array[TypeId] = []
@@ -828,8 +840,23 @@ pub impl Comp {
         self.lowerWhereSyntaxTraitTypes = savedWTr
         return <Result.Ok value=() />
     }
+}
+
+pub impl Comp {
 
     inout fn lowerMethodMember(im: ImplAst, conformanceTrait: Bind, m: MemberAst, recvN: Bind, recvTy: U64, recvTraitArgs: Array[U64], recvTraitOwner: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) -> Result[(), CompileDiagnostic] {
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Method />, anchor: m.nameSpan.start, traitOwner: recvTraitOwner)
+        val result = self.lowerMethodMemberInSourceScope(im: im, conformanceTrait: conformanceTrait, m: m, recvN: recvN, recvTy: recvTy, recvTraitArgs: recvTraitArgs, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: hasRecv, isAssoc: isAssoc, witnessed: inout witnessed)
+        if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
+            return <Result.Err error=self.diagnosticAt(offset: m.nameSpan.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
+        }
+        return result
+    }
+
+}
+
+impl Comp {
+    inout fn lowerMethodMemberInSourceScope(im: ImplAst, conformanceTrait: Bind, m: MemberAst, recvN: Bind, recvTy: U64, recvTraitArgs: Array[U64], recvTraitOwner: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) -> Result[(), CompileDiagnostic] {
         val nameN: Bind = self.internBytes(s: m.name)
         mut val boundTypes: Array[TypeAst] = []
         mut val boundTraits: Array[TypeAst] = []
@@ -981,8 +1008,23 @@ pub impl Comp {
         self.lowerWhereTraitTypes = savedWTr
         return <Result.Ok value=() />
     }
+}
+
+pub impl Comp {
 
     inout fn lowerImpl(im: ImplAst) -> Result[(), CompileDiagnostic] {
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Implementation />, anchor: im.span.start)
+        val result = self.lowerImplInSourceScope(im: im)
+        if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
+            return <Result.Err error=self.diagnosticAt(offset: im.span.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
+        }
+        return result
+    }
+
+}
+
+impl Comp {
+    inout fn lowerImplInSourceScope(im: ImplAst) -> Result[(), CompileDiagnostic] {
         val implParamBinds: Array[Bind] = (try self.lowerTypeParamNames(names: im.implParams, anchor: im.span.start, sendableFlags: im.implParamSendable))
         val receiverParams = self.cur.typeParams
         self.cur.typeParams = implParamBinds
@@ -1109,8 +1151,23 @@ pub impl Comp {
         self.lowerWhereTraitTypes = savedWTr
         return <Result.Ok value=() />
     }
+}
+
+pub impl Comp {
 
     inout fn lowerSyntaxImpl(im: SyntaxImpl) -> Result[(), CompileDiagnostic] {
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Implementation />, anchor: im.span.start)
+        val result = self.lowerSyntaxImplInSourceScope(im: im)
+        if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
+            return <Result.Err error=self.diagnosticAt(offset: im.span.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
+        }
+        return result
+    }
+
+}
+
+impl Comp {
+    inout fn lowerSyntaxImplInSourceScope(im: SyntaxImpl) -> Result[(), CompileDiagnostic] {
         mut val implSpans: Array[Span] = []
         mut val implFlags: Array[Bool] = []
         mut val i: U64 = 0U64
@@ -1229,6 +1286,9 @@ pub impl Comp {
         self.lowerWhereSyntaxTraitTypes = savedWTr
         return <Result.Ok value=() />
     }
+}
+
+pub impl Comp {
 
     inout fn factoryRequirementReturn(selfRef: U64, kind: U64, errorRef: U64, offset: U64) -> U64 {
         if kind == 0U64 { return selfRef }
@@ -1239,6 +1299,18 @@ pub impl Comp {
     }
 
     inout fn lowerSigToFunc(sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Result[Func, CompileDiagnostic] {
+        val scope = self.sourceTypeUses.begin(kind: (if isExtern { give <SourceTypeScopeKind.ExternSignature /> } else { give <SourceTypeScopeKind.RequirementSignature /> }), anchor: sig.nameSpan.start, traitOwner: self.lowerAssociatedOwner)
+        val result = self.lowerSigToFuncInSourceScope(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
+        if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
+            return <Result.Err error=self.diagnosticAt(offset: sig.nameSpan.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
+        }
+        return result
+    }
+
+}
+
+impl Comp {
+    inout fn lowerSigToFuncInSourceScope(sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Result[Func, CompileDiagnostic] {
         val nameStart: U64 = sig.nameSpan.start
         val nameLen: U64 = sig.nameSpan.end - sig.nameSpan.start
         val typeParams: Array[Bind] = (try self.lowerTypeParamNames(names: sig.typeParams, anchor: nameStart, sendableFlags: sig.typeParamSendable))
@@ -1295,8 +1367,23 @@ pub impl Comp {
         val runtimeIntrinsic: RuntimeIntrinsicDeclaration = self.runtimeIntrinsicDeclaration(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
         return <Result.Ok value=<Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=sig.selfMove isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=sig.isAsync isDiverging=sig.isDiverging isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=nameStart signatureBounds=self.pushConformBounds(bounds: signatureBounds) /> />
     }
+}
+
+pub impl Comp {
 
     inout fn lowerSyntaxSigToFunc(sig: SyntaxSig, isExtern: Bool, isCExtern: Bool) -> Result[Func, CompileDiagnostic] {
+        val scope = self.sourceTypeUses.begin(kind: (if isExtern { give <SourceTypeScopeKind.ExternSignature /> } else { give <SourceTypeScopeKind.RequirementSignature /> }), anchor: sig.name.start, traitOwner: self.lowerAssociatedOwner)
+        val result = self.lowerSyntaxSigToFuncInSourceScope(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
+        if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
+            return <Result.Err error=self.diagnosticAt(offset: sig.name.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
+        }
+        return result
+    }
+
+}
+
+impl Comp {
+    inout fn lowerSyntaxSigToFuncInSourceScope(sig: SyntaxSig, isExtern: Bool, isCExtern: Bool) -> Result[Func, CompileDiagnostic] {
         mut val spans: Array[Span] = []
         mut val flags: Array[Bool] = []
         mut val i: U64 = 0U64
@@ -1374,6 +1461,9 @@ pub impl Comp {
         val runtimeIntrinsic: RuntimeIntrinsicDeclaration = self.runtimeIntrinsicDeclarationSyntax(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
         return <Result.Ok value=<Func nameStart=sig.name.start nameLen=sig.name.end - sig.name.start nameId=intern(c: inout self, start: sig.name.start, len: sig.name.end - sig.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=sig.selfInout selfMove=sig.selfMove isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=sig.isAsync isDiverging=sig.isDiverging isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=sig.name.start signatureBounds=self.pushConformBounds(bounds: signatureBounds) /> />
     }
+}
+
+pub impl Comp {
 
     inout fn validateTraitRequirement(requirement: Func) -> Result[(), CompileDiagnostic] {
         mut val index = 0U64

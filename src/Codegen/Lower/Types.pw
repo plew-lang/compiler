@@ -5,6 +5,7 @@
 impl Comp {
     inout fn recordAuthoredTypeUse(ref: U64, site: U64) {
         self.loweringTypeUses.append(ref)
+        self.sourceTypeUses.record(term: ref, site: site, parameters: self.cur.typeParams)
         if site != 0U64 && self.modules.sourceFileContaining(offset: site).isSome() && !self.authoredTypeUseSites.contains(key: ref) {
             self.authoredTypeUseSites[ref] = site
         }

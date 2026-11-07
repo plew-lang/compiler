@@ -1,3 +1,4 @@
+use ./SourceTypeUses only { SourceTypeUses, SourceTypeScopeKind }
 use ./ModuleScopeBindings only { ModuleScopeBindings, AdmittedModuleScopeBindings, ScopeBindingKind, ScopeBindingFailure, ScopeBinding }
 use @Plew/Syntax only { ExtensionId, syntaxExtension, NameSegmentAst, SyntaxSourceTypes, SyntaxSourceIndex, syntaxSourceApplication, syntaxSourceApplicationTypeArg, syntaxSourceApplicationTypeLabel, SourceApplicationAst, SourceTypesAst, SourceIndexAst }
 use ./Ir only { StructuralOverlap, StructuralOccurrence, StructuralBinding }
@@ -469,6 +470,8 @@ pub struct Comp {
     // Lowering assigns authored type uses to their declaration, expression or
     // block. Record requests local uses; declaration loading checks only the
     // remaining signature/field uses. Synthetic types are not new source uses.
+    // Provenance prefix only: not yet the admission/consumer receipt channel.
+    pub mut val sourceTypeUses: SourceTypeUses = <SourceTypeUses />
     pub mut val loweringTypeUses: Array[U64] = []
     // Authored provenance is independent of legacy visibility suppression.
     mut val authoredTypeUseSites: Dictionary[U64, U64] = [:]

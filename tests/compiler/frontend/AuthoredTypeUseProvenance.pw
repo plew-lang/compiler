@@ -1,0 +1,208 @@
+// Provenance prefix only: Lowered does not mean admitted. These assertions do
+// not replace the com-amjl source-admission REDs or certify retained proofs.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/SourceTypeUses only { SourceTypeUses, SourceTypeScopeKind, SourceTypeScopeState }
+use ../../../src/Ir only { TypeRef, Bind }
+use @Plew/Syntax only { parseItem, TopItemAst, SigAst, rangeEquals }
+use @Std/Io only { print }
+
+fn inspect(compiler~: inout Comp, function~: String, method: Bool, startIndex: U64 = 0U64) {
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: function).nameId)
+    val declaration = compiler.arena.functionAt(index: owner)
+    val first = compiler.funcParamAt(params: declaration.params, index: 0U64).ty
+    val parameter = compiler.arena.typeAt(index: first).paramId
+    if parameter == 0U64 || compiler.arena.typeAt(index: first).siteOffset != 0U64 { panic("expected lexical parameter term") }
+    mut val seen = 0U64
+    mut val firstSite = 0U64
+    mut val token = 0U64
+    mut val index = startIndex
+    while index < compiler.sourceTypeUses.useCount() {
+        val receipt = compiler.sourceTypeUses.useAt(index: index).unwrap()
+        if compiler.typeRefEq(a: receipt.term, b: first) {
+            if receipt.site == 0U64 || receipt.scope == 0U64 { panic("authored parameter lost original occurrence") }
+            val scope = compiler.sourceTypeUses.scopeAt(token: receipt.scope).unwrap()
+            if scope.anchor != declaration.defOffset {
+                if !method { panic("type occurrence moved to a foreign declaration") }
+                match scope.kind { SourceTypeScopeKind.Implementation => {} _ => { panic("shared impl parameter escaped its owners") } }
+                index += 1U64
+                continue
+            }
+            match scope.state { SourceTypeScopeState.Lowered => {} _ => { panic("successful lower did not finish scope") } }
+            if method {
+                match scope.kind { SourceTypeScopeKind.Method => {} _ => { panic("method origin lost") } }
+                val parent = compiler.sourceTypeUses.scopeAt(token: scope.parent).unwrap()
+                match parent.kind { SourceTypeScopeKind.Implementation => {} _ => { panic("method parent lost") } }
+                if receipt.parameters.count() < 2U64 { panic("impl and method parameters not retained") }
+                if receipt.parameters[0U64].paramId == receipt.parameters[1U64].paramId || receipt.parameters[0U64].paramId == 0U64 || receipt.parameters[1U64].paramId == 0U64 { panic("parameter identities collapsed") }
+            } else {
+                match scope.kind { SourceTypeScopeKind.FreeFunction => {} _ => { panic("free function origin lost") } }
+            }
+            mut val found = false
+            for val binding in receipt.parameters { if binding.paramId == parameter { found = true } }
+            if !found { panic("receipt omitted its lexical parameter") }
+            if seen != 0U64 && (receipt.site == firstSite || token != receipt.scope) { panic("source occurrences collapsed") }
+            firstSite = receipt.site
+            token = receipt.scope
+            seen += 1U64
+        }
+        index += 1U64
+    }
+    if seen < 2U64 { panic("missing repeated type occurrences") }
+}
+
+fn sourceOffset(compiler~: inout Comp, text~: String) -> U64 {
+    mut val index = 0U64
+    while index + text.bytes().count() <= compiler.arena.bytes.count() {
+        if rangeEquals(bytes: compiler.arena.bytes, start: index, len: text.bytes().count(), kw: text) { return index }
+        index += 1U64
+    }
+    panic("source fragment absent")
+}
+fn expectSite(compiler~: inout Comp, anchor: U64, site: U64) {
+    mut val index = 0U64
+    while index < compiler.sourceTypeUses.useCount() {
+        val receipt = compiler.sourceTypeUses.useAt(index: index).unwrap()
+        if receipt.site == site && receipt.scope != 0U64 && compiler.sourceTypeUses.scopeAt(token: receipt.scope).unwrap().anchor == anchor { return }
+        index += 1U64
+    }
+    panic("original source type span not retained")
+}
+
+fn main() {
+    mut val store = <SourceTypeUses />
+    val outer = store.begin(kind: <SourceTypeScopeKind.Implementation />, anchor: 10U64)
+    val inner = store.begin(kind: <SourceTypeScopeKind.Method />, anchor: 20U64)
+    mut val parameters = [<Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 paramId=7U64 />]
+    store.record(term: 1U64, site: 30U64, parameters: parameters)
+    parameters.append(<Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 paramId=8U64 />)
+    store.record(term: 1U64, site: 40U64, parameters: parameters)
+    if store.finish(token: outer, succeeded: true) { panic("out-of-order scope finished") }
+    if !store.finish(token: inner, succeeded: false) || store.currentScope() != outer { panic("failed child did not restore parent") }
+    match store.scopeAt(token: inner).unwrap().state { SourceTypeScopeState.Failed => {} _ => { panic("failed scope became successful") } }
+    if store.useAt(index: 0U64).unwrap().parameters.count() != 1U64 || store.useAt(index: 1U64).unwrap().parameters.count() != 2U64 { panic("parameter snapshot was mutated") }
+    if !store.finish(token: outer, succeeded: true) || store.currentScope() != 0U64 || store.finish(token: outer, succeeded: true) { panic("scope restoration is not single-use") }
+    if store.scopeAt(token: 0U64).isSome() || store.scopeAt(token: 999U64).isSome() || store.useAt(index: 999U64).isSome() { panic("invalid receipt handle resolved") }
+
+    val text = "trait Marker {{}}\nfn first[T](left: T, right: T) -> T where T: Marker {{ return left }}\nfn second[T](left: T, right: T) -> T where T: Marker {{ return right }}\nstruct Box[T] {{}}\nimpl[T] Box[T] {{ fn method[U](left: T, right: T, item: U) -> T {{ return left }} }}\ntrait Query[T] {{ fn ask[U](value: T, other: U) -> T fn other[U](value: T, other: U) -> T }}\nfn main() {{}}\n"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=text path="AuthoredTypeProvenance.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    if compiler.sourceTypeUses.currentScope() != 0U64 { panic("declaration scope leaked") }
+    inspect(inout compiler, "first", method: false)
+    inspect(inout compiler, "second", method: false)
+    inspect(inout compiler, "method", method: true)
+    // Trait requirement scopes retain implicit Self, trait T and method U;
+    // sibling requirements never share their own U identity or scope token.
+    val query = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Query").nameId))
+    mut val requirementScopes = 0U64
+    mut val ownParameter = 0U64
+    mut val previousToken = 0U64
+    mut val scopeIndex = 1U64
+    while scopeIndex <= compiler.sourceTypeUses.scopeCount() {
+        val scope = compiler.sourceTypeUses.scopeAt(token: scopeIndex).unwrap()
+        match scope.kind {
+            SourceTypeScopeKind.RequirementSignature => {
+                if scope.traitOwner != query.nameStart { panic("requirement lost trait origin") }
+                mut val found = false
+                mut val useIndex = 0U64
+                while useIndex < compiler.sourceTypeUses.useCount() {
+                    val receipt = compiler.sourceTypeUses.useAt(index: useIndex).unwrap()
+                    if receipt.scope == scopeIndex {
+                        if receipt.parameters.count() != 3U64 || receipt.parameters[0U64].paramId == 0U64 || receipt.parameters[1U64].paramId == 0U64 || receipt.parameters[2U64].paramId == 0U64 { panic("requirement binders not retained") }
+                        if ownParameter != 0U64 && (ownParameter == receipt.parameters[2U64].paramId || previousToken == receipt.scope) { panic("requirement sibling identities collapsed") }
+                        ownParameter = receipt.parameters[2U64].paramId
+                        previousToken = receipt.scope
+                        found = true
+                        break
+                    }
+                    useIndex += 1U64
+                }
+                if !found { panic("requirement source occurrences absent") }
+                requirementScopes += 1U64
+            }
+            _ => {}
+        }
+        scopeIndex += 1U64
+    }
+    if requirementScopes != 2U64 { panic("requirement origins absent") }
+
+    val signature = "fn first[T](left: T, right: T) -> T where T: Marker {{ return left }}"
+    match parseItem(source: signature, start: sourceOffset(inout compiler, signature), end: sourceOffset(inout compiler, signature) + signature.bytes().count()) {
+        TopItemAst.Decl(d: val declaration) => {
+            expectSite(inout compiler, anchor: declaration.nameSpan.start, site: declaration.params[0U64].ty.span.start)
+            expectSite(inout compiler, anchor: declaration.nameSpan.start, site: declaration.params[1U64].ty.span.start)
+        }
+        _ => { panic("syntax source-site setup did not parse") }
+    }
+    val valueSignature = "fn valueFirst[T](left: T, right: T) -> T where T: Marker {{ return left }}"
+    val valueImpl = "impl[T] Box[T] {{ fn valueMethod[U](left: T, right: T, item: U) -> T {{ return left }} }}"
+    val valueRequirement = "fn valueAsk[U](value: T, other: U) -> T {{}}"
+    mut val valueCompiler = <Comp />
+    // Generated value ASTs retain real coordinates in the loaded source file.
+    // Commented fragments avoid registering a competing syntax declaration.
+    analyzeFrontendForRequests(c: inout valueCompiler, input: <FrontendInput.Text text="trait Marker {{}} struct Box[T] {{}} trait Query[T] {{}}\n// " + valueSignature + "\n// " + valueImpl + "\n// " + valueRequirement + "\nfn main() {{}}\n" path="ValueProvenance.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val valueStart = sourceOffset(inout valueCompiler, valueSignature)
+    match parseItem(source: valueSignature, start: valueStart, end: valueStart + valueSignature.bytes().count()) {
+        TopItemAst.Decl(d: val declaration) => {
+            match valueCompiler.lowerFuncDecl(d: declaration) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic("value declaration: " + diagnostic.message) } }
+            inspect(inout valueCompiler, "valueFirst", method: false)
+            expectSite(inout valueCompiler, anchor: declaration.nameSpan.start, site: declaration.params[0U64].ty.span.start)
+            expectSite(inout valueCompiler, anchor: declaration.nameSpan.start, site: declaration.params[1U64].ty.span.start)
+            val rawSignature = <SigAst name=declaration.name nameSpan=declaration.nameSpan typeParams=declaration.typeParams typeParamSpans=declaration.typeParamSpans params=declaration.params hasRet=declaration.hasRet ret=declaration.ret isAssoc=false whereParams=declaration.whereParams whereTypes=declaration.whereTypes whereTraits=declaration.whereTraits whereTraitTypes=declaration.whereTraitTypes />
+            match valueCompiler.lowerSigToFunc(sig: rawSignature, isExtern: true, isCExtern: false) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic("extern signature: " + diagnostic.message) } }
+            match valueCompiler.sourceTypeUses.scopeAt(token: valueCompiler.sourceTypeUses.scopeCount()).unwrap().kind { SourceTypeScopeKind.ExternSignature => {} _ => { panic("extern and requirement origins conflated") } }
+        }
+        _ => { panic("value adapter setup did not parse declaration") }
+    }
+    val implStart = sourceOffset(inout valueCompiler, valueImpl)
+    match parseItem(source: valueImpl, start: implStart, end: implStart + valueImpl.bytes().count()) {
+        TopItemAst.Impl(im: val implementation) => {
+            match valueCompiler.lowerImpl(im: implementation) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic("value impl: " + diagnostic.message) } }
+            inspect(inout valueCompiler, "valueMethod", method: true)
+            expectSite(inout valueCompiler, anchor: implementation.members[0U64].nameSpan.start, site: implementation.members[0U64].params[0U64].ty.span.start)
+        }
+        _ => { panic("value adapter setup did not parse impl") }
+    }
+    // Supply this session's actual trait Self/T identities, as lowerTrait
+    // does. Never borrow a similarly numbered binder from another Comp.
+    val valueQuery = valueCompiler.decls.traitAt(index: valueCompiler.decls.firstTraitNamed(nameId: valueCompiler.internBytes(s: "Query").nameId))
+    val selfName = valueCompiler.internBytes(s: "Self")
+    val selfId = valueCompiler.decls.traitOwnerAt(index: valueCompiler.decls.traitOwnerIndex(offset: valueQuery.nameStart)).selfParamId
+    val captured = [<Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=selfName.nameId paramId=selfId fieldStart=0U64 fieldLen=0U64 />, valueCompiler.traitBindAt(binds: valueQuery.typeParams, index: 0U64)]
+    valueCompiler.cur.typeParams = captured
+    valueCompiler.lowerAssociatedOwner = valueQuery.nameStart
+    val requirementStart = sourceOffset(inout valueCompiler, valueRequirement)
+    match parseItem(source: valueRequirement, start: requirementStart, end: requirementStart + valueRequirement.bytes().count()) {
+        TopItemAst.Decl(d: val declaration) => {
+            val rawSignature = <SigAst name=declaration.name nameSpan=declaration.nameSpan typeParams=declaration.typeParams typeParamSpans=declaration.typeParamSpans params=declaration.params hasRet=declaration.hasRet ret=declaration.ret isAssoc=false />
+            valueCompiler.lowerSigToFunc(sig: rawSignature, isExtern: false, isCExtern: false).unwrap()
+            val scope = valueCompiler.sourceTypeUses.scopeAt(token: valueCompiler.sourceTypeUses.scopeCount()).unwrap()
+            if scope.traitOwner != valueQuery.nameStart { panic("value requirement lost trait origin") }
+            match scope.kind { SourceTypeScopeKind.RequirementSignature => {} _ => { panic("value requirement origin lost") } }
+            expectSite(inout valueCompiler, anchor: declaration.nameSpan.start, site: declaration.params[0U64].ty.span.start)
+            val receipt = valueCompiler.sourceTypeUses.useAt(index: valueCompiler.sourceTypeUses.useCount() - 1U64).unwrap()
+            if receipt.parameters.count() != 3U64 || receipt.parameters[0U64].paramId != captured[0U64].paramId || receipt.parameters[1U64].paramId != captured[1U64].paramId { panic("value requirement binders lost") }
+        }
+        _ => { panic("value requirement setup did not parse") }
+    }
+    val bad = "fn failed[T](value: T#Absent.Item) {{}}"
+    val start = compiler.arena.bytes.count()
+    compiler.appendSrc(from: bad.bytes())
+    match parseItem(source: bad, start: start, end: start + bad.bytes().count()) {
+        TopItemAst.Decl(d: val declaration) => {
+            if compiler.lowerFuncDecl(d: declaration).isOk() { panic("invalid value adapter source unexpectedly lowered") }
+        }
+        _ => { panic("failure adapter setup did not parse declaration") }
+    }
+    if compiler.sourceTypeUses.currentScope() != 0U64 { panic("failed value adapter leaked source scope") }
+    match compiler.sourceTypeUses.scopeAt(token: compiler.sourceTypeUses.scopeCount()).unwrap().state { SourceTypeScopeState.Failed => {} _ => { panic("failed value lowering marked complete") } }
+    mut val failed = <Comp />
+    if analyzeFrontendForRequests(c: inout failed, input: <FrontendInput.Text text=bad path="FailedProvenance.pw" />, sources: <SourceAccess stdRoot=[] />).isOk() { panic("invalid syntax source unexpectedly lowered") }
+    if failed.sourceTypeUses.currentScope() != 0U64 { panic("failed syntax adapter leaked source scope") }
+    match failed.sourceTypeUses.scopeAt(token: failed.sourceTypeUses.scopeCount()).unwrap().state { SourceTypeScopeState.Failed => {} _ => { panic("failed syntax lowering marked complete") } }
+    val before = compiler.sourceTypeUses.useCount()
+    val name = compiler.internBytes(s: "I64")
+    compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
+    if compiler.sourceTypeUses.useCount() != before { panic("raw interning fabricated source provenance") }
+    print("1")
+}
