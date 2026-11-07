@@ -317,3 +317,33 @@ is not extension identity was not duplicated: the general distinct-declaration
 rule and resolved-identity condition already establish it. Diff whitespace and
 new section/link checks pass. No product tests or performance measurement were
 run for this documentation-only increment; implementation acceptance is open.
+
+### Module Binding Producer Scenarios
+
+Inspection before consumer uptake found that both shared parsers flatten an
+extension into tagged impl items and lose an empty declaration entirely.
+Preserve a distinct extension declaration item (name and original full/name
+spans), independent from its existing impl items. No source rescan is allowed.
+The finite producer guarantee covers empty/populated/multiple/same-spelled
+extension declarations, top-level source order, direct/materialize/freeze,
+nonzero source bases and appended-file prefix retention. Distinct parsed
+occurrences remain distinct; semantic admission owns bundle identity.
+Check existing top-item consumers for any assumed first-impl/count layout.
+This is required input preservation, not module collision admission or task
+completion. After this producer boundary, registration and use/public-surface
+bindings must reach one admission authority before lexical kind consumers.
+
+[Extension declaration producer verification](../../../evidence/rejection-domains/diagnostic-domain-implementation/extension-declaration-producer.json)
+is saved as Syntax `3e328b2` (signed and pushed, no release tag/pin uptake).
+The executed two-case RED loses empty/populated declaration roots after a
+successful compile/link. The final 15 executions inspect direct rows, macro AST
+values without freezing, and a distinct freeze roundtrip. Seventeen preserved
+Syntax fixtures / 88 cases pass with unchanged inputs. All 48 pool checkpoint
+fields/captures/rollbacks reconcile structurally. Independent review reran all
+15 final native cases and reconciled controls/current hashes; no required
+repairs remain after fixing an obsolete comment and duplicated adapter modes.
+The declaration marker preserves empty bundles, original name/full spans,
+source order and tagged impl data; it does not itself admit any module binding.
+Next: consume these declaration roots in common module binding admission and
+connect the neutral source-application consumer. The exact compiler Syntax pin,
+package-wide gates, collision rejection and com-9hde completion remain open.
