@@ -211,7 +211,8 @@ task or infer that parser preservation alone supplies these guarantees.
 The existing complete-bound-instance requirement has concrete manual controls:
 MaterializedTypePathControls mode shorthand preserves accepted short-form
 admission/name/ParamId receiver only; shorthandInstance requires canonical trait
-owner plus the bound I64 argument and currently prints0 against golden1. A
+owner plus the bound I64 argument; it printed0 against golden1 before the
+complete-context increment below, and now passes. A
 focused raw-shape diagnostic found the written bound span rather than canonical
 declaration owner and an empty positional-argument list; this is not proof of a valid
 complete instance. Retain this failing control as required work, and make it GREEN before closing
@@ -274,3 +275,7 @@ accepted by the old candidate and now rejects with the intended short-source
 ambiguity in check/run. Full proof admission/task closure remains open.
 Standard build20261107T204652-build-017d31 passes with unchanged inputs;
 fresh candidate bin/plewc-short-projection-bound-context is WIP only.
+
+Fresh candidate target17 and preservation37 now all pass with immutable inputs.
+Neutral source/native review accepts only this finite context increment, not
+common view proof or the remaining task. Formal current-source gates remain open.
