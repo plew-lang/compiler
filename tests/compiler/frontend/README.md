@@ -143,6 +143,7 @@ checks do not certify the whole task, source-set semantics or final gates.
 `SemanticTraitViewTerms.pw` is a manual com-zdod regression. Compile and link
 using the procedure above, then run each of `differentArguments`,
 `useProvenance`, `children`, `closedness`, `projectionPresence`, `topLevelView`
-and `closedControl`. Each must exit 0 with empty stderr and the exact `.out`.
+`closedControl`, `environment`, `nestedEnvironment`, `callerOwned`, `witness`,
+`legacyGrounding` and `projectionNormalization`. Each must exit 0 with empty stderr and the exact `.out`.
 It tests production semantic view storage/readers, not source syntax or final
 method dispatch (which have separate follow-up tasks).

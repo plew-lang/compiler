@@ -85,7 +85,12 @@ pub struct ResolvedViewSource {
     pub val surfaceId: U64 = 0
     pub val traitInstance: TraitInstanceKey = <TraitInstanceKey owner=0U64 positionalArgs=[] />
 }
-pub impl ResolvedViewSource { factory }
+pub impl ResolvedViewSource {
+    factory
+    fn withArguments(arguments: Array[U64]) -> ResolvedViewSource {
+        return <ResolvedViewSource writtenStart=self.writtenStart writtenLen=self.writtenLen lexicalSurfaceModule=self.lexicalSurfaceModule surfaceId=self.surfaceId traitInstance=<TraitInstanceKey owner=self.traitInstance.owner positionalArgs=arguments /> />
+    }
+}
 
 // `TypeTerm` is the immutable semantic type row stored by Arena.  Type
 // children are relations, not owned implementation details of a table row:

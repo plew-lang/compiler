@@ -78,3 +78,21 @@ rigid versus designated-binder scenarios, nested and caller-owned replacements,
 real key/caller reconciliation, applicable gates and neutral completion review.
 The graph uses normalized source heads, so its children must be reconciled with
 that normalization before claiming parameterized duplicate-selector support.
+
+## Grounding Checkpoint
+
+[Six executed RED/GREEN cases and second fresh build](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-grounding-increment.json)
+cover explicit environment substitution, nested selector arguments,
+caller-owned replacement terms, witness grounding, legacy grounding and
+body projection normalization. Build 20261107T013334-build-ea255b passed;
+the fresh candidate retained the original seven assertions and eight existing
+native controls. The view-rebuilding bridge changes selector children while
+preserving owner/use provenance; each grounding operation keeps its existing
+substitution/proof authority. typeRefViewSources is read-only and no longer
+requires mutable Comp access.
+
+Task remains in progress. Next cover raw selector normalization/admission,
+rigid versus designated-binder matching and occurs checks. In particular,
+unifyPatterns/typeRefsAlphaEq/occursInPattern still have legacy argument-only
+walks; reconcile these actual consumers rather than declaring the shared
+reader fix sufficient. Follow with keys/callers, gates and independent review.

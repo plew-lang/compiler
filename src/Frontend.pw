@@ -998,7 +998,7 @@ pub impl Comp {
         return <ResolvedViewSource surfaceId=term.viewExtId />
     }
 
-    inout fn typeRefViewSources(ref: U64) -> Array[ResolvedViewSource] {
+    fn typeRefViewSources(ref: U64) -> Array[ResolvedViewSource] {
         mut val out: Array[ResolvedViewSource] = []
         val count = self.typeTermViewSourceCount(ref: ref)
         mut val index = 0U64

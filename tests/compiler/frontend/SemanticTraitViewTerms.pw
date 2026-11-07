@@ -2,14 +2,14 @@
 // selector, publication, equality and traversal; source syntax is a later task.
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
 use ../../../src/SourceAccess only { SourceAccess }
-use ../../../src/Ir only { TypeRef, ResolvedViewSource, TraitInstanceKey }
+use ../../../src/Ir only { TypeRef, ResolvedViewSource, TraitInstanceKey, Bind, PatternBindInput, WitnessBind, WitnessMatch, InstanceEnvironment }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
 
 fn main() {
     val scenario = argAt(1I64)
     mut val compiler = <Comp />
-    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait P[K] {{ type Item }} struct S {{}} fn main() {{}}" path="SemanticViews.pw" />, sources: <SourceAccess />).unwrap()
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait P[K] {{ type Item }} struct S {{}} impl S as P[I64] {{ type Item=Bool }} fn main() {{}}" path="SemanticViews.pw" />, sources: <SourceAccess />).unwrap()
     val traitName = compiler.internBytes(s: "P")
     val owner = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: traitName.nameId))
     val integerName = compiler.internBytes(s: "I64")
@@ -30,12 +30,45 @@ fn main() {
     val structName = compiler.internBytes(s: "S")
     val declaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: structName.nameId))
     val parameterName = compiler.internBytes(s: "T")
-    val parameter = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=1U64 args=[] />)
+    val parameter = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=compiler.nextParamId args=[] />)
+    val binding = <Bind nameStart=parameterName.nameStart nameLen=parameterName.nameLen nameId=parameterName.nameId paramId=compiler.nextParamId fieldStart=0U64 fieldLen=0U64 />
+    compiler.nextParamId += 1U64
+    val arrayName = compiler.internBytes(s: "Array")
+    val nested = compiler.pushType(t: <TypeRef nameStart=arrayName.nameStart nameLen=arrayName.nameLen args=[parameter] />)
     val member = compiler.internBytes(s: "Item")
     val projection = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] projectionReceiver=integer assocTraitStart=owner.nameStart assocTraitLen=owner.nameLen assocTraitId=owner.nameId assocTraitArgs=[integer] assocNameId=member.nameId hasAssocTraitDecl=true assocTraitDeclOffset=owner.nameStart />)
-    val argument = if scenario == "closedness" { give parameter } else if scenario == "projectionPresence" { give projection } else { give integer }
+    val receiver = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] hasDecl=true declOffset=declaration.defOffset />)
+    val validProjection = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] projectionReceiver=receiver assocTraitStart=owner.nameStart assocTraitLen=owner.nameLen assocTraitId=owner.nameId assocTraitArgs=[integer] assocNameId=member.nameId hasAssocTraitDecl=true assocTraitDeclOffset=owner.nameStart />)
+    val argument = if scenario == "closedness" || scenario == "environment" || scenario == "witness" || scenario == "legacyGrounding" || scenario == "callerOwned" { give parameter } else if scenario == "nestedEnvironment" { give nested } else if scenario == "projectionNormalization" { give validProjection } else if scenario == "projectionPresence" { give projection } else { give integer }
     val source = <ResolvedViewSource surfaceId=traitName.nameId traitInstance=<TraitInstanceKey owner=owner.nameStart positionalArgs=[argument] /> />
     val viewed = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] hasDecl=true declOffset=declaration.defOffset viewSources=[source] />)
+    if scenario == "environment" || scenario == "nestedEnvironment" || scenario == "callerOwned" {
+        val replacement = if scenario == "callerOwned" { give nested } else { give integer }
+        val grounded = compiler.groundTermInEnvironment(ref: viewed, params: [binding], values: [replacement])
+        val expected = if scenario == "nestedEnvironment" {
+            give compiler.pushType(t: <TypeRef nameStart=arrayName.nameStart nameLen=arrayName.nameLen args=[integer] />)
+        } else { give replacement }
+        print(compiler.typeRefEq(a: compiler.typeTermRefViewArgumentAt(ref: grounded, index: 0U64), b: expected))
+        return
+    }
+    if scenario == "legacyGrounding" {
+        compiler.cur.typeParams = [binding]
+        compiler.cur.typeArgs = [integer]
+        val grounded = compiler.groundTypeRef(ref: viewed).unwrap()
+        print(compiler.typeRefEq(a: compiler.typeTermRefViewArgumentAt(ref: grounded, index: 0U64), b: integer))
+        return
+    }
+    if scenario == "projectionNormalization" {
+        val grounded = compiler.closeBodyProjectionTerms(ref: viewed, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64).unwrap()
+        print(compiler.typeRefEq(a: compiler.typeTermRefViewArgumentAt(ref: grounded, index: 0U64), b: boolean))
+        return
+    }
+    if scenario == "witness" {
+        val witness = <WitnessMatch binds=[<WitnessBind binder=0U64 paramId=binding.paramId term=integer />] />
+        val grounded = compiler.groundWitnessTypeTerm(ref: viewed, params: <PatternBindInput.Values values=[binding] />, matchResult: witness).unwrap()
+        print(compiler.typeRefEq(a: compiler.typeTermRefViewArgumentAt(ref: grounded, index: 0U64), b: integer))
+        return
+    }
     if scenario == "children" {
         print(compiler.typeTermRefChildCount(ref: viewed) == 1U64 && compiler.typeTermRefChildRef(ref: viewed, index: 0U64) == integer)
     } else if scenario == "closedness" {

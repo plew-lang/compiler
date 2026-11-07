@@ -24,6 +24,17 @@ pub impl Comp {
         // of closedness: unbound parameters and projections remain untouched.
         if (params.count() == 0U64 || values.count() == 0U64) && selfRef == 0U64 && itemRef == 0U64 { return ref }
         val t = self.arena.typeTermAt(index: ref)
+        if t.assocNameId == 0U64 && self.typeTermRefViewArgumentCount(ref: ref) != 0U64 {
+            mut val arguments: Array[U64] = []
+            mut val index = 0U64
+            while index < self.typeTermRefViewArgumentCount(ref: ref) {
+                arguments.append(self.groundTermInEnvironment(ref: self.typeTermRefViewArgumentAt(ref: ref, index: index), params: params, values: values, selfRef: selfRef, itemRef: itemRef))
+                index += 1U64
+            }
+            val underlying = self.typeRefWithoutOuterViews(ref: ref)
+            val grounded = self.groundTermInEnvironment(ref: underlying, params: params, values: values, selfRef: selfRef, itemRef: itemRef)
+            return self.typeRefWithAddedViewSources(ref: grounded, additions: self.viewSourcesWithArguments(ref: ref, arguments: arguments))
+        }
         // Self and Item are proof-derived binders just like ParamId entries,
         // except their values live on the selected receiver proof rather than
         // in a method's generic argument vector. They may occur below a
@@ -222,6 +233,17 @@ pub impl Comp {
         // A non-projection leaf has no children to close. Read its scalar
         // shape before materializing any owning compatibility type record.
         val term = self.arena.typeTermAt(index: ref)
+        if term.assocNameId == 0U64 && self.typeTermRefViewArgumentCount(ref: ref) != 0U64 {
+            mut val arguments: Array[U64] = []
+            mut val index = 0U64
+            while index < self.typeTermRefViewArgumentCount(ref: ref) {
+                arguments.append((try self.closeBodyProjectionTermsRecording(ref: self.typeTermRefViewArgumentAt(ref: ref, index: index), environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording)))
+                index += 1U64
+            }
+            val underlying = self.typeRefWithoutOuterViews(ref: ref)
+            val grounded = (try self.closeBodyProjectionTermsRecording(ref: underlying, environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording))
+            return <Result.Ok value=self.typeRefWithAddedViewSources(ref: grounded, additions: self.viewSourcesWithArguments(ref: ref, arguments: arguments)) />
+        }
         if !term.isRecord && term.assocNameId == 0U64 && term.args.len == 0U64 && term.assocTraitArgs.len == 0U64 { return <Result.Ok value=ref />}
         val t: TypeRef = self.arena.typeAt(index: ref)
         if t.isRecord {
@@ -339,6 +361,24 @@ pub impl Comp {
     // Projections take precedence over their receiver mirror (which may carry
     // isRecord). Their receiver and trait arguments are the semantic children;
     // records otherwise expose fields, and other terms expose arguments.
+    // Reconstruct only selector children. Grounding chooses their replacement
+    // terms; this bridge preserves the written provenance and selected owner.
+    fn viewSourcesWithArguments(ref: U64, arguments: Array[U64]) -> Array[ResolvedViewSource] {
+        mut val sources: Array[ResolvedViewSource] = []
+        mut val argumentIndex = 0U64
+        for source in self.typeRefViewSources(ref: ref) {
+            mut val children: Array[U64] = []
+            mut val index = 0U64
+            while index < source.traitInstance.positionalArgs.count() {
+                children.append(arguments[argumentIndex])
+                argumentIndex += 1U64
+                index += 1U64
+            }
+            sources.append(source.withArguments(arguments: children))
+        }
+        return sources
+    }
+
     fn typeViewArgumentCount(t: TypeRef) -> U64 {
         mut val count = 0U64
         for source in t.viewSources { count += source.traitInstance.positionalArgs.count() }
@@ -548,6 +588,17 @@ pub impl Comp {
     inout fn groundWitnessTypeTerm(ref: U64, params: PatternBindInput, matchResult: WitnessMatch) -> Result[U64, CompileDiagnostic] {
         if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=ref />}
         val semantic: TypeRef = self.arena.typeAt(index: ref)
+        if semantic.assocNameId == 0U64 && self.typeTermRefViewArgumentCount(ref: ref) != 0U64 {
+            mut val arguments: Array[U64] = []
+            mut val index = 0U64
+            while index < self.typeTermRefViewArgumentCount(ref: ref) {
+                arguments.append((try self.groundWitnessTypeTerm(ref: self.typeTermRefViewArgumentAt(ref: ref, index: index), params: params, matchResult: matchResult)))
+                index += 1U64
+            }
+            val underlying = self.typeRefWithoutOuterViews(ref: ref)
+            val grounded = (try self.groundWitnessTypeTerm(ref: underlying, params: params, matchResult: matchResult))
+            return <Result.Ok value=self.typeRefWithAddedViewSources(ref: grounded, additions: self.viewSourcesWithArguments(ref: ref, arguments: arguments)) />
+        }
         // A projection contains its receiver; substituting Self must not
         // replace the projection itself and discard the associated name.
         if semantic.assocNameId != 0U64 {
@@ -949,6 +1000,17 @@ pub impl Comp {
             return <Result.Ok value=ref />
         }
         val t = self.arena.typeTermAt(index: ref)
+        if t.assocNameId == 0U64 && self.typeTermRefViewArgumentCount(ref: ref) != 0U64 {
+            mut val arguments: Array[U64] = []
+            mut val index = 0U64
+            while index < self.typeTermRefViewArgumentCount(ref: ref) {
+                arguments.append((try self.groundTypeRef(ref: self.typeTermRefViewArgumentAt(ref: ref, index: index))))
+                index += 1U64
+            }
+            val underlying = self.typeRefWithoutOuterViews(ref: ref)
+            val grounded = (try self.groundTypeRef(ref: underlying))
+            return <Result.Ok value=self.typeRefWithAddedViewSources(ref: grounded, additions: self.viewSourcesWithArguments(ref: ref, arguments: arguments)) />
+        }
         if t.isRecord {
             if t.recordFieldLabels.len != t.recordFieldTerms.len { return <Result.Ok value=ref />}
             mut val fields: Array[U64] = []
