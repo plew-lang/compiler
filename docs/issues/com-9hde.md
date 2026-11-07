@@ -466,3 +466,24 @@ exceeds ordinary branch push while consumer/full gates remain unfinished; explic
 user approval was requested. Do not retry or publish through another route
 without that approval. A local path override is still WIP-only, excluded from
 commits; the other required kind/owner/legacy/diagnostic repairs remain open.
+
+## Canonical Extension Identity Repair Plan
+
+[Executed owner/kind controls and neutral plan review](../../../evidence/rejection-domains/diagnostic-domain-implementation/view-source-owner-increment.json)
+now use valid published declarations: each source alone succeeds; combining
+same-spelled trait/extension misrejects, and separately owned extension bundles
+collide at declaration admission. R1 now excludes extension applicability when
+a retained trait owner already fixes the kind; the native case becomes GREEN,
+while the separate-owner case deliberately remains RED. No whole-task approval.
+
+For R2, use a canonical bundle ID issued once from the merged admitted binding
+(owner module plus original name); aliases, re-publication and same-owner
+fragments preserve it. The merged original declaration offset+1 is an admissible
+session-local representation, not a stable ABI. Migrate Func/Conform/view/callable
+and cycle/proof activation together; resolve names for display from the sealed
+ID metadata. Replace interner bounds/name-based existence and applicability,
+connect type and legacy producers to the same binding authority, and remove
+unused competing spelling-based view validators. Kind-erased compatibility IDs
+must not let a trait source activate an unrelated extension with an equal numeric
+ID. Retain empty declaration existence independently of receiver applicability.
+This is existing R2/R3 scope, not a call-site-only module filter workaround.

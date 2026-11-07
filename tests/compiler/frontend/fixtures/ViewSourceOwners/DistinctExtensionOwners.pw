@@ -1,0 +1,7 @@
+use @Std/Io only { print }
+use ./Shared only { S }
+use ./ExtensionSource only { Origin as First }
+use ./OtherExtensionSource only { Origin as Second }
+fn main() { val value = <S />
+ print("{value#First.number()}")
+ print("{value#Second.number()}") }

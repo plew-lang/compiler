@@ -1,0 +1,5 @@
+use @Std/Io only { print }
+use ./Shared only { S }
+use ./TraitSource only { Origin as TraitOrigin }
+fn main() { val value = <S />
+ print("{value#TraitOrigin.number()}") }

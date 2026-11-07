@@ -1,0 +1,4 @@
+use ./TraitSource only { Origin }
+pub struct S {}
+pub impl S { factory }
+pub impl S as Origin { fn number() -> I64 { return 11I64 } }

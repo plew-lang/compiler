@@ -1,0 +1,5 @@
+use @Std/Io only { print }
+use ./Shared only { S }
+use ./ExtensionSource only { Origin as ExtensionOrigin }
+fn main() { val value = <S />
+ print("{value#ExtensionOrigin.number()}") }

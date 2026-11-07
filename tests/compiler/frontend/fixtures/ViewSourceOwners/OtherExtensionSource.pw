@@ -1,0 +1,2 @@
+use ./Shared only { S }
+pub extension Origin { pub impl S { fn number() -> I64 { return 33I64 } } }

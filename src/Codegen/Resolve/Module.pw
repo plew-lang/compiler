@@ -568,7 +568,9 @@ pub impl Comp {
         val receiverHead = self.arena.typeHeadSpan(ref: recvRef, fallback: <InternedSpan start=recvStart len=recvLen />)
         mut val found: CallableSourceHead = <CallableSourceHead />
         val entry: InternedSpan = self.interner.entries[sourceId - 1U64]
-        if (try self.extAppliesToType(extStart: entry.start, extLen: entry.len, typeStart: receiverHead.start, typeLen: receiverHead.len, typeRef: recvRef)) {
+        // A retained trait owner already fixes the source kind. An applicable
+        // same-spelled extension cannot compete with that lexical decision.
+        if sourceOwner == 0U64 && (try self.extAppliesToType(extStart: entry.start, extLen: entry.len, typeStart: receiverHead.start, typeLen: receiverHead.len, typeRef: recvRef)) {
             found = <CallableSourceHead kind=1U64 id=sourceId owner=sourceId arity=0U64 />
         }
         // A trait selector is resolved while lowering at its lexical use site.

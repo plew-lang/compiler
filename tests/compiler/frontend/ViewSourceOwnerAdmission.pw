@@ -1,0 +1,12 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ViewSourceOwners/" + argAt(1I64) + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => { print("1") }
+        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) print("0") }
+    }
+}
