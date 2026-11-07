@@ -35,16 +35,17 @@ pub impl Arena {
     }
     fn typeViewSourceCount(ref: U64) -> U64 {
         if ref == 0U64 || ref >= self.typeTermCount() { return 0U64 }
-        val term = self.typeTermAt(index: ref)
-        if term.viewSources.len != 0U64 { return term.viewSources.len }
-        if term.viewIds.len != 0U64 { return term.viewIds.len }
-        return if term.viewExtId != 0U64 { give 1U64 } else { give 0U64 }
+        return self.typeTermAt(index: ref).viewSourceInput().count()
     }
     fn typeViewSourceAt(ref: U64, index: U64) -> ResolvedViewSource {
-        val term = self.typeTermAt(index: ref)
-        if term.viewSources.len != 0U64 { return self.typeViewSourceAt(index: term.viewSources.start + index) }
-        if term.viewIds.len != 0U64 { return <ResolvedViewSource surfaceId=self.typeViewIdAt(index: term.viewIds.start + index) /> }
-        return <ResolvedViewSource surfaceId=term.viewExtId />
+        return self.typeTermAt(index: ref).viewSourceInput().at(index: index, sources: self.typeViewSourcePool, identifiers: self.typeViewIdPool)
+    }
+    fn typeViewSourceHeadsEqual(a: U64, b: U64) -> Bool {
+        if a >= self.typeTermCount() || b >= self.typeTermCount() { return false }
+        val left = self.typeTermAt(index: a).viewSourceInput()
+        val right = self.typeTermAt(index: b).viewSourceInput()
+        if left.count() == 0U64 || right.count() == 0U64 { return left.count() == right.count() }
+        return left.containsHeads(required: right, sources: self.typeViewSourcePool, identifiers: self.typeViewIdPool) && right.containsHeads(required: left, sources: self.typeViewSourcePool, identifiers: self.typeViewIdPool)
     }
     fn typeViewSources(ref: U64) -> Array[ResolvedViewSource] {
         if ref == 0U64 || ref >= self.typeTermCount() { return [] }
@@ -333,5 +334,36 @@ pub impl Arena {
         val enumeration = self.enumIndexByOffset(offset: term.declOffset)
         if enumeration < self.enumCount() { return self.enumAt(index: enumeration).isUnique }
         return false
+    }
+}
+
+// Read-only source-set view. Loops receive only small ranges and their pools,
+// never Comp/Arena by value and never a writer capability.
+impl TypeViewSourceInput {
+    fn count() -> U64 {
+        if self.sources.len != 0U64 { return self.sources.len }
+        if self.identifiers.len != 0U64 { return self.identifiers.len }
+        return if self.single != 0U64 { give 1U64 } else { give 0U64 }
+    }
+    fn at(index: U64, sources: Array[ResolvedViewSource], identifiers: Array[U64]) -> ResolvedViewSource {
+        if self.sources.len != 0U64 { return sources[self.sources.start + index] }
+        if self.identifiers.len != 0U64 { return <ResolvedViewSource surfaceId=identifiers[self.identifiers.start + index] /> }
+        return <ResolvedViewSource surfaceId=self.single />
+    }
+    fn containsHeads(required: TypeViewSourceInput, sources: Array[ResolvedViewSource], identifiers: Array[U64]) -> Bool {
+        mut val index = 0U64
+        while index < required.count() {
+            val wanted = required.at(index: index, sources: sources, identifiers: identifiers)
+            mut val found = false
+            mut val candidate = 0U64
+            while candidate < self.count() {
+                if wanted.sameHead(other: self.at(index: candidate, sources: sources, identifiers: identifiers)) { found = true
+                    break }
+                candidate += 1U64
+            }
+            if !found { return false }
+            index += 1U64
+        }
+        return true
     }
 }

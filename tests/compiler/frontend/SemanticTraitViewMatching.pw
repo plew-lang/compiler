@@ -1,0 +1,45 @@
+// Raw structural matching controls; this fixture does not admit source proofs.
+use ../../../src/Frontend only { Comp, sameSemanticViewSourceHeadSet }
+use ../../../src/Ir only { TypeRef, Bind, PatternBindInput, PatternTypeInput, ResolvedViewSource }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn matches(compiler: inout Comp, pattern: U64, actual: U64, parameters: Array[Bind] = []) -> Bool {
+    return compiler.typeRefListPatternMatches(pattern: <PatternTypeInput.Values values=[pattern] />, patternParams: <PatternBindInput.Values values=parameters />, actual: <PatternTypeInput.Values values=[actual] />)
+}
+
+fn main() {
+    val scenario = argAt(1I64)
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "T")
+    if scenario == "extensionDuplicate" || scenario == "extensionDuplicateReverse" || scenario == "extensionDifferent" || scenario == "extensionDifferentReverse" {
+        val duplicate = scenario == "extensionDuplicate" || scenario == "extensionDuplicateReverse"
+        val left = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewIds=(if duplicate { give [7U64, 8U64] } else { give [7U64, 7U64] }) />)
+        val right = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewIds=(if duplicate { give [8U64, 7U64, 7U64] } else { give [7U64, 8U64] }) />)
+        val reverse = scenario == "extensionDuplicateReverse" || scenario == "extensionDifferentReverse"
+        val same = if reverse { give matches(compiler: inout compiler, pattern: right, actual: left) } else { give matches(compiler: inout compiler, pattern: left, actual: right) }
+        print(same == duplicate)
+        return
+    }
+    if scenario == "arrayDuplicate" || scenario == "arrayDifferent" || scenario == "arrayDifferentReverse" {
+        val first = <ResolvedViewSource surfaceId=7U64 />
+        val second = <ResolvedViewSource surfaceId=8U64 />
+        val duplicate = scenario == "arrayDuplicate"
+        val left = if duplicate { give [first, second] } else { give [first, first] }
+        val right = if duplicate { give [second, first, first] } else { give [first, second] }
+        val same = if scenario == "arrayDifferentReverse" { give sameSemanticViewSourceHeadSet(a: right, b: left) } else { give sameSemanticViewSourceHeadSet(a: left, b: right) }
+        print(same == duplicate)
+        return
+    }
+    val parameter = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=11U64 args=[] />)
+    val other = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=22U64 args=[] />)
+    val binding = <Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=11U64 fieldStart=0U64 fieldLen=0U64 />
+    val member = compiler.internBytes(s: "Item")
+    val sameReceiver = scenario == "projectionSame"
+    val left = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=11U64 args=[] projectionReceiver=parameter assocTraitId=31U64 assocNameId=member.nameId />)
+    val right = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=(if sameReceiver { give 11U64 } else { give 22U64 }) args=[] projectionReceiver=(if sameReceiver { give parameter } else { give other }) assocTraitId=(if scenario == "projectionTraitDistinct" { give 32U64 } else { give 31U64 }) assocNameId=member.nameId />)
+    val designated = scenario == "projectionDesignated" || scenario == "projectionTraitDistinct"
+    val same = matches(compiler: inout compiler, pattern: left, actual: right, parameters: (if designated { give [binding] } else { give [] }))
+    print(if scenario == "projectionDesignated" || sameReceiver { give same } else { give !same })
+}

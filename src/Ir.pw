@@ -87,6 +87,12 @@ pub struct ResolvedViewSource {
 }
 pub impl ResolvedViewSource {
     factory
+    fn sameHead(other: ResolvedViewSource) -> Bool {
+        if self.traitInstance.owner != 0U64 || other.traitInstance.owner != 0U64 {
+            return self.traitInstance.owner != 0U64 && self.traitInstance.owner == other.traitInstance.owner && self.traitInstance.positionalArgs.count() == other.traitInstance.positionalArgs.count()
+        }
+        return self.surfaceId == other.surfaceId
+    }
     fn withArguments(arguments: Array[U64]) -> ResolvedViewSource {
         return <ResolvedViewSource writtenStart=self.writtenStart writtenLen=self.writtenLen lexicalSurfaceModule=self.lexicalSurfaceModule surfaceId=self.surfaceId traitInstance=<TraitInstanceKey owner=self.traitInstance.owner positionalArgs=arguments /> />
     }
@@ -203,7 +209,25 @@ pub struct TypeTerm {
     pub val assocTraitDeclOffset: U64 = 0U64
     pub val siteOffset: U64 = 0U64
 }
-impl TypeTerm { factory }
+struct TypeViewSourceInput {
+    val sources: TypeViewSourceRange
+    val identifiers: TypeViewIdRange
+    val single: U64
+}
+impl TypeViewSourceInput { factory }
+impl TypeTerm {
+    factory
+    fn viewSourceInput() -> TypeViewSourceInput {
+        return <TypeViewSourceInput sources=self.viewSources identifiers=self.viewIds single=self.viewExtId />
+    }
+}
+pub impl TypeTerm {
+    // A pattern projection's receiver is a child, not its head. The legacy
+    // owner bridge here is not exact equality or source-proof admission.
+    fn patternProjectionHeadMatches(other: TypeTerm) -> Bool {
+        return self.assocNameId != 0U64 && self.assocNameId == other.assocNameId && self.assocTraitId == other.assocTraitId && (!(self.hasAssocTraitDecl && other.hasAssocTraitDecl) || self.assocTraitDeclOffset == other.assocTraitDeclOffset)
+    }
+}
 
 // These recursive read queries need only immutable structural pools. Keep
 // the full Arena out of their recursive ABI without changing the public

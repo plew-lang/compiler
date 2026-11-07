@@ -244,3 +244,29 @@ fresh native compile/link/executions match them with empty stderr and exit0.
 Neutral static review verifies exact inverse-translation equivalence and
 original zero-argument identity/setup intent. Evidence is in the linked final
 consumer repair record. Normal gate remains to be repeated.
+
+
+## Normal Corpus Structural Regressions
+
+Run corpus in 20261107T052105-test-e0a626 completed with five historical
+failures plus trait_via_output_constraint and unify_type_term. Validation was
+interrupted and collected before source edits. The latter is a retained raw
+extension-set helper oracle: replacing unordered duplicate-insensitive set
+comparison by raw count and one-way containment regressed it. Fresh native
+controls also expose same-length asymmetric matching. Keep the fixture oracle.
+
+The via positive rejects at signature checking; a direct projection matching
+RED confirms receiver mirror ParamIds bypass the designated binder relation.
+A fixed original-source archive also reproduces designated projection alpha
+comparison failure, with same/rigid/trait/member/argument controls green.
+Projection pattern heads must own trait/member identity and compare receivers
+through the existing semantic children, preserving the same binder environment.
+This repairs the new matching regression; exact-equality and general record
+category work remain with com-bvc8.
+
+Initial repair build 20261107T060008-build-1f1208 passed, then owner cleanup
+moved pure relations out of Comp to source/type/range owners and required
+pools. No fake inout access or whole Comp comparison loop is retained. Fresh
+validation and impact review remain mandatory. The earlier no-unresolved
+structural-findings review conclusion is withdrawn for these regressions.
+[Native RED and repair record](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-normal-regressions.json).

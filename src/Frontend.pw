@@ -969,22 +969,13 @@ pub impl Comp {
     // accidentally turn `S#E` into the trait named by E's conformance subject.
     inout fn semanticViewSourceEq(a: ResolvedViewSource, b: ResolvedViewSource) -> Bool {
         if a.traitInstance.owner != 0U64 || b.traitInstance.owner != 0U64 {
-            if !self.semanticViewSourceHeadEq(a: a, b: b) { return false }
+            if !a.sameHead(other: b) { return false }
             mut val index = 0U64
             while index < a.traitInstance.positionalArgs.count() {
                 if !self.typeRefEq(a: a.traitInstance.positionalArgs[index], b: b.traitInstance.positionalArgs[index]) { return false }
                 index += 1U64
             }
             return true
-        }
-        return a.surfaceId == b.surfaceId
-    }
-
-    // Head matching never compares child terms: designated-binder matching
-    // must reach them through the same traversal used by exact equality.
-    fn semanticViewSourceHeadEq(a: ResolvedViewSource, b: ResolvedViewSource) -> Bool {
-        if a.traitInstance.owner != 0U64 || b.traitInstance.owner != 0U64 {
-            return a.traitInstance.owner != 0U64 && a.traitInstance.owner == b.traitInstance.owner && a.traitInstance.positionalArgs.count() == b.traitInstance.positionalArgs.count()
         }
         return a.surfaceId == b.surfaceId
     }
@@ -1002,22 +993,6 @@ pub impl Comp {
                 if self.semanticViewSourceEq(a: source, b: candidate) { found = true }
             }
             if !found { return false }
-        }
-        return true
-    }
-
-    inout fn sameSemanticViewSourceHeadSet(a: Array[ResolvedViewSource], b: Array[ResolvedViewSource]) -> Bool {
-        if a.count() != b.count() { return false }
-        mut val i: U64 = 0U64
-        while i < a.count() {
-            mut val found: Bool = false
-            mut val j: U64 = 0U64
-            while j < b.count() {
-                if self.semanticViewSourceHeadEq(a: a[i], b: b[j]) { found = true }
-                j += 1U64
-            }
-            if !found { return false }
-            i += 1U64
         }
         return true
     }
@@ -2711,4 +2686,21 @@ pub impl PreparedSemanticFacts {
         }
         return <Optional.None />
     }
+}
+
+fn semanticViewSourceHeadsContain(sources: Array[ResolvedViewSource], required: Array[ResolvedViewSource]) -> Bool {
+    for source in required {
+        mut val found = false
+        for candidate in sources {
+            if source.sameHead(other: candidate) { found = true
+                break }
+        }
+        if !found { return false }
+    }
+    return true
+}
+
+// Head relation only; callers compare positional child terms separately.
+pub fn sameSemanticViewSourceHeadSet(a: Array[ResolvedViewSource], b: Array[ResolvedViewSource]) -> Bool {
+    return semanticViewSourceHeadsContain(sources: a, required: b) && semanticViewSourceHeadsContain(sources: b, required: a)
 }

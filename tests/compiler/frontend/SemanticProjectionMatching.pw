@@ -1,0 +1,29 @@
+// Projection receiver binders participate in alpha comparison as children.
+use ../../../src/Frontend only { Comp }
+use ../../../src/Ir only { TypeRef, Bind }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    val scenario = argAt(1I64)
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val firstName = compiler.internBytes(s: "First")
+    val secondName = compiler.internBytes(s: "Second")
+    val firstBinding = <Bind nameStart=firstName.nameStart nameLen=firstName.nameLen nameId=firstName.nameId paramId=11U64 fieldStart=0U64 fieldLen=0U64 />
+    val secondBinding = <Bind nameStart=secondName.nameStart nameLen=secondName.nameLen nameId=secondName.nameId paramId=22U64 fieldStart=0U64 fieldLen=0U64 />
+    val first = compiler.pushType(t: <TypeRef nameStart=firstName.nameStart nameLen=firstName.nameLen paramId=11U64 args=[] />)
+    val second = compiler.pushType(t: <TypeRef nameStart=secondName.nameStart nameLen=secondName.nameLen paramId=22U64 args=[] />)
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
+    val boolName = compiler.internBytes(s: "Bool")
+    val boolean = compiler.pushType(t: <TypeRef nameStart=boolName.nameStart nameLen=boolName.nameLen args=[] />)
+    val member = compiler.internBytes(s: "Item")
+    val differentMember = compiler.internBytes(s: "Other")
+    val left = compiler.pushType(t: <TypeRef nameStart=firstName.nameStart nameLen=firstName.nameLen paramId=11U64 args=[] projectionReceiver=first assocTraitId=31U64 assocNameId=member.nameId assocTraitArgs=[integer] />)
+    val sameReceiver = scenario == "sameControl"
+    val right = compiler.pushType(t: <TypeRef nameStart=(if sameReceiver { give firstName.nameStart } else { give secondName.nameStart }) nameLen=(if sameReceiver { give firstName.nameLen } else { give secondName.nameLen }) paramId=(if sameReceiver { give 11U64 } else { give 22U64 }) args=[] projectionReceiver=(if sameReceiver { give first } else { give second }) assocTraitId=(if scenario == "traitDistinct" { give 32U64 } else { give 31U64 }) assocNameId=(if scenario == "memberDistinct" { give differentMember.nameId } else { give member.nameId }) assocTraitArgs=[(if scenario == "argumentDistinct" { give boolean } else { give integer })] />)
+    val designated = scenario != "rigidDistinct" && !sameReceiver
+    val same = compiler.typeRefsAlphaEq(a: left, b: right, aParams: (if designated { give [firstBinding] } else { give [] }), bParams: (if designated { give [secondBinding] } else { give [] }))
+    print(if scenario == "designated" || sameReceiver { give same } else { give !same })
+}

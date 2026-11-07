@@ -295,7 +295,7 @@ impl Comp {
                 Optional.None => { return false }
             }
         }
-        if !self.sameSemanticViewSourceHeadSet(a: facts.viewSources.getOr(key: left, fallback: []), b: facts.viewSources.getOr(key: right, fallback: [])) { return false }
+        if !sameSemanticViewSourceHeadSet(a: facts.viewSources.getOr(key: left, fallback: []), b: facts.viewSources.getOr(key: right, fallback: [])) { return false }
         if a.isRecord != b.isRecord || a.isAny != b.isAny || a.isSendable != b.isSendable || a.isDiverging != b.isDiverging { return false }
         // Record heads have no nominal owner. Shared child traversal compares
         // labels and semantic fields; the synthetic ABI layout name is separate.
@@ -386,6 +386,17 @@ pub impl Comp {
         if a >= self.arena.typeCount() || b >= self.arena.typeCount() { return false }
         val ta: TypeRef = self.arena.typeAt(index: a)
         val tb: TypeRef = self.arena.typeAt(index: b)
+        if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
+            if !self.arena.typeTermAt(index: a).patternProjectionHeadMatches(other: self.arena.typeTermAt(index: b)) { return false }
+            val count = self.typeTermRefChildCount(ref: a)
+            if count != self.typeTermRefChildCount(ref: b) { return false }
+            mut val child = 0U64
+            while child < count {
+                if self.typeTermRefIdentityChildLabel(ref: a, index: child) != self.typeTermRefIdentityChildLabel(ref: b, index: child) || !self.typeRefsAlphaEq(a: self.typeTermRefChildRef(ref: a, index: child), b: self.typeTermRefChildRef(ref: b, index: child), aParams: aParams, bParams: bParams) { return false }
+                child += 1U64
+            }
+            return true
+        }
         val ai = self.typeParameterHeadIndex(ref: a, params: <PatternBindInput.Values values=aParams />)
         val bi = self.typeParameterHeadIndex(ref: b, params: <PatternBindInput.Values values=bParams />)
         if ai < aParams.count() || bi < bParams.count() {
@@ -400,7 +411,7 @@ pub impl Comp {
         }
         // Matching binders establish only the head. A qualified occurrence
         // still owns its view source set and all of its semantic children.
-        if !self.typeTermViewSourceHeadsEqual(a: a, b: b) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging { return false }
+        if !self.arena.typeViewSourceHeadsEqual(a: a, b: b) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging { return false }
         if ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId { return false }
         if ta.args.count() != tb.args.count() { return false }
         mut val i: U64 = 0
@@ -515,12 +526,23 @@ pub impl Comp {
         if a == 0U64 || b == 0U64 || a >= self.arena.typeCount() || b >= self.arena.typeCount() { return a == b }
         val ta: TypeTerm = self.arena.typeTermAt(index: a)
         val tb: TypeTerm = self.arena.typeTermAt(index: b)
+        if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
+            if !ta.patternProjectionHeadMatches(other: tb) { return false }
+            val count = self.typeTermRefChildCount(ref: a)
+            if count != self.typeTermRefChildCount(ref: b) { return false }
+            mut val child = 0U64
+            while child < count {
+                if self.typeTermRefIdentityChildLabel(ref: a, index: child) != self.typeTermRefIdentityChildLabel(ref: b, index: child) || !self.unifyPatterns(a: self.typeTermRefChildRef(ref: a, index: child), aSide: aSide, b: self.typeTermRefChildRef(ref: b, index: child), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds) { return false }
+                child += 1U64
+            }
+            return true
+        }
         if ta.paramId != 0U64 || tb.paramId != 0U64 {
             if ta.paramId != tb.paramId { return false }
         } else {
             if ((ta.hasDecl && tb.hasDecl) && ta.declOffset != tb.declOffset) || (!(ta.hasDecl && tb.hasDecl) && ta.nameId != tb.nameId) { return false }
         }
-        if (!ignoreTopView && !(self.typeTermViewSourceHeadsEqual(a: a, b: b))) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId || ta.args.len != tb.args.len || ta.assocTraitArgs.len != tb.assocTraitArgs.len { return false }
+        if (!ignoreTopView && !(self.arena.typeViewSourceHeadsEqual(a: a, b: b))) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId || ta.args.len != tb.args.len || ta.assocTraitArgs.len != tb.assocTraitArgs.len { return false }
         mut val i: U64 = 0U64
         while i < ta.args.len {
             if !(self.unifyPatterns(a: self.arena.typeArgumentAt(index: ta.args.start + i), aSide: aSide, b: self.arena.typeArgumentAt(index: tb.args.start + i), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }
