@@ -58,11 +58,10 @@ pub impl Comp {
         return self.expressionSourceType(exprId: id)
     }
 
-    // The empty-view case needs no owned array. Preserve the existing set
-    // semantics (including duplicate IDs) for the non-empty representation.
+    // Compatibility consumes the complete semantic selector set, never its
+    // one-source or spelling-only compatibility mirrors.
     inout fn sameCompatibilityViewSet(expectedRef: U64, inferredRef: U64) -> Bool {
-        if self.arena.typeTermAt(index: expectedRef).viewIds.len == 0U64 && self.arena.typeTermAt(index: inferredRef).viewIds.len == 0U64 { return true }
-        return self.sameViewIdSet(a: self.arena.typeAt(index: expectedRef).viewIds, b: self.arena.typeAt(index: inferredRef).viewIds)
+        return self.typeTermViewSourcesEqual(a: expectedRef, b: inferredRef)
     }
 
     inout fn isConcreteType(type: TypeTerm) -> Bool {
@@ -285,7 +284,7 @@ pub impl Comp {
         // Once the nominal heads are known, a view is part of semantic type
         // identity even when the payload layout is unchanged. Unresolved
         // foreign binders above remain the responsibility of substitution.
-        if te.viewExtId != tin.viewExtId || !self.sameCompatibilityViewSet(expectedRef: expectedRef, inferredRef: inferredRef) {
+        if !self.sameCompatibilityViewSet(expectedRef: expectedRef, inferredRef: inferredRef) {
             return <Result.Ok value=<TypeCompatibility.Incompatible /> />
         }
         // same head: a generic head must agree on its type arguments.

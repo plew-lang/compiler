@@ -189,7 +189,7 @@ pub impl Comp {
                 // semantic child before resolving that output.
                 val receiver = if t.assocNameId != 0U64 { give self.typeTermProjectionReceiver(t: t) } else { give i }
                 val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: receiver)
-                try self.checkTraitSubjectViewCycles(viewIds: self.viewSourceIds(sources: sources), offset: t.siteOffset)
+                try self.checkTraitSubjectViewCycles(sources: sources, offset: t.siteOffset)
                 mut val selectedCount: U64 = 0U64
                 mut val vi: U64 = 0U64
                 while vi < sources.count() {

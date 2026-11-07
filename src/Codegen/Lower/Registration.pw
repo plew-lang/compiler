@@ -356,43 +356,6 @@ pub impl Comp {
         return params.count()
     }
 
-    // View source order is presentation only.  Compare the selector names as a
-    // duplicate-free set here; later verification classifies them as extensions
-    // plus the single permitted trait selector.
-    inout fn sameViewIdSet(a: Array[U64], b: Array[U64]) -> Bool {
-        mut val ai: U64 = 0U64
-        while ai < a.count() {
-            mut val seenA: Bool = false
-            mut val ap: U64 = 0U64
-            while ap < ai {
-                if a[ap] == a[ai] { seenA = true }
-                ap += 1U64
-            }
-            if !(seenA) {
-                mut val found: Bool = false
-                mut val bi: U64 = 0U64
-                while bi < b.count() {
-                    if b[bi] == a[ai] { found = true }
-                    bi += 1U64
-                }
-                if !(found) { return false }
-            }
-            ai += 1U64
-        }
-        mut val bi: U64 = 0U64
-        while bi < b.count() {
-            mut val found: Bool = false
-            mut val aj: U64 = 0U64
-            while aj < a.count() {
-                if a[aj] == b[bi] { found = true }
-                aj += 1U64
-            }
-            if !(found) { return false }
-            bi += 1U64
-        }
-        return true
-    }
-
     // Structural equality modulo the two declaration binder lists. This is the
     // declaration-key equality, not call-site type compatibility.
     inout fn typeRefsAlphaEq(a: U64, b: U64, aParams: Array[Bind], bParams: Array[Bind]) -> Bool {

@@ -1015,6 +1015,23 @@ pub impl Comp {
         return out
     }
 
+    // Exact source-set identity is independent of duplicate input entries or
+    // written order. Candidate head matching below is a distinct relation.
+    inout fn semanticViewSourceSetsEqual(a: Array[ResolvedViewSource], b: Array[ResolvedViewSource]) -> Bool {
+        if a.count() == 0U64 || b.count() == 0U64 { return a.count() == b.count() }
+        val left = self.normalizedViewSources(sources: a)
+        val right = self.normalizedViewSources(sources: b)
+        if left.count() != right.count() { return false }
+        for source in left {
+            mut val found = false
+            for candidate in right {
+                if self.semanticViewSourceEq(a: source, b: candidate) { found = true }
+            }
+            if !found { return false }
+        }
+        return true
+    }
+
     inout fn sameSemanticViewSourceHeadSet(a: Array[ResolvedViewSource], b: Array[ResolvedViewSource]) -> Bool {
         if a.count() != b.count() { return false }
         mut val i: U64 = 0U64

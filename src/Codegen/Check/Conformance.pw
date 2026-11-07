@@ -552,12 +552,13 @@ pub impl Comp {
     // source-set, extension names select their registered bundles regardless
     // of whether a particular receiver can use every member.  Applicability is
     // checked separately by the view validator.
-    inout fn checkTraitSubjectViewCycles(viewIds: Array[U64], offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkTraitSubjectViewCycles(sources: Array[ResolvedViewSource], offset: U64) -> Result[(), CompileDiagnostic] {
         mut val extIds: Array[U64] = []
         mut val i: U64 = 0U64
-        while i < viewIds.count() {
-            val id: U64 = viewIds[i]
-            if id != 0U64 && id <= self.interner.entries.count() {
+        while i < sources.count() {
+            val source = sources[i]
+            val id = source.surfaceId
+            if source.traitInstance.owner == 0U64 && id != 0U64 && id <= self.interner.entries.count() {
                 val entry: InternedSpan = self.interner.entries[id - 1U64]
                 if self.isExtName(start: entry.start, len: entry.len) {
                     mut val duplicate: Bool = false

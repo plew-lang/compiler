@@ -157,3 +157,13 @@ The com-zdod manual raw-input increment adds TraitCyclePatternInputs scenarios
 `viewNestedDuplicate`. Compare each
 successful execution with its existing companion `.out`. Pending RED results
 are recorded in com-zdod; an assertion abort is a failed test, never a pass.
+
+`SemanticTraitViewConsumers.pw` is a manual com-zdod regression for production
+compatibility, argument recovery and recursive view-cycle consumers. Run
+`compatibility`, `compatibilityControl`, `compatibilityMirrorControl`,
+`argumentStored`, `argumentExplicit`, `argumentControl`,
+`argumentDuplicateControl`, `genericCycleViewArgument`, `genericCycleControl`
+`traitSourceActivation` and `bodyInstanceKeys`. Each execution must exit 0, match its `.out`, and
+produce empty stderr. The source setup deliberately declares a trait and an
+extension with the same spelling to check that resolved source kind controls
+activation. It does not certify source parsing of parameterized view syntax.

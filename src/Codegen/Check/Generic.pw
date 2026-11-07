@@ -237,12 +237,15 @@ pub impl Comp {
     // tuple, or a function type is no less structural than a top-level view.
     inout fn checkGenericTypeViewCycles(ref: U64, offset: U64) -> Result[(), CompileDiagnostic] {
         if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=() /> }
-        try self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: ref), offset: offset)
-        val t: TypeRef = self.arena.typeAt(index: ref)
-        mut val i: U64 = 0U64
-        while i < t.args.count() {
-            try self.checkGenericTypeViewCycles(ref: t.args[i], offset: offset)
-            i += 1U64
+        // Projection mirrors do not own a second view set. Their receiver is
+        // a child in the same traversal as selector arguments and record fields.
+        if self.arena.typeTermAt(index: ref).assocNameId == 0U64 {
+            try self.checkTraitSubjectViewCycles(sources: self.typeRefViewSources(ref: ref), offset: offset)
+        }
+        mut val index = 0U64
+        while index < self.typeTermRefChildCount(ref: ref) {
+            try self.checkGenericTypeViewCycles(ref: self.typeTermRefChildRef(ref: ref, index: index), offset: offset)
+            index += 1U64
         }
         return <Result.Ok value=() />
     }

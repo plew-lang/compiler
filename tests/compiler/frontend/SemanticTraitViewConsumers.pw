@@ -1,0 +1,82 @@
+// Manual com-zdod consumers: these invoke existing production compatibility,
+// argument recovery and recursive view-cycle entries, not a copied matcher.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { TypeRef, ResolvedViewSource, TraitInstanceKey, Expr, Param, MakeFieldRange, InstanceEnvironment }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    val scenario = argAt(1I64)
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[K] {{}} trait B[K] {{}} trait P[K] {{ type Item }} struct S {{}} impl S as P[I64] {{ type Item=I64 }} impl S as P[Bool] {{ type Item=Bool }} extension E {{ impl A[I64] as B[I64] {{}} }} extension F {{ impl B[I64] as A[I64] {{}} }} extension P {{ impl A[I64] as B[I64] {{}} }} fn identity[T](value: T) -> T {{ return value }} fn main() {{}}" path="ViewConsumers.pw" />, sources: <SourceAccess />).unwrap()
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
+    val booleanName = compiler.internBytes(s: "Bool")
+    val boolean = compiler.pushType(t: <TypeRef nameStart=booleanName.nameStart nameLen=booleanName.nameLen args=[] />)
+    val traitName = compiler.internBytes(s: "P")
+    val trait = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: traitName.nameId))
+    val expectedSource = <ResolvedViewSource surfaceId=trait.nameId traitInstance=<TraitInstanceKey owner=trait.nameStart positionalArgs=[integer] /> />
+    val actualSource = <ResolvedViewSource surfaceId=trait.nameId traitInstance=<TraitInstanceKey owner=trait.nameStart positionalArgs=[boolean] /> />
+    val structName = compiler.internBytes(s: "S")
+    val declaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: structName.nameId))
+    val base = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] hasDecl=true declOffset=declaration.defOffset />)
+    val expected = compiler.typeRefWithViewSources(ref: base, sources: [expectedSource])
+    val actual = compiler.typeRefWithViewSources(ref: base, sources: [actualSource])
+    if scenario == "bodyInstanceKeys" {
+        val name = compiler.internBytes(s: "identity")
+        mut val function = compiler.arena.functionCount()
+        mut val index = 0U64
+        while index < compiler.arena.functionCount() {
+            if compiler.arena.functionAt(index: index).nameId == name.nameId { function = index }
+            index += 1U64
+        }
+        if function == compiler.arena.functionCount() { panic("missing key test function") }
+        val parameters = [compiler.funcBindAt(binds: compiler.arena.functionAt(index: function).typeParams, index: 0U64)]
+        val first = compiler.internBodyInstance(fnIdx: function, environment: <InstanceEnvironment params=parameters args=[expected] />)
+        val second = compiler.internBodyInstance(fnIdx: function, environment: <InstanceEnvironment params=parameters args=[actual] />)
+        val copy = compiler.typeRefWithViewSources(ref: base, sources: [expectedSource])
+        val repeated = compiler.internBodyInstance(fnIdx: function, environment: <InstanceEnvironment params=parameters args=[copy] />)
+        print(first != second && first == repeated && compiler.findBodyInstance(fnIdx: function, environment: <InstanceEnvironment params=parameters args=[actual] />) == second)
+        return
+    }
+    if scenario == "compatibilityMirrorControl" {
+        val raw = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] hasDecl=true declOffset=declaration.defOffset viewSources=[expectedSource] />)
+        print(compiler.typesCompatible(expected: raw, inferred: expected).unwrap())
+        return
+    }
+    if scenario == "compatibility" {
+        print(!compiler.typesCompatible(expected: expected, inferred: actual).unwrap())
+        return
+    }
+    if scenario == "compatibilityControl" {
+        print(compiler.typesCompatible(expected: expected, inferred: expected).unwrap())
+        return
+    }
+    if scenario == "argumentStored" || scenario == "argumentExplicit" || scenario == "argumentControl" || scenario == "argumentDuplicateControl" {
+        val sourceType = if scenario == "argumentControl" || scenario == "argumentDuplicateControl" { give expected } else { give actual }
+        val constructed = compiler.pushExpr(e: <Expr.Make typeStart=declaration.nameStart typeLen=declaration.nameLen variantStart=0U64 variantLen=0U64 isEnum=false ty=if scenario == "argumentExplicit" { give base } else { give sourceType } fields=<MakeFieldRange start=0U64 len=0U64 /> />)
+        val expression = if scenario == "argumentExplicit" { give compiler.pushExpr(e: <Expr.ExtView recv=constructed source=actualSource strip=false />) } else { give constructed }
+        val parameterType = if scenario == "argumentDuplicateControl" {
+            give compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] hasDecl=true declOffset=declaration.defOffset viewSources=[expectedSource, expectedSource] />)
+        } else { give expected }
+        val parameter = <Param nameStart=0U64 nameLen=0U64 tyStart=declaration.nameStart tyLen=declaration.nameLen tyNameId=structName.nameId tyIsArray=false ty=parameterType isInout=false isMove=false isBorrow=false noLabel=true hasDefault=false defaultExpr=0U64 />
+        val matches = compiler.argMatchesParam(argExpr: expression, p: parameter).unwrap()
+        print(if scenario == "argumentControl" || scenario == "argumentDuplicateControl" { give matches } else { give !matches })
+        return
+    }
+    val extension = compiler.internBytes(s: "E")
+    val reverse = compiler.internBytes(s: "F")
+    val selected = if scenario == "traitSourceActivation" {
+        give [expectedSource, <ResolvedViewSource surfaceId=reverse.nameId />]
+    } else if scenario == "genericCycleControl" { give [<ResolvedViewSource surfaceId=extension.nameId />] }
+    else { give [<ResolvedViewSource surfaceId=extension.nameId />, <ResolvedViewSource surfaceId=reverse.nameId />] }
+    val inner = compiler.typeRefWithViewSources(ref: integer, sources: selected)
+    val viewed = if scenario == "traitSourceActivation" { give inner } else {
+        give compiler.typeRefWithViewSources(ref: base, sources: [<ResolvedViewSource surfaceId=trait.nameId traitInstance=<TraitInstanceKey owner=trait.nameStart positionalArgs=[inner] /> />])
+    }
+    match compiler.checkGenericTypeViewCycles(ref: viewed, offset: 0U64) {
+        Result.Ok(value: _) => { print(scenario == "genericCycleControl" || scenario == "traitSourceActivation") }
+        Result.Err(error: val diagnostic) => { print(scenario == "genericCycleViewArgument" && diagnostic.message == "trait-to-trait conformance cycle") }
+    }
+}

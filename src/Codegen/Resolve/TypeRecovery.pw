@@ -6,73 +6,38 @@
 // ones). This is also the shared mapping used by type-checking and emission.
 
 pub impl Comp {
-    // The type resolver needs this before a body-local TypeInfo is available:
-    // `f(value: p#E)` is selected while `p` may still be name-only, but the
-    // written view is already a part of the argument's type identity.  Keep
-    // this source-set recovery here, next to overload matching, rather than
-    // letting a later backend check discover that the wrong overload won.
-    inout fn typeRefViewIds(ref: U64) -> Array[U64] {
-        mut val out: Array[U64] = []
-        if ref == 0U64 || ref >= self.arena.typeCount() { return out }
-        val t: TypeRef = self.arena.typeAt(index: ref)
-        out = t.viewIds
-        if out.count() == 0U64 && t.viewExtId != 0U64 { out.append(t.viewExtId) }
-        return out
-    }
-
-    inout fn appendDistinctViewId(ids: inout Array[U64], id: U64) {
-        if id == 0U64 { return }
-        mut val i: U64 = 0U64
-        while i < ids.count() {
-            if ids[i] == id { return }
-            i += 1U64
-        }
-        ids.append(id)
-    }
-
-    // Recover a value's static source set from both its declared TypeRef and
-    // explicit view syntax.  The latter is essential during first-pass free
-    // overload resolution, before a local `P` has been promoted to a typed
-    // local but after `p#E` has already made its provenance explicit.
-    inout fn argViewIds(argExpr: U64, ti: TypeInfo) -> Result[Array[U64], CompileDiagnostic] {
-        mut val out: Array[U64] = []
-        mut val cur: U64 = argExpr
-        mut val keepBase: Bool = true
-        mut val walking: Bool = true
+    // During first-pass overload recovery the expression's explicit selector
+    // can precede a stored local TypeRef. Preserve its resolved full instance,
+    // and combine it with the base's retained source set without re-resolving
+    // its written spelling. This is recovery, not new conformance evidence.
+    inout fn argViewSources(argExpr: U64, ti: TypeInfo) -> Result[Array[ResolvedViewSource], CompileDiagnostic] {
+        mut val sources: Array[ResolvedViewSource] = []
+        mut val current = argExpr
+        mut val keepBase = true
+        mut val walking = true
         while walking {
-            match self.arena.exprs[cur] {
+            match self.arena.exprs[current] {
                 Expr.ExtView(recv: val base, source: val source, strip: val strip) => {
                     if strip {
-                        out = []
+                        sources = []
                         keepBase = false
                         walking = false
                     } else {
-                        self.appendDistinctViewId(ids: inout out, id: source.surfaceId)
-                        cur = base
+                        sources.append(source)
+                        current = base
                     }
                 }
                 _ => { walking = false }
             }
         }
         if keepBase {
-            val base: TypeInfo = (try self.exprType(id: cur))
-            val baseIds: Array[U64] = self.typeRefViewIds(ref: base.ref)
-            mut val i: U64 = 0U64
-            while i < baseIds.count() {
-                self.appendDistinctViewId(ids: inout out, id: baseIds[i])
-                i += 1U64
-            }
-            // A non-view expression can still carry a fully recovered ref.
-            if cur == argExpr {
-                val tiIds: Array[U64] = self.typeRefViewIds(ref: ti.ref)
-                i = 0U64
-                while i < tiIds.count() {
-                    self.appendDistinctViewId(ids: inout out, id: tiIds[i])
-                    i += 1U64
-                }
+            val base = (try self.exprType(id: current))
+            for source in self.typeRefViewSources(ref: base.ref) { sources.append(source) }
+            if current == argExpr {
+                for source in self.typeRefViewSources(ref: ti.ref) { sources.append(source) }
             }
         }
-        return <Result.Ok value=out />
+        return <Result.Ok value=self.normalizedViewSources(sources: sources) />
     }
 
     inout fn callableLabelMatchesParameter(param: Param, hasLabel: Bool, labelStart: U64, labelLen: U64) -> Bool {
@@ -255,9 +220,9 @@ pub impl Comp {
             // when the base local has not acquired a TypeRef yet: `p#E` must
             // select `f(P#E)` rather than falling through to first-declared
             // `f(P)` and failing only in backend validation.
-            val actualViews: Array[U64] = (try self.argViewIds(argExpr: argExpr, ti: ti))
-            val paramViews: Array[U64] = self.typeRefViewIds(ref: p.ty)
-            if !(self.sameViewIdSet(a: actualViews, b: paramViews)) {
+            val actualViews = (try self.argViewSources(argExpr: argExpr, ti: ti))
+            val paramViews = self.typeRefViewSources(ref: p.ty)
+            if !self.semanticViewSourceSetsEqual(a: actualViews, b: paramViews) {
                 return <Result.Ok value=false />
             }
             // generic-instance discrimination (spec/07: distinguish at concrete argument

@@ -103,9 +103,29 @@ Its internal setup now supplies [I64], preserving the original multiple-trait
 Input diagnostic assertion. Only changed fixtures were rerun; unchanged inputs
 retain their exact prior result. This is not whole-suite or task certification.
 
+## Consumer Migration Checkpoint
+
+Executed SemanticTraitViewConsumers REDs show compatibility and stored/explicit
+argument recovery dropping positional arguments, a view-argument traversal gap,
+and a same-spelled trait incorrectly activating an extension. Three positive
+controls passed. Production consumers now retain ResolvedViewSource through
+exact set comparison, argument recovery and extension activation. Semantic
+compatibility mirrors no longer decide identity; view-cycle traversal uses the
+shared semantic child reader. Extension activation tests the retained kind
+(owner zero), not merely a matching name. Spelling-only recovery/set helpers
+have no remaining callers and were removed.
+[Executed evidence and caller/key reconciliation](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-consumers-increment.json)
+records five REDs, three preserved controls, and fresh GREEN for 11 consumer
+cases plus all 69 earlier cases (80 total). Build 20261107T022411-build-4fedcf
+passed. New controls cover compatibility mirrors, duplicate parameter source
+sets and actual internBodyInstance/findBodyInstance keys. Layout-only array
+mangles remain distinct from semantic body keys; do not add selector spellings
+to physical layout names or use those names as semantic equality.
+Task-wide gates and completion review remain pending.
+
 ## Remaining Work
 
-Reconcile remaining Infer/Type and TypeRecovery view-id consumers, alias/owner
+Reconcile qualified-binder handling, alias/owner
 and normalization composition scenarios, complete keys/rebuild/caller use,
 applicable normal/fixed-point/performance gates and neutral completion review.
 Keep known projection-versus-receiver category repair assigned to com-bvc8;
