@@ -1,0 +1,9 @@
+use ../Shared only { S }
+use ./First only { Origin as First }
+use ./Second only { Origin as Second }
+fn main() {
+    val value = <S />
+    val first = value#First
+    val second = value#Second
+    val both = value#First#Second
+}

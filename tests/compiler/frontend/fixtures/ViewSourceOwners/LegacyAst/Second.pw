@@ -1,0 +1,3 @@
+use ../Shared only { S }
+pub trait P {}
+pub extension Origin {}

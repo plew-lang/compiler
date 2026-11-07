@@ -1,0 +1,57 @@
+// No extension method exists: applicability must come from Conform identity.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ViewSourceOwners/ConformanceOnly/_.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val bindings = compiler.moduleScopeBindings.unwrap()
+    val first = bindings.extensionId(moduleId: 0U64, nameId: compiler.internBytes(s: "First").nameId).unwrap()
+    val second = bindings.extensionId(moduleId: 0U64, nameId: compiler.internBytes(s: "Second").nameId).unwrap()
+    if first == second { print("0") return }
+    mut val firstCount = 0U64
+    mut val secondCount = 0U64
+    mut val index = 0U64
+    while index < compiler.decls.conformCount() {
+        val conformance = compiler.decls.conformAt(index: index)
+        if conformance.extId == first {
+            if conformance.sourceModule != bindings.extensionBinding(identity: first).unwrap().ownerModule { print("0") return }
+            firstCount += 1U64
+        }
+        if conformance.extId == second {
+            if conformance.sourceModule != bindings.extensionBinding(identity: second).unwrap().ownerModule { print("0") return }
+            secondCount += 1U64
+        }
+        index += 1U64
+    }
+    if firstCount != 1U64 || secondCount != 1U64 { print("0") return }
+    index = 0U64
+    while index < compiler.arena.functionCount() {
+        val extension = compiler.arena.functionAt(index: index).extId
+        if extension == first || extension == second { print("0") return }
+        index += 1U64
+    }
+    mut val firstView = false
+    mut val secondView = false
+    mut val bothViews = false
+    index = 1U64
+    while index < compiler.arena.typeCount() {
+        val sources = compiler.arena.typeViewSources(ref: index)
+        if sources.count() == 1U64 && sources[0U64].traitInstance.owner == 0U64 {
+            if sources[0U64].surfaceId == first {
+                if !compiler.proofSourceIsActive(baseRef: index, extId: first) || compiler.proofSourceIsActive(baseRef: index, extId: second) { print("0") return }
+                firstView = true
+            }
+            if sources[0U64].surfaceId == second {
+                if !compiler.proofSourceIsActive(baseRef: index, extId: second) || compiler.proofSourceIsActive(baseRef: index, extId: first) { print("0") return }
+                secondView = true
+            }
+        }
+        if sources.count() == 2U64 && sources[0U64].traitInstance.owner == 0U64 && sources[1U64].traitInstance.owner == 0U64 && ((sources[0U64].surfaceId == first && sources[1U64].surfaceId == second) || (sources[0U64].surfaceId == second && sources[1U64].surfaceId == first)) {
+            if !compiler.proofSourceIsActive(baseRef: index, extId: first) || !compiler.proofSourceIsActive(baseRef: index, extId: second) { print("0") return }
+            bothViews = true
+        }
+        index += 1U64
+    }
+    print(if firstView && secondView && bothViews { give "1" } else { give "0" })
+}

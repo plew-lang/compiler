@@ -1,0 +1,3 @@
+use ../Shared only { S }
+pub trait B {}
+pub extension Origin { pub impl S as B {} }

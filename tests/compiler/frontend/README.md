@@ -176,7 +176,12 @@ activation. It does not certify source parsing of parameterized view syntax.
 `ExtensionFinalIdentity.pw`, `LegacyExtensionIdentity.pw` and
 `ExtensionIdentityBindings.pw` each print their companion golden without arguments.
 They exercise the compatibility final resolver, materialized AST conformance
-registration and sealed module-binding identity respectively. These are manual
+registration and sealed module-binding identity respectively. Legacy identity
+also takes `spanless`, `trait`, `spanlessTrait`, `unknown`, `spanlessUnknown`,
+`foreign`, `spanlessForeign`, `method`, `spanlessMethod`, `foreignMethod` or
+`spanlessForeignMethod`. The foreign setup deliberately chooses the same-spelled
+bundle whose module differs from the interner's first name occurrence; method
+cases check both registered Func/Conform identities and original defOffsets. These are manual
 native diagnostics, not normal-suite coverage. The first covers value and
 associated resolver APIs; it does not cover parser-to-associated-call dispatch.
 
@@ -203,3 +208,13 @@ source line order, determines which conflicting binding is primary.
 exactly with `.stderr`. This leaf test covers notes with unpositioned primaries,
 line/file/unpositioned context and warning/failure-domain independence. Both are
 manual native diagnostics outside the normal suite.
+
+
+`ConformanceOnlyExtensionOwners.pw` is another manual native identity control.
+It prints its companion golden without arguments. The File graph under
+`ViewSourceOwners/ConformanceOnly` uses two same-spelled, differently owned
+bundles with no methods. It checks Conform IDs/source modules, individual and
+composed view sources, and the actual proof-source activation query's exclusion
+of the other bundle. It does not certify complete trait-instance proof search
+or associated-call dispatch. The setup itself is also valid for `--check` and
+`--run` (no stdout).

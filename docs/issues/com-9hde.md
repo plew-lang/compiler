@@ -535,3 +535,35 @@ generation3 LLVM/runtime equality and all3 samples produced identical outputs:
 The saved fixed-point candidate `bin/plewc-source-binding-fixed-point` repeats
 the owner/kind check/run8 and collision CLI3 controls. This is WIP evidence,
 not full-suite acceptance, exact Syntax pin uptake, or adopted-carrier promotion.
+
+
+## Remaining Legacy Adapter Controls
+
+Before claiming R3 closure, exercise ImplAst.extName with and without its optional
+name span at an explicit original impl site. Both forms must obtain the same
+admitted bundle identity; neither may derive module authority from newly interned
+text. Pair valid extension input with known trait/non-extension and unknown name
+refusals, preserving the intended failure domain and preventing conformance
+publication on failure. This is compatibility adapter coverage under the existing
+scope, not new source syntax or global spelling inference. The representation's
+required impl span supplies lexical provenance when the optional name span is
+absent. Retain canonical ID checks for successful conformance registration.
+
+## Legacy Adapter and Conformance-only Verification
+
+[Finite evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/legacy-extension-adapter-closure.json)
+records actual spanless compatibility RED and final12 successful legacy controls.
+The optional name span and required original impl site converge through the same
+sealed binding/kind query. Both Func and Conform retain canonical IDs and original
+definition offsets; foreign-module controls exclude interner-position authority.
+The unused competing alias spelling resolver is removed.
+
+A conformance-only extension control checks two owners without extension methods,
+registered Conform provenance, individual/composed views and exact proof-source
+activation membership. Native1 and previous-candidate CLI check/run2 succeed; this
+does not certify the full solver or final dispatch. Existing ArrayViewAdmission
+keeps its nine scenarios and ref0 compatibility path, correcting only its obsolete
+nameId setup to the sealed ID. Neutral review accepted all three finite scopes.
+Source compatibility check succeeds; no fresh full build/performance is claimed
+for this adapter repair. Parameterized value source-application consumer controls,
+exact Syntax pin and whole-task gates remain open.

@@ -12,8 +12,9 @@ fn accepts(scenario: String, expectedError: String = "") -> Bool {
                 // The legacy no-term entry still resolves the same source.
                 val receiver = compiler.internBytes(s: "S")
                 val extension = compiler.internBytes(s: "E")
-                val selected = compiler.resolveViewSourceKey(recvStart: receiver.nameStart, recvLen: receiver.nameLen, recvRef: 0U64, sourceId: extension.nameId).unwrap()
-                return selected.kind == 1U64 && selected.id == extension.nameId
+                val identity = compiler.moduleScopeBindings.unwrap().extensionId(moduleId: 0U64, nameId: extension.nameId).unwrap()
+                val selected = compiler.resolveViewSourceKey(recvStart: receiver.nameStart, recvLen: receiver.nameLen, recvRef: 0U64, sourceId: identity).unwrap()
+                return selected.kind == 1U64 && selected.id == identity
             }
             return true
         }

@@ -448,29 +448,6 @@ pub impl Comp {
         return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
     }
 
-    // Parser AST values retain selector text but not a separate selector span.
-    // Resolve that text in the surrounding expression/type module before it is
-    // interned.  This preserves the imported declaration's span as the trait
-    // identity carrier; it is deliberately shared by value and type views.
-    inout fn aliasRealTextInModule(siteOffset: U64, text: String) -> Bind {
-        val traitOwner: U64 = self.traitOwnerForSelector(siteOffset: siteOffset, text: text)
-        if traitOwner != 0U64 {
-            val traitLen: U64 = self.traitNameLenByOwner(owner: traitOwner)
-            return <Bind nameStart=traitOwner nameLen=traitLen fieldStart=traitOwner fieldLen=traitLen />
-        }
-        mut val ai: U64 = 0U64
-        while ai < self.decls.importAliases.count() {
-            val al: Bind = self.decls.importAliases[ai]
-            if self.moduleOf(offset: al.nameStart) == self.moduleOf(offset: siteOffset) {
-                if rangeEquals(bytes: self.arena.bytes, start: al.nameStart, len: al.nameLen, kw: text) {
-                    return <Bind nameStart=al.fieldStart nameLen=al.fieldLen fieldStart=al.fieldStart fieldLen=al.fieldLen />
-                }
-            }
-            ai += 1U64
-        }
-        return self.internBytes(s: text)
-    }
-
     // Lower an authored selector once.  `traitOwner` is an immutable
     // declaration identity, not a spelling to be resolved again by Verify,
     // Mono, or LLVM.  An extension bundle is receiver-dependent, so it keeps

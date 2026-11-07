@@ -67,10 +67,15 @@ impl Comp {
         return <Result.Ok value=<BoundValueViewHead index=head source=(try self.bindViewSourceName(siteOffset: names[head].start, name: names[head])) /> />
     }
 
-    inout fn extensionIdentityForImpl(name: Span, siteOffset: U64) -> Result[U64, CompileDiagnostic] {
-        val source = try self.bindViewSourceName(siteOffset: siteOffset, name: name)
+    inout fn extensionIdentityForImpl(name: Span, siteOffset: U64, text: String = "") -> Result[U64, CompileDiagnostic] {
+        // Value AST clients may omit the optional name span, but the impl's
+        // original site still supplies lexical authority. Interned spelling
+        // identifies the query name only; it must not provide that authority.
+        val source = if name.end > name.start {
+            give (try self.bindViewSourceName(siteOffset: siteOffset, name: name))
+        } else { give (try self.lowerViewSource(siteOffset: siteOffset, text: text)) }
         if source.traitInstance.owner != 0U64 {
-            return <Result.Err error=self.diagnosticAt(offset: name.start, msg: "extension impl does not name an extension declaration", failureDomain: <FailureDomain.Input />) />
+            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "extension impl does not name an extension declaration", failureDomain: <FailureDomain.Input />) />
         }
         return <Result.Ok value=source.surfaceId />
     }

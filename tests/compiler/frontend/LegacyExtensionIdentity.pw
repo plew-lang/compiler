@@ -2,17 +2,63 @@
 // for its extension declaration, rather than issuing an interned spelling ID.
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend, ImplAst, TypeAst, Span }
 use ../../../src/SourceAccess only { SourceAccess }
+use @Plew/Syntax only { MemberAst, MemberKind, BlockAst }
 use @Std/Io only { print }
+use @Std/Process only { argAt }
+use ../../../src/Diag only { FailureDomain, emitDiagnostic }
 fn main() {
+    val scenario = argAt(1I64)
+    val withMethod = scenario == "method" || scenario == "spanlessMethod" || scenario == "foreignMethod" || scenario == "spanlessForeignMethod"
+    val foreign = scenario == "foreign" || scenario == "spanlessForeign" || scenario == "foreignMethod" || scenario == "spanlessForeignMethod"
+    val spanless = scenario == "spanlessMethod" || scenario == "spanlessForeignMethod" || scenario == "spanlessForeign" || scenario == "spanless" || scenario == "spanlessTrait" || scenario == "spanlessUnknown"
+    val wrongKind = scenario == "trait" || scenario == "spanlessTrait"
+    val unknown = scenario == "unknown" || scenario == "spanlessUnknown"
     mut val compiler = <Comp />
-    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="struct S {{}} trait P {{}} extension E {{}} fn main() {{}}" path="LegacyIdentity.pw" />, sources: <SourceAccess />).unwrap()
-    val extension = compiler.internBytes(s: "E")
-    val identity = compiler.moduleScopeBindings.unwrap().extensionId(moduleId: 0U64, nameId: extension.nameId).unwrap()
+    analyzeFrontend(c: inout compiler, input: (if foreign { give <FrontendInput.File path="tests/compiler/frontend/fixtures/ViewSourceOwners/LegacyAst/_.pw" /> } else { give <FrontendInput.Text text="struct S {{}} trait P {{}} extension E {{}} fn main() {{}}" path="LegacyIdentity.pw" /> }), sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val extensionName = if foreign { give "Origin" } else { give "E" }
+    val extension = compiler.internBytes(s: extensionName)
+    val bindings = compiler.moduleScopeBindings.unwrap()
+    val module = if foreign {
+        val first = bindings.uniqueBinding(moduleId: 0U64, nameId: compiler.internBytes(s: "First").nameId).unwrap().ownerModule
+        val second = bindings.uniqueBinding(moduleId: 0U64, nameId: compiler.internBytes(s: "Second").nameId).unwrap().ownerModule
+        // Deliberately choose the module other than the interner's first
+        // occurrence, so interned storage cannot accidentally be authority.
+        give if compiler.moduleOf(offset: extension.nameStart) == first { give second } else { give first }
+    } else { give 0U64 }
+    val binding = bindings.uniqueBinding(moduleId: module, nameId: extension.nameId).unwrap()
+    val identity = bindings.extensionId(moduleId: module, nameId: extension.nameId).unwrap()
     val receiver = compiler.internBytes(s: "S")
     val declaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: receiver.nameId))
     val receiverSpan = <Span start=declaration.nameStart end=declaration.nameStart + declaration.nameLen />
     val traitName = compiler.internBytes(s: "P")
-    val trait = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: traitName.nameId))
-    compiler.lowerImpl(im: <ImplAst recvType=<TypeAst name="S" nameSpan=receiverSpan args=[] span=receiverSpan /> implParams=[] isTraitImpl=true traitName="P" traitNameSpan=<Span start=trait.nameStart end=trait.nameStart + trait.nameLen /> traitArgs=[] whereParams=[] whereTraits=[] isPub=false members=[] span=receiverSpan extName="E" extNameSpan=<Span start=extension.nameStart end=extension.nameStart + extension.nameLen /> />).unwrap()
-    print(if compiler.decls.conformAt(index: compiler.decls.conformCount() - 1U64).extId == identity { give "1" } else { give "0" })
+    val traitOwner = bindings.uniqueBinding(moduleId: module, nameId: traitName.nameId).unwrap().declarationOffset
+    val siteSpan = if foreign { give <Span start=binding.declarationOffset end=binding.declarationOffset + extension.nameLen /> } else { give receiverSpan }
+    val selectedName = if wrongKind { give "P" } else if unknown { give "Missing" } else { give extensionName }
+    val written = compiler.internBytes(s: selectedName)
+    val writtenSpan = if spanless { give <Span start=0U64 end=0U64 /> } else { give if foreign { give <Span start=binding.declarationOffset end=binding.declarationOffset + extension.nameLen /> } else { give <Span start=written.nameStart end=written.nameStart + written.nameLen /> } }
+    val count = compiler.decls.conformCount()
+    match compiler.lowerImpl(im: <ImplAst recvType=<TypeAst name="S" nameSpan=receiverSpan args=[] span=receiverSpan /> implParams=[] isTraitImpl=true traitName="P" traitNameSpan=<Span start=traitOwner end=traitOwner + traitName.nameLen /> traitArgs=[] whereParams=[] whereTraits=[] isPub=false members=[] span=siteSpan extName=selectedName extNameSpan=writtenSpan />) {
+        Result.Err(error: val diagnostic) => {
+            if compiler.decls.conformCount() != count { print("0") return }
+            if wrongKind {
+                match diagnostic.failureDomain {
+                    FailureDomain.Input => { print(if diagnostic.message == "extension impl does not name an extension declaration" { give "1" } else { give "0" }) return }
+                    _ => {}
+                }
+            }
+            if unknown && diagnostic.isSourceRejection() && diagnostic.message == "unknown view source (spec/09)" { print("1") return }
+            emitDiagnostic(diagnostic: diagnostic)
+            print("0")
+            return
+        }
+        Result.Ok(value: _) => { if wrongKind || unknown { print("0") return } }
+    }
+    if withMethod {
+        val emptyType = <TypeAst name="" args=[] span=<Span start=0U64 end=0U64 /> />
+        val member = <MemberAst kind=<MemberKind.Method /> name="added" nameSpan=siteSpan typeParams=[] params=[] hasRet=false ret=emptyType whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=<BlockAst stmts=[] /> assocTy=emptyType />
+        val functionCount = compiler.arena.functionCount()
+        compiler.lowerImpl(im: <ImplAst recvType=<TypeAst name="S" nameSpan=receiverSpan args=[] span=receiverSpan /> implParams=[] isTraitImpl=false traitName="" traitArgs=[] whereParams=[] whereTraits=[] isPub=false members=[member] span=siteSpan extName=selectedName extNameSpan=writtenSpan />).unwrap()
+        if compiler.arena.functionCount() != functionCount + 1U64 || compiler.arena.functionAt(index: functionCount).extId != identity || compiler.arena.functionAt(index: functionCount).defOffset != siteSpan.start { print("0") return }
+    }
+    print(if compiler.decls.conformAt(index: compiler.decls.conformCount() - 1U64).extId == identity && compiler.decls.conformAt(index: compiler.decls.conformCount() - 1U64).defOffset == siteSpan.start { give "1" } else { give "0" })
 }
