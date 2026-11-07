@@ -11,6 +11,15 @@ fn appendEdge(compiler: inout Comp, subject: TraitDef, target: TraitDef, argumen
 }
 
 fn viewArgument(compiler: inout Comp, integerName: Bind, scenario: String, second: Bool) -> U64 {
+    if scenario == "viewArgumentSame" || scenario == "viewArgumentDistinct" || scenario == "viewArgumentDuplicate" {
+        val name = compiler.internBytes(s: "ParameterView")
+        val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
+        val argumentName = if second && scenario == "viewArgumentDistinct" { give compiler.internBytes(s: "Bool") } else { give integerName }
+        val argument = compiler.pushType(t: <TypeRef nameStart=argumentName.nameStart nameLen=argumentName.nameLen args=[] />)
+        val source = <ResolvedViewSource surfaceId=name.nameId traitInstance=<TraitInstanceKey owner=declaration.nameStart positionalArgs=[argument] /> />
+        val sources = if !second && scenario == "viewArgumentDuplicate" { give [source, source] } else { give [source] }
+        return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=sources />)
+    }
     if scenario == "projectionMirror" {
         val name = compiler.internBytes(s: "FirstView")
         val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
@@ -56,7 +65,7 @@ fn main() {
     if scenario == "viewSameSpellingDistinct" {
         analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/TraitCycleViews/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
     } else {
-    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[Item] {{}} trait B[Item] {{}} struct Box[T] {{}} struct Other[T] {{}} trait FirstView {{ type Item }} trait SecondView {{}} extension E {{ impl A[Bool] as B[Bool] {{}} }} extension F {{ impl A[Bool] as B[Bool] {{}} }} fn main() {{}}" path="CanonicalInput.pw" />, sources: <SourceAccess />).unwrap()
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[Item] {{}} trait B[Item] {{}} struct Box[T] {{}} struct Other[T] {{}} trait FirstView {{ type Item }} trait SecondView {{}} trait ParameterView[Kind] {{}} extension E {{ impl A[Bool] as B[Bool] {{}} }} extension F {{ impl A[Bool] as B[Bool] {{}} }} fn main() {{}}" path="CanonicalInput.pw" />, sources: <SourceAccess />).unwrap()
     }
     val subject = compiler.decls.traitAt(index: 0U64)
     val target = compiler.decls.traitAt(index: 1U64)
@@ -64,7 +73,7 @@ fn main() {
     val box = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: boxName.nameId))
     val integerName = compiler.internBytes(s: "I64")
     val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
-    val viewScenario = scenario == "projectionMirror" || scenario == "viewSameSpellingDistinct" || scenario == "viewSame" || scenario == "viewDistinct" || scenario == "extensionLegacy" || scenario == "extensionSet" || scenario == "extensionDistinct"
+    val viewScenario = scenario == "viewArgumentSame" || scenario == "viewArgumentDistinct" || scenario == "viewArgumentDuplicate" || scenario == "projectionMirror" || scenario == "viewSameSpellingDistinct" || scenario == "viewSame" || scenario == "viewDistinct" || scenario == "extensionLegacy" || scenario == "extensionSet" || scenario == "extensionDistinct"
     val recordScenario = scenario == "recordSame" || scenario == "recordLabelDistinct" || scenario == "recordChildDistinct"
     val field = compiler.internBytes(s: "field")
     val canonical = if viewScenario {
@@ -94,7 +103,7 @@ fn main() {
         } else { give integer }
         give compiler.pushType(t: <TypeRef nameStart=layout.nameStart nameLen=layout.nameLen args=[] isRecord=true recordFieldLabels=[label] recordFieldTerms=[child] />)
     } else { panic("unknown test scenario") }
-    val distinct = scenario == "viewSameSpellingDistinct" || scenario == "viewDistinct" || scenario == "extensionDistinct" || scenario == "distinct" || scenario == "recordLabelDistinct" || scenario == "recordChildDistinct"
+    val distinct = scenario == "viewArgumentDistinct" || scenario == "viewSameSpellingDistinct" || scenario == "viewDistinct" || scenario == "extensionDistinct" || scenario == "distinct" || scenario == "recordLabelDistinct" || scenario == "recordChildDistinct"
     appendEdge(compiler: inout compiler, subject: subject, target: target, argument: canonical)
     appendEdge(compiler: inout compiler, subject: target, target: subject, argument: other)
     match compiler.checkTraitSubjectCycles(activeExtIds: []) {

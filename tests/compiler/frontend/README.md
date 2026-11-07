@@ -149,3 +149,10 @@ using the procedure above, then run each of `differentArguments`,
 and `duplicateBuilder`. Each must exit 0 with empty stderr and the exact `.out`.
 It tests production semantic view storage/readers, not source syntax or final
 method dispatch (which have separate follow-up tasks).
+
+The com-zdod manual raw-input increment adds TraitCyclePatternInputs scenarios
+`viewArity`, `viewArgumentRef`, `extensionArguments`, `viewArgumentBinder`,
+`differentViewInstances`, and TraitCycleCanonicalIdentity scenarios
+`viewArgumentSame`, `viewArgumentDistinct`, `viewArgumentDuplicate`. Compare each
+successful execution with its existing companion `.out`. Pending RED results
+are recorded in com-zdod; an assertion abort is a failed test, never a pass.

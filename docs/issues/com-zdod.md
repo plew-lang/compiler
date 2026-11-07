@@ -123,3 +123,22 @@ Next increment: raw wrong owner/arity/ref/foreign binder/selector combinations,
 canonicalized checked graph children, and remaining inference/type recovery
 view-id consumers. Finish key/rebuild caller reconciliation and required gates,
 then obtain neutral task-completion review. No task or parent closure yet.
+
+## Next Raw Boundary RED
+
+[Executed raw boundary checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-raw-boundary-red.json)
+adds five PatternInputs and three CanonicalIdentity scenarios. Missing trait
+arguments, arguments on an extension, two different instances of the same
+trait, and duplicate parameterized selectors currently fail their test
+assertions. Invalid argument refs and foreign binders already return Input;
+equal and different well-formed arguments produce the expected cycle results.
+Both fixtures compiled successfully in the confirmed run. The earlier empty
+Array inference setup error is excluded from RED evidence. Exit134 is the native
+test's failing assertion after observing the wrong API result, not a compiler
+crash being accepted as a rejection.
+
+These are intentionally pending RED tests. Shape validation and normalized
+checked selector children must be repaired together; graph head normalization
+alone currently disagrees with its raw child count. Keep the common structural
+traversal authoritative rather than adding another cycle-specific type solver.
+Do not close the task from the preceding finite GREEN checkpoints.
