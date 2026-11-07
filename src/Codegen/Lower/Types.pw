@@ -808,24 +808,31 @@ pub impl Comp {
         mut val viewExtId: U64 = 0U64
         if viewIds.count() == 1U64 { viewExtId = viewIds[0U64] }
 
-        mut val projectionTrait: Span = t.projectionTrait
-        if !projection.isSome() && !namespaceType && t.projectionAssoc.end > t.projectionAssoc.start {
-            if projectionTrait.end == projectionTrait.start {
-                projectionTrait = (try self.uniqueSyntaxProjectionTrait(t: t))
-            } else {
-                val owner: U64 = self.traitOwnerAtUse(start: projectionTrait.start, len: projectionTrait.end - projectionTrait.start, arity: syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t))
-                if owner == 0U64 {
-                    return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection must specify the trait's positional type arguments") />
-                }
-                mut val pi: U64 = 0U64
-                while pi < syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t) {
-                    val label: Span = syntaxTypeProjectionTraitArgLabel(file: self.syntax, ty: t, index: pi)
-                    if label.end > label.start {
-                        return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection source accepts positional trait type arguments only") />
-                    }
-                    pi += 1U64
-                }
+        // Frozen legacy ASTs retain explicit projection fields. Bind them at
+        // the original type site, just like the value-AST adapter above.
+        if !projection.isSome() && t.projectionTrait.end > t.projectionTrait.start {
+            val selected = try self.bindViewSourceName(siteOffset: t.span.start, name: t.projectionTrait)
+            mut val arguments: Array[U64] = []
+            mut val index = 0U64
+            while index < syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t) {
+                arguments.append((try self.lowerSyntaxType(id: syntaxTypeProjectionTraitArg(file: self.syntax, ty: t, index: index))).ref)
+                index += 1U64
             }
+            mut val labelled = false
+            index = 0U64
+            while index < t.projectionTraitArgLabels.count {
+                val label = syntaxTypeProjectionTraitArgLabel(file: self.syntax, ty: t, index: index)
+                if label.end > label.start { labelled = true }
+                index += 1U64
+            }
+            val source = try self.completeTypeViewSource(source: selected, arguments: arguments, hasLabels: labelled)
+            if source.traitInstance.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection source must name a trait", failureDomain: <FailureDomain.Source />) /> }
+            projection = <Optional.Some v=<LoweredTypeProjection source=source member=<Bind nameStart=t.projectionAssoc.start nameLen=t.projectionAssoc.end - t.projectionAssoc.start fieldStart=0U64 fieldLen=0U64 /> /> />
+        }
+        // Only short-form T.Item reaches this compatibility inference path.
+        mut val projectionTrait = <Span start=0U64 end=0U64 />
+        if !projection.isSome() && !namespaceType && t.projectionAssoc.end > t.projectionAssoc.start {
+            projectionTrait = (try self.uniqueSyntaxProjectionTrait(t: t))
         }
 
         mut val assocTraitStart: U64 = 0U64

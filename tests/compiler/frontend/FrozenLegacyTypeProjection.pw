@@ -1,0 +1,66 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend, TypeAst, Span }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic }
+use @Plew/Syntax only { NameSegmentAst, ViewSourceAst, rangeEquals, parseItem, TopItemAst, DeclAst, DeclId }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+fn main() {
+    val scenario = argAt(1I64)
+    mut val compiler = <Comp />
+    val source = if scenario == "foreign" { give <FrontendInput.File path="tests/compiler/frontend/fixtures/ImplTraitInstances/ProjectionLegacy/_.pw" /> } else { give <FrontendInput.Text text="trait P[K] {{ type Item }} struct S {{}} extension E {{ pub impl S {{ fn marker() {{}} }} }} fn main() {{}}" path="FrozenLegacyProjection.pw" /> }
+    match analyzeFrontend(c: inout compiler, input: source, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) print("0") return }
+        Result.Ok(value: _) => {}
+    }
+    val name = compiler.internBytes(s: "P")
+    val bindings = compiler.moduleScopeBindings.unwrap()
+    val module = if scenario == "foreign" {
+        val first = bindings.uniqueBinding(moduleId: 0U64, nameId: compiler.internBytes(s: "First").nameId).unwrap().ownerModule
+        val second = bindings.uniqueBinding(moduleId: 0U64, nameId: compiler.internBytes(s: "Second").nameId).unwrap().ownerModule
+        give if compiler.moduleOf(offset: name.nameStart) == first { give second } else { give first }
+    } else { give 0U64 }
+    val expectedOwner = bindings.uniqueBinding(moduleId: module, nameId: name.nameId).unwrap().declarationOffset
+    val site = <Span start=expectedOwner end=expectedOwner + 1U64 />
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = <TypeAst name="I64" nameSpan=<Span start=integerName.nameStart end=integerName.nameStart + integerName.nameLen /> args=[] span=site />
+    val receiver = compiler.internBytes(s: "S")
+    val member = compiler.internBytes(s: "Item")
+    val extension = compiler.internBytes(s: "E")
+    val extensionSpan = <Span start=extension.nameStart end=extension.nameStart + extension.nameLen />
+    val label = compiler.internBytes(s: "key")
+    val arguments: Array[TypeAst] = if scenario == "missing" { give [] } else if scenario == "extra" { give [integer, integer] } else { give [integer] }
+    mut val labels: Array[String] = []
+    mut val labelSpans: Array[Span] = []
+    for val argument in arguments {
+        labels.append(if scenario == "named" { give "key" } else { give "" })
+        labelSpans.append(if scenario == "named" { give <Span start=label.nameStart end=label.nameStart + label.nameLen /> } else { give <Span start=0U64 end=0U64 /> })
+    }
+    val selected = if scenario == "extension" { give extensionSpan } else { give <Span start=name.nameStart end=name.nameStart + name.nameLen /> }
+    val views: Array[ViewSourceAst] = if scenario == "foreign" { give [] } else { give [<ViewSourceAst path=[<NameSegmentAst name="E" nameSpan=extensionSpan args=[] />] span=site />] }
+    val type = <TypeAst name="S" nameSpan=<Span start=receiver.nameStart end=receiver.nameStart + receiver.nameLen /> args=[] span=site viewSources=views projectionTrait=(if scenario == "extension" { give "E" } else { give "P" }) projectionTraitSpan=selected projectionTraitArgs=arguments projectionTraitArgLabels=(if scenario == "omittedLabels" { give [] } else { give labels }) projectionTraitArgLabelSpans=(if scenario == "omittedLabels" { give [] } else { give labelSpans }) projectionAssoc="Item" projectionAssocSpan=<Span start=member.nameStart end=member.nameStart + member.nameLen /> />
+    // Freeze through the public macro-input boundary, not a private type helper.
+    val original = match parseItem(source: "fn frozen() {{}}", start: site.start, end: site.start + 14U64) {
+        TopItemAst.Decl(d: val declaration) => declaration
+        _ => { print("0") return }
+    }
+    val declaration = <DeclAst kind=original.kind name=original.name nameSpan=original.nameSpan typeParams=original.typeParams span=original.span isUnique=original.isUnique fields=original.fields hasDeinit=original.hasDeinit deinitBody=original.deinitBody variants=original.variants params=original.params hasRet=true ret=type isAsync=original.isAsync whereParams=original.whereParams whereTraits=original.whereTraits body=original.body />
+    val item = compiler.syntax.freezeTopItem(ast: <TopItemAst.Decl d=declaration />)
+    val id = compiler.syntax.declNode(id: <DeclId raw=compiler.syntax.topItemPayload(item: item) />).ret
+    val invalid = scenario == "missing" || scenario == "extra" || scenario == "named" || scenario == "extension"
+    match compiler.lowerSyntaxType(id: id) {
+        Result.Err(error: val diagnostic) => {
+            val expected = if scenario == "named" { give "trait view source accepts positional type arguments only" } else if scenario == "extension" { give "associated-type projection source must name a trait" } else { give "a trait view requires all positional type arguments" }
+            if invalid && diagnostic.isSourceRejection() && diagnostic.message == expected { print("1") } else { emitDiagnostic(diagnostic: diagnostic) print("0") }
+        }
+        Result.Ok(value: val lowered) => {
+            if invalid { print("0") return }
+            val projection = compiler.arena.typeAt(index: lowered.ref)
+            if projection.assocTraitStart != expectedOwner || projection.assocTraitArgs.count() != 1U64 || projection.assocNameId != member.nameId || projection.projectionReceiver == 0U64 { print("0") return }
+            val argument = compiler.arena.typeAt(index: projection.assocTraitArgs[0U64])
+            if !rangeEquals(bytes: compiler.arena.bytes, start: argument.nameStart, len: argument.nameLen, kw: "I64") { print("0") return }
+            val base = compiler.arena.typeAt(index: projection.projectionReceiver)
+            if base.siteOffset != site.start { print("0") return }
+            if scenario == "foreign" { print(base.viewSources.count() == 0U64) } else { print(base.viewSources.count() == 1U64 && base.viewSources[0U64].surfaceId == bindings.extensionId(moduleId: module, nameId: extension.nameId).unwrap()) }
+        }
+    }
+}

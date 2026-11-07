@@ -663,3 +663,21 @@ input hashes. The remaining consumer case is the explicitly retained
 shorthandInstance RED owned by com-amjl, not part of these29 successes.
 Fresh build/fixed point/performance, exact Syntax pin and task closure remain
 unproven; this is finite repair acceptance only.
+
+## Frozen Legacy Explicit Projection Boundary
+
+Task-wide reconciliation found that the frozen legacy explicit projection path
+still reselected traitOwnerAtUse by name/arity, unlike direct TypeAst lowering.
+The public freezeTopItem boundary makes this path reachable. New
+FrozenLegacyTypeProjection controls establish actual RED for foreign-module
+lexical authority and common Source arity/label diagnostics. A legacy AST with
+omitted optional label spans also reached an index panic; keep that absence as
+an explicit compatibility control rather than indexing labels by argument count.
+
+Decode frozen children independently, then bind the explicit trait at the
+original type site and use the same completeTypeViewSource finalizer. Preserve
+preceding rich E separately from the projection. Only T.Item shorthand retains
+its existing inference path, owned by com-amjl. Cover default/foreign, missing/
+extra/named arguments, extension-only source and omitted labels. Candidate build,
+fresh controls, independent review and updated final gates are required before
+accepting this increment; prior6.738295 measurement precedes this repair.
