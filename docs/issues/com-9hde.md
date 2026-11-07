@@ -621,3 +621,27 @@ diagnostic was corrected from this actual candidate rule, not counted as product
 RED. CLI outputs11/22 and11/33 prove the positive call paths. Reject scripts
 require exact exit1, not arbitrary nonzero. Existing Source-to-ORC wrapper output
 remains outside this binding guarantee and under com-yeua's transport boundary.
+
+## Qualified Type Path Repair (active RED)
+
+[Saved controls, RED and neutral implementation-plan review](../../../evidence/rejection-domains/diagnostic-domain-implementation/remaining-source-binding-controls.json)
+close the four missing binding-publication control groups. QualifiedTypeViewConsumers
+is an actual successful-executable RED: both imported-owner and barrel-owner
+`S#Types.P[I64]` are rejected as incomplete associated projections. This confirms
+the old qualified type failure persists; value-path success does not repair it.
+
+Preserve all dotted segments, their type arguments/labels and original spans in
+SyntaxType/TypeAst.viewSources. Lower resolves namespace/source/projection once
+through the admitted binding authority; retain canonical owner through exact
+arity and projection formation instead of another traitOwnerAtUse query. Rich
+projection moves to assocTrait/assocName storage and does not also add its trait
+to receiver views. Keep preceding source sets. A legacy projection may coexist
+with preceding rich views: distinguish rich projection presence from any rich
+view presence, and use the original type site for its lexical authority.
+
+Reject arguments on namespace prefixes, generic/multiple associated suffixes,
+and extension-only E.Item rather than inferring a trait. Preserve T.Item, nominal
+namespace paths, any wrappers, nested children and adjacent arena ranges. Cover
+direct/materialize/freeze, bare and qualified projections, source-set separation,
+arity/labels and invalid-path reasons. Neutral review derives this repair from
+the existing spec/design; no new language decision or task expansion is needed.

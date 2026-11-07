@@ -1,0 +1,42 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic }
+use @Plew/Syntax only { rangeEquals }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn view(compiler: inout Comp, function: String, traitName: String, arity: U64) -> Bool {
+    val name = compiler.internBytes(s: function)
+    val declaration = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: name.nameId))
+    val term = compiler.funcParamAt(params: declaration.params, index: 0U64).ty
+    val type = compiler.arena.typeAt(index: term)
+    if type.assocNameId != 0U64 || type.assocTraitArgs.count() != 0U64 || compiler.arena.typeViewSourceCount(ref: term) != 1U64 { return false }
+    val selected = compiler.arena.typeViewSourceAt(ref: term, index: 0U64)
+    val traitNameId = compiler.internBytes(s: traitName).nameId
+    val trait = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: traitNameId))
+    if selected.surfaceId != trait.nameId || selected.traitInstance.owner != trait.nameStart || selected.traitInstance.positionalArgs.count() != arity || selected.writtenStart != declaration.defOffset + function.bytes().count() + "(value: S#Types.".bytes().count() || selected.writtenLen != traitName.bytes().count() { return false }
+    if !rangeEquals(bytes: compiler.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "S") { return false }
+    if arity == 1U64 {
+        val argument = compiler.arena.typeAt(index: selected.traitInstance.positionalArgs[0U64])
+        if !rangeEquals(bytes: compiler.arena.bytes, start: argument.nameStart, len: argument.nameLen, kw: "I64") { return false }
+    }
+    return true
+}
+
+fn main() {
+    val scenario = if argAt(1I64) == "" { give "QualifiedTypeDirect" } else { give argAt(1I64) }
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ImplTraitInstances/" + scenario + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) print("0") return }
+        Result.Ok(value: _) => {}
+    }
+    if !view(compiler: inout compiler, function: "target", traitName: "P", arity: 1U64) || !view(compiler: inout compiler, function: "zero", traitName: "Zero", arity: 0U64) { print("0") return }
+    val function = compiler.internBytes(s: "projection")
+    val declaration = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: function.nameId))
+    val projection = compiler.arena.typeAt(index: compiler.funcParamAt(params: declaration.params, index: 0U64).ty)
+    val trait = compiler.internBytes(s: "P")
+    val owner = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: trait.nameId))
+    if projection.assocTraitStart != owner.nameStart || projection.assocTraitId != owner.nameId || projection.assocTraitArgs.count() != 1U64 || projection.assocNameId != compiler.internBytes(s: "Item").nameId || projection.viewSources.count() != 0U64 { print("0") return }
+    val argument = compiler.arena.typeAt(index: projection.assocTraitArgs[0U64])
+    print(rangeEquals(bytes: compiler.arena.bytes, start: argument.nameStart, len: argument.nameLen, kw: "I64") && rangeEquals(bytes: compiler.arena.bytes, start: projection.nameStart, len: projection.nameLen, kw: "S"))
+}

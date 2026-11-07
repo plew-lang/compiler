@@ -1,0 +1,8 @@
+use ./QualifiedTypeBarrel as Types
+struct S {}
+impl S as Types.P[I64] { type Item = I64 }
+impl S as Types.Zero {}
+fn target(value: S#Types.P[I64]) {}
+fn projection(value: S#Types.P[I64].Item) {}
+fn zero(value: S#Types.Zero) {}
+fn main() {}
