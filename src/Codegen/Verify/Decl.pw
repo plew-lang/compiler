@@ -277,6 +277,12 @@ pub impl Comp {
     inout fn checkResolvedTypeViewSourceValid(typeRef: U64, source: ResolvedViewSource, offset: U64) -> Result[(), CompileDiagnostic] {
         if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
         val t: TypeRef = self.arena.typeAt(index: typeRef)
+        if source.traitInstance.owner == 0U64 && source.traitInstance.positionalArgs.count() != 0U64 {
+            val entry = self.interner.entries[source.surfaceId - 1U64]
+            if self.isExtName(start: entry.start, len: entry.len) {
+                return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "an extension view does not take type arguments", failureDomain: <FailureDomain.Source />) />
+            }
+        }
         val selected: CallableSourceHead = (try self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: typeRef, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner))
         if selected.kind != 0U64 { return <Result.Ok value=() /> }
         if source.traitInstance.owner != 0U64 {
@@ -286,7 +292,7 @@ pub impl Comp {
         if self.isExtName(start: entry.start, len: entry.len) {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)") />
         }
-        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)") />
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)", failureDomain: <FailureDomain.Source />) />
     }
 
     // A chain of `Expr.ExtView` nodes represents one normalized view, not a

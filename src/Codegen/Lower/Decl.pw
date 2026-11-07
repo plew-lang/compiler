@@ -147,7 +147,7 @@ pub impl Comp {
                 associated = tail.name
                 associatedSpan = tail.nameSpan
             }
-            return self.normalizeProjectionType(t: <TypeAst name=head.name nameSpan=head.nameSpan args=head.args span=t.span extView=t.extView extViewSpan=t.extViewSpan viewNames=t.viewNames viewNameSpans=t.viewNameSpans projectionTrait=t.projectionTrait projectionTraitSpan=t.projectionTraitSpan projectionTraitArgs=t.projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionTraitArgLabelSpans=t.projectionTraitArgLabelSpans projectionAssoc=associated projectionAssocSpan=associatedSpan isAny=t.isAny argLabels=head.argLabels argLabelSpans=head.argLabelSpans isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord />, whereTypes: whereTypes, whereTraits: whereTraits)
+            return self.normalizeProjectionType(t: <TypeAst name=head.name nameSpan=head.nameSpan args=head.args span=t.span extView=t.extView extViewSpan=t.extViewSpan viewNames=t.viewNames viewSources=t.viewSources viewNameSpans=t.viewNameSpans projectionTrait=t.projectionTrait projectionTraitSpan=t.projectionTraitSpan projectionTraitArgs=t.projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionTraitArgLabelSpans=t.projectionTraitArgLabelSpans projectionAssoc=associated projectionAssocSpan=associatedSpan isAny=t.isAny argLabels=head.argLabels argLabelSpans=head.argLabelSpans isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord />, whereTypes: whereTypes, whereTraits: whereTraits)
         }
         mut val args: Array[TypeAst] = []
         mut val i: U64 = 0
@@ -159,7 +159,7 @@ pub impl Comp {
             val moduleId = self.typeNamespaceModule(name: t.nameSpan)
             if moduleId != 4000000000U64 {
                 self.recordNamespaceUse(name: t.projectionAssocSpan, moduleId: moduleId)
-                return <Result.Ok value=<TypeAst name=t.projectionAssoc nameSpan=t.projectionAssocSpan args=args span=t.span extView=t.extView viewNames=t.viewNames isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord /> />
+                return <Result.Ok value=<TypeAst name=t.projectionAssoc nameSpan=t.projectionAssocSpan args=args span=t.span extView=t.extView viewNames=t.viewNames viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord /> />
             }
         }
         mut val projectionTrait: String = t.projectionTrait
@@ -190,7 +190,7 @@ pub impl Comp {
             projectionTraitArgs.append((try self.normalizeProjectionType(t: t.projectionTraitArgs[i], whereTypes: whereTypes, whereTraits: whereTraits)))
             i += 1U64
         }
-        return <Result.Ok value=<TypeAst name=t.name nameSpan=t.nameSpan args=args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=projectionTrait projectionTraitArgs=projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=t.projectionAssoc isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord /> />
+        return <Result.Ok value=<TypeAst name=t.name nameSpan=t.nameSpan args=args span=t.span extView=t.extView viewNames=t.viewNames viewSources=t.viewSources projectionTrait=projectionTrait projectionTraitArgs=projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=t.projectionAssoc isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord /> />
     }
 
     inout fn normalizeProjectionTypeActive(t: TypeAst) -> Result[TypeAst, CompileDiagnostic] {

@@ -1,0 +1,94 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend, TypeAst, Span }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic }
+use @Plew/Syntax only { NameSegmentAst, ViewSourceAst, rangeEquals }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    val scenario = argAt(1I64)
+    val legacy = scenario == "legacyViews" || scenario == "legacyExt"
+    val invalid = scenario == "missing" || scenario == "extra" || scenario == "named" || scenario == "extensionArguments" || scenario == "unknown"
+    val target = if scenario == "missing" {
+        give "fn target(value: S#P) {{}}"
+    } else if scenario == "extra" {
+        give "fn target(value: S#P[I64, Bool]) {{}}"
+    } else if scenario == "named" {
+        give "fn target(value: S#P[K=I64]) {{}}"
+    } else if scenario == "extensionArguments" {
+        give "fn target(value: S#E[I64]) {{}}"
+    } else if scenario == "unknown" {
+        give "fn target(value: S#Missing[I64]) {{}}"
+    } else if scenario == "plain" {
+        give "fn target(value: S#Zero) {{}}"
+    } else if scenario == "projection" {
+        give "fn target(value: S#P[I64].Item) {{}}"
+    } else if scenario == "nested" {
+        give "fn target(value: S#P[Box[I64]]) {{}}"
+    } else if scenario == "multiple" {
+        give "fn target(value: S#Pair[I64, Bool]) {{}}"
+    } else if scenario == "macro" || legacy {
+        give ""
+    } else {
+        give "fn target(value: S#P[I64]) {{}}"
+    }
+    val text = "trait P[K] {{ type Item }} trait Pair[K,L] {{}} trait Zero {{}} struct Box[T] {{}} struct S {{}} impl S as P[I64] {{ type Item=I64 }} impl S as P[Bool] {{ type Item=Bool }} impl S as P[Box[I64]] {{ type Item=I64 }} impl S as Pair[I64,Bool] {{}} impl S as Zero {{}} extension E {{ pub impl S {{ fn marker() {{}} }} }} " + target + " fn main() {{}}"
+    val expectedDiagnostic = if scenario == "named" { give "trait view source accepts positional type arguments only" } else if scenario == "extensionArguments" { give "an extension view does not take type arguments" } else if scenario == "unknown" { give "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)" } else { give "a trait view requires all positional type arguments" }
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text=text path="LoweredViews.pw" />, sources: <SourceAccess />) {
+        Result.Err(error: val diagnostic) => {
+            if invalid && diagnostic.isSourceRejection() && diagnostic.message == expectedDiagnostic { print("1") } else { emitDiagnostic(diagnostic: diagnostic) print("0") }
+            return
+        }
+        Result.Ok(value: _) => {}
+    }
+    if invalid { print("0") return }
+    val traitName = compiler.internBytes(s: if scenario == "plain" { give "Zero" } else if scenario == "multiple" { give "Pair" } else { give "P" })
+    val trait = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: traitName.nameId))
+    mut val term = 0U64
+    if scenario == "macro" || legacy {
+        val name = compiler.internBytes(s: "S")
+        val declaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: name.nameId))
+        val integer = compiler.internBytes(s: "I64")
+        val integerAst = <TypeAst name="I64" nameSpan=<Span start=integer.nameStart end=integer.nameStart + integer.nameLen /> args=[] span=<Span start=integer.nameStart end=integer.nameStart + integer.nameLen /> />
+        val selected = <NameSegmentAst name="P" nameSpan=<Span start=trait.nameStart end=trait.nameStart + trait.nameLen /> args=[integerAst] argLabels=[""] argLabelSpans=[<Span start=0U64 end=0U64 />] />
+        val source = <ViewSourceAst path=[selected] span=<Span start=trait.nameStart end=trait.nameStart + trait.nameLen /> />
+        val type = <TypeAst name="S" nameSpan=<Span start=declaration.nameStart end=declaration.nameStart + declaration.nameLen /> args=[] span=<Span start=declaration.nameStart end=declaration.nameStart + declaration.nameLen /> viewSources=[source] />
+        if legacy {
+            val legacyType = <TypeAst name="S" nameSpan=type.nameSpan args=[] span=type.span viewNames=(if scenario == "legacyViews" { give ["P"] } else { give [] }) viewNameSpans=[selected.nameSpan] extView=(if scenario == "legacyExt" { give "P" } else { give "" }) extViewSpan=selected.nameSpan />
+            match compiler.lowerType(t: legacyType) {
+                Result.Ok(value: _) => { print("0") }
+                Result.Err(error: val diagnostic) => { print(diagnostic.isSourceRejection() && diagnostic.message == "a trait view requires all positional type arguments") }
+            }
+            return
+        }
+        term = compiler.lowerType(t: type).unwrap().ref
+    } else {
+        val name = compiler.internBytes(s: "target")
+        val function = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: name.nameId))
+        term = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    }
+    val type = compiler.arena.typeAt(index: term)
+    if scenario == "projection" {
+        print(type.assocTraitStart == trait.nameStart && type.assocTraitArgs.count() == 1U64 && type.assocNameId != 0U64)
+        return
+    }
+    if compiler.arena.typeViewSourceCount(ref: term) != 1U64 { print("0") return }
+    val source = compiler.arena.typeViewSourceAt(ref: term, index: 0U64)
+    val expectedArity = if scenario == "plain" { give 0U64 } else if scenario == "multiple" { give 2U64 } else { give 1U64 }
+    if source.traitInstance.owner != trait.nameStart || source.surfaceId != trait.nameId || source.traitInstance.positionalArgs.count() != expectedArity { print("0") return }
+    if scenario == "plain" { print("1") return }
+    val argument = compiler.arena.typeAt(index: source.traitInstance.positionalArgs[0U64])
+    val expected = if scenario == "nested" { give "Box" } else { give "I64" }
+    if !rangeEquals(bytes: compiler.arena.bytes, start: argument.nameStart, len: argument.nameLen, kw: expected) { print("0") return }
+    if scenario == "nested" {
+        if argument.args.count() != 1U64 { print("0") return }
+        val child = compiler.arena.typeAt(index: argument.args[0U64])
+        if !rangeEquals(bytes: compiler.arena.bytes, start: child.nameStart, len: child.nameLen, kw: "I64") { print("0") return }
+    }
+    if scenario == "multiple" {
+        val other = compiler.arena.typeAt(index: source.traitInstance.positionalArgs[1U64])
+        if !rangeEquals(bytes: compiler.arena.bytes, start: other.nameStart, len: other.nameLen, kw: "Bool") { print("0") return }
+    }
+    print(rangeEquals(bytes: compiler.arena.bytes, start: source.writtenStart, len: source.writtenLen, kw: if scenario == "multiple" { give "Pair" } else { give "P" }))
+}

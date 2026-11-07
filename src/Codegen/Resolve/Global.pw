@@ -490,9 +490,9 @@ pub impl Comp {
         val owner: U64 = self.traitOwnerForSelectorSpan(siteOffset: siteOffset, start: start, len: len)
         if owner != 0U64 {
             val ownerLen: U64 = self.traitNameLenByOwner(owner: owner)
-            return <ResolvedViewSource writtenStart=siteOffset writtenLen=len lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=intern(c: inout self, start: owner, len: ownerLen) traitInstance=<TraitInstanceKey owner=owner positionalArgs=[] /> />
+            return <ResolvedViewSource writtenStart=start writtenLen=len lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=intern(c: inout self, start: owner, len: ownerLen) traitInstance=<TraitInstanceKey owner=owner positionalArgs=[] /> />
         }
-        return <ResolvedViewSource writtenStart=siteOffset writtenLen=len lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=intern(c: inout self, start: start, len: len) />
+        return <ResolvedViewSource writtenStart=start writtenLen=len lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=intern(c: inout self, start: start, len: len) />
     }
 
     // If `recv` is a bare identifier naming a type (not a local value), return that

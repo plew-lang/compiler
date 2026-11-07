@@ -52,9 +52,57 @@ The shared parser has no lexical declaration environment. Immediately after
 #Source, square brackets may be positional trait type arguments or existing
 indexing on extension/zero-argument-trait views. Identifier spelling cannot
 choose meaning, and a later compiler-owned reparser would violate the single
-grammar authority. Before product changes, the user is asked whether to retain
+grammar authority. Before value-position product changes, the user is asked whether to retain
 an unresolved bracket-application syntax and classify it after ordinary lexical
 source resolution, preserving existing syntax. The alternative requires
 parenthesized views for indexing and changes the language surface. The former
 is a proposal, not adopted yet; its precise grammar representation and lowering
-must be designed before implementation. Current source remains unchanged.
+must be designed before implementation. The value-position grammar remains unchanged.
+
+
+## Type-position increment (in progress)
+
+Shared Syntax ae70dd4ef7ee67aa12d9449f909a356cb0c84989 / 0.1.11-dev.31
+retains rich view-source rows separately from associated projections, including
+arguments, labels and original spans through direct parsing/materialize/freeze.
+[Producer increment](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-view-type-syntax-increment.json)
+records 15 golden fixtures / 34 distinct reconciled cases and neutral review.
+This is not package-wide or task-wide completion. Exact manifest and lock uptake
+uses the normal resolver, without a local override.
+
+[Executed Lower RED](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-view-type-lowering-red.json)
+uses actual Frontend analysis plus an AST adapter control. Annotation, AST,
+nested and multiple arguments lose the complete selector. Missing/extra/named
+arguments and extension arguments are accepted. Plain and projection controls
+pass. Unknown source is already rejected; retain its existing message rather
+than treating wording alone as an acceptance defect. Its missing Source
+classification remains an actual failure of the new domain assertion. The new never-green test's
+expectation was corrected accordingly.
+
+Current repair passes the rich rows to a shared finalizer, keeps legacy mirrors
+as fallback only, and preserves rows through type-path/projection normalization.
+Known-owner arity and positional-only checks do not establish conformance.
+Standard build and focused native verification succeeded; see the finite increment below. Value
+bracket handoff, qualified selector production, impl known-owner arity admission,
+alias/module controls and task-wide completion remain open.
+
+Neutral incremental review found legacy viewNames/extView bypassed the shared
+finalizer. Added two compatibility AST cases; both executed RED after the first
+build. All four rich retention cases and plain/projection controls passed.
+The invalid forms now reject, but their Unclassified domain failed the new
+Source assertions. The second repair routes both carriers' compatibility fields
+through the same finalizer and marks authored rejection producers as Source.
+Second standard build: 20261107T093420-build-5cbd97 succeeded. No blanket
+adapter conversion and no conformance-evidence admission change.
+
+
+[Type Lower increment verification](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-view-type-lowering-increment.json):
+13 new cases and 43 existing consumer/matching/projection controls pass through
+fresh compile/link/native, exact goldens and empty runtime stderr. Both input
+inventories remain unchanged and match current files. The standard build passed.
+Neutral review confirmed the compatibility fix and producer-only classification;
+final review independently reran all 56 saved native cases and verified all
+187/191 recorded input hashes against current files. No additional required fix
+was found for this finite increment. This finite increment does not close
+the whole task or certify a full suite/performance gate. The remaining boundaries
+listed above stay open.

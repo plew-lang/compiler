@@ -53,7 +53,25 @@ pub impl Comp {
             }
             associated = tail.name
         }
-        return <Result.Ok value=<SyntaxType name=head.name args=head.args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=t.projectionTrait projectionTraitArgs=t.projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=associated isAny=t.isAny argLabels=head.argLabels isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord /> />
+        return <Result.Ok value=<SyntaxType name=head.name args=head.args span=t.span extView=t.extView viewNames=t.viewNames viewSources=t.viewSources projectionTrait=t.projectionTrait projectionTraitArgs=t.projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=associated isAny=t.isAny argLabels=head.argLabels isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord /> />
+    }
+
+    // Both syntax carriers decode children, then publish the same authored
+    // source contract. Conformance is checked later, not inferred here.
+    inout fn completeTypeViewSource(source: ResolvedViewSource, arguments: Array[U64], hasLabels: Bool) -> Result[ResolvedViewSource, CompileDiagnostic] {
+        if hasLabels {
+            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait view source accepts positional type arguments only", failureDomain: <FailureDomain.Source />) />
+        }
+        if source.traitInstance.owner != 0U64 {
+            val ownerIndex = self.decls.traitOwnerIndex(offset: source.traitInstance.owner)
+            if ownerIndex >= self.decls.traitOwnerCount() {
+                return <Result.Err error=self.patternTypeInputFailure(offset: source.writtenStart, reason: "invalid trait view owner") />
+            }
+            if arguments.count() != self.decls.traitOwnerAt(index: ownerIndex).arity {
+                return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "a trait view requires all positional type arguments", failureDomain: <FailureDomain.Source />) />
+            }
+        }
+        return <Result.Ok value=<ResolvedViewSource writtenStart=source.writtenStart writtenLen=source.writtenLen lexicalSurfaceModule=source.lexicalSurfaceModule surfaceId=source.surfaceId traitInstance=<TraitInstanceKey owner=source.traitInstance.owner positionalArgs=arguments /> /> />
     }
 
     // Authored names keep their source identity. Synthesized value ASTs
@@ -488,10 +506,32 @@ pub impl Comp {
         // Every authored selector enters the source-set normal form, including
         // the one-source case. `viewExtId` remains a compatibility mirror while
         // scalar consumers are migrated, but never carries the only source fact.
-        if t.viewNames.count() > 0U64 {
+        if t.viewSources.count() > 0U64 {
+            for val syntaxSource in t.viewSources {
+                mut val names: Array[Span] = []
+                for val segment in syntaxSource.path { names.append(segment.nameSpan) }
+                val headIndex = (try self.typePathHead(names: names))
+                if headIndex + 1U64 != syntaxSource.path.count() {
+                    return <Result.Err error=self.diagnosticAt(offset: syntaxSource.span.start, msg: "invalid view source path", failureDomain: <FailureDomain.Source />) />
+                }
+                val head = syntaxSource.path[headIndex]
+                val written = self.lowerTypeName(name: head.name, span: head.nameSpan)
+                mut val arguments: Array[U64] = []
+                mut val hasLabels = false
+                for val argument in head.args { arguments.append((try self.lowerType(t: argument)).ref) }
+                for val label in head.argLabels { if label.bytes().count() > 0U64 { hasLabels = true } }
+                val selected = if head.nameSpan.end > head.nameSpan.start {
+                    give self.lowerViewSourceSpan(siteOffset: t.span.start, start: written.nameStart, len: written.nameLen)
+                } else { give self.lowerViewSource(siteOffset: t.span.start, text: head.name) }
+                val source = (try self.completeTypeViewSource(source: selected, arguments: arguments, hasLabels: hasLabels))
+                mut val present = false
+                for val existing in viewSources { if self.semanticViewSourceEq(a: existing, b: source) { present = true } }
+                if !present { viewSources.append(source) }
+            }
+        } else if t.viewNames.count() > 0U64 {
             mut val vi: U64 = 0U64
             while vi < t.viewNames.count() {
-                val source: ResolvedViewSource = self.lowerViewSource(siteOffset: t.span.start, text: t.viewNames[vi])
+                val source = (try self.completeTypeViewSource(source: self.lowerViewSource(siteOffset: t.span.start, text: t.viewNames[vi]), arguments: [], hasLabels: false))
                 mut val present: Bool = false
                 mut val si: U64 = 0U64
                 while si < viewSources.count() {
@@ -502,8 +542,8 @@ pub impl Comp {
                 vi += 1U64
             }
         }
-        if t.extView.bytes().count() > 0 {
-            val source: ResolvedViewSource = self.lowerViewSource(siteOffset: t.span.start, text: t.extView)
+        if t.viewSources.count() == 0U64 && t.extView.bytes().count() > 0 {
+            val source = (try self.completeTypeViewSource(source: self.lowerViewSource(siteOffset: t.span.start, text: t.extView), arguments: [], hasLabels: false))
             mut val present: Bool = false
             mut val si: U64 = 0U64
             while si < viewSources.count() {
@@ -677,9 +717,39 @@ pub impl Comp {
 
         mut val viewSources: Array[ResolvedViewSource] = []
         mut val vi: U64 = 0U64
-        while vi < syntaxTypeViewNameCount(file: self.syntax, ty: t) {
+        while vi < t.viewSources.count {
+            val syntaxSource = syntaxTypeViewSource(file: self.syntax, ty: t, index: vi)
+            mut val names: Array[Span] = []
+            mut val segmentIndex = 0U64
+            while segmentIndex < syntaxSource.path.count {
+                names.append(syntaxViewSourceSegment(file: self.syntax, source: syntaxSource, index: segmentIndex).name)
+                segmentIndex += 1U64
+            }
+            val headIndex = (try self.typePathHead(names: names))
+            if headIndex + 1U64 != syntaxSource.path.count {
+                return <Result.Err error=self.diagnosticAt(offset: syntaxSource.span.start, msg: "invalid view source path", failureDomain: <FailureDomain.Source />) />
+            }
+            val head = syntaxViewSourceSegment(file: self.syntax, source: syntaxSource, index: headIndex)
+            mut val arguments: Array[U64] = []
+            mut val hasLabels = false
+            mut val argumentIndex = 0U64
+            while argumentIndex < head.args.count {
+                arguments.append((try self.lowerSyntaxType(id: syntaxNameSegmentArg(file: self.syntax, segment: head, index: argumentIndex))).ref)
+                val label = syntaxNameSegmentArgLabel(file: self.syntax, segment: head, index: argumentIndex)
+                if label.end > label.start { hasLabels = true }
+                argumentIndex += 1U64
+            }
+            val selected = self.lowerViewSourceSpan(siteOffset: t.span.start, start: head.name.start, len: head.name.end - head.name.start)
+            val source = (try self.completeTypeViewSource(source: selected, arguments: arguments, hasLabels: hasLabels))
+            mut val present = false
+            for val existing in viewSources { if self.semanticViewSourceEq(a: existing, b: source) { present = true } }
+            if !present { viewSources.append(source) }
+            vi += 1U64
+        }
+        vi = 0U64
+        while t.viewSources.count == 0U64 && vi < syntaxTypeViewNameCount(file: self.syntax, ty: t) {
             val viewSpan: Span = syntaxTypeViewName(file: self.syntax, ty: t, index: vi)
-            val source: ResolvedViewSource = self.lowerViewSourceSpan(siteOffset: t.span.start, start: viewSpan.start, len: viewSpan.end - viewSpan.start)
+            val source = (try self.completeTypeViewSource(source: self.lowerViewSourceSpan(siteOffset: t.span.start, start: viewSpan.start, len: viewSpan.end - viewSpan.start), arguments: [], hasLabels: false))
             mut val present: Bool = false
             mut val si: U64 = 0U64
             while si < viewSources.count() {
@@ -689,8 +759,8 @@ pub impl Comp {
             if !present { viewSources.append(source) }
             vi += 1U64
         }
-        if t.extView.end > t.extView.start {
-            val source: ResolvedViewSource = self.lowerViewSourceSpan(siteOffset: t.span.start, start: t.extView.start, len: t.extView.end - t.extView.start)
+        if t.viewSources.count == 0U64 && t.extView.end > t.extView.start {
+            val source = (try self.completeTypeViewSource(source: self.lowerViewSourceSpan(siteOffset: t.span.start, start: t.extView.start, len: t.extView.end - t.extView.start), arguments: [], hasLabels: false))
             mut val present: Bool = false
             mut val si: U64 = 0U64
             while si < viewSources.count() {
