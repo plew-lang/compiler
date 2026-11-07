@@ -476,23 +476,13 @@ pub impl Comp {
     // Mono, or LLVM.  An extension bundle is receiver-dependent, so it keeps
     // its canonical surface key with traitOwner=0 until the common view query
     // decides whether that bundle applies.
-    inout fn lowerViewSource(siteOffset: U64, text: String) -> ResolvedViewSource {
-        val written: Bind = self.internBytes(s: text)
-        val owner: U64 = self.traitOwnerForSelector(siteOffset: siteOffset, text: text)
-        if owner != 0U64 {
-            val ownerLen: U64 = self.traitNameLenByOwner(owner: owner)
-            return <ResolvedViewSource writtenStart=siteOffset writtenLen=text.bytes().count() lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=intern(c: inout self, start: owner, len: ownerLen) traitInstance=<TraitInstanceKey owner=owner positionalArgs=[] /> />
-        }
-        return <ResolvedViewSource writtenStart=siteOffset writtenLen=text.bytes().count() lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=written.nameId />
+    inout fn lowerViewSource(siteOffset: U64, text: String) -> Result[ResolvedViewSource, CompileDiagnostic] {
+        val written = self.internBytes(s: text)
+        return self.bindViewSourceIdentity(moduleId: self.moduleOf(offset: siteOffset), nameId: written.nameId, written: <Span start=siteOffset end=siteOffset + text.bytes().count() />)
     }
 
-    inout fn lowerViewSourceSpan(siteOffset: U64, start: U64, len: U64) -> ResolvedViewSource {
-        val owner: U64 = self.traitOwnerForSelectorSpan(siteOffset: siteOffset, start: start, len: len)
-        if owner != 0U64 {
-            val ownerLen: U64 = self.traitNameLenByOwner(owner: owner)
-            return <ResolvedViewSource writtenStart=start writtenLen=len lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=intern(c: inout self, start: owner, len: ownerLen) traitInstance=<TraitInstanceKey owner=owner positionalArgs=[] /> />
-        }
-        return <ResolvedViewSource writtenStart=start writtenLen=len lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=intern(c: inout self, start: start, len: len) />
+    inout fn lowerViewSourceSpan(siteOffset: U64, start: U64, len: U64) -> Result[ResolvedViewSource, CompileDiagnostic] {
+        return self.bindViewSourceName(siteOffset: siteOffset, name: <Span start=start end=start + len />)
     }
 
     // If `recv` is a bare identifier naming a type (not a local value), return that

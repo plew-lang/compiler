@@ -556,21 +556,15 @@ pub impl Comp {
         return <Result.Ok value=self.arena.functionCount() />
     }
 
-    inout fn findExtMethod(recvStart: U64, recvLen: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
-        val qSrcId: U64 = intern(c: inout self, start: srcStart, len: srcLen)
-        return <Result.Ok value=(try self.findExtMethodById(recvStart: recvStart, recvLen: recvLen, srcId: qSrcId, sourceOwner: srcStart, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef)) />
-    }
-
     // Resolve a written `#Name` to one semantic source key before method
     // lookup. The spelling is only an input to this conversion: candidates
     // thereafter compare kind + declaration/bundle owner + arity.
     inout fn resolveViewSourceKey(recvStart: U64, recvLen: U64, recvRef: U64, sourceId: U64, sourceOwner: U64 = 0U64) -> Result[CallableSourceHead, CompileDiagnostic] {
         val receiverHead = self.arena.typeHeadSpan(ref: recvRef, fallback: <InternedSpan start=recvStart len=recvLen />)
         mut val found: CallableSourceHead = <CallableSourceHead />
-        val entry: InternedSpan = self.interner.entries[sourceId - 1U64]
         // A retained trait owner already fixes the source kind. An applicable
         // same-spelled extension cannot compete with that lexical decision.
-        if sourceOwner == 0U64 && (try self.extAppliesToType(extStart: entry.start, extLen: entry.len, typeStart: receiverHead.start, typeLen: receiverHead.len, typeRef: recvRef)) {
+        if sourceOwner == 0U64 && (try self.extAppliesToType(extensionId: sourceId, typeStart: receiverHead.start, typeLen: receiverHead.len, typeRef: recvRef)) {
             found = <CallableSourceHead kind=1U64 id=sourceId owner=sourceId arity=0U64 />
         }
         // A trait selector is resolved while lowering at its lexical use site.
@@ -641,10 +635,10 @@ pub impl Comp {
         // expression. Keep those AST selectors distinct from inherited local
         // type views, so the cache never re-resolves one written selector with
         // weaker provenance and turns it into another same-named owner.
-        mut val writtenIds: Array[U64] = []
+        mut val writtenIds: Array[ResolvedViewSource] = []
         if finalSourceId != 0U64 {
             self.appendViewSource(sources: inout sources, source: (try self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: finalSourceId, sourceOwner: finalSourceOwner)))
-            writtenIds.append(finalSourceId)
+            writtenIds.append(<ResolvedViewSource surfaceId=finalSourceId traitInstance=<TraitInstanceKey owner=finalSourceOwner positionalArgs=[] /> />)
         }
         mut val cur: U64 = recv
         mut val go: Bool = true
@@ -664,16 +658,16 @@ pub impl Comp {
                         // provenance: resolving it again from only its
                         // spelling can select a different same-named trait
                         // owner and manufacture an ambiguity.
-                        if selectorId != finalSourceId {
+                        if selectorId != finalSourceId || selector.traitInstance.owner != finalSourceOwner {
                             self.appendViewSource(sources: inout sources, source: (try self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: selectorId, sourceOwner: selector.traitInstance.owner)))
                         }
                         mut val written: Bool = false
                         mut val wi: U64 = 0U64
                         while wi < writtenIds.count() {
-                            if writtenIds[wi] == selectorId { written = true }
+                            if writtenIds[wi].sameHead(other: selector) { written = true }
                             wi += 1U64
                         }
-                        if !written { writtenIds.append(selectorId) }
+                        if !written { writtenIds.append(selector) }
                         cur = base
                     }
                 }
@@ -701,7 +695,7 @@ pub impl Comp {
                 mut val written: Bool = false
                 mut val wi: U64 = 0U64
                 while wi < writtenIds.count() {
-                    if writtenIds[wi] == staticSources[si].surfaceId { written = true }
+                    if writtenIds[wi].sameHead(other: staticSources[si]) { written = true }
                     wi += 1U64
                 }
                 if !written {
@@ -912,16 +906,14 @@ pub impl Comp {
     // additive: active extension candidates shadow the base surface, selected
     // traits narrow those candidates, then the bare surface is the fallback.
     // Type recovery, verifier, and backend consume this exact final Func.
-    inout fn resolveExtMethodFinal(recv: U64, srcStart: U64, srcLen: U64, sourceOwner: U64 = 0U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+    inout fn resolveExtMethodFinal(recv: U64, source: ResolvedViewSource, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         // `Type#Source.member()` is the associated counterpart of a value
         // view.  It has no value TypeInfo, so select its source from the type
         // qualifier before entering the ordinary receiver path.
         val assoc: Bind = self.assocRecvName(recv: recv)
         if assoc.nameLen != 0U64 {
             val recvRef: U64 = self.simpleTypeRef(nameStart: assoc.nameStart, nameLen: assoc.nameLen)
-            mut val finalOwner: U64 = srcStart
-            if sourceOwner != 0U64 { finalOwner = sourceOwner }
-            val sources: Array[CallableSourceHead] = (try self.collectViewSources(recv: recv, recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: recvRef, finalSourceId: intern(c: inout self, start: srcStart, len: srcLen), finalSourceOwner: finalOwner))
+            val sources: Array[CallableSourceHead] = (try self.collectViewSources(recv: recv, recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: recvRef, finalSourceId: source.surfaceId, finalSourceOwner: source.traitInstance.owner))
             val selected: U64 = (try self.findAssocInViewSet(recvStart: assoc.nameStart, recvLen: assoc.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef))
             if selected < self.arena.functionCount() { return <Result.Ok value=selected />}
             return <Result.Ok value=(try self.findAssoc(recvStart: assoc.nameStart, recvLen: assoc.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)) />
@@ -930,9 +922,7 @@ pub impl Comp {
         if !(rt.kind == 2 || (rt.kind == 0 && rt.nameLen > 0U64)) {
             return <Result.Ok value=self.arena.functionCount() />
         }
-        mut val finalOwner: U64 = srcStart
-        if sourceOwner != 0U64 { finalOwner = sourceOwner }
-        val sources: Array[CallableSourceHead] = (try self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, finalSourceId: intern(c: inout self, start: srcStart, len: srcLen), finalSourceOwner: finalOwner))
+        val sources: Array[CallableSourceHead] = (try self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, finalSourceId: source.surfaceId, finalSourceOwner: source.traitInstance.owner))
         mut val mfi: U64 = (try self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref))
         if mfi >= self.arena.functionCount() {
             mfi = (try self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref))
@@ -1047,11 +1037,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn findExtMethodById(recvStart: U64, recvLen: U64, srcId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
-        if srcId == 0U64 || srcId > self.interner.entries.count() { return <Result.Ok value=self.arena.functionCount() />}
-        val source: CallableSourceHead = (try self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: srcId, sourceOwner: sourceOwner))
-        return <Result.Ok value=(try self.findExtMethodBySource(recvStart: recvStart, recvLen: recvLen, source: source, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef)) />
-    }
+
 
     inout fn findExtMethodBySource(recvStart: U64, recvLen: U64, source: CallableSourceHead, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         if source.kind == 0U64 { return <Result.Ok value=self.arena.functionCount() />}

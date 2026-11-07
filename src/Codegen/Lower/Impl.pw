@@ -803,7 +803,7 @@ pub impl Comp {
         self.cur.lowerRetTy = savedRet
         val fnIdx: U64 = self.arena.functionCount()
         mut val extId: U64 = 0U64
-        if im.extName.end > im.extName.start { extId = intern(c: inout self, start: im.extName.start, len: im.extName.end - im.extName.start) }
+        if im.extName.end > im.extName.start { extId = try self.extensionIdentityForImpl(name: im.extName, siteOffset: im.span.start) }
         mut val originTraitId: U64 = 0U64
         mut val originTraitOwner: U64 = 0U64
         mut val originTraitArity: U64 = 0U64
@@ -953,12 +953,11 @@ pub impl Comp {
         }
         self.cur.lowerRetTy = savedRet
         val fnIdx: U64 = self.arena.functionCount()
-        // an extension method (spec/09) is tagged with its extension's name id so it is
+        // an extension method (spec/09) is tagged with its extension's canonical bundle id so it is
         // excluded from bare resolution (reachable only via `value#Ext.m()`).
         mut val extId: U64 = 0
         if im.extName.bytes().count() > 0 {
-            val extN: Bind = self.internBytes(s: im.extName)
-            extId = intern(c: inout self, start: extN.nameStart, len: extN.nameLen)
+            extId = try self.extensionIdentityForImpl(name: im.extNameSpan, siteOffset: im.span.start)
         }
         mut val originTraitId: U64 = 0U64
         mut val originTraitOwner: U64 = 0U64
@@ -1100,8 +1099,7 @@ pub impl Comp {
             val traitN: Bind = conformanceTrait
             mut val cfExtId: U64 = 0
             if normalizedImpl.extName.bytes().count() > 0 {
-                val cfExtN: Bind = self.internBytes(s: normalizedImpl.extName)
-                cfExtId = intern(c: inout self, start: cfExtN.nameStart, len: cfExtN.nameLen)
+                cfExtId = try self.extensionIdentityForImpl(name: normalizedImpl.extNameSpan, siteOffset: normalizedImpl.span.start)
             }
             try self.registerDeclaredConformance(cf: <Conform subjectTraitOwner=recvTraitOwner sourceModule=self.moduleOf(offset: normalizedImpl.span.start) typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=receiverType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=normalizedImpl.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=cfExtId defOffset=normalizedImpl.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) bounds=(try self.lowerValueConformanceBounds(im: normalizedImpl)) />)
         }
@@ -1224,7 +1222,7 @@ pub impl Comp {
         if normalizedImpl.isTraitImpl {
             val traitN: Bind = conformanceTrait
             mut val extId: U64 = 0U64
-            if normalizedImpl.extName.end > normalizedImpl.extName.start { extId = intern(c: inout self, start: normalizedImpl.extName.start, len: normalizedImpl.extName.end - normalizedImpl.extName.start) }
+            if normalizedImpl.extName.end > normalizedImpl.extName.start { extId = try self.extensionIdentityForImpl(name: normalizedImpl.extName, siteOffset: normalizedImpl.span.start) }
             try self.registerDeclaredConformance(cf: <Conform subjectTraitOwner=recvTraitOwner sourceModule=self.moduleOf(offset: normalizedImpl.span.start) typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=recvArity traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=normalizedImpl.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=extId defOffset=normalizedImpl.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) bounds=(try self.lowerSyntaxConformanceBounds(im: normalizedImpl)) />)
         }
         self.drainDerives(typeStart: recvN.nameStart, typeLen: recvN.nameLen, isEnum: false, declStart: normalizedImpl.span.start, declEnd: normalizedImpl.span.end)

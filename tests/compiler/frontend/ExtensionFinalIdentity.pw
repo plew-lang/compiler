@@ -1,0 +1,29 @@
+// Exercise the retained-source compatibility resolver, independently of the
+// current parser's ExtView + Method representation.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Expr, TypeRef, MakeFieldRange, ArgRange, ResolvedViewSource }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="struct S {{}} extension E {{ impl S {{ fn number() -> I64 {{ return 22I64 }} assoc fn answer() -> I64 {{ return 23I64 }} }} }} fn main() {{}}" path="FinalIdentity.pw" />, sources: <SourceAccess />).unwrap()
+    mut val extensionId = 0U64
+    mut val index = 0U64
+    while index < compiler.arena.functionCount() {
+        val function = compiler.arena.functionAt(index: index)
+        if function.extId != 0U64 { extensionId = function.extId }
+        index += 1U64
+    }
+    val source = <ResolvedViewSource surfaceId=extensionId />
+    val receiverName = compiler.internBytes(s: "S")
+    val declaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: receiverName.nameId))
+    val receiverType = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] hasDecl=true declOffset=declaration.defOffset />)
+    val value = compiler.pushExpr(e: <Expr.Make typeStart=declaration.nameStart typeLen=declaration.nameLen variantStart=0U64 variantLen=0U64 isEnum=false ty=receiverType fields=<MakeFieldRange start=0U64 len=0U64 /> />)
+    val qualifier = compiler.pushExpr(e: <Expr.Ident start=declaration.nameStart len=declaration.nameLen />)
+    val method = compiler.internBytes(s: "number")
+    val associated = compiler.internBytes(s: "answer")
+    val selected = compiler.resolveExtMethodFinal(recv: value, source: source, nameStart: method.nameStart, nameLen: method.nameLen, args: <ArgRange start=0U64 len=0U64 />).unwrap()
+    val selectedAssociated = compiler.resolveExtMethodFinal(recv: qualifier, source: source, nameStart: associated.nameStart, nameLen: associated.nameLen, args: <ArgRange start=0U64 len=0U64 />).unwrap()
+    if selected >= compiler.arena.functionCount() || selectedAssociated >= compiler.arena.functionCount() { print("0") return }
+    print(if compiler.arena.functionAt(index: selected).extId == source.surfaceId && compiler.arena.functionAt(index: selectedAssociated).extId == source.surfaceId { give "1" } else { give "0" })
+}

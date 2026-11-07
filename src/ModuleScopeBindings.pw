@@ -45,6 +45,7 @@ pub struct AdmittedModuleScopeBindings {
     val entries: Array[ScopeBinding]
     val nextNamed: Array[U64]
     val nameHeads: Dictionary[U64, U64]
+    val extensionRows: Dictionary[U64, U64]
 }
 impl AdmittedModuleScopeBindings { factory }
 
@@ -57,6 +58,7 @@ pub struct ModuleScopeBindings {
     mut val importHeads: Dictionary[U64, U64] = [:]
     mut val states: Dictionary[U64, U64] = [:]
     mut val modules: Array[U64] = []
+    mut val extensionRows: Dictionary[U64, U64] = [:]
     mut val closed: Bool = false
     mut val failure: Optional[ScopeBindingFailure] = <Optional.None />
 }
@@ -85,7 +87,7 @@ pub impl ModuleScopeBindings {
 
     inout fn finish() -> Result[AdmittedModuleScopeBindings, ScopeBindingFailure] {
         match self.failure { Optional.Some(v: val failure) => { return <Result.Err error=failure /> } _ => {} }
-        if self.closed { return <Result.Ok value=<AdmittedModuleScopeBindings entries=self.entries nextNamed=self.nextNamed nameHeads=self.nameHeads /> /> }
+        if self.closed { return <Result.Ok value=<AdmittedModuleScopeBindings entries=self.entries nextNamed=self.nextNamed nameHeads=self.nameHeads extensionRows=self.extensionRows /> /> }
         mut val index = 0U64
         while index < self.modules.count() {
             match self.finishModule(moduleId: self.modules[index], offset: 0U64) {
@@ -94,12 +96,39 @@ pub impl ModuleScopeBindings {
             }
             index += 1U64
         }
+        index = 0U64
+        while index < self.entries.count() {
+            val binding = self.entries[index]
+            if binding.kind == <ScopeBindingKind.Extension /> {
+                val identity = binding.declarationOffset + 1U64
+                if !self.extensionRows.contains(key: identity) { self.extensionRows[identity] = index + 1U64 }
+            }
+            index += 1U64
+        }
         self.closed = true
-        return <Result.Ok value=<AdmittedModuleScopeBindings entries=self.entries nextNamed=self.nextNamed nameHeads=self.nameHeads /> />
+        return <Result.Ok value=<AdmittedModuleScopeBindings entries=self.entries nextNamed=self.nextNamed nameHeads=self.nameHeads extensionRows=self.extensionRows /> />
     }
 }
 
 pub impl AdmittedModuleScopeBindings {
+    // IDs belong to this admitted source session. Compute them only from the
+    // merged original declaration, never from an alias or another fragment.
+    fn extensionId(moduleId: U64, nameId: U64) -> Optional[U64] {
+        match self.uniqueBinding(moduleId: moduleId, nameId: nameId) {
+            Optional.Some(v: val binding) => {
+                if binding.kind == <ScopeBindingKind.Extension /> { return <Optional.Some v=binding.declarationOffset + 1U64 /> }
+            }
+            _ => {}
+        }
+        return <Optional.None />
+    }
+
+    fn extensionBinding(identity: U64) -> Optional[ScopeBinding] {
+        val row = self.extensionRows.getOr(key: identity, fallback: 0U64)
+        if row == 0U64 { return <Optional.None /> }
+        return <Optional.Some v=self.entries[row - 1U64] />
+    }
+
     fn kind(moduleId: U64, nameId: U64, requirePublic: Bool = false) -> Optional[ScopeBindingKind] {
         mut val entry = self.nameHeads.getOr(key: nameId, fallback: 0U64)
         while entry != 0U64 {

@@ -50,12 +50,8 @@ impl Comp {
             if source.traitInstance.positionalArgs.count() != 0U64 {
                 return <Result.Err error=self.patternTypeSemanticFailure(ref: ref, offset: offset, reason: "extension view arguments", sourceMessage: "an extension view does not take type arguments") />
             }
-            if source.surfaceId == 0U64 || source.surfaceId > self.interner.entries.count() {
-                return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "unresolved extension view source") />
-            }
-            val name = self.interner.entries[source.surfaceId - 1U64]
-            if !self.isExtName(start: name.start, len: name.len) {
-                return <Result.Err error=self.patternTypeSemanticFailure(ref: ref, offset: offset, reason: "unresolved extension view source", sourceMessage: "unknown extension view source") />
+            if !self.knownExtensionSource(identity: source.surfaceId) {
+                return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "unresolved extension view source identity") />
             }
         }
         return <Result.Ok value=() />
@@ -997,12 +993,9 @@ pub impl Comp {
             val priorEntry: Callable = self.decls.callableAt(index: i)
             val prior: Func = self.arena.functionAt(index: priorEntry.funcIdx)
             if priorEntry.funcIdx < before && !prior.isProvided {
-                // A bare declaration namespace is module-owned.  A named
-                // extension is instead its own bundle: `#Ext` carries no module
-                // qualifier at a call site, so every declaration named Ext must
-                // enter this one collision domain even when loaded from another
-                // module.
-                val sameNamespace: Bool = (prior.extId != 0U64 && prior.extId == f.extId) || priorEntry.sourceModule == sourceModule
+                // The module owns each declared extension bundle. Canonical
+                // extId distinguishes its fragments from another owner's name.
+                val sameNamespace: Bool = priorEntry.sourceModule == sourceModule
                 if sameNamespace {
                     if self.sameFuncCandidateBucket(a: prior, b: f) {
                         // Raw foreign/intrinsic functions have one linker symbol,
@@ -1119,8 +1112,7 @@ pub impl Comp {
         if f.extId != 0U64 {
             sourceKind = 1U64
             sourceId = f.extId
-            // An extension name is one bundle across loaded modules (and is
-            // collision-checked as such), so its interned bundle id is stable.
+            // Canonical bundle identity was retained from module admission.
             sourceOwner = f.extId
         } else if f.srcTraitId != 0U64 {
             sourceKind = 2U64
@@ -1246,7 +1238,7 @@ pub impl Comp {
                 // As with methods, a named extension is one source-selectable
                 // bundle, not one bundle per defining module.  Its conformance
                 // key must therefore be unique across all of its parts.
-                val sameNamespace: Bool = (prior.extId != 0U64 && prior.extId == cf.extId) || prior.sourceModule == cf.sourceModule
+                val sameNamespace: Bool = prior.sourceModule == cf.sourceModule
                 if sameNamespace {
                     if prior.extId == cf.extId && prior.traitId == cf.traitId && prior.traitStart == cf.traitStart && prior.typeId == cf.typeId && prior.subjectArgs.count() == cf.subjectArgs.count() {
                         // A conformance is a callable-like source surface: its

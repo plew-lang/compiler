@@ -187,7 +187,6 @@ pub impl Comp {
                 if self.assocRecvName(recv: id).nameLen != 0U64 {
                     return <Result.Ok value=() />
                 }
-                val sourceSpan: InternedSpan = self.interner.entries[sourceSelector.surfaceId - 1U64]
                 try self.checkResolvedViewValid(recv: recv, source: sourceSelector, strip: strip)
                 if !(self.exprFeedsAnotherView(id: id)) {
                     val finalType: TypeInfo = (try self.typeOf(id: id))

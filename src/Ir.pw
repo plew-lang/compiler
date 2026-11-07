@@ -76,12 +76,11 @@ pub struct PType {
 // value/type view, not a lookup side table: the written span exists only for
 // diagnostics, while traitInstance retains the declaration owner and all
 // positional semantic arguments. A zero owner is the deferred extension-bundle
-// case; surfaceId is then the bundle's canonical name key. Later phases must
+// case; surfaceId is then its admitted canonical bundle identity. Later phases must
 // consume this node rather than recover an owner from its spelling again.
 pub struct ResolvedViewSource {
     pub val writtenStart: U64 = 0
     pub val writtenLen: U64 = 0
-    pub val lexicalSurfaceModule: U64 = 0
     pub val surfaceId: U64 = 0
     pub val traitInstance: TraitInstanceKey = <TraitInstanceKey owner=0U64 positionalArgs=[] />
 }
@@ -94,7 +93,7 @@ pub impl ResolvedViewSource {
         return self.surfaceId == other.surfaceId
     }
     fn withArguments(arguments: Array[U64]) -> ResolvedViewSource {
-        return <ResolvedViewSource writtenStart=self.writtenStart writtenLen=self.writtenLen lexicalSurfaceModule=self.lexicalSurfaceModule surfaceId=self.surfaceId traitInstance=<TraitInstanceKey owner=self.traitInstance.owner positionalArgs=arguments /> />
+        return <ResolvedViewSource writtenStart=self.writtenStart writtenLen=self.writtenLen surfaceId=self.surfaceId traitInstance=<TraitInstanceKey owner=self.traitInstance.owner positionalArgs=arguments /> />
     }
 }
 
@@ -2926,8 +2925,8 @@ pub struct Callable {
     // Source spelling is retained only to resolve a written `#X`. It is not the
     // identity used once a candidate has been selected.
     pub val sourceId: U64
-    // Resolved source identity. Extension bundles are globally named, so their
-    // bundle id is their identity; trait sources use the defining trait's real
+    // Resolved source identity. Extension bundles use the admitted canonical
+    // bundle ID, independent of name spelling; trait sources use the defining trait's real
     // declaration offset. 0 denotes the bare surface.
     pub val sourceOwner: U64 = 0
     // Distinguishes same-spelled traits such as `Sub` and `Sub[Rhs]` before

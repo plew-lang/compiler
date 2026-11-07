@@ -1,0 +1,18 @@
+// Materialized AST conformance lowering must use the bundle already admitted
+// for its extension declaration, rather than issuing an interned spelling ID.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend, ImplAst, TypeAst, Span }
+use ../../../src/SourceAccess only { SourceAccess }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="struct S {{}} trait P {{}} extension E {{}} fn main() {{}}" path="LegacyIdentity.pw" />, sources: <SourceAccess />).unwrap()
+    val extension = compiler.internBytes(s: "E")
+    val identity = compiler.moduleScopeBindings.unwrap().extensionId(moduleId: 0U64, nameId: extension.nameId).unwrap()
+    val receiver = compiler.internBytes(s: "S")
+    val declaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: receiver.nameId))
+    val receiverSpan = <Span start=declaration.nameStart end=declaration.nameStart + declaration.nameLen />
+    val traitName = compiler.internBytes(s: "P")
+    val trait = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: traitName.nameId))
+    compiler.lowerImpl(im: <ImplAst recvType=<TypeAst name="S" nameSpan=receiverSpan args=[] span=receiverSpan /> implParams=[] isTraitImpl=true traitName="P" traitNameSpan=<Span start=trait.nameStart end=trait.nameStart + trait.nameLen /> traitArgs=[] whereParams=[] whereTraits=[] isPub=false members=[] span=receiverSpan extName="E" extNameSpan=<Span start=extension.nameStart end=extension.nameStart + extension.nameLen /> />).unwrap()
+    print(if compiler.decls.conformAt(index: compiler.decls.conformCount() - 1U64).extId == identity { give "1" } else { give "0" })
+}

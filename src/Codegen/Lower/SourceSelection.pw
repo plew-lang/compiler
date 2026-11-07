@@ -1,10 +1,33 @@
 // Shared semantic selection; the two syntax adapters only decode children.
 impl Comp {
-    inout fn bindValueViewSource(names: Array[Span]) -> Result[BoundValueViewHead, CompileDiagnostic] {
-        if names.count() == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "missing view source path", failureDomain: <FailureDomain.Input />) /> }
-        val head = try self.typePathHead(names: names)
-        val name = names[head]
-        mut val moduleId = self.moduleOf(offset: name.start)
+    inout fn knownExtensionSource(identity: U64) -> Bool {
+        match self.moduleScopeBindings {
+            Optional.Some(v: val bindings) => { return bindings.extensionBinding(identity: identity).isSome() }
+            _ => { return false }
+        }
+    }
+
+    inout fn viewSourceName(source: ResolvedViewSource) -> Result[InternedSpan, CompileDiagnostic] {
+        mut val nameId = source.surfaceId
+        if source.traitInstance.owner == 0U64 {
+            match self.moduleScopeBindings {
+                Optional.Some(v: val bindings) => {
+                    match bindings.extensionBinding(identity: source.surfaceId) {
+                        Optional.Some(v: val binding) => { nameId = binding.ownerNameId }
+                        _ => { nameId = 0U64 }
+                    }
+                }
+                _ => { nameId = 0U64 }
+            }
+        }
+        if nameId == 0U64 || nameId > self.interner.entries.count() {
+            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "unknown admitted view source identity", failureDomain: <FailureDomain.Internal />) />
+        }
+        return <Result.Ok value=self.interner.entries[nameId - 1U64] />
+    }
+
+    inout fn bindViewSourceName(siteOffset: U64, name: Span) -> Result[ResolvedViewSource, CompileDiagnostic] {
+        mut val moduleId = self.moduleOf(offset: siteOffset)
         mut val nameId = intern(c: inout self, start: name.start, len: name.end - name.start)
         val qualified = self.modules.qualifiedUseIndex(offset: name.start)
         if qualified < self.modules.qualifiedUseCount() {
@@ -12,26 +35,44 @@ impl Comp {
             moduleId = origin.targetModule
             nameId = intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength)
         }
+        return self.bindViewSourceIdentity(moduleId: moduleId, nameId: nameId, written: name, requirePublic: qualified < self.modules.qualifiedUseCount())
+    }
+
+    inout fn bindViewSourceIdentity(moduleId: U64, nameId: U64, written: Span, requirePublic: Bool = false) -> Result[ResolvedViewSource, CompileDiagnostic] {
         val bindings = match self.moduleScopeBindings {
             Optional.Some(v: val admitted) => admitted
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: name.start, msg: "view source lookup before module binding admission", failureDomain: <FailureDomain.Internal />) /> }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: written.start, msg: "view source lookup before module binding admission", failureDomain: <FailureDomain.Internal />) /> }
         }
         match bindings.uniqueBinding(moduleId: moduleId, nameId: nameId) {
             Optional.Some(v: val binding) => {
-                if qualified < self.modules.qualifiedUseCount() && !binding.isPublic {
-                    return <Result.Err error=self.diagnosticAt(offset: name.start, msg: "name is not public in the specified namespace", failureDomain: <FailureDomain.Source />) />
+                if requirePublic && !binding.isPublic {
+                    return <Result.Err error=self.diagnosticAt(offset: written.start, msg: "name is not public in the specified namespace", failureDomain: <FailureDomain.Source />) />
                 }
                 mut val traitOwner = 0U64
+                mut val identity = binding.ownerNameId
                 match binding.kind {
                     ScopeBindingKind.Trait => { traitOwner = binding.declarationOffset }
-                    ScopeBindingKind.Extension => {}
-                    _ => { return <Result.Err error=self.diagnosticAt(offset: name.start, msg: "view source must name a trait or extension (spec/09)", failureDomain: <FailureDomain.Source />) /> }
+                    ScopeBindingKind.Extension => { identity = bindings.extensionId(moduleId: moduleId, nameId: nameId).unwrap() }
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: written.start, msg: "view source must name a trait or extension (spec/09)", failureDomain: <FailureDomain.Source />) /> }
                 }
-                val source = <ResolvedViewSource writtenStart=name.start writtenLen=name.end - name.start lexicalSurfaceModule=self.moduleOf(offset: name.start) surfaceId=binding.ownerNameId traitInstance=<TraitInstanceKey owner=traitOwner positionalArgs=[] /> />
-                return <Result.Ok value=<BoundValueViewHead index=head source=source /> />
+                return <Result.Ok value=<ResolvedViewSource writtenStart=written.start writtenLen=written.end - written.start surfaceId=identity traitInstance=<TraitInstanceKey owner=traitOwner positionalArgs=[] /> /> />
             }
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: name.start, msg: "unknown view source (spec/09)", failureDomain: <FailureDomain.Source />) /> }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: written.start, msg: "unknown view source (spec/09)", failureDomain: <FailureDomain.Source />) /> }
         }
+    }
+
+    inout fn bindValueViewSource(names: Array[Span]) -> Result[BoundValueViewHead, CompileDiagnostic] {
+        if names.count() == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "missing view source path", failureDomain: <FailureDomain.Input />) /> }
+        val head = try self.typePathHead(names: names)
+        return <Result.Ok value=<BoundValueViewHead index=head source=(try self.bindViewSourceName(siteOffset: names[head].start, name: names[head])) /> />
+    }
+
+    inout fn extensionIdentityForImpl(name: Span, siteOffset: U64) -> Result[U64, CompileDiagnostic] {
+        val source = try self.bindViewSourceName(siteOffset: siteOffset, name: name)
+        if source.traitInstance.owner != 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: name.start, msg: "extension impl does not name an extension declaration", failureDomain: <FailureDomain.Input />) />
+        }
+        return <Result.Ok value=source.surfaceId />
     }
 
     fn valueViewNeedsArguments(source: ResolvedViewSource) -> Bool {

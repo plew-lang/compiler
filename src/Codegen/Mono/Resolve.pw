@@ -21,13 +21,10 @@ pub impl Comp {
     inout fn proofSourceIsActive(baseRef: U64, extId: U64) -> Bool {
         if extId == 0U64 { return true }
         if baseRef >= self.arena.typeCount() { return false }
-        val base: TypeRef = self.arena.typeAt(index: baseRef)
-        mut val i: U64 = 0U64
-        while i < base.viewIds.count() {
-            if base.viewIds[i] == extId { return true }
-            i += 1U64
+        for source in self.arena.typeViewSources(ref: baseRef) {
+            if source.traitInstance.owner == 0U64 && source.surfaceId == extId { return true }
         }
-        return base.viewIds.count() == 0U64 && base.viewExtId == extId
+        return false
     }
 
     inout fn sameProofTraitArgs(a: Array[U64], b: Array[U64]) -> Bool {

@@ -1016,7 +1016,9 @@ pub impl Comp {
                 if ids[j] == sources[i].surfaceId { present = true }
                 j += 1U64
             }
-            if !present && sources[i].surfaceId != 0U64 { ids.append(sources[i].surfaceId) }
+            // Compatibility extension membership never erases a trait kind
+            // into the extension ID domain.
+            if !present && sources[i].traitInstance.owner == 0U64 && sources[i].surfaceId != 0U64 { ids.append(sources[i].surfaceId) }
             i += 1U64
         }
         return ids

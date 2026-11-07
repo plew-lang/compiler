@@ -558,17 +558,13 @@ pub impl Comp {
         while i < sources.count() {
             val source = sources[i]
             val id = source.surfaceId
-            if source.traitInstance.owner == 0U64 && id != 0U64 && id <= self.interner.entries.count() {
-                val entry: InternedSpan = self.interner.entries[id - 1U64]
-                if self.isExtName(start: entry.start, len: entry.len) {
-                    mut val duplicate: Bool = false
-                    mut val j: U64 = 0U64
-                    while j < extIds.count() {
-                        if extIds[j] == id { duplicate = true }
-                        j += 1U64
-                    }
-                    if !duplicate { extIds.append(id) }
+            if source.traitInstance.owner == 0U64 {
+                if !self.knownExtensionSource(identity: id) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "unknown extension identity in source set", failureDomain: <FailureDomain.Input />) />
                 }
+                mut val duplicate = false
+                for existing in extIds { if existing == id { duplicate = true } }
+                if !duplicate { extIds.append(id) }
             }
             i += 1U64
         }
