@@ -19,6 +19,30 @@ Registration associates each declaration with its kind, lexical/module owner, so
 
 Aliases and re-publication preserve the original declaration identity. An imported local name is a binding to that identity or overload set, not a copied declaration with new visibility rights. A generated callable also needs an explicit semantic owner and origin; appended synthetic text cannot determine its privileges.
 
+### Shared Module Binding Admission
+
+Module scope construction admits one binding per name across nominal types
+(struct, enum and newtype), traits, named extensions, free functions, globals
+and imported namespace/selected/alias bindings. The sole multi-declaration
+binding is a valid free-function overload set. Registration and use/public-surface
+construction share this conflict authority; separate per-kind name indices
+must not create separate language namespaces. Reject conflicting bindings even
+when no body references them, retaining both origins for diagnostics.
+
+Deduplicate paths to the same original declaration before conflict checking.
+Declaration fragments belonging to one resolved extension identity remain one
+binding; this does not permit an independent trait or type of the same name.
+Owner-scoped members and lexical shadowing retain their separate scope rules.
+The [module specification](https://github.com/plew-lang/spec/blob/main/spec/04-execution/15-modules.md#同一スコープの名前衝突)
+owns the accepted language surface.
+
+Binding establishes the declaration kind before interpreting a use. Neither
+expected type, value/type position, receiver applicability nor a successful
+alternative parse can rescue a binding collision. In particular, a source
+selector does not search for an applicable same-named trait or extension after
+another interpretation fails. Checking validates the already bound source and
+its complete application, then retains the resulting evidence.
+
 ### Shared Overload Declaration Admission
 
 Declaration admission owns the complete overload acceptance decision, before a
@@ -131,7 +155,7 @@ The [module specification](https://github.com/plew-lang/spec/blob/main/spec/04-e
 
 Selective use of a function name transfers all public overloads under that name. An alias changes the local binding name of the set. Non-public overloads do not become public because another overload shares their spelling. Namespace-qualified calls read that namespace's reachable public surface; they do not fall back to unrelated same-named declarations.
 
-Lookup must retain enough exclusion information for an accurate diagnostic. Finding a private candidate can explain an error but cannot hide an applicable visible overload or authorize the private call. Non-function binding collisions follow their own specification rules, not overload-set union.
+Lookup must retain enough exclusion information for an accurate diagnostic. Finding a private candidate can explain an error but cannot hide an applicable visible overload or authorize the private call. Cross-kind module binding collisions are rejected by shared module binding admission, not resolved through overload-set union.
 
 For example, importing an unlabeled `print(String)` and declaring `print(value: String)` locally produces candidates distinguished by their argument labels. A labeled call selects the local function; an unlabeled call can select the imported function. The same candidate/applicability rules apply if both declarations originated in the same module.
 

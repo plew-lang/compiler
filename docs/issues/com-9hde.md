@@ -273,30 +273,47 @@ exercised. Source files are unchanged across the successful focused runs.
 Compiler pin/Lower/Record uptake, qualified type paths and task-wide gates remain
 open. The producer deliberately selects neither semantic interpretation.
 
-The earlier plan to finalize every source kind lexically in Lower needs renewed
-review before consumer implementation. Existing run/view_source_kind_collision
-allows same-named trait and extension sources and resolves by applicability.
-A parameterized version is accepted as an extension for `values#Extra[0U64]`
-and `values#Extra`, while the annotated Array[I64]#Extra is rejected for trait
-arity. These observations are not an adopted precedence rule or proof the
-existing behavior is correct. Determine the normative binding/applicability
-owner and required plan/contract correction; do not infer kind from whichever
-parser branch or semantic interpretation happens to succeed.
+### Adopted Module Binding Rule and Consumer Plan
 
-[Source-kind boundary investigation](../../../evidence/rejection-domains/diagnostic-domain-implementation/source-kind-binding-boundary.json)
-traces the existing positive control to intentional commit `21d338e8` and pairs
-it with the existing both-sources rejection. Neutral review finds no canonical
-rule that settles whether positional arity or a parser/meaning failure excludes
-a same-named source candidate. Source-body checking can own receiver-dependent
-finalization before successful publication, consistent with general design;
-lexical-only Lower selection and prohibition on even pending construction input
-reaching checking are not established contracts. Do not move the receiver's type
-checker into Lower or choose a branch by trying meaning and falling back.
+The user adopted one module binding namespace across types, traits, named
+extensions, free functions, globals and use aliases/namespaces. Only admitted
+free-function overloads share a name. See [module binding admission](../design/name-lookup.md#shared-module-binding-admission)
+and the [normative collision rule](https://github.com/plew-lang/spec/blob/main/spec/04-execution/15-modules.md#同一スコープの名前衝突).
+This removes the prior source-kind specification stop; it does not certify the
+current implementation or the complete task.
 
-Stop for the existing user decision boundary: clarify kind-name coexistence and
-arity/branch-failure treatment, then correct this concrete staging plan and
-synchronize the normative wording as authorized. This is a new concrete collision
-case, not reinstatement of the withdrawn blanket request for approval of neutral
-syntax retention. The producer is saved as Syntax `2b5811c` without a package tag;
-compiler dependency remains exact dev31/ae70. Do not close com-9hde, update its
-pin into an unsupported consumer, or claim task-wide GREEN.
+[The preserved investigation](../../../evidence/rejection-domains/diagnostic-domain-implementation/source-kind-binding-boundary.json)
+records the old intentional same-name trait/extension behavior and the value/type
+arity discrepancy. The existing `run/view_source_kind_collision` positive
+expectation is superseded by the adopted specification, not evidence to retain
+an applicability-based source-kind selector. Update affected tests under the
+changed-spec allowance while preserving non-collision view/index controls.
+
+Before publishing an admitted module binding, reject cross-kind collisions in
+local, imported, aliased and re-published bindings, including unused declarations.
+Preserve valid free overloads, original-identity deduplication, separate-module
+namespaces, owner-scoped members and ordinary lexical shadowing. Registration
+and public-surface construction must share the binding-conflict decision rather
+than copying per-kind predicates. Confirm actual implementation ownership before
+splitting any cross-cutting repair; do not silently count it as already done.
+
+The consumer requests the unique lexical declaration identity/kind, then selects
+the retained syntax role and validates complete arity and receiver applicability
+with the existing semantic owners. Neither syntax-branch success nor receiver
+applicability chooses between colliding names. No receiver type checker is moved
+into Lower, and no failed interpretation falls back to another meaning.
+
+The producer remains Syntax `2b5811c` without a package tag; compiler dependency
+remains exact dev31/ae70. Pin/consumer uptake, qualified type paths, source
+admission and final-use gates remain open. Do not close com-9hde or claim
+implementation GREEN from this documentation change.
+
+Documentation-only independent review (`module_binding_docs_review`) checked
+these spec/design changes and worklog handoff: no required repairs; the shared
+binding authority, unchanged overload/shadowing rules and resolved-extension
+fragment distinction are consistent. New local files/section anchors and saved
+evidence links resolve. An optional extra explanation that equal spelling alone
+is not extension identity was not duplicated: the general distinct-declaration
+rule and resolved-identity condition already establish it. Diff whitespace and
+new section/link checks pass. No product tests or performance measurement were
+run for this documentation-only increment; implementation acceptance is open.

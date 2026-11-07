@@ -47,7 +47,11 @@ A method-source selector can require declaration binding before the syntax's
 role is known. Shared Syntax retains qualified segments, positional argument
 syntax, index syntax and source coordinates needed by the semantic owner;
 it must not guess a namespace or type from spelling. A parameterized trait
-requires its complete positional application. An extension or zero-arity trait
+requires its complete positional application. Module binding admission rejects
+same-named trait/extension bindings before their use; receiver applicability
+cannot select between source kinds. Lexical binding retains the unique source
+identity and kind, while checking owns its validity for the receiver.
+An extension or zero-arity trait
 view is complete before an ordinary following index. These classifications
 implement the existing view and indexing rules, rather than a new precedence
 or type-checking fallback. Once bound, a failure in the selected interpretation
