@@ -1,0 +1,32 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend, Expr }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic }
+use @Plew/Syntax only { rangeEquals }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    val scenario = if argAt(1I64) == "" { give "Value" } else { give argAt(1I64) }
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ViewApplications/" + scenario + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) print("0") return }
+        Result.Ok(value: _) => {}
+    }
+    if scenario != "Value" { print("1") return }
+    val name = compiler.internBytes(s: "P")
+    val trait = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
+    mut val found = 0U64
+    for val expression in compiler.arena.exprs {
+        match expression {
+            Expr.ExtView(recv: _, source: val source, strip: val strip) => {
+                if source.traitInstance.owner != trait.nameStart { continue }
+                if strip || source.surfaceId != trait.nameId || source.traitInstance.positionalArgs.count() != 1U64 { print("0") return }
+                val argument = compiler.arena.typeAt(index: source.traitInstance.positionalArgs[0U64])
+                if !rangeEquals(bytes: compiler.arena.bytes, start: argument.nameStart, len: argument.nameLen, kw: "I64") { print("0") return }
+                found += 1U64
+            }
+            _ => {}
+        }
+    }
+    print(found == 1U64)
+}

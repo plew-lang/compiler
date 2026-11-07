@@ -1,0 +1,6 @@
+trait P[K] {}
+struct S {}
+pub impl S { factory }
+impl S as P[I64] {}
+fn target() { val value = <S /> val result = value }
+fn main() {}

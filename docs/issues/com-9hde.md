@@ -153,3 +153,64 @@ binding owner can distinguish namespace, trait and associated projection.
 The scope remains in this existing task. Neutral review confirmed unresolved retention follows from the adopted
 single-grammar/handoff contract; the earlier unnecessary user-confirmation
 request is withdrawn. Concrete representation design is the next step.
+
+## Next implementation unit: name-dependent source applications
+
+This is an internal encoding plan under the Grammar Handoff Contract, not a
+change to the accepted source language. Review its concrete boundaries before
+editing product code.
+
+1. A shared source-selection syntax row retains receiver, complete dotted name
+   segments, written spans, strip mode and an optional bracket application on
+   the final segment. The parser can stop before an ordinary method-call suffix
+   and preserve following postfix operations. The source path ends after its
+   first bracket packet or before a `.name(` call suffix. Thus
+   `value#Ns.P[T].field[index]` retains `Ns.P` plus `[T]`, then ordinary
+   postfix syntax; `value#Ext.field[index]` retains `Ext.field` plus the packet
+   until binding identifies `Ext`. Never move a field-attached packet to an
+   earlier parameterized trait to repair a missing application. It does not bind namespaces,
+   traits or value fields. Parentheses end this source-path construction scope;
+   `(value#P)[index]` remains an ordinary index over the parenthesized view.
+2. The bracket packet retains independently parsed type-list and index-expression
+   alternatives plus each alternative's syntax-error receipt. Parsing uses the
+   existing shared type/expression grammar, not a new parser or a later reparse.
+   Append-only arena checkpoints roll back a failed alternative by pool length;
+   checkpoint every mutable pool length and parser position/error state, not
+   only expression rows. Preserve a successful first alternative before taking
+   the second checkpoint, so rollback cannot invalidate its children. Existing
+   pool prefixes remain unchanged. Do not copy the entire SyntaxFile or publish
+   malformed speculative children.
+   Successful alternatives refer to owned typed pools and retain original spans.
+   Verify the successful branches consume the same bracket boundary; do not
+   choose a new semantic priority if that invariant fails.
+3. Materialization/freeze preserve every packet status, child, label and error
+   location. A syntax error in an unselected alternative must not invalidate a
+   valid interpretation. A selected invalid alternative remains a Source error;
+   no semantic fallback to the other alternative is permitted. Existing legacy
+   ExtView/ExtMethod AST payloads cannot carry these alternatives: add a rich
+   carrier and converge direct and materialized input on the same classifier.
+4. Lower resolves namespace prefixes and the source head once, retaining the
+   binding result (canonical owner, kind, arity and provenance). Do not pass
+   only its spelling to a second bare-name resolver. Only the selected branch
+   is lowered; success of the other parser branch never proves source kind. A parameterized
+   trait consumes the attached complete type application at that head. A
+   zero-arity trait or extension completes the view without consuming the packet
+   as type arguments; the packet is then an ordinary index. Dotted suffixes after
+   a resolved source are ordinary member operations. Publish only the established
+   canonical view / field / index / call operations; no unresolved choice escapes
+   to Record, Verify, Mono, Mid or LLVM.
+5. Type-position qualified source paths preserve the same name segments but have
+   unambiguous type-argument syntax. Namespace/source/projection splitting uses
+   the same lexical owner boundary and existing projection formation. Keep
+   semantic view arguments and associated projection arguments distinct.
+
+Start with actual Frontend File regressions for a complete value trait view and
+preserved extension / zero-arity-trait / parenthesized indexing, with a plain
+receiver control. Add producer packet/range/error tests through direct parse,
+materialize and freeze, including nested applications, multiple arguments,
+selected invalid syntax, later indexing, method suffixes and malformed brackets.
+Then close namespace-qualified value/type paths, missing/extra arguments,
+aliases/reexports, two instances and exact written coordinates. Update the exact
+Syntax pin only after its producer increment passes neutral review. Focused gates
+precede task-wide normal/fixed-point/performance acceptance. This plan does not
+claim those remaining tests or implementation are complete.
