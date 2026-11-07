@@ -1005,14 +1005,7 @@ pub impl Comp {
     }
 
     fn typeRefViewSources(ref: U64) -> Array[ResolvedViewSource] {
-        mut val out: Array[ResolvedViewSource] = []
-        val count = self.typeTermViewSourceCount(ref: ref)
-        mut val index = 0U64
-        while index < count {
-            out.append(self.typeTermViewSourceAt(ref: ref, index: index))
-            index += 1U64
-        }
-        return out
+        return self.arena.typeViewSources(ref: ref)
     }
 
     // Exact source-set identity is independent of duplicate input entries or

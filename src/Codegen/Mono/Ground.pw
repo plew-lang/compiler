@@ -515,6 +515,9 @@ pub impl Comp {
 
     inout fn typeTermViewSourcesEqual(a: U64, b: U64) -> Bool {
         if a >= self.arena.typeTermCount() || b >= self.arena.typeTermCount() { return false }
+        val left = self.typeTermViewSourceCount(ref: a)
+        val right = self.typeTermViewSourceCount(ref: b)
+        if left == 0U64 || right == 0U64 { return left == right }
         return self.semanticViewSourceSetsEqual(a: self.typeRefViewSources(ref: a), b: self.typeRefViewSources(ref: b))
     }
 

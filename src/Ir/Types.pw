@@ -27,6 +27,14 @@ pub impl Arena {
     fn typeViewArgumentAt(sources: TypeViewSourceRange, index: U64) -> U64 {
         return sources.argumentAt(pool: self.typeViewSourcePool, index: index)
     }
+    fn typeViewSources(ref: U64) -> Array[ResolvedViewSource] {
+        if ref == 0U64 || ref >= self.typeTermCount() { return [] }
+        val term = self.typeTermAt(index: ref)
+        if term.viewSources.len != 0U64 { return term.viewSources.copied(pool: self.typeViewSourcePool) }
+        if term.viewIds.len != 0U64 { return term.viewIds.resolvedSources(pool: self.typeViewIdPool) }
+        if term.viewExtId != 0U64 { return [<ResolvedViewSource surfaceId=term.viewExtId />] }
+        return []
+    }
     fn typeArgumentLabelAt(index: U64) -> U64 { return self.typeArgumentLabelPool[index] }
     fn typeAssocArgumentAt(index: U64) -> U64 { return self.typeAssocArgumentPool[index] }
     fn typeAssocArgumentLabelAt(index: U64) -> U64 { return self.typeAssocArgumentLabelPool[index] }
@@ -131,6 +139,16 @@ pub impl Arena {
 // The loop needs only a range and its pool. Passing a whole compiler (or
 // arena) by value here makes each hot structural query copy unrelated state.
 impl TypeViewSourceRange {
+    fn copied(pool: Array[ResolvedViewSource]) -> Array[ResolvedViewSource] {
+        mut val sources: Array[ResolvedViewSource] = []
+        mut val index = 0U64
+        while index < self.len {
+            sources.append(pool[self.start + index])
+            index += 1U64
+        }
+        return sources
+    }
+
     fn argumentCount(pool: Array[ResolvedViewSource]) -> U64 {
         mut val count = 0U64
         mut val index = 0U64
@@ -151,6 +169,18 @@ impl TypeViewSourceRange {
             sourceIndex += 1U64
         }
         return 0U64
+    }
+}
+
+impl TypeViewIdRange {
+    fn resolvedSources(pool: Array[U64]) -> Array[ResolvedViewSource] {
+        mut val sources: Array[ResolvedViewSource] = []
+        mut val index = 0U64
+        while index < self.len {
+            sources.append(<ResolvedViewSource surfaceId=pool[self.start + index] />)
+            index += 1U64
+        }
+        return sources
     }
 }
 
