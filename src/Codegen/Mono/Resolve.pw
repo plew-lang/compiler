@@ -544,7 +544,7 @@ pub impl Comp {
         mut val direct = <TraitProofSelection />
         mut val preferredOwners = sourceOwners
         if !demand.isExistence() && preferredOwners.count() == 0U64 {
-            for source in self.typeRefViewSources(ref: baseRef) {
+            for source in self.arena.typeViewSources(ref: baseRef) {
                 if source.traitInstance.owner != 0U64 { preferredOwners.append(source.traitInstance.owner) }
             }
         }
@@ -1052,7 +1052,7 @@ pub impl Comp {
                             // here would silently erase the selected
                             // extension source for every later proof/call
                             // query.
-                            val additions: Array[ResolvedViewSource] = self.typeRefViewSources(ref: tyRef)
+                            val additions: Array[ResolvedViewSource] = self.arena.typeViewSources(ref: tyRef)
                             if additions.count() == 0U64 { return <Result.Ok value=resolved />}
                             return <Result.Ok value=self.typeRefWithAddedViewSources(ref: resolved, additions: additions) />
                         }
@@ -1064,7 +1064,7 @@ pub impl Comp {
             val receiverArg: U64 = self.receiverParamArgument(paramId: t.paramId)
             if receiverArg != 0U64 && receiverArg != tyRef {
                 val resolved: U64 = (try self.resolveTy(tyRef: receiverArg))
-                val additions: Array[ResolvedViewSource] = self.typeRefViewSources(ref: tyRef)
+                val additions: Array[ResolvedViewSource] = self.arena.typeViewSources(ref: tyRef)
                 if additions.count() == 0U64 { return <Result.Ok value=resolved />}
                 return <Result.Ok value=self.typeRefWithAddedViewSources(ref: resolved, additions: additions) />
             }

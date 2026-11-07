@@ -106,7 +106,7 @@ fn main() {
     if scenario == "duplicateBuilder" {
         val duplicate = compiler.typeRefWithViewSources(ref: receiver, sources: [integerSource, useSource])
         val single = compiler.typeRefWithViewSources(ref: receiver, sources: [integerSource])
-        print(compiler.typeRefEq(a: duplicate, b: single) && compiler.typeTermViewSourceCount(ref: duplicate) == 1U64)
+        print(compiler.typeRefEq(a: duplicate, b: single) && compiler.arena.typeViewSourceCount(ref: duplicate) == 1U64)
         return
     }
     if scenario == "environment" || scenario == "nestedEnvironment" || scenario == "callerOwned" {
@@ -115,25 +115,25 @@ fn main() {
         val expected = if scenario == "nestedEnvironment" {
             give compiler.pushType(t: <TypeRef nameStart=arrayName.nameStart nameLen=arrayName.nameLen args=[integer] />)
         } else { give replacement }
-        print(compiler.typeRefEq(a: compiler.typeTermRefViewArgumentAt(ref: grounded, index: 0U64), b: expected))
+        print(compiler.typeRefEq(a: compiler.arena.typeViewArgumentAt(ref: grounded, index: 0U64), b: expected))
         return
     }
     if scenario == "legacyGrounding" {
         compiler.cur.typeParams = [binding]
         compiler.cur.typeArgs = [integer]
         val grounded = compiler.groundTypeRef(ref: viewed).unwrap()
-        print(compiler.typeRefEq(a: compiler.typeTermRefViewArgumentAt(ref: grounded, index: 0U64), b: integer))
+        print(compiler.typeRefEq(a: compiler.arena.typeViewArgumentAt(ref: grounded, index: 0U64), b: integer))
         return
     }
     if scenario == "projectionNormalization" {
         val grounded = compiler.closeBodyProjectionTerms(ref: viewed, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64).unwrap()
-        print(compiler.typeRefEq(a: compiler.typeTermRefViewArgumentAt(ref: grounded, index: 0U64), b: boolean))
+        print(compiler.typeRefEq(a: compiler.arena.typeViewArgumentAt(ref: grounded, index: 0U64), b: boolean))
         return
     }
     if scenario == "witness" {
         val witness = <WitnessMatch binds=[<WitnessBind binder=0U64 paramId=binding.paramId term=integer />] />
         val grounded = compiler.groundWitnessTypeTerm(ref: viewed, params: <PatternBindInput.Values values=[binding] />, matchResult: witness).unwrap()
-        print(compiler.typeRefEq(a: compiler.typeTermRefViewArgumentAt(ref: grounded, index: 0U64), b: integer))
+        print(compiler.typeRefEq(a: compiler.arena.typeViewArgumentAt(ref: grounded, index: 0U64), b: integer))
         return
     }
     if scenario == "children" {

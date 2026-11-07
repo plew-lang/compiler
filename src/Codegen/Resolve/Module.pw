@@ -692,7 +692,7 @@ pub impl Comp {
             }
         }
         if !stripped && recvRef != 0U64 && recvRef < self.arena.typeCount() {
-            val staticSources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: recvRef)
+            val staticSources: Array[ResolvedViewSource] = self.arena.typeViewSources(ref: recvRef)
             mut val si: U64 = 0U64
             while si < staticSources.count() {
                 mut val written: Bool = false
@@ -979,7 +979,7 @@ pub impl Comp {
                         val lo = (try self.typedLocal(index: li))
                         if lo.ty != 0U64 && lo.ty < self.arena.typeCount() {
                             val localTy: TypeRef = self.arena.typeAt(index: lo.ty)
-                            val localSources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: lo.ty)
+                            val localSources: Array[ResolvedViewSource] = self.arena.typeViewSources(ref: lo.ty)
                             mut val vi: U64 = 0U64
                             while vi < localSources.count() {
                                 val localSource: ResolvedViewSource = localSources[vi]

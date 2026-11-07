@@ -191,7 +191,7 @@ pub impl Comp {
                 try self.checkResolvedViewValid(recv: recv, source: sourceSelector, strip: strip)
                 if !(self.exprFeedsAnotherView(id: id)) {
                     val finalType: TypeInfo = (try self.typeOf(id: id))
-                    try self.checkTraitSubjectViewCycles(sources: self.typeRefViewSources(ref: finalType.ref), offset: sourceSelector.writtenStart)
+                    try self.checkTraitSubjectViewCycles(sources: self.arena.typeViewSources(ref: finalType.ref), offset: sourceSelector.writtenStart)
                 }
                 try self.verifyExpr(id: recv)
             }

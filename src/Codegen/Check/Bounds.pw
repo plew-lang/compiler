@@ -431,7 +431,7 @@ pub impl Comp {
         mut val candidates: Array[StaticMemberResolution] = []
         mut val preferredCandidates: Array[StaticMemberResolution] = []
         mut val sourceOwners: Array[U64] = []
-        for source in self.typeRefViewSources(ref: receiverRef) { if source.traitInstance.owner != 0U64 { sourceOwners.append(source.traitInstance.owner) } }
+        for source in self.arena.typeViewSources(ref: receiverRef) { if source.traitInstance.owner != 0U64 { sourceOwners.append(source.traitInstance.owner) } }
         mut val traitIndex = 0U64
         while traitIndex < self.decls.traitCount() {
             val declaration = self.decls.traitAt(index: traitIndex)

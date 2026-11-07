@@ -66,7 +66,7 @@ pub impl Comp {
                     return baseRef
                 }
                 val bt: TypeRef = self.arena.typeAt(index: baseRef)
-                mut val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: baseRef)
+                mut val sources: Array[ResolvedViewSource] = self.arena.typeViewSources(ref: baseRef)
                 mut val present: Bool = false
                 mut val i: U64 = 0U64
                 while i < sources.count() {

@@ -32,9 +32,9 @@ pub impl Comp {
         }
         if keepBase {
             val base = (try self.exprType(id: current))
-            for source in self.typeRefViewSources(ref: base.ref) { sources.append(source) }
+            for source in self.arena.typeViewSources(ref: base.ref) { sources.append(source) }
             if current == argExpr {
-                for source in self.typeRefViewSources(ref: ti.ref) { sources.append(source) }
+                for source in self.arena.typeViewSources(ref: ti.ref) { sources.append(source) }
             }
         }
         return <Result.Ok value=self.normalizedViewSources(sources: sources) />
@@ -221,7 +221,7 @@ pub impl Comp {
             // select `f(P#E)` rather than falling through to first-declared
             // `f(P)` and failing only in backend validation.
             val actualViews = (try self.argViewSources(argExpr: argExpr, ti: ti))
-            val paramViews = self.typeRefViewSources(ref: p.ty)
+            val paramViews = self.arena.typeViewSources(ref: p.ty)
             if !self.semanticViewSourceSetsEqual(a: actualViews, b: paramViews) {
                 return <Result.Ok value=false />
             }

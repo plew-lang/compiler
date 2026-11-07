@@ -116,8 +116,8 @@ impl Comp {
         // A projection's explicit receiver owns its view set, including any
         // normalization. Never validate or compare the parent's mirror again.
         if self.arena.typeTermAt(index: normalized).assocNameId == 0U64 {
-            val sources = (try self.checkPatternViewInput(ref: ref, offset: offset, input: self.typeRefViewSources(ref: normalized)))
-            if sources.count() != self.typeTermViewSourceCount(ref: normalized) {
+            val sources = (try self.checkPatternViewInput(ref: ref, offset: offset, input: self.arena.typeViewSources(ref: normalized)))
+            if sources.count() != self.arena.typeViewSourceCount(ref: normalized) {
                 normalized = self.typeRefWithViewSources(ref: normalized, sources: sources)
             }
             if sources.count() != 0U64 {
@@ -180,7 +180,7 @@ impl Comp {
                 return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "inconsistent type name identity") />
             }
             if term.assocNameId == 0U64 {
-                for source in self.typeRefViewSources(ref: current) {
+                for source in self.arena.typeViewSources(ref: current) {
                     try self.checkPatternViewSourceInput(ref: current, offset: offset, source: source)
                 }
             }
@@ -419,11 +419,11 @@ pub impl Comp {
             i += 1U64
         }
         if ta.assocNameId == 0U64 {
-            val count = self.typeTermRefViewArgumentCount(ref: a)
-            if count != self.typeTermRefViewArgumentCount(ref: b) { return false }
+            val count = self.arena.typeViewArgumentCount(ref: a)
+            if count != self.arena.typeViewArgumentCount(ref: b) { return false }
             i = 0U64
             while i < count {
-                if !self.typeRefsAlphaEq(a: self.typeTermRefViewArgumentAt(ref: a, index: i), b: self.typeTermRefViewArgumentAt(ref: b, index: i), aParams: aParams, bParams: bParams) { return false }
+                if !self.typeRefsAlphaEq(a: self.arena.typeViewArgumentAt(ref: a, index: i), b: self.arena.typeViewArgumentAt(ref: b, index: i), aParams: aParams, bParams: bParams) { return false }
                 i += 1U64
             }
         }
@@ -536,11 +536,11 @@ pub impl Comp {
             i += 1U64
         }
         if !ignoreTopView && ta.assocNameId == 0U64 {
-            val count = self.typeTermRefViewArgumentCount(ref: a)
-            if count != self.typeTermRefViewArgumentCount(ref: b) { return false }
+            val count = self.arena.typeViewArgumentCount(ref: a)
+            if count != self.arena.typeViewArgumentCount(ref: b) { return false }
             i = 0U64
             while i < count {
-                if !self.unifyPatterns(a: self.typeTermRefViewArgumentAt(ref: a, index: i), aSide: aSide, b: self.typeTermRefViewArgumentAt(ref: b, index: i), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds) { return false }
+                if !self.unifyPatterns(a: self.arena.typeViewArgumentAt(ref: a, index: i), aSide: aSide, b: self.arena.typeViewArgumentAt(ref: b, index: i), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds) { return false }
                 i += 1U64
             }
         }

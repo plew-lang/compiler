@@ -576,7 +576,7 @@ pub impl Comp {
             associatedValues.append(value)
         }
         mut val sourceOwners: Array[U64] = []
-        for val source in self.typeRefViewSources(ref: receiverRef) {
+        for val source in self.arena.typeViewSources(ref: receiverRef) {
             if source.traitInstance.owner != 0U64 { sourceOwners.append(source.traitInstance.owner) }
         }
         val proof = try self.traitPatternProof(demand: demand, baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, assocNames: associatedNames, assocValues: associatedValues, sourceOwners: sourceOwners)

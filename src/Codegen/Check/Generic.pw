@@ -240,7 +240,7 @@ pub impl Comp {
         // Projection mirrors do not own a second view set. Their receiver is
         // a child in the same traversal as selector arguments and record fields.
         if self.arena.typeTermAt(index: ref).assocNameId == 0U64 {
-            try self.checkTraitSubjectViewCycles(sources: self.typeRefViewSources(ref: ref), offset: offset)
+            try self.checkTraitSubjectViewCycles(sources: self.arena.typeViewSources(ref: ref), offset: offset)
         }
         mut val index = 0U64
         while index < self.typeTermRefChildCount(ref: ref) {

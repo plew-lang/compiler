@@ -24,11 +24,11 @@ pub impl Comp {
         // of closedness: unbound parameters and projections remain untouched.
         if (params.count() == 0U64 || values.count() == 0U64) && selfRef == 0U64 && itemRef == 0U64 { return ref }
         val t = self.arena.typeTermAt(index: ref)
-        if t.assocNameId == 0U64 && self.typeTermRefViewArgumentCount(ref: ref) != 0U64 {
+        if t.assocNameId == 0U64 && self.arena.typeViewArgumentCount(ref: ref) != 0U64 {
             mut val arguments: Array[U64] = []
             mut val index = 0U64
-            while index < self.typeTermRefViewArgumentCount(ref: ref) {
-                arguments.append(self.groundTermInEnvironment(ref: self.typeTermRefViewArgumentAt(ref: ref, index: index), params: params, values: values, selfRef: selfRef, itemRef: itemRef))
+            while index < self.arena.typeViewArgumentCount(ref: ref) {
+                arguments.append(self.groundTermInEnvironment(ref: self.arena.typeViewArgumentAt(ref: ref, index: index), params: params, values: values, selfRef: selfRef, itemRef: itemRef))
                 index += 1U64
             }
             val underlying = self.typeRefWithoutOuterViews(ref: ref)
@@ -43,10 +43,10 @@ pub impl Comp {
         // convenience in groundTermForBody.
         if !t.hasDecl && t.assocNameId == 0U64 && t.paramId == 0U64 && t.args.len == 0U64 {
             if selfRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
-                return self.typeRefWithAddedViewSources(ref: selfRef, additions: self.typeRefViewSources(ref: ref))
+                return self.typeRefWithAddedViewSources(ref: selfRef, additions: self.arena.typeViewSources(ref: ref))
             }
             if itemRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") {
-                return self.typeRefWithAddedViewSources(ref: itemRef, additions: self.typeRefViewSources(ref: ref))
+                return self.typeRefWithAddedViewSources(ref: itemRef, additions: self.arena.typeViewSources(ref: ref))
             }
         }
         if t.isRecord {
@@ -105,7 +105,7 @@ pub impl Comp {
                         // Reapplying this map would capture its binders and
                         // infinitely expand recursive T -> Container[T].
                         val grounded = self.groundTermInEnvironment(ref: replacement, params: [], values: [], selfRef: selfRef, itemRef: itemRef)
-                        return self.typeRefWithAddedViewSources(ref: grounded, additions: self.typeRefViewSources(ref: ref))
+                        return self.typeRefWithAddedViewSources(ref: grounded, additions: self.arena.typeViewSources(ref: ref))
                     }
                     return ref
                 }
@@ -193,10 +193,10 @@ pub impl Comp {
         // consulting the explicit binder map.
         if !t.hasDecl && t.assocNameId == 0U64 && t.paramId == 0U64 && t.args.len == 0U64 {
             if environment.receiverRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
-                return <Result.Ok value=self.typeRefWithAddedViewSources(ref: environment.receiverRef, additions: self.typeRefViewSources(ref: ref)) />
+                return <Result.Ok value=self.typeRefWithAddedViewSources(ref: environment.receiverRef, additions: self.arena.typeViewSources(ref: ref)) />
             }
             if itemRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") {
-                return <Result.Ok value=self.typeRefWithAddedViewSources(ref: itemRef, additions: self.typeRefViewSources(ref: ref)) />
+                return <Result.Ok value=self.typeRefWithAddedViewSources(ref: itemRef, additions: self.arena.typeViewSources(ref: ref)) />
             }
         }
         val explicit: U64 = self.groundTermInEnvironment(ref: ref, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
@@ -233,11 +233,11 @@ pub impl Comp {
         // A non-projection leaf has no children to close. Read its scalar
         // shape before materializing any owning compatibility type record.
         val term = self.arena.typeTermAt(index: ref)
-        if term.assocNameId == 0U64 && self.typeTermRefViewArgumentCount(ref: ref) != 0U64 {
+        if term.assocNameId == 0U64 && self.arena.typeViewArgumentCount(ref: ref) != 0U64 {
             mut val arguments: Array[U64] = []
             mut val index = 0U64
-            while index < self.typeTermRefViewArgumentCount(ref: ref) {
-                arguments.append((try self.closeBodyProjectionTermsRecording(ref: self.typeTermRefViewArgumentAt(ref: ref, index: index), environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording)))
+            while index < self.arena.typeViewArgumentCount(ref: ref) {
+                arguments.append((try self.closeBodyProjectionTermsRecording(ref: self.arena.typeViewArgumentAt(ref: ref, index: index), environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording)))
                 index += 1U64
             }
             val underlying = self.typeRefWithoutOuterViews(ref: ref)
@@ -366,7 +366,7 @@ pub impl Comp {
     fn viewSourcesWithArguments(ref: U64, arguments: Array[U64]) -> Array[ResolvedViewSource] {
         mut val sources: Array[ResolvedViewSource] = []
         mut val argumentIndex = 0U64
-        for source in self.typeRefViewSources(ref: ref) {
+        for source in self.arena.typeViewSources(ref: ref) {
             mut val children: Array[U64] = []
             mut val index = 0U64
             while index < source.traitInstance.positionalArgs.count() {
@@ -393,14 +393,6 @@ pub impl Comp {
             remaining -= arguments.count()
         }
         return 0U64
-    }
-
-    fn typeTermRefViewArgumentCount(ref: U64) -> U64 {
-        return self.arena.typeViewArgumentCount(sources: self.arena.typeTermAt(index: ref).viewSources)
-    }
-
-    fn typeTermRefViewArgumentAt(ref: U64, index: U64) -> U64 {
-        return self.arena.typeViewArgumentAt(sources: self.arena.typeTermAt(index: ref).viewSources, index: index)
     }
 
     inout fn typeTermChildCount(t: TypeRef) -> U64 {
@@ -487,12 +479,12 @@ pub impl Comp {
         }
         if t.isRecord {
             if index < t.recordFieldTerms.len { return self.arena.typeRecordFieldAt(index: t.recordFieldTerms.start + index) }
-            return self.typeTermRefViewArgumentAt(ref: ref, index: index - t.recordFieldTerms.len)
+            return self.arena.typeViewArgumentAt(ref: ref, index: index - t.recordFieldTerms.len)
         }
         if index < t.args.len { return self.arena.typeArgumentAt(index: t.args.start + index) }
         val traitIndex: U64 = index - t.args.len
         if traitIndex < t.assocTraitArgs.len { return self.arena.typeAssocArgumentAt(index: t.assocTraitArgs.start + traitIndex) }
-        return self.typeTermRefViewArgumentAt(ref: ref, index: traitIndex - t.assocTraitArgs.len)
+        return self.arena.typeViewArgumentAt(ref: ref, index: traitIndex - t.assocTraitArgs.len)
     }
 
     inout fn typeTermRefIdentityChildLabel(ref: U64, index: U64) -> U64 {
@@ -515,23 +507,23 @@ pub impl Comp {
 
     inout fn typeTermViewSourcesEqual(a: U64, b: U64) -> Bool {
         if a >= self.arena.typeTermCount() || b >= self.arena.typeTermCount() { return false }
-        val left = self.typeTermViewSourceCount(ref: a)
-        val right = self.typeTermViewSourceCount(ref: b)
+        val left = self.arena.typeViewSourceCount(ref: a)
+        val right = self.arena.typeViewSourceCount(ref: b)
         if left == 0U64 || right == 0U64 { return left == right }
-        return self.semanticViewSourceSetsEqual(a: self.typeRefViewSources(ref: a), b: self.typeRefViewSources(ref: b))
+        return self.semanticViewSourceSetsEqual(a: self.arena.typeViewSources(ref: a), b: self.arena.typeViewSources(ref: b))
     }
 
     inout fn typeTermViewSourceHeadsEqual(a: U64, b: U64) -> Bool {
         if a >= self.arena.typeTermCount() || b >= self.arena.typeTermCount() { return false }
-        val count = self.typeTermViewSourceCount(ref: a)
-        if count != self.typeTermViewSourceCount(ref: b) { return false }
+        val count = self.arena.typeViewSourceCount(ref: a)
+        if count != self.arena.typeViewSourceCount(ref: b) { return false }
         mut val index = 0U64
         while index < count {
-            val wanted = self.typeTermViewSourceAt(ref: a, index: index)
+            val wanted = self.arena.typeViewSourceAt(ref: a, index: index)
             mut val found = false
             mut val other = 0U64
             while other < count {
-                if self.semanticViewSourceHeadEq(a: wanted, b: self.typeTermViewSourceAt(ref: b, index: other)) { found = true
+                if self.semanticViewSourceHeadEq(a: wanted, b: self.arena.typeViewSourceAt(ref: b, index: other)) { found = true
                     break }
                 other += 1U64
             }
@@ -580,11 +572,11 @@ pub impl Comp {
     inout fn groundWitnessTypeTerm(ref: U64, params: PatternBindInput, matchResult: WitnessMatch) -> Result[U64, CompileDiagnostic] {
         if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=ref />}
         val semantic: TypeRef = self.arena.typeAt(index: ref)
-        if semantic.assocNameId == 0U64 && self.typeTermRefViewArgumentCount(ref: ref) != 0U64 {
+        if semantic.assocNameId == 0U64 && self.arena.typeViewArgumentCount(ref: ref) != 0U64 {
             mut val arguments: Array[U64] = []
             mut val index = 0U64
-            while index < self.typeTermRefViewArgumentCount(ref: ref) {
-                arguments.append((try self.groundWitnessTypeTerm(ref: self.typeTermRefViewArgumentAt(ref: ref, index: index), params: params, matchResult: matchResult)))
+            while index < self.arena.typeViewArgumentCount(ref: ref) {
+                arguments.append((try self.groundWitnessTypeTerm(ref: self.arena.typeViewArgumentAt(ref: ref, index: index), params: params, matchResult: matchResult)))
                 index += 1U64
             }
             val underlying = self.typeRefWithoutOuterViews(ref: ref)
@@ -604,7 +596,7 @@ pub impl Comp {
             return <Result.Ok value=self.rebuildProjectionTerm(t: semantic, receiver: receiver, traitArgs: traitArgs) />
         }
         if matchResult.selfRef != 0U64 && semantic.args.count() == 0U64 && rangeEquals(bytes: self.arena.bytes, start: semantic.nameStart, len: semantic.nameLen, kw: "Self") {
-            return <Result.Ok value=self.typeRefWithAddedViewSources(ref: matchResult.selfRef, additions: self.typeRefViewSources(ref: ref)) />
+            return <Result.Ok value=self.typeRefWithAddedViewSources(ref: matchResult.selfRef, additions: self.arena.typeViewSources(ref: ref)) />
         }
         if semantic.paramId != 0U64 {
             val byParam: U64 = self.witnessBindParamIndex(binds: matchResult.binds, paramId: semantic.paramId)
@@ -992,11 +984,11 @@ pub impl Comp {
             return <Result.Ok value=ref />
         }
         val t = self.arena.typeTermAt(index: ref)
-        if t.assocNameId == 0U64 && self.typeTermRefViewArgumentCount(ref: ref) != 0U64 {
+        if t.assocNameId == 0U64 && self.arena.typeViewArgumentCount(ref: ref) != 0U64 {
             mut val arguments: Array[U64] = []
             mut val index = 0U64
-            while index < self.typeTermRefViewArgumentCount(ref: ref) {
-                arguments.append((try self.groundTypeRef(ref: self.typeTermRefViewArgumentAt(ref: ref, index: index))))
+            while index < self.arena.typeViewArgumentCount(ref: ref) {
+                arguments.append((try self.groundTypeRef(ref: self.arena.typeViewArgumentAt(ref: ref, index: index))))
                 index += 1U64
             }
             val underlying = self.typeRefWithoutOuterViews(ref: ref)
@@ -1627,7 +1619,7 @@ impl Comp {
         val rebuilt = if type.isRecord {
             give self.rebuildRecordTypeTerm(t: type, fieldTerms: arguments)
         } else { give self.rebuildTypeTerm(t: type, args: arguments, assocTraitArgs: associated) }
-        if self.typeTermViewSourceCount(ref: ref) == 0U64 { return rebuilt }
+        if self.arena.typeViewSourceCount(ref: ref) == 0U64 { return rebuilt }
         mut val viewArguments: Array[U64] = []
         while index < children.count() {
             viewArguments.append(children[index])

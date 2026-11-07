@@ -188,7 +188,7 @@ pub impl Comp {
                 // receiver, not to the associated output. Validate the actual
                 // semantic child before resolving that output.
                 val receiver = if t.assocNameId != 0U64 { give self.typeTermProjectionReceiver(t: t) } else { give i }
-                val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: receiver)
+                val sources: Array[ResolvedViewSource] = self.arena.typeViewSources(ref: receiver)
                 try self.checkTraitSubjectViewCycles(sources: sources, offset: t.siteOffset)
                 mut val selectedCount: U64 = 0U64
                 mut val vi: U64 = 0U64

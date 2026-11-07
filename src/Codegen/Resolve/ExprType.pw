@@ -903,7 +903,7 @@ pub impl Comp {
                 val br: U64 = self.typedIrRefOfInfo(ti: bt)
                 if br != 0U64 {
                     val brt = self.arena.typeTermAt(index: br)
-                    mut val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: br)
+                    mut val sources: Array[ResolvedViewSource] = self.arena.typeViewSources(ref: br)
                     if strip {
                         sources = []
                     } else {

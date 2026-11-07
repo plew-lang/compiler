@@ -286,10 +286,10 @@ pub impl Comp {
         match base {
             CallTemplateReceiver.Term(term: _) => { return <Result.Ok value=<CallTemplateReceiver.Term term=viewedTerm /> />}
             CallTemplateReceiver.PriorCallResult(exprId: val priorExpr, siteKey: val priorKey) => {
-                return <Result.Ok value=<CallTemplateReceiver.PriorCallResultWithViews exprId=priorExpr siteKey=priorKey views=self.publishCallTemplateViews(views: self.typeRefViewSources(ref: viewedTerm)) /> />
+                return <Result.Ok value=<CallTemplateReceiver.PriorCallResultWithViews exprId=priorExpr siteKey=priorKey views=self.publishCallTemplateViews(views: self.arena.typeViewSources(ref: viewedTerm)) /> />
             }
             CallTemplateReceiver.PriorProtocolResult(slot: val priorSlot) => {
-                return <Result.Ok value=<CallTemplateReceiver.PriorProtocolResultWithViews slot=priorSlot views=self.publishCallTemplateViews(views: self.typeRefViewSources(ref: viewedTerm)) /> />
+                return <Result.Ok value=<CallTemplateReceiver.PriorProtocolResultWithViews slot=priorSlot views=self.publishCallTemplateViews(views: self.arena.typeViewSources(ref: viewedTerm)) /> />
             }
             _ => {}
         }
@@ -1865,7 +1865,7 @@ pub impl Comp {
                 // the canonical TypeRef representation used everywhere else.
                 val receiverTerm: U64 = self.parametricExprTerm(exprId: recv)
                 if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
-                    mut val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: receiverTerm)
+                    mut val sources: Array[ResolvedViewSource] = self.arena.typeViewSources(ref: receiverTerm)
                     if strip {
                         sources = []
                     } else {
