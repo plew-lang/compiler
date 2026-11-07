@@ -148,7 +148,11 @@ normalization does not consume canonical nominal owners established by admission
 Executed counterexamples confirm the former (wrong true result) and the latter
 (mixed stamped/unstamped duplicates rejected, also in reverse order and nested).
 Same-identity/designated-binder and already-stamped controls remain GREEN.
-Repair and fresh validation are in progress; the review does not certify closure.
+Repair impact review at 472595cb accepted both fixes and test validity.
+[Executed repair evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-review-repair.json)
+records build 20261107T025754-build-a0396f and all seven fixtures/97 native
+cases passing with unchanged inputs. The reviewer independently reconciled the saved GREEN and changed-file hashes.
+Formal performance and whole-task gates remain outstanding; no closure yet.
 
 The normalized result must publish established declaration identity, rather than
 make later equality repeat lookup or depend on private admission tables. Raw
