@@ -1,6 +1,6 @@
 ---
 id: com-scq5
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-07T16:41:03Z
@@ -34,3 +34,15 @@ Reconcile each visibility combination, external import/use, re-publication and p
 The product implementation is owned by [com-9hde](com-9hde.md), including shared Syntax public-wrapper support, retained extension visibility and module-publication consumers. Its existing kind/owner/legacy-path review repairs remain there. [met-bejv](met-bejv.md) owns the three existing fixture-purpose reconciliations after the publication and canonical binding paths are available. No new implementation owner or parallel visibility authority is created.
 
 
+
+## Completion Record
+
+Resolved as a documentation-only contract on 2026-11-08. spec09 now defines
+the explicit syntax and four visibility combinations; spec15 connects normal
+publication/re-publication; Name Lookup and Syntax assign separate retained
+declaration/member facts and their consumers. Neutral independent review by
+`extension_publication_contract_review` found no required correction or pending
+surface decision. Its optional example-reachability clarification was adopted.
+[Review record](../../../evidence/rejection-domains/diagnostic-domain-implementation/extension-publication-contract-review.json).
+Local links and diff whitespace checks passed. This closes only documentation;
+no compiler acceptance, GREEN, exact pin uptake or product completion is claimed.

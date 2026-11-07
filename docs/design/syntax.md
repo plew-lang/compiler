@@ -39,8 +39,11 @@ that can make an invalid source literal pass `check` and fail only in LLVM.
 
 Source spans refer to the original admitted text. Interned spelling can be shared or copied without turning its new storage offset into the operation's source location. If a current API uses a source offset to recover module membership, lowering must preserve the original offset until that dependency is replaced by explicit provenance. Synthetic names or appended text are not a substitute for source ownership.
 
-Module declaration syntax retains each declaration's kind, name token and
-original declaration span, including an empty named extension. Flattening an
+Module declaration syntax retains each declaration's kind, name token,
+authored publication modifier and original declaration span, including an empty
+named extension. The extension declaration's publication is independent of its
+impls' publication: direct parsing, AST materialization, freezing and semantic
+input preserve both without inferring either from the other. Flattening an
 extension's impl bodies does not erase its own binding declaration or collapse
 distinct source occurrences by spelling. The macro adapter and freeze boundary
 preserve the same information; semantic binding admission owns identity and

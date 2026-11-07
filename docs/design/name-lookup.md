@@ -43,6 +43,25 @@ selector does not search for an applicable same-named trait or extension after
 another interpretation fails. Checking validates the already bound source and
 its complete application, then retains the resulting evidence.
 
+### Extension Declaration and Member Publication
+
+Module binding/public-surface construction consumes the extension declaration's
+own publication status. Member admission consumes the selected impl's separate
+visibility under its defining module. The accepted combinations and source
+syntax are owned by [the extension specification](../../../spec/spec/02-type-system/09-extensions.md#拡張名とメンバの公開).
+
+An extension's public members do not publish its name. A public extension does
+not publish its private impls, and a private extension containing public impls
+is valid. Do not infer declaration publication by scanning members or reject a
+public impl merely because its containing extension is private. Apply the usual
+package/public-API reachability rules at their existing boundary.
+
+Selective, namespace and alias use, including re-publication, retain the original
+extension identity and declaration publication. A published alias cannot widen
+member visibility. Bind the source before receiver applicability; member checks
+consume that bound source and the member's retained owner/publication facts,
+without recovering privileges or choosing a different source by spelling.
+
 ### Shared Overload Declaration Admission
 
 Declaration admission owns the complete overload acceptance decision, before a
