@@ -1,6 +1,7 @@
 // Part of the lowering pass (root: _.pw): type lowering, record-struct
 // synthesis, and argument / field / dict-literal lowering.
 
+
 impl Comp {
     inout fn recordAuthoredTypeUse(ref: U64, site: U64) {
         self.loweringTypeUses.append(ref)
@@ -8,6 +9,33 @@ impl Comp {
             self.authoredTypeUseSites[ref] = site
         }
     }
+    inout fn bindTypeSourcePath(names: Array[Span], arities: Array[U64], siteOffset: U64, fallback: String = "") -> Result[BoundTypeSourcePath, CompileDiagnostic] {
+        if names.count() == 0U64 || names.count() != arities.count() {
+            return <Result.Err error=self.diagnosticAt(offset: siteOffset, msg: "invalid type source path input", failureDomain: <FailureDomain.Input />) />
+        }
+        if names.count() == 1U64 && names[0U64].start == names[0U64].end {
+            return <Result.Ok value=<BoundTypeSourcePath head=0U64 source=(try self.lowerViewSource(siteOffset: siteOffset, text: fallback)) member=<Span start=0U64 end=0U64 /> /> />
+        }
+        val head = try self.typePathHead(names: names)
+        mut val index = 0U64
+        while index < head {
+            if arities[index] != 0U64 { return <Result.Err error=self.diagnosticAt(offset: names[index].start, msg: "namespace segments do not accept type arguments", failureDomain: <FailureDomain.Source />) /> }
+            index += 1U64
+        }
+        val source = try self.bindViewSourceName(siteOffset: siteOffset, name: names[head])
+        mut val member = <Span start=0U64 end=0U64 />
+        if head + 1U64 < names.count() {
+            member = names[head + 1U64]
+            if head + 2U64 != names.count() || arities[head + 1U64] != 0U64 {
+                return <Result.Err error=self.diagnosticAt(offset: member.start, msg: "invalid associated-type projection path", failureDomain: <FailureDomain.Source />) />
+            }
+            if source.traitInstance.owner == 0U64 {
+                return <Result.Err error=self.diagnosticAt(offset: names[head].start, msg: "associated-type projection source must name a trait", failureDomain: <FailureDomain.Source />) />
+            }
+        }
+        return <Result.Ok value=<BoundTypeSourcePath head=head source=source member=member /> />
+    }
+
 }
 
 pub impl Comp {
@@ -510,27 +538,28 @@ pub impl Comp {
         mut val viewExtId: U64 = 0
         mut val viewIds: Array[U64] = []
         mut val viewSources: Array[ResolvedViewSource] = []
+        mut val projection: Optional[LoweredTypeProjection] = <Optional.None />
         // Every authored selector enters the source-set normal form, including
         // the one-source case. `viewExtId` remains a compatibility mirror while
         // scalar consumers are migrated, but never carries the only source fact.
         if t.viewSources.count() > 0U64 {
             for val syntaxSource in t.viewSources {
+                if projection.isSome() { return <Result.Err error=self.diagnosticAt(offset: syntaxSource.span.start, msg: "a projection must be the final type source path", failureDomain: <FailureDomain.Source />) /> }
                 mut val names: Array[Span] = []
-                for val segment in syntaxSource.path { names.append(segment.nameSpan) }
-                val headIndex = (try self.typePathHead(names: names))
-                if headIndex + 1U64 != syntaxSource.path.count() {
-                    return <Result.Err error=self.diagnosticAt(offset: syntaxSource.span.start, msg: "invalid view source path", failureDomain: <FailureDomain.Source />) />
-                }
-                val head = syntaxSource.path[headIndex]
-                val written = self.lowerTypeName(name: head.name, span: head.nameSpan)
+                mut val arities: Array[U64] = []
+                for val segment in syntaxSource.path { names.append(segment.nameSpan) arities.append(segment.args.count()) }
+                val fallback = if syntaxSource.path.count() > 0U64 { give syntaxSource.path[0U64].name } else { give "" }
+                val bound = try self.bindTypeSourcePath(names: names, arities: arities, siteOffset: t.span.start, fallback: fallback)
+                val head = syntaxSource.path[bound.head]
                 mut val arguments: Array[U64] = []
                 mut val hasLabels = false
                 for val argument in head.args { arguments.append((try self.lowerType(t: argument)).ref) }
                 for val label in head.argLabels { if label.bytes().count() > 0U64 { hasLabels = true } }
-                val selected = if head.nameSpan.end > head.nameSpan.start {
-                    give (try self.lowerViewSourceSpan(siteOffset: t.span.start, start: written.nameStart, len: written.nameLen))
-                } else { give (try self.lowerViewSource(siteOffset: t.span.start, text: head.name)) }
-                val source = (try self.completeTypeViewSource(source: selected, arguments: arguments, hasLabels: hasLabels))
+                val source = try self.completeTypeViewSource(source: bound.source, arguments: arguments, hasLabels: hasLabels)
+                if bound.member.end > bound.member.start {
+                    projection = <Optional.Some v=<LoweredTypeProjection source=source member=<Bind nameStart=bound.member.start nameLen=bound.member.end - bound.member.start fieldStart=0U64 fieldLen=0U64 /> /> />
+                    continue
+                }
                 mut val present = false
                 for val existing in viewSources { if self.semanticViewSourceEq(a: existing, b: source) { present = true } }
                 if !present { viewSources.append(source) }
@@ -563,47 +592,40 @@ pub impl Comp {
         // `viewExtId` is a legacy compatibility mirror.
         // A multi-selector type must never silently mean just its last spelling.
         if viewIds.count() == 1U64 { viewExtId = viewIds[0U64] }
-        mut val assocTraitStart: U64 = 0
-        mut val assocTraitLen: U64 = 0
-        mut val assocTraitId: U64 = 0
-        if t.projectionTrait.bytes().count() > 0 {
-            val atn: Bind = self.internBytes(s: t.projectionTrait)
-            // A projection source is a declaration identity, not its use
-            // alias spelling.  Preserve that owner in the lowered type so
-            // `TextConvert` and `BytesConvert` can select distinct same-name
-            // traits and their associated witnesses.
-            val owner: U64 = self.traitOwnerAtUse(start: atn.nameStart, len: atn.nameLen, arity: t.projectionTraitArgs.count())
-            if owner != 0U64 {
-                assocTraitStart = owner
-                assocTraitLen = self.traitNameLenByOwner(owner: owner)
-                assocTraitId = intern(c: inout self, start: assocTraitStart, len: assocTraitLen)
-            } else {
-                assocTraitStart = atn.nameStart
-                assocTraitLen = atn.nameLen
-                assocTraitId = intern(c: inout self, start: atn.nameStart, len: atn.nameLen)
-            }
+        // Hand-built legacy projections may coexist with preceding rich views.
+        // Only an actual rich projection supersedes the legacy projection fields.
+        if !projection.isSome() && t.projectionTrait.bytes().count() > 0U64 {
+            val selected = if t.projectionTraitSpan.end > t.projectionTraitSpan.start {
+                give (try self.bindViewSourceName(siteOffset: t.span.start, name: t.projectionTraitSpan))
+            } else { give (try self.lowerViewSource(siteOffset: t.span.start, text: t.projectionTrait)) }
+            mut val arguments: Array[U64] = []
+            mut val labelled = false
+            for val argument in t.projectionTraitArgs { arguments.append((try self.lowerType(t: argument)).ref) }
+            for val label in t.projectionTraitArgLabels { if label != "" { labelled = true } }
+            val source = try self.completeTypeViewSource(source: selected, arguments: arguments, hasLabels: labelled)
+            if source.traitInstance.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection source must name a trait", failureDomain: <FailureDomain.Source />) /> }
+            projection = <Optional.Some v=<LoweredTypeProjection source=source member=self.lowerTypeName(name: t.projectionAssoc, span: t.projectionAssocSpan) /> />
         }
+        mut val assocTraitStart: U64 = 0U64
+        mut val assocTraitLen: U64 = 0U64
+        mut val assocTraitId: U64 = 0U64
         mut val assocTraitArgs: Array[U64] = []
         mut val assocTraitArgLabels: Array[U64] = []
-        mut val ati: U64 = 0U64
-        while ati < t.projectionTraitArgs.count() {
-            assocTraitArgs.append((try self.lowerType(t: t.projectionTraitArgs[ati])).ref)
-            if ati < t.projectionTraitArgLabels.count() && t.projectionTraitArgLabels[ati].bytes().count() > 0U64 {
-                val label: Bind = self.internBytes(s: t.projectionTraitArgLabels[ati])
-                assocTraitArgLabels.append(intern(c: inout self, start: label.nameStart, len: label.nameLen))
-            } else {
-                assocTraitArgLabels.append(0U64)
+        mut val assocNameStart: U64 = 0U64
+        mut val assocNameLen: U64 = 0U64
+        mut val assocNameId: U64 = 0U64
+        match projection {
+            Optional.Some(v: val selected) => {
+                assocTraitStart = selected.source.traitInstance.owner
+                assocTraitLen = self.traitNameLenByOwner(owner: assocTraitStart)
+                assocTraitId = selected.source.surfaceId
+                assocTraitArgs = selected.source.traitInstance.positionalArgs
+                for val argument in assocTraitArgs { assocTraitArgLabels.append(0U64) }
+                assocNameStart = selected.member.nameStart
+                assocNameLen = selected.member.nameLen
+                assocNameId = intern(c: inout self, start: assocNameStart, len: assocNameLen)
             }
-            ati += 1U64
-        }
-        mut val assocNameStart: U64 = 0
-        mut val assocNameLen: U64 = 0
-        mut val assocNameId: U64 = 0
-        if t.projectionAssoc.bytes().count() > 0 {
-            val aan: Bind = self.internBytes(s: t.projectionAssoc)
-            assocNameStart = aan.nameStart
-            assocNameLen = aan.nameLen
-            assocNameId = intern(c: inout self, start: aan.nameStart, len: aan.nameLen)
+            Optional.None => {}
         }
         // intern any named binding labels (`Item`/`Output` in `any P[Item=I32]`) parallel
         // to args; 0 for a positional argument.
@@ -723,20 +745,22 @@ pub impl Comp {
         }
 
         mut val viewSources: Array[ResolvedViewSource] = []
+        mut val projection: Optional[LoweredTypeProjection] = <Optional.None />
         mut val vi: U64 = 0U64
         while vi < t.viewSources.count {
             val syntaxSource = syntaxTypeViewSource(file: self.syntax, ty: t, index: vi)
+            if projection.isSome() { return <Result.Err error=self.diagnosticAt(offset: syntaxSource.span.start, msg: "a projection must be the final type source path", failureDomain: <FailureDomain.Source />) /> }
             mut val names: Array[Span] = []
-            mut val segmentIndex = 0U64
-            while segmentIndex < syntaxSource.path.count {
-                names.append(syntaxViewSourceSegment(file: self.syntax, source: syntaxSource, index: segmentIndex).name)
-                segmentIndex += 1U64
+            mut val arities: Array[U64] = []
+            mut val pathIndex = 0U64
+            while pathIndex < syntaxSource.path.count {
+                val segment = syntaxViewSourceSegment(file: self.syntax, source: syntaxSource, index: pathIndex)
+                names.append(segment.name)
+                arities.append(segment.args.count)
+                pathIndex += 1U64
             }
-            val headIndex = (try self.typePathHead(names: names))
-            if headIndex + 1U64 != syntaxSource.path.count {
-                return <Result.Err error=self.diagnosticAt(offset: syntaxSource.span.start, msg: "invalid view source path", failureDomain: <FailureDomain.Source />) />
-            }
-            val head = syntaxViewSourceSegment(file: self.syntax, source: syntaxSource, index: headIndex)
+            val bound = try self.bindTypeSourcePath(names: names, arities: arities, siteOffset: t.span.start)
+            val head = syntaxViewSourceSegment(file: self.syntax, source: syntaxSource, index: bound.head)
             mut val arguments: Array[U64] = []
             mut val hasLabels = false
             mut val argumentIndex = 0U64
@@ -746,8 +770,12 @@ pub impl Comp {
                 if label.end > label.start { hasLabels = true }
                 argumentIndex += 1U64
             }
-            val selected = (try self.lowerViewSourceSpan(siteOffset: t.span.start, start: head.name.start, len: head.name.end - head.name.start))
-            val source = (try self.completeTypeViewSource(source: selected, arguments: arguments, hasLabels: hasLabels))
+            val source = try self.completeTypeViewSource(source: bound.source, arguments: arguments, hasLabels: hasLabels)
+            if bound.member.end > bound.member.start {
+                projection = <Optional.Some v=<LoweredTypeProjection source=source member=<Bind nameStart=bound.member.start nameLen=bound.member.end - bound.member.start fieldStart=0U64 fieldLen=0U64 /> /> />
+                vi += 1U64
+                continue
+            }
             mut val present = false
             for val existing in viewSources { if self.semanticViewSourceEq(a: existing, b: source) { present = true } }
             if !present { viewSources.append(source) }
@@ -781,7 +809,7 @@ pub impl Comp {
         if viewIds.count() == 1U64 { viewExtId = viewIds[0U64] }
 
         mut val projectionTrait: Span = t.projectionTrait
-        if !namespaceType && t.projectionAssoc.end > t.projectionAssoc.start {
+        if !projection.isSome() && !namespaceType && t.projectionAssoc.end > t.projectionAssoc.start {
             if projectionTrait.end == projectionTrait.start {
                 projectionTrait = (try self.uniqueSyntaxProjectionTrait(t: t))
             } else {
@@ -803,7 +831,7 @@ pub impl Comp {
         mut val assocTraitStart: U64 = 0U64
         mut val assocTraitLen: U64 = 0U64
         mut val assocTraitId: U64 = 0U64
-        if projectionTrait.end > projectionTrait.start {
+        if !projection.isSome() && projectionTrait.end > projectionTrait.start {
             val owner: U64 = self.traitOwnerAtUse(start: projectionTrait.start, len: projectionTrait.end - projectionTrait.start, arity: syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t))
             if owner != 0U64 {
                 assocTraitStart = owner
@@ -817,7 +845,7 @@ pub impl Comp {
         mut val assocTraitArgs: Array[U64] = []
         mut val assocTraitArgLabels: Array[U64] = []
         mut val ati: U64 = 0U64
-        while ati < syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t) {
+        while !projection.isSome() && ati < syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t) {
             assocTraitArgs.append((try self.lowerSyntaxType(id: syntaxTypeProjectionTraitArg(file: self.syntax, ty: t, index: ati))).ref)
             val label: Span = syntaxTypeProjectionTraitArgLabel(file: self.syntax, ty: t, index: ati)
             if label.end > label.start {
@@ -828,10 +856,23 @@ pub impl Comp {
         mut val assocNameStart: U64 = 0U64
         mut val assocNameLen: U64 = 0U64
         mut val assocNameId: U64 = 0U64
-        if !namespaceType && t.projectionAssoc.end > t.projectionAssoc.start {
+        if !projection.isSome() && !namespaceType && t.projectionAssoc.end > t.projectionAssoc.start {
             assocNameStart = t.projectionAssoc.start
             assocNameLen = t.projectionAssoc.end - t.projectionAssoc.start
             assocNameId = intern(c: inout self, start: assocNameStart, len: assocNameLen)
+        }
+        match projection {
+            Optional.Some(v: val selected) => {
+                assocTraitStart = selected.source.traitInstance.owner
+                assocTraitLen = self.traitNameLenByOwner(owner: assocTraitStart)
+                assocTraitId = selected.source.surfaceId
+                assocTraitArgs = selected.source.traitInstance.positionalArgs
+                for val argument in assocTraitArgs { assocTraitArgLabels.append(0U64) }
+                assocNameStart = selected.member.nameStart
+                assocNameLen = selected.member.nameLen
+                assocNameId = intern(c: inout self, start: assocNameStart, len: assocNameLen)
+            }
+            Optional.None => {}
         }
         mut val argLabels: Array[U64] = []
         mut val li: U64 = 0U64

@@ -1,0 +1,76 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend, TypeAst, Span }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic, FailureDomain }
+use @Plew/Syntax only { parseItem, TopItemAst, NameSegmentAst, ViewSourceAst, rangeEquals }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+fn main() {
+    val scenario = argAt(1I64)
+    val legacy = scenario == "legacy" || scenario == "foreign" || scenario == "empty"
+    mut val compiler = <Comp />
+    val source = if scenario == "foreign" { give <FrontendInput.File path="tests/compiler/frontend/fixtures/ImplTraitInstances/ProjectionLegacy/_.pw" /> } else if legacy { give <FrontendInput.Text text="trait P[K] {{ type Item }} struct S {{}} extension E {{ pub impl S {{ fn marker() {{}} }} }} fn main() {{}}" path="LegacyProjection.pw" /> } else { give <FrontendInput.File path="tests/compiler/frontend/fixtures/ImplTraitInstances/QualifiedTypeDirect.pw" /> }
+    match analyzeFrontend(c: inout compiler, input: source, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) print("0") return }
+        Result.Ok(value: _) => {}
+    }
+    mut val result = 0U64
+    mut val expectedOwner = 0U64
+    if legacy {
+        val name = compiler.internBytes(s: "P")
+        val bindings = compiler.moduleScopeBindings.unwrap()
+        val module = if scenario == "foreign" {
+            val first = bindings.uniqueBinding(moduleId: 0U64, nameId: compiler.internBytes(s: "First").nameId).unwrap().ownerModule
+            val second = bindings.uniqueBinding(moduleId: 0U64, nameId: compiler.internBytes(s: "Second").nameId).unwrap().ownerModule
+            give if compiler.moduleOf(offset: name.nameStart) == first { give second } else { give first }
+        } else { give 0U64 }
+        expectedOwner = bindings.uniqueBinding(moduleId: module, nameId: name.nameId).unwrap().declarationOffset
+        val site = <Span start=expectedOwner end=expectedOwner + 1U64 />
+        val integer = <TypeAst name="I64" args=[] span=site />
+        val views = if scenario == "legacy" { give [<ViewSourceAst path=[<NameSegmentAst name="E" args=[] />] span=site />] } else if scenario == "empty" { give [<ViewSourceAst path=[] span=site />] } else { give [] }
+        val type = <TypeAst name="S" args=[] span=site viewSources=views projectionTrait="P" projectionTraitArgs=[integer] projectionAssoc="Item" />
+        match compiler.lowerType(t: type) {
+            Result.Err(error: val diagnostic) => {
+                if scenario == "empty" && diagnostic.message == "invalid type source path input" {
+                    match diagnostic.failureDomain { FailureDomain.Input => { print("1") return } _ => {} }
+                }
+                emitDiagnostic(diagnostic: diagnostic) print("0") return
+            }
+            Result.Ok(value: val type) => { if scenario == "empty" { print("0") return } result = type.ref }
+        }
+    } else {
+        val name = if scenario == "nominal" { give "nominal" } else if scenario == "any" { give "erased" } else if scenario == "shorthand" || scenario == "shorthandInstance" { give "shorthand" } else { give "projection" }
+        val signature = compiler.internBytes(s: name)
+        val function = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: signature.nameId))
+        if scenario == "nominal" || scenario == "any" || scenario == "shorthand" || scenario == "shorthandInstance" {
+            result = compiler.funcParamAt(params: function.params, index: 0U64).ty
+        } else {
+            match parseItem(source: "fn projection(value: S#Types.P[I64].Item) {{}}", start: function.defOffset - 3U64, end: function.defOffset + 40U64) {
+                TopItemAst.Decl(d: val declaration) => { result = compiler.lowerType(t: declaration.params[0U64].ty).unwrap().ref }
+                _ => { print("0") return }
+            }
+        }
+        val trait = compiler.internBytes(s: "P")
+        expectedOwner = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: trait.nameId)).nameStart
+    }
+    val type = compiler.arena.typeAt(index: result)
+    if scenario == "nominal" { print(type.assocNameId == 0U64 && !type.isAny && type.viewSources.count() == 0U64 && rangeEquals(bytes: compiler.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "Foreign")) return }
+    if scenario == "any" {
+        if !type.isAny || type.args.count() != 2U64 || type.argLabels[0U64] != 0U64 || type.argLabels[1U64] != compiler.internBytes(s: "Item").nameId || type.viewSources.count() != 0U64 || type.assocNameId != 0U64 || !rangeEquals(bytes: compiler.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "P") { print("0") return }
+        val positional = compiler.arena.typeAt(index: type.args[0U64])
+        val associated = compiler.arena.typeAt(index: type.args[1U64])
+        print(rangeEquals(bytes: compiler.arena.bytes, start: positional.nameStart, len: positional.nameLen, kw: "I64") && rangeEquals(bytes: compiler.arena.bytes, start: associated.nameStart, len: associated.nameLen, kw: "Bool"))
+        return
+    }
+    // Existing short-form admission is a preservation control. Its complete
+    // bound instance is a separate com-amjl assertion, not certified here.
+    if scenario == "shorthand" { print(type.assocTraitId == compiler.internBytes(s: "P").nameId && type.assocNameId == compiler.internBytes(s: "Item").nameId && type.projectionReceiver != 0U64 && type.paramId != 0U64) return }
+    if type.assocTraitStart != expectedOwner || type.assocTraitArgs.count() != 1U64 || type.assocNameId != compiler.internBytes(s: "Item").nameId || type.projectionReceiver == 0U64 { print("0") return }
+    val argument = compiler.arena.typeAt(index: type.assocTraitArgs[0U64])
+    if !rangeEquals(bytes: compiler.arena.bytes, start: argument.nameStart, len: argument.nameLen, kw: "I64") { print("0") return }
+    val receiver = compiler.arena.typeAt(index: type.projectionReceiver)
+    if scenario == "foreign" && receiver.siteOffset != expectedOwner { print("0") return }
+    if scenario == "legacy" {
+        val identity = compiler.moduleScopeBindings.unwrap().extensionId(moduleId: 0U64, nameId: compiler.internBytes(s: "E").nameId).unwrap()
+        print(receiver.viewSources.count() == 1U64 && receiver.viewSources[0U64].surfaceId == identity && receiver.viewSources[0U64].traitInstance.owner == 0U64)
+    } else { print(receiver.viewSources.count() == 0U64) }
+}

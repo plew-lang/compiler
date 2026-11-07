@@ -1,1 +1,1 @@
-pub use ./QualifiedTypeOwner only { P, Zero }
+pub use ./QualifiedTypeOwner only { P, Zero, Foreign }

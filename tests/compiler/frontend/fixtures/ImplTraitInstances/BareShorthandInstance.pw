@@ -1,0 +1,3 @@
+use ./QualifiedTypeOwner only { P }
+fn target[T](value: T.Item) where T: P[I64] {}
+fn main() {}

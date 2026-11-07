@@ -12,12 +12,13 @@ fn main() {
             print(ty.argLabelSpans[0U64].end)
             print(ty.viewNameSpans[0U64].start)
             print(ty.viewNameSpans[0U64].end)
-            print(ty.projectionTraitSpan.start)
-            print(ty.projectionTraitSpan.end)
-            print(ty.projectionTraitArgLabelSpans[0U64].start)
-            print(ty.projectionTraitArgLabelSpans[0U64].end)
-            print(ty.projectionAssocSpan.start)
-            print(ty.projectionAssocSpan.end)
+            val projection = ty.viewSources[1U64]
+            print(projection.path[0U64].nameSpan.start)
+            print(projection.path[0U64].nameSpan.end)
+            print(projection.path[0U64].argLabelSpans[0U64].start)
+            print(projection.path[0U64].argLabelSpans[0U64].end)
+            print(projection.path[1U64].nameSpan.start)
+            print(projection.path[1U64].nameSpan.end)
         }
         _ => {}
     }

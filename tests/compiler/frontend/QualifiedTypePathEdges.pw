@@ -1,0 +1,39 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+fn main() {
+    val scenario = argAt(1I64)
+    val valid = scenario == "" || scenario == "precedingExtension" || scenario == "precedingTrait"
+    val selected = if scenario == "precedingExtension" { give "S#E#P[I64].Item" } else if scenario == "precedingTrait" { give "S#Q#P[I64].Item" } else if scenario == "missing" { give "S#P.Item" } else if scenario == "extra" { give "S#P[I64,Bool].Item" } else if scenario == "named" { give "S#P[K=I64].Item" } else if scenario == "suffixArguments" { give "S#P[I64].Item[Bool]" } else if scenario == "multipleSuffix" { give "S#P[I64].Item.More" } else if scenario == "extensionProjection" { give "S#E.Item" } else if scenario == "afterProjection" { give "S#P[I64].Item#E" } else { give "S#P[I64].Item" }
+    val expected = if scenario == "missing" || scenario == "extra" { give "a trait view requires all positional type arguments" } else if scenario == "named" { give "trait view source accepts positional type arguments only" } else if scenario == "extensionProjection" { give "associated-type projection source must name a trait" } else if scenario == "afterProjection" { give "a projection must be the final type source path" } else if scenario == "namespaceArguments" { give "namespace segments do not accept type arguments" } else { give "invalid associated-type projection path" }
+    val text = "trait P[K] {{ type Item }} trait Q {{}} struct S {{}} impl S as P[I64] {{ type Item = I64 }} impl S as Q {{}} extension E {{ pub impl S {{ fn marker() {{}} }} }} fn target(value: " + selected + ") {{}} fn main() {{}}"
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: (if scenario == "namespaceArguments" { give <FrontendInput.File path="tests/compiler/frontend/fixtures/ImplTraitInstances/QualifiedTypePrefixArguments.pw" /> } else { give <FrontendInput.Text text=text path="TypePathEdges.pw" /> }), sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Err(error: val diagnostic) => {
+            if !valid && diagnostic.isSourceRejection() && diagnostic.message == expected { print("1") return }
+            emitDiagnostic(diagnostic: diagnostic) print("0") return
+        }
+        Result.Ok(value: _) => { if !valid { print("0") return } }
+    }
+    val function = compiler.internBytes(s: "target")
+    val declaration = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: function.nameId))
+    val projection = compiler.arena.typeAt(index: compiler.funcParamAt(params: declaration.params, index: 0U64).ty)
+    val trait = compiler.internBytes(s: "P")
+    val owner = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: trait.nameId))
+    if projection.assocTraitStart != owner.nameStart || projection.assocNameId != compiler.internBytes(s: "Item").nameId || projection.projectionReceiver == 0U64 { print("0") return }
+    val receiver = compiler.arena.typeAt(index: projection.projectionReceiver)
+    if scenario == "" { print(receiver.viewSources.count() == 0U64 && projection.viewSources.count() == 0U64) return }
+    if receiver.viewSources.count() != 1U64 || projection.viewSources.count() != 1U64 { print("0") return }
+    val source = receiver.viewSources[0U64]
+    if scenario == "precedingExtension" {
+        val extension = compiler.internBytes(s: "E")
+        val identity = compiler.moduleScopeBindings.unwrap().extensionId(moduleId: 0U64, nameId: extension.nameId).unwrap()
+        print(source.traitInstance.owner == 0U64 && source.surfaceId == identity)
+    } else {
+        val name = compiler.internBytes(s: "Q")
+        val other = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
+        print(source.traitInstance.owner == other.nameStart && source.traitInstance.owner != projection.assocTraitStart)
+    }
+}

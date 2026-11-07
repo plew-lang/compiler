@@ -67,6 +67,15 @@ implement the existing view and indexing rules, rather than a new precedence
 or type-checking fallback. Once bound, a failure in the selected interpretation
 cannot select the other interpretation instead.
 
+Type-position source paths retain every dotted segment, its arguments and its
+original coordinates until the same binding boundary separates namespaces,
+the source head and an optional final associated member. Lower stores a
+projection's canonical trait instance separately from the receiver's preceding
+view set; the projected trait is not also an added receiver view. Explicit
+legacy projection fields remain an adapter fallback when no rich projection
+is present, including when preceding rich views are present. Their lexical
+authority is the original type site, not an interned spelling's storage offset.
+
 Similarly, a qualified source path must survive until lookup distinguishes
 namespace prefixes, the trait source and an associated projection. Lower consumes
 shared syntax; it does not parse the source text again. The exact arena/adapter

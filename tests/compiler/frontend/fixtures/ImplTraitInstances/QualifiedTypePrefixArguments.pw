@@ -1,0 +1,4 @@
+use ./QualifiedTypeOwner as Types
+struct S {}
+fn target(value: S#Types[I64].P[I64]) {}
+fn main() {}

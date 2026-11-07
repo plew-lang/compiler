@@ -166,31 +166,16 @@ pub impl Comp {
         if t.projectionAssoc.bytes().count() > 0 {
             if projectionTrait.bytes().count() == 0 {
                 projectionTrait = (try self.uniqueProjectionTrait(t: t, whereTypes: whereTypes, whereTraits: whereTraits))
-            } else {
-                val traitN: Bind = self.internBytes(s: projectionTrait)
-                // The spelling may be a use alias.  Resolve it at this
-                // authored type site before comparing arity; a global
-                // name-id scan would pick an unrelated same-spelled trait.
-                val owner: U64 = self.traitOwnerAtUse(start: traitN.nameStart, len: traitN.nameLen, arity: t.projectionTraitArgs.count())
-                if owner == 0U64 {
-                    return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection must specify the trait's positional type arguments") />
-                }
-                mut val pi: U64 = 0U64
-                while pi < t.projectionTraitArgLabels.count() {
-                    if t.projectionTraitArgLabels[pi].bytes().count() > 0U64 {
-                        return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection source accepts positional trait type arguments only") />
-                    }
-                    pi += 1U64
-                }
             }
         }
+
         mut val projectionTraitArgs: Array[TypeAst] = []
         i = 0U64
         while i < t.projectionTraitArgs.count() {
             projectionTraitArgs.append((try self.normalizeProjectionType(t: t.projectionTraitArgs[i], whereTypes: whereTypes, whereTraits: whereTraits)))
             i += 1U64
         }
-        return <Result.Ok value=<TypeAst name=t.name nameSpan=t.nameSpan args=args span=t.span extView=t.extView viewNames=t.viewNames viewSources=t.viewSources projectionTrait=projectionTrait projectionTraitArgs=projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=t.projectionAssoc isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord /> />
+        return <Result.Ok value=<TypeAst name=t.name nameSpan=t.nameSpan args=args span=t.span extView=t.extView extViewSpan=t.extViewSpan viewNames=t.viewNames viewNameSpans=t.viewNameSpans viewSources=t.viewSources projectionTrait=projectionTrait projectionTraitSpan=t.projectionTraitSpan projectionTraitArgs=projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionTraitArgLabelSpans=t.projectionTraitArgLabelSpans projectionAssoc=t.projectionAssoc projectionAssocSpan=t.projectionAssocSpan isAny=t.isAny argLabels=t.argLabels argLabelSpans=t.argLabelSpans isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord /> />
     }
 
     inout fn normalizeProjectionTypeActive(t: TypeAst) -> Result[TypeAst, CompileDiagnostic] {

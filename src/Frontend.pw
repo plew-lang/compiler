@@ -328,6 +328,21 @@ struct BoundValueViewHead {
 }
 impl BoundValueViewHead { factory }
 
+// A source head is bound once; the optional final member remains separate
+// from the receiver's accumulated view set.
+struct BoundTypeSourcePath {
+    val head: U64
+    val source: ResolvedViewSource
+    val member: Span
+}
+impl BoundTypeSourcePath { factory }
+struct LoweredTypeProjection {
+    val source: ResolvedViewSource
+    val member: Bind
+}
+impl LoweredTypeProjection { factory }
+
+
 pub struct Comp {
     pub mut val moduleScopeBindings: Optional[AdmittedModuleScopeBindings] = <Optional.None />
     mut val semanticClosures: Array[SemanticClosure] = []

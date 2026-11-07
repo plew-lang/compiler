@@ -256,3 +256,24 @@ Actual CLI executions additionally require11/22 for the three published routes
 and same namespace,11/33 for local/imported union, and exit1 with the intended
 Source diagnostic for rejected inputs. Source rejection followed by the existing
 ORC diagnostic wrapper is not certification of that failure-transport boundary.
+
+### Qualified type paths (manual)
+
+`QualifiedTypeViewConsumers.pw` runs without arguments and with
+`QualifiedTypeReexport`. It inspects qualified complete/zero-arity views and
+associated projection storage, canonical owner and original source coordinates.
+`QualifiedTypePathEdges.pw` runs without arguments and with `precedingExtension`,
+`precedingTrait`, `missing`, `extra`, `named`, `suffixArguments`, `multipleSuffix`,
+`extensionProjection`, `afterProjection`, `namespaceArguments`. These inspect
+receiver/projection separation and require intended Source reasons on invalid
+paths. Each native invocation must match its companion golden with exit0 and
+empty stderr.
+
+`MaterializedTypePathControls.pw` runs without arguments and with `legacy`,
+`foreign`, `empty`, `shorthand`, `nominal`, `any`. It covers materialized rich
+Lower, legacy projection with preceding rich extension, spanless lexical type
+site authority, malformed-input refusal and non-interference. `shorthand` proves
+only existing admission/name/ParamId receiver retention. The extra mode
+`shorthandInstance` deliberately remains a manual RED (stdout0 versus golden1)
+for com-amjl's complete-bound-instance retention; it must not be counted GREEN
+or removed from that task's required work.

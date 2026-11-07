@@ -205,3 +205,22 @@ full term ref. This increment does not establish generic newtype inheritance or
 repair that erasure. Full exact-instance evidence, retained source facts,
 projection/final-consumer work and task-wide gates remain open; do not close this
 task or infer that parser preservation alone supplies these guarantees.
+
+## Short-form Instance Controls from Source-path Preservation
+
+The existing complete-bound-instance requirement has concrete manual controls:
+MaterializedTypePathControls mode shorthand preserves accepted short-form
+admission/name/ParamId receiver only; shorthandInstance requires canonical trait
+owner plus the bound I64 argument and currently prints0 against golden1. A
+focused raw-shape diagnostic found the written bound span rather than canonical
+declaration owner and an empty positional-argument list; this is not proof of a valid
+complete instance. Preserve this RED when closing this task rather than counting
+short-form acceptance as full evidence retention.
+
+The unchanged old candidate487138f4 also rejects
+fixtures/ImplTraitInstances/QualifiedShorthandInstance.pw (`where T: Types.P[I64]`)
+with no unique short source, while accepting BareShorthandInstance.pw
+(`where T: P[I64]`). Both belong to this task's lexical complete-instance and
+short-form uniqueness contract. The com-9hde qualified explicit-path repair
+does not certify or replace them. Original results live under the saved
+qualified-type repair evidence; no new specification or task scope is adopted.

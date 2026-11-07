@@ -645,3 +645,21 @@ namespace paths, any wrappers, nested children and adjacent arena ranges. Cover
 direct/materialize/freeze, bare and qualified projections, source-set separation,
 arity/labels and invalid-path reasons. Neutral review derives this repair from
 the existing spec/design; no new language decision or task expansion is needed.
+
+## Qualified Type Path Finite Repair
+
+Shared Syntax now keeps the complete source path. The two Lower adapters decode
+children into one binding boundary and retain that canonical owner through view
+arity/projection formation. Projection and preceding receiver sources stay
+separate. Legacy explicit projection no longer searches by interned storage
+position; normalization preserves original name/label/member spans. Empty rich
+AST paths are Input failures rather than a pre-validation index access.
+
+The new producer has executed3 RED→3 GREEN (direct/materialized/frozen);
+qualified consumer2 RED→2 GREEN. Final current-input runs preserve26 producer
+cases (including old coordinate/child goldens unchanged) and29 consumer cases.
+Neutral review independently replayed all56 saved cases and matched current
+input hashes. The remaining consumer case is the explicitly retained
+shorthandInstance RED owned by com-amjl, not part of these29 successes.
+Fresh build/fixed point/performance, exact Syntax pin and task closure remain
+unproven; this is finite repair acceptance only.
