@@ -1,0 +1,52 @@
+// Manual internal regression for com-zdod. Exercise the production semantic
+// selector, publication, equality and traversal; source syntax is a later task.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { TypeRef, ResolvedViewSource, TraitInstanceKey }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    val scenario = argAt(1I64)
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait P[K] {{ type Item }} struct S {{}} fn main() {{}}" path="SemanticViews.pw" />, sources: <SourceAccess />).unwrap()
+    val traitName = compiler.internBytes(s: "P")
+    val owner = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: traitName.nameId))
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
+    val booleanName = compiler.internBytes(s: "Bool")
+    val boolean = compiler.pushType(t: <TypeRef nameStart=booleanName.nameStart nameLen=booleanName.nameLen args=[] />)
+    val integerSource = <ResolvedViewSource surfaceId=traitName.nameId traitInstance=<TraitInstanceKey owner=owner.nameStart positionalArgs=[integer] /> />
+    val otherSource = <ResolvedViewSource surfaceId=traitName.nameId traitInstance=<TraitInstanceKey owner=owner.nameStart positionalArgs=[boolean] /> />
+    val useSource = <ResolvedViewSource writtenStart=integerName.nameStart writtenLen=integerName.nameLen surfaceId=traitName.nameId traitInstance=<TraitInstanceKey owner=owner.nameStart positionalArgs=[integer] /> />
+    if scenario == "differentArguments" {
+        print(!compiler.semanticViewSourceEq(a: integerSource, b: otherSource))
+        return
+    }
+    if scenario == "useProvenance" {
+        print(compiler.semanticViewSourceEq(a: integerSource, b: useSource))
+        return
+    }
+    val structName = compiler.internBytes(s: "S")
+    val declaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: structName.nameId))
+    val parameterName = compiler.internBytes(s: "T")
+    val parameter = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=1U64 args=[] />)
+    val member = compiler.internBytes(s: "Item")
+    val projection = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] projectionReceiver=integer assocTraitStart=owner.nameStart assocTraitLen=owner.nameLen assocTraitId=owner.nameId assocTraitArgs=[integer] assocNameId=member.nameId hasAssocTraitDecl=true assocTraitDeclOffset=owner.nameStart />)
+    val argument = if scenario == "closedness" { give parameter } else if scenario == "projectionPresence" { give projection } else { give integer }
+    val source = <ResolvedViewSource surfaceId=traitName.nameId traitInstance=<TraitInstanceKey owner=owner.nameStart positionalArgs=[argument] /> />
+    val viewed = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] hasDecl=true declOffset=declaration.defOffset viewSources=[source] />)
+    if scenario == "children" {
+        print(compiler.typeTermRefChildCount(ref: viewed) == 1U64 && compiler.typeTermRefChildRef(ref: viewed, index: 0U64) == integer)
+    } else if scenario == "closedness" {
+        print(!compiler.arena.typeIsClosed(ref: viewed))
+    } else if scenario == "projectionPresence" {
+        print(compiler.arena.typeContainsAssociatedProjection(ref: viewed))
+    } else if scenario == "topLevelView" {
+        print(compiler.arena.typeTermAt(index: viewed).hasTopLevelView())
+    } else if scenario == "closedControl" {
+        print(compiler.arena.typeIsClosed(ref: viewed) && !compiler.arena.typeContainsAssociatedProjection(ref: viewed))
+    } else {
+        panic("unknown semantic view scenario")
+    }
+}

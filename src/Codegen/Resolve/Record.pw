@@ -1815,7 +1815,7 @@ pub impl Comp {
                 }
                 mut val receiverTerm: U64 = (try self.methodReceiverTerm(exprId: recv))
                 if source.surfaceId != 0U64 && receiverTerm != 0U64 {
-                    val additions: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=source.surfaceId traitOwner=source.traitOwner />]
+                    val additions: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=source.surfaceId traitInstance=source.traitInstance />]
                     receiverTerm = self.typeRefWithAddedViewSources(ref: receiverTerm, additions: additions)
                 }
                 val receiverSource: CallTemplateReceiver = (try self.viewedReceiverTemplateForExpr(exprId: recv, viewedTerm: receiverTerm))
@@ -1826,11 +1826,11 @@ pub impl Comp {
                 // leaves some extension-path selections unfilled because the
                 // final concrete receiver is not known during the early pass.
                 if methodCallee >= self.arena.functionCount() {
-                    methodCallee = (try self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: source.surfaceId, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId)))
+                    methodCallee = (try self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId)))
                 }
                 if methodCallee >= self.arena.functionCount() && source.surfaceId != 0U64 && source.surfaceId <= self.interner.entries.count() {
                     val surface: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
-                    methodCallee = (try self.resolveExtMethodFinal(recv: recv, srcStart: surface.start, srcLen: surface.len, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args))
+                    methodCallee = (try self.resolveExtMethodFinal(recv: recv, srcStart: surface.start, srcLen: surface.len, sourceOwner: source.traitInstance.owner, nameStart: nameStart, nameLen: nameLen, args: args))
                 }
                 try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, useOffset: self.exprOffset(id: exprId))
                 try self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: receiverSource, receiverTerm: receiverTerm, args: args)

@@ -481,7 +481,7 @@ pub impl Comp {
         val owner: U64 = self.traitOwnerForSelector(siteOffset: siteOffset, text: text)
         if owner != 0U64 {
             val ownerLen: U64 = self.traitNameLenByOwner(owner: owner)
-            return <ResolvedViewSource writtenStart=siteOffset writtenLen=text.bytes().count() lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=intern(c: inout self, start: owner, len: ownerLen) traitOwner=owner />
+            return <ResolvedViewSource writtenStart=siteOffset writtenLen=text.bytes().count() lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=intern(c: inout self, start: owner, len: ownerLen) traitInstance=<TraitInstanceKey owner=owner positionalArgs=[] /> />
         }
         return <ResolvedViewSource writtenStart=siteOffset writtenLen=text.bytes().count() lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=written.nameId />
     }
@@ -490,7 +490,7 @@ pub impl Comp {
         val owner: U64 = self.traitOwnerForSelectorSpan(siteOffset: siteOffset, start: start, len: len)
         if owner != 0U64 {
             val ownerLen: U64 = self.traitNameLenByOwner(owner: owner)
-            return <ResolvedViewSource writtenStart=siteOffset writtenLen=len lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=intern(c: inout self, start: owner, len: ownerLen) traitOwner=owner />
+            return <ResolvedViewSource writtenStart=siteOffset writtenLen=len lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=intern(c: inout self, start: owner, len: ownerLen) traitInstance=<TraitInstanceKey owner=owner positionalArgs=[] /> />
         }
         return <ResolvedViewSource writtenStart=siteOffset writtenLen=len lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=intern(c: inout self, start: start, len: len) />
     }

@@ -74,16 +74,16 @@ pub struct PType {
 
 // A source selected by an authored `#Name`.  This is a semantic child of a
 // value/type view, not a lookup side table: the written span exists only for
-// diagnostics, while traitOwner is the declaration identity chosen in the
-// lexical surface module.  A zero traitOwner is the deferred extension-bundle
-// case; surfaceId is then the bundle's canonical name key.  Later phases must
+// diagnostics, while traitInstance retains the declaration owner and all
+// positional semantic arguments. A zero owner is the deferred extension-bundle
+// case; surfaceId is then the bundle's canonical name key. Later phases must
 // consume this node rather than recover an owner from its spelling again.
 pub struct ResolvedViewSource {
     pub val writtenStart: U64 = 0
     pub val writtenLen: U64 = 0
     pub val lexicalSurfaceModule: U64 = 0
     pub val surfaceId: U64 = 0
-    pub val traitOwner: U64 = 0
+    pub val traitInstance: TraitInstanceKey = <TraitInstanceKey owner=0U64 positionalArgs=[] />
 }
 pub impl ResolvedViewSource { factory }
 
@@ -208,33 +208,41 @@ fn typeNameBytesAreSelf(bytes: Array[U8], start: U64, len: U64) -> Bool {
     return bytes[start] == 'S' && bytes[start + 1U64] == 'e' && bytes[start + 2U64] == 'l' && bytes[start + 3U64] == 'f'
 }
 
-fn typeTermContainsAssociatedProjection(terms: Array[TypeTerm], recordFields: Array[U64], arguments: Array[U64], associatedArguments: Array[U64], ref: U64) -> Bool {
+fn typeTermContainsAssociatedProjection(terms: Array[TypeTerm], recordFields: Array[U64], arguments: Array[U64], associatedArguments: Array[U64], viewSources: Array[ResolvedViewSource], ref: U64) -> Bool {
     if ref == 0U64 || ref >= terms.count() { return false }
     val term = terms[ref]
     if term.projectionPresence != 0U64 { return term.projectionPresence == 2U64 }
     if term.assocNameId != 0U64 { return true }
+    mut val viewIndex = 0U64
+    while viewIndex < term.viewSources.len {
+        val source = viewSources[term.viewSources.start + viewIndex]
+        for child in source.traitInstance.positionalArgs {
+            if typeTermContainsAssociatedProjection(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, viewSources: viewSources, ref: child) { return true }
+        }
+        viewIndex += 1U64
+    }
     if term.isRecord {
         mut val index = 0U64
         while index < term.recordFieldTerms.len {
-            if typeTermContainsAssociatedProjection(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, ref: recordFields[term.recordFieldTerms.start + index]) { return true }
+            if typeTermContainsAssociatedProjection(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, viewSources: viewSources, ref: recordFields[term.recordFieldTerms.start + index]) { return true }
             index += 1U64
         }
         return false
     }
     mut val index = 0U64
     while index < term.args.len {
-        if typeTermContainsAssociatedProjection(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, ref: arguments[term.args.start + index]) { return true }
+        if typeTermContainsAssociatedProjection(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, viewSources: viewSources, ref: arguments[term.args.start + index]) { return true }
         index += 1U64
     }
     index = 0U64
     while index < term.assocTraitArgs.len {
-        if typeTermContainsAssociatedProjection(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, ref: associatedArguments[term.assocTraitArgs.start + index]) { return true }
+        if typeTermContainsAssociatedProjection(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, viewSources: viewSources, ref: associatedArguments[term.assocTraitArgs.start + index]) { return true }
         index += 1U64
     }
     return false
 }
 
-fn typeTermIsClosed(terms: Array[TypeTerm], recordFields: Array[U64], arguments: Array[U64], associatedArguments: Array[U64], bytes: Array[U8], ref: U64) -> Bool {
+fn typeTermIsClosed(terms: Array[TypeTerm], recordFields: Array[U64], arguments: Array[U64], associatedArguments: Array[U64], viewSources: Array[ResolvedViewSource], bytes: Array[U8], ref: U64) -> Bool {
     if ref == 0U64 { return true }
     if ref >= terms.count() { return false }
     val state = terms[ref].closedness
@@ -242,23 +250,31 @@ fn typeTermIsClosed(terms: Array[TypeTerm], recordFields: Array[U64], arguments:
     val term = terms[ref]
     if term.paramId != 0U64 || term.assocNameId != 0U64 || term.projectionReceiver != 0U64 { return false }
     if !term.isAny && typeNameBytesAreSelf(bytes: bytes, start: term.nameStart, len: term.nameLen) { return false }
+    mut val viewIndex = 0U64
+    while viewIndex < term.viewSources.len {
+        val source = viewSources[term.viewSources.start + viewIndex]
+        for child in source.traitInstance.positionalArgs {
+            if !typeTermIsClosed(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, viewSources: viewSources, bytes: bytes, ref: child) { return false }
+        }
+        viewIndex += 1U64
+    }
     if term.isRecord {
         if term.recordFieldLabels.len != term.recordFieldTerms.len { return false }
         mut val index = 0U64
         while index < term.recordFieldTerms.len {
-            if !typeTermIsClosed(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, bytes: bytes, ref: recordFields[term.recordFieldTerms.start + index]) { return false }
+            if !typeTermIsClosed(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, viewSources: viewSources, bytes: bytes, ref: recordFields[term.recordFieldTerms.start + index]) { return false }
             index += 1U64
         }
         return true
     }
     mut val index = 0U64
     while index < term.args.len {
-        if !typeTermIsClosed(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, bytes: bytes, ref: arguments[term.args.start + index]) { return false }
+        if !typeTermIsClosed(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, viewSources: viewSources, bytes: bytes, ref: arguments[term.args.start + index]) { return false }
         index += 1U64
     }
     index = 0U64
     while index < term.assocTraitArgs.len {
-        if !typeTermIsClosed(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, bytes: bytes, ref: associatedArguments[term.assocTraitArgs.start + index]) { return false }
+        if !typeTermIsClosed(terms: terms, recordFields: recordFields, arguments: arguments, associatedArguments: associatedArguments, viewSources: viewSources, bytes: bytes, ref: associatedArguments[term.assocTraitArgs.start + index]) { return false }
         index += 1U64
     }
     return true
@@ -2862,13 +2878,15 @@ pub struct Func {
 // A callable surface entry. Func is an implementation/body record; this table is
 // the semantic call namespace consumed by every resolver query. sourceKind is
 // 0=bare/inherent, 1=named extension, 2=trait-provided/path surface.
-pub struct ViewSource {
+// Coarse declaration/candidate bucket only. This head is not a semantic
+// trait-instance identity or a conformance/final-selection receipt.
+pub struct CallableSourceHead {
     pub val kind: U64 = 0
     pub val id: U64 = 0
     pub val owner: U64 = 0
     pub val arity: U64 = 0
 }
-pub impl ViewSource { factory }
+pub impl CallableSourceHead { factory }
 
 pub struct Callable {
     // Source declarations reserve identity before nominal type resolution;

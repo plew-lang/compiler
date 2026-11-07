@@ -51,11 +51,11 @@ use @Plew/Syntax only { syntaxTraitTypeParamSpan, syntaxTraitTypeParamIsSendable
 use @Plew/Syntax only { MemberId, SyntaxMember, syntaxImplMemberCount, syntaxImplMember, syntaxMember, syntaxMemberTypeParamCount, syntaxMemberTypeParamSpan, syntaxMemberTypeParamIsSendable, syntaxMemberParamCount, syntaxMemberParam, syntaxMemberWhereCount, syntaxMemberWhereParamSpan, syntaxMemberWhereTraitSpan, syntaxMemberWhereType, syntaxMemberWhereTraitType }
 use @Plew/Syntax only { ImplId, SyntaxImpl, syntaxImpl, syntaxImplParamCount, syntaxImplParamSpan, syntaxImplParamIsSendable, syntaxImplTraitArgCount, syntaxImplTraitArg, syntaxImplWhereCount, syntaxImplWhereParamSpan, syntaxImplWhereTraitSpan, syntaxImplWhereType, syntaxImplWhereTraitType }
 use @Plew/Syntax only { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, SyntaxFile, SyntaxSlice, TopItemId, SyntaxTopItemKind, ImportId, SyntaxImport, TraitId, SyntaxTrait, NewtypeId, SyntaxNewtype, TypeId, SyntaxType, ExprId, SyntaxExpr, SyntaxExprKind, ArgId, SyntaxArg, ParamId, SyntaxParam, MakeFieldId, SyntaxMakeField, BindId, SyntaxBind, PatternId, SyntaxPattern, MatchArmId, SyntaxMatchArm, BlockId, SyntaxBlock, StmtId, SyntaxStmt, SyntaxStmtKind, parseProgramSyntaxInto, syntaxFileTopLevel, syntaxTopItemKind, syntaxTopItemPayload, syntaxTopItemSpan, syntaxImport, syntaxTrait, syntaxTraitTypeParamCount, syntaxNewtype, syntaxType, syntaxTypeNameSegment, syntaxTypeArgCount, syntaxTypeArg, syntaxTypeArgLabel, syntaxTypeViewNameCount, syntaxTypeViewName, syntaxTypeProjectionTraitArgCount, syntaxTypeProjectionTraitArg, syntaxTypeProjectionTraitArgLabel, syntaxImportNameCount, syntaxImportNameSpan, syntaxImportNameAliasSpan, syntaxExpr, syntaxExprArgCount, syntaxExprArg, syntaxArg, syntaxExprMakeFieldCount, syntaxExprMakeField, syntaxMakeField, syntaxExprElemCount, syntaxExprElem, syntaxExprDictEntryCount, syntaxExprDictKey, syntaxExprDictValue, syntaxExprParamCount, syntaxExprParam, syntaxExprTypeSegment, syntaxNameSegmentArg, syntaxExprTypeArgCount, syntaxExprTypeArg, syntaxBlock, syntaxBlockStmtCount, syntaxBlockStmt, syntaxStmt, syntaxStmtBindCount, syntaxStmtBind, syntaxBind, syntaxMatchArmCount, syntaxMatchArmAt, syntaxMatchArm, syntaxPattern, syntaxPatternBindCount, syntaxPatternBind, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-use ./Ir only { PType, ResolvedViewSource, TypeRef, TypeTerm, TypeArgumentRange, TypeRecordLabelRange, TypeRecordFieldRange, TypeViewIdRange, TypeViewSourceRange, TypeArgumentLabelRange, TypeAssocArgumentRange, TypeAssocArgumentLabelRange, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticValueBlockTyping, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallKind, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, ViaWitness, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, FinalTryResolution, FinalAwaitResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, FfiIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, StaticProofInstantiation, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget, identSelfTarget }
+use ./Ir only { PType, ResolvedViewSource, TypeRef, TypeTerm, TypeArgumentRange, TypeRecordLabelRange, TypeRecordFieldRange, TypeViewIdRange, TypeViewSourceRange, TypeArgumentLabelRange, TypeAssocArgumentRange, TypeAssocArgumentLabelRange, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticValueBlockTyping, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallKind, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, ViaWitness, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, FinalTryResolution, FinalAwaitResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, FfiIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, RuntimeIntrinsicDeclaration, CallableSourceHead, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, StaticProofInstantiation, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget, identSelfTarget }
 use ./Mid/Ir only { MidCanonicalArena }
 use ./Ir only { CallParameterBinding, DefaultGeneratorRange, DefaultGeneratorOrigin, CachedCallee }
 pub use @Plew/Syntax only { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
-pub use ./Ir only { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticValueBlockTyping, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallKind, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, ViaWitness, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, FinalTryResolution, FinalAwaitResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, StaticProofInstantiation, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
+pub use ./Ir only { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticValueBlockTyping, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallKind, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, ViaWitness, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, FinalTryResolution, FinalAwaitResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, RuntimeIntrinsicDeclaration, CallableSourceHead, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, StaticProofInstantiation, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
 use ./Toml only { bytesEq }
 use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
@@ -962,8 +962,23 @@ pub impl Comp {
     // node, and keeps the full copy in one place so Mono and LLVM cannot each
     // accidentally turn `S#E` into the trait named by E's conformance subject.
     inout fn semanticViewSourceEq(a: ResolvedViewSource, b: ResolvedViewSource) -> Bool {
-        if a.traitOwner != 0U64 || b.traitOwner != 0U64 {
-            return a.traitOwner != 0U64 && a.traitOwner == b.traitOwner
+        if a.traitInstance.owner != 0U64 || b.traitInstance.owner != 0U64 {
+            if !self.semanticViewSourceHeadEq(a: a, b: b) { return false }
+            mut val index = 0U64
+            while index < a.traitInstance.positionalArgs.count() {
+                if !self.typeRefEq(a: a.traitInstance.positionalArgs[index], b: b.traitInstance.positionalArgs[index]) { return false }
+                index += 1U64
+            }
+            return true
+        }
+        return a.surfaceId == b.surfaceId
+    }
+
+    // Head matching never compares child terms: designated-binder matching
+    // must reach them through the same traversal used by exact equality.
+    fn semanticViewSourceHeadEq(a: ResolvedViewSource, b: ResolvedViewSource) -> Bool {
+        if a.traitInstance.owner != 0U64 || b.traitInstance.owner != 0U64 {
+            return a.traitInstance.owner != 0U64 && a.traitInstance.owner == b.traitInstance.owner && a.traitInstance.positionalArgs.count() == b.traitInstance.positionalArgs.count()
         }
         return a.surfaceId == b.surfaceId
     }
@@ -1002,6 +1017,22 @@ pub impl Comp {
             mut val j: U64 = 0U64
             while j < b.count() {
                 if self.semanticViewSourceEq(a: a[i], b: b[j]) { found = true }
+                j += 1U64
+            }
+            if !found { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    inout fn sameSemanticViewSourceHeadSet(a: Array[ResolvedViewSource], b: Array[ResolvedViewSource]) -> Bool {
+        if a.count() != b.count() { return false }
+        mut val i: U64 = 0U64
+        while i < a.count() {
+            mut val found: Bool = false
+            mut val j: U64 = 0U64
+            while j < b.count() {
+                if self.semanticViewSourceHeadEq(a: a[i], b: b[j]) { found = true }
                 j += 1U64
             }
             if !found { return false }

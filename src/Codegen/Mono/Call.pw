@@ -577,7 +577,7 @@ pub impl Comp {
         }
         mut val sourceOwners: Array[U64] = []
         for val source in self.typeRefViewSources(ref: receiverRef) {
-            if source.traitOwner != 0U64 { sourceOwners.append(source.traitOwner) }
+            if source.traitInstance.owner != 0U64 { sourceOwners.append(source.traitInstance.owner) }
         }
         val proof = try self.traitPatternProof(demand: demand, baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, assocNames: associatedNames, assocValues: associatedValues, sourceOwners: sourceOwners)
         if self.proofIsMissing(proof: proof) { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }

@@ -94,7 +94,7 @@ pub impl Arena {
         }
         self.typeTerms.append(<TypeTerm closedness=closedness projectionPresence=projectionPresence nameStart=t.nameStart nameLen=t.nameLen nameId=t.nameId paramId=t.paramId args=<TypeArgumentRange start=argsStart len=t.args.count() /> isRecord=t.isRecord recordFieldLabels=<TypeRecordLabelRange start=recordLabelStart len=t.recordFieldLabels.count() /> recordFieldTerms=<TypeRecordFieldRange start=recordFieldStart len=t.recordFieldTerms.count() /> viewExtId=t.viewExtId viewIds=<TypeViewIdRange start=viewIdStart len=t.viewIds.count() /> viewSources=<TypeViewSourceRange start=viewSourceStart len=t.viewSources.count() /> isAny=t.isAny argLabels=<TypeArgumentLabelRange start=labelStart len=t.argLabels.count() /> assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=<TypeAssocArgumentRange start=assocArgStart len=t.assocTraitArgs.count() /> assocTraitArgLabels=<TypeAssocArgumentLabelRange start=assocLabelStart len=t.assocTraitArgLabels.count() /> assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId projectionReceiver=t.projectionReceiver isSendable=t.isSendable isDiverging=t.isDiverging hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
         self.typeRows.append(t)
-        if t.args.count() == 0U64 && t.viewExtId == 0U64 && t.viewIds.count() == 0U64 && !t.isAny && !t.isSendable && !t.isDiverging {
+        if t.args.count() == 0U64 && t.viewExtId == 0U64 && t.viewIds.count() == 0U64 && t.viewSources.count() == 0U64 && !t.isAny && !t.isSendable && !t.isDiverging {
             while self.bareTypeNameRefs.count() <= t.nameId { self.bareTypeNameRefs.append(0U64) }
             if self.bareTypeNameRefs[t.nameId] == 0U64 { self.bareTypeNameRefs[t.nameId] = id + 1U64 }
         }
@@ -135,7 +135,7 @@ impl Arena {
 // one-selector compatibility mirror and without thawing its pooled children.
 pub impl TypeTerm {
     fn hasTopLevelView() -> Bool {
-        return self.viewExtId != 0U64 || self.viewIds.len != 0U64
+        return self.viewExtId != 0U64 || self.viewIds.len != 0U64 || self.viewSources.len != 0U64
     }
 }
 
@@ -162,6 +162,13 @@ impl Arena {
     fn registeredProjectionPresence(t: TypeRef) -> U64 {
         if t.assocNameId != 0U64 { return 2U64 }
         mut val state = 1U64
+        for source in t.viewSources {
+            for child in source.traitInstance.positionalArgs {
+                val presence = self.childProjectionPresence(ref: child)
+                if presence == 2U64 { return 2U64 }
+                if presence == 0U64 { state = 0U64 }
+            }
+        }
         val children = if t.isRecord { give t.recordFieldTerms } else { give t.args }
         for child in children {
             val presence = self.childProjectionPresence(ref: child)
@@ -183,6 +190,12 @@ impl Arena {
         if !t.isAny && t.nameLen == 4U64 {
             if t.nameStart > self.bytes.count() || self.bytes.count() - t.nameStart < 4U64 { return 0U64 }
             if self.typeNameIsSelf(start: t.nameStart, len: t.nameLen) { return 2U64 }
+        }
+        for source in t.viewSources {
+            for child in source.traitInstance.positionalArgs {
+                val state = self.childTypeClosedness(ref: child)
+                if state != 1U64 { return state }
+            }
         }
         if t.isRecord {
             if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return 2U64 }
@@ -214,14 +227,14 @@ pub impl Arena {
     // Structural children are immutable; declaration stamping preserves this
     // fact. Forward/unknown children retain the exact recursive reader.
     fn typeContainsAssociatedProjection(ref: U64) -> Bool {
-        return typeTermContainsAssociatedProjection(terms: self.typeTerms, recordFields: self.typeRecordFieldPool, arguments: self.typeArgumentPool, associatedArguments: self.typeAssocArgumentPool, ref: ref)
+        return typeTermContainsAssociatedProjection(terms: self.typeTerms, recordFields: self.typeRecordFieldPool, arguments: self.typeArgumentPool, associatedArguments: self.typeAssocArgumentPool, viewSources: self.typeViewSourcePool, ref: ref)
     }
 
     // Unit is zero. Closedness does not normalize projections or choose proof.
     // Declaration resolution preserves it; structural rebuilding registers a
     // new term. Unknown rows retain the original recursive check.
     fn typeIsClosed(ref: U64) -> Bool {
-        return typeTermIsClosed(terms: self.typeTerms, recordFields: self.typeRecordFieldPool, arguments: self.typeArgumentPool, associatedArguments: self.typeAssocArgumentPool, bytes: self.bytes, ref: ref)
+        return typeTermIsClosed(terms: self.typeTerms, recordFields: self.typeRecordFieldPool, arguments: self.typeArgumentPool, associatedArguments: self.typeAssocArgumentPool, viewSources: self.typeViewSourcePool, bytes: self.bytes, ref: ref)
     }
 }
 

@@ -36,15 +36,15 @@ impl Comp {
         mut val sources: Array[ResolvedViewSource] = []
         mut val traitOwner = 0U64
         for source in self.typeRefViewSources(ref: ref) {
-            if source.traitOwner != 0U64 {
-                val owner = self.decls.traitOwnerIndex(offset: source.traitOwner)
+            if source.traitInstance.owner != 0U64 {
+                val owner = self.decls.traitOwnerIndex(offset: source.traitInstance.owner)
                 if owner >= self.decls.traitOwnerCount() {
                     return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "unresolved view trait owner") />
                 }
-                if traitOwner != 0U64 && traitOwner != source.traitOwner {
+                if traitOwner != 0U64 && traitOwner != source.traitInstance.owner {
                     return <Result.Err error=self.patternTypeSemanticFailure(ref: ref, offset: offset, reason: "multiple trait view selectors", sourceMessage: "a view source set may select only one trait") />
                 }
-                traitOwner = source.traitOwner
+                traitOwner = source.traitInstance.owner
                 if source.surfaceId != self.decls.traitOwnerAt(index: owner).nameId {
                     return <Result.Err error=self.patternTypeInputFailure(offset: offset, reason: "inconsistent view trait identity") />
                 }
@@ -210,7 +210,7 @@ impl Comp {
                 Optional.None => { return false }
             }
         }
-        if !self.sameSemanticViewSourceSet(a: facts.viewSources.getOr(key: left, fallback: []), b: facts.viewSources.getOr(key: right, fallback: [])) { return false }
+        if !self.sameSemanticViewSourceHeadSet(a: facts.viewSources.getOr(key: left, fallback: []), b: facts.viewSources.getOr(key: right, fallback: [])) { return false }
         if a.isRecord != b.isRecord || a.isAny != b.isAny || a.isSendable != b.isSendable || a.isDiverging != b.isDiverging { return false }
         // Record heads have no nominal owner. Shared child traversal compares
         // labels and semantic fields; the synthetic ABI layout name is separate.
@@ -1082,24 +1082,24 @@ pub impl Comp {
         return c.sourceKind == 0U64
     }
 
-    inout fn callableSourceKey(c: Callable) -> ViewSource {
-        return <ViewSource kind=c.sourceKind id=c.sourceId owner=c.sourceOwner arity=c.sourceArity />
+    inout fn callableSourceKey(c: Callable) -> CallableSourceHead {
+        return <CallableSourceHead kind=c.sourceKind id=c.sourceId owner=c.sourceOwner arity=c.sourceArity />
     }
 
-    inout fn sameViewSource(a: ViewSource, b: ViewSource) -> Bool {
+    inout fn sameCallableSourceHead(a: CallableSourceHead, b: CallableSourceHead) -> Bool {
         return a.kind == b.kind && a.id == b.id && a.owner == b.owner && a.arity == b.arity
     }
 
-    inout fn callableMatchesSource(c: Callable, source: ViewSource) -> Bool {
-        return source.kind != 0U64 && self.sameViewSource(a: self.callableSourceKey(c: c), b: source)
+    inout fn callableMatchesSource(c: Callable, source: CallableSourceHead) -> Bool {
+        return source.kind != 0U64 && self.sameCallableSourceHead(a: self.callableSourceKey(c: c), b: source)
     }
 
-    inout fn callableTraitKey(c: Callable) -> ViewSource {
-        return <ViewSource kind=2U64 id=c.traitId owner=c.traitOwner arity=c.traitArity />
+    inout fn callableTraitKey(c: Callable) -> CallableSourceHead {
+        return <CallableSourceHead kind=2U64 id=c.traitId owner=c.traitOwner arity=c.traitArity />
     }
 
-    inout fn callableMatchesTrait(c: Callable, source: ViewSource) -> Bool {
-        return c.traitId != 0U64 && source.kind == 2U64 && self.sameViewSource(a: self.callableTraitKey(c: c), b: source)
+    inout fn callableMatchesTrait(c: Callable, source: CallableSourceHead) -> Bool {
+        return c.traitId != 0U64 && source.kind == 2U64 && self.sameCallableSourceHead(a: self.callableTraitKey(c: c), b: source)
     }
 
     // Candidate de-duplication is stricter than source selection.  `#E` names
@@ -1108,7 +1108,7 @@ pub impl Comp {
     // two candidates under E, not duplicate witnesses.  Only copies of the
     // same source *and* trait provenance denote one semantic callable.
     inout fn sameCallableSemanticOrigin(a: Callable, b: Callable) -> Bool {
-        return self.sameViewSource(a: self.callableSourceKey(c: a), b: self.callableSourceKey(c: b)) && self.sameViewSource(a: self.callableTraitKey(c: a), b: self.callableTraitKey(c: b))
+        return self.sameCallableSourceHead(a: self.callableSourceKey(c: a), b: self.callableSourceKey(c: b)) && self.sameCallableSourceHead(a: self.callableTraitKey(c: a), b: self.callableTraitKey(c: b))
     }
 
     // Match a call receiver against the declaration's complete receiver pattern.

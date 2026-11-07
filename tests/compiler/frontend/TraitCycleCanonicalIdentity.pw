@@ -1,6 +1,6 @@
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
 use ../../../src/SourceAccess only { SourceAccess }
-use ../../../src/Ir only { Bind, Conform, TraitDef, TypeRef, ResolvedViewSource }
+use ../../../src/Ir only { Bind, Conform, TraitDef, TypeRef, ResolvedViewSource, TraitInstanceKey }
 use ../../../src/Diag only { emitDiagnostic }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
@@ -28,13 +28,13 @@ fn viewArgument(compiler: inout Comp, integerName: Bind, scenario: String, secon
         }
         if index >= compiler.decls.traitCount() { panic("missing independent P owner") }
         val declaration = compiler.decls.traitAt(index: index)
-        return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=[<ResolvedViewSource surfaceId=declaration.nameId traitOwner=declaration.nameStart />] />)
+        return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=[<ResolvedViewSource surfaceId=declaration.nameId traitInstance=<TraitInstanceKey owner=declaration.nameStart positionalArgs=[] /> />] />)
     }
     if scenario == "viewSame" || scenario == "viewDistinct" {
         val text = if second && scenario == "viewDistinct" { give "SecondView" } else { give "FirstView" }
         val name = compiler.internBytes(s: text)
         val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
-        return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=[<ResolvedViewSource surfaceId=declaration.nameId traitOwner=declaration.nameStart />] />)
+        return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=[<ResolvedViewSource surfaceId=declaration.nameId traitInstance=<TraitInstanceKey owner=declaration.nameStart positionalArgs=[] /> />] />)
     }
     val extension = compiler.internBytes(s: "E")
     if second && scenario == "extensionLegacy" {

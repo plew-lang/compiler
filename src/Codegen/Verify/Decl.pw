@@ -197,7 +197,7 @@ pub impl Comp {
                     if sourceSelector.surfaceId != 0U64 && sourceSelector.surfaceId <= self.interner.entries.count() {
                         val receiverTerm = self.arena.typeAt(index: receiver)
                         try self.checkResolvedTypeViewSourceValid(typeRef: receiver, source: sourceSelector, offset: t.siteOffset)
-                        val source: ViewSource = (try self.resolveViewSourceKey(recvStart: receiverTerm.nameStart, recvLen: receiverTerm.nameLen, recvRef: receiver, sourceId: sourceSelector.surfaceId, sourceOwner: sourceSelector.traitOwner))
+                        val source: CallableSourceHead = (try self.resolveViewSourceKey(recvStart: receiverTerm.nameStart, recvLen: receiverTerm.nameLen, recvRef: receiver, sourceId: sourceSelector.surfaceId, sourceOwner: sourceSelector.traitInstance.owner))
                         if source.kind == 2U64 { selectedCount += 1U64 }
                     }
                     vi += 1U64
@@ -221,12 +221,12 @@ pub impl Comp {
         // value re-views as `checkTypeViewSources` does for `Type#…`: otherwise
         // only an expression chain could manufacture an unrepresentable
         // two-trait state.
-        val selected: ViewSource = (try self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: intern(c: inout self, start: srcStart, len: srcLen)))
+        val selected: CallableSourceHead = (try self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: intern(c: inout self, start: srcStart, len: srcLen)))
         if selected.kind == 2U64 {
-            val active: Array[ViewSource] = (try self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref))
+            val active: Array[CallableSourceHead] = (try self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref))
             mut val i: U64 = 0U64
             while i < active.count() {
-                if active[i].kind == 2U64 && !(self.sameViewSource(a: active[i], b: selected)) {
+                if active[i].kind == 2U64 && !(self.sameCallableSourceHead(a: active[i], b: selected)) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: recv), msg: "a view may select at most one trait source; extension views compose but trait selection is singular (spec/09)") />
                 }
                 i += 1U64
@@ -243,17 +243,17 @@ pub impl Comp {
         if strip { return <Result.Ok value=() /> }
         val rt: TypeInfo = (try self.exprType(id: recv))
         if rt.nameLen == 0U64 { return <Result.Ok value=() /> }
-        val selected: ViewSource = (try self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: source.surfaceId, sourceOwner: source.traitOwner))
+        val selected: CallableSourceHead = (try self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner))
         if selected.kind != 0U64 {
             // `#Trait` is a singleton selector in the normalized view state.
             // Compare semantic owners carried by both authored selectors; a
             // spelling-only reconstruction here would again make imports part
             // of the later resolver's meaning.
             if selected.kind == 2U64 {
-                val active: Array[ViewSource] = (try self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref))
+                val active: Array[CallableSourceHead] = (try self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref))
                 mut val i: U64 = 0U64
                 while i < active.count() {
-                    if active[i].kind == 2U64 && !(self.sameViewSource(a: active[i], b: selected)) {
+                    if active[i].kind == 2U64 && !(self.sameCallableSourceHead(a: active[i], b: selected)) {
                         return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "a view may select at most one trait source; extension views compose but trait selection is singular (spec/09)") />
                     }
                     i += 1U64
@@ -261,7 +261,7 @@ pub impl Comp {
             }
             return <Result.Ok value=() />
         }
-        if source.traitOwner != 0U64 {
+        if source.traitInstance.owner != 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)") />
         }
         val entry: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
@@ -277,9 +277,9 @@ pub impl Comp {
     inout fn checkResolvedTypeViewSourceValid(typeRef: U64, source: ResolvedViewSource, offset: U64) -> Result[(), CompileDiagnostic] {
         if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
         val t: TypeRef = self.arena.typeAt(index: typeRef)
-        val selected: ViewSource = (try self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: typeRef, sourceId: source.surfaceId, sourceOwner: source.traitOwner))
+        val selected: CallableSourceHead = (try self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: typeRef, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner))
         if selected.kind != 0U64 { return <Result.Ok value=() /> }
-        if source.traitOwner != 0U64 {
+        if source.traitInstance.owner != 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot view this type through that trait: its instance does not conform to the selected trait (spec/09)") />
         }
         val entry: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
