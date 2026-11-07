@@ -156,6 +156,11 @@ request is withdrawn. Concrete representation design is the next step.
 
 ## Next implementation unit: name-dependent source applications
 
+**Consumer-stage point4 is provisional and must not be implemented as written.**
+The source-kind collision review below found a concrete counterexample to its
+lexical-only assumption. Producer retention remains independently valid; record
+the necessary surface rule and corrected stage owner before consumer changes.
+
 This is an internal encoding plan under the Grammar Handoff Contract, not a
 change to the accepted source language. Review its concrete boundaries before
 editing product code.
@@ -214,3 +219,84 @@ aliases/reexports, two instances and exact written coordinates. Update the exact
 Syntax pin only after its producer increment passes neutral review. Focused gates
 precede task-wide normal/fixed-point/performance acceptance. This plan does not
 claim those remaining tests or implementation are complete.
+
+### Concrete Producer Encoding
+
+Use one new SourceSelection expression tag, retaining its receiver in child0,
+qualified segments in the existing typePath name-segment range, strip in flag0,
+source-only span in text and whole expression span in span. Add a typed optional
+SourceApplicationId field (raw0 absent; allocated packet ids are pool index +1)
+to SyntaxExpr and one private sourceApplications pool. A packet contains its
+original bracket span and two closed alternatives: parsed type-id/label ranges
+or a type-parse error receipt; parsed index ExprId or an index-parse error
+receipt. No alternative stores a value AST in SyntaxFile.
+
+The public value AST adds SourceSelection and corresponding application/type/
+index alternatives using owned arrays/ExprAst only at that explicit boundary.
+Materialization and freeze retain both branch outcomes and original coordinates;
+freeze allocates packet identity after recursive children. Existing ExtView and
+ExtMethod value constructors remain compatibility inputs to the same later
+semantic classifier, not a second spelling-based resolver.
+
+Each speculative branch has a fresh P cursor sharing immutable bytes/tokens,
+starting at the packet's '['. Original P errors remain outside speculation.
+A private arena checkpoint contains every private pool length, including the
+packet pool. Roll back failed branches without touching old row prefixes;
+checkpoint branch B only after retaining branch A. Success must consume the
+closing bracket. If both succeed their end positions must agree. If only one
+succeeds it establishes the syntactic bracket extent, not semantic source kind.
+If neither succeeds, publish no malformed child and report the syntax error;
+there is no valid interpretation for binding to select. A selected failed branch
+with another syntactically successful branch remains a later Source diagnostic.
+
+The shared Hash parser gathers dotted identifiers only up to the first packet
+or before `.name(`. Following operations stay in the ordinary postfix loop;
+parentheses naturally terminate that collection invocation. The producer has
+no namespace/trait/extension registry and makes no semantic choice. Lower later
+requests the lookup-owned lexical binding result instead of owning a second
+name-resolution algorithm. Qualified type/projection splitting and the concrete
+extension-header binding authority still need consumer implementation; do not
+claim the producer closes those semantic contracts.
+
+### Producer Verification and Consumer Boundary
+
+[Finite producer verification](../../../evidence/rejection-domains/diagnostic-domain-implementation/value-view-syntax-producer-increment.json)
+records initial executed RED (six failures/four controls), source application
+rows, isolated grammar branches, complete pool checkpoints and value adapters.
+Seventeen fixtures / 88 distinct cases pass; the latest 54 include exact
+receiver/arguments/path/coordinates/error receipts and direct/materialize/freeze
+assertions, recursive packet freeze and prefix retention. Neutral review reran
+both focused sets, checked current hashes and accepted the finite producer after
+four assertion gaps were fixed. All47 pool checkpoint fields/creation/rollback
+were structurally reconciled; this is not a claim every pool was dynamically
+exercised. Source files are unchanged across the successful focused runs.
+Compiler pin/Lower/Record uptake, qualified type paths and task-wide gates remain
+open. The producer deliberately selects neither semantic interpretation.
+
+The earlier plan to finalize every source kind lexically in Lower needs renewed
+review before consumer implementation. Existing run/view_source_kind_collision
+allows same-named trait and extension sources and resolves by applicability.
+A parameterized version is accepted as an extension for `values#Extra[0U64]`
+and `values#Extra`, while the annotated Array[I64]#Extra is rejected for trait
+arity. These observations are not an adopted precedence rule or proof the
+existing behavior is correct. Determine the normative binding/applicability
+owner and required plan/contract correction; do not infer kind from whichever
+parser branch or semantic interpretation happens to succeed.
+
+[Source-kind boundary investigation](../../../evidence/rejection-domains/diagnostic-domain-implementation/source-kind-binding-boundary.json)
+traces the existing positive control to intentional commit `21d338e8` and pairs
+it with the existing both-sources rejection. Neutral review finds no canonical
+rule that settles whether positional arity or a parser/meaning failure excludes
+a same-named source candidate. Source-body checking can own receiver-dependent
+finalization before successful publication, consistent with general design;
+lexical-only Lower selection and prohibition on even pending construction input
+reaching checking are not established contracts. Do not move the receiver's type
+checker into Lower or choose a branch by trying meaning and falling back.
+
+Stop for the existing user decision boundary: clarify kind-name coexistence and
+arity/branch-failure treatment, then correct this concrete staging plan and
+synchronize the normative wording as authorized. This is a new concrete collision
+case, not reinstatement of the withdrawn blanket request for approval of neutral
+syntax retention. The producer is saved as Syntax `2b5811c` without a package tag;
+compiler dependency remains exact dev31/ae70. Do not close com-9hde, update its
+pin into an unsupported consumer, or claim task-wide GREEN.
